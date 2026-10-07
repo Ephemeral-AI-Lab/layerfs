@@ -1,6 +1,6 @@
 # Source organization for remaining milestones
 
-> **Status:** Proposal; target LayerFS 0.1.7; not a released contract.
+> **Status:** Archived; retained for historical source-organization context only.
 > Owner requested this recommendation on 2026-10-06. It extends the applied
 > active-package organization at local `1775fdf98` and the S6 custody checkpoint
 > `cae3d43ed`. Future paths below are recommended destinations, not evidence that
@@ -22,6 +22,12 @@ The [original folder proposal](SOURCE-ORGANIZATION.md) and its
 11-package structure. The [milestone plan](../303/07-implementation-validation.md)
 owns deliverables and dependencies; [progress](PROGRESS.md) and
 [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307) own completion.
+
+Current routing2026-10-08: this older source-organization proposal is superseded
+by the [reviewed layout](FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md) and
+[ownership review](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md). Its old daemon native/
+request-step, host-runtime and API-core trees are historical; do not instantiate
+them. Current R1 has12 active members; full native serving remains unimplemented.
 
 ## Rules for extending the structure
 

@@ -1,0 +1,33 @@
+{
+  "changed_documents": [
+    "core/AGENTS.md",
+    "core/docs/architecture/68-native-workspace-control.md",
+    "core/docs/issues/303/01-architecture.md",
+    "core/docs/issues/303/06-cluster-one-integration.md",
+    "core/docs/issues/303/07-implementation-validation.md",
+    "core/docs/issues/303/README.md",
+    "core/docs/issues/303/daemon-sqlite.md",
+    "core/docs/issues/303/fuse.md",
+    "core/docs/issues/303/workspace-api/commit.md",
+    "core/docs/issues/303/workspace-api/mount.md",
+    "core/docs/issues/303/workspace-api/unmount.md",
+    "core/docs/issues/307/CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md",
+    "core/docs/issues/307/FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md",
+    "core/docs/issues/307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md",
+    "core/docs/issues/307/HANDOFF-S8-IMPLEMENTATION-20261008.md",
+    "core/docs/issues/307/R1-COMPLETE-FUSE-HANDOFF-20261008.md",
+    "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+    "core/docs/issues/307/S8-IMPLEMENTATION-PLAN-20261008.md",
+    "core/docs/issues/307/S8-MECHANISM-EVIDENCE-20261008.md",
+    "core/docs/issues/307/S8-PROOF-PLAN-20261008.md",
+    "core/docs/issues/307/S8-SPECIFICATION-20261008.md",
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md",
+    "core/docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md"
+  ],
+  "checked_local_links": 498,
+  "missing_paths": [],
+  "anchor_candidates_for_manual_review": [],
+  "product_source_hash_mismatches": [],
+  "product_manifest_diff": "",
+  "new_agent_or_R2_implementation": false
+}

@@ -5,15 +5,14 @@
 > This file routes the fresh owner-dispatched assignment. It adds no independent
 > authorization, implementation, native proof, timing or acceptance result.
 
-The old C1-only dispatch prepared at `32d969776` is superseded by the fresh
-owner-dispatched R0–R9 implementation assignment. Its original text/source pins
-remain in Git and the R0 input hash receipt. Do not dispatch daemon execution,
-launcher/cgroups, command registration, Exec wire, host Store/runtime adapters
-or retired E04 work from it. All current rollout checkpoints are authorized for
-local implementation, documentation, scoped checks/proofs/registered qualification
-and local commits, with conditional R9 retirement only after R8 acceptance and
-replacement/dependency coverage. Remote push/issue edits, release/deployment,
-new worktrees, destructive resets and unrelated resources are not authorized.
+Current dispatch correction2026-10-08: R1 is verified and the previous agent stops
+at that boundary. Use the [self-contained R2–R5 prompt](HANDOFF-R2-R5-IMPLEMENTATION-20261008.md)
+only after owner dispatch. This older handoff is not authorization to run R6–R9.
+The [ownership review](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md) supersedes planned
+daemon native/request-step homes: Fuse owns the complete connection/request service;
+daemon assembles it with existing engine ports and aggregate control/Commit.
+Only optional admin cancellation/client provenance is deferred. Filesystem contracts
+and all historical IDs/receipts remain. No remote publication or early retirement.
 
 Read current root/core guides, both root handbooks, the 303 design index and
 primary operation/engine/FUSE/integration contracts, the 307
@@ -29,7 +28,8 @@ public organization without old host Server/data service or legacy source includ
 Sandbox/runtime or external executor owns ordinary commands, streams, exit status
 and explicit caller cancellation. Optional WorkspaceApi.exec selects mounted cwd
 and delegates. FUSE admits every permitted visible process without Exec identity.
-Daemon owns exact request/open/lookup/capture/Commit work and complete drain;
+Fuse owns native request/reply orchestration over backed Overlay lookup/open
+state; daemon retains capture/Commit and aggregate readiness/drain composition;
 shell exit/zero registered commands proves none of those lifetimes. Force does
 not kill caller processes. Setup/executor owns actual identity, visibility and
 Store/Overlay/credential protection, with proof at actual topology.

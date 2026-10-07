@@ -1,0 +1,42 @@
+{
+  "review_input": "5be93f6d7f9352eab3cbfa286fedbc861e6e3494",
+  "changed_document_hashes": {
+    "core/AGENTS.md": "c68bc00c39a3984087e6283c2b82eae92eec3bbd541e959ec131aed739339d43",
+    "core/docs/architecture/68-native-workspace-control.md": "d113db2896c3fa33d4cf8723558f2a6e1a567b0e8d4b206e7beb6d063967a9f5",
+    "core/docs/issues/303/01-architecture.md": "8c859e10dfbf39b6b5de03ef87a3f33110995d72dcfb7a8638db195c78f5e8e1",
+    "core/docs/issues/303/06-cluster-one-integration.md": "e91534ac121d7f4858055f79e17715719ae52472d7e19ca36a79036d0b3da8d4",
+    "core/docs/issues/303/07-implementation-validation.md": "7fb3db517e70efc399ab38eae8afe0538b3f816a2dabae41b9b0b638ee42cfaa",
+    "core/docs/issues/303/README.md": "0406e7312713c73ebbda451683526a970b1225df83f62b122f8438819ed4e99d",
+    "core/docs/issues/303/daemon-sqlite.md": "970c3b9e7b49146405729460d173db3425d52c6461e5b8fe0673e16b9b234caf",
+    "core/docs/issues/303/fuse.md": "0eb328b386eb2057e1678f30edf84770d88e9f2e011a46f7e211d2f694a10162",
+    "core/docs/issues/303/workspace-api/commit.md": "221f27a527396e6ac6bfa33086ba7fc760fab27dbc34fd96f3b87536f39ad251",
+    "core/docs/issues/303/workspace-api/mount.md": "35725b70e75f61c5a583739c461db1bd3a8f8eec02a9c3d27bcc8a26a90c452f",
+    "core/docs/issues/303/workspace-api/unmount.md": "2381b14964e824607bc08f56a13b47b76f57189d9e809cd907799690d159589b",
+    "core/docs/issues/307/CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md": "22c3f353aa78c3a922b903c13be36bcb005648e249c8ad0df5094afbcea725ea",
+    "core/docs/issues/307/FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md": "5510be08f8aa39b304eaa69444559643e28be438f75d6b91c69f5879f88fb6dd",
+    "core/docs/issues/307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md": "f641ba07f5e75ede8cc161c5166c7a51d987f096ebf3854d3b902c276b66783f",
+    "core/docs/issues/307/HANDOFF-S8-IMPLEMENTATION-20261008.md": "f432e7b40cf54fc2bc6203dae7edfbec89985bef3bfca08dd58e2527415f0860",
+    "core/docs/issues/307/R1-COMPLETE-FUSE-HANDOFF-20261008.md": "1defc7b5e021beb2c9f2a58e3c587bdc545f05080207972075cfd31db06fc2c8",
+    "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md": "8e50a801d4941296a809c529dccfa574c0df045e1c81b03951630cac25912769",
+    "core/docs/issues/307/S8-IMPLEMENTATION-PLAN-20261008.md": "dcf693c574aa549924b2056fe3e269b694de9f1227631b6c075daa7bf4ac355c",
+    "core/docs/issues/307/S8-MECHANISM-EVIDENCE-20261008.md": "423640dfe22b258fbb782996e0cb6d555bf05c7ccc07db830c9d9f6ca19558f6",
+    "core/docs/issues/307/S8-PROOF-PLAN-20261008.md": "70352c316847e990fdd0f847a177bac6bcf64e350868b33a773535f89e8e3dc4",
+    "core/docs/issues/307/S8-SPECIFICATION-20261008.md": "a905930fc4d6970d7e54efd08e55997821fe3e9706b217aa27cfbc1ef260d1d0",
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md": "a9e9bf9f8a000008ae05f769098583e1e54fbde10a77b9d4357f51d782f27f2d",
+    "core/docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md": "2c9c14b2c3a08627333ede1f86c8d5d65165c3b19c28b660ee8c441102ea2f20"
+  },
+  "full_working_diff_whitespace_exit": 0,
+  "current_daemon_layout_has_no_native_or_request_engine_rows": true,
+  "historical_campaigns_unchanged": [
+    "r1-runtime-cancel-20261008",
+    "filesystem-poc-20261008"
+  ],
+  "owner_notes_unchanged": {
+    "HANDOFF-PRE-S8-SERVERLESS-20261007.md": true,
+    "HANDOFF-S7-S9-RESUME-20261006.md": true,
+    "S7-S9-SPEED-TEST-PLAN.md": true
+  },
+  "runtime_checks": "NOT_RUN for documentation-only review; unchanged verified R1 identities and prior proof results reused, no native implementation claim",
+  "resources_created": 0,
+  "agents_dispatched": 0
+}

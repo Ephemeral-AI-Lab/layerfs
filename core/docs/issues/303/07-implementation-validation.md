@@ -220,6 +220,12 @@ and [R0–R9 rollout](../307/CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md) supersede 
 host adapters/daemon execution destinations and earlier estimates. Never dispatch
 those obsolete homes or infer implementation from their source counts.
 
+The2026-10-08 [ownership review](../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+now places session/dispatch/kernel handlers/coherence in Fuse. Daemon retains
+assembly, shared SQL/Store services, registry and existing Commit composition.
+Current source is12 active crates/62382 active LOC at `5be93f6d7`; old §4 counts
+and folder estimates below are historical, not an active implementation assignment.
+
 ## 4. Source removal, relocation and estimates
 
 ### 4.1 Removal (measured at `f96d97651`)

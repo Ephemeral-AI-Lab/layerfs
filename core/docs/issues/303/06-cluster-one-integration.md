@@ -23,6 +23,15 @@ processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
 [R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
 historical baseline pins, receipts and verdicts retain their original scope.
 
+Source-ownership revision2026-10-08 [proposed design, reviewed against verified
+R1 at `5be93f6d7`]: [reviewed ownership](../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+assigns the complete native connection/request service to `layerfs-fuse`.
+Daemon assembles it with the existing shared SQL/Store services and retains
+registry/control, overall Ready/terminal unmount and the existing Commit driver.
+Dependency is daemon -> fuse -> workspace; Fuse imports no daemon. This changes
+proposed homes, not filesystem guarantees or proof outcomes. Native implementation
+remains R2–R5; optional admin is deferred and R1 is verified.
+
 ## 1. The contract in brief
 
 ```text
@@ -169,7 +178,7 @@ Not available to a daemon:
  store/open.rs    one Handles + Storage + HistoryProvider at startup
  store/ports.rs   AuthenticatedObjects, FileLengths, InodeSerials over the Store
  store/bind.rs    mount: Branch snapshot, root checks, base view, Workspace bind
- store/commit.rs  Save scope, candidate checks, stage, publish, discard, new base
+ store/commit.rs  original capture, Save scope/finish, stage-and-publish, known install
 ```
 
 - **One write handle and a fixed set of read handles per daemon**, opened once
@@ -198,6 +207,21 @@ Not available to a daemon:
   constructors in the same process, the path Project Init already uses with no
   re-derivation. The untrusted-wire admission step leaves with the wire.
 
+### R4/R5 construction and native composition
+
+R4 supplies a complete backed captured namespace constructor to the existing
+store/commit.rs driver. Reuse captured-file construction, Content names/links/
+metadata/root algorithms, actual Store policy, Storage Save and History. R5
+integrates mounted publication and known local install, retaining later active
+mutations and readers. There is no second Commit orchestrator/encoder, host Init
+runtime path or per-Commit Store seal. The live Store stays open.
+
+Fuse owns connection/request/coherence service; daemon retains direct Store
+admission and per-operation failures. A separate Store read-service home is
+conditional on missing bounded immutable-demand behavior, not a duplicate Fuse
+dispatcher. R4 component work may overlap R2/R3; R5 full mounted oracle depends
+on all three. Forced teardown/sustained concurrency/frozen acceptance remain R6/R8.
+
 ## 5. Host control and install
 
 R1b implements the actual protected-config `layerfs-daemon` application, a
@@ -205,8 +229,9 @@ separate correlated startup Hello and session termination over the existing
 authenticated native control. It transfers the original installed/opened Store
 into the existing Service and preserves original failed installation custody.
 [Application architecture](../../architecture/70-daemon-application-startup-control.md)
-states its exact readiness/admission/error scope. ControlReady is not FUSE Ready;
-ordinary Sandbox execution/access and complete application drain remain open.
+states its exact readiness/admission/error scope. ControlReady is not FUSE Ready. Later [R1 completion](../307/R1-COMPLETE-FUSE-HANDOFF-20261008.md)
+verifies ordinary Sandbox execution/access at its pinned deployment; native
+attachment and complete filesystem/application drain remain unproved.
 
 
 Host filesystem controls are mount, Commit, status and terminal unmount,

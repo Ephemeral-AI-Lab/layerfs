@@ -32,6 +32,13 @@ integration supersedes host-runtime prose at the original source pin. Current
 [rollout ledger](../../307/ROLLOUT-LEDGER-20261008.md) govern future composition;
 pre-S8 proofs remain component scope, with no native namespace Commit claim.
 
+Reviewed R4/R5 ownership [proposed design]: Workspace provides the complete
+captured namespace constructor using Content/Storage/Persistence. Daemon retains
+its existing store/commit.rs orchestration and control admission. Fuse owns native
+reply/page/cache continuity through known install; it does not capture or publish
+History through another Commit driver. R5 mounted proof depends on R2/R3/R4.
+See [source review](../../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
+
 ## 1. Purpose and granularity
 
 [owner requirement]

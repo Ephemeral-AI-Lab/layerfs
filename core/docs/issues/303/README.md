@@ -45,6 +45,17 @@ processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
 [R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
 historical baseline pins, receipts and verdicts retain their original scope.
 
+Reviewed source-ownership update2026-10-08 at `5be93f6d7`: R1 is verified and
+there are12 active members, including actual Sandbox and daemon application.
+The [ownership review](../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md) and
+[reviewed layout](../307/FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md) assign the full
+native connection/request service to Fuse; daemon assembles it with shared SQL/
+Store services and retains overall control/Ready/drain/Commit. FUSE replacement
+is still excluded/unimplemented. The old daemon native/request-step destinations
+are superseded, not moved code. Only optional admin cancellation/client provenance
+is deferred; full R2–R5 requirements remain. The [next-agent prompt](../307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md)
+awaits owner dispatch; this review performs no implementation or native proof.
+
 ## Primary design documents
 
 Seven primary contracts own the current operation and implementation design.
@@ -124,7 +135,7 @@ operation/engine documents. The consolidated findings are:
 | Why no filtering? | Task-granularity source-only projections cannot substitute for the per-call complete filesystem. Ignore rules are command semantics, not LayerFS membership; task mode uses the same complete-root contract |
 | No data-structure size/count/time caps? | Remove inherited metadata/edit/file/Commit/whole-stream ceilings through backed/streamed structures; no automatic Bash duration cap. Explicit windows/resources/platform formats remain, no silent omission |
 | Large amounts of files/data without Phase-4.5 limits? | Indexed metadata, generation-selective enumeration, bounded payload/namespace construction and transport backpressure; deferred edits/directory Vec/new-parent map/sparse/import constraints must change, not merely be relabelled |
-| Removed server and safe immutable distribution? | No layerfs-server revival and no host runtime. Since 2026-10-07 every daemon opens one shared SQLite Store directly ([06](06-cluster-one-integration.md)); immutable content supports verified reuse, while reference closure, GC, durability and mutable history CAS still require exact protocols. Persistence now opens on macOS and Linux, and daemon direct ports/Store-half Commit are implemented; native install/control and FUSE/Exec qualification remain |
+| Removed server and safe immutable distribution? | No layerfs-server revival and no host runtime. Since 2026-10-07 every daemon opens one shared SQLite Store directly ([06](06-cluster-one-integration.md)); immutable content supports verified reuse, while reference closure, GC, durability and mutable history CAS still require exact protocols. Persistence now opens on macOS and Linux, and daemon direct ports/Store-half Commit are implemented; native install/control/ordinary runtime are verified by R1; FUSE and mounted Commit remain unproved |
 
 ## Smallest supported granularity: one tool call
 

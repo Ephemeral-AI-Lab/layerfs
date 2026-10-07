@@ -24,6 +24,13 @@ processes. Current [S8 specification](../../307/S8-SPECIFICATION-20261008.md) an
 [R0–R9 rollout](../../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
 historical baseline pins, receipts and verdicts retain their original scope.
 
+Reviewed R2 ownership [proposed design]: Fuse owns connection/profile/session,
+all-loop serving evidence and bounded native dispatch; daemon owns the existing
+registry and composes overall Workspace Ready with service admission. No daemon
+native/request engine is duplicated. Bound and ControlReady remain distinct
+from Ready; [source review](../../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+changes homes, not the acceptance predicate.
+
 ## 1. Purpose and granularity
 
 [owner requirement]

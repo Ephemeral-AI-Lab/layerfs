@@ -1,0 +1,16 @@
+{
+  "final_changed_local_links_checked": 501,
+  "missing_paths": [],
+  "anchor_validation": "02-document-check.json; only added final receipt links have no fragments",
+  "full_staged_whitespace_exit": 0,
+  "product_trees_match_counted": true,
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "source_members_active": 12,
+  "proposed_after_actual_FUSE_activation": 13,
+  "R1_proofs": "Unchanged source, reused only at original scope",
+  "implementation_or_runtime_changes": false,
+  "review_only": true
+}

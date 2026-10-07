@@ -22,6 +22,13 @@ processes. Current [S8 specification](../../307/S8-SPECIFICATION-20261008.md) an
 [R0–R9 rollout](../../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
 historical baseline pins, receipts and verdicts retain their original scope.
 
+Reviewed R2 ownership [proposed design]: Fuse owns normal native detach and
+connection/request drain; daemon combines those exact receipts with all namespace-
+bound SQL/completion/Store/control consumers before native revocation, Close and
+route removal. Busy keeps service usable. Connection-drained alone is insufficient.
+Forced teardown remains R6; this ownership change does not complete its proofs.
+See [source review](../../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
+
 ## 1. Observable contract
 
 [owner decision]

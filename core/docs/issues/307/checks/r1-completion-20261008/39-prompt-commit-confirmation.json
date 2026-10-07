@@ -1,0 +1,26 @@
+{
+  "commit": "5be93f6d7f9352eab3cbfa286fedbc861e6e3494",
+  "first_parent": "ed965f895dbe5f835a690180b6c76f93fe368d74",
+  "committed_tree": "9ea9895db5f18f8bd5fbfe91451e86f5984846cf",
+  "index_matches_commit": true,
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "committed_production_count_recomputed_matches": true,
+  "production_loc": {
+    "before": 170673,
+    "after": 170673,
+    "delta": 0
+  },
+  "migration_subtotals": {
+    "active": 62382,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443
+  },
+  "prompt": "core/docs/issues/307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md",
+  "prompt_sha256": "a7366863134f3c9ce4d2a1e84e3d37007a0de8a3e77278bbd7f8e328cea3affb",
+  "scope": "Documentation-only next-agent prompt; no R2-R5 execution or new agent/chat",
+  "R1_closure": "ed965f895dbe5f835a690180b6c76f93fe368d74",
+  "full_R0_R9_objective": "uncompleted; stop after handoff; pause requested"
+}

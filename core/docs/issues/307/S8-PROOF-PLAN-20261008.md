@@ -25,6 +25,25 @@ owns the prospective disposition; historical source pins, receipts and verdicts
 stay unchanged. The [R0–R9 rollout](ROLLOUT-LEDGER-20261008.md) is the current
 implementation assignment, superseding narrower old checkpoint dispatches.
 
+Reviewed source-ownership update2026-10-08 at `5be93f6d7`: follow the
+[ownership review](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md) and
+[reviewed file layout](FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md). FUSE owns the
+connection and kernel request service; daemon assembles it with the existing
+shared SQL/Store owners and composes overall Ready/unmount/Commit. Planned daemon
+`native/` and kernel `request/steps/` homes are superseded. This is proposed source
+organization, not implementation or relaxed proof requirements. R1 is complete;
+only optional admin cancellation/client provenance is deferred. R2–R5 execution
+awaits owner dispatch; forced teardown/concurrency/frozen acceptance remain later.
+
+Source-boundary coverage: Fuse tests establish connection/profile/callback/
+admission/parking/reply/coherence behavior; daemon integration tests establish the
+aggregate registry/control/engine/Store Ready and terminal conjunction. Existing
+FP-8/FP-34 service proofs must cover completion before/after waiter registration,
+lost publisher, credit release and shutdown waking the original continuation;
+no polling or occupied-worker substitute. These are correctness obligations of
+the existing deferred-service mechanism, not numerical gates or passing evidence.
+Normal R2 drain is distinct from R6 force/concurrency and R8 frozen qualification.
+
 ## 1. Purpose and rules
 
 The plan defines how a future S8 implementation must prove function, counts,

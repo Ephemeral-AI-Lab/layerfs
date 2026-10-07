@@ -25,6 +25,15 @@ processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
 [R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
 historical baseline pins, receipts and verdicts retain their original scope.
 
+Source-ownership revision2026-10-08 [proposed design, reviewed against verified
+R1 at `5be93f6d7`]: [reviewed ownership](../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+assigns the complete native connection/request service to `layerfs-fuse`.
+Daemon assembles it with the existing shared SQL/Store services and retains
+registry/control, overall Ready/terminal unmount and the existing Commit driver.
+Dependency is daemon -> fuse -> workspace; Fuse imports no daemon. This changes
+proposed homes, not filesystem guarantees or proof outcomes. Native implementation
+remains R2–R5; optional admin is deferred and R1 is verified.
+
 ## 1. Readiness and the complete base
 
 [owner requirement; proposed readiness contract]
@@ -85,6 +94,18 @@ the expected common case. Engine ownership, queue service and backpressure must
 support Execs of any duration in either mode. No assumed short command, fixed
 Workspace lifetime or command classifier may justify retiring state or leaving
 reclamation until a presumed near-term unmount.
+
+### Native request dispatch versus SQL service
+
+The existing daemon Overlay owner is the sole SQL scheduler and remains shared
+by filesystem, Commit and cleanup. The proposed Fuse dispatcher schedules bounded
+native continuations, not transactions. Daemon application/filesystem.rs assembles
+one shared Fuse service; service/filesystem_port.rs maps narrow original-operation
+interfaces into the existing engine. It must not contain a second request/session
+engine or require Fuse to import daemon types. Engine completion/loss and credit
+release notifications resume parked Fuse requests without occupying K workers.
+Native lookup/open/request lifetime state remains indexed in Overlay; separate
+owners/atomic jobs and automatic bounded reclamation do not move into resident maps.
 
 ## 2. Database and connection topology
 

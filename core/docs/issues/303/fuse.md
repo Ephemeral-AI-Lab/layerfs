@@ -18,6 +18,15 @@ processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
 [R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
 historical baseline pins, receipts and verdicts retain their original scope.
 
+Source-ownership revision2026-10-08 [proposed design, reviewed against verified
+R1 at `5be93f6d7`]: [reviewed ownership](../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+assigns the complete native connection/request service to `layerfs-fuse`.
+Daemon assembles it with the existing shared SQL/Store services and retains
+registry/control, overall Ready/terminal unmount and the existing Commit driver.
+Dependency is daemon -> fuse -> workspace; Fuse imports no daemon. This changes
+proposed homes, not filesystem guarantees or proof outcomes. Native implementation
+remains R2–R5; optional admin is deferred and R1 is verified.
+
 ## 1. Load-bearing contract
 
 One tool call is the smallest supported orchestration granularity. A Workspace
@@ -87,15 +96,15 @@ not full POSIX metadata fidelity.
 
 ```text
  mount A request --+                     daemon overlay.sqlite
- mount A request --+-> bounded runnable queues -> fair SQL jobs
+ mount A request --+-> Fuse shared dispatch -> existing fair SQL owner
  mount B request --+              |
                                   +-- no request owns SQL connection
 
- if inode guarded or upstream unavailable:
+ if an original engine/immutable demand is pending:
      retain bounded reply + incarnation + cancellation state
      park request ---------------------------> waiter registry
      return worker to dispatch
-     readiness -> re-admit original operation -> exact reply
+     completion/credit notification -> resume original continuation -> exact reply
 
  two parked requests for A/file-x
      do NOT consume both workers serving A/file-y
@@ -112,6 +121,21 @@ consistent bounded plan and retains immutable roots before fetching base data.
 The payload algorithm must bound work even after dense one-byte fragmentation;
 128 KiB alone does not bound the old number of intersected extents. See the
 [engine](daemon-sqlite.md) for data/ownership/service contracts.
+
+Fuse session/dispatch/operations/coherence own this full kernel lifecycle.
+Handlers reuse Workspace semantics and atomic backed Overlay lifetime jobs;
+operation handlers do not become another filesystem engine. Daemon supplies
+concrete services through narrow ports, keeps one SQL owner shared with Commit/
+cleanup, and composes overall Workspace Ready/drain. A fixed K Fuse worker pool
+is shared across mounts, not recreated for each connection.
+
+Current OwnerClient read/job adapters block on Pending.wait; moving them behind
+an interface is insufficient. Missing native service interfaces must transfer an
+original pending operation and race-safe completion/loss/credit notifications,
+allow Fuse to park without a worker/lock, and preserve exact terminal custody.
+No polling, thread-per-waiter workaround or failed-operation replay is selected.
+Fuse connection-serving/drained receipts do not alone establish aggregate
+Workspace Ready or terminal unmount. Full I-3/I-8/I-9/I-14 remain in force.
 
 ## 4. Cache coherence and lifetime transitions
 

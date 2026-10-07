@@ -30,6 +30,16 @@ owns the prospective disposition; historical source pins, receipts and verdicts
 stay unchanged. The [R0–R9 rollout](ROLLOUT-LEDGER-20261008.md) is the current
 implementation assignment, superseding narrower old checkpoint dispatches.
 
+Reviewed source-ownership update2026-10-08 at `5be93f6d7`: follow the
+[ownership review](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md) and
+[reviewed file layout](FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md). FUSE owns the
+connection and kernel request service; daemon assembles it with the existing
+shared SQL/Store owners and composes overall Ready/unmount/Commit. Planned daemon
+`native/` and kernel `request/steps/` homes are superseded. This is proposed source
+organization, not implementation or relaxed proof requirements. R1 is complete;
+only optional admin cancellation/client provenance is deferred. R2–R5 execution
+awaits owner dispatch; forced teardown/concurrency/frozen acceptance remain later.
+
 ## 1. Labels
 
 | Label | Meaning |
@@ -73,7 +83,7 @@ facts about the pin, not measured penalties.
 | A reader is chosen by a blind counter and then a blocking mutex; a quarantined reader stays in rotation | [open.rs](../../../crates/layerfs-daemon/src/store/open.rs) |
 | Identical concurrent misses each acquire | [client.rs](../../../crates/layerfs-workspace/src/base/client.rs) |
 | `SourceView::lookup`/`stat` compose one answer from up to five independent owner jobs | [view.rs](../../../crates/layerfs-workspace/src/workspace/view.rs) |
-| Every port blocks its caller in `Pending::wait` | [completion.rs](../../../crates/layerfs-daemon/src/service/completion.rs) |
+| Current OwnerClient read/job adapters block in `Pending::wait`; `try_complete` alone supplies no native continuation wakeup | [completion.rs](../../../crates/layerfs-daemon/src/service/completion.rs) |
 | A mutation is followed by a second owner job that releases its publication ticket | `ReplyAttempted` in [commands.rs](../../../crates/layerfs-daemon/src/overlay/commands.rs) |
 | An unreleased lease, request or base-source row keeps a closed namespace `Held`; no reclaim phase deletes those tables | [close.rs](../../../crates/layerfs-overlay/src/lifetime/close.rs), [reclaim.rs](../../../crates/layerfs-overlay/src/maintenance/reclaim.rs) |
 | A demand whose hits and fetched results together exceed the 32 MiB window fails after the fetch, and nothing fetched is retained, so an identical later demand pays again | [client.rs](../../../crates/layerfs-workspace/src/base/client.rs) |

@@ -165,6 +165,15 @@ Exec registration, reading and mutating the mount and retaining a filesystem
 reference during an unmount attempt. S10 must prove that such changes survive
 Commit and a fresh mount. Use ordinary public filesystem access in these proofs.
 
+Reviewed target source ownership2026-10-08: the replacement `layerfs-fuse` owns
+its complete native connection/request service, including bounded dispatch,
+parking/resumption, kernel handlers/replies and coherence. Daemon assembles one
+shared Fuse service with its existing SQL/Store services, retaining registry,
+overall Ready/unmount and Commit composition. Dependency is daemon -> fuse ->
+workspace, never Fuse -> daemon. This remains unimplemented R2–R5 work; see the
+[reviewed ownership](docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
+Moving blocking OwnerClient calls behind a port does not establish deferred service.
+
 ### Shared construction and completion boundaries
 
 Source checked at `4156e9070`, guidance updated 2026-10-08. Namespace Init and

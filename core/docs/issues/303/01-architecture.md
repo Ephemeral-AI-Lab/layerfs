@@ -16,6 +16,15 @@ processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
 [R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
 historical baseline pins, receipts and verdicts retain their original scope.
 
+Source-ownership revision2026-10-08 [proposed design, reviewed against verified
+R1 at `5be93f6d7`]: [reviewed ownership](../307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+assigns the complete native connection/request service to `layerfs-fuse`.
+Daemon assembles it with the existing shared SQL/Store services and retains
+registry/control, overall Ready/terminal unmount and the existing Commit driver.
+Dependency is daemon -> fuse -> workspace; Fuse imports no daemon. This changes
+proposed homes, not filesystem guarantees or proof outcomes. Native implementation
+remains R2–R5; optional admin is deferred and R1 is verified.
+
 ## 1. What the owner requires
 
 Implement both current workstreams in `core/`. Root `crates/` is the v0.1.6
@@ -90,9 +99,9 @@ history completion or safe collection.
 | --- | --- | --- |
 | Mutable metadata and physical payload | daemon overlay engine / shared SQLite | Every key/query constrained by Workspace namespace/incarnation |
 | Filesystem semantics and stable views | Workspace / daemon | No SQL text, kernel protocol or pack format knowledge |
-| Kernel protocol/coherence | FUSE adapter / daemon | Ordinary syscall path for every authorized process |
+| Native connection and kernel request lifecycle | layerfs-fuse library in daemon process | Session/serving/drain, callbacks, bounded shared dispatch/parking, kernel handlers/replies/coherence over Workspace semantics |
 | Bash and streaming process I/O | ordinary Sandbox/runtime or external executor | No automatic runtime cap or command-specific filesystem hooks |
-| Registry/lifecycle/admission | daemon composition | Short routing references; no whole-Exec/Commit slot lock |
+| Overall Workspace lifecycle/admission | daemon composition | Sole registry and Ready/terminal conjunction over Fuse and engine receipts; no duplicate native request engine |
 | Logical content reads/construction | layerfs-content / daemon | Stable sources, Store policy, bounded synchronous output |
 | Saved objects and physical encoding | cluster-one Storage/provider / daemon | Immutable identities, semantic admission, reference closure |
 | Branch/stage/Commit/serial authority | HistoryCatalog/provider / daemon | Atomic overwrite Branch publication with captured parent; exact outcomes |
@@ -129,8 +138,9 @@ changes. No cap increase or whole-file error fallback substitutes for those chan
                                     |
                          overlay.sqlite
 
- independent daemon work: content construction per Commit, Store demands,
-                          runnable filesystem service; commands remain runtime-owned
+ independent engine work: content construction per Commit and admitted Store demands
+ Fuse service in daemon process: one shared K pool, parked/runnable kernel requests
+ commands remain runtime-owned
  parked requests: inode/resource waiters retain bounded cancellable replies
 ```
 
@@ -141,7 +151,10 @@ single-writer database serializes whole commands or Commits. SQL jobs retain
 short transaction ownership and bounded fair service; actual device throughput
 and whole-system residency remain qualification work.
 
-Fairness spans Workspaces and service classes, including live/idle cleanup.
+The Fuse request scheduler and existing daemon SQL scheduler serve distinct
+units. application/filesystem.rs assembles one Fuse service shared by mounts;
+service/filesystem_port.rs supplies actual pending engine operations and wakeups,
+not another native scheduler. Fairness spans Workspaces and service classes, including live/idle cleanup.
 Waiters park without occupying all native workers or holding Workspace locks
 across owner/Store waits. Each Workspace admits one Commit lifecycle, with one
 construction producer and its local borrowed Save. Different Workspaces may

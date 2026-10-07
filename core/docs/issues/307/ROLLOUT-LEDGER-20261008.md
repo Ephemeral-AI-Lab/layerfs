@@ -124,3 +124,17 @@ core105256/active62382/reference65417/excluded predecessors37431/integration5443
 unchanged. [Exact parent/staged count](checks/r1-completion-20261008/28-exact-production-loc.json)
 classifies archived uncommitted admin/R2 drafts as evidence, with no production
 retirement credit. The handoff and post-commit confirmation identify the closure.
+
+## Reviewed source organization, after R1
+
+At input5be93f6d7, [the ownership review](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+selects Fuse as owner of session/dispatch/kernel operations/replies/coherence.
+Daemon supplies application/filesystem assembly and narrow service/filesystem_port
+implementations over the existing shared fair SQL owner/direct Store; it keeps
+registry, overall Ready/normal terminal conjunction and existing Commit driver.
+Planned daemon native/ and request/steps/ homes are superseded, not moved code.
+Current active count is12; replacement FUSE will make13. Product/LOC and all R1
+proof identities are unchanged. No R2–R5 implementation or new agent is dispatched.
+Normal drain remains R2, coherence R3, captured namespace R4, mounted Commit R5;
+R4 component work may overlap R2/R3 and R5 depends on all three. Forced teardown/
+sustained concurrency/frozen acceptance and conditional retirement remain later.

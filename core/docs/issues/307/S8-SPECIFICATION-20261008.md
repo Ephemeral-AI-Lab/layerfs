@@ -34,6 +34,16 @@ owns the prospective disposition; historical source pins, receipts and verdicts
 stay unchanged. The [R0–R9 rollout](ROLLOUT-LEDGER-20261008.md) is the current
 implementation assignment, superseding narrower old checkpoint dispatches.
 
+Reviewed source-ownership update2026-10-08 at `5be93f6d7`: follow the
+[ownership review](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md) and
+[reviewed file layout](FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md). FUSE owns the
+connection and kernel request service; daemon assembles it with the existing
+shared SQL/Store owners and composes overall Ready/unmount/Commit. Planned daemon
+`native/` and kernel `request/steps/` homes are superseded. This is proposed source
+organization, not implementation or relaxed proof requirements. R1 is complete;
+only optional admin cancellation/client provenance is deferred. R2–R5 execution
+awaits owner dispatch; forced teardown/concurrency/frozen acceptance remain later.
+
 ## 1. Scope, authority and status of claims
 
 S8 delivers, on the existing direct-Store daemon: a native FUSE mount per
@@ -108,7 +118,7 @@ Workspace lifetime and Commit cadence are independent.
  --------------------------------             ---------------------------------------------
  Init -> seal -> install (once)               control Service + registry (one per daemon)
  mount / Commit / status /   ------->    |        |             |
- unmount over authenticated channels         Store (1 writer,     Overlay Owner       request service
+ unmount over authenticated channels         Store (1 writer,     Overlay Owner       Fuse request service
                                              N readers, 1 cache)  (1 SQL thread)      (K workers, fair)
                                                  ^                    ^                   ^
                                                  +---------+----------+-------------------+
@@ -121,8 +131,24 @@ Workspace lifetime and Commit cadence are independent.
 Daemon-lifetime owners, never recreated per mount [implemented and
 source-verified]: the `Store` (writer, fixed readers, `CanonicalCache`), the
 overlay `Owner` thread with its queue and connection, and the control `Service`
-registry. S8 adds one more daemon-lifetime owner, the request service. They stay
-alive across zero-mounted-Workspace intervals.
+registry. [Proposed design] S8 adds one daemon-assembled `layerfs-fuse` request service with a
+fixed K-worker pool shared across all mounts. It and the engine owners stay alive
+across zero-mounted-Workspace intervals; only connection state is per mount.
+
+The crate dependency is daemon -> fuse -> workspace, never Fuse -> daemon.
+Fuse owns mount/profile/session/readiness/drain, callbacks, receive/handoff
+admission, queues/workers, parked continuations, operation handlers, replies and
+coherence. Its handlers reuse Workspace semantics and backed Overlay ownership.
+Daemon application/filesystem.rs assembles services; service/filesystem_port.rs
+implements only the narrow missing engine service interfaces. Existing SQL owner
+fairness across filesystem, Commit and cleanup remains separate and unchanged.
+
+Fuse connection-serving facts are necessary for overall Ready; daemon combines
+them with registry/Workspace/service admission. Fuse connection-drained facts are
+necessary for terminal unmount; daemon also proves all namespace-bound engine,
+Store and control work disposed, then revocation/Close/routing removal. Neither
+receipt substitutes for the other owner's predicate or creates a second registry.
+The full review specifies these interfaces without claiming they exist today.
 
 Invariants. Each is a requirement with a proof row in the
 [proof plan](S8-PROOF-PLAN-20261008.md#3-functional-proofs).
@@ -418,15 +444,23 @@ reported until Gone. No receiver shutdown silently drops another owner's job.
 | Thread | Count | May do | Never does |
 | --- | --- | --- | --- |
 | Dispatch loop (fuser `run`) | 2 per mount initially | Decode into its fixed receive slot; wait only for that mount's native handoff credit before any copy/job; own bounded inputs and hand off request/FORGET work | Wait for an owner result/credit, Store demand or stream; retain Workspace/cache/registry/SQL locks during the admission wait |
-| Service worker | `K` per daemon, fixed at readiness; initial `K = read_handles + 2` | Run one step of one request; perform a cold Store demand when it holds a reader; compose and send replies | Wait on a `Pending`, a flight or an admission credit |
+| Fuse request-service worker | `K` per daemon-assembled service, fixed at readiness; initial `K = read_handles + 2` | Run one step of one request; perform a cold Store demand when it holds a reader; compose and send replies | Wait on a `Pending`, a flight or an admission credit |
 | Overlay Owner | 1 per daemon [implemented] | Short typed SQL jobs and maintenance turns | Content decode, Store I/O, reply sends |
 | Mount session owner | 1 per mount, around `fuser::Session::run` | Retain session/result custody; distinguish joined successful completion from errors that can leave unjoined loops | Infer complete drain from run() returning an error |
 
-The existing engine remains the only SQL scheduler. The request service
+The existing daemon engine remains the only SQL scheduler. The Fuse request service
 schedules requests, not SQL: it decides which parked-then-runnable request a
 worker advances next. It adds no whole-Exec or whole-Commit gate, no polling,
 no batching sleep and no second queue in front of SQL beyond the Owner's own
 lanes.
+
+The current OwnerClient read/job adapters synchronously wait. They cannot simply
+be hidden behind `ports.rs` and called by all K workers. The missing service port
+must hand out an owned original pending operation with race-safe completion/loss/
+credit notifications. Fuse parks the continuation and later consumes that exact
+outcome once. Engine completion/credit owners stay in daemon; interfaces must not
+expose daemon types to Fuse or implement polling/thread-per-waiter fallbacks.
+Workspace semantic fact steps remain reusable, rather than duplicated in handlers.
 
 ### 6.2 Admission and backpressure
 
@@ -758,7 +792,7 @@ selected by the runtime remain explicit; LayerFS adds no runtime/output cap.
 | Property | Owning requirement | Proof |
 | --- | --- | --- |
 | Commands cannot open Store, Overlay or daemon credentials | Sandbox setup/external executor establishes unprivileged identity, protected path visibility, /proc protections and no inherited protected descriptors | FP-5-Runtime at actual topology; a directory layout is not isolation evidence |
-| Commands cannot abort/unmount the connection | Daemon owns mount/fusectl controls; runtime withholds relevant capabilities and helper escalation. P-2's explicit no-new-privileges setting belongs to runtime setup | FP-5-Runtime |
+| Commands cannot abort/unmount the connection | Fuse owns native mount/fusectl controls inside the privileged daemon process; daemon control authorizes transitions and runtime withholds relevant capabilities and helper escalation. P-2's explicit no-new-privileges setting belongs to runtime setup | FP-5-Runtime |
 | Permitted filesystem access | Kernel default_permissions and reported configured uid/gid/mode; same semantics for all processes seeing the mount | FP-17; no Exec admission |
 | Sibling mount visibility | Runtime access setup declares and proves its actual namespace topology; shared uid alone is no adversarial isolation boundary | FP-5-Runtime and FP-22-FS |
 | Working directory | Caller/runtime chooses it; optional SDK convenience chooses a mounted directory | It is not confinement |
@@ -989,7 +1023,7 @@ coverage.
 | --- | --- | --- |
 | D-1 | Extend the existing registry `Binding` with a native state and three gauges; add `Attach`, `Locate`, `ForceUnmount` as additive tags | A second routing registry; a single combined mount record that would blur the two acknowledgement points |
 | D-2 | First-party `mount(2)`/`umount2(2)` and `Session::from_fd`; two loops through `Config.n_threads` | fuser's mount and unmount ownership: silent helper fallback, lazy detach, a handle that reports success after `EBUSY` |
-| D-3 | A daemon request service with per-Workspace runnable queues, fixed workers and completion notifiers; dispatch loops never wait | Blocking the loop in `Pending::wait`; more loops per mount as a substitute for parking |
+| D-3 | One Fuse-owned request service shared across daemon mounts, with per-Workspace runnable queues, fixed workers and engine completion notifications; admitted work never waits on receivers/workers | Blocking the loop in `Pending::wait`; more loops per mount as a substitute for parking |
 | D-4 | One consistent answer job with required owning effects: positive LOOKUP acquires indexed custody, pure observations remain read-only; explicit processing leases/fact rounds are counted | A torn multi-job answer or a zero-SQL claim that drops necessary ownership |
 | D-5 | R admitted handoffs plus N fixed receive slots; only callback-entry native-capacity admission may wait on a receiver. Owner/Store prerequisites park off-loop; terminal wakeup disposes all waiters | Pretending fuser exposes a pre-read hook, unbounded pending input, or waiting on SQL/Store while holding a receiver |
 | D-6 | Indexed per-mount/per-inode lookup counts and leases; bounded checked FORGET jobs; independent open/processing custody | Counter-only FORGET and best-effort removed-inode attributes; a resident visited-tree map |

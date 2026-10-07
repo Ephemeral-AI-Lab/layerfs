@@ -14,7 +14,11 @@ any later owner direction before edits. Do not mistake a first mount demo for
 complete filesystem acceptance.
 
 The previous agent was explicitly told to stop after verified R1 and this prompt.
-Your R2–R5 work begins only when the owner dispatches/resumes it. The full R0–R9
+The subsequent architecture review changes only documentation and proposed homes;
+the verified R1 product/source/build/proof identities below remain unchanged.
+Your R2–R5 work begins only when the owner dispatches/resumes it. The later
+reviewed source split below is part of that assignment, not permission for the
+documentation agent to start implementation. The full R0–R9
 objective remains unfinished; completing this batch does not complete R6–R9.
 Do not create another chat, automation, remote publication or broader assignment.
 
@@ -75,6 +79,7 @@ Read current files, not merely the historical pins quoted in them.
   Read `S8-IMPLEMENTATION-PLAN-20261008.md`,
   `S8-MECHANISM-EVIDENCE-20261008.md`, `S8-PROOF-PLAN-20261008.md`,
   `FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md`,
+  `R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md`,
   `CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md` and
   `ROLLOUT-LEDGER-20261008.md` alongside it. Plans/research do not prove capability.
 - `core/docs/issues/307/R1-COMPLETE-FUSE-HANDOFF-20261008.md` and final R1 receipts
@@ -106,7 +111,8 @@ R1 closure commit: `ed965f895dbe5f835a690180b6c76f93fe368d74`.
 Its first parent and last production-changing commit:
 `e5e95e76c16da65172d17b6a52bb9a25613547ec`.
 R1 closure tree: `f8f2df8a94b69b46e2aab91f0aa6175d569c346f`.
-The prompt-delivery commit is documentation/evidence only; find its exact identity
+The latest prompt-delivery/ownership-review commit is documentation/evidence only;
+find its exact identity
 with `git log -1 --format=fuller -- core/docs/issues/307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md`.
 Do not assume HEAD equals the older R1 closure after that delivery commit.
 
@@ -263,6 +269,7 @@ exactly owned resources with retained receipts; never infer custody from names.
 | Typed SQL/lifetime jobs | Daemon `src/overlay/commands.rs`, `src/service/completion.rs`; Overlay `src/lifetime/` exact BaseSource/OpenFile/LookupOwner/FileRead/CapturedReader/OperationOwner and indexed records |
 | Captured file construction | Workspace `src/construction/captured/owner.rs`: `CapturedFileEdits::prepare/construct`; `src/construction/records.rs`: indexed construction backing |
 | Commit composition | Daemon `src/store/{commit,commit_types,settle}.rs`: Capture → begin Save → constructor → finish → History → prepared/known local install; exact failure/unknown custody |
+| Native request service (new) | Fuse src/{ports,session,dispatch,operations,coherence}; daemon application/filesystem.rs and service/filesystem_port.rs supply assembly/engine ports only |
 | Native wire addition | Bridge `src/control_types.rs`, request/reply codecs; SDK `src/workspace/` and `src/control/connection.rs` use the existing authenticated exchange/correlation owners |
 
 `store::BoundWorkspace::commit` accepts a constructor of the form
@@ -292,9 +299,25 @@ as implementation.
 
 Activate a real replacement `layerfs-fuse`, preserving/accounting the dormant
 incompatible predecessor before relocation. The predecessor imports old Workspace
-APIs and cannot activate unchanged. Only Fuse owns fuser types, callback decoding,
-attribute conversion and owned reply wrappers. Daemon owns the first-party request
-sink, Store/Workspace/SQL semantics and request service. Avoid dependency cycles.
+APIs and cannot activate unchanged. Only Fuse owns fuser types and the complete
+kernel connection/request lifecycle:
+mount/profile/session/readiness/drain, callbacks, bounded admission/queues/workers,
+parked requests/completion wakeups, operation handlers, replies and cache coherence.
+Daemon owns assembly/control, shared Overlay SQL fairness/direct Store and the
+existing Commit driver. Workspace/Overlay retain semantics/backed state. The
+dependency direction is daemon -> fuse -> workspace; Fuse imports no daemon.
+Reuse current domain ports/types, adding only genuinely missing service interfaces.
+No extra adapter crate, duplicated semantic engine or copied token hierarchy.
+
+Use Fuse session/, dispatch/ and operations/ homes instead of planned daemon
+native/ and kernel request/steps/. Daemon application/filesystem.rs assembles one
+Fuse service shared across mounts; service/filesystem_port.rs implements narrow
+engine ports, not a second session/request engine. One fixed K-worker Fuse pool
+lives for the daemon-assembled service, distinct from per-mount receive/session
+owners and the existing SQL scheduler serving filesystem/Commit/cleanup. Correct
+existing engine modules remain in place. See the reviewed layout for conditional
+splits; native_open.rs, read_service.rs, scratch and extra query modules are not
+scaffolding requirements.
 
 Extend the existing registry and authenticated protocol with Attach/Locate/Ready
 and retained native disposition. SDK mount is two separately acknowledged original
@@ -325,10 +348,15 @@ witness. Resolve these mechanisms with source-supported evidence and exact retai
 failure states; do not weaken Ready or extend the authorized third-party patch.
 
 Implement callback-entry admission before copied input with R+N accounting, bounded
-receive slots and terminal wakeups, plus one daemon-wide fixed-K fair service with
+receive slots and terminal wakeups, plus one Fuse-owned fixed-K fair service
+shared across daemon mounts with
 parked owned continuations. Current Pending.wait and Workspace mutation drivers
 provide semantics but are synchronous; calling them on receivers/service workers
-does not satisfy I-8. No admitted prerequisite wait on those workers, no locks held
+does not satisfy I-8. The port must transfer the original pending handle and
+race-safe completion/loss/credit wakeups; Fuse resumes and consumes that same
+outcome once. Handle registration/completion races and terminal disposal; no
+try_complete polling or thread per waiter. No admitted prerequisite wait on those
+workers, no locks held
 across parks, and no progress dependency on a later kernel request (I-9).
 
 Add consistent read/lookup answers and atomic indexed lookup aggregate acquisition
@@ -347,6 +375,13 @@ request/Owner/completion/Store/control drain, then native ownership revocation,
 acknowledged logical Close and route removal; bounded physical deletion may follow.
 Never let a second teardown attempt skip a consumed failed session/join result.
 Retain each original error/input/reply owner, including startup and send failures.
+
+Fuse reports connection serving/drained facts; daemon combines them with actual
+Workspace/service admission and all namespace-bound engine/Store/control work for
+overall Ready/terminal unmount. Do not duplicate those state machines or use a
+connection receipt alone as the aggregate result. Device/capability Create wiring
+belongs in existing Sandbox container.rs/container_types.rs; inspect through
+endpoint.rs/topology.rs. request.rs remains the ordinary Exec request owner.
 
 Required R2 proof: installed Store → complete Ready → ordinary external Bash
 read/stat/readdir/permissions → normal unmount and full drain. Include an unregistered

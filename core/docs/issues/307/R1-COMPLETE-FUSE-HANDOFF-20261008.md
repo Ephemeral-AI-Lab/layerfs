@@ -167,7 +167,9 @@ proof distinctions and all existing numerical/failure/unrun dispositions remain.
 1. Preserve dormant `layerfs-fuse` as an explicitly accounted predecessor before
    activating a real replacement. Its old Workspace imports are incompatible;
    it is not a fallback. Only the replacement Fuse adapter names fuser types.
-   Daemon receives owned first-party request/reply values and owns semantic service.
+   Fuse owns the full connection/request/dispatch/handler/reply/coherence service.
+   Daemon assembles it with narrow engine ports; Workspace/Overlay retain semantics
+   and backed state. See the [reviewed split](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
 2. Keep fuser exactly0.18.0 with only the authorized timestamp patch. Before each
    actual native fuser build run `python3 -B core/tools/check_fuser_integrity.py`.
    Base archive SHA256 `b82b6597d216503555ead6b358f341ef748869bf5c6fbae6a0cb9dd231baecfd`;
@@ -192,7 +194,8 @@ proof distinctions and all existing numerical/failure/unrun dispositions remain.
    continuous liveness. Open proc task-directory metadata is not an exit witness.
    These are unresolved engineering prerequisites, not permission to weaken Ready.
 6. Implement callback-entry admission before copying with R+N accounting, finite
-   receive slots and terminal wakeups; one daemon-wide K-worker fair service with
+   receive slots and terminal wakeups; one Fuse-owned K-worker fair service shared
+   across daemon mounts, with
    parked owned continuations. Existing synchronous Pending.wait and Workspace
    mutate loops are reusable semantics, not the required resumable scheduling.
    Never wait for a prerequisite on a receiver or admitted service worker, and
@@ -209,8 +212,8 @@ proof distinctions and all existing numerical/failure/unrun dispositions remain.
    drain from an outer handle or permit a second attempt to skip a lost result.
    Forced FS teardown does not kill caller-owned commands.
 
-The first resumed implementation/proof slice should add the actual Fuse adapter,
-request service and Attach/Locate state to the existing registry, then demonstrate
+The first resumed implementation/proof slice should add the complete Fuse native
+request service and daemon assembly/ports, plus Attach/Locate state in the existing registry, then demonstrate
 installed Store → complete native Ready → externally launched ordinary Bash
 read/stat/permissions → busy-preserving normal unmount → complete drain. Include
 lost Attach custody and an unregistered process retaining cwd/FD. A narrow kernel

@@ -73,3 +73,13 @@ defining the head. Each candidate retains its captured ancestry; displaced
 Commits remain immutable. Native replies preserve that known result or original
 unknown independently. See the [owner decision and proofs](../issues/307/BRANCH-OVERWRITE-DECISION-20261007.md);
 the earlier F13 HeadMoved receipts are historical evidence only.
+
+## Next native integration boundary
+
+At verified R1 product tree e3a61dfd814a579b58f56b63754ec3dbce83d67e, this control
+service still supplies logical Bound and the Store-half Commit composition. The
+[reviewed R2–R5 target](../issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
+assigns the full native connection/request service to Fuse and leaves this daemon
+registry/control owner responsible for overall Ready/terminal unmount and existing
+Commit admission. It adds no implemented native capability to this architecture
+record. Concrete serving/aggregate drain and mounted Commit remain unproved.

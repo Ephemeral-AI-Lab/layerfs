@@ -1,965 +1,273 @@
-# Final cluster-two product: proposed file-level layout
+# Reviewed cluster-two file layout through R5
 
 > **Status:** Proposal; target LayerFS 0.1.7; not a released contract.
-> Prepared 2026-10-08 against local `main` `752fc39ac7ae906d3e1e4ae50011c6d4d882cb50`.
-> This is a destination proposal after S8/S10/S11/S12/S13, not a statement that
-> these modules, native behavior or qualification already exist.
+> Revised2026-10-08 against `5be93f6d7f9352eab3cbfa286fedbc861e6e3494`;
+> implemented product tree `e3a61dfd814a579b58f56b63754ec3dbce83d67e`.
+> R1 is verified. This destination is not implemented or proved by this document.
 
-The owner's latest direction is incorporated: the SDK exposes Project, Workspace
-and Sandbox APIs. Commands run through ordinary sandbox/container execution or
-an external executor. The filesystem daemon owns no Bash supervisor, launcher
-mode, per-Exec cgroup, Exec registration or Exec stream/status/cancellation
-protocol. It still owns native requests, independent lookup/open/capture custody,
-Store/Commit work and exact filesystem teardown.
+The [ownership review](R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md) accepts FUSE as
+owner of the native connection and complete kernel request lifecycle. Daemon
+assembles it, retains the shared SQL/Store services, sole registry, overall
+Workspace Ready/terminal unmount and existing Commit driver. Planned daemon
+`native/` and kernel `request/steps/` trees are superseded by the Fuse homes below.
+The [S8 specification](S8-SPECIFICATION-20261008.md) retains full behavioral authority.
 
-This document supersedes conflicting folder recommendations in the older
-[source organization](SOURCE-ORGANIZATION-S7-S13.md) and the managed-Exec portions
-of the [S8 file plan](S8-IMPLEMENTATION-PLAN-20261008.md) for the destination shown
-here. The detailed S8 specification/proof reconciliation to caller-owned execution
-is still required; this file does not relabel those old proof IDs or receipts.
+## 1. Current source and legend
 
-## 1. Scope and legend
+The [current inventory](checks/r2-r5-ownership-review-20261008/01-current-source-inventory.json)
+contains every tracked active shipped source path and exact membership/counts:
+12 active crates,569 active production files and62382 active production LOC.
+Core including excluded code is105256; root reference65417; combined170673.
+Excluded predecessors37431 and old FUSE/Server integration5443 remain. Sandbox is
+already active, as are SDK facades and the daemon application/executable. FUSE
+is excluded incompatible predecessor source. Actual replacement FUSE makes13
+active crates; do not reactivate its old imports or create empty membership.
 
-The complete product tree below includes every tracked active-member `src/` and
-shipped `sql/` file at the source pin, each package manifest, and proposed native,
-SDK and S10 additions. It preserves the current cluster-one owning homes rather
-than recreating their implementation. The final product has 13 crates: the current
-11 plus actual replacement FUSE and Sandbox. `layerfs-api/sdk` is the path of the
-`layerfs-sdk` package; API-core is not reintroduced.
+The original all-file destination/origin/blob
+[manifest](checks/final-cluster-two-layout-20261008/02-destination-manifest.json)
+and Git version of this document retain the earlier source pin. That immutable
+manifest is historical, not the current membership or dispatch assignment.
+Unchanged interiors are collapsed below, rather than moving them to satisfy a
+new exhaustive diagram. Original source and API owners remain authoritative.
 
-- `[E]`: an existing tracked file's owning home is retained. This does not promise
-  that its implementation remains byte-identical through later milestones.
-- `[M]`: proposed relocation of existing source, with its exact origin shown.
-- `[P]`: proposed destination. Add it only when actual implementation needs that
-  responsibility. Names may be adjusted coherently during implementation; this
-  is not a requirement to create empty files or a fixed final file-count target.
+`[E]` means an existing owning home at the reviewed input; `[R2]`–`[R5]` identify
+new/extended responsibility, not implemented behavior. Braced groups are candidate
+focused siblings. Add or split only for actual behavior/line limits; names and file
+counts are not scaffolding requirements. New production files≤999 physical lines;
+lib.rs/mod.rs≤200, declarations/delegation only. Tests stay outside product src.
 
-Every module entry is included. `lib.rs`/`mod.rs` remain declaration/delegation
-only and at most 200 physical lines; new implementation files stay at most 999.
-A large responsibility splits before the ceiling; no wrapper/interface is added
-just to populate the tree. Each crate keeps external `tests/`, `examples/` and
-`benches/` as applicable. The next section lists prospective native proof files;
-existing test fixtures and immutable evidence are not product source.
-
-The exact destination/origin/blob map and preserved-file hashes are in the
-[manifest](checks/final-cluster-two-layout-20261008/02-destination-manifest.json).
-
-## 2. Complete product source tree
+## 2. Proposed end-of-R5 owning homes
 
 ```text
-└── core/
-    └── crates/
-        ├── layerfs-api/
-        │   └── sdk/
-        │       ├── src/
-        │       │   ├── control/
-        │       │   │   ├── connection.rs  [M] ← core/crates/layerfs-api/sdk/src/control.rs
-        │       │   │   └── mod.rs  [P]
-        │       │   ├── project/
-        │       │   │   ├── api.rs  [P]
-        │       │   │   ├── history.rs  [P]
-        │       │   │   ├── init.rs  [M] ← core/crates/layerfs-api/sdk/src/init.rs
-        │       │   │   ├── init_types.rs  [M] ← core/crates/layerfs-api/sdk/src/init_types.rs
-        │       │   │   ├── install.rs  [M] ← core/crates/layerfs-api/sdk/src/install.rs
-        │       │   │   ├── install_types.rs  [M] ← core/crates/layerfs-api/sdk/src/install_types.rs
-        │       │   │   └── mod.rs  [P]
-        │       │   ├── sandbox/
-        │       │   │   ├── api.rs  [P]
-        │       │   │   ├── exec.rs  [P]
-        │       │   │   ├── lifecycle.rs  [P]
-        │       │   │   ├── mod.rs  [P]
-        │       │   │   └── types.rs  [P]
-        │       │   ├── workspace/
-        │       │   │   ├── api.rs  [P]
-        │       │   │   ├── commit.rs  [P]
-        │       │   │   ├── mod.rs  [P]
-        │       │   │   ├── mount.rs  [P]
-        │       │   │   ├── status.rs  [P]
-        │       │   │   ├── types.rs  [P]
-        │       │   │   └── unmount.rs  [P]
-        │       │   └── lib.rs  [E]
-        │       └── Cargo.toml  [E]
-        ├── layerfs-bridge/
-        │   ├── src/
-        │   │   ├── native/
-        │   │   │   ├── channel.rs  [E]
-        │   │   │   ├── error.rs  [E]
-        │   │   │   ├── handshake.rs  [E]
-        │   │   │   ├── io.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── profile.rs  [E]
-        │   │   │   └── types.rs  [E]
-        │   │   ├── control.rs  [E]
-        │   │   ├── control_history.rs  [E]
-        │   │   ├── control_native.rs  [P]
-        │   │   ├── control_reply.rs  [E]
-        │   │   ├── control_request.rs  [E]
-        │   │   ├── control_types.rs  [E]
-        │   │   ├── lib.rs  [E]
-        │   │   ├── provision.rs  [E]
-        │   │   ├── provision_wire.rs  [E]
-        │   │   └── wire.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-content/
-        │   ├── src/
-        │   │   ├── contract/
-        │   │   │   ├── error.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   └── policy.rs  [E]
-        │   │   ├── file/
-        │   │   │   ├── cdc/
-        │   │   │   │   ├── gear.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   └── zeros.rs  [E]
-        │   │   │   ├── construction/
-        │   │   │   │   ├── bytes.rs  [E]
-        │   │   │   │   ├── chunk_runs.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   └── runs.rs  [E]
-        │   │   │   ├── edit/
-        │   │   │   │   ├── apply.rs  [E]
-        │   │   │   │   ├── backing.rs  [E]
-        │   │   │   │   ├── compare.rs  [E]
-        │   │   │   │   ├── concat.rs  [E]
-        │   │   │   │   ├── draft_codec.rs  [E]
-        │   │   │   │   ├── engine.rs  [E]
-        │   │   │   │   ├── finish.rs  [E]
-        │   │   │   │   ├── input.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── objects.rs  [E]
-        │   │   │   │   ├── references.rs  [E]
-        │   │   │   │   ├── resolution.rs  [E]
-        │   │   │   │   ├── runs.rs  [E]
-        │   │   │   │   ├── source.rs  [E]
-        │   │   │   │   ├── split.rs  [E]
-        │   │   │   │   ├── state.rs  [E]
-        │   │   │   │   ├── tree.rs  [E]
-        │   │   │   │   └── zero.rs  [E]
-        │   │   │   ├── mapping/
-        │   │   │   │   ├── build.rs  [E]
-        │   │   │   │   ├── codec.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── predecessor.rs  [E]
-        │   │   │   │   ├── read.rs  [E]
-        │   │   │   │   ├── repeated.rs  [E]
-        │   │   │   │   └── types.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── read.rs  [E]
-        │   │   │   └── view.rs  [E]
-        │   │   ├── filesystem/
-        │   │   │   ├── attributes/
-        │   │   │   │   ├── build.rs  [E]
-        │   │   │   │   ├── codec.rs  [E]
-        │   │   │   │   ├── keys.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── patch.rs  [E]
-        │   │   │   │   ├── portable.rs  [E]
-        │   │   │   │   ├── read.rs  [E]
-        │   │   │   │   └── value.rs  [E]
-        │   │   │   ├── directory/
-        │   │   │   │   ├── changes.rs  [P]
-        │   │   │   │   ├── codec.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── read.rs  [E]
-        │   │   │   │   └── update.rs  [E]
-        │   │   │   ├── inode/
-        │   │   │   │   ├── codec.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── read.rs  [E]
-        │   │   │   │   └── update.rs  [E]
-        │   │   │   ├── qualify/
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── proof.rs  [E]
-        │   │   │   │   ├── records.rs  [E]
-        │   │   │   │   └── walk.rs  [E]
-        │   │   │   ├── references/
-        │   │   │   │   ├── backing.rs  [E]
-        │   │   │   │   ├── indexed.rs  [E]
-        │   │   │   │   ├── indexed_release.rs  [E]
-        │   │   │   │   ├── indexed_rows.rs  [E]
-        │   │   │   │   ├── indexed_validation.rs  [P]
-        │   │   │   │   ├── indexed_wire.rs  [E]
-        │   │   │   │   ├── meaning.rs  [E]
-        │   │   │   │   ├── merge.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── operation.rs  [E]
-        │   │   │   │   ├── record.rs  [E]
-        │   │   │   │   ├── reduce.rs  [E]
-        │   │   │   │   ├── release.rs  [E]
-        │   │   │   │   └── runs.rs  [E]
-        │   │   │   ├── rows/
-        │   │   │   │   ├── check.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── source.rs  [E]
-        │   │   │   │   ├── spool.rs  [E]
-        │   │   │   │   ├── stream.rs  [E]
-        │   │   │   │   ├── stream_update.rs  [E]
-        │   │   │   │   ├── update.rs  [E]
-        │   │   │   │   └── view.rs  [E]
-        │   │   │   ├── sorted/
-        │   │   │   │   ├── budget.rs  [E]
-        │   │   │   │   ├── finish.rs  [E]
-        │   │   │   │   ├── format.rs  [E]
-        │   │   │   │   ├── merge.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   └── page.rs  [E]
-        │   │   │   ├── state/
-        │   │   │   │   ├── codec.rs  [E]
-        │   │   │   │   ├── initial.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── roots.rs  [E]
-        │   │   │   │   ├── store.rs  [E]
-        │   │   │   │   └── types.rs  [E]
-        │   │   │   ├── validate/
-        │   │   │   │   ├── backed.rs  [P]
-        │   │   │   │   ├── cycles.rs  [E]
-        │   │   │   │   ├── entries.rs  [E]
-        │   │   │   │   └── incremental.rs  [P]
-        │   │   │   ├── identity.rs  [E]
-        │   │   │   ├── input.rs  [E]
-        │   │   │   ├── limits.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── objects.rs  [E]
-        │   │   │   ├── path.rs  [E]
-        │   │   │   ├── read.rs  [E]
-        │   │   │   ├── root.rs  [E]
-        │   │   │   ├── symlink.rs  [E]
-        │   │   │   ├── update.rs  [E]
-        │   │   │   └── validate.rs  [E]
-        │   │   ├── object/
-        │   │   │   ├── context/
-        │   │   │   │   ├── dispatch.rs  [E]
-        │   │   │   │   ├── inode.rs  [E]
-        │   │   │   │   ├── mapping.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── namespace.rs  [E]
-        │   │   │   │   └── read.rs  [E]
-        │   │   │   ├── access.rs  [E]
-        │   │   │   ├── admission.rs  [E]
-        │   │   │   ├── codec.rs  [E]
-        │   │   │   ├── id.rs  [E]
-        │   │   │   ├── inode_leaf.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── output.rs  [E]
-        │   │   │   └── predecessor.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-daemon/
-        │   ├── src/
-        │   │   ├── bin/
-        │   │   │   └── layerfs-daemon.rs  [P]
-        │   │   ├── control/
-        │   │   │   ├── attach.rs  [P]
-        │   │   │   ├── commit.rs  [P]
-        │   │   │   ├── failure.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── native_state.rs  [P]
-        │   │   │   ├── operations.rs  [E]
-        │   │   │   ├── registry.rs  [E]
-        │   │   │   ├── serve.rs  [E]
-        │   │   │   ├── status.rs  [E]
-        │   │   │   ├── types.rs  [E]
-        │   │   │   └── unmount.rs  [P]
-        │   │   ├── native/
-        │   │   │   ├── config.rs  [P]
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   ├── readiness.rs  [P]
-        │   │   │   └── session.rs  [P]
-        │   │   ├── overlay/
-        │   │   │   ├── captured_run_port.rs  [E]
-        │   │   │   ├── commands.rs  [E]
-        │   │   │   ├── credits.rs  [E]
-        │   │   │   ├── file_port.rs  [E]
-        │   │   │   ├── indexed_operation_record.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── native_ownership_commands.rs  [P]
-        │   │   │   ├── operation_record_port.rs  [E]
-        │   │   │   ├── owner.rs  [E]
-        │   │   │   ├── queue.rs  [E]
-        │   │   │   ├── read_commands.rs  [P]
-        │   │   │   └── read_port.rs  [E]
-        │   │   ├── request/
-        │   │   │   ├── steps/
-        │   │   │   │   ├── attributes.rs  [P]
-        │   │   │   │   ├── directory.rs  [P]
-        │   │   │   │   ├── lookup.rs  [P]
-        │   │   │   │   ├── mod.rs  [P]
-        │   │   │   │   ├── mutation.rs  [P]
-        │   │   │   │   ├── open.rs  [P]
-        │   │   │   │   ├── read.rs  [P]
-        │   │   │   │   └── refused.rs  [P]
-        │   │   │   ├── credits.rs  [P]
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   ├── queue.rs  [P]
-        │   │   │   ├── types.rs  [P]
-        │   │   │   └── workers.rs  [P]
-        │   │   ├── service/
-        │   │   │   ├── completion.rs  [E]
-        │   │   │   ├── job_sql.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── native_observations.rs  [P]
-        │   │   │   ├── observations.rs  [E]
-        │   │   │   └── startup.rs  [E]
-        │   │   ├── store/
-        │   │   │   ├── bind.rs  [E]
-        │   │   │   ├── commit.rs  [E]
-        │   │   │   ├── commit_types.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── open.rs  [E]
-        │   │   │   ├── operation.rs  [E]
-        │   │   │   ├── ports.rs  [E]
-        │   │   │   ├── read_service.rs  [P]
-        │   │   │   ├── settle.rs  [E]
-        │   │   │   └── types.rs  [E]
-        │   │   ├── bootstrap.rs  [E]
-        │   │   ├── install.rs  [E]
-        │   │   ├── install_file.rs  [E]
-        │   │   ├── install_types.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-fuse/
-        │   ├── src/
-        │   │   ├── mount/
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   ├── profile.rs  [P]
-        │   │   │   ├── session.rs  [P]
-        │   │   │   └── syscalls.rs  [P]
-        │   │   ├── request/
-        │   │   │   ├── decode.rs  [P]
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   ├── reply.rs  [P]
-        │   │   │   └── types.rs  [P]
-        │   │   ├── attributes.rs  [P]
-        │   │   ├── diagnostics.rs  [P]
-        │   │   └── lib.rs  [P]
-        │   └── Cargo.toml  [P]
-        ├── layerfs-history/
-        │   ├── src/
-        │   │   ├── contract/
-        │   │   │   ├── catalog.rs  [E]
-        │   │   │   ├── error.rs  [E]
-        │   │   │   ├── identity.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── query.rs  [E]
-        │   │   │   └── records.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-overlay/
-        │   ├── sql/
-        │   │   ├── accounting.sql  [E]
-        │   │   ├── native_ownership.sql  [P]
-        │   │   └── schema.sql  [E]
-        │   ├── src/
-        │   │   ├── contract/
-        │   │   │   ├── custody.rs  [E]
-        │   │   │   ├── error.rs  [E]
-        │   │   │   ├── indexed_operation_record.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   └── types.rs  [E]
-        │   │   ├── database/
-        │   │   │   ├── accounting.rs  [E]
-        │   │   │   ├── allocation.rs  [E]
-        │   │   │   ├── connection.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── profile.rs  [E]
-        │   │   │   ├── startup.rs  [E]
-        │   │   │   └── statements.rs  [E]
-        │   │   ├── diagnostics/
-        │   │   │   ├── access_plan.rs  [E]
-        │   │   │   ├── captured_runs.rs  [E]
-        │   │   │   ├── indexed_operation_record_plan.rs  [E]
-        │   │   │   ├── lifetime_plan.rs  [E]
-        │   │   │   ├── metrics.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── native_ownership_plan.rs  [P]
-        │   │   │   ├── payload.rs  [E]
-        │   │   │   ├── source_plan.rs  [E]
-        │   │   │   └── startup.rs  [E]
-        │   │   ├── lifetime/
-        │   │   │   ├── captured_reader.rs  [E]
-        │   │   │   ├── close.rs  [E]
-        │   │   │   ├── composition.rs  [E]
-        │   │   │   ├── file_owners.rs  [E]
-        │   │   │   ├── frontier.rs  [E]
-        │   │   │   ├── generation.rs  [E]
-        │   │   │   ├── indexed_operation_record.rs  [E]
-        │   │   │   ├── lookup.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── native_group.rs  [P]
-        │   │   │   ├── native_lookup.rs  [P]
-        │   │   │   ├── operation.rs  [E]
-        │   │   │   ├── operation_record.rs  [E]
-        │   │   │   ├── orphan.rs  [E]
-        │   │   │   ├── retire.rs  [P]
-        │   │   │   ├── source.rs  [E]
-        │   │   │   └── workspace.rs  [E]
-        │   │   ├── maintenance/
-        │   │   │   ├── debt.rs  [P]
-        │   │   │   ├── garbage.rs  [E]
-        │   │   │   ├── indexed_operation_record.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── native_ownership.rs  [P]
-        │   │   │   ├── orphan.rs  [E]
-        │   │   │   ├── ready.rs  [E]
-        │   │   │   ├── reclaim.rs  [E]
-        │   │   │   └── source_wait.rs  [E]
-        │   │   ├── namespace/
-        │   │   │   ├── captured_namespace.rs  [P]
-        │   │   │   ├── compound.rs  [E]
-        │   │   │   ├── directory_entry.rs  [E]
-        │   │   │   ├── inode.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   └── read_compound.rs  [P]
-        │   │   ├── payload/
-        │   │   │   ├── access.rs  [E]
-        │   │   │   ├── captured_runs.rs  [E]
-        │   │   │   ├── captured_types.rs  [E]
-        │   │   │   ├── cells.rs  [E]
-        │   │   │   ├── layers.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   └── stream.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-persistence/
-        │   ├── sql/
-        │   │   └── sqlite/
-        │   │       ├── acquisition/
-        │   │       │   ├── queries/
-        │   │       │   │   ├── abandoned.sql  [E]
-        │   │       │   │   ├── advance.sql  [E]
-        │   │       │   │   ├── begin.sql  [E]
-        │   │       │   │   ├── bind_native.sql  [E]
-        │   │       │   │   ├── bindings_first.sql  [E]
-        │   │       │   │   ├── bindings_next.sql  [E]
-        │   │       │   │   ├── charge.sql  [E]
-        │   │       │   │   ├── claim_epoch.sql  [E]
-        │   │       │   │   ├── complete_file.sql  [E]
-        │   │       │   │   ├── credit.sql  [E]
-        │   │       │   │   ├── directories.sql  [E]
-        │   │       │   │   ├── directory_path.sql  [E]
-        │   │       │   │   ├── directory_sizes.sql  [E]
-        │   │       │   │   ├── discard_entries.sql  [E]
-        │   │       │   │   ├── discard_entry_keys.sql  [E]
-        │   │       │   │   ├── discard_entry_tail.sql  [E]
-        │   │       │   │   ├── discard_native.sql  [E]
-        │   │       │   │   ├── discard_native_keys.sql  [E]
-        │   │       │   │   ├── discard_native_tail.sql  [E]
-        │   │       │   │   ├── entries_first.sql  [E]
-        │   │       │   │   ├── entries_next.sql  [E]
-        │   │       │   │   ├── entry_dependencies.sql  [E]
-        │   │       │   │   ├── file_roots.sql  [E]
-        │   │       │   │   ├── job.sql  [E]
-        │   │       │   │   ├── job_sizes.sql  [E]
-        │   │       │   │   ├── jobs.sql  [E]
-        │   │       │   │   ├── owner.sql  [E]
-        │   │       │   │   ├── place_entry.sql  [E]
-        │   │       │   │   ├── put_entries.sql  [E]
-        │   │       │   │   ├── put_entry.sql  [E]
-        │   │       │   │   ├── put_native.sql  [E]
-        │   │       │   │   ├── release.sql  [E]
-        │   │       │   │   ├── release_abandoned.sql  [E]
-        │   │       │   │   ├── set_directory_root.sql  [E]
-        │   │       │   │   ├── unplaced_first.sql  [E]
-        │   │       │   │   └── unplaced_next.sql  [E]
-        │   │       │   └── schema.sql  [E]
-        │   │       ├── queries/
-        │   │       │   └── history/
-        │   │       │       ├── allocation_advance_scope.sql  [E]
-        │   │       │       ├── allocation_insert_scope.sql  [E]
-        │   │       │       ├── allocation_scope_by_id.sql  [E]
-        │   │       │       ├── branch_branch_by_id.sql  [E]
-        │   │       │       ├── branch_branch_first_page.sql  [E]
-        │   │       │       ├── branch_branch_name_taken.sql  [E]
-        │   │       │       ├── branch_branch_next_page.sql  [E]
-        │   │       │       ├── branch_insert_branch.sql  [E]
-        │   │       │       ├── commit_advance_branch.sql  [E]
-        │   │       │       ├── commit_commit_by_id.sql  [E]
-        │   │       │       ├── commit_delete_stage.sql  [E]
-        │   │       │       ├── commit_insert_commit.sql  [E]
-        │   │       │       ├── layerstack_advance_stack.sql  [E]
-        │   │       │       ├── layerstack_insert_layer.sql  [E]
-        │   │       │       ├── layerstack_insert_stack.sql  [E]
-        │   │       │       ├── layerstack_layer_by_id.sql  [E]
-        │   │       │       ├── layerstack_layer_by_source.sql  [E]
-        │   │       │       ├── layerstack_layer_root.sql  [E]
-        │   │       │       ├── layerstack_stack_by_id.sql  [E]
-        │   │       │       ├── layerstack_stack_first_page.sql  [E]
-        │   │       │       ├── layerstack_stack_head.sql  [E]
-        │   │       │       ├── layerstack_stack_name_taken.sql  [E]
-        │   │       │       ├── layerstack_stack_next_page.sql  [E]
-        │   │       │       ├── staging_bump_token.sql  [E]
-        │   │       │       ├── staging_delete_stage.sql  [E]
-        │   │       │       ├── staging_insert_stage.sql  [E]
-        │   │       │       ├── staging_next_token.sql  [E]
-        │   │       │       ├── staging_stage_by_workspace.sql  [E]
-        │   │       │       ├── staging_stage_first_page.sql  [E]
-        │   │       │       └── staging_stage_next_page.sql  [E]
-        │   │       ├── history.sql  [E]
-        │   │       ├── metadata.sql  [E]
-        │   │       ├── objects.sql  [E]
-        │   │       ├── objects_units.sql  [E]
-        │   │       └── objects_units_index.sql  [E]
-        │   ├── src/
-        │   │   ├── backend/
-        │   │   │   ├── sqlite/
-        │   │   │   │   ├── acquisition/
-        │   │   │   │   │   ├── accounting.rs  [E]
-        │   │   │   │   │   ├── cleanup.rs  [E]
-        │   │   │   │   │   ├── entry_windows.rs  [E]
-        │   │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   │   ├── reads.rs  [E]
-        │   │   │   │   │   ├── root_windows.rs  [E]
-        │   │   │   │   │   ├── statements.rs  [E]
-        │   │   │   │   │   └── writes.rs  [E]
-        │   │   │   │   ├── connection.rs  [E]
-        │   │   │   │   ├── file_control.rs  [E]
-        │   │   │   │   ├── metadata_allocation.rs  [E]
-        │   │   │   │   ├── metadata_locations.rs  [E]
-        │   │   │   │   ├── metadata_policy.rs  [E]
-        │   │   │   │   ├── metadata_pooling.rs  [E]
-        │   │   │   │   ├── metadata_signatures.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── objects_read.rs  [E]
-        │   │   │   │   ├── objects_selection.rs  [E]
-        │   │   │   │   ├── prepared.rs  [E]
-        │   │   │   │   ├── profile.rs  [E]
-        │   │   │   │   ├── publish.rs  [E]
-        │   │   │   │   ├── query.rs  [E]
-        │   │   │   │   ├── reclamation.rs  [E]
-        │   │   │   │   ├── rows.rs  [E]
-        │   │   │   │   ├── schema.rs  [E]
-        │   │   │   │   ├── seal.rs  [E]
-        │   │   │   │   ├── seal_allocation.rs  [E]
-        │   │   │   │   ├── statement_work.rs  [E]
-        │   │   │   │   ├── transaction.rs  [E]
-        │   │   │   │   ├── unit_io.rs  [E]
-        │   │   │   │   ├── unit_layout.rs  [E]
-        │   │   │   │   ├── units_publish.rs  [E]
-        │   │   │   │   └── units_read.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   └── records.rs  [E]
-        │   │   ├── history/
-        │   │   │   ├── allocation.rs  [E]
-        │   │   │   ├── bindings.rs  [E]
-        │   │   │   ├── branch.rs  [E]
-        │   │   │   ├── catalog.rs  [E]
-        │   │   │   ├── commit.rs  [E]
-        │   │   │   ├── layerstack.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── provider.rs  [E]
-        │   │   │   ├── rows.rs  [E]
-        │   │   │   ├── staging.rs  [E]
-        │   │   │   └── transaction.rs  [E]
-        │   │   ├── metadata/
-        │   │   │   ├── allocation.rs  [E]
-        │   │   │   ├── locations.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── policy.rs  [E]
-        │   │   │   ├── pooling.rs  [E]
-        │   │   │   └── signatures.rs  [E]
-        │   │   ├── objects/
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   └── read.rs  [E]
-        │   │   ├── storage/
-        │   │   │   ├── acquisition/
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   └── provider.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── provider.rs  [E]
-        │   │   │   └── publication.rs  [E]
-        │   │   ├── store/
-        │   │   │   ├── config.rs  [E]
-        │   │   │   ├── handles.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── open.rs  [E]
-        │   │   │   └── seal.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-project/
-        │   ├── src/
-        │   │   ├── import/
-        │   │   │   ├── backing.rs  [E]
-        │   │   │   ├── batch.rs  [E]
-        │   │   │   ├── error.rs  [E]
-        │   │   │   ├── files.rs  [E]
-        │   │   │   ├── init.rs  [E]
-        │   │   │   ├── metadata.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── namespace.rs  [E]
-        │   │   │   ├── scan.rs  [E]
-        │   │   │   ├── source.rs  [E]
-        │   │   │   └── work.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-sandbox/
-        │   ├── src/
-        │   │   ├── access/
-        │   │   │   ├── identity.rs  [P]
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   └── visibility.rs  [P]
-        │   │   ├── backend/
-        │   │   │   ├── docker/
-        │   │   │   │   ├── create.rs  [P]
-        │   │   │   │   ├── exec.rs  [P]
-        │   │   │   │   ├── inspect.rs  [P]
-        │   │   │   │   ├── logs.rs  [P]
-        │   │   │   │   ├── mod.rs  [P]
-        │   │   │   │   ├── ports.rs  [P]
-        │   │   │   │   ├── remove.rs  [P]
-        │   │   │   │   └── streams.rs  [P]
-        │   │   │   └── mod.rs  [P]
-        │   │   ├── lifecycle/
-        │   │   │   ├── create.rs  [P]
-        │   │   │   ├── delete.rs  [P]
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   └── readiness.rs  [P]
-        │   │   ├── owner/
-        │   │   │   ├── config.rs  [P]
-        │   │   │   ├── identity.rs  [P]
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   └── routing.rs  [P]
-        │   │   ├── types/
-        │   │   │   ├── execution.rs  [P]
-        │   │   │   ├── failure.rs  [P]
-        │   │   │   ├── mod.rs  [P]
-        │   │   │   └── sandbox.rs  [P]
-        │   │   └── lib.rs  [P]
-        │   └── Cargo.toml  [P]
-        ├── layerfs-storage/
-        │   ├── src/
-        │   │   ├── encoding/
-        │   │   │   ├── delta/
-        │   │   │   │   ├── candidates.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── read.rs  [E]
-        │   │   │   │   ├── record.rs  [E]
-        │   │   │   │   └── select.rs  [E]
-        │   │   │   ├── pool/
-        │   │   │   │   ├── counters.rs  [E]
-        │   │   │   │   ├── delta.rs  [E]
-        │   │   │   │   ├── index.rs  [E]
-        │   │   │   │   ├── leaf.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── read.rs  [E]
-        │   │   │   │   └── value_group.rs  [E]
-        │   │   │   ├── codec.rs  [E]
-        │   │   │   ├── decode.rs  [E]
-        │   │   │   ├── full.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── pack_cache.rs  [E]
-        │   │   │   └── pack_units.rs  [E]
-        │   │   ├── pack/
-        │   │   │   ├── assemble.rs  [E]
-        │   │   │   ├── layout.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   └── placement.rs  [E]
-        │   │   ├── port/
-        │   │   │   ├── acquisition/
-        │   │   │   │   ├── contract.rs  [E]
-        │   │   │   │   ├── mod.rs  [E]
-        │   │   │   │   ├── rows.rs  [E]
-        │   │   │   │   └── work.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── pack.rs  [E]
-        │   │   │   ├── persistence.rs  [E]
-        │   │   │   ├── read_pack.rs  [E]
-        │   │   │   ├── read_scoped.rs  [E]
-        │   │   │   └── read_selection.rs  [E]
-        │   │   ├── read/
-        │   │   │   ├── counters.rs  [E]
-        │   │   │   ├── fetch.rs  [E]
-        │   │   │   ├── length.rs  [E]
-        │   │   │   ├── locator_cache.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── objects.rs  [E]
-        │   │   │   ├── prefetch.rs  [E]
-        │   │   │   ├── provider.rs  [E]
-        │   │   │   └── units.rs  [E]
-        │   │   ├── save/
-        │   │   │   ├── batch.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── operation.rs  [E]
-        │   │   │   ├── pooled.rs  [E]
-        │   │   │   ├── profile.rs  [E]
-        │   │   │   ├── provider.rs  [E]
-        │   │   │   ├── publication.rs  [E]
-        │   │   │   ├── reservation.rs  [E]
-        │   │   │   ├── seal.rs  [E]
-        │   │   │   ├── select.rs  [E]
-        │   │   │   ├── source.rs  [E]
-        │   │   │   ├── state.rs  [E]
-        │   │   │   ├── wave.rs  [E]
-        │   │   │   └── work.rs  [E]
-        │   │   ├── store/
-        │   │   │   ├── error.rs  [E]
-        │   │   │   ├── handle.rs  [E]
-        │   │   │   ├── location.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── policy.rs  [E]
-        │   │   │   ├── reservations.rs  [E]
-        │   │   │   └── source.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        ├── layerfs-telemetry/
-        │   ├── src/
-        │   │   ├── output/
-        │   │   │   ├── collector.rs  [E]
-        │   │   │   ├── encode.rs  [E]
-        │   │   │   ├── health.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── queue.rs  [E]
-        │   │   │   └── retention.rs  [E]
-        │   │   ├── platform/
-        │   │   │   ├── linux.rs  [E]
-        │   │   │   ├── macos.rs  [E]
-        │   │   │   └── mod.rs  [E]
-        │   │   ├── runtime/
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── monitor.rs  [E]
-        │   │   │   ├── observation.rs  [E]
-        │   │   │   ├── operation.rs  [E]
-        │   │   │   └── session.rs  [E]
-        │   │   ├── timer/
-        │   │   │   ├── bounded_json.rs  [E]
-        │   │   │   ├── format.rs  [E]
-        │   │   │   ├── json.rs  [E]
-        │   │   │   ├── limits.rs  [E]
-        │   │   │   ├── mod.rs  [E]
-        │   │   │   ├── recording.rs  [E]
-        │   │   │   ├── report.rs  [E]
-        │   │   │   └── scope.rs  [E]
-        │   │   └── lib.rs  [E]
-        │   └── Cargo.toml  [E]
-        └── layerfs-workspace/
-            ├── src/
-            │   ├── base/
-            │   │   ├── cache.rs  [E]
-            │   │   ├── client.rs  [E]
-            │   │   ├── file.rs  [E]
-            │   │   ├── mod.rs  [E]
-            │   │   └── view.rs  [E]
-            │   ├── construction/
-            │   │   ├── captured/
-            │   │   │   ├── context.rs  [E]
-            │   │   │   ├── mod.rs  [E]
-            │   │   │   ├── normalize.rs  [E]
-            │   │   │   ├── owner.rs  [E]
-            │   │   │   ├── scan.rs  [E]
-            │   │   │   ├── source.rs  [E]
-            │   │   │   └── state.rs  [E]
-            │   │   ├── namespace/
-            │   │   │   ├── assemble.rs  [P]
-            │   │   │   ├── cursor.rs  [P]
-            │   │   │   ├── directories.rs  [P]
-            │   │   │   ├── inodes.rs  [P]
-            │   │   │   ├── mod.rs  [P]
-            │   │   │   └── normalize.rs  [P]
-            │   │   ├── scratch/
-            │   │   │   ├── mod.rs  [P]
-            │   │   │   ├── records.rs  [P]
-            │   │   │   └── release.rs  [P]
-            │   │   ├── context.rs  [P]
-            │   │   ├── driver.rs  [P]
-            │   │   ├── mod.rs  [E]
-            │   │   ├── outcome.rs  [P]
-            │   │   └── records.rs  [E]
-            │   ├── mutation/
-            │   │   ├── driver.rs  [E]
-            │   │   ├── eval.rs  [E]
-            │   │   ├── facts.rs  [E]
-            │   │   ├── job.rs  [E]
-            │   │   └── mod.rs  [E]
-            │   ├── operations/
-            │   │   ├── file/
-            │   │   │   ├── mod.rs  [E]
-            │   │   │   ├── read.rs  [E]
-            │   │   │   └── write.rs  [E]
-            │   │   ├── namespace/
-            │   │   │   ├── create.rs  [E]
-            │   │   │   ├── list.rs  [E]
-            │   │   │   ├── mod.rs  [E]
-            │   │   │   ├── remove.rs  [E]
-            │   │   │   └── rename.rs  [E]
-            │   │   ├── attributes.rs  [E]
-            │   │   ├── mod.rs  [E]
-            │   │   ├── read_plan.rs  [P]
-            │   │   └── types.rs  [E]
-            │   ├── ports/
-            │   │   ├── captured_namespace.rs  [P]
-            │   │   ├── captured_runs.rs  [E]
-            │   │   ├── files.rs  [E]
-            │   │   ├── lengths.rs  [E]
-            │   │   ├── mod.rs  [E]
-            │   │   ├── operation_record.rs  [E]
-            │   │   └── overlay.rs  [E]
-            │   ├── workspace/
-            │   │   ├── install.rs  [E]
-            │   │   ├── mod.rs  [E]
-            │   │   ├── serials.rs  [E]
-            │   │   ├── state.rs  [E]
-            │   │   └── view.rs  [E]
-            │   └── lib.rs  [E]
-            └── Cargo.toml  [E]
+core/
+  Cargo.toml, Cargo.lock               [R2] real replacement FUSE and reviewed locked wiring
+  crates/
+    layerfs-fuse/                     [R2] preserve excluded predecessor before replacement
+      Cargo.toml
+      src/
+        lib.rs
+        ports.rs                      [R2] narrow nonblocking services; no daemon imports
+        attributes.rs                 [R2/R3] checked native identity/attribute conversion
+        diagnostics.rs                [R2] connection/request/credit/drain facts
+        mount/
+          mod.rs
+          config.rs                   [R2] native configuration, no application parsing
+          profile.rs                  [R2] negotiation and explicit receipt
+          syscalls.rs                 [R2] mount/plain normal detach; force extensions R6
+        session/
+          mod.rs
+          startup.rs                  [R2] connection and receive-loop ownership
+          readiness.rs                [R2] actual all-loop serving evidence
+          state.rs                    [R2] exact native states/retained failures
+          drain.rs                    [R2] connection/request drain; aggregate unmount in daemon
+        request/
+          mod.rs
+          callbacks.rs                [R2/R3] only fuser callback implementation
+          decode.rs                   [R2/R3] validate within preadmission receive ownership
+          types.rs                    [R2/R3] bounded owned inputs and original identity
+          reply.rs                    [R2/R3] one reply attempt/disposal, no inferred delivery
+        dispatch/
+          mod.rs
+          admission.rs                [R2] R handoffs + N receive slots, terminal wakeups
+          queue.rs                    [R2] fair runnable native requests across mounts
+          workers.rs                  [R2] one fixed K pool per daemon-assembled service
+          pending.rs                  [R2] parked original requests/replies/credits
+          completion.rs               [R2] resume notification, exact result ownership
+        operations/
+          mod.rs
+          lookup.rs                   [R2] LOOKUP/FORGET via atomic backed engine jobs
+          attributes.rs               [R2/R3] semantic plans, getattr/setattr
+          directory.rs                [R2] backed handles/cookies, bounded enumeration
+          open.rs                     [R2/R3] OPEN/RELEASE and processing association
+          read.rs, readlink.rs         [R2] exact source/consumer lifetime
+          write.rs                    [R3] write/append; split truncate.rs only if useful
+          create.rs, link.rs          [R3] namespace entry handlers
+          rename.rs, remove.rs         [R3] native orchestration of Workspace decisions
+          flush.rs                    [R3] supported flush/fsync semantics, no Store seal
+          unsupported.rs              [R2/R3] explicit refusals/disposal
+        coherence/
+          mod.rs
+          reply_order.rs              [R3] published frontier and reply attempts
+          attributes.rs               [R3] aliases/attribute coherence
+          pages.rs                    [R3/R5] cached pages and install continuity
+      tests/                          [R2/R3] mount/requests/normal teardown/mutations/mmap;
+                                      [R5] component install coherence, no separate mmap engine
+
+    layerfs-daemon/
+      Cargo.toml                      [R2] daemon -> fuse -> workspace; no reverse edge
+      src/
+        lib.rs, bootstrap.rs          [E] declarations; concrete Store composition
+        install.rs, install_file.rs, install_types.rs [E]
+        bin/layerfs-daemon.rs          [E] thin application entry
+        application/
+          mod.rs, cli.rs              [E]
+          config.rs, failure.rs       [E/R2/R5]
+          connection.rs, owner.rs     [E] existing application/control ownership
+          serve.rs                    [E/R2]
+          filesystem.rs               [R2] assemble shared Fuse service/engine ports
+        control/
+          mod.rs, registry.rs         [E/R2] sole registry/aggregate native disposition
+          operations.rs, serve.rs     [E/R2/R5]
+          types.rs, failure.rs        [E/R2/R5]
+          attach.rs, unmount.rs       [R2] aggregate admission/Ready/normal terminal transition
+          status.rs                   [E/R2] compose maintained gauges
+          commit.rs                   [R5] control admission/delegation to store/commit.rs
+        service/
+          mod.rs, startup.rs          [E]
+          job_sql.rs, observations.rs [E] SQL owner receipts, not FUSE duplicate diagnostics
+          completion.rs               [E/R2] real completion/loss notifier, exact consumption
+          filesystem_port.rs          [R2/R3] implement Fuse service ports; no request engine
+        overlay/
+          mod.rs, owner.rs, queue.rs, credits.rs [E/R2] shared fair SQL service/notifications
+          commands.rs                 [E/R2/R3/R4]
+          read_port.rs, file_port.rs  [E/R2/R3] preserve existing callers; native async seam
+          captured_run_port.rs        [E/R4]
+          operation_record_port.rs, indexed_operation_record.rs [E/R4]
+          native_ownership_commands.rs [R2/R3] bounded typed jobs on existing owner
+          captured_namespace_port.rs  [R4] adapt existing captured page/point jobs
+        store/
+          mod.rs, open.rs, bind.rs, ports.rs [E/R2/R4] direct Store and admitted demand service
+          read_service.rs             [R2, conditional] missing bounded immutable-demand service
+          operation.rs, types.rs      [E] fresh exact failure scopes
+          commit.rs                   [E/R5] sole capture/Save/finish/publish/install driver
+          commit_types.rs, settle.rs  [E/R5] original result/unknown/install custody
+      tests/                          [R2/R3] external executor/aggregate normal drain;
+                                      [R5] mounted Commit/custody/full fresh-mount oracle
+
+    layerfs-workspace/
+      src/
+        lib.rs, base/                 [E] current immutable view/cache/client
+        mutation/                     [E/R3] reuse decisions in resumable native plans
+        operations/
+          mod.rs, types.rs, attributes.rs [E/R2/R3]
+          read_plan.rs                [R2, conditional] missing resumable source-qualified plans
+          file/{mod,read,write}.rs    [E/R2/R3]
+          namespace/{mod,list,create,remove,rename}.rs [E/R2/R3]
+        ports/
+          mod.rs, overlay.rs, files.rs, lengths.rs [E/R2/R3/R4]
+          captured_runs.rs, operation_record.rs [E/R4]
+          captured_namespace.rs       [R4] provider-neutral captured pages/points
+        construction/
+          mod.rs, records.rs          [E/R4]
+          context.rs, driver.rs, outcome.rs [R4] one captured namespace producer
+          captured/                   [E/R4] existing changed-file context/normalize/owner/
+                                      scan/source/state; no second file constructor
+          namespace/{mod,cursor,directories,inodes,normalize,assemble}.rs [R4]
+          scratch/{mod,records,release}.rs [R4, conditional] reuse existing indexed records
+        workspace/{mod,state,view,serials,install}.rs [E/R2/R5]
+      tests/                          [R4] captured/incremental namespace; [R5] install continuity
+
+    layerfs-overlay/
+      sql/
+        schema.sql, accounting.sql    [E/R2/R4]
+        native_ownership.sql          [R2, conditional] additional atomic indexed statements
+      src/
+        lib.rs, contract/, database/, payload/ [E/R2/R3/R4]
+        namespace/
+          mod.rs, inode.rs, directory_entry.rs, compound.rs [E/R2/R3]
+          read_compound.rs            [R2] consistent facts + atomic entry/lookup ownership
+          captured_namespace.rs       [R4, conditional] only missing indexed captured windows
+        lifetime/
+          existing source/owner/record modules [E]
+          native_group.rs, native_lookup.rs [R2] backed aggregate/incarnation/revocation
+          native_open.rs              [R2/R3, conditional] reuse file_owners.rs first
+          file_owners.rs, lookup.rs   [E/R2/R3] independent existing owners retained
+          orphan.rs, captured_reader.rs, composition.rs, frontier.rs, close.rs [E/R2–R5]
+        maintenance/
+          existing modules, reclaim.rs, orphan.rs [E/R2–R5]
+          native_ownership.rs         [R2/R3] bounded live/terminal last-owner reclamation
+        diagnostics/
+          existing access/lifetime/payload modules [E]
+          native_ownership_plan.rs    [R2, conditional] actual new statement-plan evidence
+      tests/                          [R2/R3] native indexed custody; [R4] captured windows
+
+    layerfs-content/
+      src/
+        lib.rs, contract/, file/, object/ [E] reuse canonical algorithms/formats
+        filesystem/
+          existing attributes/inode/rows/root modules [E/R4]
+          directory/changes.rs        [R4, conditional] only missing bounded changes interface
+          references/indexed_validation.rs [R4, conditional] extend existing indexed reducers
+          validate.rs                [E/R4] existing validation entry
+          validate/{cycles,entries}.rs [E/R4]
+          validate/{backed,incremental}.rs [R4] missing backed/topology obligations, no second validator
+      tests/                          [R4] extend actual canonical/backed validation coverage
+
+    layerfs-api/sdk/
+      src/
+        lib.rs, operation.rs, control/, project/, sandbox/ [E]
+        workspace/
+          mod.rs, api.rs, binding.rs  [E/R2/R5] Bound stays distinct from Ready
+          mount.rs, types.rs          [R2/R5] original bind + Attach attempts/custody
+          status.rs, unmount.rs, commit.rs [E/R2/R5]
+      tests/                          [R2/R5] public control/mounted integration, reuse homes
+
+    layerfs-bridge/
+      src/
+        lib.rs, native/               [E] authenticated CONTROL transport, no data service
+        control.rs, control_request.rs, control_reply.rs, control_types.rs [E/R2/R5]
+        control_native.rs             [R2] bounded composed native facts/control vocabulary
+        control_history.rs, existing setup/provision/wire modules [E]
+      tests/                          [R2/R5] extend current protocol homes
+
+    layerfs-sandbox/
+      src/
+        lib.rs, types/                [E]
+        backend/docker/
+          container.rs, container_types.rs [E/R2] actual FUSE device/capability deployment
+          endpoint.rs, topology.rs    [E/R2] selected settings/backing/mount visibility
+          request.rs                  [E] ordinary Exec creation, no FUSE configuration owner
+          existing archive/HTTP/listener/stream modules [E]
+      tests/                          [R2] changed deployment permissions/visibility
+      no optional admin module/API/dependency
+
+    layerfs-storage/, layerfs-persistence/, layerfs-history/ [E] Save/provider/publication
+    layerfs-project/, layerfs-telemetry/ [E] host Init and existing observations
+  vendor/fuser-0.18.0/                 existing sole authorized patch, integrity checked
+  docs/issues/{303,307}/              contracts/layout/rollout/handoff and append-only receipts
 ```
 
-## 3. Deepest native and integrated proof destinations
+## 3. Consolidation and interfaces
 
-These are proposed external test homes. Existing active tests and qualifying
-unchanged receipts are reused where applicable; excluded predecessor tests must
-be ported or retired explicitly. No proof has run for this layout document.
+`ports.rs` is not permission for an interface per algorithm or a generic executor.
+Reuse Workspace and domain contracts; add only missing asynchronous engine service
+boundaries. Dependency `daemon -> fuse -> workspace` forbids Fuse importing daemon.
+Any needed existing domain-type edge must be concrete/reviewed, with no cyclic
+back-edge, copied token schema or extra adapter crate.
 
-```text
-└── core/
-    └── crates/
-        ├── layerfs-api/
-        │   └── sdk/
-        │       └── tests/
-        │           ├── project_api.rs  [P]
-        │           ├── sandbox_api.rs  [P]
-        │           └── workspace_api.rs  [P]
-        ├── layerfs-daemon/
-        │   └── tests/
-        │       ├── external_executor.rs  [P]
-        │       ├── mounted_commit.rs  [P]
-        │       ├── mounted_concurrency.rs  [P]
-        │       └── native_drain.rs  [P]
-        ├── layerfs-fuse/
-        │   └── tests/
-        │       ├── native_mmap.rs  [P]
-        │       ├── native_mount.rs  [P]
-        │       ├── native_mutations.rs  [P]
-        │       ├── native_requests.rs  [P]
-        │       └── native_teardown.rs  [P]
-        ├── layerfs-overlay/
-        │   └── tests/
-        │       └── native_ownership.rs  [P]
-        ├── layerfs-sandbox/
-        │   └── tests/
-        │       ├── lifecycle.rs  [P]
-        │       ├── normal_exec.rs  [P]
-        │       └── workspace_visibility.rs  [P]
-        └── layerfs-workspace/
-            └── tests/
-                ├── captured_namespace.rs  [P]
-                └── incremental_namespace.rs  [P]
-```
+Native continuations and wakeups live in Fuse dispatch; real pending SQL completions,
+credits and immutable Store read admission retain their engine owners. A fixed
+K pool is shared across mounts in one daemon-assembled Fuse service. The shared
+SQL owner independently serves native, Commit and cleanup producers. Blocking
+OwnerClient read adapters, `try_complete` polling or a thread per parked request
+cannot substitute for the required no-worker-wait completion mechanism.
 
-## 4. Ownership and shared construction
+Fuse reports connection-serving/connection-drained evidence. Daemon combines that
+with Workspace/service admission and all namespace-bound engine/Store/control work
+for overall Ready/terminal unmount. Positive LOOKUP/acquire and FORGET/release are
+atomic backed jobs; open/processing/captured owners remain independent. No in-memory
+whole-namespace map or implicit drop-based retirement is introduced.
 
-| Home | Responsibility |
+Names can consolidate: lookup+forget, open+release, write+truncate and related
+namespace handlers should share a focused file until size/responsibility requires
+splitting. Extra native_open/read_service/scratch/query/diagnostic files are conditional
+on missing behavior, not new parallel implementations. Keep correct current code
+where it is; external tests may reuse existing homes. `native_mmap` tests kernel
+callbacks/coherence and creates no separate mmap engine.
+
+## 4. Checkpoints and later retirement
+
+| Checkpoint | Required independent completion |
 | --- | --- |
-| SDK `project/` | ProjectApi; existing Init, seal/install manifest and fork/history control |
-| SDK `workspace/` | WorkspaceApi; mount/location/Commit/status/unmount. An optional exec convenience resolves the mount directory and delegates ordinary Sandbox execution |
-| SDK `sandbox/` | SandboxApi facade over actual sandbox lifecycle/execution; no Store data service |
-| Sandbox `backend/docker/` | Concrete ordinary container execution and standard streams/results. The caller/runtime owns exit and explicit cancellation; a lost result is never automatic re-execution |
-| Sandbox `access/` | Establish user identity, mount visibility and Store/overlay/credential protection. Actual platform proof is required; a folder is not isolation evidence |
-| FUSE `mount/` and `request/` | Only fuser-typed implementation; direct mount/abort/plain detach, callback conversion and one reply attempt |
-| Daemon `request/` | Bounded receive/handoff custody, fair runnable filesystem service and exact result disposal |
-| Daemon `control/` | One registry and explicit lifecycle/Commit admission. No process lifetime is inferred from command registration or shell exit |
-| Daemon `overlay/` | The existing single fair SQL owner and typed command adapters |
-| Daemon `store/commit.rs` | Existing capture → constructor → Save finish → History publication → known local install orchestration. Extend this owner rather than adding a second Commit driver |
-| Workspace `construction/captured/` | Existing regular-file normalization from authenticated retained base plus final overlay changes |
-| Workspace `construction/namespace/` | Complete captured names, links, metadata and changed file roots through bounded cursors |
-| Workspace `construction/scratch/` | Attempt-scoped operation records and exact release; no global Init acquisition backing |
-| Content `filesystem/` and `file/` | Canonical algorithms, owning validation, backed reducers and file edits |
-| Overlay `lifetime/` and `maintenance/` | Independent lookup/open/capture/processing custody and bounded last-owner cleanup |
-| Storage / History / Persistence | Immutable Save/encoding, history publication semantics, concrete global Store provider |
+| R2 | Full native serving and aggregate Ready; read/stat/readdir/permissions; indexed lookup/open/request custody; Busy service usability and complete normal drain |
+| R3 | Ordinary mutations, kernel-origin mapped writes, aliases/attributes/pages and exact request/reply/lifetime coherence |
+| R4 | Complete captured names/links/metadata/file roots with bounded canonical construction/validation and incremental topology; may progress alongside R2/R3 |
+| R5 | Existing daemon Commit driver consumes R4; actual mounted Bash changes, publication/known install, fresh-mount full oracle, failures/unknowns and later active-change survival; depends on R2/R3/R4 |
+| R6/R8 | Forced teardown, sustained concurrency and frozen integrated acceptance remain later; R2–R5 does not claim them |
+| R7/R9 | Covered predecessor cleanup and conditional reference retirement retain rollout ordering and exact accounting; no early deletion |
 
-```text
- ProjectApi.init → Project import ───────────────┐
-                                               ├→ Content → Storage Save → Persistence
- Workspace captured files + namespace ──────────┘
-      daemon store/commit: Save finish → History publication → local base install
-
- ordinary Bash / external executor → kernel → FUSE → daemon request service
-                                               → Workspace / Overlay / Store
-```
-
-The two input routes share canonical construction libraries and formats while
-retaining their own input and publication owners. Commit does not invoke native
-Project Init or materialize a temporary native tree. Full captured namespace
-assembly, incremental topology, failure disposition and mounted survival remain
-real S10 work. Source reuse alone does not close their gates. See the
-[shared construction guidance](../../../AGENTS.md#shared-construction-and-completion-boundaries)
-and [current Store Commit composition](../../architecture/65-store-commit-composition.md).
-
-Normal filesystem access has no Exec identity requirement. Bash exit does not
-prove descriptors/mappings or descendants are gone. Kernel mount-busy evidence
-and daemon filesystem/Commit guards govern unmount. Forced connection teardown
-does not implicitly kill caller-owned processes or resolve unknown Commit state.
-
-## 5. Qualification, runtime files and final retirement
-
-The existing `core/benchmark/fs-bench-pro/` runner, families, registry, shared
-helpers, diagnostics and tests remain development/qualification owners. New
-integrated routes extend those existing families at prospective identities;
-no harness-selected behavior enters product source. `core/tools/` retains
-scoped provenance/boundary checks and the root LOC counter remains reproducible.
-Architecture documentation describes implemented source; issue plans/receipts
-retain proposed/measured/failed/unrun distinctions.
-
-Database placement is separate from repository layout:
-
-```text
- named in-VM shared Store volume/
- └── store.sqlite             Disposable / WAL / OFF; shared daemon processes
-                              live WAL/SHM sidecars have normal SQLite ownership
-
- daemon-local backing/
- └── overlay.sqlite           one owner connection; Workspace-prefixed mutable state
-                              MEMORY / OFF / EXCLUSIVE; no Workspace sync
-
- sandbox-visible Workspace mounts/
- ├── workspace-A/             ordinary filesystem view
- └── workspace-B/             ordinary filesystem view
-```
-
-There is no database per Workspace, Commit or command. The host initializes and
-installs one sealed Store and subsequently sends control calls. Daemon Store
-adapters use opened Storage/History ports; SQLite paths and concrete provider
-opening stay at persistence/application composition. Native Store files never
-live under the repository bind mount. Durable execution stays disabled until
-explicit owner reauthorization.
-
-After S12 replacement coverage and acceptance, S11/S13 retire the superseded
-core predecessors, excluded Server/old FUSE/Sandbox wiring and root `crates/`.
-The old SDK host `client/`/`runtime/`, Bridge data codec/framing, API-core and
-Daemon `upstream/` are already retired and are absent from this destination.
-No daemon `exec/`, command launcher or custom Exec wire appears here.
-Keep shared root `.cargo/config.toml`, required documentation/tools/patch
-provenance, the authorized `core/vendor/fuser-0.18.0/`, and immutable historical
-receipts/Git identities. Obsolete reference manifests/build/test entrypoints are
-retired only after their dependency audit; no removal is performed by this plan.
-
-## 6. Preparation checks and remaining reconciliation
-
-This document is checked against the exact current active source inventory,
-destination collisions, current-source origin coverage, all proposed module
-entries, forbidden retired/daemon-execution destinations, local links/anchors,
-status and whitespace. Both already-modified AGENTS guides and three protected
-untracked notes remain byte-identical and unstaged by this checkpoint.
-
-No product implementation, relocation, manifest activation, database schema,
-dependency, build, runtime test, mount or performance measurement is performed.
-Final file counts are a planning inventory, not production LOC or a budget.
-Implementation must still reconcile S8 control/status/drain/proof requirements
-to caller-owned execution, complete the real Sandbox API/backend integration,
-finish S10 normalization and prove S12 before S13 retirement.
-
-## 7. R0 implementation-boundary amendment, 2026-10-08
-
-The original destination manifest/receipt remains unchanged at its source pin.
-R0 read-only construction review identifies one additional real adapter home:
-`layerfs-daemon/src/overlay/captured_namespace_port.rs`, proposed (P), which
-implements Workspace's neutral retained captured-namespace port through the
-existing OwnerClient/typed Commands and preserves original attempted Completion
-custody. It introduces no second SQL owner or mutable graph. Exact destination
-amendment is [retained separately](checks/r0-owner-reconciliation-20261008/04-destination-amendment.json).
-The original planning inventory remains 523 E / 5 M / 108 P; this prospective
-addition is +1 P, yielding 109 P, and creates no implementation or LOC.
-
-Actual Sandbox replacement also preserves/relocates excluded source before path
-replacement, with exact migration accounting; it never activates the old manifest
-with its retired API-core/host-service dependencies. Current
-[S8 implementation plan](S8-IMPLEMENTATION-PLAN-20261008.md#2-cargo-activation)
-and [R0–R9 ledger](ROLLOUT-LEDGER-20261008.md) govern activation/coverage.
+No implementation, timing, LOC growth or retirement is established by this proposal.
+Keep Disposable/WAL/OFF, separate Overlay, writeback off, one construction producer,
+locked bounded checks, exact failure custody and authorized fuser integrity. The
+[next-agent prompt](HANDOFF-R2-R5-IMPLEMENTATION-20261008.md) carries exact current
+R1 evidence/resources and the complete executable assignment after owner dispatch.
