@@ -1,0 +1,20 @@
+# {"timestamp": "2026-10-07T07:15:59.972108+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/filesystem_qualify-be1ee350ebdb2178", "--exact", "incoming_work_cannot_supply_missing_topology_or_inflate_a_proof", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/filesystem_qualify-be1ee350ebdb2178": "2baa6c2f17f8fddb67dbb499fc7065a40a1b83bcce08b9a616d9a203b6750b85"}, "source_diff_sha256": "e27bf00dc8f86d9743d0acd3c2b9c69a6609b9244d833e7b9d533171f768fd5b", "source_parent": "d5ef7ba4e9c7911746ba6b9dd773218b1264d7bb", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+
+thread 'incoming_work_cannot_supply_missing_topology_or_inflate_a_proof' panicked at crates/layerfs-content/tests/filesystem_qualify.rs:563:5:
+assertion `left == right` failed
+  left: Ok(QualifiedRoot { id: FilesystemRootId(ObjectId("fa27617be06f51f3df297245b3c70c7c47793a0ecdd2438d142ec2a5233f7fcb")), root: FilesystemRoot { profile: ObjectId("d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0"), scope: InodeScope(ObjectId("f3d5c9a15beddeaa5a96236ae9474b17961e6cec5c7f0944c5d20e25b012b2da")), root_inode: InodeIdentity { scope: InodeScope(ObjectId("f3d5c9a15beddeaa5a96236ae9474b17961e6cec5c7f0944c5d20e25b012b2da")), serial: 1 }, inode_table: ObjectId("7e6af37aa24e8f514e701940d3628ce5ea0bd7626a7440b959b9f4e2222740a0") }, inodes: 3, directories: 1, bindings: 2 })
+ right: Err(InvalidRecord("qualified inode binding count"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test incoming_work_cannot_supply_missing_topology_or_inflate_a_proof ... FAILED
+
+failures:
+
+failures:
+    incoming_work_cannot_supply_missing_topology_or_inflate_a_proof
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+
+# exit=101

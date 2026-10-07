@@ -553,6 +553,42 @@ fn an_inode_leaf_overlapping_its_left_sibling_is_refused() {
 }
 
 #[test]
+fn incoming_work_cannot_supply_missing_topology_or_inflate_a_proof() {
+    let (store, root) = craft(&[
+        (1, DIR, 0, &[("bound", 2)]),
+        (2, FILE, 1, &[]),
+        (3, FILE, 1, &[]),
+    ]);
+    let mut work = QualificationWork {
+        bindings: 1,
+        ..QualificationWork::default()
+    };
+    assert_eq!(
+        qualify_root(&store, &mut Records::default(), &context(root), &mut work),
+        Err(ContentError::InvalidRecord("qualified inode binding count"))
+    );
+    let (session, ..) = built();
+    let mut expected = QualificationWork::default();
+    let first = qualify_root(
+        &session.store,
+        &mut Records::default(),
+        &context(session.root),
+        &mut expected,
+    )
+    .unwrap();
+    let mut previous = expected;
+    let second = qualify_root(
+        &session.store,
+        &mut Records::default(),
+        &context(session.root),
+        &mut previous,
+    )
+    .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(previous, expected);
+}
+
+#[test]
 fn provider_and_record_failures_return_no_proof() {
     let (session, ..) = built();
     let own = context(session.root);

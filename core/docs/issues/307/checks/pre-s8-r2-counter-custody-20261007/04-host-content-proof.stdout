@@ -1,0 +1,31 @@
+# {"timestamp": "2026-10-07T07:19:31.480390+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/filesystem_qualify-be1ee350ebdb2178", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/filesystem_qualify-be1ee350ebdb2178": "2baa6c2f17f8fddb67dbb499fc7065a40a1b83bcce08b9a616d9a203b6750b85"}, "source_diff_sha256": "66c9264705943f6c56b43bc7abe5860fee7b37a145aeebfb2028f2494277f852", "source_parent": "d5ef7ba4e9c7911746ba6b9dd773218b1264d7bb", "wall_stop": "specified in command; build is not test execution"}
+
+running 11 tests
+test a_binding_to_a_serial_outside_the_table_is_refused ... ok
+test a_built_multi_page_root_qualifies_within_bounded_windows ... S9_R2_QUALIFY inodes=708 directories=6 bindings=709 inode_pages=29 directory_pages=29 record_reads=718 record_batches=30 record_changes=1422 peak_batch_changes=64 peak_batch_bytes=13568
+ok
+test a_directory_bound_twice_is_refused_in_one_parent_or_two ... ok
+test a_proof_admits_only_its_own_root_and_context ... ok
+test a_root_of_another_context_is_refused_before_any_record ... ok
+test an_inode_leaf_overlapping_its_left_sibling_is_refused ... ok
+test every_cycle_is_refused ... ok
+test incoming_work_cannot_supply_missing_topology_or_inflate_a_proof ... 
+thread 'incoming_work_cannot_supply_missing_topology_or_inflate_a_proof' panicked at crates/layerfs-content/tests/filesystem_qualify.rs:563:5:
+assertion `left == right` failed
+  left: Ok(QualifiedRoot { id: FilesystemRootId(ObjectId("fa27617be06f51f3df297245b3c70c7c47793a0ecdd2438d142ec2a5233f7fcb")), root: FilesystemRoot { profile: ObjectId("d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0"), scope: InodeScope(ObjectId("f3d5c9a15beddeaa5a96236ae9474b17961e6cec5c7f0944c5d20e25b012b2da")), root_inode: InodeIdentity { scope: InodeScope(ObjectId("f3d5c9a15beddeaa5a96236ae9474b17961e6cec5c7f0944c5d20e25b012b2da")), serial: 1 }, inode_table: ObjectId("7e6af37aa24e8f514e701940d3628ce5ea0bd7626a7440b959b9f4e2222740a0") }, inodes: 3, directories: 1, bindings: 2 })
+ right: Err(InvalidRecord("qualified inode binding count"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test invalid_inode_rows_and_a_missing_root_inode_are_refused ... ok
+test provider_and_record_failures_return_no_proof ... ok
+test unreachable_and_miscounted_inodes_are_refused ... ok
+
+failures:
+
+failures:
+    incoming_work_cannot_supply_missing_topology_or_inflate_a_proof
+
+test result: FAILED. 10 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+# exit=101

@@ -87,6 +87,8 @@ impl QualifiedRoot {
 }
 
 /// Work one qualification performed, including a refused one's progress.
+/// Qualification resets this structure at entry; prior observations cannot
+/// contribute to the namespace closure or to a successful proof's counts.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct QualificationWork {
     /// Inode-table pages read by the sequential pass.

@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T07:23:55.260316+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-r2-daemon-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/root_qualification-1983c82a7478eba2; exec timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/root_qualification-1983c82a7478eba2 --test-threads=1 --nocapture"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "66c9264705943f6c56b43bc7abe5860fee7b37a145aeebfb2028f2494277f852", "source_parent": "d5ef7ba4e9c7911746ba6b9dd773218b1264d7bb", "wall_stop": "specified in command; build is not test execution"}
+80d28d73b8ceb489e68bb143d35d0d833a8618e91c0aedac5728f67e769ff244  core/target/cluster2-linux/debug/deps/root_qualification-1983c82a7478eba2
+
+running 1 test
+test a_real_root_qualifies_through_short_original_scratch_jobs ... S9_R2_QUALIFY_REAL_SCRATCH inodes=2022 bindings=2040 inode_pages=81 directory_pages=41 record_reads=2080 record_batches=82 record_changes=4083 peak_batch_changes=72 owner_jobs=2162 peak_conversion_heap_bytes=19200 peak_reply_capacity_bytes=50 diagnostic_wall_ms=124
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+
+# exit=0

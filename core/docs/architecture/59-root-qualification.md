@@ -28,6 +28,11 @@ Content/provider refusal without a proof. A used backing scope cannot be
 silently reused. The caller owns its operation scope and releases it on either
 outcome; the pass does not create another database or perform guessed cleanup.
 
+Counter-custody correction after `d5ef7ba4e`: each call resets its work structure
+before any provider call. Incoming observations cannot supply missing bindings
+or inflate a proof. The [focused regression](../issues/307/PRE-S8-R2-COUNTER-CUSTODY-20261007.md)
+retains the originally reproduced invalid proof and corrected evidence.
+
 This is an explicit paid whole-root operation. Mount retains bounded root
 checks and never calls it. The proof covers namespace topology, not authority,
 file mappings, file bytes, symlink targets, attribute closure, Save completion

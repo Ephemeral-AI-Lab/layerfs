@@ -1,0 +1,10 @@
+# {"timestamp": "2026-10-07T07:20:49.686847+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/root_qualification-4df2dde97be4e06f", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/root_qualification-4df2dde97be4e06f": "577495b84f8cf5e621702c65d9ad1983ed60a022c82722d7daf7438fe0c49bea"}, "source_diff_sha256": "66c9264705943f6c56b43bc7abe5860fee7b37a145aeebfb2028f2494277f852", "source_parent": "d5ef7ba4e9c7911746ba6b9dd773218b1264d7bb", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test a_real_root_qualifies_through_short_original_scratch_jobs ... S9_R2_QUALIFY_REAL_SCRATCH inodes=2022 bindings=2040 inode_pages=81 directory_pages=41 record_reads=2080 record_batches=82 record_changes=4083 peak_batch_changes=72 owner_jobs=2162 peak_conversion_heap_bytes=19200 peak_reply_capacity_bytes=50 diagnostic_wall_ms=130
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+
+# exit=0

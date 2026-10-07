@@ -37,12 +37,14 @@ const WINDOW_BYTES: usize = WINDOW * (NAME_LENGTH_BYTES + 8 + MAXIMUM_NAME_BYTES
 ///
 /// File mappings, symlink targets and attribute trees are not walked. Their
 /// owning readers check them under bounded demand reads.
+/// `work` is reset at entry and reports only this attempted pass.
 pub fn qualify_root(
     reader: &dyn AuthenticatedObjects,
     records: &mut dyn IndexedConstructionBacking,
     context: &RootContext,
     work: &mut QualificationWork,
 ) -> ContentResult<QualifiedRoot> {
+    *work = QualificationWork::default();
     let root = FilesystemRoot::decode(&reader.read_canonical(context.root.0)?)?;
     context.check(root)?;
     let root_serial = root.root_inode().serial();
