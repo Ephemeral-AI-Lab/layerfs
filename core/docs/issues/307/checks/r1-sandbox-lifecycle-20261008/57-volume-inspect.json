@@ -1,0 +1,13 @@
+[
+    {
+        "CreatedAt": "2026-10-07T22:04:03Z",
+        "Driver": "local",
+        "Labels": {
+            "layerfs.owner": "r1d-20261008"
+        },
+        "Mountpoint": "/var/lib/docker/volumes/layerfs-r1d-store-20261008-0efd0a4ca4474348ad35c6046f3ef4de/_data",
+        "Name": "layerfs-r1d-store-20261008-0efd0a4ca4474348ad35c6046f3ef4de",
+        "Options": null,
+        "Scope": "local"
+    }
+]

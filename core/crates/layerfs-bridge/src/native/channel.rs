@@ -2,6 +2,7 @@
 use super::{io, ChannelError, ChannelResult, ChannelWork, VerifiedPeer, MAX_PLAINTEXT_BYTES};
 use snow::StatelessTransportState;
 use std::{
+    io::Read,
     net::{Shutdown, TcpStream},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -22,15 +23,22 @@ impl Shared {
         }
     }
     fn fail(&self, stream: &TcpStream, error: ChannelError) -> ChannelError {
+        self.fail_observed(stream, error).0
+    }
+    fn fail_observed(&self, stream: &TcpStream, error: ChannelError) -> (ChannelError, bool) {
         if !self.failed.swap(true, Ordering::AcqRel) {
             if let Err(close) = stream.shutdown(Shutdown::Both) {
-                return ChannelError::CloseFailed {
-                    original: Box::new(error),
-                    close,
-                };
+                return (
+                    ChannelError::CloseFailed {
+                        original: Box::new(error),
+                        close,
+                    },
+                    true,
+                );
             }
+            return (error, true);
         }
-        error
+        (error, false)
     }
 }
 /// Authenticated duplex ownership. Each direction can move to its own I/O worker.
@@ -53,6 +61,16 @@ impl Connection {
             stream: self.receive.stream.try_clone()?,
             shared: self.receive.shared.clone(),
         })
+    }
+    /// Clears explicit handshake I/O waits on the actual shared socket before long-lived operations.
+    /// An original policy-change error quarantines/fences this owner once.
+    pub fn clear_io_waits(&self) -> ChannelResult<()> {
+        self.receive.shared.ready()?;
+        self.receive
+            .stream
+            .set_read_timeout(None)
+            .and_then(|()| self.receive.stream.set_write_timeout(None))
+            .map_err(|error| self.receive.shared.fail(&self.receive.stream, error.into()))
     }
     pub(super) fn new(
         stream: TcpStream,
@@ -192,6 +210,57 @@ pub struct Receiver {
     work: ChannelWork,
 }
 impl Receiver {
+    /// After the final session reply send completes, waits once for caller EOF, then fences once.
+    /// This releases only socket ownership; it establishes no Workspace/process/FS drain.
+    /// A peer that retains its socket retains this connection slot until explicit lifecycle fencing.
+    pub fn wait_peer_end(&mut self) -> Result<(), Box<super::PeerEndFailure>> {
+        self.work.channel_calls = self.work.channel_calls.saturating_add(1);
+        let mut received = None;
+        let mut phase = super::PeerEndPhase::Admit;
+        let mut fence_attempted = false;
+        let result = (|| {
+            self.shared.ready()?;
+            phase = super::PeerEndPhase::Read;
+            let mut byte = [0];
+            self.work.zeroed_bytes = self.work.zeroed_bytes.saturating_add(1);
+            self.work.stack_window_bytes = self.work.stack_window_bytes.max(1);
+            self.work.io_attempts = self.work.io_attempts.saturating_add(1);
+            let n = match self.stream.read(&mut byte) {
+                Ok(n) => n,
+                Err(error) => {
+                    let (cause, attempted) = self.shared.fail_observed(&self.stream, error.into());
+                    fence_attempted = attempted;
+                    return Err(cause);
+                }
+            };
+            if n != 0 {
+                received = Some(byte[0]);
+                self.work.io_calls = self.work.io_calls.saturating_add(1);
+                self.work.wire_bytes = self.work.wire_bytes.saturating_add(n as u64);
+                let (cause, attempted) = self.shared.fail_observed(
+                    &self.stream,
+                    ChannelError::Invalid("trailing input after final session reply"),
+                );
+                fence_attempted = attempted;
+                return Err(cause);
+            }
+            phase = super::PeerEndPhase::Fence;
+            if self.shared.failed.swap(true, Ordering::AcqRel) {
+                return Err(ChannelError::Quarantined);
+            }
+            fence_attempted = true;
+            self.stream.shutdown(Shutdown::Both).map_err(Into::into)
+        })();
+        result.map_err(|cause| {
+            Box::new(super::PeerEndFailure {
+                cause,
+                phase,
+                fence_attempted,
+                received,
+                work: self.work(),
+            })
+        })
+    }
     /// Receives/authenticates one record; no replay after read/crypto failure.
     pub fn receive(&mut self) -> ChannelResult<&[u8]> {
         self.work.channel_calls = self.work.channel_calls.saturating_add(1);

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "9",
+    "core/target/debug/examples/sandbox_lifecycle",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "layerfs-r1d-store-20261008-6c318c832e6342eebb1ec6cdd3a67f01",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r1d-daemon/layerfs-daemon",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r1d-host-03f014d3dd2b4da1936e9e6c4dd86a3b"
+  ],
+  "host_executable_sha256": "c5c57c8b94768cd24a235fc2ef7aaea8553951d45bee3bfeece04b0654ce82cf",
+  "linux_daemon_sha256": "74e8bf3c055a3bdbcefd563648d840e8e2cbf7163900d5925c797c260195f6f6",
+  "source_receipt": "88-final-source-identity.json",
+  "volume": "layerfs-r1d-store-20261008-6c318c832e6342eebb1ec6cdd3a67f01",
+  "host_fixture": "core/target/r1d-host-03f014d3dd2b4da1936e9e6c4dd86a3b",
+  "timeout_seconds": 9,
+  "profile": "explicit Disposable/WAL/OFF global Store; separate Overlay MEMORY/OFF/EXCLUSIVE",
+  "scope": "Functional positive path, natural caches, no cold/residency/performance/numeric gate claim. Whole-Sandbox stop is explicit crash teardown.",
+  "original_failed_proof": "59-native-lifecycle-proof.txt",
+  "changed_treatment": "Daemon terminal reply send -> caller EOF -> original fence; source/binary changed, no operation replay"
+}

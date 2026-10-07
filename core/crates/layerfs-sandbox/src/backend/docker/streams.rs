@@ -82,6 +82,9 @@ impl ExecCreated {
                 transfer: Box::new(WireFailure {
                     attempted: false,
                     sent_bytes: 0,
+                    request_header_bytes: 0,
+                    sent_body_bytes: 0,
+                    pending_request: Default::default(),
                     status: None,
                     cause: RuntimeError::Protocol("original Start already attempted; no replay"),
                     fence_error: None,
@@ -352,11 +355,7 @@ impl RuntimeOutput {
                 }
                 self.header_used += n;
             }
-            self.tag = self.header[0];
-            if self.header[1..4] != [0; 3] || self.tag > 3 {
-                return Err(RuntimeError::Protocol("standard runtime frame header"));
-            }
-            self.remaining = u32::from_be_bytes(self.header[4..8].try_into().expect("four bytes"));
+            (self.tag, self.remaining) = super::mux::header(self.header)?;
             if self.tag == 3 {
                 return Err(RuntimeError::Protocol(
                     "runtime system-error stream; original unread payload retained",

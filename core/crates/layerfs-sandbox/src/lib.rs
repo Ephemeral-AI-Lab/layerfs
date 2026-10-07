@@ -4,6 +4,6 @@
 pub mod backend;
 mod types;
 pub use types::{
-    CommandIdentity, ContainerId, ErrorDiagnostic, ExecId, ExecInspection, RuntimeError,
-    WireFailure,
+    CommandIdentity, ContainerId, ErrorDiagnostic, ExecId, ExecInspection, PendingRequest,
+    RuntimeError, WireFailure,
 };

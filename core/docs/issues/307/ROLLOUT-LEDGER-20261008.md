@@ -11,7 +11,7 @@ implementation. This ledger records actual state, not promised acceptance.
 | Checkpoint | State | Evidence/remaining work |
 | --- | --- | --- |
 | R0 contract/proof/guide/layout/dispatch reconciliation | COMPLETE — documentation scope only | [Deepest-file plan](checks/r0-owner-reconciliation-20261008/01-deepest-file-plan.md), [owner/proof disposition](checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md); [independent review](checks/r0-owner-reconciliation-20261008/06-independent-review-disposition.md) and [scoped document verification](checks/r0-owner-reconciliation-20261008/07-verification-scope.md); exact staged LOC/identity recorded in checkpoint receipts; no native product claim |
-| R1 real SDK and ordinary Sandbox lifecycle/execution/access | IN_PROGRESS | [Deepest-file plan](checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md); real Project/Workspace facade and [daemon application checkpoint](checks/r1-daemon-composition-20261008/65-application-results.md) verified; [ordinary runtime foundation](checks/r1-sandbox-runtime-20261008/81-foundation-results.md) now verified; full Sandbox lifecycle/SDK/command access/cancellation and native Ready still required. Old excluded Sandbox cannot activate unchanged |
+| R1 real SDK and ordinary Sandbox lifecycle/execution/access | IN_PROGRESS | [Deepest-file plan](checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md); real Project/Workspace facade and [daemon application checkpoint](checks/r1-daemon-composition-20261008/65-application-results.md) verified; [ordinary runtime foundation](checks/r1-sandbox-runtime-20261008/81-foundation-results.md) now verified; [owned lifecycle/SDK startup/access](checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt) now verified; exact external-runtime cancellation and native Ready still required. Old excluded Sandbox cannot activate unchanged |
 | R2 real native Ready/read/permissions/indexed custody/normal drain | NOT_STARTED | Bound is not Ready; no native serving path proved |
 | R3 ordinary mutation/kernel coherence | NOT_STARTED | Component mutation source exists; native semantics/races/mappings/removed references unproved |
 | R4 captured namespace and incremental topology | NOT_STARTED | Existing captured files/operation records/Content route reused; owning namespace producer, bounded validation and checked ancestry remain |
@@ -79,3 +79,19 @@ algorithmic simplification. Actual owned lifecycle/private-config/daemon-ready/
 access and external-runtime process cancellation are still required. Published
 standard2.2.4 client capability is identified, but access/CNI/actual signal proof
 remains unqualified; it is not an owner waiver or a reason to close the Goal.
+
+
+R1d now implements actual owned Engine lifecycle/private deployment/absolute
+listener wait/exact topology/auth/SDK Hello and same-Control installation. The
+cross-platform [native proof](checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt)
+passes with macOS host Init/seal, two Linux direct-Store daemons sharing one named
+VM volume, ordinary identity/access and a third reopen after product deletions.
+The [original failed close proof](checks/r1-sandbox-lifecycle-20261008/59-native-lifecycle-proof.txt)
+is retained; original EndSession send/EOF/fence ordering is repaired without retry
+or ENOTCONN suppression. [Architecture](../../architecture/72-owned-sandbox-lifecycle.md)
+records exact ownership/failure/limits. R1 remains IN_PROGRESS; native FUSE Ready,
+per-command cancellation qualification, S10 mounted Commit, application forced
+close/join, full acceptance and retirement remain open. Prepared official unchanged
+ctr2.2.4 bytes are checksum verified; they establish no runtime signal qualification.
+
+R1d exact source-size comparison: Production LOC: 169065 -> 170673 (delta +1608). Core103648→105256; active60774→62382; reference65417, excluded predecessors37431 and excluded integration5443 unchanged. No relocation or retirement. [Exact accounting](checks/r1-sandbox-lifecycle-20261008/106-exact-production-loc.json) uses the same pinned counter over first-parent/staged product snapshots.

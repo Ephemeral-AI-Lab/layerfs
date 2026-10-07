@@ -1,0 +1,12 @@
+OWNED_FIRST_CONTAINER 8584fd47c48bf9a2b80a79b663bb27d183598439082e95b242c036b93bc8a4bc phase=InstallPending
+DIRECT_STORE host_sqlite=3.51.0 daemon_sqlite=Some("3.53.2") incarnation=[157, 252, 165, 140, 237, 158, 40, 203, 233, 61, 181, 56, 219, 180, 247, 102, 114, 5, 170, 61, 222, 119, 9, 231, 217, 218, 207, 247, 135, 67, 202, 65] profile=Disposable
+OWNED_SECOND_CONTAINER 05fce676c66e8a5c0e7e5f41672148c091bef4ed305d8e09925777d8d8aaaed7 phase=ControlReady
+ORDINARY_ACCESS uid=501 gid=20 groups=20 CapEff=0 CapAmb=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_control_denied
+ORDINARY_RESULT OutputProgress { stdout: 135, stderr: 0, wire_payload: 135, saturated: false } ExecInspection { container: ContainerId("8584fd47c48bf9a2b80a79b663bb27d183598439082e95b242c036b93bc8a4bc"), exec: ExecId("a67bc38bc7efe8f5d41fb3461ab179b17b949dacd24887aeeedf687a0167584b"), running: false, exit_code: Some(0), pid: Some(27903) }
+OWNED_CLEANUP container=8584fd47c48bf9a2b80a79b663bb27d183598439082e95b242c036b93bc8a4bc disposition=SandboxDisposition { uploaded: true, started: true, stopped: true, deleted: true }
+ORDINARY_ACCESS uid=501 gid=20 groups=20 CapEff=0 CapAmb=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_control_denied
+ORDINARY_RESULT OutputProgress { stdout: 135, stderr: 0, wire_payload: 135, saturated: false } ExecInspection { container: ContainerId("05fce676c66e8a5c0e7e5f41672148c091bef4ed305d8e09925777d8d8aaaed7"), exec: ExecId("669475cecb0af86ee67a25bffc0f463b92c0a9c597bc65f6a5e360eabf7f6c36"), running: false, exit_code: Some(0), pid: Some(27972) }
+OWNED_CLEANUP container=05fce676c66e8a5c0e7e5f41672148c091bef4ed305d8e09925777d8d8aaaed7 disposition=SandboxDisposition { uploaded: true, started: true, stopped: true, deleted: true }
+OWNED_REOPEN_CONTAINER 9ddb9c402ecc89f0b43069fc81396892558d1eeb1c4d4869957fe5fecb49e0aa phase=ControlReady
+SHARED_STORE_REOPEN_AFTER_BOTH_DELETIONS root=ObjectId("587702d587f16cb4837043a7874bea708007912f365139bbcfc12a45a4e4c1d1") container=9ddb9c402ecc89f0b43069fc81396892558d1eeb1c4d4869957fe5fecb49e0aa cleanup=SandboxDisposition { uploaded: true, started: true, stopped: true, deleted: true }
+TWO_DAEMONS_SHARED_STORE separate_overlay=true root=ObjectId("587702d587f16cb4837043a7874bea708007912f365139bbcfc12a45a4e4c1d1") native_fuse=NOT_RUN graceful_daemon_drain=NOT_RUN

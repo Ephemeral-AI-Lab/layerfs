@@ -1,0 +1,59 @@
+source_hashes_match=True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling autocfg v1.5.1
+   Compiling nix v0.31.3
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling memoffset v0.9.1
+   Compiling layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 41.80s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_bridge-c1b46e236f84be81)
+  Executable tests/control_records.rs (core/target/cluster2-linux/debug/deps/control_records-bfa6aca3b6f8967e)
+  Executable tests/daemon_records.rs (core/target/cluster2-linux/debug/deps/daemon_records-6e5b09d00a00fefd)
+  Executable tests/install_records.rs (core/target/cluster2-linux/debug/deps/install_records-e921712fa3ca560b)
+  Executable tests/native.rs (core/target/cluster2-linux/debug/deps/native-52c3dd6a8ef162f9)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-77c9832298339be7)
+  Executable unittests src/bin/layerfs-daemon.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-cb13d83b54484162)
+  Executable tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-eb66ab7f963249de)
+  Executable tests/complete_installed_roots.rs (core/target/cluster2-linux/debug/deps/complete_installed_roots-16464fe442a967ed)
+  Executable tests/completion_ownership.rs (core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c)
+  Executable tests/completion_storage.rs (core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b)
+  Executable tests/construction_cursor.rs (core/target/cluster2-linux/debug/deps/construction_cursor-07de2b18561b362d)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-429c3690851e8b2c)
+  Executable tests/e2_startup_receipts.rs (core/target/cluster2-linux/debug/deps/e2_startup_receipts-9c92e0224dade04c)
+  Executable tests/edit_backing.rs (core/target/cluster2-linux/debug/deps/edit_backing-24e3ad85e8e9d52b)
+  Executable tests/finite_service.rs (core/target/cluster2-linux/debug/deps/finite_service-7919da4c90c994e0)
+  Executable tests/host_handoff.rs (core/target/cluster2-linux/debug/deps/host_handoff-4cdc6cae8d18612d)
+  Executable tests/indexed_operation_record.rs (core/target/cluster2-linux/debug/deps/indexed_operation_record-f7132d37f46cf1cf)
+  Executable tests/installed_qualification.rs (core/target/cluster2-linux/debug/deps/installed_qualification-633d7c5f52039959)
+  Executable tests/installed_store.rs (core/target/cluster2-linux/debug/deps/installed_store-08f9c29a011e4e8b)
+  Executable tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-97b0619943df4135)
+  Executable tests/native_application.rs (core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029)
+  Executable tests/native_control.rs (core/target/cluster2-linux/debug/deps/native_control-83467c0a8be9b56b)
+  Executable tests/native_install.rs (core/target/cluster2-linux/debug/deps/native_install-035242047b6cc903)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77)
+  Executable tests/root_qualification.rs (core/target/cluster2-linux/debug/deps/root_qualification-f04f6db36b728ea2)
+  Executable tests/shared_processes.rs (core/target/cluster2-linux/debug/deps/shared_processes-19348c8a37ad0fa6)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-6022c7bd339d8d01)
+  Executable tests/store_commit.rs (core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735)
+  Executable unittests examples/e2_startup.rs (core/target/cluster2-linux/debug/examples/e2_startup-764e95f467052da9)
+  Executable unittests examples/engine_finite.rs (core/target/cluster2-linux/debug/examples/engine_finite-b4194296b8df16f9)
+  Executable unittests examples/resource_growth.rs (core/target/cluster2-linux/debug/examples/resource_growth-3ee8bc1eb229e503)
+  Executable unittests examples/resource_prepare.rs (core/target/cluster2-linux/debug/examples/resource_prepare-6727760423608d12)
+  Executable unittests examples/store_accounting.rs (core/target/cluster2-linux/debug/examples/store_accounting-8271dac67dde7a86)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sandbox-b9571925bf205bba)
+  Executable tests/engine_lifecycle.rs (core/target/cluster2-linux/debug/deps/engine_lifecycle-e87752ec713b80d7)
+  Executable tests/engine_protocol.rs (core/target/cluster2-linux/debug/deps/engine_protocol-28e012febde1d9e8)
+  Executable unittests examples/engine_streams.rs (core/target/cluster2-linux/debug/examples/engine_streams-668971a9a72f1eef)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-44c2b4cec4643a32)
+  Executable tests/init.rs (core/target/cluster2-linux/debug/deps/init-60d760448a800074)
+  Executable unittests examples/sandbox_lifecycle.rs (core/target/cluster2-linux/debug/examples/sandbox_lifecycle-7930aaa3d35307c8)
+binary=core/target/cluster2-linux/debug/layerfs-daemon sha256=d6cee9ee8d50debfeb0c95d133fe1c911b51b5f46065721224cd1ac19e13ec31 bytes=95339704
+binary=core/target/r1d-daemon/layerfs-daemon sha256=e25134528e2c470cc3ff7f782be7765d52a84e830636b8da74473539a29fca7c bytes=5734056

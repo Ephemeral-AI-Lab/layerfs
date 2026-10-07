@@ -1,0 +1,23 @@
+{
+  "commit": "1b3e90e1fdb53d0af79fb3b5cc88215a96a00cb1",
+  "first_parent": "cd541ae927ab2728b734f49a78c6f8e8d3498a4d",
+  "committed_tree": "79ff8fc0bf931f32735d7b2ea10c95fac62db674",
+  "index_matches_commit": true,
+  "product_trees": {
+    "core/crates": "2f07fddc2f3b7d2a90f8cd498d28c7c71b2c1329",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "counted_product_trees_match_commit": true,
+  "committed_production_count_recomputed_matches": true,
+  "production_loc": {
+    "before": 167277,
+    "after": 169065,
+    "delta": 1788
+  },
+  "migration_subtotals": {
+    "active": 60774,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443
+  },
+  "relocation": "1106 unchanged excluded Sandbox production lines: excluded integration -> excluded predecessors; no retirement or simplification"
+}

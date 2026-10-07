@@ -24,6 +24,9 @@ impl<R: Read> Body<R> {
             done: false,
         }
     }
+    pub fn inner_mut(&mut self) -> &mut R {
+        &mut self.inner
+    }
     fn next_chunk(&mut self) -> io::Result<()> {
         if self.post_chunk {
             let mut crlf = [0; 2];

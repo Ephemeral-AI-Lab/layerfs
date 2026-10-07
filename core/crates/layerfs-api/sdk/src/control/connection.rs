@@ -137,6 +137,34 @@ impl Control {
             }
         }
     }
+    /// Installs one sealed Project through this same control owner without resetting correlation.
+    /// Failed attempted installation retains its original failure and makes this owner terminal.
+    pub fn install_project(
+        &mut self,
+        project: &crate::SealedProject,
+    ) -> Result<crate::Installed, Box<crate::InstallFailure>> {
+        if self.failed {
+            return Err(Box::new(crate::InstallFailure {
+                source: project.store.path.clone(),
+                manifest: project.manifest.clone(),
+                phase: layerfs_bridge::control::InstallPhase::Request,
+                request_attempted: false,
+                accepted: false,
+                acknowledged: None,
+                work: crate::InstallWork::default(),
+                error: crate::InstallError::Channel(ChannelError::Quarantined),
+                fence_error: None,
+            }));
+        }
+        crate::install(project, &mut self.connection).inspect_err(|failure| {
+            if failure.request_attempted {
+                self.failed = true;
+            }
+        })
+    }
+    pub(crate) fn clear_io_waits(&self) -> Result<(), ChannelError> {
+        self.connection.clear_io_waits()
+    }
     /// Actual cumulative native send/receive work for this connection.
     pub fn channel_work(&self) -> (ChannelWork, ChannelWork) {
         (self.connection.send.work(), self.connection.receive.work())

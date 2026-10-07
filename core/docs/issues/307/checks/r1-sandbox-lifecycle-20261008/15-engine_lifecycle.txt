@@ -1,0 +1,21 @@
+
+running 4 tests
+test lost_upload_and_start_keep_original_owner_and_refuse_replay ... ok
+test partial_create_identity_and_nonlocal_volume_are_not_adopted ... ok
+test stderr_and_substring_markers_never_satisfy_readiness ... ok
+test streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup ... 
+thread 'streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup' panicked at crates/layerfs-sandbox/tests/engine_lifecycle.rs:79:62:
+called `Result::unwrap()` on an `Err` value: ListenerFailure { observation: ListenerObservation { stdout: 1048656, stderr: 53, marker_seen: true }, transfer: WireFailure { attempted: true, sent_bytes: 253, request_header_bytes: 0, sent_body_bytes: 0, pending_request: PendingRequest { bytes: 0 }, status: Some(200), cause: Protocol("original logs fence failed"), fence_error: Some(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), observed_exec: None, observed_container: None, requested_container: Some(ContainerId("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")), requested_exec: None, error_body: None } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread '<unnamed>' panicked at crates/layerfs-sandbox/tests/support/engine.rs:41:39:
+bounded peer admission: Resource temporarily unavailable (os error 35)
+FAILED
+
+failures:
+
+failures:
+    streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.11s
+

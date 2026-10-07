@@ -106,6 +106,9 @@ impl Docker {
                 Box::new(WireFailure {
                     attempted: false,
                     sent_bytes: 0,
+                    request_header_bytes: 0,
+                    sent_body_bytes: 0,
+                    pending_request: Default::default(),
                     status: None,
                     cause,
                     fence_error: None,

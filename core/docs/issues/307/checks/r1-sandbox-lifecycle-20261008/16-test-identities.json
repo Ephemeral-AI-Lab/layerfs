@@ -1,0 +1,8 @@
+{
+  "engine_lifecycle": {
+    "binary": "core/target/debug/deps/engine_lifecycle-73412ddc1548593a",
+    "sha256": "675f42a4c8e4416211823dd5111900a8da9225bc2b186307f4cff494a4c7028e",
+    "timeout_seconds": 100,
+    "exit_code": 101
+  }
+}

@@ -8,21 +8,23 @@ use crate::{ErrorDiagnostic, ExecId, RuntimeError, WireFailure};
 use std::{
     io::{self, BufReader, Read, Write},
     net::Shutdown,
-    os::unix::net::UnixStream,
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 /// Concrete local Docker Engine endpoint. Control waits never apply to command streams.
 #[derive(Clone, Debug)]
 pub struct Docker {
     pub(super) socket: PathBuf,
     pub(super) control_wait: Duration,
+    pub(super) deadline: Option<Instant>,
 }
 pub(super) struct Response {
     pub status: u16,
     pub body: Body<BufReader<Socket>>,
     pub writer: Socket,
     pub sent: u64,
+    header_bytes: u64,
+    pub multiplexed: bool,
 }
 impl Docker {
     /// Selects an explicit local endpoint and blocking metadata I/O wait.
@@ -35,6 +37,7 @@ impl Docker {
         Ok(Self {
             socket: socket.as_ref().to_owned(),
             control_wait,
+            deadline: None,
         })
     }
     pub(super) fn exchange(
@@ -46,13 +49,28 @@ impl Docker {
     ) -> Result<Response, Box<WireFailure>> {
         let mut count = Count(0);
         encode(&mut count).map_err(|e| failure(false, 0, None, e.into(), None))?;
-        let stream = UnixStream::connect(&self.socket)
-            .map_err(|e| failure(false, 0, None, e.into(), None))?;
-        let mut stream = Socket::new(stream, Some(self.control_wait))
+        self.exchange_body(method, path, upgrade, "application/json", count.0, |w| {
+            encode(w)
+        })
+    }
+    /// Streams one known-length body once; no pre-read or file-sized allocation.
+    pub(super) fn exchange_body(
+        &self,
+        method: &str,
+        path: &str,
+        upgrade: bool,
+        media: &str,
+        length: u64,
+        encode: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+    ) -> Result<Response, Box<WireFailure>> {
+        let mut stream = Socket::connect(&self.socket, self.control_wait, self.deadline)
             .map_err(|e| failure(false, 0, None, e.into(), None))?;
         let mut sent = 0u64;
         let mut attempted = false;
         let mut observed_status = None;
+        let mut pending_request = crate::PendingRequest::default();
+        let head=format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: {media}\r\nContent-Length: {length}\r\n{}",if upgrade {"Connection: Upgrade\r\nUpgrade: tcp\r\n\r\n"} else {"Connection: close\r\n\r\n"});
+        let header_bytes = head.len() as u64;
         let result = (|| {
             {
                 let sender = Sender {
@@ -65,45 +83,70 @@ impl Docker {
                     bytes: [0; 8192],
                     used: 0,
                 };
-                writer.write_all(format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",count.0).as_bytes())?;
-                writer.write_all(if upgrade {
-                    b"Connection: Upgrade\r\nUpgrade: tcp\r\n\r\n"
-                } else {
-                    b"Connection: close\r\n\r\n"
-                })?;
-                encode(&mut writer)?;
-                writer.flush()?;
+                let encoded = (|| {
+                    writer.write_all(head.as_bytes())?;
+                    let mut body = ExactBody {
+                        inner: &mut writer,
+                        remaining: length,
+                    };
+                    encode(&mut body)?;
+                    if body.remaining != 0 {
+                        return Err(RuntimeError::Protocol("short request body"));
+                    }
+                    writer.flush()?;
+                    Ok::<(), RuntimeError>(())
+                })();
+                if encoded.is_err() {
+                    pending_request
+                        .bytes
+                        .extend_from_slice(&writer.bytes[..writer.used]);
+                }
+                encoded?;
             }
             let read = stream.try_clone()?;
             let mut reader = BufReader::with_capacity(8192, read);
-            let (status, mode) = headers(&mut reader, upgrade, &mut observed_status)?;
+            let (status, mode, multiplexed) = headers(&mut reader, upgrade, &mut observed_status)?;
             if upgrade && status == 101 {
                 stream.wait = None;
+                stream.deadline = None;
                 reader.get_mut().wait = None;
+                reader.get_mut().deadline = None;
             }
-            Ok::<_, RuntimeError>((reader, status, mode))
+            Ok::<_, RuntimeError>((reader, status, mode, multiplexed))
         })();
         match result {
-            Ok((reader, status, mode)) => Ok(Response {
+            Ok((reader, status, mode, multiplexed)) => Ok(Response {
                 status,
                 body: Body::new(reader, mode),
                 writer: stream,
                 sent,
+                multiplexed,
+                header_bytes,
             }),
             Err(cause) => {
                 let fence_error = stream.stream.shutdown(Shutdown::Both).err();
-                Err(failure(
-                    attempted,
-                    sent,
-                    observed_status,
-                    cause,
-                    fence_error,
-                ))
+                let mut original = failure(attempted, sent, observed_status, cause, fence_error);
+                original.request_header_bytes = header_bytes;
+                original.sent_body_bytes = sent.saturating_sub(header_bytes);
+                original.pending_request = pending_request;
+                Err(original)
             }
         }
     }
 }
 impl Response {
+    pub fn failed_fence(&self, error: io::Error) -> Box<WireFailure> {
+        let mut original = failure(
+            true,
+            self.sent,
+            Some(self.status),
+            RuntimeError::Protocol("original logs fence failed"),
+            Some(error),
+        );
+        original.request_header_bytes = self.header_bytes;
+        original.sent_body_bytes = self.sent.saturating_sub(self.header_bytes);
+        original
+    }
     pub fn fail(&mut self, cause: RuntimeError, observed: Option<ExecId>) -> Box<WireFailure> {
         let error_body = if matches!(cause, RuntimeError::Http(_)) {
             let mut bytes = [0; 1025];
@@ -139,12 +182,14 @@ impl Response {
             cause,
             self.writer.stream.shutdown(Shutdown::Both).err(),
         );
+        result.request_header_bytes = self.header_bytes;
+        result.sent_body_bytes = self.sent.saturating_sub(self.header_bytes);
         result.observed_exec = observed;
         result.error_body = error_body;
         result
     }
 }
-fn failure(
+pub(super) fn failure(
     attempted: bool,
     sent_bytes: u64,
     status: Option<u16>,
@@ -154,6 +199,9 @@ fn failure(
     Box::new(WireFailure {
         attempted,
         sent_bytes,
+        request_header_bytes: 0,
+        sent_body_bytes: 0,
+        pending_request: Default::default(),
         status,
         cause,
         fence_error,
@@ -210,40 +258,60 @@ struct BufferedSender<'a> {
     used: usize,
 }
 impl Write for BufferedSender<'_> {
-    fn write(&mut self, mut input: &[u8]) -> io::Result<usize> {
-        let accepted = input.len();
-        while !input.is_empty() {
-            let n = input.len().min(self.bytes.len() - self.used);
-            self.bytes[self.used..self.used + n].copy_from_slice(&input[..n]);
-            self.used += n;
-            input = &input[n..];
-            if self.used == self.bytes.len() {
-                self.flush()?;
-            }
+    fn write(&mut self, input: &[u8]) -> io::Result<usize> {
+        if input.is_empty() {
+            return Ok(0);
         }
-        Ok(accepted)
+        if self.used == self.bytes.len() {
+            self.flush()?;
+        }
+        let n = input.len().min(self.bytes.len() - self.used);
+        self.bytes[self.used..self.used + n].copy_from_slice(&input[..n]);
+        self.used += n;
+        Ok(n)
     }
-    fn write_all(&mut self, input: &[u8]) -> io::Result<()> {
-        self.write(input).map(|_| ())
+    fn write_all(&mut self, mut input: &[u8]) -> io::Result<()> {
+        while !input.is_empty() {
+            let n = self.write(input)?;
+            if n == 0 {
+                return Err(io::ErrorKind::WriteZero.into());
+            }
+            input = &input[n..];
+        }
+        Ok(())
     }
     fn flush(&mut self) -> io::Result<()> {
         let mut sent = 0;
         while sent < self.used {
-            let n = self.inner.write(&self.bytes[sent..self.used])?;
-            if n == 0 {
-                return Err(io::ErrorKind::WriteZero.into());
+            let result = self
+                .inner
+                .write(&self.bytes[sent..self.used])
+                .and_then(|n| {
+                    if n == 0 {
+                        Err(io::ErrorKind::WriteZero.into())
+                    } else {
+                        Ok(n)
+                    }
+                });
+            match result {
+                Ok(n) => sent += n,
+                Err(error) => {
+                    self.bytes.copy_within(sent..self.used, 0);
+                    self.used -= sent;
+                    return Err(error);
+                }
             }
-            sent += n;
         }
         self.used = 0;
         Ok(())
     }
 }
+
 fn headers(
     reader: &mut impl Read,
     upgrade: bool,
     observed: &mut Option<u16>,
-) -> Result<(u16, Framing), RuntimeError> {
+) -> Result<(u16, Framing, bool), RuntimeError> {
     let start = line(reader, 8192)?;
     let mut pieces = start.splitn(3, |b| *b == b' ');
     if pieces.next() != Some(b"HTTP/1.1".as_slice()) {
@@ -334,7 +402,13 @@ fn headers(
         {
             return Err(RuntimeError::Protocol("Engine upgrade framing"));
         }
-        return Ok((status, Framing::Hijacked));
+        return Ok((status, Framing::Hijacked, true));
+    }
+    if status == 204 {
+        if chunked || length.is_some_and(|n| n != 0) {
+            return Err(RuntimeError::Protocol("HTTP no-body framing"));
+        }
+        return Ok((status, Framing::Fixed(0), false));
     }
     if status < 200 {
         return Err(RuntimeError::Protocol(
@@ -350,5 +424,38 @@ fn headers(
         } else {
             Framing::Close
         },
+        media == Some(true),
     ))
+}
+
+/// Rejects a local encoder exceeding its declared body before those extra bytes enter the wire.
+struct ExactBody<'a> {
+    inner: &'a mut dyn Write,
+    remaining: u64,
+}
+impl Write for ExactBody<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.len() as u64 > self.remaining {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "request body exceeded length",
+            ));
+        }
+        let n = self.inner.write(bytes)?;
+        self.remaining -= n as u64;
+        Ok(n)
+    }
+    fn write_all(&mut self, mut bytes: &[u8]) -> io::Result<()> {
+        while !bytes.is_empty() {
+            let n = self.write(bytes)?;
+            if n == 0 {
+                return Err(io::ErrorKind::WriteZero.into());
+            }
+            bytes = &bytes[n..];
+        }
+        Ok(())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
 }

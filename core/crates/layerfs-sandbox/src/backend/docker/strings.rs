@@ -37,12 +37,26 @@ impl Text {
 }
 impl<R: Read> Json<R> {
     pub fn string(&mut self, capture: bool) -> Result<Text, RuntimeError> {
-        self.expect(b'"')?;
         let mut text = Text::new();
+        self.string_each(|c| text.push(c, capture))?;
+        Ok(text)
+    }
+    pub fn string_equals(&mut self, expected: &str) -> Result<bool, RuntimeError> {
+        let mut expected = expected.chars();
+        let mut equal = true;
+        self.string_each(|c| {
+            if expected.next() != Some(c) {
+                equal = false;
+            }
+        })?;
+        Ok(equal && expected.next().is_none())
+    }
+    fn string_each(&mut self, mut emit: impl FnMut(char)) -> Result<(), RuntimeError> {
+        self.expect(b'"')?;
         loop {
             let byte = self.byte()?;
             let c = match byte {
-                b'"' => return Ok(text),
+                b'"' => return Ok(()),
                 0..=31 => return Err(RuntimeError::Protocol("JSON unescaped control")),
                 b'\\' => match self.byte()? {
                     b'"' => '"',
@@ -93,7 +107,7 @@ impl<R: Read> Json<R> {
                         .expect("one validated scalar")
                 }
             };
-            text.push(c, capture);
+            emit(c);
         }
     }
     fn hex4(&mut self) -> Result<u16, RuntimeError> {

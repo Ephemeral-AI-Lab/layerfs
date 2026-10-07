@@ -1,0 +1,6 @@
+OWNED_FIRST_CONTAINER a2835feaf03ae6dbfa92d7ce1e01a743fc51ab6565cafd6e1dae4e640db21c19 phase=InstallPending
+DIRECT_STORE host_sqlite=3.51.0 daemon_sqlite=Some("3.53.2") incarnation=[3, 194, 53, 184, 100, 62, 237, 79, 10, 20, 15, 207, 181, 173, 181, 51, 221, 83, 182, 47, 33, 28, 135, 163, 88, 22, 102, 170, 120, 134, 187, 7] profile=Disposable
+OWNED_SECOND_CONTAINER fea71a408a89ec6a68fcb030f2abc1493e1e9f8523eb1546c51de7464ff4b890 phase=ControlReady
+ORDINARY_ACCESS uid=501 gid=20 groups=20 CapEff=0 CapAmb=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_control_denied
+ORDINARY_RESULT OutputProgress { stdout: 135, stderr: 0, wire_payload: 135, saturated: false } ExecInspection { container: ContainerId("a2835feaf03ae6dbfa92d7ce1e01a743fc51ab6565cafd6e1dae4e640db21c19"), exec: ExecId("1eac3538689e0b4ed1502c23b6c346de7667ba2063fe15951927c174ba663286"), running: false, exit_code: Some(0), pid: Some(25819) }
+Error: "end ControlFailure { call: Call { id: 5, request: EndSession }, phase: Fence, attempted: true, received: Some(Answer { id: 5, reply: SessionEnded }), cause: Channel(Io(Os { code: 57, kind: NotConnected, message: \"Socket is not connected\" })), fence_error: None }"

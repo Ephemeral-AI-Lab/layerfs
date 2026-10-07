@@ -1,0 +1,26 @@
+[
+  {
+    "command": [
+      "docker",
+      "volume",
+      "rm",
+      "layerfs-r1d-store-20261008-0efd0a4ca4474348ad35c6046f3ef4de"
+    ],
+    "exit_code": 0,
+    "stdout": "layerfs-r1d-store-20261008-0efd0a4ca4474348ad35c6046f3ef4de\n",
+    "stderr": "",
+    "scope": "explicit harness-owned isolated test-volume cleanup after product retained Store proof; not Sandbox delete or real product history GC"
+  },
+  {
+    "command": [
+      "docker",
+      "volume",
+      "rm",
+      "layerfs-r1d-store-20261008-6c318c832e6342eebb1ec6cdd3a67f01"
+    ],
+    "exit_code": 0,
+    "stdout": "layerfs-r1d-store-20261008-6c318c832e6342eebb1ec6cdd3a67f01\n",
+    "stderr": "",
+    "scope": "explicit harness-owned isolated test-volume cleanup after product retained Store proof; not Sandbox delete or real product history GC"
+  }
+]

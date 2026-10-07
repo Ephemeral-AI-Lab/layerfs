@@ -1,0 +1,22 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error[E0614]: type `Duration` cannot be dereferenced
+  --> crates/layerfs-api/sdk/src/sandbox/lifecycle.rs:62:36
+   |
+62 |             .set_read_timeout(Some(**docker_wait(&request)))
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0614]: type `Duration` cannot be dereferenced
+  --> crates/layerfs-api/sdk/src/sandbox/lifecycle.rs:65:37
+   |
+65 |             .set_write_timeout(Some(**docker_wait(&request)))
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0614`.
+error: could not compile `layerfs-sdk` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

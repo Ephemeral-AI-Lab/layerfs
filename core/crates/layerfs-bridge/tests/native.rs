@@ -235,3 +235,72 @@ fn corrupted_authenticated_record_retains_the_crypto_failure_without_replay() {
         Err(ChannelError::Quarantined)
     ));
 }
+
+#[test]
+fn terminal_reply_retains_eof_and_original_platform_fence_outcome() {
+    let (mut client, mut server, _raw) = pair();
+    server.send.send(b"final acknowledgement").unwrap();
+    assert_eq!(client.receive.receive().unwrap(), b"final acknowledgement");
+    let worker = thread::spawn(move || {
+        match server.receive.wait_peer_end() {
+            Ok(()) => println!("NATIVE_END peer_eof=true fence=OK"),
+            Err(failure) => {
+                assert!(
+                    cfg!(target_os = "macos"),
+                    "unexpected terminal failure: {failure:?}"
+                );
+                assert_eq!(failure.phase, layerfs_bridge::native::PeerEndPhase::Fence);
+                assert!(failure.fence_attempted && failure.received.is_none());
+                assert!(
+                    matches!(&failure.cause,ChannelError::Io(error) if error.kind()==std::io::ErrorKind::NotConnected)
+                );
+                println!("NATIVE_END peer_eof=true original_fence_failure={failure:?}");
+            }
+        }
+        let work = server.receive.work();
+        assert_eq!(work.io_attempts, 1);
+        assert_eq!(work.wire_bytes, 0);
+        assert!(matches!(
+            server.receive.receive(),
+            Err(ChannelError::Quarantined)
+        ));
+        assert!(matches!(
+            server.send.send(b"after end"),
+            Err(ChannelError::Quarantined)
+        ));
+    });
+    client.send.close().unwrap();
+    worker.join().unwrap();
+}
+#[test]
+fn terminal_trailing_input_keeps_original_byte_work_and_has_no_second_read() {
+    let (_client, mut server, mut raw) = pair();
+    raw.write_all(&[0x7f]).unwrap();
+    let failure = server.receive.wait_peer_end().unwrap_err();
+    assert_eq!(failure.received, Some(0x7f));
+    assert_eq!(failure.phase, layerfs_bridge::native::PeerEndPhase::Read);
+    assert!(failure.fence_attempted);
+    assert!(matches!(failure.cause, ChannelError::Invalid(_)));
+    assert_eq!(failure.work.io_attempts, 1);
+    assert_eq!(failure.work.wire_bytes, 1);
+    let second = server.receive.wait_peer_end().unwrap_err();
+    assert!(matches!(second.cause, ChannelError::Quarantined));
+    assert_eq!(second.work.io_attempts, 1);
+    assert_eq!(second.phase, layerfs_bridge::native::PeerEndPhase::Admit);
+    assert!(!second.fence_attempted);
+}
+
+#[test]
+fn terminal_read_error_keeps_phase_and_original_fence_attempt() {
+    let (_client, mut server, _client_raw, server_raw) = pair_with_retained_sockets();
+    server_raw
+        .set_read_timeout(Some(Duration::from_millis(100)))
+        .unwrap();
+    let failure = server.receive.wait_peer_end().unwrap_err();
+    assert_eq!(failure.phase, layerfs_bridge::native::PeerEndPhase::Read);
+    assert!(failure.fence_attempted);
+    assert_eq!(failure.received, None);
+    assert!(matches!(failure.cause, ChannelError::Io(_)));
+    assert_eq!(failure.work.io_attempts, 1);
+    assert_eq!(failure.work.wire_bytes, 0);
+}

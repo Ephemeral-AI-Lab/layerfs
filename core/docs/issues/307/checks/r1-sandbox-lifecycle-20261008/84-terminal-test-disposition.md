@@ -1,0 +1,5 @@
+# Original terminal socket test disposition
+
+79 native channel suite:8 PASS,1 FAILED. On macOS responder, clean peer EOF followed by original responder shutdown returned ENOTCONN, retained exactly as PeerEndPhase::Fence/fence_attempted=true/received=None/io_attempts1. The initial test incorrectly required every platform responder fence to succeed. Production daemon is Linux-only. Bridge generic terminal API must retain platform fence failure, and the macOS controller's clean fence is established separately by the actual Linux-daemon proof.
+
+The test now qualifies exact native terminal outcomes: clean fence success, or macOS original NotConnected error with exact Fence/attempt/EOF/no-wire-bytes custody. Any read-phase error, other code, wrong phase or non-macOS fence error fails. It does not suppress/retry/relabel the production error or claim macOS responder clean close. Original79 FAILED retained. Rerun only that affected case on macOS; all three terminal cases on Linux at final build identity. Source production code is unchanged by this oracle repair.

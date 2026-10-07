@@ -1,0 +1,38 @@
+{
+  "whitespace": [
+    {
+      "command": [
+        "git",
+        "diff",
+        "--cached",
+        "--check"
+      ],
+      "exit_code": 2,
+      "receipt": "109-full-whitespace.txt"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--cached",
+        "--check",
+        "--",
+        ".",
+        ":(exclude)core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/*.txt"
+      ],
+      "exit_code": 0,
+      "receipt": "110-source-doc-whitespace.txt"
+    }
+  ],
+  "product_trees_match_counted": true,
+  "counted_product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "final_source_receipt_matches": true,
+  "full_whitespace_verdict": "FAILED \u2014 retained raw stdout only; see exact receipt",
+  "scoped_whitespace_verdict": "PASS",
+  "guard": "102-final-boundary.txt",
+  "fmt": "103-final-format.txt",
+  "required_checks_complete": true
+}

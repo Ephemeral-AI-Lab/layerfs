@@ -1,0 +1,24 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r1d-linux-checks-20261008",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-c",
+    "import hashlib,json,subprocess,re,sys\nfrom pathlib import Path\nm=json.load(open('core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/88-final-source-identity.json'))\nbad=[p for p,h in m['files'].items() if hashlib.sha256(open(p,'rb').read()).hexdigest()!=h]\nprint('source_hashes_match='+str(not bad),flush=True)\nif bad: print(bad);sys.exit(2)\nbase=['--manifest-path','core/Cargo.toml','--locked','-p','layerfs-sdk','-p','layerfs-sandbox','-p','layerfs-bridge','-p','layerfs-daemon','--all-targets']\nr=subprocess.run(['cargo','test',*base,'--no-run'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)\nprint(r.stdout,flush=True)\nif r.returncode:sys.exit(r.returncode)\nlog=r.stdout\nfor test in ['engine_lifecycle','engine_protocol','native','native_application']:\n binary=re.search('Executable tests/'+test+r'\\.rs \\(([^)]+)\\)',log).group(1)\n print('selected_test='+test+' binary='+binary+' sha256='+hashlib.sha256(Path(binary).read_bytes()).hexdigest(),flush=True)\n seconds='9s' if test=='native_application' else '100s'\n result=subprocess.call(['timeout','--kill-after=1s',seconds,binary,'--nocapture','--test-threads=1'])\n print('test='+test+' exit_code='+str(result),flush=True)\n if result:sys.exit(result)\nr=subprocess.call(['cargo','clippy',*base,'--','-D','warnings'])\nprint('clippy_exit='+str(r),flush=True)\nsys.exit(r)\n"
+  ],
+  "scope": "Exact final source; bounded isolated functional tests, explicit Disposable native fixture, no cold/performance/CI claim"
+}

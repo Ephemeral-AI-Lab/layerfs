@@ -1,0 +1,17 @@
+
+running 1 test
+test streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup ... 
+thread 'streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup' panicked at crates/layerfs-sandbox/tests/engine_lifecycle.rs:91:5:
+assertion `left == right` failed
+  left: [108, 97, 121, 101, 114, 102, 115, 45, 108, 111, 99, 97, 108, 47, 99, 111, 110, 102, 105, 103, 47, 100, 97, 101, 109, 111, 110, 46, 115, 101, 116, 117]
+ right: [108, 97, 121, 101, 114, 102, 115, 45, 108, 111, 99, 97, 108, 47, 99, 111, 110, 102, 105, 103, 47, 100, 97, 101, 109, 111, 110, 46, 115, 101, 116, 117, 112]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.03s
+

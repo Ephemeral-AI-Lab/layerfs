@@ -1,0 +1,16 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "100",
+    "core/target/debug/deps/native-d9a245f3724f5845",
+    "terminal_reply_retains_eof_and_original_platform_fence_outcome",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "sha256": "ef3bfa69a839f2cec9b93e9f37f1b2ffc837cd2058a9ff94fd45fe5c85fca4bf",
+  "exit_code": 0,
+  "old79_failure_retained": true
+}

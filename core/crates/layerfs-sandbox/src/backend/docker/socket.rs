@@ -2,26 +2,77 @@
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use std::{
     io::{self, Read, Write},
-    os::{fd::AsFd, unix::net::UnixStream},
-    time::Duration,
+    os::{
+        fd::{AsFd, AsRawFd},
+        unix::net::UnixStream,
+    },
+    path::Path,
+    time::{Duration, Instant},
 };
 pub(super) struct Socket {
     pub stream: UnixStream,
     pub wait: Option<Duration>,
+    pub deadline: Option<Instant>,
 }
 impl Socket {
-    pub fn new(stream: UnixStream, wait: Option<Duration>) -> io::Result<Self> {
+    /// One nonblocking connect attempt; only genuine EINPROGRESS has a completion wait.
+    pub fn connect(path: &Path, wait: Duration, deadline: Option<Instant>) -> io::Result<Self> {
+        use nix::{
+            errno::Errno,
+            sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, UnixAddr},
+        };
+        let address = UnixAddr::new(path).map_err(io::Error::from)?;
+        let fd = socket(
+            AddressFamily::Unix,
+            SockType::Stream,
+            SockFlag::empty(),
+            None,
+        )
+        .map_err(io::Error::from)?;
+        nix::fcntl::fcntl(
+            &fd,
+            nix::fcntl::FcntlArg::F_SETFD(nix::fcntl::FdFlag::FD_CLOEXEC),
+        )
+        .map_err(io::Error::from)?;
+        let stream = UnixStream::from(fd);
         stream.set_nonblocking(true)?;
-        Ok(Self { stream, wait })
+        let result = connect(stream.as_raw_fd(), &address);
+        let owner = Self {
+            stream,
+            wait: Some(wait),
+            deadline,
+        };
+        match result {
+            Ok(()) => Ok(owner),
+            Err(Errno::EINPROGRESS) => {
+                owner.ready(PollFlags::POLLOUT)?;
+                match owner.stream.take_error()? {
+                    Some(error) => Err(error),
+                    None => Ok(owner),
+                }
+            }
+            // Unix EAGAIN is failed admission, not a queued/pending connection.
+            Err(error) => Err(error.into()),
+        }
     }
     pub fn try_clone(&self) -> io::Result<Self> {
         Ok(Self {
             stream: self.stream.try_clone()?,
             wait: self.wait,
+            deadline: self.deadline,
         })
     }
     fn ready(&self, flags: PollFlags) -> io::Result<()> {
-        let timeout = match self.wait {
+        let wait = if let Some(deadline) = self.deadline {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|d| !d.is_zero())
+                .ok_or_else(|| io::Error::from(io::ErrorKind::TimedOut))?;
+            Some(self.wait.map_or(remaining, |d| d.min(remaining)))
+        } else {
+            self.wait
+        };
+        let timeout = match wait {
             Some(d) => PollTimeout::try_from(d).map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidInput, "control I/O wait width")
             })?,

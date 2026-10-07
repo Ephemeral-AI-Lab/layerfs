@@ -1,0 +1,28 @@
+[
+  {
+    "command": [
+      "perl",
+      "-e",
+      "alarm shift; exec @ARGV",
+      "100",
+      "core/target/debug/deps/engine_lifecycle-73412ddc1548593a",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "d4502bc3bc92d605419153dd04792fcd62867e2cd615df6bced865a4fc014595",
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "perl",
+      "-e",
+      "alarm shift; exec @ARGV",
+      "100",
+      "core/target/debug/deps/engine_protocol-d2af69217dd3cbdb",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "bf488ac667a46de3b710bcc451ec84dccded8318c05458fcba023409e76d8e5e",
+    "exit_code": 0
+  }
+]

@@ -1,0 +1,29 @@
+
+running 9 tests
+test authenticated_duplex_records_stream_beyond_one_window_with_fixed_buffers ... NATIVE suite=Noise_KK_25519_AESGCM_SHA256 server_receive=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 17, io_attempts: 17, wire_bytes: 196654, zeroed_bytes: 262102, crypto_attempts: 5, crypto_input_bytes: 196644, crypto_output_bytes: 196564, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 0, plain_capacity: 65519, sealed_capacity: 65535 } server_send=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 10, io_attempts: 10, wire_bytes: 196654, zeroed_bytes: 131054, crypto_attempts: 5, crypto_input_bytes: 196564, crypto_output_bytes: 196644, buffer_allocation_attempts: 1, requested_buffer_bytes: 65535, stack_window_bytes: 0, plain_capacity: 0, sealed_capacity: 65535 } handshake=ChannelWork { channel_calls: 0, record_io_attempts: 2, records: 0, plaintext_bytes: 0, io_calls: 4, io_attempts: 4, wire_bytes: 100, zeroed_bytes: 562, crypto_attempts: 2, crypto_input_bytes: 48, crypto_output_bytes: 48, buffer_allocation_attempts: 1, requested_buffer_bytes: 256, stack_window_bytes: 512, plain_capacity: 0, sealed_capacity: 0 }
+NATIVE client_send=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 10, io_attempts: 10, wire_bytes: 196654, zeroed_bytes: 131054, crypto_attempts: 5, crypto_input_bytes: 196564, crypto_output_bytes: 196644, buffer_allocation_attempts: 1, requested_buffer_bytes: 65535, stack_window_bytes: 0, plain_capacity: 0, sealed_capacity: 65535 } client_receive=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 16, io_attempts: 16, wire_bytes: 196654, zeroed_bytes: 262102, crypto_attempts: 5, crypto_input_bytes: 196644, crypto_output_bytes: 196564, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 0, plain_capacity: 65519, sealed_capacity: 65535 }
+ok
+test corrupted_authenticated_record_retains_the_crypto_failure_without_replay ... ok
+test malformed_record_quarantines_both_directions_before_body_allocation ... ok
+test oversized_unattempted_record_does_not_consume_a_nonce ... ok
+test successful_native_channels_enable_nodelay_on_both_authenticated_sockets ... ok
+test terminal_read_error_keeps_phase_and_original_fence_attempt ... ok
+test terminal_reply_keeps_peer_owner_until_caller_fence_then_quarantines ... 
+thread '<unnamed>' panicked at crates/layerfs-bridge/tests/native.rs:245:40:
+called `Result::unwrap()` on an `Err` value: PeerEndFailure { cause: Io(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), phase: Fence, fence_attempted: true, received: None, work: ChannelWork { channel_calls: 1, record_io_attempts: 0, records: 0, plaintext_bytes: 0, io_calls: 0, io_attempts: 1, wire_bytes: 0, zeroed_bytes: 1, crypto_attempts: 0, crypto_input_bytes: 0, crypto_output_bytes: 0, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 1, plain_capacity: 65519, sealed_capacity: 65535 } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'terminal_reply_keeps_peer_owner_until_caller_fence_then_quarantines' panicked at crates/layerfs-bridge/tests/native.rs:259:19:
+called `Result::unwrap()` on an `Err` value: Any { .. }
+FAILED
+test terminal_trailing_input_keeps_original_byte_work_and_has_no_second_read ... ok
+test wrong_static_identity_fails_the_actual_handshake ... S7_FAILED_HANDSHAKE client=ChannelWork { channel_calls: 0, record_io_attempts: 2, records: 0, plaintext_bytes: 0, io_calls: 2, io_attempts: 3, wire_bytes: 50, zeroed_bytes: 514, crypto_attempts: 1, crypto_input_bytes: 0, crypto_output_bytes: 48, buffer_allocation_attempts: 1, requested_buffer_bytes: 256, stack_window_bytes: 512, plain_capacity: 0, sealed_capacity: 0 } server=ChannelWork { channel_calls: 0, record_io_attempts: 1, records: 0, plaintext_bytes: 0, io_calls: 2, io_attempts: 2, wire_bytes: 50, zeroed_bytes: 562, crypto_attempts: 1, crypto_input_bytes: 48, crypto_output_bytes: 0, buffer_allocation_attempts: 1, requested_buffer_bytes: 256, stack_window_bytes: 512, plain_capacity: 0, sealed_capacity: 0 }
+ok
+
+failures:
+
+failures:
+    terminal_reply_keeps_peer_owner_until_caller_fence_then_quarantines
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

@@ -1,0 +1,7 @@
+
+running 1 test
+test terminal_reply_retains_eof_and_original_platform_fence_outcome ... NATIVE_END peer_eof=true original_fence_failure=PeerEndFailure { cause: Io(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), phase: Fence, fence_attempted: true, received: None, work: ChannelWork { channel_calls: 1, record_io_attempts: 0, records: 0, plaintext_bytes: 0, io_calls: 0, io_attempts: 1, wire_bytes: 0, zeroed_bytes: 1, crypto_attempts: 0, crypto_input_bytes: 0, crypto_output_bytes: 0, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 1, plain_capacity: 65519, sealed_capacity: 65535 } }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+

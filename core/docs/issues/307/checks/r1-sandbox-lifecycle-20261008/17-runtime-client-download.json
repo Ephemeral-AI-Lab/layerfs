@@ -1,0 +1,19 @@
+{
+  "command": [
+    "curl",
+    "--fail",
+    "--location",
+    "--max-time",
+    "50",
+    "--output",
+    "core/target/runtime-tools/containerd-2.2.4/containerd-static-2.2.4-linux-arm64.tar.gz",
+    "https://github.com/containerd/containerd/releases/download/v2.2.4/containerd-static-2.2.4-linux-arm64.tar.gz"
+  ],
+  "exit_code": 0,
+  "stderr": "  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n\n  0 29.1M    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0\n 13 29.1M   13 4047k    0     0  1864k      0  0:00:15  0:00:02  0:00:13 4547k\n 30 29.1M   30 9117k    0     0  2798k      0  0:00:10  0:00:03  0:00:07 4609k\n 53 29.1M   53 15.4M    0     0  3735k      0  0:00:07  0:00:04  0:00:03 5349k\n 69 29.1M   69 20.2M    0     0  4006k      0  0:00:07  0:00:05  0:00:02 5324k\n 80 29.1M   80 23.4M    0     0  3885k      0  0:00:07  0:00:06  0:00:01 4903k\n100 29.1M  100 29.1M    0     0  4237k      0  0:00:07  0:00:07 --:--:-- 5294k\n",
+  "published_sha256": "5f01ac0ad46caf685afee7614e36e406c48e73c1d84a71378dd4afe5d63a11d2",
+  "official_metadata": "https://github.com/containerd/containerd/releases/expanded_assets/v2.2.4",
+  "archive_sha256": "5f01ac0ad46caf685afee7614e36e406c48e73c1d84a71378dd4afe5d63a11d2",
+  "ctr_sha256": "dba23ecfa03867ccd3a7ae442f5cef7f0d37564f8c96639500997b5bef5e03d8",
+  "ctr_bytes": 20840632
+}

@@ -84,3 +84,12 @@ retained malformed/product faults may exhaust the explicitly finite connection
 capacity until an operator transfers custody or ends that daemon lifecycle.
 Functional binary tests explicitly stop their owned process after proving logical
 Workspace close and label that stop as process termination, not native drain.
+
+R1d now qualifies actual macOS controller startup/installation against the Linux
+application and corrects EndSession socket ordering: final reply send completes,
+then the daemon waits once for the caller's EOF and fences once before releasing
+its connection slot. Original Served and terminal byte/work/phase/fence-attempt
+receipts survive failure; a failed connection retains receipts while its local
+socket owner drops. This establishes no application force-close/join or native
+filesystem drain. [Owned Sandbox lifecycle](72-owned-sandbox-lifecycle.md) records
+the current source, actual failed/final proof identities and precise scope.

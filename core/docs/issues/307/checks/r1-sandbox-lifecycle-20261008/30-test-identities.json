@@ -1,0 +1,17 @@
+{
+  "engine_lifecycle": {
+    "command": [
+      "perl",
+      "-e",
+      "alarm shift; exec @ARGV",
+      "100",
+      "core/target/debug/deps/engine_lifecycle-73412ddc1548593a",
+      "streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup",
+      "--exact",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "9d657ce9a749ac71869bf702a59db42fcfd2d9a9db6c6624dbda27139808227f",
+    "exit_code": 101
+  }
+}

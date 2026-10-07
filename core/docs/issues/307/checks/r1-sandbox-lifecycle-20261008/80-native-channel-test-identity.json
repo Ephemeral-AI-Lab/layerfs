@@ -1,0 +1,13 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "100",
+    "core/target/debug/deps/native-d9a245f3724f5845",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "binary_sha256": "ab2566c2e29721d30f4e94c63e91fb15c51abfd00ab36ecaac92c76668af9165",
+  "exit_code": 101
+}

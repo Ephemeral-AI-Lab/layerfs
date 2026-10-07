@@ -1,0 +1,66 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+warning: variable does not need to be mutable
+  --> crates/layerfs-sandbox/src/backend/docker/archive.rs:39:13
+   |
+39 |         let mut pending_source = crate::PendingRequest::default();
+   |             ----^^^^^^^^^^^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+warning: `layerfs-sandbox` (lib test) generated 1 warning (1 duplicate)
+warning: `layerfs-sandbox` (lib) generated 1 warning (run `cargo fix --lib -p layerfs-sandbox` to apply 1 suggestion)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+warning: function `upgrade` is never used
+   --> crates/layerfs-sandbox/tests/support/engine.rs:134:8
+    |
+134 | pub fn upgrade(payload: &[u8]) -> Vec<u8> {
+    |        ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+error[E0308]: mismatched types
+   --> crates/layerfs-api/sdk/examples/sandbox_lifecycle.rs:148:64
+    |
+148 |         let bound = workspace.bind(WorkspaceId::from_authority([40 + n; 16]), branch)?;
+    |                                    --------------------------- ^^^^^^^^^^^^ expected an array with a size of 32, found one with a size of 16
+    |                                    |
+    |                                    arguments to this function are incorrect
+    |
+note: associated function defined here
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:12
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |            ^^^^^^^^^^^^^^
+
+error[E0308]: mismatched types
+   --> crates/layerfs-api/sdk/examples/sandbox_lifecycle.rs:148:36
+    |
+148 |         let bound = workspace.bind(WorkspaceId::from_authority([40 + n; 16]), branch)?;
+    |                               ---- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `WorkspaceId`, found `Result<WorkspaceId, HistoryError>`
+    |                               |
+    |                               arguments to this method are incorrect
+    |
+    = note: expected struct `WorkspaceId`
+                 found enum `Result<WorkspaceId, HistoryError>`
+note: method defined here
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk/src/workspace/binding.rs:18:12
+    |
+18  |     pub fn bind(
+    |            ^^^^
+help: use the `?` operator to extract the `Result<WorkspaceId, HistoryError>` value, propagating a `Result::Err` value to the caller
+    |
+148 |         let bound = workspace.bind(WorkspaceId::from_authority([40 + n; 16])?, branch)?;
+    |                                                                             +
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-sdk` (example "sandbox_lifecycle" test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: `layerfs-sandbox` (test "engine_lifecycle") generated 1 warning

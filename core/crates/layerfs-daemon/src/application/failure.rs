@@ -29,6 +29,13 @@ pub enum ApplicationError {
     Install(Box<InstallFailure>),
     /// Original control outcome and failed delivery/fence.
     Control(Box<ServeFailure>),
+    /// Original final session reply send completed; terminal peer observation/fence then failed.
+    SessionEnd {
+        /// Original call/outcome whose reply send completed before the terminal failure.
+        served: Box<Served>,
+        /// Original terminal byte/work/cause, not a replayed final reply.
+        ending: Box<layerfs_bridge::native::PeerEndFailure>,
+    },
     /// Original product refusal delivered successfully, with unresolved custody.
     RetainedControl(Box<Served>),
     /// Original install result retained after application publication synchronization failed.
@@ -47,6 +54,9 @@ impl fmt::Display for ApplicationError {
             Self::Protocol(e) => write!(f, "native request: {e}"),
             Self::Install(e) => write!(f, "installation: {e}"),
             Self::Control(e) => write!(f, "control: {e}"),
+            Self::SessionEnd { ending, .. } => {
+                write!(f, "after original session reply: {}", ending.cause)
+            }
             Self::RetainedControl(_) => f.write_str("original unresolved control custody retained"),
             Self::InstallPublication(_) => {
                 f.write_str("original install result retained; application publication poisoned")

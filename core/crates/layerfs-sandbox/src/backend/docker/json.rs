@@ -73,6 +73,27 @@ impl<R: Read> Json<R> {
             }
         }
     }
+    pub fn array(
+        &mut self,
+        mut element: impl FnMut(&mut Self) -> Result<(), RuntimeError>,
+    ) -> Result<(), RuntimeError> {
+        self.whitespace()?;
+        self.expect(b'[')?;
+        self.whitespace()?;
+        if self.peek()? == Some(b']') {
+            self.byte()?;
+            return Ok(());
+        }
+        loop {
+            element(self)?;
+            self.whitespace()?;
+            match self.byte()? {
+                b']' => return Ok(()),
+                b',' => self.whitespace()?,
+                _ => return Err(RuntimeError::Protocol("JSON array separator")),
+            }
+        }
+    }
     pub fn boolean(&mut self) -> Result<bool, RuntimeError> {
         match self.peek()? {
             Some(b't') => {

@@ -68,6 +68,8 @@ impl Peer {
                 let mut body = vec![0; length];
                 reader.read_exact(&mut body).unwrap();
                 request.extend_from_slice(&body);
+                let follows_logs =
+                    request.starts_with(b"GET ") && request.windows(6).any(|b| b == b"/logs?");
                 requests.push(request);
                 let mut sent = 0usize;
                 'response: for bytes in response.chunks(split.max(1)) {
@@ -88,6 +90,12 @@ impl Peer {
                             }
                         }
                     }
+                }
+                // A follow subscription remains open until the caller's explicit fence.
+                // This is a bounded external peer wait, not product readiness/retry policy.
+                if follows_logs {
+                    let mut one = [0];
+                    let _ = stream.read(&mut one);
                 }
             }
             requests

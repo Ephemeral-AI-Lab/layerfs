@@ -1,0 +1,24 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling nix v0.31.3
+   Compiling memoffset v0.9.1
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error[E0599]: no associated item named `SOCK_NONBLOCK` found for struct `SockFlag` in the current scope
+  --> crates/layerfs-sandbox/src/backend/docker/socket.rs:28:23
+   |
+28 |             SockFlag::SOCK_NONBLOCK | SockFlag::SOCK_CLOEXEC,
+   |                       ^^^^^^^^^^^^^ associated item not found in `SockFlag`
+
+error[E0599]: no associated item named `SOCK_CLOEXEC` found for struct `SockFlag` in the current scope
+  --> crates/layerfs-sandbox/src/backend/docker/socket.rs:28:49
+   |
+28 |             SockFlag::SOCK_NONBLOCK | SockFlag::SOCK_CLOEXEC,
+   |                                                 ^^^^^^^^^^^^ associated item not found in `SockFlag`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-sandbox` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

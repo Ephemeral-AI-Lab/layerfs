@@ -1,0 +1,46 @@
+[
+  {
+    "command": [
+      "docker",
+      "stop",
+      "--time",
+      "1",
+      "a2835feaf03ae6dbfa92d7ce1e01a743fc51ab6565cafd6e1dae4e640db21c19"
+    ],
+    "exit_code": 0,
+    "stdout": "Flag --time has been deprecated, use --timeout instead\na2835feaf03ae6dbfa92d7ce1e01a743fc51ab6565cafd6e1dae4e640db21c19\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "rm",
+      "a2835feaf03ae6dbfa92d7ce1e01a743fc51ab6565cafd6e1dae4e640db21c19"
+    ],
+    "exit_code": 0,
+    "stdout": "a2835feaf03ae6dbfa92d7ce1e01a743fc51ab6565cafd6e1dae4e640db21c19\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "stop",
+      "--time",
+      "1",
+      "fea71a408a89ec6a68fcb030f2abc1493e1e9f8523eb1546c51de7464ff4b890"
+    ],
+    "exit_code": 0,
+    "stdout": "Flag --time has been deprecated, use --timeout instead\nfea71a408a89ec6a68fcb030f2abc1493e1e9f8523eb1546c51de7464ff4b890\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "rm",
+      "fea71a408a89ec6a68fcb030f2abc1493e1e9f8523eb1546c51de7464ff4b890"
+    ],
+    "exit_code": 0,
+    "stdout": "fea71a408a89ec6a68fcb030f2abc1493e1e9f8523eb1546c51de7464ff4b890\n",
+    "stderr": ""
+  }
+]

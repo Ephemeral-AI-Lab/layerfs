@@ -2,8 +2,9 @@
 
 > **Status:** Implemented source during R1a after `eb9b06c4c`; scoped verification
 > is retained under [R1 receipts](../issues/307/checks/r1-sdk-sandbox-20261008/).
-> Actual SandboxApi/runtime lifecycle and native Ready/mounted Commit remain
-> R1/R2/R5 work. No integrated qualification or performance is claimed.
+> Actual [SandboxApi/runtime lifecycle](72-owned-sandbox-lifecycle.md) is now implemented
+> with scoped R1d evidence. Native Ready/mounted Commit and full R1 qualification
+> remain open. No integrated acceptance or performance is claimed.
 
 SDK `project/` owns existing complete native Init/seal and bounded authenticated
 sealed install, with a stateless ProjectApi forwarding those operations. New
@@ -40,4 +41,6 @@ actually installed Store and real fair Overlay owner over authenticated channels
 They retain exact overwrite/captured-parent/current-root UpToDate, anchored history,
 Busy, stale token, unknown and publication/install custody scope. There is no
 native FUSE/kernel or ordinary Sandbox execution coverage in this subcheckpoint.
-No Sandbox placeholder/member/dependency is added to imply full R1 completion.
+That R1a subcheckpoint added no Sandbox placeholder/member/dependency. R1d now
+adds the actual one-way SDK-to-Sandbox edge and facade over owned runtime source;
+its narrower control/access proof does not imply full R1 completion.

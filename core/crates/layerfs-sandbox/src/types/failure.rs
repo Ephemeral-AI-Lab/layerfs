@@ -31,6 +31,12 @@ impl std::error::Error for RuntimeError {}
 pub struct WireFailure {
     pub attempted: bool,
     pub sent_bytes: u64,
+    /// Exact encoded HTTP header length; body transfer is counted separately.
+    pub request_header_bytes: u64,
+    /// Actual positive socket body transfer, excluding headers and buffered input.
+    pub sent_body_bytes: u64,
+    /// Original undelivered fixed request window; Debug redacts private payload.
+    pub pending_request: super::PendingRequest,
     pub status: Option<u16>,
     pub cause: RuntimeError,
     pub fence_error: Option<io::Error>,

@@ -215,8 +215,25 @@ impl Application {
                             });
                         }
                     }
+                    if session_end {
+                        connection
+                            .receive
+                            .wait_peer_end()
+                            .map_err(|ending| ConnectionFailure {
+                                slot,
+                                received: ending.received.map(|byte| vec![byte]),
+                                original: None,
+                                cause: ApplicationError::SessionEnd {
+                                    served: Box::new(served),
+                                    ending,
+                                },
+                                fence_error: None,
+                                diagnostic_error: None,
+                            })?;
+                        return Ok(());
+                    }
                     drop(served);
-                    if session_end || reserved_refusal {
+                    if reserved_refusal {
                         connection.send.close().map_err(|cause| ConnectionFailure {
                             slot,
                             received: None,

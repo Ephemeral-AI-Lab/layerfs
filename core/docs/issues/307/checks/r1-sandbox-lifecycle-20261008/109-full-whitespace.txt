@@ -1,0 +1,14 @@
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/15-engine_lifecycle.txt:6: trailing whitespace.
++test streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup ... 
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/15-engine_lifecycle.txt:21: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/29-engine_lifecycle.txt:3: trailing whitespace.
++test streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup ... 
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/29-engine_lifecycle.txt:17: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/35-engine_lifecycle.txt:9: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/35-engine_protocol.txt:15: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/54-engine_lifecycle.txt:10: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/54-engine_protocol.txt:15: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/79-native-channel-tests.txt:11: trailing whitespace.
++test terminal_reply_keeps_peer_owner_until_caller_fence_then_quarantines ... 
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/79-native-channel-tests.txt:29: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-lifecycle-20261008/89-repaired-terminal-test.txt:7: new blank line at EOF.

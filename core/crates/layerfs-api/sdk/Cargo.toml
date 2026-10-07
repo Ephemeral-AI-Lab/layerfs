@@ -14,3 +14,4 @@ layerfs-persistence = { path = "../../layerfs-persistence" }
 layerfs-storage = { path = "../../layerfs-storage" }
 layerfs-telemetry = { path = "../../layerfs-telemetry" }
 layerfs-project = { path = "../../layerfs-project" }
+layerfs-sandbox = { path = "../../layerfs-sandbox" }
