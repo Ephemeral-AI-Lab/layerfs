@@ -6,6 +6,9 @@
 #![forbid(unsafe_code)]
 
 pub mod bootstrap;
+pub mod install;
+mod install_file;
+pub mod install_types;
 mod overlay;
 mod service;
 pub mod store;

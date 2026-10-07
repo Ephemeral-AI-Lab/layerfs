@@ -7,6 +7,7 @@ mod operation;
 mod ports;
 mod settle;
 mod types;
+pub(crate) use bind::checked_base;
 
 pub use commit_types::{CommitError, CommitFailure, CommitPhase, CommitSuccess};
 pub use open::{Store, StoreWork};

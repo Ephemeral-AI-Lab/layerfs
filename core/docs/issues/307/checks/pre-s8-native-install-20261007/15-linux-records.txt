@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T09:45:31.735547+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-native-install-records", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/install_records-9a34a1068771d2c3; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/install_records-9a34a1068771d2c3 --nocapture --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "1824c623ddda33a31d1d70d046ca10823e8e26b13bd635ee20b4bc2d1b618dd5", "source_parent": "2f4668b739f417d8fdc081af96c8ecaaaf6cf706", "wall_stop": "specified in command; build is not test execution"}
+a8f94a28f45191f6cd69c76979972764e7c99c710c3bc19983d730a9bbd59c67  core/target/cluster2-linux/debug/deps/install_records-9a34a1068771d2c3
+
+running 2 tests
+test bounded_manifest_is_exact_and_does_not_cap_stream_length ... ok
+test installed_and_refused_keep_original_publication_knowledge ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+# exit=0

@@ -57,7 +57,9 @@ product mental model or campaign-specific benchmark procedures.
   Exec integration is unfinished.
   SDK creates/imports the initial Store, publishes the first Branch and consumes
   seal, returning a closed file plus explicit provider/locator/profile metadata.
-  It retains no Store handle or data service. Install/control are separate work.
+  It retains no Store handle or data service. Native install now streams the
+  sealed file once, opens it in the daemon and returns both actual SQLite versions;
+  see [F5 handoff](docs/issues/307/PRE-S8-F5-20261007.md). General control is next.
   The prior client/runtime, daemon upstream, Bridge logical data framing and
   excluded API-core are retired. Historical receipts keep their original topology
   and verdicts; excluded predecessor crates and root reference remain intact.

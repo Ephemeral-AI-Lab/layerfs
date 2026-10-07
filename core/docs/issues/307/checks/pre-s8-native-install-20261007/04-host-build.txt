@@ -1,0 +1,35 @@
+# {"timestamp": "2026-10-07T09:39:59.735058+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "-p", "layerfs-sdk", "-p", "layerfs-bridge", "--all-targets", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "1824c623ddda33a31d1d70d046ca10823e8e26b13bd635ee20b4bc2d1b618dd5", "source_parent": "2f4668b739f417d8fdc081af96c8ecaaaf6cf706", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.91s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_bridge-d6d40251613ee3c5)
+  Executable tests/install_records.rs (core/target/debug/deps/install_records-acaeaa05f7194819)
+  Executable tests/native.rs (core/target/debug/deps/native-f22a6908121b7872)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-0bfa28e1fd061d83)
+  Executable tests/captured_runs.rs (core/target/debug/deps/captured_runs-1ac996a262e706b3)
+  Executable tests/completion_ownership.rs (core/target/debug/deps/completion_ownership-850c7d83283a18fb)
+  Executable tests/completion_storage.rs (core/target/debug/deps/completion_storage-b55463e791cc6391)
+  Executable tests/construction_cursor.rs (core/target/debug/deps/construction_cursor-49788331bfc85ebc)
+  Executable tests/device_capacity.rs (core/target/debug/deps/device_capacity-295d0e2698ad3659)
+  Executable tests/e2_startup_receipts.rs (core/target/debug/deps/e2_startup_receipts-c0d4c7944f58d1a1)
+  Executable tests/edit_backing.rs (core/target/debug/deps/edit_backing-b509dea7d8bea0e3)
+  Executable tests/host_handoff.rs (core/target/debug/deps/host_handoff-5ac0178e0ab43f97)
+  Executable tests/indexed_operation_record.rs (core/target/debug/deps/indexed_operation_record-1c01a08b5691ad1a)
+  Executable tests/installed_store.rs (core/target/debug/deps/installed_store-d85b8e2c04bf7509)
+  Executable tests/job_cost.rs (core/target/debug/deps/job_cost-89f3da0d8421fc11)
+  Executable tests/native_install.rs (core/target/debug/deps/native_install-0f3274ac22c6f627)
+  Executable tests/owner.rs (core/target/debug/deps/owner-62149214abc20e7a)
+  Executable tests/root_qualification.rs (core/target/debug/deps/root_qualification-5cc2e93d1f2f8a6a)
+  Executable tests/startup_cost.rs (core/target/debug/deps/startup_cost-aa9c8b92144a7c21)
+  Executable tests/store_commit.rs (core/target/debug/deps/store_commit-fb5644ea67cf932d)
+  Executable unittests examples/e2_startup.rs (core/target/debug/examples/e2_startup-bba034aad5653f60)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-19cad419710344c2)
+  Executable tests/init.rs (core/target/debug/deps/init-a5a8f83bd4512c7f)
+
+# exit=0

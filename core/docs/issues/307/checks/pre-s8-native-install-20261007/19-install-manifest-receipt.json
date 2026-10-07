@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-10-07T09:46:27.244596+00:00",
+  "original_path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-native-install-14077-docker/installed.manifest",
+  "bytes": 166,
+  "sha256": "0ed77e9432c7087c472735a1d4a65d214456302e818559d7a109160f4ba17bc1",
+  "host_sqlite": "3.51.0",
+  "daemon_sqlite": "3.53.2",
+  "profile": "sqlite-wal-off-v2",
+  "locator": "/store/store.sqlite",
+  "provider": "Sqlite",
+  "volume": "layerfs-pre-s8-install-1791366363725131000-store",
+  "volume_removed": true,
+  "child_exit": 0,
+  "container_removed": true,
+  "source_removed": true,
+  "sealed_file_removed": true,
+  "original_manifest_retained": true,
+  "unknown_outcome": null
+}

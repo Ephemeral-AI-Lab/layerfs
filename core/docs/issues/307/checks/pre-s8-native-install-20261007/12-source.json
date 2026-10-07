@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-10-07T09:43:01.089479+00:00",
+  "parent": "2f4668b739f417d8fdc081af96c8ecaaaf6cf706",
+  "files": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.lock": "36a4a9b711c7d3a2b9eae6d3c2dab5bd214b494a7c447dd44bcda74663baeaea",
+    "core/Cargo.toml": "441b1162aacb628b299ed1e660a1bd08f9ce76e82ced5af5f777fb501f254544",
+    "core/crates/layerfs-api/sdk/src/install.rs": "d454c6f3f169be4c15098f63a844ad5584f6b7526949a15b88c06d1dd112036c",
+    "core/crates/layerfs-api/sdk/src/install_types.rs": "ad73bd785a71edd346ad75f06753ef24cdfb61a596da74c6d9c5afe0ae43f4e0",
+    "core/crates/layerfs-api/sdk/src/lib.rs": "fdaad61bdf587e5554bd2aeee07e30369d395d9786dc3dfc4f2206d65823dde8",
+    "core/crates/layerfs-bridge/src/control.rs": "ca2f8801c23c5ec6cef83b988b6152a29e53004a4a21bd41948912895cd0a7d6",
+    "core/crates/layerfs-bridge/src/lib.rs": "92ebb1c9f9c2d783c878381c9fde4fbd2dbcd3d601da80174db2661f016faf2e",
+    "core/crates/layerfs-bridge/src/provision_wire.rs": "ef36e2348651f5292993235b1e5abf3b15416883456b3baf1db7d9e93917a152",
+    "core/crates/layerfs-bridge/src/wire.rs": "536ee0d655e16b8b89a84670b3acabeac44757d588888442e24a20dcd2dbc26f",
+    "core/crates/layerfs-bridge/tests/install_records.rs": "6ceddf49564d255b96d6420998485ea0f2900e1a1699ebf0a73caf79d93a6a3a",
+    "core/crates/layerfs-daemon/Cargo.toml": "8f862921a86fa871be7b830acd5b84889c19a4834dc59eebde02b0ec5ef76954",
+    "core/crates/layerfs-daemon/src/bootstrap.rs": "79beed5ddac2962997ca681b73ef3f898b4b526a4aae76e13fa37432f89b74fd",
+    "core/crates/layerfs-daemon/src/install.rs": "bf08c61d6816c6a204d28840bafc4f012ce2df19e30b650a2c8cd72aa4c78fe5",
+    "core/crates/layerfs-daemon/src/install_file.rs": "5c0297a61b7f0eebb9e1c33bc1d2adc32b75f56a6c0591f3b186f08b740171a6",
+    "core/crates/layerfs-daemon/src/install_types.rs": "1f12deb5a77d7b3642261efd43d5d45a0cb24bae2440a5b4a4d00774d26e0e93",
+    "core/crates/layerfs-daemon/src/lib.rs": "3acd80b4a2b34abc7a6f2f75251f308206b52be1a103f1040c231a2306cf1f04",
+    "core/crates/layerfs-daemon/src/store/bind.rs": "55e78faf3a393b72434f0e3d358c11fea82a5bd9f8df0d8f0b93dd3bae1b1cf5",
+    "core/crates/layerfs-daemon/src/store/mod.rs": "229e29a5b376238e7fc213261a777471fda38e833864867bca659d2cabe6ccbd",
+    "core/crates/layerfs-daemon/tests/host_handoff.rs": "30578bea60b6c4bdfabb72f5e013e2b5ff65509a558e5bf8be9ed319ee7fb475",
+    "core/crates/layerfs-daemon/tests/native_install.rs": "15a81388db6d2ae52c52b2bf04a40d7ee976575608889e39f582ddd10d6e17fc",
+    "core/crates/layerfs-daemon/tests/support/install_docker.rs": "bdbbaf76c6ce23a16426400d8ab631270490470abd664898cd6ad516ad777724",
+    "core/crates/layerfs-daemon/tests/support/native_install.rs": "09519cb71b1aeb5186b8ac6c5139faf5099e41ec68912e4d07624d44739cf392"
+  },
+  "refresh": "byte-identical copy and rename"
+}

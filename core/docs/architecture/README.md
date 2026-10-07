@@ -412,3 +412,7 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 - [Shared Store foundation](60-shared-store-foundation.md): macOS/Linux WAL
   profiles, typed one-attempt contention, host seal and the authorized macOS
   file-control boundary; daemon adapter/control integration remains separate.
+
+Current one-time Store handoff: [67 — Native Store install](67-native-store-install.md)
+composes host Init/seal, bounded authenticated file streaming and direct daemon
+open, with exact original partial/publication custody and both SQLite versions.

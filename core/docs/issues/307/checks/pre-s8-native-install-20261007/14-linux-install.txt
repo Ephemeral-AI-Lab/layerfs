@@ -1,0 +1,14 @@
+# {"timestamp": "2026-10-07T09:45:24.933571+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-native-install-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/native_install-1d4271438b96c8ba; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/native_install-1d4271438b96c8ba --nocapture --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "1824c623ddda33a31d1d70d046ca10823e8e26b13bd635ee20b4bc2d1b618dd5", "source_parent": "2f4668b739f417d8fdc081af96c8ecaaaf6cf706", "wall_stop": "specified in command; build is not test execution"}
+483c4d538a9a95502e6c4392b1e86c8fc3683b0cafd54f738e4ae5a2411d45b8  core/target/cluster2-linux/debug/deps/native_install-1d4271438b96c8ba
+
+running 3 tests
+test authenticated_install_opens_one_store_and_reads_the_complete_root ... INSTALL_ROOT_ORACLE paths=6 full_regular_bytes=300048 hardlink=true raw_symlink=true host_sqlite=3.53.2 daemon_sqlite=3.53.2 work=InstallWork { records: 3, write_calls: 3, written: 180224, sync_calls: 0, peak_record_bytes: 65519 }
+ok
+test existing_store_is_refused_before_upload_and_preserved ... ok
+test interrupted_transfer_keeps_original_partial_file_and_claim_refuses_another_installer ... INSTALL_PARTIAL original_bytes=31 published=false claim_acknowledged=true no_product_cleanup=true
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+# exit=0

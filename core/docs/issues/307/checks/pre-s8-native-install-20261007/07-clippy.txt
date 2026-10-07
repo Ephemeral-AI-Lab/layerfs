@@ -1,0 +1,43 @@
+# {"timestamp": "2026-10-07T09:40:33.721719+00:00", "command": ["cargo", "+1.85.1", "clippy", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "-p", "layerfs-sdk", "-p", "layerfs-bridge", "--all-targets", "--", "-D", "warnings"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "1824c623ddda33a31d1d70d046ca10823e8e26b13bd635ee20b4bc2d1b618dd5", "source_parent": "2f4668b739f417d8fdc081af96c8ecaaaf6cf706", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error: spawned process is not `wait()`ed on in all code paths
+   --> crates/layerfs-daemon/tests/support/install_docker.rs:60:25
+    |
+60  |           let mut child = Command::new("docker")
+    |  _________________________^
+61  | |             .args([
+62  | |                 "run",
+63  | |                 "--rm",
+...   |
+91  | |             .spawn()
+92  | |             .unwrap();
+    | |_____________________^
+    |
+note: no `wait()` call exists on the code path to this early return
+   --> crates/layerfs-daemon/tests/support/install_docker.rs:102:21
+    |
+102 |                     return;
+    |                     ^^^^^^
+note: `wait()` call exists, but it is unreachable due to the early return
+   --> crates/layerfs-daemon/tests/support/install_docker.rs:109:13
+    |
+109 |             child,
+    |             ^^^^^
+    = help: consider calling `.wait()` in all code paths
+    = note: not doing so might leave behind zombie processes
+    = note: see https://doc.rust-lang.org/stable/std/process/struct.Child.html#warning
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#zombie_processes
+    = note: `-D clippy::zombie-processes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::zombie_processes)]`
+
+error: could not compile `layerfs-daemon` (test "host_handoff") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+
+# exit=101

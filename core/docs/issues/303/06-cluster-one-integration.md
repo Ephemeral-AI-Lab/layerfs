@@ -51,7 +51,7 @@ lists the rules.
 
 ## 2. Cluster-one APIs the daemon calls
 
-All but the combined stage-and-publish call exist today. The daemon calls them
+These direct calls, including atomic stage-and-publish, are implemented. The daemon calls them
 directly; no wire form of any of them remains.
 
 | Operation | API | Obligation |
@@ -64,7 +64,7 @@ directly; no wire form of any of them remains.
 | Inode serials | `reserve_inodes(request)` | Database-owned range; never recycled |
 | Save | `Storage::begin_save()`, `Save::sink()`/`accept`, `Save::finish()` | A stack local of the Commit; earlier published waves survive a later failure |
 | Same-Save reads | `AuthenticatedObjects for Save` | Construction reads what it just produced |
-| Stage and publish | One catalog call combining `stage_changes` and `commit_staged` in a single write transaction (to be added, O-23) | Exact captured expectations, the saved candidate and a conditional head transition; `Committed`, `UpToDate` or the exact conflict, with no stage left behind |
+| Stage and publish | `HistoryCatalog::stage_and_commit` in a single write transaction (O-23) | Exact captured expectations, the saved candidate and a conditional head transition; `Committed`, `UpToDate` or the exact conflict, with no stage left behind |
 | Discard | `discard_stage(DiscardRequest)` | Exact owned token; only for a stage created by the separate calls |
 
 Content construction and reads are unchanged: `FilesystemRead`, `FileView`,
@@ -83,15 +83,15 @@ a new system-call dependency.
 
 ### 3.2 Profiles
 
-Both profiles use WAL and differ only in synchronization. [proposed design,
-needs the owner's ruling O-21]
+Both profiles use WAL and differ only in synchronization (owner ruling O-21,
+implemented in [F1–F4](../307/PRE-S8-F1-F4-20261007.md)).
 
 | Profile | Journal | `synchronous` | Survives |
 | --- | --- | --- | --- |
 | Durable | WAL | FULL | Process and kernel crash, to the extent the VM disk honors a sync |
 | Disposable | WAL | OFF | Process crash. A kernel or VM crash may lose or damage the Store |
 
-Today's Disposable profile is a memory journal with rollback locking. It is
+The superseded Disposable profile used a memory journal with rollback locking. It is
 correct for one process and wrong for several: a daemon killed mid-commit
 leaves a torn file with no journal, every other daemon reads the damage, and
 readers and the writer block each other. Under WAL a killed process cannot tear
@@ -166,8 +166,10 @@ Not available to a daemon:
   exclusion, not a retry. No lock spans a Commit.
 - **The shared immutable object cache sits above the read handles.** An object
   never changes, so most reads never reach the Store.
-- **Few write transactions per Commit:** one id reservation per Save, bounded
-  publication batches, and stage and publish as one history transaction.
+- **Few write transactions per Commit:** one combined initial id reservation per Save, explicitly counted block refills
+  for unbounded streams, bounded publication batches, and one stage-and-publish
+  history transaction. The owner approved counted refills in the
+  [reservation decision](../307/SAVE-RESERVATION-DECISION-20261007.md).
 - **Commit is one synchronous function.** `Save<'_>` is a local borrowed from a
   `Storage` on the Commit thread. There is no Save registry, capability,
   token table, reply custody or supervisor.
@@ -195,8 +197,11 @@ Bash.
 | Seal | Host | Checkpoint TRUNCATE with no reader, drop the handle, verify no `-wal`, `-shm` or `-journal` sidecar remains. Returns one file and a manifest: provider kind, Store locator, profile, both SQLite versions, binding key, cursor key, layer stack, Branch, root |
 | Install | Daemon subcommand, driven by the host | Write to a new temporary name in the volume, then rename. An existing Store is refused |
 
-After install the host cannot open the Store: the file is inside the VM. Forking
-a Branch or reading history after install is an open question (O-18).
+The native one-time handoff is implemented and proven in
+[F5](../307/PRE-S8-F5-20261007.md), with both actual SQLite versions recorded.
+After install the host cannot open the installed Store: the file is inside the
+VM. Fork and history reads are subsequent control commands (F13), not a new
+host data service.
 
 ## 6. Store visibility
 
@@ -240,8 +245,9 @@ inside one publication, and a Branch moves only by conditional transition.
 | Daemon `upstream/` | Bound the daemon to the host runtime |
 | #307 S9 R1 application assembly, R3 restart custody, R4 remote Save | Not built; no boundary left to serve |
 
-The Bridge keeps its authenticated record channel for control. Whether control
-stays on that channel or moves to container stdio is open (O-20).
+The Bridge keeps its authenticated native record channel for control, selected
+by the pre-S8 assignment. Its prior data codec/contract/framing, SDK runtime and
+daemon upstream are retired in [F12](../307/PRE-S8-F12-20261007.md).
 
 ## 9. Prerequisites
 

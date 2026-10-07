@@ -33,8 +33,8 @@ cannot depend on Workspace/daemon; daemon cannot depend on SDK. The provider-fre
 Bridge keeps its pinned KK handshake, nonce ownership, authenticated bounded
 records, before-effect oversized-record refusal, independent close fence and
 exact I/O/crypto quarantine. Removing data fragmentation does not change its
-native maximum record size or crypto suite. F5/F13 add control records and the
-streamed one-time handoff. There is no remote Save or host data fallback.
+native maximum record size or crypto suite. [Native install](67-native-store-install.md) adds control records and the
+streamed one-time handoff; F13 general control follows. There is no remote Save or host data fallback.
 
 All E04 traces, receipts and original verdicts remain under their historical
 source pins. Its examples/test subject is removed; future execution of those

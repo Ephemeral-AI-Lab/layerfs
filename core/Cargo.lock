@@ -508,6 +508,7 @@ dependencies = [
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
+ "layerfs-sdk",
  "layerfs-storage",
  "layerfs-telemetry",
  "layerfs-workspace",

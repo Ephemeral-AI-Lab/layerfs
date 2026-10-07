@@ -1,0 +1,9 @@
+# {"timestamp": "2026-10-07T09:42:39.719953+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/install_records-acaeaa05f7194819", "--exact", "installed_and_refused_keep_original_publication_knowledge", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/install_records-acaeaa05f7194819": "d8e138157dfd6e030baf245e92d3cf69a919114a88f97e131df8b3d1cedfae84"}, "source_diff_sha256": "1824c623ddda33a31d1d70d046ca10823e8e26b13bd635ee20b4bc2d1b618dd5", "source_parent": "2f4668b739f417d8fdc081af96c8ecaaaf6cf706", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test installed_and_refused_keep_original_publication_knowledge ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+# exit=0

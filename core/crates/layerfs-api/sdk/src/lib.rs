@@ -4,5 +4,9 @@
 
 mod init;
 mod init_types;
+mod install;
+mod install_types;
 pub use init::initialize;
 pub use init_types::{InitError, InitFailure, InitRequest, SealedProject};
+pub use install::install;
+pub use install_types::{InstallError, InstallFailure, InstallWork, Installed};

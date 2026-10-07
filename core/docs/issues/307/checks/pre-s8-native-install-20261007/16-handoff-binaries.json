@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-10-07T09:46:02.001263+00:00",
+  "source_inputs": "12-source.json",
+  "binaries": {
+    "core/target/debug/deps/host_handoff-5ac0178e0ab43f97": "57e974ecd223bd658c84807a6bc814abe4d696a89c0e077ac6ae0ef9d0432074",
+    "core/target/cluster2-linux/debug/deps/host_handoff-765898494f2ebc70": "58b10186f702f396596e66918e99e5288d6aac4cd972053f60b2b3c1f49df996"
+  },
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "cache": "functional/count proof; no cold-cache or timing admission"
+}

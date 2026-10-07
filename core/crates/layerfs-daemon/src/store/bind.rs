@@ -79,7 +79,7 @@ impl Store {
         })
     }
 }
-pub(super) fn checked_base(
+pub(crate) fn checked_base(
     client: Arc<CanonicalClient>,
     snapshot: &BranchSnapshot,
 ) -> ContentResult<BaseView> {

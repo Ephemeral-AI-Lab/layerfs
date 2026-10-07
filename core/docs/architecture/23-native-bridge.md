@@ -16,15 +16,17 @@ they do not change an existing dependency edge.
 TCP socket and provisioned expected static keys. It attempts KK once under a fixed
 cluster-two prologue, permits no handshake payload, checks completion and actual
 expected peer, and only then constructs VerifiedPeer. Provisioning public-key/keypair
-functions cannot manufacture that authenticated type. SDK bind requires it before
-application permission/scope/profile checks. Trust/rotation remains application work.
+functions cannot manufacture that authenticated type. Native install/control
+receives this authenticated Connection before application checks. Trust/rotation remains application work.
 
 [Channel](../../crates/layerfs-bridge/src/native/channel.rs) owns one sender and one
 receiver, separate scratch/nonces and shared failure state. Each can move to its
 own I/O worker; the library starts no thread. A connection owns two socket handles
 after try_clone. A two-byte ciphertext length is checked before resize; Noise
 authenticates the exact body. Ciphertext is at most 65,535 bytes, plaintext at most
-65,519 including future logical framing. Sender retains one cipher buffer;
+65,519. Host-mediated logical data framing is retired; current
+[install metadata and streaming](67-native-store-install.md) use these native
+record windows. Sender retains one cipher buffer;
 receiver retains one cipher and one plain buffer. Receive results borrow the
 current window. Handshake transient arrays/vector are each bounded at 256 bytes
 and freed before channel readiness.

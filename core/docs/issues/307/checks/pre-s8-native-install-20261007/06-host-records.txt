@@ -1,0 +1,10 @@
+# {"timestamp": "2026-10-07T09:40:22.783025+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/install_records-acaeaa05f7194819", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/install_records-acaeaa05f7194819": "f7f0f76b736519c8d170107aa462bfefcd84f25bdfaa88d4d3168edac5e86328"}, "source_diff_sha256": "1824c623ddda33a31d1d70d046ca10823e8e26b13bd635ee20b4bc2d1b618dd5", "source_parent": "2f4668b739f417d8fdc081af96c8ecaaaf6cf706", "wall_stop": "specified in command; build is not test execution"}
+
+running 2 tests
+test bounded_manifest_is_exact_and_does_not_cap_stream_length ... ok
+test installed_and_refused_keep_original_publication_knowledge ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+# exit=0
