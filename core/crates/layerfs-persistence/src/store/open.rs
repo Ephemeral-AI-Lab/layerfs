@@ -17,26 +17,6 @@ impl Handles {
         policy: StoragePolicy,
         history: &HistoryCatalogConfig,
     ) -> Result<Self, PersistenceError> {
-        Self::create_selected(config, policy, history, false)
-    }
-    /// Creates a private host Init build which becomes shareable only at seal.
-    ///
-    /// Disposable uses MEMORY/OFF during acquisition, without crash survival.
-    /// Durable retains WAL/FULL. Normal opens never accept or convert the
-    /// private memory-journal file; successful seal returns a WAL Store.
-    pub fn create_for_init(
-        config: PersistenceConfig,
-        policy: StoragePolicy,
-        history: &HistoryCatalogConfig,
-    ) -> Result<Self, PersistenceError> {
-        Self::create_selected(config, policy, history, true)
-    }
-    fn create_selected(
-        config: PersistenceConfig,
-        policy: StoragePolicy,
-        history: &HistoryCatalogConfig,
-        private_init: bool,
-    ) -> Result<Self, PersistenceError> {
         if config.backend != BackendSelection::Sqlite
             || !cfg!(any(target_os = "macos", target_os = "linux"))
         {
@@ -62,7 +42,6 @@ impl Handles {
             config.sqlite_profile,
             config.sqlite_pack_layout,
             config.sqlite_acquisition,
-            private_init && config.sqlite_profile == crate::SqlitePersistenceProfile::Disposable,
         )?);
         session.initialize(policy, history, catalog_id)?;
         let directory = config.path.parent().map(Path::to_path_buf);
@@ -104,7 +83,6 @@ impl Handles {
                 config.sqlite_profile,
                 config.sqlite_pack_layout,
                 config.sqlite_acquisition,
-                false,
             )?),
             directory,
             binding,

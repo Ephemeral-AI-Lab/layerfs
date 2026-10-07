@@ -188,9 +188,9 @@ fixtures, examples and tools do not contribute to production LOC.
   Durable uses FULL (and macOS full synchronization); Disposable uses OFF and
   claims process-crash survival only. Open verifies WAL and never converts an
   existing Store. Select profile/layout before open; Postgres stays unavailable.
-  Explicit host `create_for_init` may use a private Disposable MEMORY/OFF build
-  after the owner-directed Init decision; it is unshareable and has no crash
-  survival until sole-owner seal changes it to WAL. Normal opens never promote it.
+  Owner supersession2026-10-07 keeps WAL throughout Init and Commit; no private
+  MEMORY import or journal promotion remains. The measured host Init regression
+  is retained as FAIL and accepted as the new baseline for that exact scope.
   Host seal consumes sole ownership, checkpoints, closes and verifies one file.
   See the [foundation checkpoint](docs/issues/307/PRE-S8-F1-F4-20261007.md).
 - Target (owner direction 2026-10-07): the same Store opened directly by every

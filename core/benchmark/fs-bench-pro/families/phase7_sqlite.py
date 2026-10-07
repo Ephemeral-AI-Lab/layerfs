@@ -322,8 +322,7 @@ def build(root,arm,out,common):
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
     if selection == SERVERLESS_WAL_CASE:
-        from families import serverless_init
-        return serverless_init.run(case, output, arm, common)
+        raise ValueError('single WAL Init decision is closed; retained sample is the owner-accepted baseline; no resampling')
     if selection in RETIRED_STREAMING_CASES:raise ValueError('withdrawn streaming treatment; source and receipts retained on codex/init-streaming-candidate; ordinary incumbent restored')
     if selection in RETIRED_PAYLOAD_SEGMENT_CASES:raise ValueError('payload layout withdrawn; historical receipts retained; no active vehicle')
     regression=selection in REGRESSION_CASES+SPACE_SCALING_V1_CASES+SPACE_SCALING_CASES+WORK_REDUCTION_CASES+STREAMING_CASES+STREAMING_BATCHED_CASES+STREAMING_REFILL_CASES+INCUMBENT_RESTORED_CASES

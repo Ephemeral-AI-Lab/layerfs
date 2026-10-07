@@ -51,8 +51,10 @@ def decision(row, reference):
     if row['command_wall_ns'] > row['command_budget_ns'] or row['verification_wall_ns'] > row['verification_budget_ns']:
         return {'status': 'FAIL', 'import_route': None, 'reason': 'frozen command/proof limit'}
     return {
-        'status': 'DECIDED',
-        'import_route': 'memory-import-wal-seal-required' if elapsed > retained else 'wal-throughout',
+        'status': 'OWNER_ACCEPTED_BASELINE',
+        'import_route': 'wal-throughout',
+        'historical_conditional_route': 'memory-import-wal-seal-required' if elapsed > retained else 'wal-throughout',
+        'design_authority': 'owner WAL-throughout supersession 2026-10-07',
         'speed_gate': 'PASS' if 10 * elapsed <= 11 * retained else 'FAIL',
         'speed_operands_ns': [elapsed, retained], 'speed_formula': '10*candidate<=11*control',
         'time_delta_ns': elapsed - retained,

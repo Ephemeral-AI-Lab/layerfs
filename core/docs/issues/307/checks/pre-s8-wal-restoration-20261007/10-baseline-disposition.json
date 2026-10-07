@@ -1,0 +1,22 @@
+{
+  "method": "Reclassify owner design disposition only; no product execution or new measurement",
+  "retained_receipt": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/receipt.json",
+  "retained_sha256": "6a5406aaf866a7c4ce616cd706f02be1a55650fb31c0f1da4a37f488b6e796d9",
+  "decision": {
+    "status": "OWNER_ACCEPTED_BASELINE",
+    "import_route": "wal-throughout",
+    "historical_conditional_route": "memory-import-wal-seal-required",
+    "design_authority": "owner WAL-throughout supersession 2026-10-07",
+    "speed_gate": "FAIL",
+    "speed_operands_ns": [
+      198720291,
+      155291459
+    ],
+    "speed_formula": "10*candidate<=11*control",
+    "time_delta_ns": 43428832,
+    "time_delta_percent": 27.966014537863284,
+    "storage_delta_bytes": -16384,
+    "storage_delta_percent": -0.07957032027053909,
+    "strict_allocation_status": "NOT_RUN \u2014 mechanism removed"
+  }
+}

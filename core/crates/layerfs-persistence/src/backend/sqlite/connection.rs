@@ -13,8 +13,6 @@ use std::{
 pub struct ConnectionProfile {
     /// Explicit selected completion/durability contract.
     pub persistence: SqlitePersistenceProfile,
-    /// Private Disposable Init build; not a shared Store until successful seal.
-    pub private_init: bool,
     /// Actual physical schema selected explicitly or from the supported stored version.
     pub pack_layout: crate::SqlitePackLayout,
     /// Whether the stored schema version carries the acquisition tables.
@@ -153,7 +151,6 @@ impl Session {
         selected: SqlitePersistenceProfile,
         creation_layout: crate::SqlitePackLayout,
         creation_acquisition: crate::SqliteAcquisitionSchema,
-        private_init: bool,
     ) -> Result<Self, BackendError> {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
@@ -171,14 +168,7 @@ impl Session {
         connection
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
-        profile::apply(
-            &connection,
-            create,
-            selected,
-            creation_acquisition,
-            private_init,
-            &work,
-        )?;
+        profile::apply(&connection, create, selected, creation_acquisition, &work)?;
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
         } else {
@@ -214,14 +204,9 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         let profile = ConnectionProfile {
             persistence: selected,
-            private_init,
             pack_layout: layout,
             acquisition,
-            identity: if private_init {
-                "sqlite-private-init-memory-off-v1"
-            } else {
-                selected.identity()
-            },
+            identity: selected.identity(),
             sqlite_version: rusqlite::version().to_owned(),
             platform: std::env::consts::OS,
             vfs_selection: "SQLite default; name not directly observed",

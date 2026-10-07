@@ -60,19 +60,20 @@ functional checks and retained failures. New Durable execution stays deferred.
 Historical allocation/speed results keep their original profiles and verdicts;
 mechanism retirement supplies no speed or storage improvement claim.
 
-## Private host acquisition after the Init decision
+## WAL throughout and the accepted host Init baseline
 
-The [single WAL Init decision](../issues/307/PRE-S8-INIT-WAL-RESULT-20261007.md)
-selects `Handles::create_for_init` for host acquisition. Disposable creates a
-private MEMORY/OFF file with explicit `private_init=true` and profile identity
-`sqlite-private-init-memory-off-v1`. It is not yet shareable and has no
-crash-survival claim. Normal open still refuses every non-WAL file. Durable
-uses the ordinary WAL/FULL creation path. The overlay is unchanged.
+The [owner supersession](../issues/307/PRE-S8-WAL-BASELINE-DECISION-20261007.md)
+keeps WAL throughout both Init and Commit. The private MEMORY creation and
+promotion path is removed, while ordinary checkpoint/close seal and its
+approved macOS file-control wrapper remain. The existing198720291ns host
+Disposable1000 observation is the accepted baseline for its exact scope.
+Its original1.10× comparison against retained155291459ns MEMORY evidence
+remains FAIL; there is no new speedup, matched pair, Commit latency or complete
+resource claim. All raw receipts and the withdrawn private-route history remain.
 
-After sole session ownership is obtained, seal explicitly sets the private
-file's journal to WAL and verifies the result before checkpoint/checked close.
-No payload copy, second database, implicit open conversion, retry or guessed
-cleanup occurs. A retained provider refuses before conversion. Failed or dropped
-private imports remain incomplete files with no automatic resume. The eventual
-thin SDK owns all import providers and drops them before seal. The shared Store
-manifest and daemon startup always use the ready WAL profile.
+Both operations reuse canonical construction, Storage Save and WAL/history
+implementation with separately owned input and mutable producer state. Each
+Storage handle permits one active Save; concurrent producers use separate
+handles over the same Store. No mutex spans a whole Commit, and Commit never
+runs Init acquisition/abandoned-operation cleanup. These concurrency and
+publication obligations still require their own proof.

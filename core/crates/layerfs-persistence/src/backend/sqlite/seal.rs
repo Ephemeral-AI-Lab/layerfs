@@ -17,21 +17,6 @@ impl Session {
         }
         #[cfg(target_os = "macos")]
         super::file_control::disable_persistent_wal(&state.connection)?;
-        if self.profile.private_init {
-            let result = query::run(
-                &state.connection,
-                "PRAGMA journal_mode=wal",
-                vec![],
-                &state.work,
-            )?;
-            let mode = result
-                .first()
-                .ok_or(PersistenceError::Malformed)?
-                .get::<String>(0)?;
-            if mode != "wal" {
-                return Err(PersistenceError::Malformed);
-            }
-        }
         let result = query::run(
             &state.connection,
             "PRAGMA wal_checkpoint(TRUNCATE)",

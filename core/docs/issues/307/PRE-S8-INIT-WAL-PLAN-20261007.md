@@ -3,6 +3,12 @@
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 > Registered after F1–F4 `8c66eb8b4`, 2026-10-07, under owner assignment #307.
 
+**Owner supersession2026-10-07:** WAL throughout is the selected design and the
+existing WAL observation is accepted as the baseline for its exact scope.
+The private-import route/conditional decision below is historical and withdrawn;
+original receipts and the speed FAIL remain unchanged. See the
+[controlling decision](PRE-S8-WAL-BASELINE-DECISION-20261007.md).
+
 ## Deepest-file plan
 
 | File | Requirement |

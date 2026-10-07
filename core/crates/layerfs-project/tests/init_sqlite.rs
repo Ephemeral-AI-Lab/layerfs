@@ -38,7 +38,7 @@ fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
     for selected in DEVELOPMENT_PROFILES {
         for count in [100, 1000] {
             let fixture = Fixture::new(count);
-            let h = Handles::create_for_init(
+            let h = Handles::create(
                 PersistenceConfig::sqlite(fixture.path.join("store.sqlite"))
                     .with_sqlite_profile(selected)
                     .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),

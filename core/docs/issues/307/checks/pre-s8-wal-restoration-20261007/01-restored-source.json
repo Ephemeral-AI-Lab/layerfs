@@ -1,0 +1,13 @@
+{
+  "restored_from": "c5fae7e3aa783dcdb1c09bf977c0395a5b066dd5",
+  "method": "Read exact selected blobs from Git and replace only the private-import changes; no checkout reset, no raw evidence removal.",
+  "files": {
+    "core/crates/layerfs-persistence/src/store/open.rs": "f23a49feb163a65772bec81e0a4492b31e6182e0021edc5a063c14816f689094",
+    "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs": "a8861b8ea39e38ce6b7937b05f556a05549418432d4b2abfd7c62efab83681b3",
+    "core/crates/layerfs-persistence/src/backend/sqlite/profile.rs": "e23e36ca699b4aba2ff043f00e82a8b8458a3c278f8a47bbf79bf32ce93a0939",
+    "core/crates/layerfs-persistence/src/backend/sqlite/seal.rs": "8dfd97a389bcde9b009a1cf28845b30e54c3ad8ab2da3612e626bba700fc7d61",
+    "core/crates/layerfs-project/tests/init_sqlite.rs": "ca323250e9cbd89787485eda3efcc11295d65fa8dff441ec24db969e67ed6923"
+  },
+  "removed": "core/crates/layerfs-persistence/tests/private_init.rs",
+  "preserved": "All private-route history/receipts; macOS file_control.rs; independent R2 correction."
+}

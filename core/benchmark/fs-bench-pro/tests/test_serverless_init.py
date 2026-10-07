@@ -13,6 +13,8 @@ class ServerlessInitTests(unittest.TestCase):
         case = phase7_sqlite.CASES[phase7_sqlite.SERVERLESS_WAL_CASE]
         self.assertEqual(case.fixture, 'namespace-1000-compact-v3')
         self.assertEqual(case.profile, 'disposable')
+        with self.assertRaisesRegex(ValueError, 'no resampling'):
+            phase7_sqlite.run(case.id, None, 'candidate', None, None)
         self.assertEqual((case.command_budget_ns, case.verification_budget_ns),
                          (30_000_000_000, 19_000_000_000))
         self.assertEqual(sum('serverless-wal' in key for key in phase7_sqlite.CASES), 1)
@@ -47,7 +49,9 @@ class ServerlessInitTests(unittest.TestCase):
                'verification_wall_ns': 1, 'verification_budget_ns': 19}
         result = serverless_init.decision(row, reference)
         self.assertEqual(result['speed_gate'], 'PASS')
-        self.assertEqual(result['import_route'], 'memory-import-wal-seal-required')
+        self.assertEqual(result['import_route'], 'wal-throughout')
+        self.assertEqual(result['historical_conditional_route'], 'memory-import-wal-seal-required')
+        self.assertEqual(result['status'], 'OWNER_ACCEPTED_BASELINE')
         self.assertEqual(result['storage_delta_percent'], -5)
         self.assertEqual(result['strict_allocation_status'], 'NOT_RUN — mechanism removed')
         row['comparison_ns'] = 111

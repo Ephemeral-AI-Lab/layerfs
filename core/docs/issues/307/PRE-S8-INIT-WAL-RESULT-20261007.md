@@ -3,6 +3,12 @@
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 > One registered sample on2026-10-07 at `c5fae7e3aa783dcdb1c09bf977c0395a5b066dd5`.
 
+**Owner supersession2026-10-07:** WAL throughout is the selected design and the
+existing WAL observation is accepted as the baseline for its exact scope.
+The private-import route/conditional decision below is historical and withdrawn;
+original receipts and the speed FAIL remain unchanged. See the
+[controlling decision](PRE-S8-WAL-BASELINE-DECISION-20261007.md).
+
 The WAL-throughout candidate fails the existing1.10× speed comparison. The
 owner's precommitted rule selects private memory-journal import followed by
 WAL conversion at seal. No second timing sample is authorized or collected.

@@ -166,7 +166,6 @@ an existing file; use `open_writable` or `open_read_only` for an existing Store.
 | API | Arguments / result | Important requirement |
 | --- | --- | --- |
 | `Handles::create` | `PersistenceConfig`, `StoragePolicy`, `&HistoryCatalogConfig` → `Result<Handles, PersistenceError>` | Fresh shared WAL Store; valid policy and authority config |
-| `Handles::create_for_init` | Same inputs/result | Explicit private host acquisition; Disposable is MEMORY/OFF until seal, Durable stays WAL/FULL |
 | `Handles::open_writable` | config, binding bytes, cursor key `[u8;32]` → handles | Existing supported Store; matching authority and selected profile |
 | `Handles::open_read_only` | Same open arguments | Mutations explicitly refused |
 | `Storage::new` | `Arc<dyn PackPersistence>` → `StorageResult<Storage>` | Reads and validates persisted policy |
@@ -692,17 +691,17 @@ before checkpoint; no sidecar is manually deleted. A retained provider refuses
 before checkpoint. Provisioning excludes new openers through handoff. The result
 records path, profile, SQLite version and closed-file bytes.
 
-After the one owner-directed WAL Init measurement at `c5fae7e3a` missed its
-speed comparison, explicit `Handles::create_for_init` builds Disposable input
-privately under MEMORY/OFF. Its profile is `sqlite-private-init-memory-off-v1`
-and `private_init=true`; it has no crash-survival guarantee and is refused by
-normal opens. Sole-owner seal explicitly changes that fresh private build to WAL,
-verifies the mode, then checkpoints/closes as above. This creation-only transition
-is not migration of an existing shared Store. Durable Init remains WAL/FULL.
-An incomplete private file is retained on failure and has no automatic resume
-or promotion. The [decision and evidence](core/docs/issues/307/PRE-S8-INIT-WAL-RESULT-20261007.md)
-retain the failed WAL sample; the selected memory route has functional proof,
-not a new timing result.
+Owner supersession2026-10-07 selects WAL throughout Init and Commit. The
+briefly implemented private MEMORY import and conversion-at-seal path is
+withdrawn. The198720291ns Disposable1000 host Init observation is accepted as
+the baseline for its exact measured scope, while its original1.10× comparison
+against retained155291459ns MEMORY evidence remains FAIL (+27.966%). This is
+not a new matched pair or proof that all of the difference was caused by WAL.
+[Decision, identities and limits](core/docs/issues/307/PRE-S8-WAL-BASELINE-DECISION-20261007.md)
+retain the regression, storage delta and independent proof. No second timing
+run or claim about daemon Commit speed accompanies this choice. Overlapping
+producers own separate Storage/Save state over the same Store; Commit does not
+reuse native Init acquisition or abandoned-operation cleanup.
 
 Host Init alone uses acquisition tables and bounded incremental reclamation.
 New acquisition Stores select incremental auto-vacuum; existing mode0 Stores
