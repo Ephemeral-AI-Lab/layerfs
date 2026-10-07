@@ -1,0 +1,25 @@
+{
+  "files": {
+    "build.stderr": {
+      "bytes": 497,
+      "sha256": "804b7fc2c908ae357f7422b813db4cfb7ff594fdaaceaceacd8c7b83cc50b657"
+    },
+    "build.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cold.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cold.stdout": {
+      "bytes": 378,
+      "sha256": "bbe30d3a2feb06363e25d0e062f52ec184444bcf97f289ebcb27d0184d657611"
+    },
+    "receipt.json": {
+      "bytes": 13447,
+      "sha256": "3805845592479581c2596cf37afa7a5a0924dc57ac18ff18c525e9dac5233933"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}
