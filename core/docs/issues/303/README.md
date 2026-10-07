@@ -282,7 +282,7 @@ and evidence: [08 §3](08-decisions-provenance.md#3-decisions-of-this-design).
 | Bounded payload updates with byte-exact visibility; no base-payload copy-up (K5, revised) | A fixed 4 KiB block grid with copy-up |
 | Bounded failed-capture resolution without foreground payload merge (K8, replacement required) | One extra layer per failed attempt |
 | Orphan content independent of namespace capture (K9, replacement required) | A single retire floor |
-| Save finish, stage and transition as separate calls; the stage is discarded by exact token on conflict (K15) | "One conditional transaction" |
+| Save finish, then stage and publish in one history transaction, leaving no stage on refusal or conflict (K15 revised 2026-10-07, O-23) | Stage and transition as separate calls with an exact-token discard on conflict |
 | `Uncertain` defines no resolution until the owner rules (K16) | A lookup rule that was never adopted |
 | Mutations wait; nothing returns `EBUSY` for contention (K13) | Refusal-based coherence |
 

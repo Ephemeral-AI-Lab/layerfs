@@ -21,18 +21,30 @@
 ## Shape
 
 ```text
- macOS host                                Docker Linux VM (one kernel)
- --------------------------------          ---------------------------------------
- layerfs-sdk (thin)                        named volume, mounted in daemons only
-   init:    create -> import -> seal         store.sqlite
-   install: stream the sealed file  ------>      ^          ^          ^
-   control: mount / Exec / Commit /          daemon A   daemon B   daemon C
-            status / unmount  <---------->   layerfs-daemon, one process each
-                                               control   five commands
-                                               store/    Handles + Storage + History
-                                               overlay/  local mutable state
-                                               Workspace + FUSE -> Bash
+ macOS host                                 Docker Linux VM (one kernel)
+ ---------------------------------          ----------------------------------------------
+ layerfs-sdk (thin)                         named volume, mounted in daemons only
+   init:    create -> import -> seal          store.sqlite  (WAL; one writer at a time,
+   install: stream the sealed file  ------>                  readers never blocked)
+   control: mount / Exec / Commit /               ^   ^            ^   ^
+            status / unmount                    write read        write read
+                    ^                             |   |             |   |
+                    |  authenticated         +----+---+-----+  +----+---+-----+
+                    +--- control channel --> | daemon A     |  | daemon B     |  ...
+                                             |              |
+                                             | control      five commands (+ fork, history)
+                                             | store/       1 write handle: Save, history, serials
+                                             |              N read handles: objects, lengths
+                                             | object cache immutable objects by id, shared
+                                             | overlay/     overlay.sqlite, local mutable state
+                                             | Workspace    one mount per Workspace
+                                             | FUSE  -->    any number of ordinary Bash processes
+                                             +--------------+
 ```
+
+Read path: FUSE → Workspace → object cache → read handle → SQLite snapshot.
+Commit path, one thread: capture → Content construction → Save batches on the
+write handle → stage+publish in one transaction → local base install.
 
 ## Folder structure and production LOC
 
@@ -48,7 +60,8 @@ core/crates/                                            now    after   change
     client/                         RETIRED            1,865       0
     runtime/                        RETIRED            5,111       0
     lib.rs                                                 9     ~10
-    init.rs        NEW  create, import, first Branch, seal, manifest    ~90
+    init.rs        NEW  create, import, first Branch, seal,             ~90
+                        manifest with a Store locator
     install.rs     NEW  stream the sealed file to a daemon install      ~60
     control.rs     NEW  connect, five commands, Exec output stream     ~170
 
@@ -64,15 +77,15 @@ core/crates/                                            now    after   change
     control.rs     NEW  request/reply records for the five commands    ~145
     lib.rs                                                 6      ~5
 
-  layerfs-daemon/src/                                  2,835  ~3,220     +385
+  layerfs-daemon/src/                                  2,835  ~3,250     +415
     overlay/  service/              unchanged          2,328   2,328
     upstream/                       RETIRED              491       0
-    store/         NEW, replaces upstream/                      ~400
+    store/         NEW, replaces upstream/                      ~430
       mod.rs       declarations                                   ~8
-      open.rs      one Handles + Storage + History at startup    ~85
-      ports.rs     objects, lengths, serials over the Store      ~75
+      open.rs      one write handle + fixed read handles        ~105
+      ports.rs     objects, lengths, serials over read handles   ~85
       bind.rs      mount: snapshot, root checks, Workspace bind ~110
-      commit.rs    Save scope, stage, publish, discard, install ~120
+      commit.rs    Save scope, stage+publish, discard, install  ~122
     control.rs     NEW  serve the five commands                 ~200
     exec.rs        NEW  Bash launch, confinement (S8)           ~230
     install.rs     NEW  write-then-rename the sealed Store       ~40
@@ -81,7 +94,7 @@ core/crates/                                            now    after   change
   layerfs-persistence/src/                             6,706  ~6,365     -341
     store/open.rs                   macOS gates removed  109    ~109
     store/seal.rs  NEW  checkpoint, close, verify one file       ~35
-    store/handles.rs                checkpoint -> seal     46     ~43
+    store/handles.rs                public checkpoint out  46     ~43
     backend/sqlite/allocation.rs        DELETED (O-22)    162       0
     backend/sqlite/allocation_owner.rs  DELETED (O-22)    111       0
     backend/sqlite/connection.rs    gate, allocation out  308    ~238
@@ -93,9 +106,10 @@ core/crates/                                            now    after   change
     history/{catalog,staging,commit}.rs  stage+publish    590    ~610
                                          in one tx (O-23)
 
-  layerfs-storage/src/                                 9,336  ~9,350      +14
+  layerfs-storage/src/                                 9,336  ~9,356      +20
     port/persistence.rs             Busy variant           97     ~99
     store/error.rs                  Busy variant          140    ~152
+    save/{wave,reservation}.rs      one reservation per Save      ~+6
 
   layerfs-history/src/contract/catalog.rs  one method      71     ~76      +5
   layerfs-workspace/src/            scoped client helpers 3,861 ~3,830     -31
@@ -106,10 +120,10 @@ core/crates/                                            now    after   change
 
 | Scope | Now | After (est.) | Change |
 | --- | ---: | ---: | ---: |
-| Data path only: SDK, API core, Bridge, daemon `upstream/` → `store/` | 9,026 | ~1,420 | about −7,600 (−84%) |
-| All touched crates, including the control, Exec and install slices that do not exist today | 33,652 | ~26,170 | about −7,480 |
-| Active core workspace | 61,711 | ~54,520 | about −7,190 |
-| Core scope (active, excluded predecessors and excluded integration) | 104,876 | ~97,390 | about −7,480 |
+| Data path only: SDK, API core, Bridge, daemon `upstream/` → `store/` | 9,026 | ~1,450 | about −7,580 (−84%) |
+| All touched crates, including the control, Exec and install slices that do not exist today | 33,652 | ~26,205 | about −7,450 |
+| Active core workspace | 61,711 | ~54,555 | about −7,155 |
+| Core scope (active, excluded predecessors and excluded integration) | 104,876 | ~97,430 | about −7,450 |
 
 Under the repository LOC rule this is reported as **retirement of the
 host-mediated transport**, a scope change, not an algorithmic simplification.
@@ -123,6 +137,54 @@ were unbuilt S8 work under the previous design as well.
 
 Avoided and never written: R4 remote Save and consumer, R1 application
 assembly, R3 restart custody.
+
+## Performance design
+
+From source reading; nothing here is measured. Each item is checked by the
+proofs of its checkpoint and by a later registered measurement.
+
+| # | Design | Why |
+| --- | --- | --- |
+| 1 | One write handle and a fixed set of read handles per daemon, each behind its own mutex, opened once at startup | WAL readers run while a writer commits. A single connection would stall every base read in a daemon during its own publication |
+| 2 | The shared immutable object cache stays above the read handles | An object never changes, so a cached object is valid forever; most FUSE reads never reach SQLite |
+| 3 | Pack ids and ordinals are reserved once per Save, in one larger block; unused ordinals are released at finish as today | Every write transaction is a lock acquisition, a WAL commit and a chance of `Busy` |
+| 4 | Publication batches keep their current bound (8,191 rows, 4 MiB) | Fewer, larger write transactions |
+| 5 | Stage and publish are one history transaction (O-23) | One write transaction fewer per Commit and no leftover stage |
+| 6 | The per-daemon inode serial block is larger than today's 1,024 | Creating files almost never touches the shared Store |
+| 7 | Init imports under WAL first. If the Init measurement after checkpoint 1 shows a loss, Init builds under a memory journal and converts to WAL at seal | Init is one host process and does not need WAL while importing; WAL writes each page twice. One measurement decides, not a guess |
+| 8 | Daemons never checkpoint explicitly; SQLite's passive auto-checkpoint runs. Only seal truncates | TRUNCATE holds the write lock for the whole WAL |
+
+The size of the read set and of the two reservation blocks are startup
+settings with defaults chosen at their checkpoints. They are resource
+settings, not caps on file, Commit or Workspace size.
+
+Known risk, to measure at checkpoint 7: the WAL can grow while readers
+overlap, and a large WAL slows readers.
+
+## Rules that keep a later database swap cheap
+
+A mounted SQLite file is the first provider. These rules keep the daemon
+unchanged when another database replaces it.
+
+1. The daemon's `store/` module uses only the Storage and History ports and
+   the opened handles. No SQLite type, file path, WAL or lock concept appears
+   in it. Seal, install and locking belong to Persistence and the install step.
+2. Every Store call has one of two shapes: an idempotent put or get of
+   immutable content by id, or one conditional transition with exact expected
+   state. No call is an interactive multi-step transaction.
+3. `Busy` is a typed outcome of every write. It maps to a failed conditional
+   write or throttling elsewhere.
+4. Reads are batched by id, as the demand path already is.
+5. The publication rule is "bytes are stored before anything references
+   them". SQLite meets it with one transaction; a two-store provider meets it
+   with two ordered steps.
+6. The install manifest carries a Store locator and the provider kind. Today
+   the locator is a path on the volume.
+7. Nothing is collected or rewritten in place.
+
+Known coupling, not changed now: pack ids, ordinals and inode serials come from
+central counters. Block reservation (items 3 and 6 above) is the mitigation and
+the reason the blocks grow.
 
 ## What moves, what goes
 
@@ -185,8 +247,9 @@ Stated so they are accepted knowingly, not discovered later.
   there than on Disposable.
 - SQLite's own bounded internal waits when a reader begins under WAL cannot be
   removed without patching it. They are not product retries.
-- The daemon serializes its own threads' Store jobs with one mutex. That is
-  mutual exclusion inside a process, not a retry of an attempted operation.
+- Each Store handle in a daemon is used by one thread at a time under its own
+  mutex. That is mutual exclusion inside a process, not a retry of an
+  attempted operation.
 - WAL size is unbounded while readers overlap; passive checkpoints can starve.
 
 ## Checkpoints
@@ -196,12 +259,14 @@ Each is one reviewable local commit with focused Disposable proofs, at most
 
 | # | Checkpoint | Proof on Disposable | Needs |
 | --- | --- | --- | --- |
-| 1 | Persistence opens on Linux: gates out, WAL profiles, typed `Busy`, lock-code mapping, `seal`, allocation owner deleted | Linux create/open/publish/read; a second connection holding the write lock yields `Busy` with no effect and a healthy session; sealed file has no sidecar and reopens | O-21, O-22 |
-| 2 | Daemon `store/open.rs`, `ports.rs`, `bind.rs`; `upstream/` retired | Ported binding, length, serial and demand cases over a real sealed Store in the Linux image | 1 |
-| 3 | Daemon `store/commit.rs`; stage+publish in one transaction | Committed, UpToDate, conflict with exact discard, missing dependency, `Busy` leaves no stage and no Workspace change | 2, O-23 |
+| 0 | Commit the finished S9 R2 Content qualifier on its own | Its two test binaries in the Linux image | — |
+| 1 | Persistence opens on Linux: gates out, WAL profiles, typed `Busy`, lock-code mapping, `seal`, allocation owner and public checkpoint removed | Linux create/open/publish/read; a second **process** holding the write lock yields `Busy` with no effect and a healthy session; a reader proceeds during that write; sealed file has no sidecar and reopens | 0 |
+| 1m | One Init measurement on the changed source | Decides performance item 7; the eight historical Init failures stay as recorded | 1 |
+| 2 | Daemon `store/open.rs`, `ports.rs`, `bind.rs` with the write handle and read set; `upstream/` retired | Ported binding, length, serial and demand cases over a real sealed Store in the Linux image; a base read completes while the write handle is held | 1 |
+| 3 | Daemon `store/commit.rs`; stage+publish in one transaction; one reservation per Save | Committed, UpToDate, conflict with exact discard, missing dependency, `Busy` leaves no stage and no Workspace change; counted write transactions per Commit | 2 |
 | 4 | Retire SDK `client/`, `runtime/`; Bridge `codec/`, `contract/`, `framing.rs`; API core; their tests and examples | Remaining packages build, Clippy clean; the cut is reported as retirement | 2, 3 |
 | 5 | Host `init.rs`, `install.rs`, `control.rs`; daemon `control.rs`, `install.rs`; Bridge `control.rs` | macOS Init → seal → install → Linux daemon mounts the installed root | 1, 4, O-18–O-20 |
-| 6 | Exec and confinement (S8) | Bash cannot see or open the Store or overlay path, by name or through `/proc` | 5, O-24 |
+| 6 | Exec and confinement (S8) | Several concurrent Bash processes on one mount; none can see or open the Store or overlay path, by name or through `/proc` | 5 |
 | 7 | Two daemons on one volume | Concurrent Saves both land; a same-Branch race gives one `Committed` and one `HeadMoved`; a killed daemon does not damage the Store | 3, 5 |
 
 Tests retired with checkpoint 4, none of which count as production LOC: every
@@ -214,6 +279,18 @@ E04 stays closed on its recorded host-mediated topology and is not rerun.
 
 Durable is implemented and builds at every checkpoint. Its execution stays
 `NOT_RUN — deferred by owner for Disposable-only development`.
+
+## Checkpoint 1 decisions
+
+| Point | Decision |
+| --- | --- |
+| Existing Disposable Stores | Regenerated. They are refused at open, not converted; no convert tool. Historical receipts are unchanged |
+| Allocation and preallocation fields in the checkpoint result and SQL work counters | Removed with the mechanism. The Persistence allocation-release test is deleted; four Persistence tests, five Project examples, one Project test and the harness readers of those fields are updated or marked `NOT_RUN — mechanism removed` |
+| Public checkpoint call | Removed. Seal is the only caller of TRUNCATE |
+| Seal ownership | Seal consumes the handles and refuses while anything else holds the session |
+| `Busy` proof | A real second process holds the write lock |
+| SDK during the transition | Two temporary match arms for the new variant keep the workspace building until checkpoint 4 retires the SDK runtime |
+| SQLite versions | Host and daemon versions are both recorded in the install manifest; the schema identity is checked at open |
 
 ## Engineering notes
 
@@ -233,20 +310,20 @@ Durable is implemented and builds at every checkpoint. Its execution stays
 - **Benchmark hosting rule** still routes the global Store to the host. It
   needs alignment before any new measurement is admitted.
 
-## Decisions needed before code
+## Owner rulings
 
-| # | Question | Recommendation |
-| --- | --- | --- |
-| O-21 | Disposable for a shared Store | WAL with `synchronous=OFF` |
-| O-22 | Delete the macOS allocation owner | Yes; one new Init speed measurement later |
-| O-23 | One stage+publish history transaction | Yes |
-| O-18 | Host fork and history reads after install | Two daemon-served control verbs |
-| O-19 | Second import into an installed volume | Refused in the first slice |
-| O-20 | Control transport | Keep the authenticated native channel |
-| O-24 | Bash user | One unprivileged user per Workspace |
+All seven were ruled on 2026-10-07 and are recorded in
+[08 §7](../303/08-decisions-provenance.md#7-questions-only-the-owner-can-answer).
 
-Checkpoint 1 is blocked only by O-21 and O-22. The others block later
-checkpoints and can be answered in order.
+| # | Ruling |
+| --- | --- |
+| O-21 | Disposable for the shared Store is WAL with `synchronous=OFF` |
+| O-22 | The macOS allocation owner is deleted |
+| O-23 | Stage and publish are one history transaction |
+| O-18 | Host fork and history reads are daemon-served control verbs |
+| O-19 | A second import into an installed volume is refused |
+| O-20 | Control stays on the authenticated native channel |
+| O-24 | One unprivileged Bash user per daemon; a Workspace is one mount serving many concurrent Bash processes |
 
 ## Working-tree state at this plan
 

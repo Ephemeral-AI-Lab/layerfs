@@ -42,12 +42,17 @@ file that changes, with production LOC before and estimated after.
 A mounted SQLite file is the first provider of this shape. Storage and History
 already reach the database through `PackPersistence` and `HistoryCatalog`;
 another database can replace SQLite behind those ports without touching the
-daemon adapter.
+daemon adapter. To keep that true, every Store call is either an idempotent put
+or get of immutable content by id, or one conditional transition with exact
+expected state; reads are batched by id; `Busy` is a typed outcome; and the
+daemon adapter names no SQLite type, path or lock. The
+[plan](../307/SERVERLESS-STORE-PLAN-20261007.md#rules-that-keep-a-later-database-swap-cheap)
+lists the rules.
 
 ## 2. Cluster-one APIs the daemon calls
 
-All of these exist today. The daemon calls them directly; no wire form of any
-of them remains.
+All but the combined stage-and-publish call exist today. The daemon calls them
+directly; no wire form of any of them remains.
 
 | Operation | API | Obligation |
 | --- | --- | --- |
@@ -59,9 +64,8 @@ of them remains.
 | Inode serials | `reserve_inodes(request)` | Database-owned range; never recycled |
 | Save | `Storage::begin_save()`, `Save::sink()`/`accept`, `Save::finish()` | A stack local of the Commit; earlier published waves survive a later failure |
 | Same-Save reads | `AuthenticatedObjects for Save` | Construction reads what it just produced |
-| Stage | `stage_changes(StageRequest)` | Exact captured expectations and the saved candidate |
-| Publish | `commit_staged(CommitStagedRequest)` | Exact token; conditional head transition; `Committed` or `UpToDate` |
-| Discard | `discard_stage(DiscardRequest)` | Exact owned token, once, after a known conflict |
+| Stage and publish | One catalog call combining `stage_changes` and `commit_staged` in a single write transaction (to be added, O-23) | Exact captured expectations, the saved candidate and a conditional head transition; `Committed`, `UpToDate` or the exact conflict, with no stage left behind |
+| Discard | `discard_stage(DiscardRequest)` | Exact owned token; only for a stage created by the separate calls |
 
 Content construction and reads are unchanged: `FilesystemRead`, `FileView`,
 `construct_stream`, `apply_edits`, `update_filesystem` and `FinalizedConsumer`
@@ -123,7 +127,7 @@ What a caller sees:
 | --- | --- |
 | Serial reservation | The mutation that needed a serial is refused; no local change |
 | Save publication wave | The Commit fails with "Store busy". Waves already published stay as unreferenced immutable objects. The Workspace keeps every change; a later explicit Commit is a new operation |
-| Stage, publish, discard | Exact refusal; local custody of the capture is retained as the [Commit contract](workspace-api/commit.md) already requires |
+| Stage and publish | Exact refusal with no stage row; local custody of the capture is retained as the [Commit contract](workspace-api/commit.md) already requires |
 
 ### 3.4 State under other writers
 
@@ -139,7 +143,8 @@ Not available to a daemon:
 
 - **Acquisition** (the Init import tables). Its abandoned-operation cleanup
   treats any other process's operation as abandoned. Only host Init uses it.
-- **Checkpoint TRUNCATE and space reclamation.** Host seal only.
+- **Checkpoint TRUNCATE and space reclamation.** Host seal only; there is no
+  public checkpoint call. Daemons rely on SQLite's passive auto-checkpoint.
 - **Collection.** No collector exists and none runs under several writers.
 
 ## 4. The daemon adapter
@@ -153,16 +158,22 @@ Not available to a daemon:
  store/commit.rs  Save scope, candidate checks, stage, publish, discard, new base
 ```
 
-- **One Store connection per daemon**, serialized by one in-process mutex per
-  bounded job (a demand batch, a length, a reservation, one history call, one
-  publication wave). Taking a mutex inside the process is mutual exclusion, not
-  a retry. No lock spans a Commit.
+- **One write handle and a fixed set of read handles per daemon**, opened once
+  at startup. Save, history and serial reservation use the write handle; object
+  and length reads use the read set, so a daemon's own publication never stalls
+  its base reads. Each handle is used by one thread at a time under its own
+  mutex, per bounded job. Taking a mutex inside the process is mutual
+  exclusion, not a retry. No lock spans a Commit.
+- **The shared immutable object cache sits above the read handles.** An object
+  never changes, so most reads never reach the Store.
+- **Few write transactions per Commit:** one id reservation per Save, bounded
+  publication batches, and stage and publish as one history transaction.
 - **Commit is one synchronous function.** `Save<'_>` is a local borrowed from a
   `Storage` on the Commit thread. There is no Save registry, capability,
   token table, reply custody or supervisor.
-- **Order is fixed:** finish Save, check the candidate root, stage, publish,
-  install the new base locally. A conflict that retains a stage gets exactly one
-  `discard_stage`.
+- **Order is fixed:** finish Save, check the candidate root, stage and publish
+  in one transaction, install the new base locally. A refused or conflicting
+  publish therefore leaves no stage row.
 - **Root checks** are the bounded ones that exist today (profile, scope, root
   serial, root inode, root listing page, portable metadata), at mount and before
   stage. Whole-root topology qualification is the explicit paid Content pass; it
@@ -181,7 +192,7 @@ Bash.
 | Step | Where | What |
 | --- | --- | --- |
 | Init | Host, unchanged | `Handles::create`, native import, first Branch |
-| Seal | Host | Checkpoint TRUNCATE with no reader, drop the handle, verify no `-wal`, `-shm` or `-journal` sidecar remains. Returns one file and a manifest: profile, binding key, cursor key, layer stack, Branch, root |
+| Seal | Host | Checkpoint TRUNCATE with no reader, drop the handle, verify no `-wal`, `-shm` or `-journal` sidecar remains. Returns one file and a manifest: provider kind, Store locator, profile, both SQLite versions, binding key, cursor key, layer stack, Branch, root |
 | Install | Daemon subcommand, driven by the host | Write to a new temporary name in the volume, then rename. An existing Store is refused |
 
 After install the host cannot open the Store: the file is inside the VM. Forking
