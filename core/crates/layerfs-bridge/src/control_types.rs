@@ -16,6 +16,10 @@ pub struct WorkspaceToken {
 /// One explicitly requested control operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Request {
+    /// End this authenticated control session; no Workspace is closed.
+    EndSession,
+    /// Observe/wait for actual daemon startup, separate from a native mount.
+    Hello(crate::daemon_types::HelloRequest),
     /// Prepare the Store/engine binding. FUSE attachment/readiness is a later S8 step.
     Mount {
         /// New authority incarnation.
@@ -133,6 +137,10 @@ pub struct ControlRefusal {
 /// Original command result. Bound means engine/Store preparation, not kernel readiness.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Reply {
+    /// Original control-session end acknowledgment; filesystem ownership is unchanged.
+    SessionEnded,
+    /// Original application startup observation; never native Workspace Ready.
+    Hello(crate::daemon_types::DaemonStatus),
     /// Newly bound engine namespace and exact selected history snapshot.
     Bound {
         /// Original namespace token.

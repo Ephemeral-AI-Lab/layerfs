@@ -1,0 +1,28 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--name",
+    "layerfs-r1b-application-20261008",
+    "--label",
+    "layerfs.owner=r1b-20261008",
+    "--mount",
+    "type=volume,src=layerfs-r1b-proof-20261008,dst=/campaign",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work,readonly",
+    "-e",
+    "TMPDIR=/campaign",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-c",
+    "import hashlib,json,subprocess,sys,time\nm=json.load(open('core/docs/issues/307/checks/r1-daemon-composition-20261008/32-final-source-identity.json'))\nbad=[p for p,h in m['files'].items() if hashlib.sha256(open(p,'rb').read()).hexdigest()!=h]\nprint('source hashes match:',not bad,flush=True)\nif bad: print(bad);sys.exit(2)\nexe='core/target/cluster2-linux/debug/deps/native_application-a7520eaee01f1d7e'\nprint('test_sha256='+hashlib.sha256(open(exe,'rb').read()).hexdigest(),flush=True)\nprint('daemon_sha256='+hashlib.sha256(open('core/target/cluster2-linux/debug/layerfs-daemon','rb').read()).hexdigest(),flush=True)\nt=time.monotonic_ns()\nr=subprocess.call(['timeout','--kill-after=1s','9s',exe,'--test-threads=1','--nocapture'])\nprint('functional_test_complete_wall_ns='+str(time.monotonic_ns()-t),flush=True)\nsys.exit(r)\n"
+  ],
+  "profile": "explicit Disposable only",
+  "bound": "9s functional test; no benchmark/numeric gate; natural cache, no cold claim",
+  "topology": "Linux test controller Init/seal/install; separate Linux daemon binary, shared native VM named volume; not macOS-to-Linux qualification",
+  "stop": "explicit owned test-daemon process kill after logical unmount; not graceful application/FUSE drain"
+}

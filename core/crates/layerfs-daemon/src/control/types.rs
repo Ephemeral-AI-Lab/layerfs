@@ -32,7 +32,7 @@ pub enum Failure {
     },
 }
 impl Success {
-    pub(super) fn reply(reply: Reply) -> Self {
+    pub(crate) fn reply(reply: Reply) -> Self {
         Self {
             reply,
             completion: None,

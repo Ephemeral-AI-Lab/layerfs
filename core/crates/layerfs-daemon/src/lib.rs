@@ -29,3 +29,5 @@ pub use service::observations::JobWork;
 pub use service::startup::OwnerStart;
 
 pub mod control;
+
+pub mod application;

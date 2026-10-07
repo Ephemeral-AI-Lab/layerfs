@@ -61,29 +61,22 @@ impl Service {
     ) -> Result<Arc<BoundWorkspace>, Failure> {
         let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         let value = bound_mut(&mut entries, token)?;
-        match value.activity {
-            Activity::Idle => (),
-            Activity::Uncertain | Activity::LocalFailure => {
-                return Err(Failure::Custody(Box::new(
-                    layerfs_bridge::control::ControlRefusal {
-                        code: ControlCode::Unknown,
-                        phase: "admission".into(),
-                        moved: None,
-                        published: value.published.clone(),
-                        detail: "original Commit custody retained".into(),
-                    },
-                )))
-            }
-            _ => {
-                return Err(Failure::Rejected(
-                    ControlCode::Busy,
-                    "Workspace control operation active",
-                ))
-            }
-        }
+        idle(value)?;
         value.activity = activity;
         value.epoch = value.epoch.saturating_add(1);
         Ok(value.workspace.clone())
+    }
+    pub(super) fn unavailable_commit(
+        &self,
+        token: WorkspaceToken,
+    ) -> Result<super::Success, Failure> {
+        let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+        let value = bound(&entries, token)?;
+        idle(value)?;
+        Err(Failure::Rejected(
+            ControlCode::Invalid,
+            "live namespace constructor unavailable",
+        ))
     }
 }
 pub(super) fn bound(
@@ -128,4 +121,23 @@ fn check(value: &Binding, token: WorkspaceToken) -> Result<(), Failure> {
         ));
     }
     Ok(())
+}
+
+fn idle(value: &Binding) -> Result<(), Failure> {
+    match value.activity {
+        Activity::Idle => Ok(()),
+        Activity::Uncertain | Activity::LocalFailure => Err(Failure::Custody(Box::new(
+            layerfs_bridge::control::ControlRefusal {
+                code: ControlCode::Unknown,
+                phase: "admission".into(),
+                moved: None,
+                published: value.published.clone(),
+                detail: "original Commit custody retained".into(),
+            },
+        ))),
+        _ => Err(Failure::Rejected(
+            ControlCode::Busy,
+            "Workspace control operation active",
+        )),
+    }
 }

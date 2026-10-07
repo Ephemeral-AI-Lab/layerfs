@@ -1,0 +1,16 @@
+{
+  "first_parent": "932abe80894e070d4767eba2c213dc5d38a64d8f",
+  "final_staged_tree_before_receipt": "f6b0160262dfc669c176c70508025834bfce007e",
+  "product_trees": {
+    "core/crates": "9aaa6795c6bb9b008d59749b23d101c209518754",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "counted_product_trees_match": true,
+  "source_identity_files_match_staged": 1095,
+  "production_loc": {
+    "before": 166022,
+    "after": 167277,
+    "delta": 1255
+  },
+  "scope": "last new receipt/docs excluded from production counts; no later staged product changes permitted without recomputation"
+}

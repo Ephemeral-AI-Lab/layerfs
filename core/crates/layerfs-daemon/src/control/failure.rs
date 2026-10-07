@@ -104,7 +104,7 @@ impl Failure {
             published,
         }
     }
-    pub(super) fn uncertain(&self) -> bool {
+    pub(crate) fn uncertain(&self) -> bool {
         self.wire().code == ControlCode::Unknown
     }
 }

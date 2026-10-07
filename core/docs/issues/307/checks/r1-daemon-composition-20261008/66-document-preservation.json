@@ -1,0 +1,11 @@
+{
+  "protected_untracked_notes": {
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": true,
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": true,
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": true
+  },
+  "local_link_targets_checked": 126,
+  "missing": [],
+  "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "source_identity_files": 1095
+}

@@ -21,6 +21,8 @@ pub enum ControlPhase {
     Receive,
     /// Received correlation/result validation.
     Validate,
+    /// Session end was acknowledged; its original local socket fence was attempted.
+    Fence,
 }
 /// Original transport/protocol failure; a failed attempted request can have effects.
 #[derive(Debug)]
@@ -99,6 +101,16 @@ impl Control {
                     "original control correlation or result",
                 )));
             }
+            if matches!(answer.reply, Reply::SessionEnded) {
+                self.failed = true;
+                phase = ControlPhase::Fence;
+                // Quarantine the underlying owner as well: transferring it into
+                // another Control cannot reset an ended native session.
+                self.connection
+                    .send
+                    .close()
+                    .map_err(ControlCause::Channel)?;
+            }
             Ok(received.take().expect("checked original answer").reply)
         })();
         match result {
@@ -137,6 +149,10 @@ impl Control {
 fn matches_reply(request: &Request, reply: &Reply) -> bool {
     match (request, reply) {
         (_, Reply::Refused(_)) => true,
+        (Request::EndSession, Reply::SessionEnded) => true,
+        (Request::Hello(request), Reply::Hello(status)) => request
+            .expected_instance
+            .is_none_or(|expected| expected == status.instance),
         (Request::Mount { workspace, branch }, Reply::Bound { token, binding }) => {
             token.workspace == *workspace && binding.branch.id == *branch
         }

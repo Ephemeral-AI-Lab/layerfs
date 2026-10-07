@@ -16,6 +16,8 @@ layerfs-history = { path = "../layerfs-history" }
 # Concrete Store opening stays in application bootstrap, outside store/.
 layerfs-persistence = { path = "../layerfs-persistence" }
 
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+
 [dev-dependencies]
 layerfs-sdk = { path = "../layerfs-api/sdk" }
 layerfs-project = { path = "../layerfs-project" }

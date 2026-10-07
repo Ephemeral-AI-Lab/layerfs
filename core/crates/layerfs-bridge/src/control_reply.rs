@@ -18,6 +18,11 @@ impl Answer {
         let mut out = Writer::new(MAGIC);
         out.put(&self.id.to_be_bytes())?;
         match &self.reply {
+            Reply::SessionEnded => out.byte(9)?,
+            Reply::Hello(value) => {
+                out.byte(8)?;
+                crate::daemon_wire::put_status(&mut out, value)?;
+            }
             Reply::Bound { token, binding } => {
                 out.byte(1)?;
                 put_token(&mut out, *token)?;
@@ -65,6 +70,8 @@ impl Answer {
             return Err(ControlError("control correlation"));
         }
         let reply = match input.byte()? {
+            9 => Reply::SessionEnded,
+            8 => Reply::Hello(crate::daemon_wire::status(&mut input)?),
             1 => Reply::Bound {
                 token: token(&mut input)?,
                 binding: binding(&mut input)?,

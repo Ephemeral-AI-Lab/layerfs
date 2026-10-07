@@ -4,7 +4,7 @@ use crate::{
     provision::{ProviderKind, StoreManifest, StoreProfile},
     wire::{Reader, Writer},
 };
-const MAGIC: &[u8] = b"LFSI\x01";
+pub(crate) const MAGIC: &[u8] = b"LFSI\x01";
 impl StoreManifest {
     /// Encodes checked metadata; sealed file bytes are separate native records.
     pub fn encode(&self) -> Result<Vec<u8>, ControlError> {

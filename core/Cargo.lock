@@ -514,6 +514,7 @@ dependencies = [
  "layerfs-storage",
  "layerfs-telemetry",
  "layerfs-workspace",
+ "nix",
 ]
 
 [[package]]

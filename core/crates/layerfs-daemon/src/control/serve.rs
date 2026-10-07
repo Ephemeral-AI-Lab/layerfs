@@ -40,49 +40,25 @@ impl Service {
             &BranchSnapshot,
         ) -> Result<FilesystemRootId, CommitError>,
     ) -> Result<Served, Box<ServeFailure>> {
-        let mut original = None;
-        let mut received = None;
-        let result = (|| {
-            let bytes = connection.receive.receive().map_err(ServeCause::Channel)?;
-            let call = match Call::decode(bytes) {
-                Ok(call) => call,
-                Err(error) => {
-                    received = Some(bytes.to_vec());
-                    return Err(ServeCause::Protocol(error));
-                }
-            };
-            let outcome = self.execute(&call.request, construct);
-            original = Some(Served { call, outcome });
-            let served = original.as_ref().expect("original operation");
-            let reply = match &served.outcome {
-                Ok(success) => success.reply.clone(),
-                Err(failure) => Reply::Refused(failure.wire()),
-            };
-            let answer = Answer {
-                id: served.call.id,
-                reply,
-            }
-            .encode()
-            .map_err(ServeCause::Protocol)?;
-            connection.send.send(&answer).map_err(ServeCause::Channel)?;
-            Ok(())
-        })();
-        match result {
-            Ok(()) => Ok(original.expect("delivered original operation")),
-            Err(cause) => {
-                let fence_error = if matches!(cause, ServeCause::Channel(_)) {
-                    None
-                } else {
-                    connection.send.close().err()
-                };
-                Err(Box::new(ServeFailure {
-                    original,
-                    received,
-                    cause,
-                    fence_error,
-                }))
-            }
-        }
+        let call = receive_call(connection)?;
+        let outcome = self.execute(&call.request, construct);
+        answer_call(connection, call, outcome)
+    }
+    /// Receives one ordinary control without inventing a Commit producer.
+    pub fn serve_one_control(
+        &self,
+        connection: &mut Connection,
+    ) -> Result<Served, Box<ServeFailure>> {
+        let call = receive_call(connection)?;
+        self.serve_control_call(connection, call)
+    }
+    pub(crate) fn serve_control_call(
+        &self,
+        connection: &mut Connection,
+        call: Call,
+    ) -> Result<Served, Box<ServeFailure>> {
+        let outcome = self.execute_control(&call.request);
+        answer_call(connection, call, outcome)
     }
 }
 impl fmt::Display for ServeFailure {
@@ -91,3 +67,57 @@ impl fmt::Display for ServeFailure {
     }
 }
 impl std::error::Error for ServeFailure {}
+
+pub(crate) fn receive_call(connection: &mut Connection) -> Result<Call, Box<ServeFailure>> {
+    let mut received = None;
+    let result = (|| {
+        let bytes = connection.receive.receive().map_err(ServeCause::Channel)?;
+        Call::decode(bytes).map_err(|cause| {
+            received = Some(bytes.to_vec());
+            ServeCause::Protocol(cause)
+        })
+    })();
+    result.map_err(|cause| failed(connection, None, received, cause))
+}
+pub(crate) fn answer_call(
+    connection: &mut Connection,
+    call: Call,
+    outcome: Result<Success, Failure>,
+) -> Result<Served, Box<ServeFailure>> {
+    let original = Served { call, outcome };
+    let result = (|| {
+        let reply = match &original.outcome {
+            Ok(success) => success.reply.clone(),
+            Err(failure) => Reply::Refused(failure.wire()),
+        };
+        let answer = Answer {
+            id: original.call.id,
+            reply,
+        }
+        .encode()
+        .map_err(ServeCause::Protocol)?;
+        connection.send.send(&answer).map_err(ServeCause::Channel)
+    })();
+    match result {
+        Ok(()) => Ok(original),
+        Err(cause) => Err(failed(connection, Some(original), None, cause)),
+    }
+}
+fn failed(
+    connection: &mut Connection,
+    original: Option<Served>,
+    received: Option<Vec<u8>>,
+    cause: ServeCause,
+) -> Box<ServeFailure> {
+    let fence_error = if matches!(cause, ServeCause::Channel(_)) {
+        None
+    } else {
+        connection.send.close().err()
+    };
+    Box::new(ServeFailure {
+        original,
+        received,
+        cause,
+        fence_error,
+    })
+}

@@ -1,0 +1,47 @@
+{
+  "scope": "only successful owned R1b proof containers/volumes; no other owner or global Store touched",
+  "attempts": [
+    {
+      "command": [
+        "docker",
+        "rm",
+        "layerfs-r1b-application-20261008"
+      ],
+      "exit": 0,
+      "stdout": "layerfs-r1b-application-20261008\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "rm",
+        "layerfs-r1b-fence-application-20261008"
+      ],
+      "exit": 0,
+      "stdout": "layerfs-r1b-fence-application-20261008\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "layerfs-r1b-proof-20261008"
+      ],
+      "exit": 0,
+      "stdout": "layerfs-r1b-proof-20261008\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "layerfs-r1b-fence-proof-20261008"
+      ],
+      "exit": 0,
+      "stdout": "layerfs-r1b-fence-proof-20261008\n",
+      "stderr": ""
+    }
+  ]
+}

@@ -8,7 +8,7 @@ use layerfs_history::{
     BranchId, CommitHistoryRequest, ForkRequest, ForkSource, HistoryName, LayerId, LayerStackId,
     WorkspaceId,
 };
-const MAGIC: &[u8] = b"LFSC\x01";
+pub(crate) const MAGIC: &[u8] = b"LFSC\x01";
 impl Call {
     /// Encodes one checked request. Failure before send has no remote effect.
     pub fn encode(&self) -> Result<Vec<u8>, ControlError> {
@@ -18,6 +18,11 @@ impl Call {
         let mut out = Writer::new(MAGIC);
         out.put(&self.id.to_be_bytes())?;
         match &self.request {
+            Request::EndSession => out.byte(8)?,
+            Request::Hello(value) => {
+                out.byte(7)?;
+                crate::daemon_wire::put_request(&mut out, value)?;
+            }
             Request::Mount { workspace, branch } => {
                 out.byte(1)?;
                 out.put(&workspace.to_bytes())?;
@@ -71,6 +76,8 @@ impl Call {
             return Err(ControlError("control correlation"));
         }
         let request = match input.byte()? {
+            8 => Request::EndSession,
+            7 => Request::Hello(crate::daemon_wire::request(&mut input)?),
             1 => Request::Mount {
                 workspace: history(WorkspaceId::from_authority(input.array()?))?,
                 branch: history(BranchId::from_bytes(input.array()?))?,

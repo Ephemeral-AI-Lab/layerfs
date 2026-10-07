@@ -1,0 +1,13 @@
+{
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "--label",
+    "layerfs.owner=r1b-20261008",
+    "layerfs-r1b-fence-proof-20261008"
+  ],
+  "exit": 0,
+  "stdout": "layerfs-r1b-fence-proof-20261008\n",
+  "stderr": ""
+}

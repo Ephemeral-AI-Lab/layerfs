@@ -1,0 +1,10 @@
+core/docs/issues/307/checks/r1-daemon-composition-20261008/14-daemon-records-tests.txt:7: new blank line at EOF.
+core/docs/issues/307/checks/r1-daemon-composition-20261008/15-control-tests.txt:9: trailing whitespace.
++test control_without_constructor_refuses_before_capture_save_or_registry_epoch ... 
+core/docs/issues/307/checks/r1-daemon-composition-20261008/15-control-tests.txt:33: new blank line at EOF.
+core/docs/issues/307/checks/r1-daemon-composition-20261008/25-control-no-producer-tests.txt:6: new blank line at EOF.
+core/docs/issues/307/checks/r1-daemon-composition-20261008/26-control-unknown-tests.txt:7: new blank line at EOF.
+core/docs/issues/307/checks/r1-daemon-composition-20261008/58-control_records-tests.txt:7: new blank line at EOF.
+core/docs/issues/307/checks/r1-daemon-composition-20261008/59-install_records-tests.txt:7: new blank line at EOF.
+core/docs/issues/307/checks/r1-daemon-composition-20261008/60-native-tests.txt:14: new blank line at EOF.
+core/docs/issues/307/checks/r1-daemon-composition-20261008/61-native_install-tests.txt:10: new blank line at EOF.

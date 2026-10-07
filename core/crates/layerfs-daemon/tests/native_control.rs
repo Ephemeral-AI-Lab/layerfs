@@ -395,6 +395,8 @@ fn an_original_unknown_blocks_another_commit_and_normal_unmount() {
     assert_eq!(observed.binding, binding);
     assert!(observed.published.is_none());
     assert!(observed.local.unwrap().captured.is_some());
+    assert!(matches!(f.service.execute_control(&Request::Commit(token)),
+        Err(layerfs_daemon::control::Failure::Custody(value)) if value.code == ControlCode::Unknown && value.published.is_none()));
     assert!(
         matches!(client.call(Request::Unmount(token)).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
     );
@@ -479,4 +481,71 @@ fn status_retains_known_publication_when_the_engine_is_unavailable() {
     println!("CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown");
     drop((original, f.service, f.installed));
     f.native.cleanup();
+}
+
+#[test]
+fn control_without_constructor_refuses_before_capture_save_or_registry_epoch() {
+    let f = fixture::Fixture::new("unavailable-producer");
+    let branch = f.native.project.branch.branch.id;
+    let success = f
+        .service
+        .execute_control(&Request::Mount {
+            workspace: identity(87),
+            branch,
+        })
+        .unwrap();
+    let token = match &success.reply {
+        Reply::Bound { token, .. } => *token,
+        other => panic!("{other:?}"),
+    };
+    drop(success);
+    fixture::write(&f.service, token, b'Q');
+    let before = match f
+        .service
+        .execute_control(&Request::Status(token))
+        .unwrap()
+        .reply
+    {
+        Reply::Status(v) => v,
+        other => panic!("{other:?}"),
+    };
+    let storage = f.installed.opened.store.work();
+    let sql = f.statements();
+    assert!(matches!(
+        f.service.execute_control(&Request::Commit(token)),
+        Err(layerfs_daemon::control::Failure::Rejected(
+            ControlCode::Invalid,
+            _
+        ))
+    ));
+    let after = match f
+        .service
+        .execute_control(&Request::Status(token))
+        .unwrap()
+        .reply
+    {
+        Reply::Status(v) => v,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(before, after, "no epoch/admission/capture/install effects");
+    assert_eq!(f.statements(), sql, "no Store SQL/Save/refill/publication");
+    let after_storage = f.installed.opened.store.work();
+    assert_eq!(
+        storage.serial_reservations,
+        after_storage.serial_reservations
+    );
+    assert_eq!(storage.object_batches, after_storage.object_batches);
+    assert_eq!(storage.length_batches, after_storage.length_batches);
+    assert!(matches!(
+        f.service.execute_control(&Request::Commit(WorkspaceToken {
+            namespace: token.namespace + 1,
+            ..token
+        })),
+        Err(layerfs_daemon::control::Failure::Rejected(
+            ControlCode::Invalid,
+            _
+        ))
+    ));
+    f.service.execute_control(&Request::Unmount(token)).unwrap();
+    f.cleanup();
 }

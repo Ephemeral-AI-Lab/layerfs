@@ -6,5 +6,6 @@ mod serve;
 mod status;
 mod types;
 pub use registry::Service;
+pub(crate) use serve::answer_call;
 pub use serve::{ServeCause, ServeFailure, Served};
 pub use types::{Failure, Success};

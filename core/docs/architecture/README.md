@@ -419,3 +419,8 @@ open, with exact original partial/publication custody and both SQLite versions.
 
 Current pre-S8 control: [68 — Native Workspace control](68-native-workspace-control.md)
 keeps original command/delivery knowledge and scoped status over direct Store ports.
+
+Current R1 application: [69 — Project/Workspace SDK facades](69-sdk-project-workspace-facades.md)
+and [70 — Direct-Store daemon startup/control](70-daemon-application-startup-control.md).
+Their component/application scope does not establish native FUSE Ready, ordinary
+Sandbox execution, mounted live Commit or complete daemon drain.

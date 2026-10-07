@@ -1,0 +1,14 @@
+{
+  "commit": "932abe80894e070d4767eba2c213dc5d38a64d8f",
+  "first_parent": "eb9b06c4c8633053e9b1cbf5f545d141b88915fc",
+  "committed_tree": "3df55e729d05783fed34abdbc89e38b09973a046",
+  "final_staged_tree_matches": true,
+  "counted_product_trees_match": true,
+  "production_loc": "165813 -> 166022 (delta +209)",
+  "core": 100605,
+  "reference": 65417,
+  "active": 57731,
+  "excluded_predecessors": 36325,
+  "excluded_integration": 6549,
+  "goal": "active; R1 in progress, R2\u2013R9 remain"
+}

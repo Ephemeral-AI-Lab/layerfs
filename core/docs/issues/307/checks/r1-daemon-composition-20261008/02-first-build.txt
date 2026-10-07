@@ -1,0 +1,58 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling nix v0.31.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+warning: unused import: `receive_call`
+ --> crates/layerfs-daemon/src/control/mod.rs:9:37
+  |
+9 | pub(crate) use serve::{answer_call, receive_call};
+  |                                     ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `File`
+ --> crates/layerfs-daemon/src/application/config.rs:5:16
+  |
+5 |     fs::{self, File, OpenOptions},
+  |                ^^^^
+
+warning: unused import: `Connection`
+ --> crates/layerfs-daemon/src/application/connection.rs:6:20
+  |
+6 |     native::{self, Connection},
+  |                    ^^^^^^^^^^
+
+error[E0624]: method `uncertain` is private
+   --> crates/layerfs-daemon/src/application/connection.rs:136:34
+    |
+136 |                         if cause.uncertain() {
+    |                                  ^^^^^^^^^ private method
+    |
+   ::: crates/layerfs-daemon/src/control/failure.rs:107:5
+    |
+107 |     pub(super) fn uncertain(&self) -> bool {
+    |     -------------------------------------- private method defined here
+
+error[E0624]: associated function `reply` is private
+   --> crates/layerfs-daemon/src/application/connection.rs:180:40
+    |
+180 |                 .map(|status| Success::reply(Reply::Hello(status)));
+    |                                        ^^^^^ private associated function
+    |
+   ::: crates/layerfs-daemon/src/control/types.rs:35:5
+    |
+35  |     pub(super) fn reply(reply: Reply) -> Self {
+    |     ----------------------------------------- private associated function defined here
+
+For more information about this error, try `rustc --explain E0624`.
+warning: `layerfs-daemon` (lib) generated 3 warnings
+error: could not compile `layerfs-daemon` (lib) due to 2 previous errors; 3 warnings emitted
+warning: build failed, waiting for other jobs to finish...

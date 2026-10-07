@@ -1,0 +1,23 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r1b-build-20261008",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-c",
+    "import json,hashlib,subprocess,sys\nm=json.load(open('core/docs/issues/307/checks/r1-daemon-composition-20261008/44-session-fence-source-identity.json'))\nbad=[p for p,h in m['files'].items() if hashlib.sha256(open(p,'rb').read()).hexdigest()!=h]\nprint('source hashes match:',not bad, flush=True)\nif bad: print(bad);sys.exit(2)\nsys.exit(subprocess.call(['cargo','test','--manifest-path','core/Cargo.toml','--locked','-p','layerfs-daemon','-p','layerfs-bridge','-p','layerfs-sdk','--all-targets','--no-run']))\n"
+  ]
+}

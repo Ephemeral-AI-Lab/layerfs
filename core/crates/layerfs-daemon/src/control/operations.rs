@@ -28,9 +28,23 @@ impl Service {
         ) -> Result<FilesystemRootId, CommitError>,
     ) -> Result<Success, Failure> {
         match request {
+            Request::Commit(token) => self.commit(*token, construct),
+            other => self.execute_control(other),
+        }
+    }
+    /// Runs a control operation without a namespace construction producer.
+    /// Commit is refused before lifecycle admission/capture/Save; retained
+    /// original token and publication custody still takes precedence.
+    pub fn execute_control(&self, request: &Request) -> Result<Success, Failure> {
+        match request {
+            Request::EndSession => Ok(Success::reply(Reply::SessionEnded)),
+            Request::Hello(_) => Err(Failure::Rejected(
+                ControlCode::Invalid,
+                "daemon Hello requires application startup owner",
+            )),
             Request::Mount { workspace, branch } => self.mount(*workspace, *branch),
             Request::Status(token) => self.status(*token),
-            Request::Commit(token) => self.commit(*token, construct),
+            Request::Commit(token) => self.unavailable_commit(*token),
             Request::Unmount(token) => self.unmount(*token),
             Request::Fork(request) => self
                 .store

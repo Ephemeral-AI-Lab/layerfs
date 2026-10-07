@@ -1,0 +1,40 @@
+source hashes match: True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling nix v0.31.3
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+error[E0609]: no field `daemon_sqlite` on type `layerfs_sdk::Installed`
+   --> crates/layerfs-daemon/tests/native_application.rs:120:23
+    |
+120 |     assert!(installed.daemon_sqlite.is_some());
+    |                       ^^^^^^^^^^^^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+120 |     assert!(installed.manifest.daemon_sqlite.is_some());
+    |                       +++++++++
+
+error[E0609]: no field `daemon_sqlite` on type `layerfs_sdk::Installed`
+   --> crates/layerfs-daemon/tests/native_application.rs:133:46
+    |
+133 |     assert_eq!(ready.store_sqlite, installed.daemon_sqlite);
+    |                                              ^^^^^^^^^^^^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+133 |     assert_eq!(ready.store_sqlite, installed.manifest.daemon_sqlite);
+    |                                              +++++++++
+
+For more information about this error, try `rustc --explain E0609`.
+error: could not compile `layerfs-daemon` (test "native_application") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+
+exit=101

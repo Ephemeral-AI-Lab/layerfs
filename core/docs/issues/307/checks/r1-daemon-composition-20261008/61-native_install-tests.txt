@@ -1,0 +1,10 @@
+
+running 3 tests
+test authenticated_install_opens_one_store_and_reads_the_complete_root ... INSTALL_ROOT_ORACLE paths=6 full_regular_bytes=300048 hardlink=true raw_symlink=true host_sqlite=3.51.0 daemon_sqlite=3.51.0 work=InstallWork { records: 3, write_calls: 3, written: 180224, sync_calls: 0, peak_record_bytes: 65519 }
+ok
+test existing_store_is_refused_before_upload_and_preserved ... ok
+test interrupted_transfer_keeps_original_partial_file_and_claim_refuses_another_installer ... INSTALL_PARTIAL original_bytes=31 published=false claim_acknowledged=true no_product_cleanup=true
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

@@ -168,3 +168,5 @@ pub use crate::control_types::{
     Activity, Answer, Call, ControlCode, ControlRefusal, LocalObservation, Reply, Request,
     WorkspaceStatus, WorkspaceToken, HISTORY_WINDOW,
 };
+
+pub use crate::daemon_types::{DaemonPhase, DaemonStatus, HelloRequest};

@@ -1,0 +1,69 @@
+{
+  "profile": "Disposable only; natural functional cache, no numeric claim",
+  "checks": [
+    {
+      "name": "control_records",
+      "command": [
+        "perl",
+        "-e",
+        "alarm shift; exec @ARGV",
+        "100",
+        "core/target/debug/deps/control_records-80fa52d464578a3a",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "binary_sha256": "11471c777e6ac281b169317ea69e8708499304eeea6b730fa1462e8e37a4c9e9",
+      "exit": 0,
+      "test_stop_s": 100,
+      "complete_functional_wall_ns": 937939000
+    },
+    {
+      "name": "install_records",
+      "command": [
+        "perl",
+        "-e",
+        "alarm shift; exec @ARGV",
+        "100",
+        "core/target/debug/deps/install_records-bd14051ae276a09a",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "binary_sha256": "f8eeac12489bd85d18036eae0077b8907042e6efa3f2747a74a68c6931a9d100",
+      "exit": 0,
+      "test_stop_s": 100,
+      "complete_functional_wall_ns": 660950334
+    },
+    {
+      "name": "native",
+      "command": [
+        "perl",
+        "-e",
+        "alarm shift; exec @ARGV",
+        "100",
+        "core/target/debug/deps/native-d9a245f3724f5845",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "binary_sha256": "82d10717ba60972b41da5dc873b3b26b8c8fa961100ed8d25dffe9e28d8f7af8",
+      "exit": 0,
+      "test_stop_s": 100,
+      "complete_functional_wall_ns": 590063417
+    },
+    {
+      "name": "native_install",
+      "command": [
+        "perl",
+        "-e",
+        "alarm shift; exec @ARGV",
+        "100",
+        "core/target/debug/deps/native_install-ef4e600bbf649dae",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "binary_sha256": "8056069bd57ee794c3e169ac660fe6a832aab83139b39e830b5706506503b4e7",
+      "exit": 0,
+      "test_stop_s": 100,
+      "complete_functional_wall_ns": 760177209
+    }
+  ]
+}

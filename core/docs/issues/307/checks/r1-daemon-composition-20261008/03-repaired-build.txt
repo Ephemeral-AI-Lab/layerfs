@@ -1,0 +1,40 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error: mismatched closing delimiter: `)`
+   --> crates/layerfs-daemon/src/application/connection.rs:136:46
+    |
+136 |                         if cause.uncertain() {
+    |                                              ^ unclosed delimiter
+...
+143 |                                 )),
+    |                                  ^ mismatched closing delimiter
+
+error: mismatched closing delimiter: `)`
+   --> crates/layerfs-daemon/src/application/connection.rs:121:49
+    |
+121 |                 InitialRecord::Control(call) => {
+    |                                                 ^ unclosed delimiter
+...
+145 |                             });
+    |                              ^ mismatched closing delimiter
+
+error: unexpected closing delimiter: `}`
+   --> crates/layerfs-daemon/src/application/connection.rs:160:9
+    |
+143 |                                 )),
+    |                                  - missing open `(` for this delimiter
+144 |                                 fence_error: None,
+145 |                             });
+    |                              - missing open `(` for this delimiter
+...
+160 |         }
+    |         ^ unexpected closing delimiter
+
+error: could not compile `layerfs-daemon` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

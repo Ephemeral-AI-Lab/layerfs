@@ -200,6 +200,15 @@ Not available to a daemon:
 
 ## 5. Host control and install
 
+R1b implements the actual protected-config `layerfs-daemon` application, a
+separate correlated startup Hello and session termination over the existing
+authenticated native control. It transfers the original installed/opened Store
+into the existing Service and preserves original failed installation custody.
+[Application architecture](../../architecture/70-daemon-application-startup-control.md)
+states its exact readiness/admission/error scope. ControlReady is not FUSE Ready;
+ordinary Sandbox execution/access and complete application drain remain open.
+
+
 Host filesystem controls are mount, Commit, status and terminal unmount,
 plus fork/history. Ordinary execution is Sandbox/runtime or external executor;
 optional WorkspaceApi.exec delegates with mounted cwd. Its streams/status and

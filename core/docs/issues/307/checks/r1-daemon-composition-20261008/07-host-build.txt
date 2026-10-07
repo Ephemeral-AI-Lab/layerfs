@@ -1,0 +1,49 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0609]: no field `initial_reservations` on type `StoreWork`
+   --> crates/layerfs-daemon/tests/native_control.rs:523:17
+    |
+523 |         storage.initial_reservations,
+    |                 ^^^^^^^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+523 |         storage.serial_reservations,
+    |                 ~~~~~~~~~~~~~~~~~~~
+
+error[E0609]: no field `initial_reservations` on type `StoreWork`
+   --> crates/layerfs-daemon/tests/native_control.rs:524:23
+    |
+524 |         after_storage.initial_reservations
+    |                       ^^^^^^^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+524 |         after_storage.serial_reservations
+    |                       ~~~~~~~~~~~~~~~~~~~
+
+error[E0609]: no field `reservation_refills` on type `StoreWork`
+   --> crates/layerfs-daemon/tests/native_control.rs:527:17
+    |
+527 |         storage.reservation_refills,
+    |                 ^^^^^^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `object_batches`, `object_ids`, `length_batches`, `length_ids`, `serial_reservations`
+
+error[E0609]: no field `reservation_refills` on type `StoreWork`
+   --> crates/layerfs-daemon/tests/native_control.rs:528:23
+    |
+528 |         after_storage.reservation_refills
+    |                       ^^^^^^^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `object_batches`, `object_ids`, `length_batches`, `length_ids`, `serial_reservations`
+
+For more information about this error, try `rustc --explain E0609`.
+error: could not compile `layerfs-daemon` (test "native_control") due to 4 previous errors
+warning: build failed, waiting for other jobs to finish...

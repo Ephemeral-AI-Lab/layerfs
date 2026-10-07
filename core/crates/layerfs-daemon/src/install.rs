@@ -21,6 +21,33 @@ pub fn receive_install(
     destination: &Path,
     settings: StoreSettings,
 ) -> Result<InstalledStore, Box<InstallFailure>> {
+    let manifest = (|| {
+        StoreManifest::decode(
+            connection
+                .receive
+                .receive()
+                .map_err(InstallError::Channel)?,
+        )
+        .map_err(InstallError::Protocol)
+    })();
+    install_manifest(connection, destination, settings, manifest)
+}
+/// Installs the original manifest already decoded by an authenticated application router.
+/// This enters the same single installer; it never reads a second request record.
+pub fn receive_install_manifest(
+    connection: &mut Connection,
+    destination: &Path,
+    settings: StoreSettings,
+    manifest: StoreManifest,
+) -> Result<InstalledStore, Box<InstallFailure>> {
+    install_manifest(connection, destination, settings, Ok(manifest))
+}
+fn install_manifest(
+    connection: &mut Connection,
+    destination: &Path,
+    settings: StoreSettings,
+    manifest: Result<StoreManifest, InstallError>,
+) -> Result<InstalledStore, Box<InstallFailure>> {
     let mut retained = InstallFailure {
         destination: destination.to_owned(),
         temporary: None,
@@ -35,14 +62,13 @@ pub fn receive_install(
         fence_error: None,
     };
     let result = (|| {
-        let mut manifest = StoreManifest::decode(
-            connection
-                .receive
-                .receive()
-                .map_err(InstallError::Channel)?,
-        )
-        .map_err(InstallError::Protocol)?;
+        let mut manifest = manifest?;
         retained.manifest = Some(manifest.clone());
+        if manifest.profile != StoreProfile::Disposable {
+            return Err(InstallError::Protocol(ControlError(
+                "explicit Disposable Store profile required",
+            )));
+        }
         if Path::new(&manifest.locator) != destination || manifest.daemon_sqlite.is_some() {
             return Err(InstallError::Protocol(ControlError(
                 "provisioned install destination",
