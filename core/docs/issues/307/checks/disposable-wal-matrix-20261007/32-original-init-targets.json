@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-10-07T15:20:19.813358+00:00",
+  "source": "unchanged original cluster-one-end controls, separately hash checked",
+  "original_target_arithmetic_failures": 4,
+  "newer_incumbent_arithmetic_failures": 3,
+  "new_measurements": 0,
+  "rows": [
+    {
+      "files": 100,
+      "current_ns": 63918250,
+      "original_control_ns": 38747750,
+      "original_control_source": "197d2fb7d0a141d7a9350852022febeec3255bf2",
+      "control_compact": "core/docs/issues/302/checks/shared-allocation1/disposable-init100.json",
+      "control_sha256": "710c252a0e2634c55a1937ad9acbab2680b0feea91e854080d565733f5183e09",
+      "formula": "10*current<=11*original",
+      "left": 639182500,
+      "right": 426225250,
+      "arithmetic": "FAIL",
+      "time_delta_percent": 64.95990089747147,
+      "scope": "original historical cluster-one-end target; no new matched arm or changed acceptance"
+    },
+    {
+      "files": 1000,
+      "current_ns": 186204834,
+      "original_control_ns": 129258375,
+      "original_control_source": "197d2fb7d0a141d7a9350852022febeec3255bf2",
+      "control_compact": "core/docs/issues/302/checks/shared-allocation1/disposable-init1000.json",
+      "control_sha256": "b4eb26ce8e7148b0fd1a53f93bbaecb870833b63e0897b15d26128788a4afa9f",
+      "formula": "10*current<=11*original",
+      "left": 1862048340,
+      "right": 1421842125,
+      "arithmetic": "FAIL",
+      "time_delta_percent": 44.05630118744723,
+      "scope": "original historical cluster-one-end target; no new matched arm or changed acceptance"
+    },
+    {
+      "files": 10000,
+      "current_ns": 2327953500,
+      "original_control_ns": 1645276292,
+      "original_control_source": "197d2fb7d0a141d7a9350852022febeec3255bf2",
+      "control_compact": "core/docs/issues/302/checks/shared-allocation1/disposable-init10000.json",
+      "control_sha256": "a5e7824202ae53b59cf7e1459b025c4f4e099bb194bfb01f90047dfbdb91cd34",
+      "formula": "10*current<=11*original",
+      "left": 23279535000,
+      "right": 18098039212,
+      "arithmetic": "FAIL",
+      "time_delta_percent": 41.49316508840814,
+      "scope": "original historical cluster-one-end target; no new matched arm or changed acceptance"
+    },
+    {
+      "files": 100000,
+      "current_ns": 7495571834,
+      "original_control_ns": 5558569958,
+      "original_control_source": "197d2fb7d0a141d7a9350852022febeec3255bf2",
+      "control_compact": "core/docs/issues/302/checks/shared-allocation1/disposable-init100000.json",
+      "control_sha256": "fb12294540d776007c9f24c766b9c452c46a7565f7fb336c135128a190b679a3",
+      "formula": "10*current<=11*original",
+      "left": 74955718340,
+      "right": 61144269538,
+      "arithmetic": "FAIL",
+      "time_delta_percent": 34.84712598088704,
+      "scope": "original historical cluster-one-end target; no new matched arm or changed acceptance"
+    }
+  ]
+}

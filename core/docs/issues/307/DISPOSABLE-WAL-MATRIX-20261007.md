@@ -5,7 +5,8 @@
 The owner-requested four namespace Init sizes and history strides10/3/1 have
 all executed once and passed functional verification, content-cold checks,
 command/proof limits and terminal cleanup. The matrix is **not all PASS**:
-Init100/1000/10000 miss the historical1.10 time arithmetic, and stride1 exceeds
+Init100/1000/10000 miss the newer-incumbent1.10 time arithmetic; all four
+miss the original cluster-one-end arithmetic, and stride1 exceeds
 its original allocated-storage ceiling. All comparisons are single, historical,
 unpaired observations; no release speedup or full resource qualification is claimed.
 
@@ -86,6 +87,23 @@ not a newly run arm. The following is the existing arithmetic
 |1000|155291459|+30913375 / +19.906681%|FAIL|+0|
 |10000|1943650833|+384302667 / +19.772207%|FAIL|+16232448|
 |100000|7423399375|+72172459 / +0.972229%|PASS|+16592896|
+
+
+The original cluster-one-end controls at `197d2fb7d` also remain visible; they
+are distinct from the later restored MEMORY incumbent above. All four current
+values exceed their original1.10 arithmetic. The newer100k incumbent comparison
+being within10% does not close this older target. The accepted1000-file WAL point
+and its owner disposition retain their separately documented scope. No new
+measurement or threshold is introduced by this additional arithmetic.
+[Receipt32](checks/disposable-wal-matrix-20261007/32-original-init-targets.json)
+hash-checks the original compact controls and records both integer operands.
+
+| Files | Original cluster-one-end ns | Current delta | Original1.10 arithmetic |
+| ---: | ---: | ---: | --- |
+|100|38747750|+64.959901%|FAIL|
+|1000|129258375|+44.056301%|FAIL|
+|10000|1645276292|+41.493165%|FAIL|
+|100000|5558569958|+34.847126%|FAIL|
 
 The accepted earlier1000-file WAL point remains198720291ns. This new owner-selected
 observation is186204834ns (−6.298027%); neither replaces the other or establishes
@@ -226,7 +244,9 @@ deployment, dependency or production-source change.
 |`5a2ce43ec`|Retained Init rows and cold correction plan|165673→165673 (+0)|100256→100256|57382→57382|65417→65417|36325 /6549 unchanged|18|
 |`06dc05a7d`|Explicit corrected source selection|165673→165673 (+0)|100256→100256|57382→57382|65417→65417|36325 /6549 unchanged|23|
 
-The following results-only commit has its own exact comparison in receipt31.
+Results commit `e8e381db9` has its exact unchanged comparison in receipt31.
+The following documentation-only original-target clarification has its unchanged
+comparison in receipt33; no benchmark is rerun.
 The counter is `tools/production_loc.py`, SHA256
 `c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb`.
 No reference or transport code is retired in this campaign.

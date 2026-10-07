@@ -25,7 +25,9 @@ profile; Durable is disabled indefinitely until explicit reauthorization (the
 earlier deferrals below retain their historical scope). The subsequent
 [full Init/history matrix](DISPOSABLE-WAL-MATRIX-20261007.md) completes all seven
 product workloads and their functional/cold proofs. Three Init historical speed
-comparisons and the stride1 original allocated-storage ceiling fail. Those
+comparisons against the newer incumbent and all four comparisons against the
+original cluster-one-end targets fail, as does the stride1 original allocated-storage
+ceiling. Those
 numerical findings are retained and are not changed by the functional closure
 table below.
 

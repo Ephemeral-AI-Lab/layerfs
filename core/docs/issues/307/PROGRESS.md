@@ -23,7 +23,8 @@ No product memory fix was required by these observations.
 
 The owner's subsequent [full Disposable WAL Init/history selection](DISPOSABLE-WAL-MATRIX-20261007.md)
 has seven completed, functionally verified and content-cold product runs.
-Init100/1000/10000 miss their historical1.10 speed arithmetic. History stride1
+Init100/1000/10000 miss the newer-incumbent1.10 speed arithmetic, and all four
+Init rows miss the separately retained original cluster-one-end arithmetic. History stride1
 fails original allocated storage:101498880B against92342273B; its logical file
 is85348352B. All command/proof budgets pass. An earlier100k cold refusal with
 zero product samples and its source-reader correction remain separately retained.
