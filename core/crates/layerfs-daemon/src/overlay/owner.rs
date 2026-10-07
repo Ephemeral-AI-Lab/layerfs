@@ -186,6 +186,10 @@ impl Owner {
     pub fn startup_work(&self) -> &layerfs_overlay::CreationWork {
         &self.startup
     }
+    /// Fixed daemon admission configuration shared with control routing.
+    pub fn configuration(&self) -> OwnerConfig {
+        self.client.shared.config
+    }
     pub fn client(&self) -> OwnerClient {
         self.client.clone()
     }

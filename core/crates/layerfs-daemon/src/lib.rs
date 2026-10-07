@@ -27,3 +27,5 @@ pub use service::completion::{Completion, Pending};
 pub use service::job_sql::JobSql;
 pub use service::observations::JobWork;
 pub use service::startup::OwnerStart;
+
+pub mod control;

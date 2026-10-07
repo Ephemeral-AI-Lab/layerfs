@@ -1,0 +1,35 @@
+# {"timestamp": "2026-10-07T10:12:00.140607+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "-p", "layerfs-sdk", "-p", "layerfs-bridge", "--lib", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "9a56d0701d369640119f8867e08f4222a4f6a19ec29ba4dbfec95fb86217a2a1", "source_parent": "9041f338dcafb36ef4ab12ad4c5c725a0f7b674a", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0308]: mismatched types
+  --> crates/layerfs-daemon/src/control/operations.rs:93:24
+   |
+93 |             namespace: bound.workspace.route().namespace(),
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `i64`
+
+error[E0308]: mismatched types
+   --> crates/layerfs-daemon/src/control/registry.rs:113:47
+    |
+113 |     if value.workspace.route().namespace() != token.namespace {
+    |        -----------------------------------    ^^^^^^^^^^^^^^^ expected `i64`, found `u64`
+    |        |
+    |        expected because this is `i64`
+    |
+help: you can convert a `u64` to an `i64` and panic if the converted value doesn't fit
+    |
+113 |     if value.workspace.route().namespace() != token.namespace.try_into().unwrap() {
+    |                                                              ++++++++++++++++++++
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-daemon` (lib test) due to 2 previous errors
+
+# exit=101

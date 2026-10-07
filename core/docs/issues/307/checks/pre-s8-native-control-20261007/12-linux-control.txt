@@ -1,0 +1,22 @@
+# {"timestamp": "2026-10-07T10:42:41.356737+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-native-control-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/native_control-03087202abe2c4a9; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/native_control-03087202abe2c4a9 --nocapture --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "20cd374447a948c11aa554b51231296ac8b780d7d645e5870c0e7cd27ed7d90b", "source_parent": "9041f338dcafb36ef4ab12ad4c5c725a0f7b674a", "wall_stop": "specified in command; build is not test execution"}
+407cf288392c221b950f6634f619c799d3383efacaf5912b1ccfc88192a43638  core/target/cluster2-linux/debug/deps/native_control-03087202abe2c4a9
+
+running 4 tests
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed
+ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_FLOW calls=20 Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true
+ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... CONTROL_LOST_ORIGINAL client=ControlFailure { call: Call { id: 2, request: Commit(WorkspaceToken { workspace: WorkspaceId(5555555555555555555555555555555555555555555555555555555555555555), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(Io(Kind(UnexpectedEof))), fence_error: None } daemon_reply=Committed(Committed(CommitRecord { id: CommitId(1291aadef3fbdc646de7304d338dd77e84db20a7fabeac2cc46d1b98c586c17737), stack: LayerStackId(3136363636363636363636363636363636), root: ObjectId("4d9eb79f44168045b5511577bb646f694c455955e134f494d1f5487d0cbd58f4"), parent: None, base_layer: LayerId(32f65f55127c7f4875ef5e18396c238812a48b2d67fec6a4d6503236709b80cf33) })) capture=Capture { route: Route { engine: 4, ns: 1, incarnation: [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85] }, generation: Generation(1), revision: 1, base_root: [156, 29, 251, 143, 183, 141, 8, 173, 104, 119, 230, 80, 28, 76, 173, 153, 137, 124, 36, 11, 120, 47, 64, 222, 199, 41, 1, 202, 157, 166, 202, 238] }
+CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+
+# exit=0

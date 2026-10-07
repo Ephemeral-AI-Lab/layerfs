@@ -100,7 +100,7 @@ impl fmt::Display for CommitFailure {
 impl std::error::Error for CommitFailure {}
 
 impl CommitError {
-    pub(super) fn uncertain(&self) -> bool {
+    pub(crate) fn uncertain(&self) -> bool {
         match self {
             Self::Storage(error) => error.is_unknown_outcome(),
             Self::Construction { original, storage } => {
@@ -152,7 +152,7 @@ impl From<WorkspaceError> for CommitError {
         Self::Workspace(error)
     }
 }
-fn owner_uncertain(error: &OwnerError) -> bool {
+pub(crate) fn owner_uncertain(error: &OwnerError) -> bool {
     match error {
         OwnerError::Unattempted { .. } => false,
         OwnerError::Overlay(

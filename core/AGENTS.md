@@ -59,7 +59,9 @@ product mental model or campaign-specific benchmark procedures.
   seal, returning a closed file plus explicit provider/locator/profile metadata.
   It retains no Store handle or data service. Native install now streams the
   sealed file once, opens it in the daemon and returns both actual SQLite versions;
-  see [F5 handoff](docs/issues/307/PRE-S8-F5-20261007.md). General control is next.
+  see [F5 handoff](docs/issues/307/PRE-S8-F5-20261007.md). Authenticated mount
+  binding, Store-half Commit, status, terminal close, fork and history now compose
+  the direct ports; see [native control](docs/architecture/68-native-workspace-control.md).
   The prior client/runtime, daemon upstream, Bridge logical data framing and
   excluded API-core are retired. Historical receipts keep their original topology
   and verdicts; excluded predecessor crates and root reference remain intact.
@@ -67,7 +69,8 @@ product mental model or campaign-specific benchmark procedures.
   links, with indexed acquisition state. The accepted host WAL baseline retains
   its recorded speed FAIL; no new timing is implied by SDK composition.
   Bridge retains pinned authenticated KK channels, bounded native records and
-  independent fences; native install/control and FUSE/Exec qualification follow.
+  independent fences and bounded native install/control. FUSE/Exec qualification
+  and complete kernel mount readiness remain S8.
   FUSE/sandbox directories remain excluded integration source; their presence
   does not establish an implemented replacement.
   Add members only with real product boundaries and implementation.

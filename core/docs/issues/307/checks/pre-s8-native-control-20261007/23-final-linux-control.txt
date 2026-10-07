@@ -1,0 +1,26 @@
+# {"timestamp": "2026-10-07T11:02:13.687582+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-native-control-final-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/native_control-03087202abe2c4a9; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/native_control-03087202abe2c4a9 --nocapture --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "20cd374447a948c11aa554b51231296ac8b780d7d645e5870c0e7cd27ed7d90b", "source_parent": "9041f338dcafb36ef4ab12ad4c5c725a0f7b674a", "wall_stop": "specified in command; build is not test execution"}
+ca026bfc4e03b6ad2469f6440dfb73ab78479fb6d2817721de32fe66957ef72b  core/target/cluster2-linux/debug/deps/native_control-03087202abe2c4a9
+
+running 6 tests
+test an_original_unknown_blocks_another_commit_and_normal_unmount ... CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true
+ok
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed
+ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_FLOW calls=20 Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true
+ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... CONTROL_LOST_ORIGINAL client=ControlFailure { call: Call { id: 2, request: Commit(WorkspaceToken { workspace: WorkspaceId(5555555555555555555555555555555555555555555555555555555555555555), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(Io(Kind(UnexpectedEof))), fence_error: None } daemon_reply=Committed(Committed(CommitRecord { id: CommitId(1244497e8b485b3d5f5d9649eec6db69d170d1f25cf17cc1a35bff9d31eda6e9b2), stack: LayerStackId(3136363636363636363636363636363636), root: ObjectId("e3b37c4193df130f0822600d4ecc184bacbb77226b56a49d8aa72a902c8621aa"), parent: None, base_layer: LayerId(3235adc59ae36c31fc2caa63d50dabfc990368f772bfd64b0742b9c7bb9798efc2) })) capture=Capture { route: Route { engine: 5, ns: 1, incarnation: [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85] }, generation: Generation(1), revision: 1, base_root: [188, 61, 147, 206, 203, 66, 63, 255, 232, 17, 101, 107, 208, 18, 187, 139, 233, 148, 124, 213, 63, 119, 4, 206, 166, 249, 78, 254, 116, 161, 46, 78] }
+CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true
+ok
+test status_retains_known_publication_when_the_engine_is_unavailable ... CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+# exit=0

@@ -200,8 +200,9 @@ Bash.
 The native one-time handoff is implemented and proven in
 [F5](../307/PRE-S8-F5-20261007.md), with both actual SQLite versions recorded.
 After install the host cannot open the installed Store: the file is inside the
-VM. Fork and history reads are subsequent control commands (F13), not a new
-host data service.
+VM. Fork and paged history reads are implemented as authenticated native control
+commands in [F13](../307/PRE-S8-F13-20261007.md). Mount returns the prepared
+Store/engine binding; S8 adds the required kernel attachment/readiness.
 
 ## 6. Store visibility
 

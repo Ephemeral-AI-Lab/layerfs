@@ -1,0 +1,9 @@
+# {"timestamp": "2026-10-07T10:51:46.878964+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/control_records-80fa52d464578a3a", "--exact", "replies_preserve_scoped_status_conflict_and_known_publication", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/control_records-80fa52d464578a3a": "388e2fbc3593082565ff9b42851355529c18de23e605353ac59b4e1e737bba67"}, "source_diff_sha256": "20cd374447a948c11aa554b51231296ac8b780d7d645e5870c0e7cd27ed7d90b", "source_parent": "9041f338dcafb36ef4ab12ad4c5c725a0f7b674a", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test replies_preserve_scoped_status_conflict_and_known_publication ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s
+
+
+# exit=0

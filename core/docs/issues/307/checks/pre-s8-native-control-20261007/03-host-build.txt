@@ -1,0 +1,27 @@
+# {"timestamp": "2026-10-07T10:25:30.937849+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--test", "native_control", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "20cd374447a948c11aa554b51231296ac8b780d7d645e5870c0e7cd27ed7d90b", "source_parent": "9041f338dcafb36ef4ab12ad4c5c725a0f7b674a", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error[E0308]: mismatched types
+   --> crates/layerfs-daemon/tests/support/control_fixture.rs:154:23
+    |
+154 |                 data: vec![tag],
+    |                       ^^^^^^^^^ expected `WriteData`, found `Vec<u8>`
+    |
+    = note: expected struct `WriteData`
+               found struct `Vec<u8>`
+    = note: this error originates in the macro `vec` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: call `Into::into` on this expression to convert `Vec<u8>` into `WriteData`
+    |
+154 |                 data: vec![tag].into(),
+    |                                +++++++
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-daemon` (test "native_control") due to 1 previous error
+
+# exit=101

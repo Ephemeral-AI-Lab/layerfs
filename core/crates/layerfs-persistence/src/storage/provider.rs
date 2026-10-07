@@ -11,6 +11,13 @@ use std::sync::Arc;
 pub struct StorageProvider {
     pub(crate) session: Arc<Session>,
 }
+impl StorageProvider {
+    /// Read-only counters from this already-open session, without a SQL query.
+    /// Application observers need no history or acquisition capability.
+    pub fn diagnostics(&self) -> Result<crate::SqlWork, PersistenceError> {
+        self.session.diagnostics().map_err(Into::into)
+    }
+}
 impl PackPersistence for StorageProvider {
     fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
         self.session.run(false, metadata::policy::read)

@@ -11,6 +11,8 @@ default = ["native"]
 native = ["dep:snow"]
 
 [dependencies]
+layerfs-content = { path = "../layerfs-content" }
+layerfs-history = { path = "../layerfs-history" }
 snow = { version = "=0.9.6", optional = true }
 
 [lints.rust]

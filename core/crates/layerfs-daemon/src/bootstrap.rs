@@ -1,6 +1,6 @@
 //! Concrete Store composition, outside the provider-independent adapter.
 use crate::store::Store;
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{Handles, PersistenceConfig, SqlWork, StorageProvider};
 use layerfs_storage::{ReservationBlocks, Storage, StorageError, StorageResult};
 use std::sync::Arc;
 
@@ -8,6 +8,27 @@ use std::sync::Arc;
 pub struct OpenedStore {
     pub store: Arc<Store>,
     pub sqlite_version: String,
+    writer: Arc<StorageProvider>,
+    readers: Vec<Arc<StorageProvider>>,
+}
+
+/// Cumulative observations, separately scoped to the writer and each fixed reader.
+pub struct StoreDiagnostics {
+    pub writer: SqlWork,
+    pub readers: Vec<SqlWork>,
+}
+impl OpenedStore {
+    /// Reads existing session counters; this issues no SQL or provider reopen.
+    pub fn diagnostics(&self) -> StorageResult<StoreDiagnostics> {
+        Ok(StoreDiagnostics {
+            writer: self.writer.diagnostics()?,
+            readers: self
+                .readers
+                .iter()
+                .map(|reader| reader.diagnostics().map_err(StorageError::from))
+                .collect::<StorageResult<Vec<_>>>()?,
+        })
+    }
 }
 
 /// Opens one writer first and a fixed number of independent read-only sessions.
@@ -48,12 +69,14 @@ pub fn open_store_observed(
     let writer = Handles::open_writable(config.clone(), binding, cursor_key)?;
     let sqlite_version = writer.profile().sqlite_version.clone();
     let mut readers = Vec::with_capacity(read_handles);
+    let mut observed_readers = Vec::with_capacity(read_handles);
     for _ in 0..read_handles {
         let opened = Handles::open_read_only(config.clone(), binding, cursor_key)?;
+        observed_readers.push(opened.storage.clone());
         readers.push(Storage::new(opened.storage)?);
     }
     let store = Arc::new(Store::new(
-        writer.storage,
+        writer.storage.clone(),
         Arc::new(writer.history),
         readers,
         cache_bytes,
@@ -62,5 +85,7 @@ pub fn open_store_observed(
     Ok(OpenedStore {
         store,
         sqlite_version,
+        writer: writer.storage,
+        readers: observed_readers,
     })
 }

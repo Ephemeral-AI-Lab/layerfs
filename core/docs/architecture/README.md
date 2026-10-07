@@ -416,3 +416,6 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 Current one-time Store handoff: [67 — Native Store install](67-native-store-install.md)
 composes host Init/seal, bounded authenticated file streaming and direct daemon
 open, with exact original partial/publication custody and both SQLite versions.
+
+Current pre-S8 control: [68 — Native Workspace control](68-native-workspace-control.md)
+keeps original command/delivery knowledge and scoped status over direct Store ports.

@@ -34,7 +34,8 @@ Bridge keeps its pinned KK handshake, nonce ownership, authenticated bounded
 records, before-effect oversized-record refusal, independent close fence and
 exact I/O/crypto quarantine. Removing data fragmentation does not change its
 native maximum record size or crypto suite. [Native install](67-native-store-install.md) adds control records and the
-streamed one-time handoff; F13 general control follows. There is no remote Save or host data fallback.
+streamed one-time handoff; [native control](68-native-workspace-control.md) supplies
+pre-S8 binding/Commit/status/close/fork/history. There is no remote Save or host data fallback.
 
 All E04 traces, receipts and original verdicts remain under their historical
 source pins. Its examples/test subject is removed; future execution of those

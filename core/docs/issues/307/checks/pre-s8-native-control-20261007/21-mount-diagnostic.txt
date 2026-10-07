@@ -1,0 +1,5 @@
+# {"timestamp": "2026-10-07T10:58:21.726474+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-control-final-view", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "python3", "-c", "import json,hashlib; m=json.load(open(\"core/docs/issues/307/checks/pre-s8-native-control-20261007/19-final-source.json\")); rows={p:hashlib.sha256(open(p,\"rb\").read()).hexdigest() for p in m[\"files\"]}; bad=[p for p,h in m[\"files\"].items() if rows[p]!=h]; print(\"mismatched\",bad); print(\"all_inputs\",len(rows)); assert not bad,bad"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "20cd374447a948c11aa554b51231296ac8b780d7d645e5870c0e7cd27ed7d90b", "source_parent": "9041f338dcafb36ef4ab12ad4c5c725a0f7b674a", "wall_stop": "specified in command; build is not test execution"}
+mismatched []
+all_inputs 28
+
+# exit=0

@@ -487,6 +487,8 @@ dependencies = [
 name = "layerfs-bridge"
 version = "0.1.6"
 dependencies = [
+ "layerfs-content",
+ "layerfs-history",
  "snow",
 ]
 

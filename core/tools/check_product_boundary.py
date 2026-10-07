@@ -53,7 +53,7 @@ ALLOWED_DEPENDENCIES = {
     # provider-independent daemon store/ subtree has a narrower source boundary.
     "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence"},
     "layerfs-sdk": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry", "layerfs-bridge", "layerfs-project"},
-    "layerfs-bridge": set(),
+    "layerfs-bridge": {"layerfs-content", "layerfs-history"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
 ENGINES_AND_CLUSTER2 = {

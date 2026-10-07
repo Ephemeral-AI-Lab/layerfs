@@ -1,0 +1,41 @@
+# {"timestamp": "2026-10-07T10:33:34.927053+00:00", "command": ["cargo", "+1.85.1", "clippy", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-persistence", "-p", "layerfs-daemon", "-p", "layerfs-sdk", "-p", "layerfs-bridge", "--all-targets", "--", "-D", "warnings"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "20cd374447a948c11aa554b51231296ac8b780d7d645e5870c0e7cd27ed7d90b", "source_parent": "9041f338dcafb36ef4ab12ad4c5c725a0f7b674a", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+error: large size difference between variants
+   --> crates/layerfs-bridge/src/control_types.rs:133:1
+    |
+133 | /  pub enum Reply {
+134 | |      /// Newly bound engine namespace and exact selected history snapshot.
+135 | |/     Bound {
+136 | ||         /// Original namespace token.
+137 | ||         token: WorkspaceToken,
+138 | ||         /// Exact selected binding.
+139 | ||         binding: BranchSnapshot,
+140 | ||     },
+    | ||_____- the second-largest variant contains at least 336 bytes
+...   |
+144 | |      Status(WorkspaceStatus),
+    | |      ----------------------- the largest variant contains at least 608 bytes
+...   |
+152 | |      Refused(ControlRefusal),
+153 | |  }
+    | |__^ the entire enum is at least 608 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+    = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields to reduce the total size of the enum
+    |
+144 |     Status(Box<WorkspaceStatus>),
+    |            ~~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-bridge` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-bridge` (lib test) due to 1 previous error
+
+# exit=101

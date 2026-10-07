@@ -14,3 +14,5 @@ pub use open::{Store, StoreWork};
 pub use operation::{BoundWorkspace, StoreOperation};
 pub use ports::{PortError, StorePorts};
 pub use types::{BindError, BindPhase, BindRefusal, BindRequest, BindSuccess};
+
+pub(crate) use commit_types::owner_uncertain;

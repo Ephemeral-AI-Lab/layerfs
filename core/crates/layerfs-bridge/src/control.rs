@@ -163,3 +163,8 @@ fn boolean(value: u8) -> Result<bool, ControlError> {
         _ => Err(ControlError("control boolean")),
     }
 }
+
+pub use crate::control_types::{
+    Activity, Answer, Call, ControlCode, ControlRefusal, LocalObservation, Reply, Request,
+    WorkspaceStatus, WorkspaceToken, HISTORY_WINDOW,
+};

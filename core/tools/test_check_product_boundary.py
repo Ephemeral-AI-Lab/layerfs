@@ -55,6 +55,13 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(unsafe_violations(root, "mod init;"))
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
+    def test_bridge_control_reuses_domain_records_without_engine_edges(self):
+        prefix = '[package]\nname="layerfs-bridge"\n[dependencies]\n'
+        for dependency in ("layerfs-content", "layerfs-history"):
+            self.assertFalse(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
+        for dependency in ("layerfs-persistence", "layerfs-sdk", "layerfs-daemon", "layerfs-overlay"):
+            self.assertTrue(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
+
     def test_sdk_dependency_edges(self):
         prefix = '[package]\nname="layerfs-sdk"\n[dependencies]\n'
         self.assertFalse(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
