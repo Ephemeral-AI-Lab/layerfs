@@ -138,6 +138,13 @@ class Registration(unittest.TestCase):
         result = resource_phase(self.phase(), sample_interval_ns=10, maximum_gap_ns=11, clock_error_ns=0)
         self.assertEqual(result["peak_kind"], "sampled")
 
+    def test_sample_inventory_cannot_claim_continuous_peak(self):
+        phase = self.phase()
+        phase["peak_kind"] = "continuous"
+        # The same three samples cannot establish absence of a between-sample peak.
+        with self.assertRaisesRegex(ValueError, "continuous"):
+            resource_phase(phase, sample_interval_ns=10, maximum_gap_ns=11, clock_error_ns=0)
+
     def test_lifetime_peak_and_missed_phase_boundary_cannot_pass(self):
         phase = self.phase()
         phase["scope"] = "lifetime"

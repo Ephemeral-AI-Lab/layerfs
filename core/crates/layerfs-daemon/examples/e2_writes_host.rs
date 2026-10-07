@@ -1,4 +1,7 @@
 //! Named external macOS host for the uncontrolled E04 Linux consumer.
+#[path = "e2_writes/control.rs"]
+#[allow(dead_code)] // Shared host and consumer lifecycle sides.
+mod control;
 #[path = "../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]
 #[allow(dead_code, clippy::needless_range_loop)]
 mod digest;

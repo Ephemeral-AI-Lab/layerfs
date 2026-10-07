@@ -2,6 +2,19 @@
 
 > Status: Current planning checklist; no release candidate exists.
 
+The human requested a handoff after E04 closure. The
+[current stopping record](HANDOFF-E04-CLOSED-S7-S9-20261007.md) closes that
+functional checkpoint on both profiles; checkpoint 4 and later plans below are
+tentative next-owner work and have not been implemented.
+
+The subsequent [owner direction](checks/e04-disposal-20261007/63-owner-disposable-development.json)
+selects Disposable as the sole active development verification profile. Before
+any next test/proof/diagnostic/performance selection, make mixed-profile external
+tests/harnesses select Disposable and explicitly defer Durable-only execution.
+Do not add product test branches or remove Durable support. Outstanding Durable
+execution is NOT_RUN — deferred by owner for Disposable-only development; retain
+the earlier both-profile E04 source identities/results and do not rerun them.
+
 Human-dispatched assignment starts in the primary checkout at
 `a08bbe39deb7d892a7a5a69b0daa001ab7e53774`, tree
 `c2b1a7c0662120803525dd43f518607441b827b0`, core/crates tree
@@ -81,8 +94,8 @@ is committed before authoring this correction. No product/Bridge error is relaxe
 
 | Owner / exact files | Change and named exit |
 | --- | --- |
-| Host worker: existing Daemon `examples/e2_writes/{host,host_fence}.rs`; tentative shared `examples/e2_writes/control.rs` | External E2/R1 prerequisite: exact received/delivered final Binding, one explicit host fence, real joins/release before acknowledgment; bounded original control publication/read |
-| Consumer/validator worker: `examples/e2_writes/{driver,oracle,streams,outcomes,fixture}.rs`, `examples/{e2_writes,e2_writes_host}.rs`; harness `shared/{evidence_jobs,evidence_backing}.py`, `tests/{test_evidence_jobs,test_evidence_backing}.py` | External E2: retain original final Message identity, coordinate after actual Close/Gone, require own later native fence; new versioned fields/argv and logical input/mount proof, preserve v1/v2 |
+| Host worker: existing Daemon `examples/e2_writes/{host,host_fence}.rs`; tentative shared `examples/e2_writes/control.rs` and external `tests/e04_disposal_control.rs` | External E2/R1 prerequisite: exact received/delivered final Binding, one explicit host fence, real joins/release before acknowledgment; bounded original control publication/read |
+| Consumer/validator worker: `examples/e2_writes/{driver,oracle,streams,outcomes,fixture}.rs`, `examples/{e2_writes,e2_writes_host}.rs`; harness `shared/{evidence_jobs,evidence_backing}.py`, `tests/{test_evidence_jobs,test_evidence_backing}.py`; tentative focused `shared/evidence_disposal.py`, `tests/test_evidence_disposal.py` | External E2: retain original final Message identity, coordinate after actual Close/Gone, require own later native fence; new versioned fields/argv and logical input/mount proof, preserve v1/v2 |
 | Vehicle worker: ignored `core/target/cluster2-307/{run_e04_owner_diagnostic,e04_native_backing_observation}.py` | External E2/E3: pre-host control seal, explicit actual bind/input/probe witnesses, preserve verified inspect state beside later evidence refusal |
 | Root: specification, architecture58, reports/reconciliation/audits/check receipts | Source/build/test/fixture/profile/custody identities and exact original success/failure scope |
 
@@ -92,6 +105,40 @@ Daemon tests only with a real public/external vehicle scope. No new product API,
 additional constructor, database, allocation window or S10 pipeline is proposed.
 After this E04 correction, the separate per-job family/capacity ownership change
 must receive its own deepest-file plan and exact unchanged-capacity proof.
+
+### Checkpoint 4: original SQL families and credited completion ownership
+
+E04 now has narrow two-profile consistency; its eleven gaps remain. Reuse actual
+Overlay DatabaseWork/StatementKind snapshots, the existing fair owner and all
+original command/result semantics. No SQL algorithm, database, dependency,
+physical reservation or product admission cap changes. Default totals stay8MiB,
+64KiB lifecycle reservation,16 namespaces and two lifecycle slots each.
+
+The full14-family receipt cannot fit all32 promised lifecycle slots under the
+current representation. Source review bounds a single Lifecycle command at
+seven actually observed families: its one transaction ends in Commit or Rollback,
+not both; it does not use Capture/Install readiness parking. This is a maintained
+source invariant, never permission to truncate an eighth actual family or infer
+values from class names. Read/ordinary work needs all actual families.
+
+| Exact existing / tentative files | Reuse/change and named requirement |
+| --- | --- |
+| Daemon `src/service/observations.rs`; tentative `src/service/job_sql.rs` | E2: actual family attribution and bounded owned receipt storage; totals derive from actual observations; preserve all failure/parked-turn costs |
+| Daemon `src/overlay/{owner,queue,credits,commands}.rs`; tentative `src/service/completion.rs` | E2/E4: one original completion owner through queue/service/held result, explicit receipt and actual queue capacity charges; publish owner observations before completion visibility; preserve stop/receiver-loss and exact original unattempted commands |
+| Daemon `src/{lib,service/mod,overlay/mod}.rs` only as needed | Declarations/reexports remain thin; preserve Pending/Completion public behavior |
+| Existing Daemon `tests/{job_cost,owner,startup_cost}.rs`, tentative `tests/completion_ownership.rs` | External E2: original family sums versus foreground family arrays, failure/parking/stop, all32 lifecycle slots under ordinary saturation, retained result/queue-capacity charges and one-shot receiver loss |
+| Existing E01/E04 example serializers and `core/benchmark/fs-bench-pro/shared/evidence_jobs.py` plus owning external tests, if public observations change | External evidence compatibility: preserve historical schemas/source pins; a successor must explicitly describe actual families and capacity rather than manufacturing old data |
+| Architecture36/owner API documentation and new scoped receipts | Root-owned scope, actual typed layout/allocation results, final source/build proofs and exact per-commit LOC |
+
+A typed completion cell may replace the opaque per-job channel, and queues may
+hold pointers; use the existing shared wake where possible. Box only genuinely
+large ordinary-only variants if that reduces simultaneously retained storage,
+with explicit heap charges. These are tentative implementation choices, not a
+claimed2KiB proof. Final compiler layouts, exceptional-result custody, queue
+spare capacity and admission arithmetic must establish the unchanged guarantee.
+Do not lower an unexplained bookkeeping allowance, add a hidden pool, raise caps,
+drop observations or weaken configured lifecycle slots to obtain a nominal fit.
+A design that does not fit must be corrected before default startup is accepted.
 
 ### Subsequent priorities
 
@@ -120,3 +167,28 @@ identified running containers and all historical evidence remain untouched.
 No remote push, release or deployment is authorized. Each local commit needs
 exact parent/staged/committed production LOC with the unchanged counter and
 separate core/reference/active/excluded subtotals.
+
+
+## Independent E3 admission correction
+
+Root owns only `core/benchmark/fs-bench-pro/shared/evidence_gates.py` and
+`tests/test_cluster_two_registration.py` for this focused change. Reuse the
+existing phase/sample arithmetic and reject a finite sampled inventory labeled
+continuous. Reproduce the missing refusal before correction; no new observer
+protocol or metric value is invented. Architecture57/reconciliation and fresh
+`checks/e3-sampled-peak-20261007/` receipts retain E1/E3 scope. This closes an
+admission loophole, not phase calibration, continuous coverage or an E1 sample.
+All broader resource integration remains a separate implementation requirement.
+
+
+## Owner-directed remaining package organization
+
+After E04 functional closure, the existing E1–E4 ledger is executed as three
+focused packages: operation accounting (families, provider demand/copies,
+queue/held allocations, waits and eligible debt); resources/cache (phase memory,
+I/O/backing/cache and actual calibration, only permitted bounds); service
+acceptance (finite arrivals, numerical criteria, progress, pressure and automatic
+live/idle drain). Checkpoint4 is the first operation-accounting change. Reuse
+run-level identities, compact referenced events and fixed aggregates; detailed
+per-job tracing is selected only where the named accounting requirement needs
+it. No generic profiling platform or unchanged E04 resampling is authorized.

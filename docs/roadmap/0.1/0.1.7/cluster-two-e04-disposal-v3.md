@@ -102,3 +102,18 @@ qualification NOT_EVALUATED, admission false, E1 count0, E05 NOT_RUN. Whole
 host/consumer disposal remains a separate required outcome. S7 E1–E4 and S9
 R1–R4/Q1 retain their independent gates; this diagnostic control is neither
 R1 product application activation nor S8 interruption evidence.
+
+
+## Later owner test-budget direction (2026-10-07)
+
+After the first Disposable v3 operation completed under80/88/90s, the human
+selected focused independent tests and a prospective120s test ceiling. The exact
+forwarded direction is retained in
+[receipt32](../../../../core/docs/issues/307/checks/e04-disposal-20261007/32-owner-test-budget-steering.json).
+New retained-data proofs use120s outer stops. A newly selected diagnostic vehicle
+may use product110s/internal118s/complete120s by an explicit pre-start launcher
+option. Its five-second original control/fence waits, workload, oracle and whole
+lifecycle boundary remain unchanged. Historical80/88/90s data and all failures
+retain their original limits. No phase timer is reset to hide whole operation cost.
+This is functional-test authorization, not a new numerical/resource acceptance
+limit or permission to change the preserved Init30s/19s comparison.

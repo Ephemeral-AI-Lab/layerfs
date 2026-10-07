@@ -1,0 +1,15 @@
+{
+  "schema": "e04-validator-timeout-source-diagnosis-v1",
+  "original_verdict": "FAILED-hang-at-declared60s-command-stop",
+  "inventory": "15-timeout-case-inventory.json",
+  "cause_supported_by_source": "Aggregate144-case command exhausted its60s allocation after137 successful bodies. The interrupted test has no wait loop: it removes one directory marker, truncates a fixed control body, and calls a finite retained-data validator. Fixture setup/seal and validation repeat the frozen1000-write JSONL/16MiB oracle fixture, and the parser checks marker.is_dir synchronously. No observer/process/control-wait/product operation runs in these tests. Individual interrupted-case completion is not yet proven.",
+  "next_selection": "Only the identified interrupted case, fresh test fixture,10s wall; then the six not-started cases as a distinct bounded selection. No replay of137 successful cases and no increase of the original60s limit.",
+  "source_locations": [
+    "tests/test_evidence_disposal.py:261",
+    "tests/test_evidence_disposal.py:162",
+    "tests/test_evidence_jobs.py:774",
+    "shared/evidence_disposal.py:142"
+  ],
+  "qualification_status": "NOT_EVALUATED",
+  "sample_count": 0
+}

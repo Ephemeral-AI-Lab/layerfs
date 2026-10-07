@@ -1,0 +1,19 @@
+{
+  "schema": "e04-post-exit-binary-retention-v1",
+  "copies": [
+    {
+      "original_path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "copy": "core/target/cluster2-307/e04-disposal-durable-admission-20261007/retained-binaries/host",
+      "sha256": "839539ad47888bd03d6c2adea37c91ff47ec5ce6276f8b93ebb8df3c7dd10021",
+      "bytes": 16017520
+    },
+    {
+      "original_path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "copy": "core/target/cluster2-307/e04-disposal-durable-admission-20261007/retained-binaries/consumer",
+      "sha256": "7d10a68d36e2f700f3afe60ae564fee5a1671683e20f06805a4d9fd15ec93939",
+      "bytes": 72756136
+    }
+  ],
+  "disposable_consumer": "same original7d10 hash preserved by this copy",
+  "disposable_host": "Original15a51 hash, matched build/input and independent source copies retained in31/33/raw run; main binary path superseded by corrected120s admission build. Separate original15a51 binary archive was not made before replacement; do not call the current839539 binary that earlier identity."
+}

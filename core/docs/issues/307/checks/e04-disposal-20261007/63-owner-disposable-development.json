@@ -1,0 +1,18 @@
+{
+  "schema": "owner-disposable-only-development-steering-v1",
+  "source_thread": "01a1142b-61e0-7111-8ef3-8db004727afc",
+  "human_instruction": "for simplicity of development, i want to disable all durability profile test, so that it developes fast with disposable profile.",
+  "active_development_profile": "Disposable",
+  "future_durable_execution": "NOT_RUN — deferred by owner for Disposable-only development",
+  "scope": [
+    "No new Durable test, proof, diagnostic or performance selection during this development assignment",
+    "Select Disposable in mixed-profile external test/harness selections; explicitly skip/defer Durable-specific execution",
+    "No test-only branch or benchmark-selected behavior in product src",
+    "Preserve Durable implementation/support and all historical successes, failures, identities and receipts",
+    "Do not block ordinary Disposable development checkpoints on deferred Durable execution; do not claim newly verified Durable behavior",
+    "Preserve focused120s prospective allowance,500000000-byte dense proof direction, E04 functional closure and simplified S7 package organization"
+  ],
+  "current_handoff_action": "Record direction; no further execution selected. No claim of repository-wide harness default changes. Next owner must enforce external selection before launching the next checks.",
+  "existing_e04": "Both completed profiles retain their original functional PASS and source identities; no unchanged reruns.",
+  "stopping_boundary": "Human requested handoff after E04 closure; no independent S7/S9 implementation resumed."
+}

@@ -1,0 +1,14 @@
+F
+======================================================================
+FAIL: test_sample_inventory_cannot_claim_continuous_peak (test_cluster_two_registration.Registration.test_sample_inventory_cannot_claim_continuous_peak)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_cluster_two_registration.py", line 145, in test_sample_inventory_cannot_claim_continuous_peak
+    with self.assertRaisesRegex(ValueError, "continuous"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.002s
+
+FAILED (failures=1)

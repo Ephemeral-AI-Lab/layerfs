@@ -1,0 +1,17 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_evidence_disposal.E04ExplicitDisposal.test_partial_control_without_complete_marker_is_refused"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 3033129500,
+  "kind": "diagnosed-isolated-test",
+  "workers": 1
+}

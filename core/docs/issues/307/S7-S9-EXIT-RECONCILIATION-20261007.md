@@ -1,7 +1,18 @@
 # S7 and S9 exit reconciliation
 
-> Status: current priority ledger following local `a08bbe39d`.
-> S7 and S9 remain unchecked; the full cluster-two goal remains active.
+> Status: current priority ledger through E04 functional closure.
+> S7 and S9 remain unchecked. The human requested the handoff after E04.
+
+The [E04-closed handoff](HANDOFF-E04-CLOSED-S7-S9-20261007.md) is the current
+stopping record. Remaining implementation below is prepared next-owner work;
+it is not executed or authorized to resume another chat by this document.
+
+The [latest owner profile direction](checks/e04-disposal-20261007/63-owner-disposable-development.json)
+selects Disposable-only development checks going forward. Outstanding Durable
+execution is NOT_RUN — deferred by owner for Disposable-only development;
+ordinary Disposable checkpoints proceed without it. Preserve Durable product
+semantics and all retained results. Existing E04 Durable evidence is historical
+at its exact source; no new Durable selection is launched at this handoff.
 
 The owning milestone boundaries are the S7/S9 rows in
 [#303 validation](../303/07-implementation-validation.md#3-slices), the named
@@ -32,19 +43,26 @@ queue wait includes parking. Neither is an exclusive CPU/device/runnable-wait
 decomposition. Retained-result credits are not queue-only occupancy; debt_upper
 is not exact eligible debt.
 
-The next selected independent E2 implementation is E04-write-16m under the
+The selected independent E2 checkpoint was E04-write-16m under the
 [committed original-job specification](../../../../docs/roadmap/0.1/0.1.7/cluster-two-e2-job-receipts-v1.md).
 It uses the frozen 1,000 aligned 4 KiB writes, a true closed 16 MiB saved fixture,
 actual Workspace/OwnerClient/authenticated runtime ports and an independent
 complete final-byte/namespace oracle. The original successful Open and
 Binding/Policy receipts now have an additive owning attachment API; its four
 public cases pass on host/Linux after matching builds. The E04 vehicle and
-retained validator now have scoped checks and three failed original diagnostic
-invocations; [the retained checkpoint](E04-ORIGINAL-RECEIPTS-20261007.md)
-records the nonblocking/idle socket corrections and the actual host-share
-allocation failure. No full write-window/oracle PASS exists. The immediate
-next correction is explicit backing capability refusal and declared native
-guest backing evidence, without changing the exact-range primitive or budgets.
+retained validator have scoped checks and three original host-bind failures;
+[their checkpoint](E04-ORIGINAL-RECEIPTS-20261007.md) records the nonblocking/idle
+socket corrections and actual host-share allocation failure. The subsequent
+[native ext4 attempt](E04-NATIVE-BACKING-20261007.md) completed1000 consumer writes,
+full16MiB oracle and local cleanup/Stop, but failed original host disposal and
+native mapping. That original failed write-window remains INCOMPLETE. The incompatible-filesystem
+refusal is now proven. The subsequent
+[coordinated v3 checkpoint](E04-DISPOSAL-CONSISTENCY-20261007.md) supplies actual
+write-window and application-disposal PASS on both Store profiles with original
+logical bind/input/probe witnesses. Whole E2 remains INCOMPLETE with all eleven
+gaps; the next implementation is per-job families and exact receipt/queue credit
+ownership under unchanged product caps. The owner's later120s test allowance
+was registered prospectively; old limits and failures are unchanged.
 E05 stays unrun. Known diagnostic scalar coverage must retain its narrow meaning;
 private provider facts/IDs, per-job statement families, whole copies, visited
 index rows and physical/phase resources cannot be invented from aggregates.
@@ -72,7 +90,7 @@ with no extension of the authorized timestamp patch or fabricated cancellation.
 | R2 context/root admission | Peer/Workspace/Branch/catalog/runtime/Save identity, derived child roles, bounded root inode/content/metadata checks | Shared owning Content membership/alias/cycle/context qualification and provenance; no caller boolean, unqualified hash or hidden full scan at repeated bind |
 | R3 restart custody | Connection/service/consumer/session fences, unattempted vs dispatched outcomes and stale capability refusal | Actual process-boundary restart/disconnect proofs, surviving-host known results and host-loss terminal unknown ownership; no inferred session recovery |
 | R4 assembly | Real macOS Store/Project/Runtime/Supervisor to authenticated Linux Upstream on both profiles | API-core/Sandbox owning application activation; native mount/Exec remains S8 |
-| Q1 complete root | Small source-removed native fixture with all 13 paths, seven file names, aliases, raw symlinks and metadata | Two interleaved remote Saves/same-Save reads/history conflict/exact disconnect, huge namespace, dense >4 GiB and large sparse native data with full oracles and resource criteria |
+| Q1 complete root | Small source-removed native fixture with all 13 paths, seven file names, aliases, raw symlinks and metadata | Two interleaved remote Saves/same-Save reads/history conflict/exact disconnect, huge namespace, owner-selected500MB dense and large sparse native data with full oracles and resource criteria (actual >4GiB execution waived below) |
 
 The bounded DirectoryLeaf context checks serial/scope and root-binding refusal;
 the FilesystemRoot context checks the root inode/content. Those facts alone do
@@ -150,3 +168,15 @@ E1 remains0/NOT_RUN, whole accounting/resource/service qualification remains
 INCOMPLETE, S7/S9 remain unchecked and E05 remains NOT_RUN. The next named E2/R1
 prerequisite is coordinated explicit application disposal and original logical
 bind/input witnesses; S8 native ownership and full S10 composition stay separate.
+
+
+## Owner-approved functional closure and remaining organization
+
+E04 is CLOSED at its completed functional scope after the final source/evidence
+checkpoint. Its two successful original profiles are not repeated to close the
+eleven broader dimensions. [The owner direction and exact scope](checks/e04-disposal-20261007/56-owner-functional-closure.json)
+retain those dimensions under S7: (1) operation accounting, (2) resources/cache,
+and (3) service acceptance. This does not waive S7/S9 exits. Future routine
+collection uses run-level identities, compact events and fixed aggregates;
+focused detailed traces require a named unresolved requirement. The500MB and
+prospective120s owner decisions remain in force.

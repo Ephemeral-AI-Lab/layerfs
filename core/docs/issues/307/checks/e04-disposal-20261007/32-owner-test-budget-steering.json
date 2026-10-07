@@ -1,0 +1,17 @@
+{
+  "schema": "owner-test-budget-steering-v1",
+  "source_thread": "01a1142b-61e0-7111-8ef3-8db004727afc",
+  "human_quote": "cut tests seperately rather batch one into a big group so that it can fit time budget, and we raise budget to 120s to give more room of passing.",
+  "received_after": "31-disposable-original-diagnostic.json",
+  "direction": "Focused package/test/case invocations, build first, explicit120s prospective test wall ceiling; separate independent cases, no timer reset across one required complete lifecycle. Diagnostic vehicles may use120s only with prospective owning selection. Historical limits/failures unchanged; no numerical qualification is implied.",
+  "current_selection": "one read-only retained-data validation of the completed original Disposable v3 run",
+  "new_validation_wall_seconds": 120,
+  "previous_operation_wall_ns": 52921882250,
+  "previous_operation_limits_preserved": {
+    "product": 80,
+    "internal_disposal": 88,
+    "external": 90
+  },
+  "qualification_status": "NOT_EVALUATED",
+  "e1_samples": 0
+}

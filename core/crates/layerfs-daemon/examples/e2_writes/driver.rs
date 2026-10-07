@@ -1,5 +1,6 @@
 //! One bounded uncontrolled E04 attempt; original failed owners remain in custody.
 use super::{
+    control,
     digest::{hex, sha256},
     fixture::{self, Config, Fixture},
     json::Json,
@@ -41,6 +42,10 @@ pub struct Failure {
     pub native_fence: Option<ConsumerFence>,
     pub startup: Option<Arc<CreationWork>>,
     pub original_startup_error: Option<layerfs_daemon::OwnerError>,
+    pub control: Option<control::Config>,
+    pub final_binding: Option<Message>,
+    pub control_ready: Option<control::Receipt>,
+    pub control_ack: Option<control::Receipt>,
     pub recorder: Option<Rc<RefCell<Recorder>>>,
 }
 impl fmt::Debug for Failure {
@@ -49,6 +54,9 @@ impl fmt::Debug for Failure {
         view.field("cause", &self.cause)
             .field("secondary_report_failure", &self.report_failure)
             .field("original_startup_error", &self.original_startup_error)
+            .field("final_binding_retained", &self.final_binding.is_some())
+            .field("original_control_ready", &self.control_ready)
+            .field("original_control_ack", &self.control_ack)
             .field("owner_retained", &self.owner.is_some())
             .field("fixture_retained", &self.fixture.is_some())
             .field("operation", &self.operation)
@@ -78,14 +86,22 @@ impl Failure {
             native_fence: None,
             startup: None,
             original_startup_error: None,
+            control: None,
+            final_binding: None,
+            control_ready: None,
+            control_ack: None,
             recorder: None,
         }
     }
 }
 pub fn collect(args: &[OsString]) -> std::result::Result<(), Failure> {
     let input = Input::parse(args).map_err(|error| Failure::new(Box::new(error)))?;
-    let recorder = Recorder::create(&input).map_err(|error| Failure::new(Box::new(error)))?;
+    let control = control::Config::read(&input.control_path, control::Role::Consumer)
+        .map_err(|error| Failure::new(Box::new(error)))?;
+    let recorder =
+        Recorder::create(&input, &control).map_err(|error| Failure::new(Box::new(error)))?;
     let mut state = Failure::new(Box::new(io::Error::other("original E04 attempt")));
+    state.control = Some(control);
     state.recorder = Some(Rc::new(RefCell::new(recorder)));
     match run(&mut state, &input) {
         Ok(()) => Ok(()),
@@ -277,12 +293,14 @@ fn run(state: &mut Failure, input: &Input) -> Result<()> {
     state.source = Some(ports.acquire(operation.workspace().route(), 1001)?);
     let source = state.source.expect("original source");
     let view = operation.workspace().view_for_source(source)?;
-    let report = oracle::verify(
+    let (report, final_binding) = oracle::verify(
         state.fixture.as_ref().expect("fixture"),
         &view,
         &ports,
         FINAL_TIME,
     )?;
+    state.final_binding = Some(final_binding);
+    record_final_binding(state)?;
     {
         let mut summary = Json::new();
         summary.raw("{\"status\":\"PASS\",")?;
@@ -385,6 +403,34 @@ fn run(state: &mut Failure, input: &Input) -> Result<()> {
         ))));
     }
     drop(done);
+    // The original Message and initialized attachment remain held while the
+    // host matches its original Delivery and explicitly fences both workers.
+    // No runtime RPC or socket close occurs between Ready and acknowledgment.
+    let original = state
+        .final_binding
+        .as_ref()
+        .expect("original final Binding");
+    let proof = control::FinalBinding::new(original.envelope().correlation, original.bytes())?;
+    let config = state
+        .control
+        .as_ref()
+        .expect("original control configuration");
+    let ready_opened_ns = recorder.borrow().at();
+    state.control_ready = Some(config.publish_ready(&proof)?);
+    let ready_published_ns = recorder.borrow().at();
+    state.control_ack = Some(config.wait_ack(&proof, Instant::now() + Duration::from_secs(5))?);
+    let ack_received_ns = recorder.borrow().at();
+    record_disposal(
+        &mut recorder.borrow_mut(),
+        state.control_ready.as_ref().expect("original Ready"),
+        state.control_ack.as_ref().expect("original Ack"),
+        ready_opened_ns,
+        ready_published_ns,
+        ack_received_ns,
+    )?;
+    drop(state.final_binding.take());
+    drop(proof);
+    let fence_opened_ns = recorder.borrow().at();
     let fixture = state.fixture.as_mut().expect("fixture");
     fixture.upstream.fence();
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -412,7 +458,11 @@ fn run(state: &mut Failure, input: &Input) -> Result<()> {
         let mut r = recorder.borrow_mut();
         let mut out = Json::new();
         r.header(&mut out, "native-fence", r.probes.records)?;
-        out.raw(",\"scope\":\"attachment-lifetime-framing-native-reassembly-not-exclusive-physical-io\",")?;
+        out.raw(",\"scope\":\"attachment-lifetime-framing-native-reassembly-not-exclusive-physical-io\",\"close_status\":\"OK\",\"control_acknowledged\":true,")?;
+        out.field("opened_ns", fence_opened_ns)?;
+        out.raw(",")?;
+        out.field("closed_ns", r.at())?;
+        out.raw(",")?;
         out.field("partial_messages", fence.partial.len())?;
         out.raw(",")?;
         out.field("live_messages", receive.live_messages)?;
@@ -443,6 +493,103 @@ fn run(state: &mut Failure, input: &Input) -> Result<()> {
     finish(&mut recorder.borrow_mut(), "RECORDED", None)?;
     Ok(())
 }
+fn record_final_binding(state: &Failure) -> io::Result<()> {
+    let message = state
+        .final_binding
+        .as_ref()
+        .expect("original final Binding");
+    if !message.complete() {
+        return Err(io::Error::other("original final Binding is incomplete"));
+    }
+    let binding = state.fixture.as_ref().expect("fixture").upstream.binding();
+    let mut r = state.recorder.as_ref().expect("recorder").borrow_mut();
+    let mut out = Json::new();
+    r.header(&mut out, "final-binding", r.probes.records)?;
+    out.raw(",\"scope\":\"original-final-credited-Binding-retained-through-host-ack\",\"complete\":true,")?;
+    out.field("at_ns", r.at())?;
+    out.raw(",")?;
+    out.field("correlation", message.envelope().correlation)?;
+    out.raw(",")?;
+    out.field("bytes", message.bytes().len())?;
+    out.raw(",")?;
+    out.text("sha256", &hex(&sha256(message.bytes())))?;
+    out.raw(",")?;
+    out.text("body_hex", &control::bytes_hex(message.bytes()))?;
+    out.raw(",\"context\":{")?;
+    for (name, value) in [
+        ("runtime", hex(&binding.runtime)),
+        ("peer", hex(&binding.peer)),
+        ("workspace", hex(&binding.workspace.to_bytes())),
+        ("catalog", hex(&binding.catalog.to_bytes())),
+        (
+            "effective_root",
+            binding.snapshot.effective_root.to_string(),
+        ),
+        ("scope", binding.snapshot.scope.to_string()),
+        ("filesystem_profile", binding.snapshot.profile.to_string()),
+    ] {
+        if name != "runtime" {
+            out.raw(",")?;
+        }
+        out.text(name, &value)?;
+    }
+    out.raw(",")?;
+    out.field("incarnation", binding.incarnation)?;
+    out.raw(",")?;
+    out.field("root_serial", binding.root_serial)?;
+    out.raw("}}")?;
+    r.append("probes", out.finish()?)
+}
+
+fn control_receipt(out: &mut Json, receipt: &control::Receipt) -> io::Result<()> {
+    out.raw("{")?;
+    out.text("run_id", &receipt.run_id)?;
+    out.raw(",")?;
+    out.field("correlation", receipt.correlation)?;
+    out.raw(",")?;
+    out.text("binding_sha256", &receipt.binding_sha256)?;
+    out.raw(",")?;
+    out.text("payload_path", &receipt.payload_path.to_string_lossy())?;
+    out.raw(",")?;
+    out.field("payload_bytes", receipt.payload_bytes)?;
+    out.raw(",")?;
+    out.text("payload_sha256", &receipt.payload_sha256)?;
+    out.raw(",")?;
+    out.text("marker_path", &receipt.marker_path.to_string_lossy())?;
+    out.raw("}")
+}
+
+fn record_disposal(
+    r: &mut Recorder,
+    ready: &control::Receipt,
+    ack: &control::Receipt,
+    opened: u64,
+    published: u64,
+    acknowledged: u64,
+) -> io::Result<()> {
+    let mut body = Json::new();
+    body.raw("{\"scope\":\"Close-Gone-then-ready-host-joined-ack-before-consumer-fence\",")?;
+    body.field("ready_opened_ns", opened)?;
+    body.raw(",")?;
+    body.field("ready_published_ns", published)?;
+    body.raw(",")?;
+    body.field("ack_received_ns", acknowledged)?;
+    body.raw(",\"ready\":")?;
+    control_receipt(&mut body, ready)?;
+    body.raw(",\"ack\":")?;
+    control_receipt(&mut body, ack)?;
+    body.raw("}")?;
+    let body = String::from_utf8(body.finish()?).map_err(io::Error::other)?;
+    let mut row = Json::new();
+    r.header(&mut row, "application-disposal", r.probes.records)?;
+    row.raw(",\"control\":")?;
+    row.raw(body.trim())?;
+    row.raw("}")?;
+    r.append("probes", row.finish()?)?;
+    r.disposal_summary = Some(body);
+    Ok(())
+}
+
 // E04 v2 extends the actual retained startup receipt. The shared E01 v1
 // serializer deliberately keeps its original field inventory and scope.
 fn startup_filesystem(out: &mut Json, started: &OwnerStart) -> io::Result<()> {

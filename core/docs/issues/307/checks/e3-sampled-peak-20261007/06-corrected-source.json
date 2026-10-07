@@ -1,0 +1,15 @@
+{
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_gates.py",
+      "sha256": "6d8ea416427185f8886e6eb5bcb096890c2d2fd36ee18cfb3b7d3ba63cc3496f"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_cluster_two_registration.py",
+      "sha256": "9bc64e7b5b8a676769ff58a1350a14a024b98797ca95314bbea0abf17bdf503d"
+    }
+  ],
+  "scope": "finite sampled inventory only; original regression failure retained;44 cases pass",
+  "qualification_status": "NOT_EVALUATED",
+  "e1_samples": 0
+}

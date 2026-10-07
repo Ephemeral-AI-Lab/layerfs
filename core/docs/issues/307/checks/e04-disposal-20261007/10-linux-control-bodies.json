@@ -1,0 +1,26 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-e04-disposal-control-bodies-20261007",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "timeout",
+    "--kill-after=1s",
+    "9s",
+    "/work/core/target/cluster2-linux/debug/deps/e04_disposal_control-ef48dc152bf72fe4"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 338731000,
+  "kind": "functional-test",
+  "workers": 1
+}

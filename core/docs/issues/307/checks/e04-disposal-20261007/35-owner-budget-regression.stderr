@@ -1,0 +1,17 @@
+F
+======================================================================
+FAIL: test_prospectively_selected_120s_vehicle_keeps_stricter_control_fences (test_evidence_disposal.E04ExplicitDisposal.test_prospectively_selected_120s_vehicle_keeps_stricter_control_fences)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_disposal.py", line 208, in test_prospectively_selected_120s_vehicle_keeps_stricter_control_fences
+    self.assertEqual(result["write_window_consistency"], "PASS", result)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'INCOMPLETE' != 'PASS'
+- INCOMPLETE
++ PASS
+ : {'schema': 'cluster-two-e2-observation-consistency-v1', 'case': 'E04-write-16m', 'observation_consistency': 'INCOMPLETE', 'write_window_consistency': 'INCOMPLETE', 'qualification_status': 'NOT_EVALUATED', 'admission_eligible': False, 'e1_sample_status': 'NOT_RUN', 'e1_sample_count': 0, 'E05_status': 'NOT_RUN', 'unavailable': ['private-base-facts-provider-id-trace', 'per-original-job-statement-families', 'whole-operation-copies', 'statement-fingerprint-bind-correlation', 'indexed-visited-rows', 'exact-eligible-debt', 'queue-only-peak', 'isolated-resource-runnable-wait', 'host-linux-kernel-phase-residency', 'physical-io', 'cache-enforcement-calibration'], 'errors': ['v3 original host argv/configuration/start order differs'], 'application_disposal_consistency': 'INCOMPLETE'}
+
+----------------------------------------------------------------------
+Ran 1 test in 2.860s
+
+FAILED (failures=1)

@@ -1,0 +1,15 @@
+{
+  "head": "d925a28c0cd9f0fd1661df614409df1a61528de4",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_cluster_two_registration.py",
+      "sha256": "9bc64e7b5b8a676769ff58a1350a14a024b98797ca95314bbea0abf17bdf503d"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_gates.py",
+      "sha256": "fec7ad3290515f3946d8f50759a6ab65ec84188235beec965f8170517a59996e"
+    }
+  ],
+  "requirement": "E1/E3: finite sampled observations cannot become a proven continuous peak by changing its label",
+  "scope": "registration validator only; no sample/qualification/resource measurement"
+}

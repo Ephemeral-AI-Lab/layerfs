@@ -1,7 +1,8 @@
 //! Bounded append-only records. Identity and input hashes precede product work.
 use super::{
-    common_streams::{compact_identity, hash_file, Stream},
-    digest::{hex, sha256},
+    common_streams::{compact_identity, Stream},
+    control,
+    digest::{hex, sha256, Sha256},
     json::Json,
 };
 use std::{
@@ -13,13 +14,14 @@ use std::{
 };
 
 pub struct Input {
-    pub invocation: [String; 8],
+    pub invocation: [String; 9],
     pub db: PathBuf,
     pub output: PathBuf,
     pub assignment: PathBuf,
     pub base: PathBuf,
     pub replacements: PathBuf,
     pub identity_path: PathBuf,
+    pub control_path: PathBuf,
 }
 fn future(path: &Path) -> io::Result<PathBuf> {
     Ok(path
@@ -38,8 +40,8 @@ fn text(path: &Path) -> io::Result<String> {
 }
 impl Input {
     pub fn parse(args: &[OsString]) -> io::Result<Self> {
-        if args.len() != 8 {
-            return Err(io::Error::other("E04 requires8arguments"));
+        if args.len() != 9 {
+            return Err(io::Error::other("E04 v3 requires9arguments"));
         }
         let endpoint = args[1]
             .to_str()
@@ -51,6 +53,7 @@ impl Input {
         let db = future(Path::new(&args[5]))?;
         let output = future(Path::new(&args[6]))?;
         let identity_path = Path::new(&args[7]).canonicalize()?;
+        let control_path = Path::new(&args[8]).canonicalize()?;
         if !Path::new(&args[5]).is_absolute()
             || !Path::new(&args[6]).is_absolute()
             || db.starts_with(&output)
@@ -59,6 +62,7 @@ impl Input {
                 base.as_path(),
                 replacements.as_path(),
                 identity_path.as_path(),
+                control_path.as_path(),
             ]
             .iter()
             .any(|path| path.starts_with(&output) || *path == db)
@@ -74,6 +78,7 @@ impl Input {
             text(&db)?,
             text(&output)?,
             text(&identity_path)?,
+            text(&control_path)?,
         ];
         Ok(Self {
             invocation,
@@ -83,6 +88,7 @@ impl Input {
             base,
             replacements,
             identity_path,
+            control_path,
         })
     }
 }
@@ -96,7 +102,8 @@ pub struct Recorder {
     pub identity_source_sha256: String,
     pub identity_source_bytes: usize,
     pub binary_sha256: String,
-    pub invocation: [String; 8],
+    pub invocation: [String; 9],
+    pub pre_start_inputs: String,
     pub assignment_sha256: String,
     pub base_sha256: String,
     pub replacements_sha256: String,
@@ -106,6 +113,7 @@ pub struct Recorder {
     pub write_attempts: u64,
     pub fixture_context: Option<String>,
     pub oracle_summary: Option<String>,
+    pub disposal_summary: Option<String>,
     pub startup: Stream,
     pub jobs: Stream,
     pub probes: Stream,
@@ -119,7 +127,7 @@ pub struct Recorder {
     terminal: bool,
 }
 impl Recorder {
-    pub fn create(input: &Input) -> io::Result<Self> {
+    pub fn create(input: &Input, control: &control::Config) -> io::Result<Self> {
         let mut bytes = Vec::new();
         File::open(&input.identity_path)?
             .take(16_385)
@@ -135,14 +143,40 @@ impl Recorder {
         if !identity.starts_with('{') || !identity.ends_with('}') {
             return Err(io::Error::other("identity JSON object required"));
         }
-        let assignment_sha256 = hash_file(&input.assignment)?;
-        let assignment_bytes = std::fs::metadata(&input.assignment)?.len();
+        let assignment = InputObservation::read(&input.assignment)?;
         let acquisition_path = input.assignment.with_extension("fixture");
-        let acquisition_sha256 = hash_file(&acquisition_path)?;
-        let acquisition_bytes = std::fs::metadata(&acquisition_path)?.len();
-        let base_sha256 = hash_file(&input.base)?;
-        let replacements_sha256 = hash_file(&input.replacements)?;
-        let binary_sha256 = hash_file(Path::new(&input.invocation[0]))?;
+        let acquisition = InputObservation::read(&acquisition_path)?;
+        let base = InputObservation::read(&input.base)?;
+        let replacements = InputObservation::read(&input.replacements)?;
+        let binary = InputObservation::read(Path::new(&input.invocation[0]))?;
+        let identity_observation = InputObservation {
+            path: input.invocation[7].clone(),
+            bytes: bytes.len() as u64,
+            sha256: hex(&sha256(&bytes)),
+        };
+        let control_observation = InputObservation {
+            path: text(&control.source_path)?,
+            bytes: control.source_bytes,
+            sha256: control.source_sha256.clone(),
+        };
+        let mut inputs = Json::new();
+        inputs.raw("{\"scope\":\"original-pre-start-logical-input-bytes\"")?;
+        for (name, value) in [
+            ("binary", &binary),
+            ("assignment", &assignment),
+            ("acquisition", &acquisition),
+            ("base", &base),
+            ("replacements", &replacements),
+            ("identity", &identity_observation),
+            ("control", &control_observation),
+        ] {
+            inputs.raw(",")?;
+            inputs.string(name)?;
+            inputs.raw(":")?;
+            value.record(&mut inputs)?;
+        }
+        inputs.raw("}")?;
+        let pre_start_inputs = String::from_utf8(inputs.finish()?).map_err(io::Error::other)?;
         let identity_sha256 = hex(&sha256(original.as_bytes()));
         let mint = |role: &str| hex(&sha256(format!("{identity_sha256}:{role}:0").as_bytes()));
         let startup_record_id = mint("startup");
@@ -168,17 +202,19 @@ impl Recorder {
             owner_id,
             identity_source_sha256: hex(&sha256(&bytes)),
             identity_source_bytes: bytes.len(),
-            binary_sha256,
+            binary_sha256: binary.sha256,
             invocation: input.invocation.clone(),
-            assignment_sha256,
-            assignment_bytes,
-            acquisition_sha256,
-            acquisition_bytes,
-            base_sha256,
-            replacements_sha256,
+            pre_start_inputs,
+            assignment_sha256: assignment.sha256,
+            assignment_bytes: assignment.bytes,
+            acquisition_sha256: acquisition.sha256,
+            acquisition_bytes: acquisition.bytes,
+            base_sha256: base.sha256,
+            replacements_sha256: replacements.sha256,
             write_attempts: 0,
             fixture_context: None,
             oracle_summary: None,
+            disposal_summary: None,
             startup: Stream::open(&input.output, "startup.jsonl")?,
             jobs: Stream::open(&input.output, "jobs.jsonl")?,
             probes: Stream::open(&input.output, "probes.jsonl")?,
@@ -215,7 +251,7 @@ impl Recorder {
         index: u64,
         record_id: &str,
     ) -> io::Result<()> {
-        out.raw("{\"schema\":\"cluster-two-job-receipts-v2\",\"case\":\"E04-write-16m\",\"mode\":\"diagnostic\",\"sample_count\":0,\"admission_eligible\":false,\"qualification_status\":\"NOT_EVALUATED\",\"global_persistence\":")?;
+        out.raw("{\"schema\":\"cluster-two-job-receipts-v3\",\"case\":\"E04-write-16m\",\"mode\":\"diagnostic\",\"sample_count\":0,\"admission_eligible\":false,\"qualification_status\":\"NOT_EVALUATED\",\"global_persistence\":")?;
         match self.global_profile {
             Some(profile) => out.string(profile)?,
             None => out.raw("null")?,
@@ -240,7 +276,7 @@ impl Recorder {
         out.text("build_target_os", std::env::consts::OS)?;
         out.raw(",")?;
         out.text("build_target_architecture", std::env::consts::ARCH)?;
-        out.raw(",\"invocation\":{\"schema\":\"cluster-two-e2-writes-invocation-v1\",\"path_scope\":\"process-local-canonical-inputs\",\"bound_before_startup\":true,\"argv\":[")?;
+        out.raw(",\"invocation\":{\"schema\":\"cluster-two-e2-writes-invocation-v3\",\"path_scope\":\"process-local-canonical-inputs\",\"bound_before_startup\":true,\"argv\":[")?;
         for (index, value) in self.invocation.iter().enumerate() {
             if index != 0 {
                 out.raw(",")?;
@@ -291,5 +327,56 @@ impl Recorder {
             self.terminal = true;
         }
         result
+    }
+}
+
+struct InputObservation {
+    path: String,
+    bytes: u64,
+    sha256: String,
+}
+impl InputObservation {
+    fn read(path: &Path) -> io::Result<Self> {
+        let mut file = File::open(path)?;
+        let before = file.metadata()?;
+        if !before.is_file() {
+            return Err(io::Error::other("original E04 input is not a regular file"));
+        }
+        let mut hash = Sha256::new();
+        let mut bytes = 0u64;
+        let mut buffer = [0; 65_536];
+        loop {
+            let count = file.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            hash.update(&buffer[..count]);
+            bytes = bytes
+                .checked_add(count as u64)
+                .ok_or_else(|| io::Error::other("input length overflow"))?;
+        }
+        let after = file.metadata()?;
+        if bytes != before.len()
+            || after.len() != before.len()
+            || after.modified()? != before.modified()?
+        {
+            return Err(io::Error::other(
+                "original E04 input changed during pre-start read",
+            ));
+        }
+        Ok(Self {
+            path: text(path)?,
+            bytes,
+            sha256: hex(&hash.finish()),
+        })
+    }
+    fn record(&self, out: &mut Json) -> io::Result<()> {
+        out.raw("{")?;
+        out.text("path", &self.path)?;
+        out.raw(",")?;
+        out.field("bytes", self.bytes)?;
+        out.raw(",")?;
+        out.text("sha256", &self.sha256)?;
+        out.raw("}")
     }
 }

@@ -637,3 +637,15 @@ E1 remains0/NOT_RUN, whole accounting/resource/service qualification remains
 INCOMPLETE, S7/S9 remain unchecked and E05 remains NOT_RUN. The next named E2/R1
 prerequisite is coordinated explicit application disposal and original logical
 bind/input witnesses; S8 native ownership and full S10 composition stay separate.
+
+
+## E04 two-profile original disposal (2026-10-07)
+
+[The v3 checkpoint](E04-DISPOSAL-CONSISTENCY-20261007.md) now proves its exact
+1000-write window, complete16MiB oracle, original host/consumer joins and Stop,
+and independently bound original native artifact on both Store profiles. Each
+narrow write-window and application-disposal predicate is PASS. Whole observation
+remains INCOMPLETE with eleven gaps, qualification NOT_EVALUATED and E1 samples0;
+this is not S7/S9 completion. Original failed runs, validator timeout and host
+admission refusal remain retained. The next independent E2 work is real per-job
+family and credit/capacity ownership, with no product cap increase.

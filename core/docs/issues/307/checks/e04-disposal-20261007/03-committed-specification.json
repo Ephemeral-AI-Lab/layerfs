@@ -1,0 +1,11 @@
+{
+  "commit": "d925a28c0cd9f0fd1661df614409df1a61528de4",
+  "first_parent": "7b1b3490b10c6c8d66feb654a909718d4bacd194",
+  "tree": "e85d861574e42ab36365da633d5f0a5e0edfa05a",
+  "core_crates_tree": "e6a05d40a420d3bfe4b8a06389a9c7c68b10579d",
+  "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "production_before": 170108,
+  "production_after": 170108,
+  "delta": 0,
+  "counted_product_trees_match": true
+}

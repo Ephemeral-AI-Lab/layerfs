@@ -221,3 +221,26 @@ but host native CloseFailed and Docker source-domain validation prevented whole
 success. That source identity remains a failed diagnostic. A proposed explicit
 application fence must preserve the original error and refuse partial encrypted
 EOF; source presence or consumer success does not qualify S7 or S9.
+
+
+## Original coordinated disposal v3
+
+[The implemented disposal checkpoint](../issues/307/E04-DISPOSAL-CONSISTENCY-20261007.md)
+now supplies one complete Disposable and one complete Durable diagnostic. The
+consumer holds its original final Binding Message through Close/Gone and exact
+host acknowledgment. Host matches the original second Binding Delivery, fences
+once through the existing Supervisor, joins/releases actual owners and verifies
+zero credits/Save custody before acknowledgment. Consumer then performs its own
+original native fence/join and Stop. No peer EOF/CloseFailed is reclassified.
+
+Original pre-start input/probe hashes join actual commands/CIDs/inspect with the
+opaque Docker bind source. Native volume identity and file stat/hash are compared
+only in their actual guest domain. External control/configuration and one-shot
+publication are explicitly diagnostic; they add no product/Bridge API, constructor,
+service lane, kernel interruption capability or benchmark maintenance pump.
+
+Both retained validators report write-window and application-disposal PASS, whole
+observation INCOMPLETE, qualification NOT_EVALUATED and E1 samples0. Exact budgets,
+source/binaries, failed precursors, partial validator timeout, custody and the
+later prospective owner120s test direction remain in the report. This does not
+close E2, R1, S7 or S9 or activate excluded application packages.

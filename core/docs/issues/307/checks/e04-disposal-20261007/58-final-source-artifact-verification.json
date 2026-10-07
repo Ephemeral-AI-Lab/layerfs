@@ -1,0 +1,181 @@
+{
+  "schema": "e04-closure-source-artifact-verification-v1",
+  "status": "PASS",
+  "scope": "read-only hashes/identity checks; no product or test rerun; no cache qualification",
+  "head": "d925a28c0cd9f0fd1661df614409df1a61528de4",
+  "inventory": {
+    "path": "core/docs/issues/307/checks/e04-disposal-20261007/44-host-budget-build-inputs.json",
+    "sha256": "34ad897a582896c36b6f680959ff26bf9192eb96545779218116212570c6e262",
+    "matched_files": 809
+  },
+  "unchanged_harness_from_11": [
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_jobs.py",
+      "sha256": "e2bac6152988cb84df26ce526660a8360cab4de1993cb2cde907387e3b11d9eb"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_backing.py",
+      "sha256": "57806b457e07d0a695279088a49af9e1fab242fa99a416f52ddec0f89c31a808"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py",
+      "sha256": "0e0e8eea6650861248104db3e8f132133f57eeaeb602144e052405c32905c222"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_backing.py",
+      "sha256": "7085ff6bcbe2327382d028383e9f8db731f9d1dd83faae9483b9c85031546715"
+    },
+    {
+      "path": "core/target/cluster2-307/e04_native_backing_observation.py",
+      "sha256": "7bc5aebc93d61638270d8e368829e402a41898c12a03ae927b5345eeccfc6fbd"
+    }
+  ],
+  "new_budget_harness": "actual file hashes included in inventory44; original35 failure and37/38 successor receipts retained",
+  "inventory44_prose_limitations": "Copied historical correction/compiled_source_unchanged_since text is not a current90s budget or claim host source stayed unchanged; actual file hashes,43 diagnosis,46/47 build commands,49 binaries and51/52 prospective120s command govern. No original receipt rewritten.",
+  "binaries": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "sha256": "839539ad47888bd03d6c2adea37c91ff47ec5ce6276f8b93ebb8df3c7dd10021"
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "sha256": "7d10a68d36e2f700f3afe60ae564fee5a1671683e20f06805a4d9fd15ec93939"
+    }
+  ],
+  "retained_binaries": [
+    {
+      "path": "core/target/cluster2-307/e04-disposal-durable-admission-20261007/retained-binaries/host",
+      "sha256": "839539ad47888bd03d6c2adea37c91ff47ec5ce6276f8b93ebb8df3c7dd10021"
+    },
+    {
+      "path": "core/target/cluster2-307/e04-disposal-durable-admission-20261007/retained-binaries/consumer",
+      "sha256": "7d10a68d36e2f700f3afe60ae564fee5a1671683e20f06805a4d9fd15ec93939"
+    }
+  ],
+  "disposable_host_binary": "not archived before replacement; prior source/hash/build/execute receipts retained; current host is distinct",
+  "e3_corrected_source": [
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_gates.py",
+      "sha256": "6d8ea416427185f8886e6eb5bcb096890c2d2fd36ee18cfb3b7d3ba63cc3496f"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_cluster_two_registration.py",
+      "sha256": "9bc64e7b5b8a676769ff58a1350a14a024b98797ca95314bbea0abf17bdf503d"
+    }
+  ],
+  "prepared_masters": [
+    {
+      "path": "core/target/cluster2-307/e04-prepared-20261007/base.bin",
+      "sha256": "a813c22ec9b6429809beafdeed2903207e31f2c68c4ab5795c11a857d26e6f17"
+    },
+    {
+      "path": "core/target/cluster2-307/e04-prepared-20261007/replacements.bin",
+      "sha256": "c9440baeb12b6f5d6fe142092fe3f862611f8c4ab36788a078922ea764489290"
+    }
+  ],
+  "protected_notes": [
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+      "bytes": 24153,
+      "mtime_ns": 1791265115133079965,
+      "inode": 868406654,
+      "scope": "identity only; contents not read as authority; not staged"
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+      "bytes": 28245,
+      "mtime_ns": 1791264508641309817,
+      "inode": 868395616,
+      "scope": "identity only; contents not read as authority; not staged"
+    }
+  ],
+  "protected_containers": [
+    {
+      "id": "9cf2fe345496b45d79ff272e6c698552948f1e92ea106926826a770592623b24",
+      "name": "/layerfs-experiment-305-dev",
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 29661,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-03T16:02:30.345379465Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+    },
+    {
+      "id": "ce75ac504df9d0e58cedcdd0df93fe7ef39c3b66ef3c13b0bb6b580def64516c",
+      "name": "/layerfs-4c8cde9ee1cf49f8049298b3377d4927",
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 18206,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-03T05:23:15.145796338Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "image": "sha256:7a75e44960a3cd06fb388d1e5cd6bdb1f9652d2cfd8ba3c82f935d2436f217ff"
+    },
+    {
+      "id": "d2433851ea5990e273b0673fdbd5c180917f1216f3c81bdfb4517da0207e2c2a",
+      "name": "/layerfs-dbd59ea75fdc62de0a1f6d9d099609ab",
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 4193,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-01T22:35:34.293517835Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "image": "sha256:1c193485fbf2cfb1b3a5210c5f86761404b458481fb66636c066a0a73140584b"
+    },
+    {
+      "id": "d2550144998b4b71de98cb9ecf6448f87c7b99a3c2f69ea778a29413fffa5ffb",
+      "name": "/layerfs-76b116dc9d984679f5802e2ec9c0798d",
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 603,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-01T19:07:59.945420919Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "image": "sha256:b545f4aecbdb220ea2e80f86f01762c9ff1aa86f5ac01b550cdf69562c9e9225"
+    }
+  ],
+  "pinned_image": {
+    "id": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "architecture": "arm64",
+    "os": "linux"
+  },
+  "raw_directories_confirmed": [
+    "e04-disposal-disposable-20261007",
+    "e04-disposal-durable-admission-20261007",
+    "e04-native-disposable-20261007",
+    "e04-disposal-durable-20261007"
+  ],
+  "e1_samples": 0,
+  "qualification_status": "NOT_EVALUATED"
+}

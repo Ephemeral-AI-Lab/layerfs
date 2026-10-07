@@ -3,10 +3,167 @@ use super::super::json::Json;
 use layerfs_bridge::native::{ChannelError, FramingError};
 use layerfs_sdk::runtime::{
     service::{InputFailure, Response, ServiceOutcome},
-    supervisor::{AttachFailure, AttachmentFence, AttachmentId, SupervisorFailure},
+    supervisor::{AttachFailure, AttachmentFence, AttachmentId, Delivery, SupervisorFailure},
     Binding,
 };
 use std::io;
+
+pub fn final_binding_matches(
+    delivery: &Delivery,
+    expected: &Binding,
+    correlation: u64,
+    bytes: &[u8],
+) -> bool {
+    delivery.header.operation == layerfs_sdk::client::Operation::Binding
+        && delivery.refused.is_none()
+        && delivery.output.complete
+        && delivery.output.completed_bytes == delivery.output.packet.bytes.len() as u64
+        && delivery.output.packet.correlation == correlation
+        && delivery.output.packet.bytes.as_slice() == bytes
+        && delivery.completion.as_ref().is_some_and(|completion| {
+            matches!(completion.outcome(), ServiceOutcome::Dispatched(Ok(Response::Binding(actual)))
+                if actual.as_ref() == expected)
+        })
+}
+
+/// Explicit application fencing has its own original result predicate. The
+/// historical peer-EOF predicate below is deliberately unchanged.
+pub fn record_explicit(
+    out: &mut Json,
+    fence: &AttachmentFence,
+    expected: AttachmentId,
+) -> io::Result<bool> {
+    let mut valid = fence.attachment == expected
+        && fence.failure.is_none()
+        && fence.request.is_none()
+        && fence.input.events.is_empty()
+        && fence.output.receipts.is_empty()
+        && fence.service.cancelled == 0
+        && fence.service.completed == 0
+        && matches!(fence.input.close, Some(Ok(())))
+        && matches!(fence.output.close, Some(Err(ChannelError::Quarantined)));
+    out.raw(",")?;
+    out.field("attachment_matches", fence.attachment == expected)?;
+    out.raw(",")?;
+    out.field("inflight_request", fence.request.is_some())?;
+    out.raw(",")?;
+    out.field("input_events", fence.input.events.len())?;
+    out.raw(",")?;
+    out.field("output_receipts", fence.output.receipts.len())?;
+    out.raw(",")?;
+    out.field("service_cancelled", fence.service.cancelled)?;
+    out.raw(",")?;
+    out.field("service_completed", fence.service.completed)?;
+    out.raw(",")?;
+    out.text("input_close", &format!("{:?}", fence.input.close))?;
+    out.raw(",")?;
+    out.text("output_close", &format!("{:?}", fence.output.close))?;
+    out.raw(",\"supervisor_failure\":")?;
+    match &fence.failure {
+        Some(value) => out.string(&cause(value))?,
+        None => out.raw("null")?,
+    }
+    out.raw(",\"input_worker\":{")?;
+    match &fence.input.worker {
+        Err(_) => {
+            valid = false;
+            out.raw("\"status\":\"PANIC-original-payload-retained\"")?;
+        }
+        Ok(report) => {
+            let native = report.native;
+            let eof = matches!(&report.failure,
+                InputFailure::Native(FramingError::Native(ChannelError::Io(error)))
+                    if error.kind() == io::ErrorKind::UnexpectedEof);
+            let quarantined = matches!(
+                &report.failure,
+                InputFailure::Native(FramingError::Native(ChannelError::Quarantined))
+            );
+            let complete_wire = native
+                .records
+                .checked_mul(18)
+                .and_then(|overhead| native.plaintext_bytes.checked_add(overhead))
+                == Some(native.wire_bytes);
+            let exact_attempts = (eof
+                && native.records.checked_add(1) == Some(native.record_io_attempts))
+                || (quarantined && native.record_io_attempts == native.records);
+            let clean = complete_wire && exact_attempts;
+            valid &= clean
+                && report.partial.is_empty()
+                && report.undelivered.is_none()
+                && report.close_failure.is_none()
+                && report
+                    .reassembly
+                    .as_ref()
+                    .is_ok_and(|value| value.live_messages == 0 && value.credited_bytes == 0);
+            out.raw("\"status\":\"JOINED\",")?;
+            out.text("original_failure", &input_cause(&report.failure))?;
+            out.raw(",")?;
+            out.text(
+                "stop_kind",
+                if eof {
+                    "interrupted-idle-read-eof"
+                } else if quarantined {
+                    "pre-io-quarantined"
+                } else {
+                    "UNEXPECTED"
+                },
+            )?;
+            out.raw(",")?;
+            out.field("complete_record_accounting", clean)?;
+            out.raw(",")?;
+            out.field("partial_messages", report.partial.len())?;
+            out.raw(",")?;
+            out.field("undelivered", report.undelivered.is_some())?;
+            out.raw(",")?;
+            out.text("close_failure", &format!("{:?}", report.close_failure))?;
+            out.raw(",")?;
+            out.text("native_debug", &format!("{native:?}"))?;
+            out.raw(",")?;
+            out.text("reassembly_debug", &format!("{:?}", report.reassembly))?;
+            for (name, value) in [
+                ("records", native.records),
+                ("record_io_attempts", native.record_io_attempts),
+                ("plaintext_bytes", native.plaintext_bytes),
+                ("wire_bytes", native.wire_bytes),
+            ] {
+                out.raw(",")?;
+                out.field(name, value)?;
+            }
+            out.raw(",\"live_messages\":")?;
+            match &report.reassembly {
+                Ok(value) => out.raw(&value.live_messages.to_string())?,
+                Err(_) => out.raw("null")?,
+            }
+            out.raw(",\"credited_bytes\":")?;
+            match &report.reassembly {
+                Ok(value) => out.raw(&value.credited_bytes.to_string())?,
+                Err(_) => out.raw("null")?,
+            }
+        }
+    }
+    out.raw("},\"output_worker\":{")?;
+    match &fence.output.worker {
+        Err(_) => {
+            valid = false;
+            out.raw("\"status\":\"PANIC-original-payload-retained\"")?;
+        }
+        Ok(report) => {
+            valid &= report.failure.is_none() && report.retained.is_empty();
+            out.raw("\"status\":\"JOINED\",")?;
+            out.text("original_failure", &format!("{:?}", report.failure))?;
+            out.raw(",")?;
+            out.field("retained_receipts", report.retained.len())?;
+            out.raw(",")?;
+            out.text("framing_debug", &format!("{:?}", report.framing))?;
+            out.raw(",")?;
+            out.text("native_debug", &format!("{:?}", report.native))?;
+        }
+    }
+    out.raw("},")?;
+    out.field("expected_explicit_fence", valid)?;
+    out.raw(",\"scope\":\"original-explicit-joined-input-output-service-custody-no-product-publication-inference\"}")?;
+    Ok(valid)
+}
 
 pub fn input_cause(value: &InputFailure) -> String {
     match value {

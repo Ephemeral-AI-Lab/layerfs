@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import re
 from .evidence_workload import payload_chunks, write_trace
-from . import evidence_backing
+from . import evidence_backing, evidence_disposal
 
 ROOT = Path(__file__).resolve().parents[4]
 WINDOW = 65_536
@@ -19,7 +19,8 @@ COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 E04_BYTES = 16_777_216
 E04_WRITES = 1000
 E04_VERSIONS = {"cluster-two-job-receipts-v1": "e04-original-write-receipts-v1",
-                "cluster-two-job-receipts-v2": "e04-original-write-receipts-v2"}
+                "cluster-two-job-receipts-v2": "e04-original-write-receipts-v2",
+                "cluster-two-job-receipts-v3": "e04-original-write-receipts-v3"}
 CLIENT = ("cache_hits", "cache_misses", "upstream_batches", "authenticated_bytes",
           "evictions", "charged_cache_bytes", "cached_objects")
 E04_GAPS = ("private-base-facts-provider-id-trace", "per-original-job-statement-families",
@@ -411,21 +412,23 @@ def writes_invocation(manifest, directory, root, docker_mapping=None):
     """Bind the original eight arguments; external Docker evidence never rewrites them."""
     value = exact(manifest.get("invocation"), ("schema", "path_scope", "bound_before_startup", "argv",
         "identity_source_sha256", "identity_source_bytes", "identity_copy_sha256", "docker_path_mapping"), "original E04 invocation")
-    require(value["schema"] == "cluster-two-e2-writes-invocation-v1"
+    v3 = manifest["schema"] == "cluster-two-job-receipts-v3"
+    require(value["schema"] == ("cluster-two-e2-writes-invocation-v3" if v3 else "cluster-two-e2-writes-invocation-v1")
             and value["path_scope"] == "process-local-canonical-inputs" and value["bound_before_startup"] is True,
             "E04 inputs not bound before original startup")
     require(value["docker_path_mapping"] == {"status": "UNAVAILABLE", "reason": "no-verified-host-container-path-mapping"},
             "collector invented host/container mapping")
     argv = value["argv"]
-    require(isinstance(argv, list) and len(argv) == 8 and all(isinstance(arg, str) and arg for arg in argv),
+    require(isinstance(argv, list) and len(argv) == (9 if v3 else 8) and all(isinstance(arg, str) and arg for arg in argv),
             "original E04 invocation cardinality missing")
     require(all(Path(argv[index]).is_absolute() for index in (0, 2, 3, 4, 5, 6, 7)), "original E04 input path is not absolute")
     command, _ = read_json(artifact(manifest["identity"].get("command_artifact"), root))
     require(command.get("argv") == argv, "E04 command differs from captured original invocation")
     native = None
     if manifest["identity"].get("execution_kind") == "docker":
-        if manifest["schema"] == "cluster-two-job-receipts-v2":
-            host, native = native_backing().mapping(docker_mapping, argv, command, root, manifest["identity"])
+        if manifest["schema"] in ("cluster-two-job-receipts-v2", "cluster-two-job-receipts-v3"):
+            host, native = native_backing().mapping(docker_mapping, argv, command, root, manifest["identity"],
+                version=3 if v3 else 2, original_inputs=manifest.get("pre_start_inputs"))
         else:
             host = observed_docker_mapping(docker_mapping, argv, command, root)
     else:
@@ -433,6 +436,8 @@ def writes_invocation(manifest, directory, root, docker_mapping=None):
         host = argv
     for index in ((0, 2, 3, 4, 6, 7) if native is not None else (0, 2, 3, 4, 5, 6, 7)):
         require(Path(host[index]) == Path(host[index]).resolve(), "mapped E04 host path is not canonical")
+    if v3:
+        require(native is not None and Path(host[8]) == Path(host[8]).resolve(), "E04 v3 control/native path observation missing")
     require(Path(host[6]) == Path(directory).resolve(), "E04 command targets another output artifact set")
     supplied, raw = read_json(host[7], 16_384)
     require(supplied == manifest["identity"] and value["identity_source_sha256"] == hash_bytes(raw)
@@ -749,13 +754,20 @@ E04_FIELDS = {
         "namespace_membership_checked", "root_serial", "namespace_entries", "binding_scope"},
     "native-fence": {"scope", "partial_messages", "live_messages", "credited_bytes", "id_copied_bytes",
         "send_framing_debug", "send_native_debug", "receive_native_debug", "receive_debug"},
+    "final-binding": {"scope", "at_ns", "correlation", "complete", "bytes", "sha256", "body_hex", "context"},
+    "application-disposal": {"control"},
 }
 
 
 def e04_envelope(record, manifest, kind, index):
     fields = E04_COMMON | E04_FIELDS[kind]
-    if kind == "startup" and manifest.get("schema") == "cluster-two-job-receipts-v2":
+    if kind == "startup" and manifest.get("schema") in ("cluster-two-job-receipts-v2", "cluster-two-job-receipts-v3"):
         fields = fields | {"filesystem"}
+    if manifest.get("schema") == "cluster-two-job-receipts-v3":
+        fields |= {"manifest": {"pre_start_inputs"}, "outcomes": {"application_disposal"},
+                   "native-fence": {"close_status", "control_acknowledged", "opened_ns", "closed_ns"}}.get(kind, set())
+    else:
+        require(kind not in ("final-binding", "application-disposal"), "v3 disposal observation mixed into earlier receipt")
     exact(record, fields, "original E04 " + kind)
     for key in E04_COMMON - {"kind", "record_index", "record_id", "global_persistence"}:
         require(record[key] == manifest[key], "mixed E04 record identity/source/arm/input: " + key)
@@ -920,6 +932,8 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
     failed = False
     try:
         manifest, _ = read_json(Path(directory) / "manifest.json")
+        if manifest.get("schema") == "cluster-two-job-receipts-v3":
+            result["application_disposal_consistency"] = "INCOMPLETE"
         require(manifest.get("schema") in E04_VERSIONS and manifest.get("case") == "E04-write-16m"
                 and manifest.get("mode") == "diagnostic" and manifest.get("sample_count") == 0 and type(manifest.get("sample_count")) is int
                 and manifest.get("admission_eligible") is False and manifest.get("qualification_status") == "NOT_EVALUATED"
@@ -945,7 +959,8 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
             require(isinstance(outcomes["original_error"], str) and outcomes["original_error"], "original E04 failure missing")
             result["errors"].append(outcomes["original_error"])
         host, command, native = writes_invocation(manifest, directory, root, docker_mapping)
-        binary, _ = identity(manifest["identity"], root, 8, host[0])
+        v3 = manifest["schema"] == "cluster-two-job-receipts-v3"
+        binary, _ = identity(manifest["identity"], root, 9 if v3 else 8, host[0])
         require(binary == manifest["actual_binary_sha256"] and manifest["build_target_os"] == manifest["identity"]["os"]
                 and manifest["build_target_architecture"] == manifest["identity"]["architecture"], "actual E04 binary/build topology differs")
         supplied, copied = read_json(Path(directory) / "identity.json", 16_384)
@@ -968,7 +983,7 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
         started = stream(directory, streams[0], names[0], 1, "RECORDED", True)[0]
         e04_envelope(started, manifest, "startup", 0)
         work = startup(started)
-        if manifest["schema"] == "cluster-two-job-receipts-v2":
+        if manifest["schema"] in ("cluster-two-job-receipts-v2", "cluster-two-job-receipts-v3"):
             e04_filesystem(started)
         original_startup = exact(started["original_outcome"], ("status", "error", "profile"), "original E04 startup")
         require(original_startup["status"] == outcomes["startup_status"], "original E04 startup result replaced")
@@ -978,7 +993,7 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                     and outcomes["original_error"] == original_startup["error"], "failed E04 startup error/Stop was replaced")
             raise ValueError("original E04 startup failed; no write result is inferred")
         require(work is not None, "original E04 startup observations unavailable")
-        if manifest["schema"] == "cluster-two-job-receipts-v2":
+        if manifest["schema"] in ("cluster-two-job-receipts-v2", "cluster-two-job-receipts-v3"):
             require(native is not None, "E04 v2 successful window requires original native backing custody")
             require(native["consumer_exit_code"] == 0, "successful E04 window has failed original consumer exit")
             require(started["filesystem"]["linux_filesystem_type"] == native["filesystem_magic"],
@@ -1014,9 +1029,11 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                 and type(acquired["source_copied_bytes"]) is int, "actual acquisition/copy facts differ from prepared witness")
         endpoints, intervals = {}, {}
         oracle = fence = bootstrap = None
+        final_binding = disposal = None
         for index, probe in enumerate(streamed_records(directory, streams[2], names[2], streams[2]["records"])):
             kind = probe.get("kind")
-            require(kind in ("owner-diagnostics", "base-fact-interval", "independent-oracle", "native-fence", "bootstrap-messages"),
+            allowed = ("owner-diagnostics", "base-fact-interval", "independent-oracle", "native-fence", "bootstrap-messages")
+            require(kind in allowed + (("final-binding", "application-disposal") if v3 else ()),
                     "unregistered E04 probe")
             e04_envelope(probe, manifest, kind, index)
             if kind == "owner-diagnostics":
@@ -1043,6 +1060,12 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
             elif kind == "native-fence":
                 require(fence is None, "duplicate original native fence")
                 fence = probe
+            elif kind == "final-binding":
+                require(final_binding is None, "duplicate original final Binding")
+                final_binding = probe
+            elif kind == "application-disposal":
+                require(disposal is None, "duplicate original application disposal")
+                disposal = probe
             else:
                 require(bootstrap is None and probe["scope"] == "original-credited-Binding-Policy-replies-retained-through-record"
                         and all(integer(probe[key]) and probe[key] > 0 for key in ("binding_bytes", "policy_bytes"))
@@ -1056,7 +1079,7 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                 "owner endpoints substituted startup/phase/lifetime boundaries")
         totals = {key: empty_job_sums() for key in ("setup", "writes", "post-writes")}
         state = {"phase": 0, "opens": 0, "close": 0, "gone": 0, "verification_source": None,
-                 "verification_acquired": 0, "verification_released": 0}
+                 "verification_acquired": 0, "verification_released": 0, "close_ns": None, "gone_ns": None}
         def observed_writes():
             nonlocal failed
             for index, record in enumerate(streamed_records(directory, streams[1], names[1], streams[1]["records"])):
@@ -1103,11 +1126,13 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                     elif record["command_kind"] == "Close":
                         require(phase == 3 and state["close"] == 0 and record["original_result"]["response_kind"] == "Done", "local Close replay/result mismatch")
                         state["close"] = 1
+                        state["close_ns"] = record["closed_ns"]
                     elif record["command_kind"] == "CleanupState":
                         require(phase == 3 and state["close"] == 1 and state["gone"] == 0
                                 and record["original_result"]["response_kind"] == "CleanupState"
                                 and record["original_result"]["details"] == {"state": "Gone"}, "automatic cleanup outcome missing/substituted")
                         state["gone"] = 1
+                        state["gone_ns"] = record["closed_ns"]
         publications, needs = write_protocol(observed_writes(), namespace, base_root, serial)
         require(state["opens"] == state["close"] == state["gone"] == 1, "missing/duplicate Open/Close/Gone original lifecycle")
         require(state["verification_acquired"] == state["verification_released"] == 1, "verification source release coverage missing")
@@ -1151,6 +1176,12 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                 and all(type(fence[key]) is int and fence[key] == 0 for key in ("partial_messages", "live_messages", "credited_bytes"))
                 and integer(fence["id_copied_bytes"]) and all(isinstance(fence[key], str) and fence[key]
                     for key in ("send_framing_debug", "send_native_debug", "receive_native_debug", "receive_debug")), "original consumer fence/custody missing")
+        if v3:
+            require(final_binding is not None and disposal is not None, "missing original final Binding/application disposal")
+            evidence_disposal.Validator(require, exact, artifact, read_json, integer).validate(
+                manifest, outcomes, final_binding, disposal, fence, native, host, root,
+                state["close_ns"], state["gone_ns"], times[2], times[3])
+            result["application_disposal_consistency"] = "PASS"
         state = exact(outcomes["database_artifact"], ("scope", "status", "path", "logical_bytes", "allocated_bytes", "device", "inode", "links"), "retained E04 database artifact")
         require(state["scope"] == "separate-post-stop-or-original-failure-artifact-stat" and state["status"] == "OBSERVED"
                 and Path(state["path"]) == Path(manifest["invocation"]["argv"][5]), "original retained DB input/artifact binding differs")
@@ -1175,6 +1206,8 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
         result["errors"].append(str(error))
     if failed:
         result["observation_consistency"] = result["write_window_consistency"] = "FAIL"
+        if "application_disposal_consistency" in result:
+            result["application_disposal_consistency"] = "FAIL"
     return result
 
 

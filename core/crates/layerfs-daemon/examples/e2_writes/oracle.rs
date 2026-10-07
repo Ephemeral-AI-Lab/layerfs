@@ -71,10 +71,10 @@ pub fn verify(
     view: &SourceView,
     ports: &impl OverlayRead,
     final_time: Time,
-) -> Result<OracleReport, OracleFailure> {
+) -> Result<(OracleReport, layerfs_bridge::codec::Message), OracleFailure> {
     let mut checked = 0;
     let mut operation = None;
-    let result = (|| -> Result<OracleReport, Box<dyn Error>> {
+    let result = (|| -> Result<(OracleReport, layerfs_bridge::codec::Message), Box<dyn Error>> {
         let root_serial = view.root_serial();
         if root_serial != fixture.upstream.expected().root_serial {
             return Err("E04 original root serial differs".into());
@@ -189,20 +189,23 @@ pub fn verify(
             Ok(ReplyView::Binding(binding)) if &binding == fixture.upstream.binding() => (),
             _ => return Err(Box::new(PortFailure::Remote(message))),
         }
-        Ok(OracleReport {
-            final_sha256: hex(&actual_hash.finish()),
-            expected_sha256: hex(&expected_hash.finish()),
-            bytes: checked,
-            mode: stat.metadata.mode,
-            nlink: stat.namespace_refs,
-            mtime_seconds: stat.metadata.mtime_seconds,
-            mtime_nanoseconds: stat.metadata.mtime_nanoseconds,
-            old_file_content_root_unchanged: true,
-            namespace_membership_checked: true,
-            root_serial,
-            namespace_entries: membership.entries.len() as u64,
-            binding_unchanged: true,
-        })
+        Ok((
+            OracleReport {
+                final_sha256: hex(&actual_hash.finish()),
+                expected_sha256: hex(&expected_hash.finish()),
+                bytes: checked,
+                mode: stat.metadata.mode,
+                nlink: stat.namespace_refs,
+                mtime_seconds: stat.metadata.mtime_seconds,
+                mtime_nanoseconds: stat.metadata.mtime_nanoseconds,
+                old_file_content_root_unchanged: true,
+                namespace_membership_checked: true,
+                root_serial,
+                namespace_entries: membership.entries.len() as u64,
+                binding_unchanged: true,
+            },
+            message,
+        ))
     })();
     match result {
         Ok(report) => Ok(report),

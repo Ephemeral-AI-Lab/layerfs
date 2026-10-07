@@ -1,0 +1,571 @@
+{
+  "schema": "e04-original-two-profile-custody-v1",
+  "rows": [
+    {
+      "profile": "disposable",
+      "raw_run": "core/target/cluster2-307/e04-disposal-disposable-20261007",
+      "external": {
+        "command": [
+          "python3",
+          "-B",
+          "core/target/cluster2-307/run_e04_owner_diagnostic.py",
+          "--run-dir",
+          "core/target/cluster2-307/e04-disposal-disposable-20261007",
+          "--profile",
+          "disposable",
+          "--setup",
+          "clone",
+          "--build-input-receipt",
+          "core/docs/issues/307/checks/e04-disposal-20261007/24-corrected-build-inputs.json",
+          "--additional-build-witness",
+          "core/docs/issues/307/checks/e04-disposal-20261007/28-matched-build-witness.json"
+        ],
+        "wall_timeout_s": 90,
+        "exit_code": 0,
+        "timed_out": false,
+        "wall_ns": 52921882250,
+        "kind": "uncontrolled-original-diagnostic",
+        "workers": 1
+      },
+      "host_exit": 0,
+      "consumer_exit": 0,
+      "volume": "layerfs-e04-disposable-fe9ebf338f7743e2-state",
+      "cid": "88f8792e4b98608431eee129abc385720244d822a3304c96ba3b8d7b38138531",
+      "consumer_removal": "KNOWN_REMOVED",
+      "helper_containers": [
+        {
+          "cid": "7b6f8be08ae041ae7fe827c47b800aadfd4f85570d12fbdd17c62ce88c2f9e73",
+          "last_observed_inspect_state": {
+            "Dead": false,
+            "Error": "",
+            "ExitCode": 0,
+            "FinishedAt": "2026-10-07T03:53:57.94892547Z",
+            "OOMKilled": false,
+            "Paused": false,
+            "Pid": 0,
+            "Restarting": false,
+            "Running": false,
+            "StartedAt": "2026-10-07T03:53:57.830931137Z",
+            "Status": "exited"
+          },
+          "name": "layerfs-e04-disposable-fe9ebf338f7743e2-pre-start",
+          "phase": "pre-start",
+          "retention": "RETAIN_CONTAINER_AND_ORIGINAL_VOLUME"
+        },
+        {
+          "cid": "d73ececb518313a5d87680298ecdc20b3bf42555c1962fb0aed0395c45934293",
+          "last_observed_inspect_state": {
+            "Dead": false,
+            "Error": "",
+            "ExitCode": 0,
+            "FinishedAt": "2026-10-07T03:54:48.206322465Z",
+            "OOMKilled": false,
+            "Paused": false,
+            "Pid": 0,
+            "Restarting": false,
+            "Running": false,
+            "StartedAt": "2026-10-07T03:54:48.10073509Z",
+            "Status": "exited"
+          },
+          "name": "layerfs-e04-disposable-fe9ebf338f7743e2-post-exit",
+          "phase": "post-exit",
+          "retention": "RETAIN_CONTAINER_AND_ORIGINAL_VOLUME"
+        }
+      ],
+      "write_records": 1000,
+      "write_attempts": 1000,
+      "oracle": {
+        "status": "PASS",
+        "bytes": 16777216,
+        "final_sha256": "7bea926791fa6462c068c4980c7c2c6f9b12b9d7a2ae50141580db3abd1af617",
+        "expected_sha256": "7bea926791fa6462c068c4980c7c2c6f9b12b9d7a2ae50141580db3abd1af617",
+        "file_mode": 420,
+        "nlink": 1,
+        "mtime_seconds": -7,
+        "mtime_nanoseconds": 42,
+        "old_file_content_root_unchanged": true,
+        "binding_unchanged": true,
+        "namespace_membership_checked": true,
+        "root_serial": 1,
+        "namespace_entries": 1,
+        "binding_scope": "captured-runtime-binding-not-current-history-query",
+        "eof_checked": true
+      },
+      "stop_status": "STOPPED",
+      "database_artifact": {
+        "scope": "separate-post-stop-or-original-failure-artifact-stat",
+        "path": "/state/overlay.sqlite",
+        "status": "OBSERVED",
+        "logical_bytes": 4853760,
+        "allocated_bytes": 273289216,
+        "device": 65025,
+        "inode": 760,
+        "links": 1
+      },
+      "independent_guest_post": {
+        "database": {
+          "allocated_bytes": 273289216,
+          "device": 65025,
+          "exists": true,
+          "gid": 0,
+          "hash_read_bytes": 4853760,
+          "hash_window_bytes": 65536,
+          "inode": 760,
+          "links": 1,
+          "logical_bytes": 4853760,
+          "mode": 33152,
+          "sha256": "e2b86b85f41828f93de5187d169fa3acf751d53a0a530743f8974f4d38a1644a",
+          "stable_during_observation": true,
+          "uid": 0
+        },
+        "database_path": "/state/overlay.sqlite",
+        "filesystem": {
+          "magic": 61267,
+          "mountinfo": "269 260 254:1 /docker/volumes/layerfs-e04-disposable-fe9ebf338f7743e2-state/_data /state ro,relatime master:1 - ext4 /dev/vda1 rw,discard",
+          "type": "ext4"
+        },
+        "owner_label": "layerfs-e04-disposable-fe9ebf338f7743e2",
+        "phase": "post-exit",
+        "probe_source": {
+          "bytes": 8857,
+          "path": "/work/core/target/cluster2-307/e04_native_backing_observation.py",
+          "sha256": "7bc5aebc93d61638270d8e368829e402a41898c12a03ae927b5345eeccfc6fbd"
+        },
+        "receipt_id": "f5a6be40338a7ef88ef5be9c761856f5fe2bbe9d2bf1a14c3d5801f510128f06",
+        "root_identity": {
+          "device": 65025,
+          "gid": 0,
+          "inode": 691,
+          "mode": 16877,
+          "uid": 0
+        },
+        "root_path": "/state",
+        "schema": "e04-native-backing-observation-v2",
+        "volume_name": "layerfs-e04-disposable-fe9ebf338f7743e2-state"
+      },
+      "independent_pre_start": {
+        "database": {
+          "exists": false
+        },
+        "database_path": "/state/overlay.sqlite",
+        "filesystem": {
+          "magic": 61267,
+          "mountinfo": "270 260 254:1 /docker/volumes/layerfs-e04-disposable-fe9ebf338f7743e2-state/_data /state ro,relatime master:1 - ext4 /dev/vda1 rw,discard",
+          "type": "ext4"
+        },
+        "owner_label": "layerfs-e04-disposable-fe9ebf338f7743e2",
+        "phase": "pre-start",
+        "probe_source": {
+          "bytes": 8857,
+          "path": "/work/core/target/cluster2-307/e04_native_backing_observation.py",
+          "sha256": "7bc5aebc93d61638270d8e368829e402a41898c12a03ae927b5345eeccfc6fbd"
+        },
+        "receipt_id": "f5a6be40338a7ef88ef5be9c761856f5fe2bbe9d2bf1a14c3d5801f510128f06",
+        "root_identity": {
+          "device": 65025,
+          "gid": 0,
+          "inode": 691,
+          "mode": 16877,
+          "uid": 0
+        },
+        "root_path": "/state",
+        "schema": "e04-native-backing-observation-v2",
+        "volume_name": "layerfs-e04-disposable-fe9ebf338f7743e2-state"
+      },
+      "host_terminal": [
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "attachment-fence",
+          "record_index": 1613,
+          "at_ns": 48630697125,
+          "deliveries": 1608,
+          "attachment_matches": true,
+          "inflight_request": false,
+          "input_events": 0,
+          "output_receipts": 0,
+          "service_cancelled": 0,
+          "service_completed": 0,
+          "input_close": "Some(Ok(()))",
+          "output_close": "Some(Err(Quarantined))",
+          "supervisor_failure": null,
+          "input_worker": {
+            "status": "JOINED",
+            "original_failure": "Native(Native(Io(Kind(UnexpectedEof))))",
+            "stop_kind": "interrupted-idle-read-eof",
+            "complete_record_accounting": true,
+            "partial_messages": 0,
+            "undelivered": false,
+            "close_failure": "None",
+            "native_debug": "ChannelWork { channel_calls: 3214, record_io_attempts: 3214, records: 3213, plaintext_bytes: 401352, io_calls: 6426, io_attempts: 6427, wire_bytes: 459186, zeroed_bytes: 264316, crypto_attempts: 3213, crypto_input_bytes: 452760, crypto_output_bytes: 401352, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 0, plain_capacity: 65519, sealed_capacity: 65535 }",
+            "reassembly_debug": "Ok(ReassemblyWork { admitted: 1608, allocation_attempts: 1608, requested_body_bytes: 272832, refused: 0, fragments: 3213, copied_bytes: 272832, live_messages: 0, credited_bytes: 0, peak_credited_bytes: 1224 })",
+            "records": 3213,
+            "record_io_attempts": 3214,
+            "plaintext_bytes": 401352,
+            "wire_bytes": 459186,
+            "live_messages": 0,
+            "credited_bytes": 0
+          },
+          "output_worker": {
+            "status": "JOINED",
+            "original_failure": "None",
+            "retained_receipts": 0,
+            "framing_debug": "FramingWork { encoding_attempts: 3706, encoded_fragments: 3706, header_bytes: 148240, fragments: 3706, copied_bytes: 39787902, frame_capacity: 65519, allocation_attempts: 1, requested_buffer_bytes: 65519, zeroed_bytes: 65519 }",
+            "native_debug": "ChannelWork { channel_calls: 3706, record_io_attempts: 3706, records: 3706, plaintext_bytes: 39936142, io_calls: 7412, io_attempts: 7412, wire_bytes: 40002850, zeroed_bytes: 20200275, crypto_attempts: 3706, crypto_input_bytes: 39936142, crypto_output_bytes: 39995438, buffer_allocation_attempts: 1, requested_buffer_bytes: 65535, stack_window_bytes: 0, plain_capacity: 0, sealed_capacity: 65535 }"
+          },
+          "expected_explicit_fence": true,
+          "scope": "original-explicit-joined-input-output-service-custody-no-product-publication-inference"
+        },
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "supervisor-final",
+          "record_index": 1614,
+          "at_ns": 48631204875,
+          "supervisor_work_debug": "SupervisorWork { turns: 18389, attached: 1, attachments: 0, headers: 1608, received: 1608, output_waits: 0, input_copied_bytes: 0, reply_copied_bytes: 39636236, delivered: 1608, fenced: 1, registry_capacity_bytes: 92928 }",
+          "service_work_debug": "ServiceWork { live_class_jobs: [0, 0, 0], submission_attempts: [1605, 3, 0, 0, 0, 0], submission_refusals: [0, 0, 0, 0, 0, 0], admitted: 1608, refused: 0, dispatched: [1605, 3, 0, 0, 0, 0], cancelled: 0, credited_bytes: 0, peak_credited_bytes: 67178756, outstanding: 0, copied_bytes: 39636236, queue_wait_ns: [8667390, 40751, 0, 0, 0, 0], service_ns: [3525588553, 3917, 0, 0, 0, 0], registry_capacity_bytes: 124416 }",
+          "output_work_debug": "Ok(OutputWork { submissions: 3216, refused: 0, admitted: 3216, owners: 0, messages: 0, credited_bytes: 0, packet_capacity_bytes: 0, reserved_bytes: 0, peak_credited_bytes: 33621336 })",
+          "input_owners": 0,
+          "attachments": 0,
+          "service_outstanding": 0,
+          "service_credited_bytes": 0,
+          "output_owners": 0,
+          "output_messages": 0,
+          "output_credited_bytes": 0,
+          "output_reserved_bytes": 0,
+          "output_packet_capacity_bytes": 0
+        },
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "serving-scope-fenced",
+          "record_index": 1615,
+          "at_ns": 48631515042,
+          "save_slots_held": 0,
+          "acknowledged_host_records": 1615,
+          "acknowledged_host_bytes": 734464,
+          "assignment_sha256": "3db99e02c4ff517d07bee6106a855ad787fc009983615378739f1632bd936354"
+        },
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "disposal-ack-published",
+          "record_index": 1616,
+          "at_ns": 48632553042,
+          "run_id": "f5a6be40338a7ef88ef5be9c761856f5fe2bbe9d2bf1a14c3d5801f510128f06",
+          "correlation": 1608,
+          "binding_sha256": "8c3b9177d529151532d59f852d5001688871a53aee6c90bffc167e511f7d8389",
+          "payload_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-disposal-disposable-20261007/control/host-ack.body",
+          "payload_bytes": 163,
+          "payload_sha256": "5e1a24735940eef0ecb86b28827e29c139fc7875cbf452d35cd90b0294a2821d",
+          "marker_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-disposal-disposable-20261007/control/host-ack.complete",
+          "scope": "original-host-joined-and-zero-owner-acknowledgment"
+        }
+      ],
+      "original_error": null,
+      "secondary_errors": []
+    },
+    {
+      "profile": "durable",
+      "raw_run": "core/target/cluster2-307/e04-disposal-durable-admission-20261007",
+      "external": {
+        "command": [
+          "python3",
+          "-B",
+          "core/target/cluster2-307/run_e04_owner_diagnostic.py",
+          "--run-dir",
+          "core/target/cluster2-307/e04-disposal-durable-admission-20261007",
+          "--profile",
+          "durable",
+          "--setup",
+          "clone",
+          "--build-input-receipt",
+          "core/docs/issues/307/checks/e04-disposal-20261007/44-host-budget-build-inputs.json",
+          "--additional-build-witness",
+          "core/docs/issues/307/checks/e04-disposal-20261007/49-budget-build-witness.json",
+          "--test-budget-seconds",
+          "120"
+        ],
+        "wall_timeout_s": 120,
+        "exit_code": 0,
+        "timed_out": false,
+        "wall_ns": 52693429083,
+        "kind": "uncontrolled-original-diagnostic",
+        "workers": 1
+      },
+      "host_exit": 0,
+      "consumer_exit": 0,
+      "volume": "layerfs-e04-durable-652dfa25a9184db2-state",
+      "cid": "9433f987964dd8d8880b573124609bddeab39865cbb9228d35b056be16121c47",
+      "consumer_removal": "KNOWN_REMOVED",
+      "helper_containers": [
+        {
+          "cid": "8dbf00a20405ce03d87ae63de7c46d0d4a68bcf4d06b8934203d52859604b9aa",
+          "last_observed_inspect_state": {
+            "Dead": false,
+            "Error": "",
+            "ExitCode": 0,
+            "FinishedAt": "2026-10-07T04:13:38.323936502Z",
+            "OOMKilled": false,
+            "Paused": false,
+            "Pid": 0,
+            "Restarting": false,
+            "Running": false,
+            "StartedAt": "2026-10-07T04:13:38.245954085Z",
+            "Status": "exited"
+          },
+          "name": "layerfs-e04-durable-652dfa25a9184db2-pre-start",
+          "phase": "pre-start",
+          "retention": "RETAIN_CONTAINER_AND_ORIGINAL_VOLUME"
+        },
+        {
+          "cid": "cc5a3fdf93c9ada3043e49b45557a0cbeb6dba3b82f87e260b3904bee3ae5afa",
+          "last_observed_inspect_state": {
+            "Dead": false,
+            "Error": "",
+            "ExitCode": 0,
+            "FinishedAt": "2026-10-07T04:14:28.485037387Z",
+            "OOMKilled": false,
+            "Paused": false,
+            "Pid": 0,
+            "Restarting": false,
+            "Running": false,
+            "StartedAt": "2026-10-07T04:14:28.398292345Z",
+            "Status": "exited"
+          },
+          "name": "layerfs-e04-durable-652dfa25a9184db2-post-exit",
+          "phase": "post-exit",
+          "retention": "RETAIN_CONTAINER_AND_ORIGINAL_VOLUME"
+        }
+      ],
+      "write_records": 1000,
+      "write_attempts": 1000,
+      "oracle": {
+        "status": "PASS",
+        "bytes": 16777216,
+        "final_sha256": "7bea926791fa6462c068c4980c7c2c6f9b12b9d7a2ae50141580db3abd1af617",
+        "expected_sha256": "7bea926791fa6462c068c4980c7c2c6f9b12b9d7a2ae50141580db3abd1af617",
+        "file_mode": 420,
+        "nlink": 1,
+        "mtime_seconds": -7,
+        "mtime_nanoseconds": 42,
+        "old_file_content_root_unchanged": true,
+        "binding_unchanged": true,
+        "namespace_membership_checked": true,
+        "root_serial": 1,
+        "namespace_entries": 1,
+        "binding_scope": "captured-runtime-binding-not-current-history-query",
+        "eof_checked": true
+      },
+      "stop_status": "STOPPED",
+      "database_artifact": {
+        "scope": "separate-post-stop-or-original-failure-artifact-stat",
+        "path": "/state/overlay.sqlite",
+        "status": "OBSERVED",
+        "logical_bytes": 4853760,
+        "allocated_bytes": 273289216,
+        "device": 65025,
+        "inode": 858,
+        "links": 1
+      },
+      "independent_guest_post": {
+        "database": {
+          "allocated_bytes": 273289216,
+          "device": 65025,
+          "exists": true,
+          "gid": 0,
+          "hash_read_bytes": 4853760,
+          "hash_window_bytes": 65536,
+          "inode": 858,
+          "links": 1,
+          "logical_bytes": 4853760,
+          "mode": 33152,
+          "sha256": "164e4d49c0f31756e774feb909b09e07e8c711e049de379e161187acd2387232",
+          "stable_during_observation": true,
+          "uid": 0
+        },
+        "database_path": "/state/overlay.sqlite",
+        "filesystem": {
+          "magic": 61267,
+          "mountinfo": "270 260 254:1 /docker/volumes/layerfs-e04-durable-652dfa25a9184db2-state/_data /state ro,relatime master:1 - ext4 /dev/vda1 rw,discard",
+          "type": "ext4"
+        },
+        "owner_label": "layerfs-e04-durable-652dfa25a9184db2",
+        "phase": "post-exit",
+        "probe_source": {
+          "bytes": 8857,
+          "path": "/work/core/target/cluster2-307/e04_native_backing_observation.py",
+          "sha256": "7bc5aebc93d61638270d8e368829e402a41898c12a03ae927b5345eeccfc6fbd"
+        },
+        "receipt_id": "4c973bec5eb83a5b34500adb8ae64c7340f575b6b350349d8bfef1c95e68ae08",
+        "root_identity": {
+          "device": 65025,
+          "gid": 0,
+          "inode": 772,
+          "mode": 16877,
+          "uid": 0
+        },
+        "root_path": "/state",
+        "schema": "e04-native-backing-observation-v2",
+        "volume_name": "layerfs-e04-durable-652dfa25a9184db2-state"
+      },
+      "independent_pre_start": {
+        "database": {
+          "exists": false
+        },
+        "database_path": "/state/overlay.sqlite",
+        "filesystem": {
+          "magic": 61267,
+          "mountinfo": "270 260 254:1 /docker/volumes/layerfs-e04-durable-652dfa25a9184db2-state/_data /state ro,relatime master:1 - ext4 /dev/vda1 rw,discard",
+          "type": "ext4"
+        },
+        "owner_label": "layerfs-e04-durable-652dfa25a9184db2",
+        "phase": "pre-start",
+        "probe_source": {
+          "bytes": 8857,
+          "path": "/work/core/target/cluster2-307/e04_native_backing_observation.py",
+          "sha256": "7bc5aebc93d61638270d8e368829e402a41898c12a03ae927b5345eeccfc6fbd"
+        },
+        "receipt_id": "4c973bec5eb83a5b34500adb8ae64c7340f575b6b350349d8bfef1c95e68ae08",
+        "root_identity": {
+          "device": 65025,
+          "gid": 0,
+          "inode": 772,
+          "mode": 16877,
+          "uid": 0
+        },
+        "root_path": "/state",
+        "schema": "e04-native-backing-observation-v2",
+        "volume_name": "layerfs-e04-durable-652dfa25a9184db2-state"
+      },
+      "host_terminal": [
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "attachment-fence",
+          "record_index": 1613,
+          "at_ns": 48972856500,
+          "deliveries": 1608,
+          "attachment_matches": true,
+          "inflight_request": false,
+          "input_events": 0,
+          "output_receipts": 0,
+          "service_cancelled": 0,
+          "service_completed": 0,
+          "input_close": "Some(Ok(()))",
+          "output_close": "Some(Err(Quarantined))",
+          "supervisor_failure": null,
+          "input_worker": {
+            "status": "JOINED",
+            "original_failure": "Native(Native(Io(Kind(UnexpectedEof))))",
+            "stop_kind": "interrupted-idle-read-eof",
+            "complete_record_accounting": true,
+            "partial_messages": 0,
+            "undelivered": false,
+            "close_failure": "None",
+            "native_debug": "ChannelWork { channel_calls: 3214, record_io_attempts: 3214, records: 3213, plaintext_bytes: 401352, io_calls: 6426, io_attempts: 6427, wire_bytes: 459186, zeroed_bytes: 264316, crypto_attempts: 3213, crypto_input_bytes: 452760, crypto_output_bytes: 401352, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 0, plain_capacity: 65519, sealed_capacity: 65535 }",
+            "reassembly_debug": "Ok(ReassemblyWork { admitted: 1608, allocation_attempts: 1608, requested_body_bytes: 272832, refused: 0, fragments: 3213, copied_bytes: 272832, live_messages: 0, credited_bytes: 0, peak_credited_bytes: 1224 })",
+            "records": 3213,
+            "record_io_attempts": 3214,
+            "plaintext_bytes": 401352,
+            "wire_bytes": 459186,
+            "live_messages": 0,
+            "credited_bytes": 0
+          },
+          "output_worker": {
+            "status": "JOINED",
+            "original_failure": "None",
+            "retained_receipts": 0,
+            "framing_debug": "FramingWork { encoding_attempts: 3706, encoded_fragments: 3706, header_bytes: 148240, fragments: 3706, copied_bytes: 39787902, frame_capacity: 65519, allocation_attempts: 1, requested_buffer_bytes: 65519, zeroed_bytes: 65519 }",
+            "native_debug": "ChannelWork { channel_calls: 3706, record_io_attempts: 3706, records: 3706, plaintext_bytes: 39936142, io_calls: 7412, io_attempts: 7412, wire_bytes: 40002850, zeroed_bytes: 20200275, crypto_attempts: 3706, crypto_input_bytes: 39936142, crypto_output_bytes: 39995438, buffer_allocation_attempts: 1, requested_buffer_bytes: 65535, stack_window_bytes: 0, plain_capacity: 0, sealed_capacity: 65535 }"
+          },
+          "expected_explicit_fence": true,
+          "scope": "original-explicit-joined-input-output-service-custody-no-product-publication-inference"
+        },
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "supervisor-final",
+          "record_index": 1614,
+          "at_ns": 48973046208,
+          "supervisor_work_debug": "SupervisorWork { turns: 18396, attached: 1, attachments: 0, headers: 1608, received: 1608, output_waits: 0, input_copied_bytes: 0, reply_copied_bytes: 39636236, delivered: 1608, fenced: 1, registry_capacity_bytes: 92928 }",
+          "service_work_debug": "ServiceWork { live_class_jobs: [0, 0, 0], submission_attempts: [1605, 3, 0, 0, 0, 0], submission_refusals: [0, 0, 0, 0, 0, 0], admitted: 1608, refused: 0, dispatched: [1605, 3, 0, 0, 0, 0], cancelled: 0, credited_bytes: 0, peak_credited_bytes: 67178756, outstanding: 0, copied_bytes: 39636236, queue_wait_ns: [8956472, 51334, 0, 0, 0, 0], service_ns: [3536241900, 10791, 0, 0, 0, 0], registry_capacity_bytes: 124416 }",
+          "output_work_debug": "Ok(OutputWork { submissions: 3216, refused: 0, admitted: 3216, owners: 0, messages: 0, credited_bytes: 0, packet_capacity_bytes: 0, reserved_bytes: 0, peak_credited_bytes: 33621336 })",
+          "input_owners": 0,
+          "attachments": 0,
+          "service_outstanding": 0,
+          "service_credited_bytes": 0,
+          "output_owners": 0,
+          "output_messages": 0,
+          "output_credited_bytes": 0,
+          "output_reserved_bytes": 0,
+          "output_packet_capacity_bytes": 0
+        },
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "serving-scope-fenced",
+          "record_index": 1615,
+          "at_ns": 48973165083,
+          "save_slots_held": 0,
+          "acknowledged_host_records": 1615,
+          "acknowledged_host_bytes": 734500,
+          "assignment_sha256": "cf7c6718a6b04d6ac8aaaf7a225efd169019c16fb23d9de852c60c1f4b4b2375"
+        },
+        {
+          "schema": "cluster-two-e04-host-v3",
+          "case": "E04-write-16m",
+          "mode": "diagnostic",
+          "sample_count": 0,
+          "admission_eligible": false,
+          "qualification_status": "NOT_EVALUATED",
+          "kind": "disposal-ack-published",
+          "record_index": 1616,
+          "at_ns": 48973714458,
+          "run_id": "4c973bec5eb83a5b34500adb8ae64c7340f575b6b350349d8bfef1c95e68ae08",
+          "correlation": 1608,
+          "binding_sha256": "23c916fdc15c7ef41daa32d561a4a302e454c33dfa2a62bca0105655b2a350bb",
+          "payload_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-disposal-durable-admission-20261007/control/host-ack.body",
+          "payload_bytes": 163,
+          "payload_sha256": "f065a372d771bc191a267d440be79d78b670a450fba3d216be7e917d2bf79c8a",
+          "marker_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-disposal-durable-admission-20261007/control/host-ack.complete",
+          "scope": "original-host-joined-and-zero-owner-acknowledgment"
+        }
+      ],
+      "original_error": null,
+      "secondary_errors": []
+    }
+  ],
+  "qualification_status": "NOT_EVALUATED",
+  "e1_sample_count": 0,
+  "whole_observation": "INCOMPLETE",
+  "captured_binding_is_not_fresh_branch_query": true
+}

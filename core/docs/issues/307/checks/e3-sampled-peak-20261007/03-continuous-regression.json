@@ -1,0 +1,17 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_cluster_two_registration.Registration.test_sample_inventory_cannot_claim_continuous_peak"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 177191875,
+  "kind": "focused-regression",
+  "workers": 1
+}

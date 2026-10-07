@@ -152,9 +152,11 @@ def evaluate(gates, observations, limits):
 
 
 def resource_phase(value, *, sample_interval_ns, maximum_gap_ns, clock_error_ns):
-    """Validate a baseline/phase/final witness; never accept a lifetime peak."""
-    if not isinstance(value, dict) or value.get("scope") != "phase" or value.get("peak_kind") not in ("sampled", "continuous"):
+    """Validate a finite sampled inventory, never a continuous or lifetime peak."""
+    if not isinstance(value, dict) or value.get("scope") != "phase":
         raise ValueError("phase resource witness required; lifetime peak forbidden")
+    if value.get("peak_kind") != "sampled":
+        raise ValueError("sampled inventory required; continuous peak source is not implemented")
     fields = ("baseline_bytes", "peak_bytes", "final_bytes", "opened_ns", "closed_ns", "first_ns", "last_ns", "largest_gap_ns")
     if any(not integer(value.get(key)) for key in fields):
         raise ValueError("missing phase resource boundary/value")

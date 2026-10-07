@@ -1,0 +1,24 @@
+{
+  "command": [
+    "env",
+    "CARGO_TARGET_DIR=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307",
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--example",
+    "e2_writes",
+    "--example",
+    "e2_writes_host"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1989325834,
+  "kind": "example-build",
+  "workers": 1
+}

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_evidence_disposal.E04ExplicitDisposal.test_prospectively_selected_120s_vehicle_keeps_stricter_control_fences"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 3217540000,
+  "kind": "focused-test",
+  "workers": 1
+}

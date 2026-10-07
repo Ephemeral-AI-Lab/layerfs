@@ -1,0 +1,27 @@
+{
+  "schema": "cluster-two-e2-observation-consistency-v1",
+  "case": "E04-write-16m",
+  "observation_consistency": "INCOMPLETE",
+  "write_window_consistency": "PASS",
+  "qualification_status": "NOT_EVALUATED",
+  "admission_eligible": false,
+  "e1_sample_status": "NOT_RUN",
+  "e1_sample_count": 0,
+  "E05_status": "NOT_RUN",
+  "unavailable": [
+    "private-base-facts-provider-id-trace",
+    "per-original-job-statement-families",
+    "whole-operation-copies",
+    "statement-fingerprint-bind-correlation",
+    "indexed-visited-rows",
+    "exact-eligible-debt",
+    "queue-only-peak",
+    "isolated-resource-runnable-wait",
+    "host-linux-kernel-phase-residency",
+    "physical-io",
+    "cache-enforcement-calibration"
+  ],
+  "errors": [],
+  "application_disposal_consistency": "PASS",
+  "cross_domain_physical_stat_comparison": "NOT_APPLICABLE-original-guest-only-no-host-equivalence"
+}

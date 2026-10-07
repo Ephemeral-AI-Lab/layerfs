@@ -1,0 +1,18 @@
+{
+  "command": [
+    "rustup",
+    "run",
+    "1.85.1",
+    "rustfmt",
+    "--edition",
+    "2021",
+    "--check",
+    "core/crates/layerfs-daemon/examples/e2_writes/host.rs"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 249279709,
+  "kind": "formatting",
+  "workers": 1
+}

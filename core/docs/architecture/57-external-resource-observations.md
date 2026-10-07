@@ -87,3 +87,15 @@ pager/dirty/journal/index/overflow/device/host-kernel domains stay unavailable
 unless an owning contract permits a derived conservative bound. The E1 registry
 and its 27 NOT_RUN proposals remain unchanged. E4 sustained service and eligible
 debt drain retain their separate finite-workload gates.
+
+
+The retained phase-registration validator now accepts only `peak_kind=sampled`
+for its finite timestamp/value inventory. The prior predicate also accepted the
+word `continuous`, then returned the maximum of those samples. A new regression
+[failed first](../issues/307/checks/e3-sampled-peak-20261007/03-continuous-regression.json);
+[44 registration cases](../issues/307/checks/e3-sampled-peak-20261007/05-registration-bodies.json)
+pass after the narrow correction. No continuous-event source/format exists in
+this validator, and a future one requires a separately authenticated evidence
+contract. This correction does not attest the provided clocks/calibration,
+close an E3 domain or create an eligible E1 sample. Existing sampled arithmetic
+and all frozen numerical authorities remain unchanged.

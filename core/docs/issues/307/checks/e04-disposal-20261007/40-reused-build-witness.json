@@ -1,0 +1,47 @@
+{
+  "schema": "e04-additional-build-inputs-v1",
+  "status": "MATCH",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+      "sha256": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c"
+    }
+  ],
+  "prior_input_inventory": {
+    "path": "core/docs/issues/307/checks/e04-disposal-20261007/39-owner-budget-inputs.json",
+    "sha256": "49871565dd64ab50d079e0fb5d3963fa79c69d1bc780946afff8951846142c74"
+  },
+  "build_receipts": [
+    {
+      "path": "core/docs/issues/307/checks/e04-disposal-20261007/25-host-corrected-build.json",
+      "sha256": "eb50bcc0ab0a9387ab6736fbe3774d42b67b054d0d9ec7394f93f689aa3da43e"
+    },
+    {
+      "path": "core/docs/issues/307/checks/e04-disposal-20261007/26-linux-corrected-build.json",
+      "sha256": "ef3e0df95a7f9dee04779f7ad410ec42a49cd1cd94ccde695e5478ba210940de"
+    }
+  ],
+  "binary_identity_unchanged": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "sha256": "15a51c573670ed6cd7157ab3e3b2d52548e747cc01b017682011454a516bdd00",
+      "bytes": 16017520
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "sha256": "7d10a68d36e2f700f3afe60ae564fee5a1671683e20f06805a4d9fd15ec93939",
+      "bytes": 72756136
+    }
+  ],
+  "mode": "diagnostic",
+  "profile": "debug-functional-only",
+  "cache": "uncontrolled",
+  "qualification_status": "NOT_EVALUATED",
+  "disposal_profile": "explicit-host-fence-v1",
+  "backing_profile": "prospective-e04-disposal-v3",
+  "unchanged_compiled_inputs": "all Rust, SQL, manifests, Cargo.lock and ARM64 config exactly match24; only external Python/tests budget changes",
+  "reused_build_inventory": {
+    "path": "core/docs/issues/307/checks/e04-disposal-20261007/24-corrected-build-inputs.json",
+    "sha256": "8fc8990cb2922ae8d06f770393313a5204fdf2e8f2f1df0652d4731fdfbc1584"
+  }
+}

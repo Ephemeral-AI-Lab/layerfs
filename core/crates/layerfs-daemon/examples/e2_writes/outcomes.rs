@@ -42,6 +42,11 @@ pub fn finish(r: &mut Recorder, status: &str, error: Option<&str>) -> io::Result
     };
     outcome.raw(",\"database_artifact\":")?;
     inventory(&mut outcome, std::path::Path::new(&r.invocation[5]))?;
+    outcome.raw(",\"application_disposal\":")?;
+    match &r.disposal_summary {
+        Some(value) => outcome.raw(value.trim())?,
+        None => outcome.raw("null")?,
+    }
     outcome.raw(",")?;
     outcome.field("write_records", r.trace.records)?;
     outcome.raw(",")?;
@@ -58,7 +63,9 @@ pub fn finish(r: &mut Recorder, status: &str, error: Option<&str>) -> io::Result
     r.write_once("outcomes.json", &outcome)?;
     let mut manifest = Json::new();
     r.header(&mut manifest, "manifest", 0)?;
-    manifest.raw(",\"driver_version\":\"e04-original-write-receipts-v2\",\"e1_sample_status\":\"NOT_RUN\",\"e1_sample_count\":0,\"E05_status\":\"NOT_RUN\",\"observation_consistency\":\"INCOMPLETE\",\"write_window_consistency\":\"NOT_EVALUATED\",\"streams\":[")?;
+    manifest.raw(",\"pre_start_inputs\":")?;
+    manifest.raw(r.pre_start_inputs.trim())?;
+    manifest.raw(",\"driver_version\":\"e04-original-write-receipts-v3\",\"e1_sample_status\":\"NOT_RUN\",\"e1_sample_count\":0,\"E05_status\":\"NOT_RUN\",\"observation_consistency\":\"INCOMPLETE\",\"write_window_consistency\":\"NOT_EVALUATED\",\"streams\":[")?;
     for (index, stream) in [
         &r.startup, &r.jobs, &r.probes, &r.trace, &r.stdout, &r.stderr,
     ]

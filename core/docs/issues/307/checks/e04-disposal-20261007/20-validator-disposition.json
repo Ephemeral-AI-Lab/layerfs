@@ -1,0 +1,12 @@
+{
+  "original_command_verdict": "FAILED-timeout60s retained unchanged",
+  "distinct_functional_bodies": 144,
+  "original_ordered_success_prefix": 137,
+  "isolated_diagnosed_case": 1,
+  "previously_not_started": 6,
+  "isolated_wall_ns": 3033129500,
+  "six_case_wall_ns": 14388663542,
+  "source_unchanged": true,
+  "no_passing_prefix_rerun": true,
+  "diagnosis": "The named partial-control refusal completes in2.842s body time with its finite real-sized fixture. The original combined selection exhausted60s cumulatively; no infinite control wait occurs in this retained-data validator. Its original FAILED stop is not relabeled."
+}

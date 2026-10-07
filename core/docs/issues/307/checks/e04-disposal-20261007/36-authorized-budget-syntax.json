@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "from pathlib import Path; [compile(Path(p).read_bytes(),p,\"exec\") for p in (\"core/target/cluster2-307/run_e04_owner_diagnostic.py\",\"core/benchmark/fs-bench-pro/shared/evidence_disposal.py\",\"core/benchmark/fs-bench-pro/tests/test_evidence_disposal.py\")]"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 75288959,
+  "kind": "syntax",
+  "workers": 1
+}

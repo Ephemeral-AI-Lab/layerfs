@@ -4,6 +4,7 @@ The owning validator supplies its bounded readers and exact-field checks. This
 module never executes Docker, probes a running guest, or imports the caller.
 """
 from pathlib import Path, PurePosixPath
+import hashlib
 import re
 import stat
 
@@ -41,7 +42,7 @@ class Validator:
                      "native backing stdout/stderr belongs to another original command")
         return path
 
-    def container(self, group, root, image, backing, host_root, argv, writable, expected_command=None, exit_code=0):
+    def container(self, group, root, image, backing, host_root, argv, writable, expected_command=None, exit_code=0, version=2):
         cid = group["container_id"]
         self.require(isinstance(cid, str) and re.fullmatch(r"[0-9a-f]{64}", cid),
                      "native backing container identity missing")
@@ -70,7 +71,11 @@ class Validator:
         by_path = {mount.get("Destination"): mount for mount in mounts}
         self.require(set(by_path) == {"/work", "/state"}, "native backing mounts absent or overlaid")
         bind, volume = by_path["/work"], by_path["/state"]
-        self.require(bind.get("Type") == "bind" and bind.get("Source") == str(host_root) and bind.get("RW") is True,
+        if version == 3:
+            self.require(configuration.get("ContainerIDFile") == str(cid_path)
+                and info.get("Config", {}).get("Volumes") in (None, {}), "v3 original CID/inherited volumes differ")
+        bind_source = self.bind_source(configuration, backing, writable) if version == 3 else str(host_root)
+        self.require(bind.get("Type") == "bind" and bind.get("Source") == bind_source and bind.get("RW") is True,
                      "native backing actual repository bind differs")
         self.require(volume.get("Type") == "volume" and volume.get("Name") == backing["name"]
             and volume.get("Driver") == backing["driver"] and volume.get("Source") == backing["mountpoint"]
@@ -78,6 +83,26 @@ class Validator:
         if "container_name" in group:
             self.require(info.get("Name") == "/" + group["container_name"], "native backing helper container name differs")
         return outer, inspected
+
+    def bind_source(self, configuration, backing, writable):
+        binds = configuration.get("Binds")
+        self.require(isinstance(binds, list) and len(binds) == 2
+            and configuration.get("VolumesFrom") in (None, []) and configuration.get("Mounts") in (None, [])
+            and configuration.get("Tmpfs") in (None, {}),
+            "v3 Docker bind inventory/VolumesFrom is ambiguous")
+        actual = {}
+        for item in binds:
+            self.require(isinstance(item, str), "v3 Docker bind descriptor absent")
+            parts = item.split(":")
+            self.require(len(parts) in (2, 3) and parts[1] not in actual,
+                         "v3 Docker bind descriptor repeated or ambiguous")
+            actual[parts[1]] = (parts[0], parts[2] if len(parts) == 3 else "rw")
+        self.require(set(actual) == {"/work", "/state"} and actual["/work"][1] == "rw"
+            and PurePosixPath(actual["/work"][0]).is_absolute()
+            and ".." not in PurePosixPath(actual["/work"][0]).parts
+            and actual["/state"] == (backing["name"], "rw" if writable else "ro"),
+            "v3 Docker actual bind destinations/access differ")
+        return actual["/work"][0]
 
     def direct_command(self, command, argv, image, cid_path, info, backing, host_root, writable):
         self.require(command[:2] == ["docker", "run"], "native backing outer command is not direct Docker run")
@@ -178,7 +203,7 @@ class Validator:
             "native backing original volume identity/options differ")
         return inspected
 
-    def observation(self, group, root, phase, backing, image, host_root, sources):
+    def observation(self, group, root, phase, backing, image, host_root, sources, version=2):
         self.exact(group, ("container_id", "container_name", "command_receipt", "inspect_receipt", "inspect_stdout",
             "cid_file", "observation_stdout", "probe_source", "probe_argv"), "native backing " + phase + " witness")
         probe = self.artifact(group["probe_source"], root)
@@ -186,14 +211,22 @@ class Validator:
         argv = ["python3", "-B", "/work/" + probe.relative_to(host_root).as_posix(), phase,
                 backing["receipt_id"], backing["owner_label"], backing["name"]]
         self.require(group["probe_argv"] == argv, "native backing probe source/argv substituted")
-        outer, inspected = self.container(group, root, image, backing, host_root, argv, False)
+        outer, inspected = self.container(group, root, image, backing, host_root, argv, False, version=version)
         value = self.read_json(self.raw_output(group["observation_stdout"], group["command_receipt"], ".stdout", root))[0]
-        self.exact(value, ("schema", "phase", "receipt_id", "owner_label", "volume_name", "root_path", "database_path",
-            "filesystem", "root_identity", "database"), "native backing actual guest observation")
-        self.require(value["schema"] == "e04-native-backing-observation-v1" and value["phase"] == phase
+        fields = {"schema", "phase", "receipt_id", "owner_label", "volume_name", "root_path", "database_path",
+            "filesystem", "root_identity", "database"}
+        if version == 3:
+            fields.add("probe_source")
+        self.exact(value, fields, "native backing actual guest observation")
+        self.require(value["schema"] == ("e04-native-backing-observation-v2" if version == 3 else "e04-native-backing-observation-v1") and value["phase"] == phase
             and value["receipt_id"] == backing["receipt_id"] and value["owner_label"] == backing["owner_label"]
             and value["volume_name"] == backing["name"] and value["root_path"] == "/state"
             and value["database_path"] == backing["database_path"], "native backing observation belongs to another original")
+        if version == 3:
+            source = self.exact(value["probe_source"], ("path", "bytes", "sha256"), "original executing probe source")
+            self.require(source["path"] == argv[2] and self.integer(source["bytes"])
+                and source["bytes"] == probe.stat().st_size and source["sha256"] == group["probe_source"]["sha256"],
+                "v3 original executing probe bytes differ from sealed source")
         filesystem = self.exact(value["filesystem"], ("type", "magic", "mountinfo"), "observed native filesystem")
         self.require(isinstance(filesystem["type"], str) and filesystem["type"] and self.integer(filesystem["magic"])
             and filesystem["magic"] <= 0xFFFFFFFF and isinstance(filesystem["mountinfo"], str),
@@ -229,13 +262,15 @@ class Validator:
                 and database["stable_during_observation"] is True, "native backing original guest file/hash identity unavailable")
         return value, outer, inspected
 
-    def mapping(self, descriptor, argv, command, root, identity):
+    def mapping(self, descriptor, argv, command, root, identity, version=2, original_inputs=None):
         self.require(descriptor is not None, "Docker native backing mapping UNAVAILABLE")
         value = self.read(descriptor, root)
-        self.exact(value, ("schema", "status", "scope", "source", "container_id", "image_id", "host_root", "container_root",
-            "collector_argv", "host_argv", "artifacts", "backing", "pre_start", "post_exit", "logical_export"),
-            "external Docker native path mapping")
-        self.require(value["schema"] == "cluster-two-e2-docker-path-mapping-v2" and value["status"] == "OBSERVED"
+        fields = {"schema", "status", "scope", "source", "container_id", "image_id", "host_root", "container_root",
+            "collector_argv", "host_argv", "artifacts", "backing", "pre_start", "post_exit", "logical_export"}
+        if version == 3:
+            fields.add("application_disposal")
+        self.exact(value, fields, "external Docker native path mapping")
+        self.require(version in (2, 3) and value["schema"] == f"cluster-two-e2-docker-path-mapping-v{version}" and value["status"] == "OBSERVED"
             and value["scope"] == "diagnostic-input-path-binding" and isinstance(value["source"], str) and value["source"]
             and value["image_id"] == command.get("image_id") and value["collector_argv"] == argv,
             "Docker native mapping version/image/original invocation differs")
@@ -246,9 +281,9 @@ class Validator:
         volume_receipt = self.volume(backing, root, identity["receipt_id"])
         self.require(argv[5] == backing["database_path"], "native backing original database argument substituted")
         host = value["host_argv"]
-        self.require(isinstance(host, list) and len(host) == 8 and host[5] is None and host[1] == argv[1],
+        self.require(isinstance(host, list) and len(host) == (9 if version == 3 else 8) and host[5] is None and host[1] == argv[1],
                      "native backing guest database acquired a fabricated host path")
-        for index in (0, 2, 3, 4, 6, 7):
+        for index in ((0, 2, 3, 4, 6, 7, 8) if version == 3 else (0, 2, 3, 4, 6, 7)):
             local = PurePosixPath(argv[index])
             self.require(local.is_absolute() and local.is_relative_to("/work") and ".." not in local.parts
                 and isinstance(host[index], str) and Path(host[index]).is_absolute()
@@ -258,11 +293,11 @@ class Validator:
                    "native backing original consumer artifacts")
         group = {**value["artifacts"], "container_id": value["container_id"]}
         outer, inspected = self.container(group, root, value["image_id"], backing, host_root, argv, True,
-                                          command["external_argv"], exit_code=None)
+                                          command["external_argv"], exit_code=None, version=version)
         product = self.read_json(self.artifact(identity["artifacts"]["product"], root), 1 << 20)[0]
         sources = {self.artifact(item, root) for item in product["sources"]}
-        pre, pre_command, pre_inspect = self.observation(value["pre_start"], root, "pre-start", backing, value["image_id"], host_root, sources)
-        post, post_command, _ = self.observation(value["post_exit"], root, "post-exit", backing, value["image_id"], host_root, sources)
+        pre, pre_command, pre_inspect = self.observation(value["pre_start"], root, "pre-start", backing, value["image_id"], host_root, sources, version)
+        post, post_command, _ = self.observation(value["post_exit"], root, "post-exit", backing, value["image_id"], host_root, sources, version)
         self.require(len({value["container_id"], value["pre_start"]["container_id"], value["post_exit"]["container_id"]}) == 3,
                      "native backing consumer/preparer/observer container identities reused")
         self.follows(volume_receipt, pre_command)
@@ -274,8 +309,41 @@ class Validator:
         # This vehicle deliberately has no exported database. An added copy
         # cannot acquire authority for the original guest's inode/allocation.
         self.require(value["logical_export"] is None, "native backing unregistered logical copy cannot replace original guest artifact")
-        return host, {"filesystem_magic": post["filesystem"]["magic"], "database_path": backing["database_path"],
-                      "database": post["database"], "consumer_exit_code": outer["exit_code"]}
+        native = {"filesystem_magic": post["filesystem"]["magic"], "database_path": backing["database_path"],
+                  "database": post["database"], "consumer_exit_code": outer["exit_code"]}
+        if version == 3:
+            self.original_inputs(original_inputs, identity, argv, host, root)
+            native.update(application_disposal=value["application_disposal"], consumer_command=outer,
+                pre_start_command=pre_command, image_id=value["image_id"], probe_source=value["pre_start"]["probe_source"])
+            self.require(value["pre_start"]["probe_source"] == value["post_exit"]["probe_source"],
+                         "v3 pre/post original probe source changed")
+        return host, native
+
+    def original_inputs(self, value, identity, argv, host, root):
+        names = ("binary", "assignment", "acquisition", "base", "replacements", "identity", "control")
+        self.exact(value, ("scope", *names), "v3 original pre-start inputs")
+        self.require(value["scope"] == "original-pre-start-logical-input-bytes", "v3 original input read scope differs")
+        bundle = self.read(identity["artifacts"]["fixture"], root)
+        frozen = {"binary": identity["artifacts"]["binary"], "assignment": bundle["inputs"]["assignment"],
+            "acquisition": bundle["inputs"]["acquisition"], "base": bundle["inputs"]["base_input"],
+            "replacements": bundle["inputs"]["replacements"], "control": identity["control"]}
+        locations = {"binary": (argv[0], host[0]), "assignment": (argv[2], host[2]),
+            "acquisition": (str(PurePosixPath(argv[2]).with_suffix(".fixture")), str(Path(host[2]).with_suffix(".fixture"))),
+            "base": (argv[3], host[3]), "replacements": (argv[4], host[4]), "identity": (argv[7], host[7]), "control": (argv[8], host[8])}
+        for name in names:
+            observed = self.exact(value[name], ("path", "bytes", "sha256"), "v3 original " + name + " input")
+            guest, host_path = locations[name]
+            self.require(observed["path"] == guest and self.integer(observed["bytes"]), "v3 original input path/length differs")
+            if name == "identity":
+                supplied, raw = self.read_json(host_path, 16_384)
+                self.require(supplied == identity and observed["bytes"] == len(raw)
+                    and observed["sha256"] == hashlib.sha256(raw).hexdigest(), "v3 original identity input bytes differ")
+            else:
+                path = self.artifact(frozen[name], root)
+                self.require(path == Path(host_path) and observed["sha256"] == frozen[name]["sha256"]
+                    and observed["bytes"] == path.stat().st_size
+                    and ("bytes" not in frozen[name] or frozen[name]["bytes"] == observed["bytes"]),
+                    "v3 original input bytes differ from independent pre-start seal: " + name)
 
     def original_artifact(self, state, native):
         self.require(state["path"] == native["database_path"] and state["status"] == "OBSERVED",

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_evidence_jobs",
+    "test_evidence_backing",
+    "test_evidence_disposal"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": -9,
+  "timed_out": true,
+  "wall_ns": 60012790333,
+  "kind": "harness-test",
+  "workers": 1
+}

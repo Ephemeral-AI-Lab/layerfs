@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/target/cluster2-307/check_e04_closure_docs.py"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 133541334,
+  "kind": "documentation",
+  "workers": 1
+}

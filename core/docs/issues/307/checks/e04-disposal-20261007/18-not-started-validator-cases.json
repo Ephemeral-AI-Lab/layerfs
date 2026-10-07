@@ -1,0 +1,23 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "test_evidence_disposal.E04ExplicitDisposal.test_partial_message_cannot_be_hidden_by_ack",
+    "test_evidence_disposal.E04ExplicitDisposal.test_pre_io_quarantine_requires_no_new_read_attempt",
+    "test_evidence_disposal.E04ExplicitDisposal.test_probe_observation_must_name_actual_presealed_source_bytes",
+    "test_evidence_disposal.E04ExplicitDisposal.test_secondary_close_failure_remains_original_refusal",
+    "test_evidence_disposal.E04ExplicitDisposal.test_truncated_encrypted_eof_is_refused_even_when_boolean_claims_clean",
+    "test_evidence_disposal.E04ExplicitDisposal.test_wrong_shutdown_result_refuses_ack"
+  ],
+  "wall_timeout_s": 30,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 14388663542,
+  "kind": "remaining-functional-tests",
+  "workers": 1
+}

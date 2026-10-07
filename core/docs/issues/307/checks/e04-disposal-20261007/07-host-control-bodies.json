@@ -1,0 +1,11 @@
+{
+  "command": [
+    "core/target/cluster2-307/debug/deps/e04_disposal_control-27b5e54b4018ebb2"
+  ],
+  "wall_timeout_s": 30,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1361462250,
+  "kind": "functional-test",
+  "workers": 1
+}

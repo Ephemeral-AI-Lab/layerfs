@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "import json,pathlib; rows=json.loads(pathlib.Path(\"core/docs/issues/307/checks/e04-disposal-20261007/11-harness-inputs.json\").read_text())[\"files\"]; [compile(pathlib.Path(r[\"path\"]).read_bytes(),r[\"path\"],\"exec\") for r in rows]; print(\"eight source files compiled\")"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 127329584,
+  "kind": "syntax",
+  "workers": 1
+}

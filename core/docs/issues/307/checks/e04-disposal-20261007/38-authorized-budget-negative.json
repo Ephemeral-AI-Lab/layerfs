@@ -1,0 +1,17 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_evidence_disposal.E04ExplicitDisposal.test_unregistered_product_cutoff_cannot_use_owner_120s_allowance"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 3085606333,
+  "kind": "focused-test",
+  "workers": 1
+}

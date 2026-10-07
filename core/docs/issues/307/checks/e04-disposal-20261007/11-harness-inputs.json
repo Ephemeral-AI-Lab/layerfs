@@ -1,0 +1,37 @@
+{
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_jobs.py",
+      "sha256": "e2bac6152988cb84df26ce526660a8360cab4de1993cb2cde907387e3b11d9eb"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_backing.py",
+      "sha256": "57806b457e07d0a695279088a49af9e1fab242fa99a416f52ddec0f89c31a808"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_disposal.py",
+      "sha256": "352d708a75eb7f4b8b3ee1e36a1a4ca126313877e1e441eb5adf460f8a074a94"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py",
+      "sha256": "0e0e8eea6650861248104db3e8f132133f57eeaeb602144e052405c32905c222"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_backing.py",
+      "sha256": "7085ff6bcbe2327382d028383e9f8db731f9d1dd83faae9483b9c85031546715"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_disposal.py",
+      "sha256": "961878cfd355354688eed1acfc343ca1b39f080cef27f021a4080daf4ac7352d"
+    },
+    {
+      "path": "core/target/cluster2-307/run_e04_owner_diagnostic.py",
+      "sha256": "91e0a76c64ebee83c21fb84661f83c9f65629f2689f23ab45ecfdbcbc8f41690"
+    },
+    {
+      "path": "core/target/cluster2-307/e04_native_backing_observation.py",
+      "sha256": "7bc5aebc93d61638270d8e368829e402a41898c12a03ae927b5345eeccfc6fbd"
+    }
+  ],
+  "schema": "e04-disposal-harness-inputs-v1"
+}

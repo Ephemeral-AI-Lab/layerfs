@@ -1,0 +1,16 @@
+{
+  "schema": "e04-owner-budget-host-admission-diagnosis-v1",
+  "original_invocation": "42-durable-original-diagnostic.json",
+  "original_wall_ns": 2470178583,
+  "original_host_stderr": "core/target/cluster2-307/e04-disposal-durable-20261007/receipts/host.stderr",
+  "original_cause": "caller functional deadline must be1..90seconds",
+  "cause": "The prospective owner-authorized120s vehicle reserves10s for terminal work and supplied110s to the original host; its external example still had the old90s argument-admission ceiling. It refused before Project/Store/runtime readiness, not from operation time.",
+  "consumer": "NOT_RUN",
+  "writes_attempted": 0,
+  "database_startup": "NOT_RUN",
+  "volume": "layerfs-e04-durable-d2e6c91d2dd0498f-state",
+  "custody": "Original empty volume and helper container, control/inputs/seals, command/first refusal retained. No cleanup/replay or reuse.",
+  "correction": "Honor the already prospective owner120s test ceiling in external host argument validation; retain5s controls and110/118/120 selected vehicle boundaries. Rebuild changed source before a fresh original Durable selection.",
+  "qualification_status": "NOT_EVALUATED",
+  "e1_samples": 0
+}

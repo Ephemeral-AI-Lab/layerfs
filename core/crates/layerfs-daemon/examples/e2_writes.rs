@@ -3,6 +3,9 @@
 #[path = "e2_startup/streams.rs"]
 #[allow(dead_code)]
 mod common_streams;
+#[path = "e2_writes/control.rs"]
+#[allow(dead_code)] // Shared host and consumer lifecycle sides.
+mod control;
 #[path = "../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]
 #[allow(dead_code, clippy::needless_range_loop)]
 mod digest;
@@ -29,8 +32,8 @@ mod streams;
 
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
-    if args.len() != 8 {
-        eprintln!("usage: e2_writes ENDPOINT ASSIGNMENT BASE_INPUT REPLACEMENTS DATABASE_ABSOLUTE OUTPUT_UNUSED IDENTITY_JSON");
+    if args.len() != 9 {
+        eprintln!("usage: e2_writes ENDPOINT ASSIGNMENT BASE_INPUT REPLACEMENTS DATABASE_ABSOLUTE OUTPUT_UNUSED IDENTITY_JSON CONTROL_CONFIG");
         std::process::exit(2);
     }
     if !cfg!(target_os = "linux") {

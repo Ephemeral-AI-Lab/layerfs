@@ -1,0 +1,16 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-c",
+    "from shared import evidence_jobs as j; import json,pathlib; p=pathlib.Path(\"core/target/cluster2-307/e04-disposal-disposable-20261007\"); o=json.loads((p/\"owner-outcome.json\").read_text()); x=j.validate(p/\"consumer-output\",docker_mapping=o[\"result\"][\"mapping\"]); print(json.dumps(x,indent=2)); raise SystemExit(bool(x[\"errors\"]))"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1963886875,
+  "kind": "retained-data-validation",
+  "workers": 1
+}

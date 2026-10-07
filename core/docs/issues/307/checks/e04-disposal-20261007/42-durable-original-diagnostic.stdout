@@ -1,0 +1,1 @@
+{"original_error": "RuntimeError('original host exited before readiness; do not launch consumer')", "owner_outcome": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-disposal-durable-20261007/owner-outcome.json", "result": null, "status": "FAILED"}
