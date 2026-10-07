@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-10-07T16:07:35.628634+00:00",
+  "rows": [
+    {
+      "path": "core/crates/layerfs-persistence/src/backend/sqlite/seal.rs",
+      "host_sha256": "d0fc7e8a94f3e57b93a226698ae7d2535aa9e949be3a5d21fd609b95fd6c6ff7",
+      "linux_sha256": "d0fc7e8a94f3e57b93a226698ae7d2535aa9e949be3a5d21fd609b95fd6c6ff7",
+      "matches": true
+    },
+    {
+      "path": "core/crates/layerfs-persistence/src/backend/sqlite/seal_allocation.rs",
+      "host_sha256": "525aac2f5e1a5f36fcaeff2b570b2b226b5085ec5f8ca1c508220f36d6c7ab24",
+      "linux_sha256": "525aac2f5e1a5f36fcaeff2b570b2b226b5085ec5f8ca1c508220f36d6c7ab24",
+      "matches": true
+    },
+    {
+      "path": "core/crates/layerfs-persistence/src/backend/sqlite/mod.rs",
+      "host_sha256": "74a69d01b8609f8faaef08b00b62c327434026a69d630d300211f8515244605f",
+      "linux_sha256": "74a69d01b8609f8faaef08b00b62c327434026a69d630d300211f8515244605f",
+      "matches": true
+    },
+    {
+      "path": "core/crates/layerfs-persistence/src/store/seal.rs",
+      "host_sha256": "f7f9ed5676fa995775d297d2ad2513d19914dd48de756eb55db5d18d7eb13424",
+      "linux_sha256": "f7f9ed5676fa995775d297d2ad2513d19914dd48de756eb55db5d18d7eb13424",
+      "matches": true
+    },
+    {
+      "path": "core/crates/layerfs-persistence/Cargo.toml",
+      "host_sha256": "12f4d34ac211b39707c68fdc7bd91f753d34e9d31d388f746b5383ce970ba7c6",
+      "linux_sha256": "12f4d34ac211b39707c68fdc7bd91f753d34e9d31d388f746b5383ce970ba7c6",
+      "matches": true
+    },
+    {
+      "path": "core/Cargo.lock",
+      "host_sha256": "9b140178803f618c44d37ca5fd3e2dee0f6809ab9405858db56a6e7ea270c1af",
+      "linux_sha256": "9b140178803f618c44d37ca5fd3e2dee0f6809ab9405858db56a6e7ea270c1af",
+      "matches": true
+    },
+    {
+      "path": ".cargo/config.toml",
+      "host_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+      "linux_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+      "matches": true
+    },
+    {
+      "path": "core/crates/layerfs-persistence/tests/serverless_store.rs",
+      "host_sha256": "820831d77b56c55b87e0d2643f140b22e5fbc6bd4e3ae5368ca773eccc7cca54",
+      "linux_sha256": "820831d77b56c55b87e0d2643f140b22e5fbc6bd4e3ae5368ca773eccc7cca54",
+      "matches": true
+    }
+  ]
+}

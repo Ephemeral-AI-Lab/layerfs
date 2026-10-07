@@ -89,4 +89,15 @@ def comparison(row, case_id):
         incumbent = reference(case_id, 'incumbent')
         result['incumbent'] = {**ROWS[case_id]['incumbent'], 'comparison_ns': incumbent['comparison_ns'],
                                'storage_bytes': incumbent['storage_bytes']}
+    if 'prior_wal' in ROWS[case_id]:
+        prior = reference(case_id, 'prior_wal')
+        result['prior_wal'] = {**ROWS[case_id]['prior_wal'],
+                               'source': prior['measured_source_commit'],
+                               'comparison_ns': prior['comparison_ns'],
+                               'storage_bytes': prior['storage_bytes'],
+                               'allocation_gate': prior['historical_comparison']['allocation_gate']}
+        if row.get('comparison_ns') is not None:
+            result['prior_wal']['time_delta_ns'] = row['comparison_ns']-prior['comparison_ns']
+        if row.get('storage_bytes') is not None:
+            result['prior_wal']['storage_delta_bytes'] = row['storage_bytes']-prior['storage_bytes']
     return result

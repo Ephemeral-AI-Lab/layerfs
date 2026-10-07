@@ -37,6 +37,22 @@ class DisposableWalTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'disabled by owner'):
             phase7_history.run(c, None, 'candidate', None, None)
 
+    def test_seal_correction_preserves_stride1_scope_and_prior_failure(self):
+        old = 'phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1'
+        name = old.replace('-wal-v1', '-seal-allocation-v1')
+        new = d.ROWS[name]
+        self.assertEqual(new['supersedes'], old)
+        self.assertEqual({k: v for k, v in new.items() if k not in ('id', 'supersedes', 'prior_wal')},
+                         {k: v for k, v in d.ROWS[old].items() if k != 'id'})
+        prior = d.reference(name, 'prior_wal')
+        self.assertEqual(prior['storage_bytes'], 101498880)
+        result = d.comparison({'comparison_ns': prior['comparison_ns'],
+                               'storage_bytes': 85348352}, name)
+        self.assertEqual(result['prior_wal']['allocation_gate'], 'FAIL')
+        self.assertEqual(result['prior_wal']['storage_delta_bytes'], -16150528)
+        self.assertEqual(result['allocation_gate'], 'PASS')
+        self.assertFalse(result['admission_eligible'])
+
     def test_new_baseline_arm_refused(self):
         for name in d.ROWS:
             with self.assertRaisesRegex(ValueError, 'historical references'):

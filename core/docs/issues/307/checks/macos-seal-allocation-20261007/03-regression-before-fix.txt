@@ -1,0 +1,22 @@
+# {"timestamp": "2026-10-07T15:59:48.177166+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/seal_allocation-e8c33a51ae8c1320", "--exact", "seal_releases_excess_and_preserves_original_file_for_all_layouts", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/seal_allocation-e8c33a51ae8c1320": "cd1b318af573f4265a011b98bd240f59c927f39f8a357c33091976d2cee9e400"}, "source_diff_sha256": "364550ed797c7417051790def6999e5cef5d256f2e9afffb2e332d80b84fbc33", "source_parent": "122b8c1b3f97c838515b6795af9b11bd2333c736", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test seal_releases_excess_and_preserves_original_file_for_all_layouts ... SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45223-0
+
+thread 'seal_releases_excess_and_preserves_original_file_for_all_layouts' panicked at crates/layerfs-persistence/tests/seal_allocation.rs:135:9:
+assertion failed: after.blocks() * 512 <= after.len() + 4096
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+RETAINED_FAILED_SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45223-0
+FAILED
+
+failures:
+
+failures:
+    seal_releases_excess_and_preserves_original_file_for_all_layouts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+
+
+# complete_command_ns=1510317667
+
+# exit=101

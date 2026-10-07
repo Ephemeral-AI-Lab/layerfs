@@ -16,6 +16,8 @@ impl Session {
             return Err(PersistenceError::Uncertain);
         }
         #[cfg(target_os = "macos")]
+        let identity = super::seal_allocation::Identity::capture(&self.path)?;
+        #[cfg(target_os = "macos")]
         super::file_control::disable_persistent_wal(&state.connection)?;
         let result = query::run(
             &state.connection,
@@ -48,6 +50,9 @@ impl Session {
                 }
             }
         }
+        #[cfg(target_os = "macos")]
+        let bytes = super::seal_allocation::release(&self.path, identity)?;
+        #[cfg(not(target_os = "macos"))]
         let bytes = std::fs::metadata(&self.path)
             .map_err(|error| PersistenceError::Refused {
                 status: error.to_string(),

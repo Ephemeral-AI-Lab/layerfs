@@ -127,6 +127,29 @@
       },
       "prepared_root": "disposable-wal-prepared.noindex",
       "supersedes": "phase7-sqlite-disposable-init-100000-owner-wal-v1"
+    },
+    {
+      "id": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-seal-allocation-v1",
+      "fixture": null,
+      "states": 157,
+      "profile": "disposable",
+      "command_budget_ns": 300000000000,
+      "verification_budget_ns": 30000000000,
+      "storage_ceiling": 92342273,
+      "pack_layout": "group-rows-indexed",
+      "reference": {
+        "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/baseline/receipt.json",
+        "sha256": "b52964747a9647f350b0ccd1267db5ed4cc071d72e30d4c09bc939442797b868"
+      },
+      "incumbent": {
+        "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/candidate/receipt.json",
+        "sha256": "9e982606b131ae4a85f8d971172c231b9de0330076edf664825b6b9cdba812a5"
+      },
+      "supersedes": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1",
+      "prior_wal": {
+        "path": "core/docs/issues/307/checks/disposable-wal-matrix-20261007/27-history-stride1-group-rows-indexed-wal-v1/receipt.json",
+        "sha256": "fac1a26fe4c6535efb6e424c32969b3e7c6065556f5edb064ed58d57740a7462"
+      }
     }
   ]
 }

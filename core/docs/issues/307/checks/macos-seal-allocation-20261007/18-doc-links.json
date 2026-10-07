@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-10-07T16:09:12.626404+00:00",
+  "status": "PASS",
+  "added_or_new_links": [
+    [
+      "cluster_one_handbook.md",
+      "core/docs/architecture/60-shared-store-foundation.md"
+    ],
+    [
+      "cluster_one_handbook.md",
+      "docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md"
+    ],
+    [
+      "core/AGENTS.md",
+      "docs/architecture/60-shared-store-foundation.md"
+    ],
+    [
+      "core/docs/architecture/60-shared-store-foundation.md",
+      "../../../docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md"
+    ],
+    [
+      "core/docs/issues/303/08-decisions-provenance.md",
+      "../../../../docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md"
+    ],
+    [
+      "core/docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md",
+      "../../../../docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md"
+    ],
+    [
+      "core/docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md",
+      "checks/macos-seal-allocation-20261007/"
+    ]
+  ],
+  "whitespace": "PASS"
+}

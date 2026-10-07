@@ -18,11 +18,15 @@ pub struct SealedStore {
 
 impl Handles {
     /// Consumes the sole session, checkpoints once, closes and verifies one file.
+    /// macOS then releases unused allocation beyond the original file's logical
+    /// end, without copying its contents or changing its identity or length.
     ///
     /// A retained provider/Storage/Reader/Save refuses with `Busy` before any
     /// checkpoint. Another process can obstruct checkpoint or keep sidecars;
     /// neither case triggers a retry or deletion. Provisioning must prevent
-    /// new openers while the sealed file is handed off.
+    /// new openers throughout sealing and handoff. This is not live Store
+    /// reclamation. Uncertain transfer/temporary-close outcomes retain the owned
+    /// `.layerfs-allocation-*` sibling; no automatic retry or deletion follows.
     pub fn seal(self) -> Result<SealedStore, PersistenceError> {
         let Self {
             storage,

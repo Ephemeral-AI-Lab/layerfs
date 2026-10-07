@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-10-07T16:09:11.957877+00:00",
+  "sha256": {
+    "core/target/release/examples/benchmark_history": "2cf43b242e8b32bce909fa8b4e4aacf427433a798d72de6c1ddef63c8c8f2dda",
+    "core/target/release/examples/verify_history": "a4b042159638070e37bdde392cdbffe517651985de303f2c2808f5e9c10492e4",
+    "core/target/debug/deps/seal_allocation-e8c33a51ae8c1320": "a37320cf5dce511ee42aa3e589ca6957df65b113d3d9d91ed7ab827753e6ab5c",
+    "core/target/debug/deps/serverless_store-7457c3c2da7238a5": "e877fb45a28687d00e1b6b980ad967628a02f4a4098b01f4fe17a6f6b26a74a6",
+    "core/target/cluster2-linux/debug/deps/serverless_store-32a365e87af8c2e1": "228c36622d07e3417ee275131fe3497e5229ca7c1d98b4e198c6ebcb67acd8f2",
+    "core/Cargo.lock": "9b140178803f618c44d37ca5fd3e2dee0f6809ab9405858db56a6e7ea270c1af",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "tools/production_loc.py": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  },
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+  "docker": "9cf2fe345496 layerfs-experiment-305-dev Up 4 days\nce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927 Up 4 days\nd2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab Up 5 days\nd2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d Up 5 days\n",
+  "workers": 1,
+  "profile": "Disposable/WAL/OFF",
+  "failed_fixture_retained": true
+}

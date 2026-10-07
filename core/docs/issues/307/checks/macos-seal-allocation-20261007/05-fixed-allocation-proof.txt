@@ -1,0 +1,25 @@
+# {"timestamp": "2026-10-07T16:05:09.453847+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/seal_allocation-e8c33a51ae8c1320", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/seal_allocation-e8c33a51ae8c1320": "a37320cf5dce511ee42aa3e589ca6957df65b113d3d9d91ed7ab827753e6ab5c"}, "source_diff_sha256": "9c44be1fddee427f6a4beb41f1ad97f5c08f8b237ba364e4beea9b122d688e47", "source_parent": "122b8c1b3f97c838515b6795af9b11bd2333c736", "wall_stop": "specified in command; build is not test execution"}
+
+running 5 tests
+test hard_link_refusal_preserves_original_bytes_and_allocation ... SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45546-0
+ok
+test readonly_seal_does_not_release_extents ... SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45546-1
+ok
+test seal_releases_excess_and_preserves_original_file_for_all_layouts ... SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45546-2
+SEAL_ALLOCATION layout=Monolithic logical=135168 before=16912384 after=135168 same_hash=true same_inode=true
+SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45546-3
+SEAL_ALLOCATION layout=GroupRows logical=143360 before=16920576 after=143360 same_hash=true same_inode=true
+SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45546-4
+SEAL_ALLOCATION layout=GroupRowsIndexed logical=147456 before=16924672 after=147456 same_hash=true same_inode=true
+ok
+test shared_session_busy_leaves_allocation_untouched ... SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45546-5
+ok
+test symlink_refusal_preserves_original_bytes_and_allocation ... SEAL_FIXTURE /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-seal-allocation-45546-6
+ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+# complete_command_ns=1274970667
+
+# exit=0

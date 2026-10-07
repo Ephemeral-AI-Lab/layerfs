@@ -541,6 +541,7 @@ dependencies = [
  "layerfs-history",
  "layerfs-storage",
  "layerfs-telemetry",
+ "nix",
  "rusqlite",
 ]
 

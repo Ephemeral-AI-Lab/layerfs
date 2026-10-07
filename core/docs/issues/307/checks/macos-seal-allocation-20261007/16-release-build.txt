@@ -1,0 +1,13 @@
+# {"timestamp": "2026-10-07T16:08:05.055978+00:00", "command": ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--release", "--locked", "-p", "layerfs-project", "--example", "benchmark_history", "--example", "verify_history"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "fe464461284f376f4243b1eb20d5f05008525c15ec20471e2aa1f1e4ecc8c925", "source_parent": "122b8c1b3f97c838515b6795af9b11bd2333c736", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+    Finished `release` profile [optimized] target(s) in 6.16s
+
+# complete_command_ns=6249056208
+
+# exit=0

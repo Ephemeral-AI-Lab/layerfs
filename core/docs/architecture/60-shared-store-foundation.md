@@ -1,7 +1,7 @@
 # Shared Store platform, contention and seal
 
 > **Status:** Current general guide.
-> Source update after `727476a4d`, 2026-10-07; provider implementation,
+> Source update after `122b8c1b3`, 2026-10-08; provider implementation,
 > not daemon/control/Exec integration or performance qualification.
 
 [`Handles`](../../crates/layerfs-persistence/src/store/handles.rs) opens one
@@ -9,8 +9,10 @@ validated session on macOS or Linux. macOS links system SQLite; Linux enables
 `bundled` on the existing pinned rusqlite dependency. The database remains
 distinct from every daemon's local overlay.
 
-Both profiles use WAL. Durable selects FULL, with full synchronization on
-macOS; Disposable selects OFF and supplies no kernel/VM-crash guarantee.
+Disposable/WAL/OFF is the sole authorized execution profile until the owner
+explicitly reauthorizes Durable. Retained Durable code selects FULL, with full
+synchronization on macOS; it may compile but must not execute. Disposable
+supplies no kernel/VM-crash guarantee.
 Identities are `sqlite-wal-full-v2` and `sqlite-wal-off-v2`. Shared creation selects WAL;
 open reads and verifies it without conversion. Existing memory-journal Stores
 are refused. Profile selection across processes is a provisioning fact rather
@@ -35,6 +37,19 @@ sidecars remain. It returns file path/bytes, provisioning profile and the
 linked SQLite version. A failure causes no guessed deletion or retry. New
 openers must be excluded by the provisioning lifecycle through handoff.
 
+The [owner-selected seal correction](../../../docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md)
+adds one narrow macOS completion step after checked SQLite close and sidecar
+absence. If physical allocation exceeds logical length, the safe, already
+locked nix0.31.3 `F_TRANSFEREXTENTS` API transfers unused extents beyond EOF to
+an exclusively created empty sibling, then closes and removes that sibling.
+The original file is never replaced or copied. Regular-file, single-link,
+device/inode and length checks fence the operation; symlinks/hard links are
+refused. Transfer or temporary-close uncertainty retains the owned sibling;
+cleanup failures remain uncertain, without a second attempt. No preallocation,
+vacuum, payload scan, persistent allocation owner or new unsafe boundary is
+introduced. Linux has no extent-transfer step. The shared daemon Store stays
+open and does not run this sole-owner host seal operation.
+
 Apple's SQLite keeps persistent WAL by default. The
 [owner-approved wrapper](../issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md)
 sets this file-control flag to0 and reads it back, only in the macOS seal path.
@@ -56,7 +71,8 @@ Store placement requires local kernel locking/shared memory: a named VM volume
 or container-local disk, never the repository host share.
 
 [F1–F4 receipts](../issues/307/PRE-S8-F1-F4-20261007.md) cover Disposable
-functional checks and retained failures. New Durable execution stays deferred.
+functional checks and retained failures. New Durable execution stays disabled
+until explicit owner reauthorization.
 Historical allocation/speed results keep their original profiles and verdicts;
 mechanism retirement supplies no speed or storage improvement claim.
 

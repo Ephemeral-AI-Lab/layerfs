@@ -171,7 +171,7 @@ an existing file; use `open_writable` or `open_read_only` for an existing Store.
 | `Storage::new` | `Arc<dyn PackPersistence>` → `StorageResult<Storage>` | Reads and validates persisted policy |
 | `Storage::begin_save` | `&self` → `StorageResult<Save<'_>>` | One producer owner for a Save |
 | `Storage::reader` | `&self` → `StorageResult<Reader<'_>>` | Operation-owned authenticated read caches |
-| `Handles::seal` | consumes `Handles` → `Result<SealedStore, PersistenceError>` | Sole host provisioning owner; checkpoint once, checked close, no sidecars; retained providers refuse |
+| `Handles::seal` | consumes `Handles` → `Result<SealedStore, PersistenceError>` | Sole host provisioning owner; checkpoint once, checked close, no sidecars, release unused macOS extents; retained providers refuse |
 
 The application supplies a stable binding key, nonzero valid catalog incarnation,
 and nonzero secret cursor key through `HistoryCatalogConfig`. Retain authority
@@ -673,8 +673,8 @@ Source: [Save lifecycle](core/crates/layerfs-storage/src/save/operation.rs),
 
 | Choice | Current behavior |
 | --- | --- |
-| Durable | Default; SQLite WAL / FULL, plus macOS full synchronization |
-| Disposable | SQLite WAL / OFF; process-crash survival, no kernel/VM-crash durability |
+| Durable | Retained WAL / FULL source may compile; execution disabled until explicit owner reauthorization |
+| Disposable | Sole active profile, selected explicitly: SQLite WAL / OFF; process-crash survival, no kernel/VM-crash durability |
 | Monolithic | Creation layout schema1; complete pack BLOBs |
 | GroupRows | Creation layout schema2; independently stored complete encoded units |
 | GroupRowsIndexed | Creation layout schema3; group rows with covering mapping index |
@@ -702,6 +702,18 @@ owner-approved macOS file-control wrapper disables and verifies persistent WAL
 before checkpoint; no sidecar is manually deleted. A retained provider refuses
 before checkpoint. Provisioning excludes new openers through handoff. The result
 records path, profile, SQLite version and closed-file bytes.
+
+Owner-selected correction after `122b8c1b3`, 2026-10-08: macOS seal then releases
+physical allocation beyond logical EOF with one safe `F_TRANSFEREXTENTS` call
+when needed. It preserves original bytes, device/inode and logical length;
+requires a singly linked regular file; checks closes and removes only its owned
+temporary after a known outcome. Uncertainty retains exact custody without
+retry. This common Persistence seal applies to all callers/layouts that seal a
+Store, including Project Init and the offline history construction driver.
+It does not run on the live Linux daemon's shared Store. Per-pack preallocation,
+the old allocation owner and public checkpoint remain retired. See the
+[source boundary](core/docs/architecture/60-shared-store-foundation.md) and
+[stride1-only plan](docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md).
 
 Owner supersession2026-10-07 selects WAL throughout Init and Commit. The
 briefly implemented private MEMORY import and conversion-at-seal path is

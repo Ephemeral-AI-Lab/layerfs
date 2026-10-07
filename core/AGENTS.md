@@ -214,6 +214,11 @@ fixtures, examples and tools do not contribute to production LOC.
   MEMORY import or journal promotion remains. The measured host Init regression
   is retained as FAIL and accepted as the new baseline for that exact scope.
   Host seal consumes sole ownership, checkpoints, closes and verifies one file.
+  Its macOS completion releases unused extents beyond logical EOF through the
+  existing safe nix API, preserving the original file's bytes and identity.
+  This narrow seal-only correction does not restore per-pack preallocation or
+  the allocation owner, and is never invoked on a live shared daemon Store; see
+  the [seal boundary](docs/architecture/60-shared-store-foundation.md).
   See the [foundation checkpoint](docs/issues/307/PRE-S8-F1-F4-20261007.md).
 - Target (owner direction 2026-10-07): the same Store opened directly by every
   Linux daemon from a shared volume, several writer processes, no host in the
