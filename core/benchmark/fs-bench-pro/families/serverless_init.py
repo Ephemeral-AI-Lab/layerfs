@@ -154,7 +154,9 @@ def run(case, output, arm, common):
             raise ValueError('compilation inputs changed during build')
         row['cold_helper'] = cold_native.build(common.ROOT, out, phase7_sqlite.invoke)
         fixture_case = init_namespace.CASES[case.fixture]
-        fixture = init_namespace.prepare(fixture_case, common.RESULTS / 'sdk-prepared')
+        prepared_name = disposable_wal.ROWS[case.id].get('prepared_root', 'sdk-prepared') if matrix else 'sdk-prepared'
+        fixture = init_namespace.prepare(fixture_case, common.RESULTS / prepared_name)
+        row['prepared_source_root'] = str(common.RESULTS / prepared_name)
         row['fixture'] = fixture
         row['workload_identity'] = {'case': fixture['case'], 'seed': fixture['seed']}
         row['fixture_identity'] = fixture['manifest_sha256']

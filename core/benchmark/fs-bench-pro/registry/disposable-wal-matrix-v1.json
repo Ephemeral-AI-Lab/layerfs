@@ -111,6 +111,22 @@
         "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/candidate/receipt.json",
         "sha256": "9e982606b131ae4a85f8d971172c231b9de0330076edf664825b6b9cdba812a5"
       }
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-100000-owner-wal-v2",
+      "fixture": "namespace-100000",
+      "states": null,
+      "profile": "disposable",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000,
+      "storage_ceiling": null,
+      "pack_layout": "monolithic",
+      "reference": {
+        "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-100000-incumbent-restored-v1/candidate/receipt.json",
+        "sha256": "1b9e139019fa3f67b0313c2c8c3186f0e5ff6bee3b3ee2052423fe210b5b709e"
+      },
+      "prepared_root": "disposable-wal-prepared.noindex",
+      "supersedes": "phase7-sqlite-disposable-init-100000-owner-wal-v1"
     }
   ]
 }

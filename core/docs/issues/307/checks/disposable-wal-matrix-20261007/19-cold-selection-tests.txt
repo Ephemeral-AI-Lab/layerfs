@@ -1,0 +1,10 @@
+# {"timestamp": "2026-10-07T14:57:19.115109+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-m", "unittest", "test_disposable_wal", "test_serverless_init"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "5a2ce43ec8f9168d24ed03507fabc3dc710137b4", "wall_stop": "specified in command; build is not test execution"}
+............
+----------------------------------------------------------------------
+Ran 12 tests in 0.036s
+
+OK
+
+# complete_command_ns=290327667
+
+# exit=0

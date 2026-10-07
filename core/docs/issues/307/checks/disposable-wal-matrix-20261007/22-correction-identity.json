@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-10-07T14:59:05.295812+00:00",
+  "loc_receipt18_commit_trees": "MATCH",
+  "native_binaries_receipt11": "UNCHANGED",
+  "spotlight_matching_open_paths": [],
+  "lsof_exit": 0,
+  "scope": "single read-only snapshot; in-run cold attestation still required"
+}

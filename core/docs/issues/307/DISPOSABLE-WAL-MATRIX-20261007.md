@@ -51,3 +51,22 @@ All new samples are macOS component operations, not integrated daemon/Exec
 latency. Historical comparisons are unpaired and admission-ineligible. Original
 Init speed/allocation failures and all other receipts keep their original verdicts.
 No Durable or MEMORY-profile product execution is selected.
+
+## First collection and source-cold correction
+
+Receipts13–15 preserve completed Init100/1000/10000 at `5ba8362cb`, with passing
+functional, source-cold and cleanup checks. Their historical1.10 speed arithmetic
+fails. Receipt16 is Init100000 v1 INELIGIBLE, zero product samples:1626 pages
+remain resident. Receipt17 observes Spotlight holding30 descriptors on15 files
+in the prepared source. Nothing was timed or replayed after this refusal.
+
+The [prospective correction](../../../../docs/roadmap/0.1/0.1.7/disposable-wal-init-cold-correction-20261007.md)
+is committed at `5a2ce43ec`, with unchanged production LOC (receipt18).
+Receipt19 passes12 affected registry/historical-scope tests.20/21 make and
+validate an independent128KiB-window byte copy of100000 files/500000000B in
+the owned `.noindex` preparation directory; every file SHA256 matches the
+original manifest, and the original fixture remains.22 confirms unchanged
+native binary hashes and the prior commit's LOC product trees. Its single
+Spotlight snapshot observes no handles on the new source; only the subsequent
+in-run cold check can establish sample eligibility. No product/native source
+changed, so receipt02's build and05–08's unaffected checks are reused by scope.

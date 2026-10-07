@@ -12,7 +12,7 @@ from shared import disposable_wal as d
 
 class DisposableWalTests(unittest.TestCase):
     def test_exact_order_workloads_and_existing_limits(self):
-        cases = [phase7_sqlite.CASES[name] for name in d.ROWS]
+        cases = [phase7_sqlite.CASES[name] for name, row in d.ROWS.items() if 'supersedes' not in row]
         self.assertEqual(len(cases), 7)
         self.assertEqual([phase7_sqlite.init.CASES[c.fixture].files for c in cases[:4]],
                          [100, 1000, 10000, 100000])
@@ -20,6 +20,15 @@ class DisposableWalTests(unittest.TestCase):
         self.assertEqual([c.command_budget_ns // 10**9 for c in cases], [30]*4+[60,170,300])
         self.assertEqual([c.verification_budget_ns // 10**9 for c in cases], [19]*4+[12,12,30])
         self.assertTrue(all(c.profile == 'disposable' for c in cases))
+
+    def test_cold_correction_preserves_original_workload_and_limits(self):
+        old = 'phase7-sqlite-disposable-init-100000-owner-wal-v1'
+        new = old.removesuffix('-v1') + '-v2'
+        row = d.ROWS[new]
+        self.assertEqual(row['supersedes'], old)
+        self.assertEqual(row['prepared_root'], 'disposable-wal-prepared.noindex')
+        self.assertEqual({k: v for k, v in row.items() if k not in ('id', 'prepared_root', 'supersedes')},
+                         {k: v for k, v in d.ROWS[old].items() if k != 'id'})
 
     def test_durable_refused_before_any_work(self):
         c = phase7_sqlite.CASES['phase7-sqlite-history-stride10-group-rows-indexed-v2']
