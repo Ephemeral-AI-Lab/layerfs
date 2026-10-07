@@ -1,0 +1,12 @@
+# {"timestamp": "2026-10-07T08:37:15.095889+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-persistence", "--test", "sqlite_ordinal_lookahead", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "97aed0fe80018e156789fb56272ab972e7f15dd54b18c9ecd009ed538f530b43", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.35s
+  Executable tests/sqlite_ordinal_lookahead.rs (core/target/debug/deps/sqlite_ordinal_lookahead-a6db892020de003d)
+
+# exit=0

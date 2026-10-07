@@ -43,7 +43,9 @@ Every producer obtains its own Storage state through Store::producer, using
 the startup ReservationBlocks passed through concrete bootstrap. Only the
 opened provider is shared. No mutable Save is global, no ownership spans a
 whole Commit, and Init acquisition/cleanup is unavailable through these ports.
-The combined publication and local install obligations remain F8.
+The combined publication and paired local install are now implemented in
+[Store Commit](65-store-commit-composition.md); S10 still supplies live namespace
+normalization.
 
 The external installed-store proof creates/imports/seals a real Store and copies
 that closed file into an independent fixture placement, removes the native

@@ -99,6 +99,12 @@ impl<'a> Save<'a> {
     pub fn take_failure(&self) -> Option<StorageError> {
         self.failure.borrow_mut().take()
     }
+    pub(super) fn remember_failure(&self, error: StorageError) {
+        let mut first = self.failure.borrow_mut();
+        if first.is_none() {
+            *first = Some(error);
+        }
+    }
     /// Actual delta-selection outcomes for this producer.
     pub fn delta_counters(&self) -> crate::encoding::delta::select::DeltaCounters {
         self.state.borrow().delta
@@ -138,10 +144,7 @@ pub struct SaveSink<'s, 'a> {
 impl FinalizedConsumer for SaveSink<'_, '_> {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
         self.save.accept(object).map_err(|error| {
-            let mut failure = self.save.failure.borrow_mut();
-            if failure.is_none() {
-                *failure = Some(error);
-            }
+            self.save.remember_failure(error);
             ContentError::OutputRejected
         })
     }

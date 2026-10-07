@@ -224,3 +224,29 @@ fn initial_combined_reservation_is_busy_before_effect() {
     assert_eq!(first, 1, "Busy consumed no value ordinals");
     println!("SAVE_BLOCK_BUSY initial_attempts=2 busy_effect=0 later_explicit_save=complete first_pack=1 first_ordinal=1 child=released-and-joined");
 }
+
+#[test]
+fn content_reads_retain_the_original_same_save_storage_failure() {
+    use layerfs_content::AuthenticatedObjects;
+    let t = support::Temp::new("same-save-read-custody");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    let missing = ObjectId::for_bytes(b"missing canonical construction dependency");
+    assert_eq!(
+        save.read_canonical(missing),
+        Err(layerfs_content::ContentError::MissingObject)
+    );
+    assert!(
+        matches!(save.take_failure(), Some(layerfs_storage::StorageError::ObjectMissing(id)) if id == missing)
+    );
+    drop(save);
+    let later = storage.begin_save().unwrap();
+    assert_eq!(
+        later.read_canonical(missing),
+        Err(layerfs_content::ContentError::MissingObject)
+    );
+    assert!(
+        matches!(later.finish(), Err(layerfs_storage::StorageError::ObjectMissing(id)) if id == missing)
+    );
+}

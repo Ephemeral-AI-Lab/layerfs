@@ -1,0 +1,8 @@
+# {"timestamp": "2026-10-07T09:09:36.486006+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-m", "unittest", "discover", "-s", "core/tools", "-p", "test_*.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "faf1df2f8ba4378eb25694b58c188c682ee5a712bce9bda09d93bac64c0c53dc", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+............................................
+----------------------------------------------------------------------
+Ran 44 tests in 0.092s
+
+OK
+
+# exit=0

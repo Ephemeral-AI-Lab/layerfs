@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-10-07T09:13:17.839681+00:00",
+  "parent": "01e60021aaa545c4bc531c274f965084e40be916",
+  "files": {
+    "core/crates/layerfs-daemon/src/store/bind.rs": "d90c97de65453072231cfc168708a01f4ae5b44344f09d8b9a5cf81c42b444da",
+    "core/crates/layerfs-daemon/src/store/commit.rs": "5e4beacc9eb1c18fd1626c641eacd35d65424a42f31feb1e69fc74b75fd6ee2c",
+    "core/crates/layerfs-daemon/src/store/commit_types.rs": "86ece4991437018b26fa4ccb4fa0205dfa540cb9e72826dc1d40336e4bf8b117",
+    "core/crates/layerfs-daemon/src/store/mod.rs": "17dad6768872c992632844d89623f74b8e86173b7d5e26a215e5e8fb6088422e",
+    "core/crates/layerfs-daemon/src/store/operation.rs": "6fb3d68d711bc58dee77fb9baf56194308af3c3cbb3ac967eb204069312bd7cf",
+    "core/crates/layerfs-daemon/src/store/settle.rs": "30459c4ca96028a8f8dda32e013c496d312af1e58809e70bde64857cc5ae5b2b",
+    "core/crates/layerfs-daemon/tests/installed_store.rs": "4c7f30ef53944a1a3f1f641d1a2fb730564df941a36f13010cfb024b0a1a3178",
+    "core/crates/layerfs-daemon/tests/store_commit.rs": "066aac05516a3a4928aebff1e30e70f953de91a26c0761bcc2cb67e7e0c7efb1",
+    "core/crates/layerfs-daemon/tests/support/history_boundary.rs": "42ca542bf08e3fd80d33fc68b7bcde557116a719b3c5761c2fef97d4733fd248",
+    "core/crates/layerfs-persistence/tests/sqlite_ordinal_lookahead.rs": "bfc51f389bbcf560e9ab2d8665c4dd0196d9fe022febc4bc4b64c4bfabf0d59f",
+    "core/crates/layerfs-storage/src/save/operation.rs": "ba2ab72ab480dd4c16ebdbc6697ffa2a5c9d02a06f3642366715bed81dc6ecfa",
+    "core/crates/layerfs-storage/src/save/provider.rs": "a16d8de09ce3c813ba32cc5947fe2201b85baf2f838731eb50b4a273c607746a",
+    "core/crates/layerfs-storage/src/store/error.rs": "62e9fe705d9c40d07dc0f500cad7b6af0085c5096dd352cb19f29a731eb44e30",
+    "core/Cargo.lock": "06392f24ff430d8e772025ea1e9fb133f20398f1ed66d14b90ed9f5592e29874",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+  },
+  "refresh": "byte-identical copy then rename",
+  "change_since_17": "commit_types.rs: map_or(true, f) to equivalent is_none_or(f), Clippy correction"
+}

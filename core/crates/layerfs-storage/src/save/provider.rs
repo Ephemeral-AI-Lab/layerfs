@@ -89,6 +89,10 @@ impl Save<'_> {
 }
 impl AuthenticatedObjects for Save<'_> {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        self.read_objects(ids).map_err(crate::error::provider_error)
+        self.read_objects(ids).map_err(|error| {
+            let mapped = crate::error::provider_error_ref(&error);
+            self.remember_failure(error);
+            mapped
+        })
     }
 }

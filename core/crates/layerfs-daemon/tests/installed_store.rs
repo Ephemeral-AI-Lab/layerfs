@@ -113,8 +113,8 @@ fn bounded_bind_batches_lengths_cache_and_original_failure() {
         );
         assert_ne!(first.route(), second.route());
         assert_eq!(
-            first.snapshot().effective_root,
-            second.snapshot().effective_root
+            first.snapshot().unwrap().effective_root,
+            second.snapshot().unwrap().effective_root
         );
         read(&first, count - 1);
         let operation = second.operation().unwrap();
@@ -333,7 +333,7 @@ fn direct_reads_finish_under_another_process_writer_and_busy_stays_typed() {
     let before = workspace.operation().unwrap().ports().reserve(1).unwrap().0;
     let held = held_writer::HeldWriter::acquire(&fixture.config.path);
     let operation = workspace.operation().unwrap();
-    let root = workspace.snapshot().effective_root;
+    let root = workspace.snapshot().unwrap().effective_root;
     assert_eq!(
         ObjectId::for_bytes(&operation.ports().read_canonical(root).unwrap()),
         root

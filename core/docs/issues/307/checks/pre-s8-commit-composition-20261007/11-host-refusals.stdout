@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T08:54:00.099224+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/store_commit-4cab497cf187d6ac", "--exact", "busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/store_commit-4cab497cf187d6ac": "0c1c9a48fe4c03b43f9002d78b8a06aed66681ba5b469bfc4dd0d6de2d4df4e8"}, "source_diff_sha256": "faf1df2f8ba4378eb25694b58c188c682ee5a712bce9bda09d93bac64c0c53dc", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+STORE_COMMIT_FIXTURE case=commit-refusals files=8
+STORE_COMMIT_REFUSALS busy_before_construction=true no_new_stage=true effective_bytes_preserved=true original_missing_dependency=true original_read_failure=true later_explicit_call=Committed
+test busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.08s
+
+
+# exit=0

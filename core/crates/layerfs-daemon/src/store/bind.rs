@@ -63,9 +63,10 @@ impl Store {
                 workspace: BoundWorkspace {
                     store: self.clone(),
                     owner,
-                    snapshot: captured,
+                    snapshot: std::sync::Mutex::new(captured),
                     identity: request.workspace,
-                    workspace: Workspace::bind(route, base),
+                    workspace: Arc::new(Workspace::bind(route, base)),
+                    committing: std::sync::atomic::AtomicBool::new(false),
                 },
                 open,
             })

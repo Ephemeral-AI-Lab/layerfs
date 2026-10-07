@@ -1,0 +1,30 @@
+# {"timestamp": "2026-10-07T08:52:01.920588+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/store_commit-4cab497cf187d6ac", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/store_commit-4cab497cf187d6ac": "b1710b2fec88972d8cfb1a792de6e61643822d810695dce877cf93de20d2dee2"}, "source_diff_sha256": "faf1df2f8ba4378eb25694b58c188c682ee5a712bce9bda09d93bac64c0c53dc", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+
+running 4 tests
+test a_held_producer_does_not_hold_workspace_metadata_or_read_capacity ... STORE_COMMIT_FIXTURE case=commit-admission files=8
+ok
+test busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss ... STORE_COMMIT_FIXTURE case=commit-refusals files=8
+
+thread 'busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss' panicked at crates/layerfs-daemon/tests/store_commit.rs:338:5:
+assertion failed: matches!(missing.error,
+    CommitError::Storage(StorageError::MissingDependency { reference, .. }) if
+    reference == absent)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test committed_up_to_date_conflict_and_new_bind_preserve_exact_roots ... STORE_COMMIT_FIXTURE case=commit-outcomes files=8
+STORE_COMMIT count=3 initial=1 refills=0 publication=1 history=1 installed=true
+STORE_UP_TO_DATE count=3 initial=1 refills=0 publication=1 history=1
+ok
+test known_publication_survives_an_unattempted_local_install ... STORE_COMMIT_FIXTURE case=commit-install-refusal files=8
+STORE_COMMIT_INSTALL_FAILURE history=known-Committed install=unattempted original_capture=retained next_commit=InFlight new_workspace=published-bytes
+ok
+
+failures:
+
+failures:
+    busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+
+# exit=101

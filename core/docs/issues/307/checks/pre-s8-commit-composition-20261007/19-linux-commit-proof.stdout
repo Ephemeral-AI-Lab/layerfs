@@ -1,0 +1,28 @@
+# {"timestamp": "2026-10-07T09:04:04.005814+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-commit-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/store_commit-699290958ac9b874; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/store_commit-699290958ac9b874 --test-threads=1 --nocapture"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "faf1df2f8ba4378eb25694b58c188c682ee5a712bce9bda09d93bac64c0c53dc", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+760197eb67425df712d502ae23dc11c276684c9326fcd13fd1fd5f6731eb776d  core/target/cluster2-linux/debug/deps/store_commit-699290958ac9b874
+
+running 7 tests
+test a_held_producer_does_not_hold_workspace_metadata_or_read_capacity ... STORE_COMMIT_FIXTURE case=commit-admission files=8
+ok
+test busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss ... STORE_COMMIT_FIXTURE case=commit-refusals files=8
+STORE_COMMIT_REFUSALS busy_before_construction=true no_new_stage=true effective_bytes_preserved=true original_missing_dependency=true original_read_failure=true later_explicit_call=Committed
+ok
+test committed_up_to_date_conflict_and_new_bind_preserve_exact_roots ... STORE_COMMIT_FIXTURE case=commit-outcomes files=8
+STORE_COMMIT count=3 initial=1 refills=0 publication=1 history=1 installed=true
+STORE_UP_TO_DATE count=3 initial=1 refills=0 publication=1 history=1
+ok
+test history_busy_after_save_has_no_stage_and_counts_only_acknowledged_save_writes ... STORE_HISTORY_BUSY save_writes=2 failed_history_statements=1 new_stage_rows=0 local_bytes=preserved later_explicit_call_writes=3
+ok
+test known_publication_survives_an_unattempted_local_install ... STORE_COMMIT_FIXTURE case=commit-install-refusal files=8
+STORE_COMMIT_INSTALL_FAILURE history=known-Committed install=unattempted original_capture=retained next_commit=InFlight new_workspace=published-bytes
+ok
+test later_mutation_survives_capture_publication_and_known_install ... STORE_COMMIT_FIXTURE case=commit-later-mutation files=8
+STORE_LATER_MUTATION captured=G first_published=G live_after_install=H next_published=H old_workspace=G namespace_entries=8
+ok
+test unknown_history_acknowledgement_retains_original_intent_and_capture ... STORE_UNKNOWN_ACK original=UnknownOutcome capture_and_intent=retained local_resolution=not-attempted install=not-attempted observer_does_not_resolve=true fixture_teardown=explicit-after-owner-stop
+ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+# exit=0

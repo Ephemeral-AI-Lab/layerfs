@@ -183,9 +183,13 @@ impl From<crate::port::PersistenceError> for StorageError {
 /// is the distinction a later adapter needs between "this root is not in this
 /// Store" and "this Store is corrupt".
 pub(crate) fn provider_error(error: StorageError) -> ContentError {
+    provider_error_ref(&error)
+}
+
+pub(crate) fn provider_error_ref(error: &StorageError) -> ContentError {
     match error {
         StorageError::ObjectMissing(_) => ContentError::MissingObject,
-        StorageError::Content(content) => content,
+        StorageError::Content(content) => content.clone(),
         StorageError::Integrity(what) => ContentError::ProviderFailure { what },
         StorageError::CapacityExceeded { what, .. } => ContentError::ProviderFailure { what },
         StorageError::UnsupportedPolicy { field } => ContentError::ProviderFailure { what: field },

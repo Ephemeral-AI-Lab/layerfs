@@ -1,0 +1,12 @@
+# {"timestamp": "2026-10-07T08:57:22.275282+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/store_commit-4cab497cf187d6ac", "history_", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/store_commit-4cab497cf187d6ac": "b10f4f01ff49dd07102e6e7f94fe8286e5a1060a2ac90efc359571f7b849778a"}, "source_diff_sha256": "faf1df2f8ba4378eb25694b58c188c682ee5a712bce9bda09d93bac64c0c53dc", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+
+running 2 tests
+test history_busy_after_save_has_no_stage_and_counts_only_acknowledged_save_writes ... STORE_HISTORY_BUSY save_writes=2 failed_history_statements=1 new_stage_rows=0 local_bytes=preserved later_explicit_call_writes=3
+ok
+test unknown_history_acknowledgement_retains_original_intent_and_capture ... STORE_UNKNOWN_ACK original=UnknownOutcome capture_and_intent=retained local_resolution=not-attempted install=not-attempted observer_does_not_resolve=true fixture_teardown=explicit-after-owner-stop
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.11s
+
+
+# exit=0

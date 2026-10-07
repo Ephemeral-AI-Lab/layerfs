@@ -1,7 +1,8 @@
 # Atomic saved-candidate publication
 
 > **Status:** Implemented source boundary after `e2f2e62c7`; Store Save and daemon
-> local install are separate operations and still need their integrated proof.
+> local install are separate operations; their integrated Store-half proof is
+> [recorded separately](65-store-commit-composition.md).
 
 HistoryCatalog::stage_and_commit takes the existing complete StageRequest and
 returns CommitStagedOutcome. Persistence performs exactly one write transaction:

@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T08:59:01.505752+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/store_commit-4cab497cf187d6ac", "--exact", "later_mutation_survives_capture_publication_and_known_install", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/store_commit-4cab497cf187d6ac": "786e607d0e2421e2df06367741631037cfa83b85b2144e75e8235f6f74ea139c"}, "source_diff_sha256": "faf1df2f8ba4378eb25694b58c188c682ee5a712bce9bda09d93bac64c0c53dc", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+STORE_COMMIT_FIXTURE case=commit-later-mutation files=8
+STORE_LATER_MUTATION captured=G first_published=G live_after_install=H next_published=H old_workspace=G namespace_entries=8
+test later_mutation_survives_capture_publication_and_known_install ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.05s
+
+
+# exit=0

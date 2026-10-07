@@ -1,0 +1,9 @@
+# {"timestamp": "2026-10-07T08:42:54.759234+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/sqlite_ordinal_lookahead-a6db892020de003d", "--exact", "content_reads_retain_the_original_same_save_storage_failure", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/sqlite_ordinal_lookahead-a6db892020de003d": "b799838e32a73a7e0e03edd14cf7667da0b804948d78cfdd310d604f4db72064"}, "source_diff_sha256": "1cb4c64b5544f762e818b7ac7cd52e7bcbcd7ee9c4346c16f224e2ef30580e76", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test content_reads_retain_the_original_same_save_storage_failure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+
+
+# exit=0

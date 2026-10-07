@@ -1,0 +1,10 @@
+# {"timestamp": "2026-10-07T09:04:05.274566+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-commit-read-custody", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/sqlite_ordinal_lookahead-0d9822c5b1a720f7; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/sqlite_ordinal_lookahead-0d9822c5b1a720f7 --exact content_reads_retain_the_original_same_save_storage_failure --nocapture"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "faf1df2f8ba4378eb25694b58c188c682ee5a712bce9bda09d93bac64c0c53dc", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+6584aa394a6c5296d40678c4d000572156e7dbf53b6e6a8e7dabd6d9924e8edb  core/target/cluster2-linux/debug/deps/sqlite_ordinal_lookahead-0d9822c5b1a720f7
+
+running 1 test
+test content_reads_retain_the_original_same_save_storage_failure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+
+
+# exit=0

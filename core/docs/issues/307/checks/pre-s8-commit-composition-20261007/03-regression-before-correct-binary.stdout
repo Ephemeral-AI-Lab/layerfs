@@ -1,0 +1,19 @@
+# {"timestamp": "2026-10-07T08:36:23.280204+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/sqlite_ordinal_lookahead-a6db892020de003d", "--exact", "content_reads_retain_the_original_same_save_storage_failure", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/sqlite_ordinal_lookahead-a6db892020de003d": "864ff7fac3be60bf409419fd24c1115b43f2bfed5102159b3aea2db376043cb3"}, "source_diff_sha256": "ba4ec36ff64f61f91f70b68238853554403d82571c22a2d6d61f247ebc30765e", "source_parent": "01e60021aaa545c4bc531c274f965084e40be916", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+
+thread 'content_reads_retain_the_original_same_save_storage_failure' panicked at crates/layerfs-persistence/tests/sqlite_ordinal_lookahead.rs:240:5:
+assertion failed: matches!(save.take_failure(),
+    Some(layerfs_storage::StorageError::ObjectMissing(id)) if id == missing)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test content_reads_retain_the_original_same_save_storage_failure ... FAILED
+
+failures:
+
+failures:
+    content_reads_retain_the_original_same_save_storage_failure
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+
+
+# exit=101
