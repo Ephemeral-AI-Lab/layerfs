@@ -135,7 +135,7 @@ entries, `F` concurrent flights.
 | Work and memory | More simultaneously owned READ replies per mount, each at most one window; `R` still bounds them |
 | Risk | Low for correctness: I-9 holds for any depth. Resource proof required |
 | Evidence | source (kernel), none measured |
-| Gate | FP-9 confirms the serialization on the mounted kernel, and the owner agrees to vary a promoted element (P-6) |
+| Gate | FP-9 confirms the serialization on the mounted kernel. The owner has agreed to one prospectively registered single-mechanism arm (P-6 ruling) |
 
 ### 4.4 Rank 4 — coalescing identical concurrent misses
 

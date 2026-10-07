@@ -595,8 +595,8 @@ commands in one Workspace read cold data one request at a time.
 The promoted value stays as the initial setting because it is the owner's
 candidate. The limit is recorded as a known property with a native oracle
 (FP-9) and a count hypothesis (H-9); raising `max_background` is the first
-profile candidate in the mechanism ledger and needs the owner's prospective
-agreement to vary a promoted element (P-6).
+profile candidate in the mechanism ledger. The owner has agreed to one
+prospectively registered single-mechanism arm that varies it (P-6 ruling).
 
 ### 8.3 Coherence matrix
 
@@ -694,7 +694,8 @@ standard-library calls:
 2. enters a new mount namespace and applies the propagation contract of 10.3;
 3. detaches the Store volume, the overlay directory and every sibling Workspace
    mount from its namespace;
-4. sets no-new-privileges if policy P-2 says so;
+4. sets no-new-privileges unless the explicit configuration value clears it
+   (P-2 ruling: set);
 5. drops supplementary groups, then gid, then uid, to the daemon's Bash identity;
 6. changes directory to the mount, then to the authorized relative directory,
    resolved beneath the mount without leaving it;
@@ -840,7 +841,7 @@ no replay, as the S6 contract already states.
 | Cold demand fails | `EIO` for that request | the original `PortError` in that request's failure scope and in a bounded daemon diagnostic | a second demand on the request's behalf |
 | A reader session quarantined | `EIO` for the demand that observed it | reader excluded and reported | reuse of that reader |
 | Mutation job outcome uncertain (owner lost mid-attempt) | `EIO` | the engine's original unknown; the Workspace's activity becomes `Uncertain` | a resend, a rollback, a guessed success |
-| Serial range exhausted because the Store write was `Busy` | per P-1 (recommended `EAGAIN`) | the create has no effect | a wait, a gate or a replay of the failed reservation |
+| Serial range exhausted because the Store write was `Busy` | `EAGAIN` (P-1 ruling, section 15.3) | the create has no effect | a wait, a gate or a replay of the failed reservation |
 | Reply send fails | none possible | a per-mount counter and the publication, if any | a second send |
 | Request on a fenced or detaching mount | `ENOTCONN` | — | new owner work |
 | Parked request when the connection is aborted | one reply attempt with `ENOTCONN`; if its owner job was already attempted, that job's original outcome stands | published state | cancellation of an attempted job |
@@ -911,6 +912,9 @@ coverage.
 Planning and the first implementation checkpoints do not wait on these; each
 row says where it starts to matter.
 
+All seven were ruled on 2026-10-08. The rulings are in section 15.3 and govern
+over the recommendation column below.
+
 | ID | Question | Recommendation | First needed |
 | --- | --- | --- | --- |
 | P-1 | A `create` needs an inode serial; the local range is exhausted; the one reservation attempt meets a Store `Busy` (K30). K13 says nothing returns `EBUSY` for contention. Which errno does Bash see, and may the daemon attempt a refill early, at a low-water mark, so that exhaustion needs several consecutive `Busy` results? | Early single attempts at a low-water mark (each still one attempt, none replayed) and `EAGAIN` on exhaustion; no gate | Mutation checkpoint |
@@ -920,6 +924,28 @@ row says where it starts to matter.
 | P-5 | Which residency-proof mechanism is accepted inside the shared VM, given that a VM-wide cache drop touches the protected containers and is not itself residency proof? | A per-file residency measurement before the attempt; ineligible with zero attempts when nonzero | Performance checkpoint |
 | P-6 | May `max_background`/congestion be varied from the promoted 1/1 in a prospectively registered single-mechanism arm if the head-of-line oracle confirms per-mount read serialization? | Yes, as a candidate arm; the promoted value stays the default until its proof | Concurrency checkpoint |
 | P-7 | Historical cases with no admissible oracle or with an S10 dependency: E09 (nondeterministic output) stays `NOT_RUN` or gets a normalized oracle; E18/E19 run before S10 as explicitly "unrefreshed index" cases or wait | Keep E09 `NOT_RUN`; run E18 only as a labelled unrefreshed case; defer E19 to S10 | Performance checkpoint |
+
+### 15.3 Owner rulings, 2026-10-08
+
+The recommendations of section 15.2 were presented to the owner in the main
+chat on 2026-10-08 in a refined form, and the owner replied "proceed". The rows
+below transcribe what was presented. They govern over the recommendation column
+of 15.2, and none of them sets a number that the text says is left for later.
+
+| ID | Ruling |
+| --- | --- |
+| P-1 | Early refill, then `EAGAIN`. Once the local unconsumed serial range is below an explicit low-water configuration value, a create makes at most one reservation attempt, outside every Workspace lock as today. A `Busy` result is that attempt's exact before-effect refusal and is never replayed. A later create is a new operation and may make its own single attempt; that is a new attempt, not a retry of the failed one. A create that finds the range exhausted and whose one attempt is `Busy` returns `EAGAIN` with no effect. No gate, wait, timer or busy handler |
+| P-2 | Yes. The launcher sets no-new-privileges. It stays an explicit configuration value with no hidden default, and qualification runs with it set. A deployment that clears it gives up the helper barrier knowingly and is outside the confinement row that depends on it |
+| P-3, shared Store | A sample may bind one closed sealed Store without a per-sample copy only when its own receipt shows zero serial reservations and zero Store write transactions, under a before/after identity proof of the Store file with a declared account of its sidecars, and the residency proof of its cache class. Every other case uses a declared byte-copy clone. The clone budget is decided after the fixture Store's size and copy time are recorded; none is set here |
+| P-3, long workloads | E08 stays `NOT_RUN`. E03, E12, E13 and E14 are reported as priced comparisons against native at the same identity and cache class, labelled diagnostic, with no pass/fail budget and no admission verdict. Each still runs under an explicit wall stop declared at prospective registration; no bound is set here |
+| P-3, verifier | Timing rows use a scoped oracle, labelled scoped. The full-byte oracle runs once at final identity as a functional proof under its own exception, declared at registration |
+| P-4 | Native ext4 and a passthrough adapter under the promoted profile are both authorized at new prospective identities. The passthrough arm is harness code: never product source and never taken from the experiment tree. A "materially better" claim compares the product against that passthrough in the same cache class over mount + Exec + unmount, with the storage delta and the gap to native reported. The numerical threshold is set by the owner after the first diagnostic data; none is set here |
+| P-5 | A per-file eviction hint followed by a per-file residency measurement of the Store file and its sidecars before the attempt. Nonzero residency is `INELIGIBLE` with zero attempts. The hint is never the proof. No VM-wide cache drop |
+| P-6 | Yes. One prospectively registered single-mechanism arm may vary `max_background` and its congestion threshold after FP-9 confirms per-mount serialization. The promoted 1/1 stays the default until that arm has its own proof |
+| P-7 | E09 stays `NOT_RUN`. E18 runs only as a labelled "unrefreshed index" case. E19 is deferred to S10 |
+
+The P-1 ruling adds one oracle to the mutation checkpoint, recorded in section
+8.1 of the [proof plan](S8-PROOF-PLAN-20261008.md#81-owner-rulings-2026-10-08).
 
 No S8 product implementation and no measurement was performed in producing this
 specification.

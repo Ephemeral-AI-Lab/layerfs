@@ -144,7 +144,7 @@ never by a future kernel request (I-9).
 | `operations/read_plan.rs` | — | N | Resumable read-class plans in the `Need`/facts shape mutations already have |
 | [mutation/](../../../crates/layerfs-workspace/src/mutation/driver.rs), [operations/](../../../crates/layerfs-workspace/src/operations/types.rs) | — | R | Mutation jobs, windows and publication tickets unchanged |
 | [base/client.rs](../../../crates/layerfs-workspace/src/base/client.rs), [base/cache.rs](../../../crates/layerfs-workspace/src/base/cache.rs), [base/view.rs](../../../crates/layerfs-workspace/src/base/view.rs) | 174, 112, 184 | R | Unchanged in the mandatory scope. Shared cached bytes and the fact cache are ranked candidates behind their gates |
-| [workspace/serials.rs](../../../crates/layerfs-workspace/src/workspace/serials.rs) | 54 | C only under P-1 | Low-water early reservation attempts if the owner selects them |
+| [workspace/serials.rs](../../../crates/layerfs-workspace/src/workspace/serials.rs) | 54 | C | Low-water early reservation attempts: at most one per create below an explicit low-water value (P-1 ruling) |
 | `layerfs-overlay/src/namespace/read_compound.rs` | — | N | The unframed read statements of one read-class job: validate bound root, parent row, local entry, target row |
 | `layerfs-overlay/src/lifetime/retire.rs` | — | N | Bounded, paged retirement of a detached namespace's remaining open, request and base-source owners (D-8) |
 | [lifetime/close.rs](../../../crates/layerfs-overlay/src/lifetime/close.rs), [maintenance/reclaim.rs](../../../crates/layerfs-overlay/src/maintenance/reclaim.rs) | 84, 296 | C | Close reaches `Queued` after retirement; debt and maintenance-stopped observations |
@@ -192,8 +192,9 @@ design is not established until it passes.
 
 Mutation steps (WRITE, SETATTR, CREATE, MKDIR, SYMLINK, LINK, UNLINK, RMDIR,
 RENAME) on the existing one-transaction jobs; publication ticket release after
-the reply attempt; mapped WRITE acceptance; the refused families; the P-1
-behaviour the owner selects.
+the reply attempt; mapped WRITE acceptance; the refused families; the ruled
+P-1 behaviour (early single reservation attempts, `EAGAIN` on exhaustion) with
+its oracle from proof-plan section 8.1.
 
 Proofs: FP-10 to FP-18, FP-28, FP-29; H-6, H-18; H-5 recorded.
 
@@ -222,9 +223,9 @@ Proofs: FP-26; H-16, H-17; the resource domains of proof-plan section 5.
 
 ### C6 — speed and storage (not authorized by this plan)
 
-Runs only after C1–C5 are proved at a frozen identity, the owner has answered
-P-3 to P-7 for the selected cases, and each selection is registered
-prospectively. Candidates of the
+Runs only after C1–C5 are proved at a frozen identity and each selection is
+registered prospectively under the P-3 to P-7 rulings, including the numbers
+those rulings leave to registration. Candidates of the
 [mechanism ledger](S8-MECHANISM-EVIDENCE-20261008.md#4-ranked-candidates) enter
 one at a time, each behind its own gate and its own single-mechanism arm.
 

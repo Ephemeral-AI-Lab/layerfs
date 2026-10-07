@@ -130,14 +130,15 @@ the Store session; no port of the excluded predecessor's request model.
 
 ## 5. Owner choices and how C1 treats them
 
-None blocks C1. Do not resolve them yourself.
+All seven were ruled by the owner on 2026-10-08 (specification section 15.3).
+Apply the rulings as written; do not reinterpret them.
 
 | ID | Choice | Treatment in C1 |
 | --- | --- | --- |
-| P-1 | errno and early refill when a create meets Store `Busy` at serial exhaustion | Not reached: C1 has no create |
-| P-2 | no-new-privileges for Exec children | Implement as an explicit configuration value with no hidden default; run C1 proofs with it set as the specification recommends and state that the owner has not yet ruled |
-| P-3 to P-5, P-7 | Performance budgets, controls, residency proof, historical cases | Not reached: C1 takes no timing |
-| P-6 | Varying `max_background` | Not reached: the promoted value is used |
+| P-1 | Early single reservation attempts below a low-water value; `EAGAIN` on exhaustion | Not reached: C1 has no create |
+| P-2 | Exec children run with no-new-privileges | Implement as an explicit configuration value with no hidden default; run C1 proofs with it set |
+| P-3 to P-5, P-7 | Performance budgets, controls, residency proof and historical cases, as ruled | Not reached: C1 takes no timing |
+| P-6 | One single-mechanism arm may vary `max_background` after FP-9 | Not reached: the promoted value is used |
 
 If the actual environment cannot supply a C1 requirement (for example no
 delegated cgroup v2 subtree), stop that part, report the exact observation and

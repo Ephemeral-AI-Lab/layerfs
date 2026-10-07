@@ -1,0 +1,168 @@
+{
+  "timestamp": "2026-10-07T18:08:13.055851+00:00",
+  "status": "PASS",
+  "parent": "77cf51686552ab6999d722827afb4f43032ac6ee",
+  "method": "Run on an extraction of the parent tree with only the ruling edits applied, which is the exact content committed; the other task's uncommitted working-tree changes are not part of it. Local markdown links and GitHub-style heading anchors resolved; one status banner per document; no trailing whitespace or tab; single final newline; FP/H identifiers against proof-plan rows, I/D/P/R against specification rows, M against mechanism-ledger rows. External URLs listed, not fetched.",
+  "runtime_checks": "NOT_RUN - documentation-only change",
+  "identifiers": {
+    "FP": 29,
+    "H": 18,
+    "I": 16,
+    "D": 15,
+    "P": 7,
+    "R": 4,
+    "M": 12
+  },
+  "undefined_identifier_references": [],
+  "documents": [
+    {
+      "path": "core/docs/issues/307/S8-SPECIFICATION-20261008.md",
+      "sha256": "ba9b6a3eee23b29e93267f17f7b645dbf8f25321600b680a30079b1393ecdf41",
+      "lines": 951,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 33,
+      "external_links": [
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/309",
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/314"
+      ],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/S8-IMPLEMENTATION-PLAN-20261008.md",
+      "sha256": "c94b5e948d4d56e6508a0fba21bc2cdb3bf7621d63cbc30eaa3e06f57637a71f",
+      "lines": 293,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 44,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/S8-MECHANISM-EVIDENCE-20261008.md",
+      "sha256": "0ee7b9fc54c2ecb58b8dffc2e08b360defe53d04175a36de483ebbb182e1c896",
+      "lines": 236,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 68,
+      "external_links": [
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/313",
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/314"
+      ],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/S8-PROOF-PLAN-20261008.md",
+      "sha256": "84bdeeece70d8b802e1206f0f48885e1bf3e134e2a8c6efb5b908d365597c3b2",
+      "lines": 334,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 8,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S8-IMPLEMENTATION-20261008.md",
+      "sha256": "eea028b302f730a413e93e0665be9ad2aba4555a2d2a6407257406013f9d5c88",
+      "lines": 201,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Dated planning checkpoint; not release evidence or a product contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 14,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-specification-20261008/01-plan.md",
+      "sha256": "112dcfa9a648188c5fc7bd657bcd511fd2d0baabe4dd09cabba8b6a3b9c4d5a7",
+      "lines": 31,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Dated planning checkpoint; not release evidence or a product contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 7,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-specification-20261008/02-review-kernel-fuse.md",
+      "sha256": "5c3fe084b940dd570f2c5ec322941f7098bf8d7acdb1b2a91d7317420fd67de6",
+      "lines": 234,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Dated planning checkpoint; not release evidence or a product contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 2,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-specification-20261008/03-review-cache-lifecycle.md",
+      "sha256": "8a2abc3b103803fa625e639715bc8f58d911b6b0ec268b207fefc2a92b1dcd68",
+      "lines": 342,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Dated planning checkpoint; not release evidence or a product contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 2,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-specification-20261008/04-review-evidence-proof.md",
+      "sha256": "0800ae4d499f4de6baf28a388dc620eaff701eb710b250c83dccda666136352a",
+      "lines": 420,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Dated planning checkpoint; not release evidence or a product contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 2,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-specification-20261008/05-finding-ledger.md",
+      "sha256": "ba96dcdb6ed999c629ce6af6e4eccc95d1c5c1063c88b3cd8bf6a5def5c2566e",
+      "lines": 229,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Dated planning checkpoint; not release evidence or a product contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 4,
+      "external_links": [],
+      "unresolved": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-owner-rulings-20261008/01-plan.md",
+      "sha256": "c28090d7654272fbf99e5015b3769cefc1efa6272dd34a88beacff5191c00ed8",
+      "lines": 27,
+      "status_banners": 1,
+      "status_banner": "> **Status:** Dated planning checkpoint; not release evidence or a product contract.",
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "ends_with_newline": true,
+      "local_links": 1,
+      "external_links": [],
+      "unresolved": []
+    }
+  ]
+}

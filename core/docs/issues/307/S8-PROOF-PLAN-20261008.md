@@ -269,7 +269,8 @@ reported either way.
 No threshold is proposed and no bound is changed here. These are the conflicts
 the retained evidence predicts, each a choice between keeping `NOT_RUN` with the
 conflict stated and a prospective scoped exception. They are specification
-choices P-3 to P-7.
+choices P-3 to P-7. The owner ruled on all of them on 2026-10-08; section 8.1
+records how each row is resolved.
 
 | Conflict | Retained observation | Decision needed |
 | --- | --- | --- |
@@ -288,6 +289,31 @@ keep their original scope and authorize no new S8 bound.
 A "materially better" claim, when one is made, must state the two arms, their
 class, the complete user-visible boundary it covers and the storage delta. This
 plan defines no numerical threshold for it.
+
+### 8.1 Owner rulings, 2026-10-08
+
+The owner ruled on P-1 to P-7 on 2026-10-08. The rulings are in
+[specification section 15.3](S8-SPECIFICATION-20261008.md#153-owner-rulings-2026-10-08);
+this table says how each conflict row above is resolved. Where a ruling leaves a
+number to registration, none is set here.
+
+| Conflict | Resolution |
+| --- | --- |
+| Full-fixture setup; shared sealed Store | A sample binds one closed sealed Store without a copy only when its own receipt shows zero serial reservations and zero Store write transactions, under a before/after identity proof of the Store file with a declared account of its sidecars and its class's residency proof; otherwise it is `INELIGIBLE` for shared binding and uses a declared byte-copy clone. The clone budget waits for the fixture Store's recorded size and copy time |
+| Long workloads | E08 `NOT_RUN`. E03, E12, E13 and E14 are priced diagnostic comparisons against `N` at the same identity and class: no pass/fail budget, no admission verdict, an explicit wall stop declared at registration |
+| Verifier | Scoped oracle, labelled scoped, on timing rows; the full-byte oracle once at final identity as a functional proof under its own declared exception |
+| Controls | `N` and `P` are both authorized at new prospective identities; `P` is harness code. "Materially better" compares `L` against `P` in the same class over mount + Exec + unmount, with the storage delta and the gap to `N`. The owner sets the threshold after the first diagnostic data |
+| Residency | Per-file eviction hint, then a per-file residency measurement of the Store file and sidecars before the attempt; nonzero is `INELIGIBLE` with zero attempts; no VM-wide cache drop |
+| Background depth | One prospectively registered single-mechanism arm may vary it after FP-9; 1/1 stays the default |
+| E09, E18, E19 | E09 `NOT_RUN`; E18 only as a labelled "unrefreshed index" case; E19 deferred to S10 |
+
+Oracle added by the P-1 ruling, run in the mutation checkpoint with an external
+peer that really holds the Store writer: a create that finds the local serial
+range exhausted and whose single reservation attempt meets `Busy` returns
+`EAGAIN`, leaves no effect, and makes no second attempt; a later create
+succeeds once a reservation succeeds. Count to record with it: reservation
+attempts per create are at most one, and early attempts begin only below the
+configured low-water value.
 
 ## 9. Registration and custody
 
