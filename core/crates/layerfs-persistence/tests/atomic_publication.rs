@@ -82,73 +82,68 @@ impl Fixture {
 }
 
 #[test]
-fn committed_up_to_date_and_exact_conflict_each_use_one_transaction() {
-    let f = Fixture::new("outcomes");
+fn overwrite_and_current_root_up_to_date_each_use_one_transaction() {
+    let f = Fixture::new("overwrite-outcomes");
     let h = &f.handles.history;
-    let before = f.handles.diagnostics().unwrap();
-    let committed = h.stage_and_commit(&f.request).unwrap();
-    let after = f.handles.diagnostics().unwrap();
-    assert_eq!(after.write_transactions - before.write_transactions, 1);
-    assert_eq!(after.write_commits - before.write_commits, 1);
-    let record = match committed {
+    let publish = |request: &StageRequest| {
+        let before = f.handles.diagnostics().unwrap();
+        let outcome = h.stage_and_commit(request).unwrap();
+        let after = f.handles.diagnostics().unwrap();
+        assert_eq!(after.write_transactions - before.write_transactions, 1);
+        assert_eq!(after.write_commits - before.write_commits, 1);
+        assert_eq!(after.rollbacks, before.rollbacks);
+        assert!(h.stage(request.workspace).unwrap().is_none());
+        outcome
+    };
+    let record = match publish(&f.request) {
         CommitStagedOutcome::Committed(record) => record,
         other => panic!("{other:?}"),
     };
-    assert!(h.stage(f.request.workspace).unwrap().is_none());
+    assert_eq!(record.parent, None);
+    let mut stale = f.request.clone();
+    stale.workspace = WorkspaceId::from_authority([4; 32]).unwrap();
+    stale.candidate_root = id("later-candidate");
+    let later = match publish(&stale) {
+        CommitStagedOutcome::Committed(record) => record,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(later.parent, None, "keep captured provenance, never rebase");
+    assert_ne!(later.id, record.id);
     assert_eq!(
-        h.branch_snapshot(f.request.branch)
+        h.branch_snapshot(stale.branch)
             .unwrap()
             .unwrap()
             .effective_root,
-        record.root
+        later.root
     );
-
-    let mut stale = f.request.clone();
-    stale.workspace = WorkspaceId::from_authority([4; 32]).unwrap();
-    let before = f.handles.diagnostics().unwrap();
-    let conflict = h.stage_and_commit(&stale).unwrap_err();
-    let after = f.handles.diagnostics().unwrap();
-    assert_eq!(after.write_transactions - before.write_transactions, 1);
-    assert_eq!(after.write_commits - before.write_commits, 0);
-    assert_eq!(after.rollbacks - before.rollbacks, 1);
     assert_eq!(
-        conflict,
-        HistoryError::HeadMoved(Box::new(layerfs_history::error::MovedState {
-            expected_head: None,
-            actual_head: Some(record.id),
-            expected_base: stale.expected_base,
-            actual_base: stale.expected_base,
-        }))
-    );
-    assert!(h.stage(stale.workspace).unwrap().is_none());
-
-    let mut same = f.request.clone();
-    same.expected_head = Some(record.id);
-    same.expected_root = record.root;
-    same.construction_base_root = record.root;
-    same.candidate_root = record.root;
-    same.generation = 2;
-    let before = f.handles.diagnostics().unwrap();
-    assert_eq!(
-        h.stage_and_commit(&same).unwrap(),
+        publish(&stale),
         CommitStagedOutcome::UpToDate {
-            head: Some(record.id),
-            root: record.root
+            head: Some(later.id),
+            root: later.root,
         }
     );
-    let after = f.handles.diagnostics().unwrap();
-    assert_eq!(after.write_transactions - before.write_transactions, 1);
-    assert_eq!(after.write_commits - before.write_commits, 1);
-    assert!(h.stage(same.workspace).unwrap().is_none());
-    // Successful transitions used two tokens; the conflict's token rolled back.
-    let staged = h.stage_changes(&same).unwrap();
-    assert_eq!(staged.token.value(), 3);
+    // An unchanged capture still overwrites a different current Branch root.
+    stale.candidate_root = stale.expected_root;
+    let restored = match publish(&stale) {
+        CommitStagedOutcome::Committed(record) => record,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(restored.parent, None);
+    assert_eq!(restored.root, f.request.expected_root);
+    let final_snapshot = h.branch_snapshot(stale.branch).unwrap().unwrap();
+    assert_eq!(final_snapshot.branch.head_commit, Some(restored.id));
+    assert_eq!(final_snapshot.effective_root, restored.root);
+    assert_eq!(h.commit(record.id).unwrap(), Some(record));
+    assert_eq!(h.commit(later.id).unwrap(), Some(later));
+    let staged = h.stage_changes(&stale).unwrap();
+    assert_eq!(staged.token.value(), 5);
     h.discard_stage(&DiscardRequest {
         workspace: staged.workspace,
         token: staged.token,
     })
     .unwrap();
-    println!("ATOMIC_HISTORY committed=1tx up_to_date=1tx conflict=1tx/1rollback exact_head_moved=true new_stage_rows=0 failed_token_consumption=0");
+    println!("ATOMIC_OVERWRITE publications=3 up_to_date=1 transactions_each=1 stages_after_each=0 captured_parent_preserved=true stale_unchanged_overwrites=true displaced_commits_retained=true");
     f.cleanup();
 }
 

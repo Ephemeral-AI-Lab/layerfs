@@ -1,14 +1,13 @@
-//! Commit insertion, conditional Branch advance, ancestry and history pages.
+//! Commit insertion, atomic Branch overwrite, ancestry and history pages.
 //!
-//! One Commit transition is exactly one transaction: validate the frozen
-//! expectations, insert or verify the immutable Commit, compare-and-swap the
-//! Branch head, delete the exact stage, commit. Only one state-changing Commit
-//! can win against a fixed expected head and base, and the loser keeps its stage
-//! so the caller can decide what to do with it.
+//! One transaction validates captured provenance, inserts or verifies the
+//! immutable Commit, overwrites the Branch head and deletes the exact stage.
+//! Publication order determines the head; reply order does not. The candidate
+//! keeps its captured parent even when publication displaces another Commit.
 
 use super::params;
 use super::transaction::Transaction;
-use layerfs_history::error::{HistoryError, HistoryResult, Missing, MovedState};
+use layerfs_history::error::{HistoryError, HistoryResult, Missing};
 use layerfs_history::identity::{CatalogId, CommitId};
 use layerfs_history::records::{
     CommitHistoryRequest, CommitRecord, CommitStagedOutcome, CommitStagedRequest, PageResult,
@@ -16,15 +15,13 @@ use layerfs_history::records::{
 };
 
 use super::query::{self, Context, Cursor, Range};
-use super::rows::{cell, commit_row, one, sql};
+use super::rows::{commit_row, one, sql};
 
 const COMMIT_BY_ID: &str = "commit_commit_by_id";
 
 const INSERT_COMMIT: &str = "commit_insert_commit";
 
 const ADVANCE_BRANCH: &str = "commit_advance_branch";
-
-const BRANCH_HEAD: &str = "commit_branch_head";
 
 const DELETE_STAGE: &str = "commit_delete_stage";
 
@@ -119,30 +116,42 @@ pub(crate) fn commit_staged(
     {
         return Err(HistoryError::Integrity("stage context"));
     }
-    if branch.head_commit != stage.expected_head || branch.base_layer != stage.expected_base {
-        return Err(HistoryError::HeadMoved(Box::new(MovedState {
-            expected_head: stage.expected_head,
-            actual_head: branch.head_commit,
-            expected_base: stage.expected_base,
-            actual_base: branch.base_layer,
-        })));
+    if branch.base_layer != stage.expected_base {
+        return Err(HistoryError::BaseMismatch {
+            commit_base: stage.expected_base,
+            branch_base: branch.base_layer,
+        });
     }
-    if stage.candidate_root == effective && stage.intended_commit_base == branch.base_layer {
+    let current_root = if branch.head_commit == stage.expected_head {
+        effective
+    } else {
+        match branch.head_commit {
+            Some(head) => {
+                let current = commit(tx, head)?.ok_or(HistoryError::Integrity("Branch Commit"))?;
+                if current.stack != stage.stack || current.base_layer != branch.base_layer {
+                    return Err(HistoryError::Integrity("Branch Commit ownership"));
+                }
+                current.root
+            }
+            None => base_root,
+        }
+    };
+    if stage.candidate_root == current_root {
         remove_stage(tx, &stage)?;
         return Ok(CommitStagedOutcome::UpToDate {
             head: branch.head_commit,
-            root: effective,
+            root: current_root,
         });
     }
     let record = CommitRecord {
         id: CommitId::derive(
             stage.candidate_root,
-            branch.head_commit,
+            stage.expected_head,
             stage.intended_commit_base,
         ),
         stack: stage.stack,
         root: stage.candidate_root,
-        parent: branch.head_commit,
+        parent: stage.expected_head,
         base_layer: stage.intended_commit_base,
     };
     if !verify_commit(tx, &record)? {
@@ -165,27 +174,11 @@ pub(crate) fn commit_staged(
                 record.id.as_slice(),
                 branch.id.as_slice(),
                 stage.expected_base.as_slice(),
-                stage.expected_head.map(|id| id.to_bytes().to_vec()),
             ],
         )
         .map_err(sql)?;
-    if advanced == 0 {
-        let actual = one(tx, BRANCH_HEAD, [branch.id.as_slice()], |row| {
-            let head: Option<Vec<u8>> = cell(row, 0)?;
-            let base: Vec<u8> = cell(row, 1)?;
-            Ok((head, base))
-        })?
-        .ok_or(HistoryError::Integrity("Branch head"))?;
-        let actual_head = match actual.0 {
-            Some(bytes) => Some(CommitId::from_slice(&bytes)?),
-            None => None,
-        };
-        return Err(HistoryError::HeadMoved(Box::new(MovedState {
-            expected_head: stage.expected_head,
-            actual_head,
-            expected_base: stage.expected_base,
-            actual_base: layerfs_history::identity::LayerId::from_slice(&actual.1)?,
-        })));
+    if advanced != 1 {
+        return Err(HistoryError::Integrity("Branch overwrite"));
     }
     remove_stage(tx, &stage)?;
     Ok(CommitStagedOutcome::Committed(record))

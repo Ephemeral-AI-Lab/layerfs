@@ -125,17 +125,9 @@ fn native_mount_commit_status_fork_history_and_terminal_unmount() {
         "Status never refreshes the moved Branch"
     );
     tag.store(b'B', Ordering::Release);
-    match client.call(Request::Commit(b)).unwrap() {
-        Reply::Refused(value) => {
-            assert_eq!(value.code, ControlCode::HeadMoved);
-            let moved = value.moved.unwrap();
-            assert_eq!(moved.expected_head, None);
-            assert_eq!(moved.actual_head, Some(first.id));
-            assert_eq!(moved.expected_base, original.branch.base_layer);
-            assert_eq!(moved.actual_base, original.branch.base_layer);
-        }
-        other => panic!("{other:?}"),
-    }
+    let overwritten = committed(client.call(Request::Commit(b)).unwrap());
+    assert_eq!(overwritten.parent, original.branch.head_commit);
+    assert_ne!(overwritten.root, first.root);
     let fork = BranchId::from_authority([75; 16]);
     let forked = client
         .call(Request::Fork(ForkRequest {
@@ -144,16 +136,17 @@ fn native_mount_commit_status_fork_history_and_terminal_unmount() {
             name: HistoryName::new("fork").unwrap(),
             source: ForkSource::Commit {
                 branch,
-                commit: first.id,
+                commit: overwritten.id,
             },
         }))
         .unwrap();
-    assert!(matches!(forked,Reply::Forked(value) if value.effective_root==first.root));
+    assert!(matches!(forked,Reply::Forked(value) if value.effective_root==overwritten.root));
     let (c, binding) = mount(&mut client, identity(73), fork);
-    assert_eq!(binding.effective_root, first.root);
+    assert_eq!(binding.effective_root, overwritten.root);
     fixture::write(&f.service, a, b'C');
     tag.store(b'C', Ordering::Release);
     let second = committed(client.call(Request::Commit(a)).unwrap());
+    assert_eq!(second.parent, Some(first.id));
     let page = match client
         .call(Request::History(CommitHistoryRequest {
             branch,
@@ -203,7 +196,7 @@ fn native_mount_commit_status_fork_history_and_terminal_unmount() {
     close(&mut client, end);
     let count = worker.join();
     assert_eq!(count, 20);
-    println!("CONTROL_FLOW calls={count} Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true");
+    println!("CONTROL_FLOW overwrite_last_effect=true captured_parent_preserved=true calls={count} Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true");
     f.cleanup();
 }
 #[test]

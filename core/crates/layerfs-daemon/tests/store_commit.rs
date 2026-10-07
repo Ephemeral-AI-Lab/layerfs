@@ -213,7 +213,7 @@ fn close(owner: &Owner, workspace: &BoundWorkspace) {
 }
 
 #[test]
-fn committed_up_to_date_conflict_and_new_bind_preserve_exact_roots() {
+fn committed_up_to_date_overwrite_and_new_bind_preserve_exact_roots() {
     let (f, store, owner) = setup("commit-outcomes");
     let first = bind(&store, &owner, &f, 1);
     let loser = bind(&store, &owner, &f, 2);
@@ -266,24 +266,29 @@ fn committed_up_to_date_conflict_and_new_bind_preserve_exact_roots() {
         same.storage.publish
     );
     drop(same);
-    let conflict = loser
+    let overwritten = loser
         .commit(|save, _, snapshot| {
             construct(save, snapshot, &bytes(b'B'), store.policy().construction())
         })
-        .unwrap_err();
-    assert_eq!(conflict.phase, CommitPhase::Publish);
-    assert!(
-        matches!(&conflict.error, CommitError::History(HistoryError::HeadMoved(m)) if m.expected_head == original.branch.head_commit && m.actual_head == Some(record.id) && m.expected_base == original.branch.base_layer && m.actual_base == original.branch.base_layer)
-    );
-    assert!(conflict.locally_settled);
-    assert!(conflict.published.is_none());
+        .unwrap();
+    let later = match &overwritten.history {
+        CommitStagedOutcome::Committed(record) => record.clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(later.parent, original.branch.head_commit);
     assert!(store.history().stage(loser.identity()).unwrap().is_none());
-    assert_eq!(loser.snapshot().unwrap(), original);
+    assert_eq!(loser.snapshot().unwrap().effective_root, later.root);
     assert_eq!(read(&loser), bytes(b'B'));
-    drop(conflict);
+    assert_eq!(
+        read(&first),
+        bytes(b'A'),
+        "another Workspace's view stays bound"
+    );
+    drop(overwritten);
     let rebound = bind(&store, &owner, &f, 3);
-    assert_eq!(rebound.snapshot().unwrap().effective_root, record.root);
-    assert_eq!(read(&rebound), bytes(b'A'));
+    assert_eq!(rebound.snapshot().unwrap().effective_root, later.root);
+    assert_eq!(read(&rebound), bytes(b'B'));
+    println!("STORE_OVERWRITE both_candidates_installed=true captured_parent_preserved=true new_bind=last_root old_workspace_view_preserved=true");
     for workspace in [&first, &loser, &rebound] {
         close(&owner, workspace);
     }

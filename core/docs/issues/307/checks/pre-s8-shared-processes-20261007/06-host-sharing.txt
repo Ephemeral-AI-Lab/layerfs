@@ -1,0 +1,53 @@
+# {"timestamp": "2026-10-07T11:37:49.360141+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/shared_processes-464fde07a85486ed", "--exact", "overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/shared_processes-464fde07a85486ed": "4730dcf197f4cce49c71d271d788affc1a0e37ba93637ad4b8ee4279fe1ecc73"}, "source_diff_sha256": "9c20952ccbb260b2e51ad51ae41434c3ec3c9092c08f06742846770fb0545e17", "source_parent": "bd5ab61d6bf34570842c3be8faddbc722a7c34ec", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store ... SHARING_OVERLAP both_Save_lifetimes_active=true initial_reservations_acknowledged=true
+SHARING_KILLED pid=21844 status=signal: 9 (SIGKILL)
+
+running 1 test
+test daemon_process_role ... SHARING_READY role=A pid=21844 overlay=/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-native-install-21843-shared-processes/A-overlay.sqlite address=127.0.0.1:58450
+SHARING_SAVE_ENTER role=A attempt=1
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b) tag=65 full_bytes=300048 root=1a12061bce1f351735eed1cafe7b2cb26719a78a3008691ee700a0ba4f4abdf4
+SHARING_COMMIT role=A attempt=1 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_SAVE_ENTER role=A attempt=2
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b) tag=67 full_bytes=300048 root=d971ae4b586cdafb113d0a783015044a47499927786aed18d8511bbe5f721b11
+SHARING_COMMIT role=A attempt=2 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_SAVE_ENTER role=A attempt=3
+SHARING_PREFIX_ACK role=A bytes=16777216 writes_before=8 writes_after=13 root=8b68bf09253e4a98cedbf2d9ba0c47f08af5da08459386bc9cc6245ed79e9752
+
+SHARING_ORIGINAL_CRASH_CLIENT ControlFailure { call: Call { id: 5, request: Commit(WorkspaceToken { workspace: WorkspaceId(0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(CloseFailed { original: Io(Kind(UnexpectedEof)), close: Os { code: 57, kind: NotConnected, message: "Socket is not connected" } }), fence_error: None }
+
+running 1 test
+test daemon_process_role ... SHARING_READY role=B pid=21845 overlay=/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-native-install-21843-shared-processes/B-overlay.sqlite address=127.0.0.1:58452
+SHARING_SAVE_ENTER role=B attempt=1
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c) tag=66 full_bytes=300048 root=96d42874bed024a42294a554202a0625e3ec65956b731db84d6a4d9f2146806a
+SHARING_COMMIT role=B attempt=1 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_SAVE_ENTER role=B attempt=2
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d) tag=68 full_bytes=300048 root=5576b3e4ae9d9ae4f35593df8cda0ba338f6f0e296e1fdb780b24e5a4cb93b76
+SHARING_COMMIT role=B attempt=2 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_ROOT_ORACLE workspace=WorkspaceId(6363636363636363636363636363636363636363636363636363636363636363) tag=68 full_bytes=300048 root=5576b3e4ae9d9ae4f35593df8cda0ba338f6f0e296e1fdb780b24e5a4cb93b76
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.21s
+
+
+SHARING_EXIT pid=21845 status=exit status: 0
+
+running 1 test
+test daemon_process_role ... SHARING_READY role=C pid=21848 overlay=/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-native-install-21843-shared-processes/C-overlay.sqlite address=127.0.0.1:58456
+SHARING_ROOT_ORACLE workspace=WorkspaceId(1515151515151515151515151515151515151515151515151515151515151515) tag=68 full_bytes=300048 root=5576b3e4ae9d9ae4f35593df8cda0ba338f6f0e296e1fdb780b24e5a4cb93b76
+SHARING_ROOT_ORACLE workspace=WorkspaceId(1616161616161616161616161616161616161616161616161616161616161616) tag=66 full_bytes=300048 root=96d42874bed024a42294a554202a0625e3ec65956b731db84d6a4d9f2146806a
+SHARING_ROOT_ORACLE workspace=WorkspaceId(6363636363636363636363636363636363636363636363636363636363636363) tag=68 full_bytes=300048 root=5576b3e4ae9d9ae4f35593df8cda0ba338f6f0e296e1fdb780b24e5a4cb93b76
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.02s
+
+
+SHARING_EXIT pid=21848 status=exit status: 0
+SHARING_RESULT separate_commits=2 same_branch_publications=2 last_head=12df65132b42411f22a78de1c53be885392ef42050afa5917d7047b2e2fd11b31d captured_parents_preserved=true killed_daemon=true fresh_open_full_oracles=true original_client_unknown_preserved=true store=/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-sharing-21843/store.sqlite
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.30s
+
+
+# exit=0

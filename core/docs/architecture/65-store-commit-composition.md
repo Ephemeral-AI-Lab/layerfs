@@ -44,7 +44,7 @@ custody and an unknown resolver are not introduced.
 
 The [Store-half proof](../issues/307/PRE-S8-F8-COMPOSITION-20261007.md) first writes
 real overlay bytes, then directly constructs the matching captured change with
-public Content APIs. It checks Committed/UpToDate, exact HeadMoved, missing
+public Content APIs. Its historical checks cover Committed/UpToDate, HeadMoved, missing
 references, original read failures, real process-held writer Busy before Save and
 at history publication, known publication/local install refusal, and later writes
 through successive installs. The acknowledgement-loss case is an external public
@@ -57,3 +57,10 @@ CleanupFailed wrapper. Original unknowns supplied by a Content producer must
 retain capture even when nested, while a definite wrapper still resolves once.
 The real Commit regression and its prior failure are retained in the
 [nested uncertainty checkpoint](../issues/307/PRE-S8-NESTED-UNKNOWN-20261007.md).
+
+Owner supersession after `bd5ab61d6`: Commit overwrites the current Branch head
+atomically and keeps the captured parent. Last database publication effect wins;
+reply order does not. The same adapter installs each known candidate without
+refresh/rebase. New Workspaces bind the last root; existing Workspaces keep their
+own installed view. Current F8/F13 proofs and retained old-policy receipts are
+linked from the [overwrite decision](../issues/307/BRANCH-OVERWRITE-DECISION-20261007.md).

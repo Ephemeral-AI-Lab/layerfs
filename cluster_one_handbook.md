@@ -389,18 +389,21 @@ uploads, or Save completion. Populate `StageRequest` from the captured state:
 | Field | Meaning |
 | --- | --- |
 | `workspace`, `branch` | Explicit producer incarnation and target Branch |
-| `expected_head`, `expected_base`, `expected_root` | Frozen history expectations |
+| `expected_head`, `expected_base`, `expected_root` | Captured provenance; head supplies the new Commit parent, not a CAS predicate |
 | `construction_base_root` | Root actually used by construction |
 | `intended_commit_base` | Base Layer intended for the resulting Commit |
 | `candidate_root` | Successfully saved filesystem root |
 | `profile`, `scope` | Filesystem profile and inode allocation scope |
 | `generation` | Caller-supplied generation represented by the candidate |
 
-`stage_and_commit` creates and consumes its stage in one conditional write
-transaction. A definite conflict/refusal leaves no newly created stage or token
+`stage_and_commit` creates and consumes its stage in one atomic Branch overwrite
+transaction. The last successful database effect determines the head, while each
+candidate keeps its captured parent. UpToDate compares the current Branch root.
+A stale unchanged capture can overwrite a different current root. No merge,
+rebase, refresh or replay occurs. A definite validation refusal leaves no newly created stage or token
 advance; Busy is before effect. Unknown preserves the original request and proves
 no stage disposition. Match both successful outcomes: `Committed(CommitRecord)`
-and `UpToDate { head, root }`; conflicts and errors are not no-op success.
+and `UpToDate { head, root }`; refusals and errors are not no-op success.
 The earlier separately acknowledged `stage_changes`/`commit_staged` API remains
 for existing exact-token consumers. Only that route uses an acknowledged token
 and `discard_stage` for its exact known ownership. Never compose those two calls
@@ -647,7 +650,7 @@ The caller decides how to collect stable edits from its own mutable state.
 | Save dropped before finish | Remaining output is not acknowledged as complete; prior publications can remain |
 | One publication transaction fails definitely | Its unacknowledged changes abort under provider contract; older successful waves remain |
 | Storage/history outcome is uncertain | Preserve exact context and refusal; do not automatically resend/delete on a guess |
-| History expected state conflicts | Candidate may be saved without becoming the current Commit |
+| History validation refusal or Busy | Candidate may be saved without becoming the current Commit |
 | `Committed` / `UpToDate` | Explicit history success; interpret the typed result |
 | Seal fails | Handoff completion failed; report it independently of earlier successful transitions |
 

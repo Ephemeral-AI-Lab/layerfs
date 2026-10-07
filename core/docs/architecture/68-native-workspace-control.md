@@ -66,3 +66,10 @@ Concrete bootstrap exposes cumulative diagnostics for its already-open writer
 and fixed readers, using Persistence's existing session counters without SQL.
 This remains outside provider-independent store/. It lets the status proof count
 all Store statements, including history, rather than only object demands.
+
+The current Branch publication policy is overwrite-only: two completed candidates
+from the same captured head may both publish, with the last database effect
+defining the head. Each candidate retains its captured ancestry; displaced
+Commits remain immutable. Native replies preserve that known result or original
+unknown independently. See the [owner decision and proofs](../issues/307/BRANCH-OVERWRITE-DECISION-20261007.md);
+the earlier F13 HeadMoved receipts are historical evidence only.

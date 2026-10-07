@@ -111,7 +111,9 @@ pub fn token(value: u64) -> StageToken {
 // Test-only public API fixture facade; no engine imports in domain source.
 pub mod sqlite {
     use layerfs_history::{HistoryCatalogConfig, HistoryError, HistoryResult};
-    use layerfs_persistence::{Handles, HistoryProvider, PersistenceConfig};
+    use layerfs_persistence::{
+        Handles, HistoryProvider, PersistenceConfig, SqlitePersistenceProfile,
+    };
     use layerfs_storage::StoragePolicy;
     pub type SqliteCatalog = HistoryProvider;
     pub fn create(
@@ -119,7 +121,8 @@ pub mod sqlite {
         config: &HistoryCatalogConfig,
     ) -> HistoryResult<SqliteCatalog> {
         Handles::create(
-            PersistenceConfig::sqlite(path),
+            PersistenceConfig::sqlite(path)
+                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
             StoragePolicy::frozen_default(),
             config,
         )
@@ -131,8 +134,13 @@ pub mod sqlite {
         binding: &[u8],
         cursor: [u8; 32],
     ) -> HistoryResult<SqliteCatalog> {
-        Handles::open_read_only(PersistenceConfig::sqlite(path), binding, cursor)
-            .map(|h| h.history)
-            .map_err(|_| HistoryError::Integrity("persistence open"))
+        Handles::open_read_only(
+            PersistenceConfig::sqlite(path)
+                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            binding,
+            cursor,
+        )
+        .map(|h| h.history)
+        .map_err(|_| HistoryError::Integrity("persistence open"))
     }
 }

@@ -1,0 +1,18 @@
+# {"timestamp": "2026-10-07T11:36:38.828193+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/shared_processes-464fde07a85486ed", "--exact", "overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/shared_processes-464fde07a85486ed": "4973b9f943b386d447c66865b565740a5dc84fb1570a9a8e953205a564c6cf6f"}, "source_diff_sha256": "9c20952ccbb260b2e51ad51ae41434c3ec3c9092c08f06742846770fb0545e17", "source_parent": "bd5ab61d6bf34570842c3be8faddbc722a7c34ec", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store ... 
+thread 'overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store' panicked at crates/layerfs-daemon/tests/shared_processes.rs:82:50:
+called `Result::unwrap()` on an `Err` value: InvalidInput("history name ends")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.05s
+
+
+# exit=101

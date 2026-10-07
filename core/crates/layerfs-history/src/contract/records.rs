@@ -115,7 +115,7 @@ pub struct StageRecord {
     pub stack: LayerStackId,
     /// Branch the stage was captured against.
     pub branch: BranchId,
-    /// Head Commit the Branch held when the stage was captured.
+    /// Captured head: provenance and the new Commit parent, not a head CAS.
     pub expected_head: Option<CommitId>,
     /// Base Layer the Branch held when the stage was captured.
     pub expected_base: LayerId,
@@ -244,7 +244,7 @@ pub struct StageRequest {
     pub workspace: WorkspaceId,
     /// Branch the candidate was constructed against.
     pub branch: BranchId,
-    /// Head Commit captured before construction.
+    /// Captured head: provenance and the new Commit parent, not a head CAS.
     pub expected_head: Option<CommitId>,
     /// Base Layer captured before construction.
     pub expected_base: LayerId,

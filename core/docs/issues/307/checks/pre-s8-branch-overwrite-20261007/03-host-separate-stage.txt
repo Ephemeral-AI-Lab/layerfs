@@ -1,0 +1,14 @@
+# {"timestamp": "2026-10-07T11:35:47.553207+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/history_conditional_updates-2ecb820077aaa28c", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/history_conditional_updates-2ecb820077aaa28c": "e7d0bc9b5d7a664529f00b2ccbdec2a16dd6e658d990aece6a8f8e2e379b42eb"}, "source_diff_sha256": "9c20952ccbb260b2e51ad51ae41434c3ec3c9092c08f06742846770fb0545e17", "source_parent": "bd5ab61d6bf34570842c3be8faddbc722a7c34ec", "wall_stop": "specified in command; build is not test execution"}
+
+running 6 tests
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test exact_stages_publish_in_order_with_their_captured_parents ... ok
+test stage_insertion_enforces_the_frozen_context ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+# exit=0

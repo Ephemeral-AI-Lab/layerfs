@@ -1,0 +1,26 @@
+# {"timestamp": "2026-10-07T11:36:22.829964+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/native_control-ba084300e86bc678", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/native_control-ba084300e86bc678": "c27be2441692f23fe0cc4be57a240792106bd2bc7b8fc5111b10e8303fadf9cb"}, "source_diff_sha256": "9c20952ccbb260b2e51ad51ae41434c3ec3c9092c08f06742846770fb0545e17", "source_parent": "bd5ab61d6bf34570842c3be8faddbc722a7c34ec", "wall_stop": "specified in command; build is not test execution"}
+
+running 6 tests
+test an_original_unknown_blocks_another_commit_and_normal_unmount ... CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true
+ok
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed
+ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_FLOW overwrite_last_effect=true captured_parent_preserved=true calls=20 Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true
+ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... CONTROL_LOST_ORIGINAL client=ControlFailure { call: Call { id: 2, request: Commit(WorkspaceToken { workspace: WorkspaceId(5555555555555555555555555555555555555555555555555555555555555555), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(CloseFailed { original: Io(Kind(UnexpectedEof)), close: Os { code: 57, kind: NotConnected, message: "Socket is not connected" } }), fence_error: None } daemon_reply=Committed(Committed(CommitRecord { id: CommitId(12f131cafc800ce36e9203c0205ce9a81444c6e6971d06eca8be5227712ad76a19), stack: LayerStackId(3136363636363636363636363636363636), root: ObjectId("c3fa8e8f329c494313181a3e11825378c8a73ae32991ca6f62f7ef8a621ddb68"), parent: None, base_layer: LayerId(32156e0b0954d97534a85a240ed715879e49587fa6f5dba0b860d61517cf23dac9) })) capture=Capture { route: Route { engine: 5, ns: 1, incarnation: [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85] }, generation: Generation(1), revision: 1, base_root: [92, 64, 156, 210, 61, 253, 20, 15, 208, 250, 194, 12, 197, 40, 201, 4, 154, 34, 110, 112, 225, 100, 0, 37, 174, 227, 6, 101, 46, 198, 156, 212] }
+CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true
+ok
+test status_retains_known_publication_when_the_engine_is_unavailable ... CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+# exit=0

@@ -1,0 +1,21 @@
+# {"timestamp": "2026-10-07T11:38:18.937234+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-overwrite-build", "-e", "CARGO_HOME=/work/core/target/cluster2-linux-cargo", "-e", "CARGO_TARGET_DIR=/work/core/target/cluster2-linux", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; python3 -c 'import json,hashlib,pathlib; m=json.load(open(\"core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/07-source.json\")); bad=[p for p,h in m[\"files\"].items() if hashlib.sha256(open(p,\"rb\").read()).hexdigest()!=h]+[p for p in m[\"deleted\"] if pathlib.Path(p).exists()]; print(\"source hashes match:\",not bad); assert not bad,bad'; cargo test --manifest-path core/Cargo.toml --locked -p layerfs-persistence -p layerfs-daemon --test atomic_publication --test history_conditional_updates --test store_commit --test native_control --test shared_processes --no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "9c20952ccbb260b2e51ad51ae41434c3ec3c9092c08f06742846770fb0545e17", "source_parent": "bd5ab61d6bf34570842c3be8faddbc722a7c34ec", "wall_stop": "specified in command; build is not test execution"}
+source hashes match: True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.92s
+  Executable tests/native_control.rs (core/target/cluster2-linux/debug/deps/native_control-03087202abe2c4a9)
+  Executable tests/shared_processes.rs (core/target/cluster2-linux/debug/deps/shared_processes-5d6f5f4b23d71857)
+  Executable tests/store_commit.rs (core/target/cluster2-linux/debug/deps/store_commit-651ca3c0e05afdde)
+  Executable tests/atomic_publication.rs (core/target/cluster2-linux/debug/deps/atomic_publication-63831bb9eb631cdc)
+  Executable tests/history_conditional_updates.rs (core/target/cluster2-linux/debug/deps/history_conditional_updates-7447a989e828b9f9)
+
+# exit=0

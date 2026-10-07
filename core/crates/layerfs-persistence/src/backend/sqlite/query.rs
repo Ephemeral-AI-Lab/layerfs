@@ -32,9 +32,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "commit_advance_branch" => Ok(include_str!(
             "../../../sql/sqlite/queries/history/commit_advance_branch.sql"
         )),
-        "commit_branch_head" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/commit_branch_head.sql"
-        )),
         "commit_commit_by_id" => Ok(include_str!(
             "../../../sql/sqlite/queries/history/commit_commit_by_id.sql"
         )),

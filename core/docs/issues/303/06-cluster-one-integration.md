@@ -35,7 +35,8 @@ file that changes, with production LOC before and estimated after.
   in the data path and holds no Store handle after install.
 - **Coordination is the database.** There is no coordinator, server or lock
   service. One short write transaction runs at a time across all daemons, and
-  history transitions are conditional on exact expected state.
+  history transitions validate exact ownership/context. Branch Commit overwrites
+  the head while retaining captured ancestry (K34).
 - **No retry.** A write that meets another writer returns `Busy` before any
   effect. Nothing waits, polls or re-issues.
 
@@ -43,8 +44,8 @@ A mounted SQLite file is the first provider of this shape. Storage and History
 already reach the database through `PackPersistence` and `HistoryCatalog`;
 another database can replace SQLite behind those ports without touching the
 daemon adapter. To keep that true, every Store call is either an idempotent put
-or get of immutable content by id, or one conditional transition with exact
-expected state; reads are batched by id; `Busy` is a typed outcome; and the
+or get of immutable content by id, or one atomic transition with exact
+ownership and captured context; reads are batched by id; `Busy` is a typed outcome; and the
 daemon adapter names no SQLite type, path or lock. The
 [plan](../307/SERVERLESS-STORE-PLAN-20261007.md#rules-that-keep-a-later-database-swap-cheap)
 lists the rules.
@@ -64,7 +65,7 @@ directly; no wire form of any of them remains.
 | Inode serials | `reserve_inodes(request)` | Database-owned range; never recycled |
 | Save | `Storage::begin_save()`, `Save::sink()`/`accept`, `Save::finish()` | A stack local of the Commit; earlier published waves survive a later failure |
 | Same-Save reads | `AuthenticatedObjects for Save` | Construction reads what it just produced |
-| Stage and publish | `HistoryCatalog::stage_and_commit` in a single write transaction (O-23) | Exact captured expectations, the saved candidate and a conditional head transition; `Committed`, `UpToDate` or the exact conflict, with no stage left behind |
+| Stage and publish | `HistoryCatalog::stage_and_commit` in a single write transaction (O-23) | Exact captured provenance and saved candidate; overwrite the Branch head, keeping the captured parent. `Committed` or current-root `UpToDate`; a definite refusal leaves no new stage (K34) |
 | Discard | `discard_stage(DiscardRequest)` | Exact owned token; only for a stage created by the separate calls |
 
 Content construction and reads are unchanged: `FilesystemRead`, `FileView`,
@@ -174,7 +175,7 @@ Not available to a daemon:
   `Storage` on the Commit thread. There is no Save registry, capability,
   token table, reply custody or supervisor.
 - **Order is fixed:** finish Save, check the candidate root, stage and publish
-  in one transaction, install the new base locally. A refused or conflicting
+  in one transaction, install the new base locally. A definitely refused
   publish therefore leaves no stage row.
 - **Root checks** are the bounded ones that exist today (profile, scope, root
   serial, root inode, root listing page, portable metadata), at mount and before
@@ -234,7 +235,9 @@ so it is accepted knowingly.
 
 Immutability still does not supply authority, reference closure, mutable
 history or safe collection. Bytes are saved before a root references them
-inside one publication, and a Branch moves only by conditional transition.
+inside one publication, and a Branch changes only through an atomic validated
+transition. Commit uses overwrite-only semantics; Layer publication retains its
+separate expected-stack-head condition.
 
 ## 8. Retired by this contract
 

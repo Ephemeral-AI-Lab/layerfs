@@ -118,6 +118,7 @@ R1–R8 bounds are implemented. "Reverses" names a prepared item marked decided.
 | K31 | The host is control-only after install: mount, Exec, Commit, status, unmount. SDK `client/` and `runtime/`, the Bridge data codec and daemon `upstream/` are retired; R1 application assembly, R3 restart custody and R4 remote Save are not built | Owner direction; they exist only to carry the data path across a process boundary that no longer exists | #307 S9 rows R1, R3, R4 as scoped on 2026-10-07 |
 | K32 | The Store volume is reachable by the daemon and not by Bash run inside a Workspace | Owner direction; mechanism in [06 §6](06-cluster-one-integration.md#6-store-visibility) | — |
 | K33 | Project Init stays on the host and ends with one sealed Store file; install copies it once into the shared volume. No collector runs under several writers | Owner direction; a sealed file has no sidecar and is safe to copy | Host-held writable Store after Init |
+| K34 | **Owner supersession 2026-10-07:** Branch Commit is overwrite-only. Last successful database publication effect wins; each candidate keeps its captured parent and filesystem state. Current-root equality gives UpToDate | Owner: "for now, it should be overwrite only"; [decision/proof](../307/BRANCH-OVERWRITE-DECISION-20261007.md) | Same-Branch HeadMoved acceptance in F8/F9/F13; merge/rebase/conflict policy deferred |
 
 ## 4. Disposition of prepared items
 
@@ -240,7 +241,7 @@ IDs are kept below so earlier references remain traceable.
 | O-3 | Must a Workspace survive a daemon process crash? (no / yes) | No. "Yes" selects the write-ahead alternative and a restart protocol not designed here | S1 |
 | O-4 | May exact uncertain-history resolution be added, with completion fencing and coherent authorized reads, no resend/delete on a guess? | Specify policy; two unfenced reads are insufficient | Terminal Uncertain remains until permitted and implemented |
 | O-5 | **Resolved 2026-10-07:** both profiles are supported; development verification runs Disposable | The shared-file definition of Disposable is O-21 | — |
-| O-6 | After a conflict, what does the product offer: reopen on the new head, commit to a fork, or leave it to the caller? | Leave it to the caller in the first release | — |
+| O-6 | **Superseded by K34 for Branch Commit:** after a conflict, what does the product offer: reopen on the new head, commit to a fork, or leave it to the caller? | Leave it to the caller in the first release | — |
 | O-7 | May the overlay start writeback and drop clean pages on its own files to bound guest page cache, given that root `AGENTS.md` §4 forbids sync calls on Workspace backing? | — | Target T8 |
 | O-8 | Which uid:gid do commands run as, and is it one identity per daemon or one per Workspace? Under a shared identity a command of one Workspace can open another's mount | One per Workspace | S8 |
 | O-9 | Is reporting `ctime = mtime` accepted? | Yes | S4 |
@@ -259,6 +260,7 @@ IDs are kept below so earlier references remain traceable.
 | O-22 | **Resolved 2026-10-07:** the macOS preallocation and extent-release owner is deleted. Strict-allocation selections become `NOT_RUN — mechanism removed` (O-16); the eight historical failures stay as recorded and Init speed needs one new measurement | Owner: "yes delete" | Persistence cut |
 | O-23 | **Resolved 2026-10-07:** stage and publish run in one history write transaction, so a `Busy` leaves no stage row | Owner: "yes" | Commit path |
 | O-24 | **Resolved 2026-10-07:** one unprivileged Bash user per daemon, different from the daemon's own user and shared by its Workspaces. A Workspace is one mount that serves any number of concurrent Bash processes | Owner: "we just want the mount, and each workspace should support multiple bashes". O-8's one-identity-per-Workspace recommendation is not adopted | Exec confinement, S8 |
+| O-25 | **Resolved 2026-10-07:** same-Branch stale candidates may both publish in order; keep Busy/no retry and original unknown custody | Owner overwrite-only direction (K34); old HeadMoved receipts remain historical | F8/F9/F13 |
 
 **Earlier questions on #303.** None of Q1–Q13 has a recorded answer.
 

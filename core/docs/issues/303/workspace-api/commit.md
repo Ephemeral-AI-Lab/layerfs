@@ -16,6 +16,13 @@ are mapped in [06](../06-cluster-one-integration.md). The
 [CAS/CDC handbook](../../../../../cas_cdc_deltaencoding_handbook.md) govern their
 implemented contracts.
 
+Current owner supersession2026-10-07: Branch Commit is overwrite-only, as
+recorded in [K34/O-25](../08-decisions-provenance.md) and the
+[implementation/proof decision](../../307/BRANCH-OVERWRITE-DECISION-20261007.md).
+The candidate keeps its captured parent; last database publication effect wins.
+Busy and unknown custody stay unchanged. Older separate-stage diagrams below
+retain the API distinction; the current daemon uses one atomic stage_and_commit.
+
 ## 1. Purpose and granularity
 
 [owner requirement]
@@ -159,10 +166,10 @@ publication, uncertain, or known publication with local install failure. Never
 flatten the latter into “Commit did not happen.” Observation is exposed through
 [status](status.md), which is not required to advance the operation.
 
-The dormant SDK has a fixed 600,000 ms Commit call and legacy phase names in
-[workspace.rs](../../../../crates/layerfs-api/sdk/src/workspace.rs) and
-[workspace_commit.rs](../../../../crates/layerfs-bridge/src/contract/workspace_commit.rs).
-Those are existing source limitations, not the revised contract. Long operations
+The retired SDK had a fixed600,000ms Commit call and legacy phase names in
+`layerfs-api/sdk/src/workspace.rs` and
+`layerfs-bridge/src/contract/workspace_commit.rs` at the historical source pin
+above. These are historical limitations, not the revised contract. Long operations
 need bounded progress/result transport independent of a fixed total runtime or
 total response count. Explicit cancellation and bounded individual RPC deadlines
 remain separate; a deadline cannot classify an already-entered history operation
@@ -420,10 +427,11 @@ lifetime extension or serialization of entire Commits substitutes for the proof.
 
 Immutable objects make content identity, reuse and authenticated acquisition
 natural candidates for distributed storage. They do not remove mutable Branch
-compare-and-swap, exact stage ownership, inode serial allocation or publication
-coordination. If A and B capture the same Branch head, one may publish and the
-other conflict; the latter preserves accepted local changes and does not silently
-rebase. Different Branches can progress independently within shared capacity.
+atomic head publication, exact stage ownership, inode serial allocation or
+coordination. If A and B capture the same head, both may publish: the last
+database effect determines the Branch head, while each retains its captured
+parent and root. No merge or rebase is performed. Different Branches progress
+independently within shared capacity.
 There is no distributed provider or endpoint implied by this diagram.
 
 ## 8. Completion and unknown outcomes
@@ -449,7 +457,7 @@ local INSTALL succeeds                   Workspace binding installed
 `StageRequest` carries captured expectations, construction base, candidate root,
 scope/profile/generation and intended base. Stage insertion does not establish
 savedness and does not check that the Branch still has the expected head.
-`Save::finish` must succeed first. Conditional transition uses only the returned
+`Save::finish` must succeed first. The separate-stage transition uses the returned
 exact token. `FilesystemResult.root` is `FilesystemRootId`; use `.0` for the
 history ObjectId field, not `.object()`.
 
@@ -471,7 +479,7 @@ history ObjectId field, not `.object()`.
                                              |              |             |
                                 +------------+-----+        +-------------+
                                 |                  |                      |
-                         Committed/UpToDate      conflict                  |
+                         Committed/UpToDate      refusal                   |
                                 |                  |                      |
                              INSTALL       exact owned-stage discard      |
                                 |            / disposition               |
@@ -535,7 +543,7 @@ separate per-file payload files. These are distinct from shrinking the database.
 | Active G+1 after success | Remains live over installed R'; never deleted as completed Commit operation records |
 | Captured G after known success and successful install | Retire from the live view; enqueue unreachable rows once retained readers/operations release ownership |
 | Operation records | Enqueue after its last consumer; retain any records required for exact unfinished/uncertain outcome custody |
-| Definite pre-stage failure/conflict | Preserve uncommitted composed state; only unreachable operation records/duplicates are reclaimable after proper local resolution |
+| Definite pre-stage failure/refusal | Preserve uncommitted composed state; only unreachable operation records/duplicates are reclaimable after proper local resolution |
 | Unknown stage/transition/required discard or failed local install | Keep exact custody and required local state; no guessed success or blanket deletion |
 | Successful terminal unmount | Fence all owners, close namespace and own removal of all remaining local rows; no separate close/cleanup call |
 
@@ -599,7 +607,7 @@ preparation observations on `codex/phase7-experiment-305` at
 | Large file / full replacement | O(actual content), progressive construction/Save | No 4 GiB Workspace or 256 MiB whole-stream ceiling; bounded queued bytes |
 | Large sparse file | Hole/run and written-byte work | Current zero-stream prerequisite corrected; persisted hole semantics |
 | Continuous file logger | Captured tail edit while later writes continue, rotation/truncate/alias lifetime | Same-inode progress, orphan bounds, failure resolution and debt accounting |
-| Concurrent Workspaces | Separate captures/Saves; shared queue/device service | Finite per-Workspace progress, exact same-Branch conflicts and authority isolation |
+| Concurrent Workspaces | Separate captures/Saves; shared queue/device service | Finite per-Workspace progress, ordered same-Branch overwrites, captured provenance and authority isolation |
 | Repeated per-call history | New state when changed, no-op outcome otherwise, retained ancestry | Historical roots stay readable; real storage/maintenance cost reported |
 
 Full-state proofs include ignored data, `.git/index`, symlinks, dependencies,

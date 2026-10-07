@@ -1,4 +1,4 @@
-//! Exact stages, conditional Branch advance and conditional stack advance.
+//! Exact stages, overwrite Branch publication and conditional stack advance.
 mod support;
 
 use layerfs_content::ObjectId;
@@ -68,41 +68,33 @@ impl Fixture {
 }
 
 #[test]
-fn a_stale_loser_keeps_its_exact_stage() {
-    let fixture = fixture("conditional-stale");
-    let winner = fixture.stage(0x21, root(0x50));
-    let loser = fixture.stage(0x22, root(0x51));
-    let committed = fixture
-        .catalog
-        .commit_staged(&CommitStagedRequest {
-            workspace: winner.workspace,
-            token: winner.token,
-        })
-        .unwrap();
-    let head = match committed {
-        CommitStagedOutcome::Committed(record) => record.id,
-        other => panic!("expected a Commit, got {other:?}"),
-    };
-    let moved = fixture
-        .catalog
-        .commit_staged(&CommitStagedRequest {
-            workspace: loser.workspace,
-            token: loser.token,
-        })
-        .unwrap_err();
-    match moved.cause() {
-        HistoryError::HeadMoved(state) => {
-            assert_eq!(state.expected_head, None);
-            assert_eq!(state.actual_head, Some(head));
-            assert_eq!(state.expected_base, fixture.base);
-            assert_eq!(state.actual_base, fixture.base);
-        }
-        other => panic!("expected HeadMoved, got {other:?}"),
+fn exact_stages_publish_in_order_with_their_captured_parents() {
+    let fixture = fixture("overwrite-stages");
+    let first = fixture.stage(0x21, root(0x50));
+    let last = fixture.stage(0x22, root(0x51));
+    for stage in [&first, &last] {
+        let record = match fixture
+            .catalog
+            .commit_staged(&CommitStagedRequest {
+                workspace: stage.workspace,
+                token: stage.token,
+            })
+            .unwrap()
+        {
+            CommitStagedOutcome::Committed(record) => record,
+            other => panic!("expected a Commit, got {other:?}"),
+        };
+        assert_eq!(record.parent, None);
+        assert_eq!(record.root, stage.candidate_root);
+        assert!(fixture.catalog.stage(stage.workspace).unwrap().is_none());
+        let snapshot = fixture
+            .catalog
+            .branch_snapshot(fixture.branch)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.branch.head_commit, Some(record.id));
+        assert_eq!(snapshot.effective_root, stage.candidate_root);
     }
-    assert_eq!(
-        fixture.catalog.stage(loser.workspace).unwrap().unwrap(),
-        loser
-    );
 }
 
 #[test]

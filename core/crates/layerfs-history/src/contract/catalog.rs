@@ -118,10 +118,11 @@ pub trait HistoryCatalog: Send + Sync {
     /// Inserts one frozen stage with its own freshly allocated token.
     fn stage_changes(&self, request: &StageRequest) -> HistoryResult<StageRecord>;
 
-    /// Commits one exact stage against its frozen expectations.
+    /// Publishes one exact stage, overwriting the Branch head atomically.
+    /// The Commit keeps its captured parent. UpToDate compares the current root.
     fn commit_staged(&self, request: &CommitStagedRequest) -> HistoryResult<CommitStagedOutcome>;
 
-    /// Stages a saved candidate and conditionally publishes it in one write
+    /// Stages a saved candidate and atomically overwrites its Branch in one write
     /// transaction. A definite refusal leaves no stage created by this attempt;
     /// a preexisting stage is never removed. Unknown retains the original intent
     /// and permits no assumed stage disposition, reread-based success or replay.

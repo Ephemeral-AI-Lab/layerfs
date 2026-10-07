@@ -105,7 +105,8 @@ Keep implementation description separate from target proposal and research.
 
 Public content/storage/history/persistence contracts govern integrated callers.
 Stable capture/input, Store-derived policy, backpressure, Save completion and
-conditional history publication are separate obligations. Immutable objects do
+atomic history publication are separate obligations. Branch Commit overwrites the
+head and keeps its captured parent; see the [owner supersession](docs/issues/307/BRANCH-OVERWRITE-DECISION-20261007.md). Immutable objects do
 not replace authority, reference closure, mutable history or safe GC.
 
 Engine-independent Project logic may consume SQLite-backed acquisition through
