@@ -1,0 +1,107 @@
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:6: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:14: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:18: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:30: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:38: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:44: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:55: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:63: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:69: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:94: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:109: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:129: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:137: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:143: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:165: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:194: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:234: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:250: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:286: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:298: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:323: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:331: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:335: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:383: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:386: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:394: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:398: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:410: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:422: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:438: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:449: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/04-rejected-broad-lock.patch:478: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:8: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:21: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:46: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:71: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:93: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:122: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:162: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:178: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:214: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:226: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:253: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:290: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:319: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:367: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:370: trailing whitespace.
++ 
+core/docs/issues/307/checks/filesystem-poc-20261008/06-unqualified-r2-draft.patch:384: trailing whitespace.
++ 
+core/docs/issues/307/checks/r1-completion-20261008/06-host-engine_lifecycle.txt:10: new blank line at EOF.
+core/docs/issues/307/checks/r1-completion-20261008/06-host-engine_protocol.txt:15: new blank line at EOF.
+core/docs/issues/307/checks/r1-completion-20261008/06-host-init.txt:8: new blank line at EOF.
+core/docs/issues/307/checks/r1-runtime-cancel-20261008/30-admin_protocol.txt:9: new blank line at EOF.
+core/docs/issues/307/checks/r1-runtime-cancel-20261008/30-engine_lifecycle.txt:10: new blank line at EOF.
+core/docs/issues/307/checks/r1-runtime-cancel-20261008/30-engine_protocol.txt:14: new blank line at EOF.
+core/docs/issues/307/checks/r1-runtime-cancel-20261008/38-reviewed-admin-tests.txt:9: new blank line at EOF.
+core/docs/issues/307/checks/r1-runtime-cancel-20261008/48-deferred-command-capability.patch:11: trailing whitespace.
++ 
+core/docs/issues/307/checks/r1-runtime-cancel-20261008/48-deferred-command-capability.patch:18: trailing whitespace.
++ 

@@ -1,0 +1,14 @@
+{
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "--label",
+    "layerfs.receipt=r1-completion-20261008",
+    "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3"
+  ],
+  "name": "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3",
+  "exit": 0,
+  "stdout": "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3\n",
+  "stderr": ""
+}

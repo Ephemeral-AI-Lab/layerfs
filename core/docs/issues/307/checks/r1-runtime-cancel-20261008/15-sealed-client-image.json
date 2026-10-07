@@ -1,0 +1,29 @@
+{
+  "original_client": "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50",
+  "image": "sha256:32e4b9d89dd74111bb662c5e0e94be970534ae3e79f0c72aa9bc77765109232b",
+  "operations": [
+    {
+      "command": [
+        "docker",
+        "stop",
+        "--time",
+        "1",
+        "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50"
+      ],
+      "exit_code": 0,
+      "stdout": "Flag --time has been deprecated, use --timeout instead\nfc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "commit",
+        "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50"
+      ],
+      "exit_code": 0,
+      "stdout": "sha256:32e4b9d89dd74111bb662c5e0e94be970534ae3e79f0c72aa9bc77765109232b\n",
+      "stderr": ""
+    }
+  ],
+  "scope": "local immutable administrative deployment artifact, no registry push or Store/data snapshot; socket bind not in image"
+}

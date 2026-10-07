@@ -2,7 +2,8 @@
 
 > **Status:** Current planning checklist; no release candidate exists.
 > Fresh owner dispatch 2026-10-08; input `1a6bb53ef14e1860d8f222df11394e5a654bb34d`.
-> Native Goal is active; source/proof identity and exact outcome govern completion.
+> Owner stop boundary: finish verified R1 and its FUSE handoff, then pause.
+> Full R0–R9 objective remains uncompleted; source/proof identity governs claims.
 
 [Rollout contract](CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md#4-combined-implementation-rollout)
 and [complete proposed layout](FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md) govern
@@ -11,8 +12,8 @@ implementation. This ledger records actual state, not promised acceptance.
 | Checkpoint | State | Evidence/remaining work |
 | --- | --- | --- |
 | R0 contract/proof/guide/layout/dispatch reconciliation | COMPLETE — documentation scope only | [Deepest-file plan](checks/r0-owner-reconciliation-20261008/01-deepest-file-plan.md), [owner/proof disposition](checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md); [independent review](checks/r0-owner-reconciliation-20261008/06-independent-review-disposition.md) and [scoped document verification](checks/r0-owner-reconciliation-20261008/07-verification-scope.md); exact staged LOC/identity recorded in checkpoint receipts; no native product claim |
-| R1 real SDK and ordinary Sandbox lifecycle/execution/access | IN_PROGRESS | [Deepest-file plan](checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md); real Project/Workspace facade and [daemon application checkpoint](checks/r1-daemon-composition-20261008/65-application-results.md) verified; [ordinary runtime foundation](checks/r1-sandbox-runtime-20261008/81-foundation-results.md) now verified; [owned lifecycle/SDK startup/access](checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt) now verified; exact external-runtime cancellation and native Ready still required. Old excluded Sandbox cannot activate unchanged |
-| R2 real native Ready/read/permissions/indexed custody/normal drain | NOT_STARTED | Bound is not Ready; no native serving path proved |
+| R1 real SDK and ordinary Sandbox lifecycle/execution/access | COMPLETE — owner-selected R1 scope | [Deepest-file plan](checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md); real Project/Workspace facade and [daemon application checkpoint](checks/r1-daemon-composition-20261008/65-application-results.md) verified; [ordinary runtime foundation](checks/r1-sandbox-runtime-20261008/81-foundation-results.md) now verified; [owned lifecycle/SDK startup/access](checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt) now verified; [final no-admin verification and R2 handoff](R1-COMPLETE-FUSE-HANDOFF-20261008.md) closes only the rollout R1 requirements. Optional administrative cancellation/provenance is owner-deferred; native Ready belongs to R2. Old excluded Sandbox cannot activate unchanged |
+| R2 real native Ready/read/permissions/indexed custody/normal drain | NOT_STARTED — paused at R1 boundary | Bound is not Ready; no native serving path proved. An unbuilt, unqualified draft is archived with known blockers; it is absent from active source |
 | R3 ordinary mutation/kernel coherence | NOT_STARTED | Component mutation source exists; native semantics/races/mappings/removed references unproved |
 | R4 captured namespace and incremental topology | NOT_STARTED | Existing captured files/operation records/Content route reused; owning namespace producer, bounded validation and checked ancestry remain |
 | R5 actual mounted live Commit/known install/survival | NOT_STARTED | Existing Store Commit is component source/proof only; complete normalizer and custody composition remain |
@@ -95,3 +96,31 @@ close/join, full acceptance and retirement remain open. Prepared official unchan
 ctr2.2.4 bytes are checksum verified; they establish no runtime signal qualification.
 
 R1d exact source-size comparison: Production LOC: 169065 -> 170673 (delta +1608). Core103648→105256; active60774→62382; reference65417, excluded predecessors37431 and excluded integration5443 unchanged. No relocation or retirement. [Exact accounting](checks/r1-sandbox-lifecycle-20261008/106-exact-production-loc.json) uses the same pinned counter over first-parent/staged product snapshots.
+
+## Owner scope correction and stop boundary, 2026-10-08
+
+The earlier R1c/R1d paragraphs and raw receipts preserve their original scope and
+verdicts. Their statements requiring native Ready before R1 closure were broader
+than the owning rollout R1 row: complete native Ready is R2. The owner now
+explicitly defers the optional privileged ctr/admin cancellation and command-client
+provenance subsystem. Ordinary runtime command streams/status, identity/backing
+protection, real daemon/control startup and exact lifecycle/failure semantics remain
+required. All filesystem contracts and R2–R9 qualification remain in force.
+
+The owner requests a pause only after verified R1 completion and an actionable
+FUSE handoff. Admin removal alone does not close R1. The final verification and
+exact source/commit/LOC references are in the [R1 handoff](R1-COMPLETE-FUSE-HANDOFF-20261008.md).
+No native filesystem acceptance or early reference retirement is inferred.
+
+R1 final closure: restored no-admin product equals e5e95e76 exactly. Final host
+and Linux locked build/Clippy checks,16 host tests,26 Linux tests,47 tooling
+tests, actual cross-platform lifecycle/access/reopen and2MiB ordinary Bash duplex
+proof all pass at [the recorded identities](checks/r1-completion-20261008/26-build-runtime-pins.json).
+Required R2 native Ready/permissions/custody/drain remain unimplemented. The owner
+stop boundary applies after this verified R1 completion and its actionable handoff.
+
+R1 final closure accounting: Production LOC:170673 ->170673 (delta +0);
+core105256/active62382/reference65417/excluded predecessors37431/integration5443
+unchanged. [Exact parent/staged count](checks/r1-completion-20261008/28-exact-production-loc.json)
+classifies archived uncommitted admin/R2 drafts as evidence, with no production
+retirement credit. The handoff and post-commit confirmation identify the closure.

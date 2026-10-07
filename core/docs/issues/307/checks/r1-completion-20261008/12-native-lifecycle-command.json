@@ -1,0 +1,25 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "9",
+    "core/target/debug/examples/sandbox_lifecycle",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r1-completion/layerfs-daemon",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r1-final-host-0396a283a7b4457e95de2e59928a89a3"
+  ],
+  "source": "02-source-identity.json",
+  "product_base": "e5e95e76c16da65172d17b6a52bb9a25613547ec",
+  "owner_selected_final_verification": true,
+  "timeout_seconds": 9,
+  "cache": "natural functional; no numeric performance/cold/residency claim",
+  "volume": "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3",
+  "fixture": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r1-final-host-0396a283a7b4457e95de2e59928a89a3",
+  "sha256": {
+    "core/target/debug/examples/sandbox_lifecycle": "c5c57c8b94768cd24a235fc2ef7aaea8553951d45bee3bfeece04b0654ce82cf",
+    "core/target/r1-completion/layerfs-daemon": "74e8bf3c055a3bdbcefd563648d840e8e2cbf7163900d5925c797c260195f6f6"
+  }
+}

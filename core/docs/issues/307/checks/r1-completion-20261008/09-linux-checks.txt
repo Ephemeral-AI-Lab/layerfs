@@ -1,0 +1,134 @@
+source_hashes_match=True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 28.99s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_bridge-c1b46e236f84be81)
+  Executable tests/control_records.rs (core/target/cluster2-linux/debug/deps/control_records-bfa6aca3b6f8967e)
+  Executable tests/daemon_records.rs (core/target/cluster2-linux/debug/deps/daemon_records-6e5b09d00a00fefd)
+  Executable tests/install_records.rs (core/target/cluster2-linux/debug/deps/install_records-e921712fa3ca560b)
+  Executable tests/native.rs (core/target/cluster2-linux/debug/deps/native-52c3dd6a8ef162f9)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-77c9832298339be7)
+  Executable unittests src/bin/layerfs-daemon.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-cb13d83b54484162)
+  Executable tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-eb66ab7f963249de)
+  Executable tests/complete_installed_roots.rs (core/target/cluster2-linux/debug/deps/complete_installed_roots-16464fe442a967ed)
+  Executable tests/completion_ownership.rs (core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c)
+  Executable tests/completion_storage.rs (core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b)
+  Executable tests/construction_cursor.rs (core/target/cluster2-linux/debug/deps/construction_cursor-07de2b18561b362d)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-429c3690851e8b2c)
+  Executable tests/e2_startup_receipts.rs (core/target/cluster2-linux/debug/deps/e2_startup_receipts-9c92e0224dade04c)
+  Executable tests/edit_backing.rs (core/target/cluster2-linux/debug/deps/edit_backing-24e3ad85e8e9d52b)
+  Executable tests/finite_service.rs (core/target/cluster2-linux/debug/deps/finite_service-7919da4c90c994e0)
+  Executable tests/host_handoff.rs (core/target/cluster2-linux/debug/deps/host_handoff-4cdc6cae8d18612d)
+  Executable tests/indexed_operation_record.rs (core/target/cluster2-linux/debug/deps/indexed_operation_record-f7132d37f46cf1cf)
+  Executable tests/installed_qualification.rs (core/target/cluster2-linux/debug/deps/installed_qualification-633d7c5f52039959)
+  Executable tests/installed_store.rs (core/target/cluster2-linux/debug/deps/installed_store-08f9c29a011e4e8b)
+  Executable tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-97b0619943df4135)
+  Executable tests/native_application.rs (core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029)
+  Executable tests/native_control.rs (core/target/cluster2-linux/debug/deps/native_control-83467c0a8be9b56b)
+  Executable tests/native_install.rs (core/target/cluster2-linux/debug/deps/native_install-035242047b6cc903)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77)
+  Executable tests/root_qualification.rs (core/target/cluster2-linux/debug/deps/root_qualification-f04f6db36b728ea2)
+  Executable tests/shared_processes.rs (core/target/cluster2-linux/debug/deps/shared_processes-19348c8a37ad0fa6)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-6022c7bd339d8d01)
+  Executable tests/store_commit.rs (core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735)
+  Executable unittests examples/e2_startup.rs (core/target/cluster2-linux/debug/examples/e2_startup-764e95f467052da9)
+  Executable unittests examples/engine_finite.rs (core/target/cluster2-linux/debug/examples/engine_finite-b4194296b8df16f9)
+  Executable unittests examples/resource_growth.rs (core/target/cluster2-linux/debug/examples/resource_growth-3ee8bc1eb229e503)
+  Executable unittests examples/resource_prepare.rs (core/target/cluster2-linux/debug/examples/resource_prepare-6727760423608d12)
+  Executable unittests examples/store_accounting.rs (core/target/cluster2-linux/debug/examples/store_accounting-8271dac67dde7a86)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sandbox-b9571925bf205bba)
+  Executable tests/engine_lifecycle.rs (core/target/cluster2-linux/debug/deps/engine_lifecycle-e87752ec713b80d7)
+  Executable tests/engine_protocol.rs (core/target/cluster2-linux/debug/deps/engine_protocol-28e012febde1d9e8)
+  Executable unittests examples/engine_streams.rs (core/target/cluster2-linux/debug/examples/engine_streams-668971a9a72f1eef)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-44c2b4cec4643a32)
+  Executable tests/init.rs (core/target/cluster2-linux/debug/deps/init-60d760448a800074)
+  Executable unittests examples/sandbox_lifecycle.rs (core/target/cluster2-linux/debug/examples/sandbox_lifecycle-7930aaa3d35307c8)
+
+test=engine_protocol binary=core/target/cluster2-linux/debug/deps/engine_protocol-28e012febde1d9e8 sha256=f4e4f32ebb6cfd6c8a919dddc9432ef9b49ebd94a6632d3bc41e9f727437ca7e
+
+running 9 tests
+test actual_mismatched_inspection_and_http_error_body_remain_distinct_from_selector ... ok
+test before_effect_identity_refusal_has_no_engine_connection ... ok
+test chunked_metadata_accepts_split_unicode_and_rejects_conflicting_framing ... ok
+test escaped_deciding_duplicates_wrong_identity_and_truncated_json_refuse ... EXTERNAL_PEER_WRITE_ERROR sent=238 expected=242 cause=Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }
+EXTERNAL_PEER_WRITE_ERROR sent=231 expected=235 cause=Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }
+ok
+test partial_creation_id_and_lost_start_are_retained_without_replay ... ok
+test positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes ... ok
+test structural_inspection_ignores_giant_arguments_and_retains_null_exit ... ok
+test upgrade_read_ahead_preserves_frames_and_request_identity ... ok
+test wrong_upgrade_media_and_malformed_status_trailers_extensions_refuse ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+test=engine_protocol exit=0
+test=engine_lifecycle binary=core/target/cluster2-linux/debug/deps/engine_lifecycle-e87752ec713b80d7 sha256=cb62edb0a814713847d7ae85874557ced80552de55e0c06210056c2eca505dd4
+
+running 5 tests
+test lost_upload_and_start_keep_original_owner_and_refuse_replay ... ok
+test marker_inside_truncated_frame_keeps_evidence_and_fails_readiness ... ok
+test partial_create_identity_and_nonlocal_volume_are_not_adopted ... EXTERNAL_PEER_WRITE_ERROR sent=168 expected=187 cause=Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }
+ok
+test stderr_and_substring_markers_never_satisfy_readiness ... ok
+test streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+test=engine_lifecycle exit=0
+test=init binary=core/target/cluster2-linux/debug/deps/init-60d760448a800074 sha256=c88c68fa036c2f46d9c129578f24ca86974d4c2a76cce2f23b2532198fef00f4
+
+running 2 tests
+test init_seals_complete_root_and_first_branch_without_retained_handles ... SDK_INIT entries=6 full_file_oracle_bytes=140014 host_sqlite=3.53.2 store_bytes=172032 profile=Disposable
+ok
+test refusal_preserves_existing_output_and_original_request ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+test=init exit=0
+test=native binary=core/target/cluster2-linux/debug/deps/native-52c3dd6a8ef162f9 sha256=0c6a6378cd6efb90361738cc637c6044342ff87eed60353944cf29fdc3665723
+
+running 9 tests
+test authenticated_duplex_records_stream_beyond_one_window_with_fixed_buffers ... NATIVE suite=Noise_KK_25519_AESGCM_SHA256 server_receive=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 10, io_attempts: 10, wire_bytes: 196654, zeroed_bytes: 262102, crypto_attempts: 5, crypto_input_bytes: 196644, crypto_output_bytes: 196564, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 0, plain_capacity: 65519, sealed_capacity: 65535 } server_send=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 10, io_attempts: 10, wire_bytes: 196654, zeroed_bytes: 131054, crypto_attempts: 5, crypto_input_bytes: 196564, crypto_output_bytes: 196644, buffer_allocation_attempts: 1, requested_buffer_bytes: 65535, stack_window_bytes: 0, plain_capacity: 0, sealed_capacity: 65535 } handshake=ChannelWork { channel_calls: 0, record_io_attempts: 2, records: 0, plaintext_bytes: 0, io_calls: 4, io_attempts: 4, wire_bytes: 100, zeroed_bytes: 562, crypto_attempts: 2, crypto_input_bytes: 48, crypto_output_bytes: 48, buffer_allocation_attempts: 1, requested_buffer_bytes: 256, stack_window_bytes: 512, plain_capacity: 0, sealed_capacity: 0 }
+NATIVE client_send=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 10, io_attempts: 10, wire_bytes: 196654, zeroed_bytes: 131054, crypto_attempts: 5, crypto_input_bytes: 196564, crypto_output_bytes: 196644, buffer_allocation_attempts: 1, requested_buffer_bytes: 65535, stack_window_bytes: 0, plain_capacity: 0, sealed_capacity: 65535 } client_receive=ChannelWork { channel_calls: 5, record_io_attempts: 5, records: 5, plaintext_bytes: 196564, io_calls: 10, io_attempts: 10, wire_bytes: 196654, zeroed_bytes: 262102, crypto_attempts: 5, crypto_input_bytes: 196644, crypto_output_bytes: 196564, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 0, plain_capacity: 65519, sealed_capacity: 65535 }
+ok
+test corrupted_authenticated_record_retains_the_crypto_failure_without_replay ... ok
+test malformed_record_quarantines_both_directions_before_body_allocation ... ok
+test oversized_unattempted_record_does_not_consume_a_nonce ... ok
+test successful_native_channels_enable_nodelay_on_both_authenticated_sockets ... ok
+test terminal_read_error_keeps_phase_and_original_fence_attempt ... ok
+test terminal_reply_retains_eof_and_original_platform_fence_outcome ... NATIVE_END peer_eof=true fence=OK
+ok
+test terminal_trailing_input_keeps_original_byte_work_and_has_no_second_read ... ok
+test wrong_static_identity_fails_the_actual_handshake ... S7_FAILED_HANDSHAKE client=ChannelWork { channel_calls: 0, record_io_attempts: 2, records: 0, plaintext_bytes: 0, io_calls: 2, io_attempts: 3, wire_bytes: 50, zeroed_bytes: 514, crypto_attempts: 1, crypto_input_bytes: 0, crypto_output_bytes: 48, buffer_allocation_attempts: 1, requested_buffer_bytes: 256, stack_window_bytes: 512, plain_capacity: 0, sealed_capacity: 0 } server=ChannelWork { channel_calls: 0, record_io_attempts: 1, records: 0, plaintext_bytes: 0, io_calls: 2, io_attempts: 2, wire_bytes: 50, zeroed_bytes: 562, crypto_attempts: 1, crypto_input_bytes: 48, crypto_output_bytes: 0, buffer_allocation_attempts: 1, requested_buffer_bytes: 256, stack_window_bytes: 512, plain_capacity: 0, sealed_capacity: 0 }
+ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+test=native exit=0
+test=native_application binary=core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029 sha256=af0fcc1eeaf1caedd254ac45406a60e87a39390c79a8bb34e6945cf3e81d8117
+
+running 1 test
+test actual_daemon_install_hello_bind_status_no_constructor_and_session_end ... DAEMON_APPLICATION direct_store=true overlay_sqlite=3.53.2 store_sqlite=3.53.2 logical_bind=true native_fuse_ready=false sealed_source_absent=true session_end=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+test=native_application exit=0
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Checking layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.86s
+clippy_exit=0
+binary=core/target/cluster2-linux/debug/layerfs-daemon sha256=359ca346552cedf62ad55fd3512bae4b964e65afea4cdc015dec538c5fccb013 bytes=95415040
+binary=core/target/r1-completion/layerfs-daemon sha256=74e8bf3c055a3bdbcefd563648d840e8e2cbf7163900d5925c797c260195f6f6 bytes=5736296

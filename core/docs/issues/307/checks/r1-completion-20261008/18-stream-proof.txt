@@ -1,0 +1,2 @@
+ENGINE_IDENTITY 501;20;Groups:	20 ;CapEff:	0000000000000000;CapAmb:	0000000000000000;NoNewPrivs:	1;
+ENGINE_STREAMS exact_container=d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0 exact_exec=21d08b3c9a777eeca43753779a744bd7a1b54b31395c2c6bcd00b290c611c5ef stdin=2097152 stdout=2097152 stderr=17 exit_code=37 prestart_exit=null transport_eof_is_not_exit=true cancellation=UNSUPPORTED_BEFORE_EFFECT no_daemon_registration=true

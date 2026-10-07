@@ -1,0 +1,1602 @@
+diff --git a/core/Cargo.lock b/core/Cargo.lock
+index 64112a6ef..80d201386 100644
+--- a/core/Cargo.lock
++++ b/core/Cargo.lock
+@@ -327,6 +327,12 @@ version = "1.18.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
+ 
++[[package]]
++name = "equivalent"
++version = "1.0.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
++
+ [[package]]
+ name = "errno"
+ version = "0.3.14"
+@@ -367,6 +373,24 @@ version = "0.2.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+ 
++[[package]]
++name = "fuser"
++version = "0.18.0"
++dependencies = [
++ "bitflags",
++ "libc",
++ "log",
++ "memchr",
++ "nix",
++ "num_enum",
++ "page_size",
++ "parking_lot",
++ "pkg-config",
++ "ref-cast",
++ "smallvec",
++ "zerocopy",
++]
++
+ [[package]]
+ name = "generic-array"
+ version = "0.14.7"
+@@ -451,6 +475,16 @@ dependencies = [
+  "typenum",
+ ]
+ 
++[[package]]
++name = "indexmap"
++version = "2.14.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
++dependencies = [
++ "equivalent",
++ "hashbrown 0.17.1",
++]
++
+ [[package]]
+ name = "inout"
+ version = "0.1.4"
+@@ -510,6 +544,7 @@ dependencies = [
+ name = "layerfs-daemon"
+ version = "0.1.6"
+ dependencies = [
++ "fuser",
+  "layerfs-bridge",
+  "layerfs-content",
+  "layerfs-history",
+@@ -652,6 +687,21 @@ dependencies = [
+  "vcpkg",
+ ]
+ 
++[[package]]
++name = "lock_api"
++version = "0.4.14"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
++dependencies = [
++ "scopeguard",
++]
++
++[[package]]
++name = "log"
++version = "0.4.34"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
++
+ [[package]]
+ name = "memchr"
+ version = "2.8.3"
+@@ -696,6 +746,28 @@ dependencies = [
+  "minimal-lexical",
+ ]
+ 
++[[package]]
++name = "num_enum"
++version = "0.7.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5d0bca838442ec211fa11de3a8b0e0e8f3a4522575b5c4c06ed722e005036f26"
++dependencies = [
++ "num_enum_derive",
++ "rustversion",
++]
++
++[[package]]
++name = "num_enum_derive"
++version = "0.7.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
++dependencies = [
++ "proc-macro-crate",
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
++
+ [[package]]
+ name = "once_cell"
+ version = "1.21.4"
+@@ -708,6 +780,39 @@ version = "0.3.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
+ 
++[[package]]
++name = "page_size"
++version = "0.6.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "30d5b2194ed13191c1999ae0704b7839fb18384fa22e49b57eeaa97d79ce40da"
++dependencies = [
++ "libc",
++ "winapi",
++]
++
++[[package]]
++name = "parking_lot"
++version = "0.12.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a"
++dependencies = [
++ "lock_api",
++ "parking_lot_core",
++]
++
++[[package]]
++name = "parking_lot_core"
++version = "0.9.12"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1"
++dependencies = [
++ "cfg-if",
++ "libc",
++ "redox_syscall",
++ "smallvec",
++ "windows-link",
++]
++
+ [[package]]
+ name = "pkg-config"
+ version = "0.3.34"
+@@ -737,6 +842,15 @@ dependencies = [
+  "universal-hash",
+ ]
+ 
++[[package]]
++name = "proc-macro-crate"
++version = "3.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
++dependencies = [
++ "toml_edit",
++]
++
+ [[package]]
+ name = "proc-macro2"
+ version = "1.0.107"
+@@ -770,6 +884,35 @@ dependencies = [
+  "getrandom 0.2.17",
+ ]
+ 
++[[package]]
++name = "redox_syscall"
++version = "0.5.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
++dependencies = [
++ "bitflags",
++]
++
++[[package]]
++name = "ref-cast"
++version = "1.0.27"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7e440fb4e4b4147295338efb76001ab9e4efc0e5839df2c47fc5ac2381d365c3"
++dependencies = [
++ "ref-cast-impl",
++]
++
++[[package]]
++name = "ref-cast-impl"
++version = "1.0.27"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "92ecd8964f8453721699a1ed72037b0db49ce2f5a5138486ee89bed6f67cdf3a"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.5",
++]
++
+ [[package]]
+ name = "regex"
+ version = "1.13.1"
+@@ -845,12 +988,38 @@ version = "1.0.23"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+ 
++[[package]]
++name = "scopeguard"
++version = "1.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
++
+ [[package]]
+ name = "semver"
+ version = "1.0.28"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+ 
++[[package]]
++name = "serde_core"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48"
++dependencies = [
++ "serde_derive",
++]
++
++[[package]]
++name = "serde_derive"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.5",
++]
++
+ [[package]]
+ name = "sha2"
+ version = "0.10.9"
+@@ -967,6 +1136,36 @@ dependencies = [
+  "syn 3.0.5",
+ ]
+ 
++[[package]]
++name = "toml_datetime"
++version = "1.1.1+spec-1.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3165f65f62e28e0115a00b2ebdd37eb6f3b641855f9d636d3cd4103767159ad7"
++dependencies = [
++ "serde_core",
++]
++
++[[package]]
++name = "toml_edit"
++version = "0.25.15+spec-1.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1340ea94a5856333492c9064b02c778b191dd2c853778d9609debdcdfea3a614"
++dependencies = [
++ "indexmap",
++ "toml_datetime",
++ "toml_parser",
++ "winnow",
++]
++
++[[package]]
++name = "toml_parser"
++version = "1.1.3+spec-1.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
++dependencies = [
++ "winnow",
++]
++
+ [[package]]
+ name = "typenum"
+ version = "1.20.1"
+@@ -1052,6 +1251,28 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "winapi"
++version = "0.3.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
++dependencies = [
++ "winapi-i686-pc-windows-gnu",
++ "winapi-x86_64-pc-windows-gnu",
++]
++
++[[package]]
++name = "winapi-i686-pc-windows-gnu"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
++
++[[package]]
++name = "winapi-x86_64-pc-windows-gnu"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
++
+ [[package]]
+ name = "windows-link"
+ version = "0.2.1"
+@@ -1067,6 +1288,35 @@ dependencies = [
+  "windows-link",
+ ]
+ 
++[[package]]
++name = "winnow"
++version = "1.0.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
++dependencies = [
++ "memchr",
++]
++
++[[package]]
++name = "zerocopy"
++version = "0.8.57"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d35102a9f36d089ccae9e4c6802bc118be4487b80aaffc0ab4e0cf5ce92d2873"
++dependencies = [
++ "zerocopy-derive",
++]
++
++[[package]]
++name = "zerocopy-derive"
++version = "0.8.57"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "146c01f5ab44258da43cf276c74a2763db2ff3969c9c652c3f2de07041d0b2bc"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
++
+ [[package]]
+ name = "zeroize"
+ version = "1.9.0"
+@@ -1082,7 +1332,3 @@ dependencies = [
+  "cc",
+  "pkg-config",
+ ]
+-
+-[[patch.unused]]
+-name = "fuser"
+-version = "0.18.0"
+diff --git a/core/crates/layerfs-daemon/Cargo.toml b/core/crates/layerfs-daemon/Cargo.toml
+index dfb6e4fa6..414a29ffe 100644
+--- a/core/crates/layerfs-daemon/Cargo.toml
++++ b/core/crates/layerfs-daemon/Cargo.toml
+@@ -16,9 +16,12 @@ layerfs-history = { path = "../layerfs-history" }
+ # Concrete Store opening stays in application bootstrap, outside store/.
+ layerfs-persistence = { path = "../layerfs-persistence" }
+ 
+-nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
++nix = { version = "=0.31.3", features = ["fs", "user", "process", "mount"] }
+ 
+ [dev-dependencies]
+ layerfs-sdk = { path = "../layerfs-api/sdk" }
+ layerfs-project = { path = "../layerfs-project" }
+ layerfs-telemetry = { path = "../layerfs-telemetry" }
++
++[target.'cfg(target_os = "linux")'.dependencies]
++fuser = { version = "=0.18.0", default-features = false }
+diff --git a/core/crates/layerfs-daemon/src/lib.rs b/core/crates/layerfs-daemon/src/lib.rs
+index c56a8cc3c..590250670 100644
+--- a/core/crates/layerfs-daemon/src/lib.rs
++++ b/core/crates/layerfs-daemon/src/lib.rs
+@@ -31,3 +31,6 @@ pub use service::startup::OwnerStart;
+ pub mod control;
+ 
+ pub mod application;
++
++#[cfg(target_os = "linux")]
++pub mod native;
+diff --git a/core/crates/layerfs-daemon/src/native/attributes.rs b/core/crates/layerfs-daemon/src/native/attributes.rs
+new file mode 100644
+index 000000000..bd591b375
+--- /dev/null
++++ b/core/crates/layerfs-daemon/src/native/attributes.rs
+@@ -0,0 +1,86 @@
++//! Portable inode projection; the kernel enforces the admitted command identity.
++use super::worker::State;
++use fuser::{FileAttr, FileType};
++use layerfs_content::object::inode_leaf::InodeKind;
++use layerfs_workspace::{Time, ViewStat};
++use std::time::{Duration, SystemTime, UNIX_EPOCH};
++pub(super) const TTL: Duration = Duration::from_secs(60);
++pub(super) fn kind(kind: InodeKind) -> FileType {
++    match kind {
++        InodeKind::RegularFile => FileType::RegularFile,
++        InodeKind::Directory => FileType::Directory,
++        InodeKind::Symlink => FileType::Symlink,
++    }
++}
++pub(super) fn time(seconds: i64, nanos: u32) -> SystemTime {
++    if seconds >= 0 {
++        UNIX_EPOCH + Duration::new(seconds as u64, nanos)
++    } else {
++        UNIX_EPOCH - Duration::from_secs(seconds.unsigned_abs())
++            + Duration::from_nanos(nanos.into())
++    }
++}
++pub(super) fn portable(time: SystemTime) -> Time {
++    match time.duration_since(UNIX_EPOCH) {
++        Ok(d) => Time {
++            seconds: d.as_secs() as i64,
++            nanoseconds: d.subsec_nanos(),
++        },
++        Err(e) => {
++            let d = e.duration();
++            if d.subsec_nanos() == 0 {
++                Time {
++                    seconds: -(d.as_secs() as i64),
++                    nanoseconds: 0,
++                }
++            } else {
++                Time {
++                    seconds: -(d.as_secs() as i64) - 1,
++                    nanoseconds: 1_000_000_000 - d.subsec_nanos(),
++                }
++            }
++        }
++    }
++}
++pub(super) fn attr(state: &State, stat: &ViewStat) -> FileAttr {
++    let mtime = time(stat.metadata.mtime_seconds, stat.metadata.mtime_nanoseconds);
++    FileAttr {
++        ino: state.inode(stat.serial),
++        size: stat.logical_len,
++        blocks: stat.logical_len.div_ceil(512),
++        atime: mtime,
++        mtime,
++        ctime: mtime,
++        crtime: UNIX_EPOCH,
++        kind: kind(stat.kind),
++        perm: stat.metadata.mode as u16,
++        nlink: if stat.kind == InodeKind::Directory {
++            2
++        } else {
++            stat.namespace_refs as u32
++        },
++        uid: state.uid,
++        gid: state.gid,
++        rdev: 0,
++        blksize: 4096,
++        flags: 0,
++    }
++}
++pub(super) fn base(stat: &ViewStat) -> layerfs_overlay::Inode {
++    layerfs_overlay::Inode {
++        serial: stat.serial,
++        kind: match stat.kind {
++            InodeKind::RegularFile => layerfs_overlay::InodeKind::File,
++            InodeKind::Directory => layerfs_overlay::InodeKind::Directory,
++            InodeKind::Symlink => layerfs_overlay::InodeKind::Symlink,
++        },
++        mode: stat.metadata.mode as u16,
++        mtime_seconds: stat.metadata.mtime_seconds,
++        mtime_nanoseconds: stat.metadata.mtime_nanoseconds,
++        nlink: stat.namespace_refs,
++        size: stat.logical_len,
++        inherited_cutoff: stat.logical_len,
++        born: 0,
++        entries: 0,
++    }
++}
+diff --git a/core/crates/layerfs-daemon/src/native/callbacks.rs b/core/crates/layerfs-daemon/src/native/callbacks.rs
+new file mode 100644
+index 000000000..140e0c120
+--- /dev/null
++++ b/core/crates/layerfs-daemon/src/native/callbacks.rs
+@@ -0,0 +1,405 @@
++//! Kernel callback admission and one owned reply attempt per request.
++use super::{
++    attributes::{attr, kind, portable, TTL},
++    worker::Adapter,
++};
++use fuser::*;
++use layerfs_content::filesystem::PathName;
++use layerfs_workspace::{Operation, Position};
++use std::{ffi::OsStr, os::unix::ffi::OsStrExt, time::SystemTime};
++macro_rules! context {
++    ($state:ident,$id:ident,$reply:ident) => {
++        match $state.context($id) {
++            Ok(ctx) => ctx,
++            Err(e) => {
++                $reply.error($state.fault(e));
++                return;
++            }
++        }
++    };
++}
++fn name(name: &OsStr) -> std::result::Result<PathName, Errno> {
++    PathName::new(name.as_bytes().to_vec()).map_err(|_| Errno::EINVAL)
++}
++impl Filesystem for Adapter {
++    fn init(&mut self, _: &Request, config: &mut KernelConfig) -> std::io::Result<()> {
++        config
++            .set_max_write(128 * 1024)
++            .map_err(|_| std::io::Error::other("128 KiB write unavailable"))?;
++        config
++            .set_max_readahead(128 * 1024)
++            .map_err(|_| std::io::Error::other("128 KiB readahead unavailable"))?;
++        config
++            .set_max_background(1)
++            .map_err(|_| std::io::Error::other("background limit"))?;
++        config
++            .set_congestion_threshold(1)
++            .map_err(|_| std::io::Error::other("congestion limit"))?;
++        Ok(())
++    }
++    fn lookup(&self, _: &Request, parent: INodeNo, raw: &OsStr, reply: ReplyEntry) {
++        let name = match name(raw) {
++            Ok(v) => v,
++            Err(e) => {
++                reply.error(e);
++                return;
++            }
++        };
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            let result = ctx
++                .call(
++                    ctx.view
++                        .lookup(ctx.operation.overlay(), state.serial(parent), &name),
++                )
++                .and_then(|stat| {
++                    ctx.lookup(&stat)?;
++                    Ok(attr(state, &stat))
++                });
++            match result {
++                Ok(a) => reply.entry(&TTL, &a, Generation(0)),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn forget(&self, _: &Request, ino: INodeNo, nlookup: u64) {
++        self.submit(move |state, id| match state.context(id) {
++            Ok(ctx) => {
++                if let Err(e) = ctx.forget(state.serial(ino), nlookup) {
++                    state.fault(e);
++                }
++                ctx.finish();
++            }
++            Err(e) => {
++                state.fault(e);
++            }
++        });
++    }
++    fn getattr(&self, _: &Request, ino: INodeNo, _: Option<FileHandle>, reply: ReplyAttr) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            match ctx.stat(state.serial(ino)) {
++                Ok(stat) => reply.attr(&TTL, &attr(state, &stat)),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn readlink(&self, _: &Request, ino: INodeNo, reply: ReplyData) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            match ctx.call(
++                ctx.view
++                    .readlink(ctx.operation.overlay(), state.serial(ino)),
++            ) {
++                Ok(link) => reply.data(link.as_bytes()),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn open(&self, _: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            let result = ctx
++                .stat(state.serial(ino))
++                .and_then(|stat| ctx.open(&stat, flags.acc_mode() != OpenAccMode::O_RDONLY));
++            match result {
++                Ok(()) => reply.opened(FileHandle(id), FopenFlags::FOPEN_KEEP_CACHE),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn read(
++        &self,
++        _: &Request,
++        ino: INodeNo,
++        fh: FileHandle,
++        offset: u64,
++        size: u32,
++        _: OpenFlags,
++        _: Option<LockOwner>,
++        reply: ReplyData,
++    ) {
++        if size > 128 * 1024 {
++            reply.error(Errno::EINVAL);
++            return;
++        }
++        self.submit(move |state, id| {
++            let mut ctx = context!(state, id, reply);
++            let result = ctx
++                .file(fh.0, state.serial(ino))
++                .and_then(|file| ctx.read(file, offset, size));
++            match result {
++                Ok(data) => reply.data(&data),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn write(
++        &self,
++        _: &Request,
++        ino: INodeNo,
++        fh: FileHandle,
++        offset: u64,
++        data: &[u8],
++        flags: WriteFlags,
++        open_flags: OpenFlags,
++        _: Option<LockOwner>,
++        reply: ReplyWrite,
++    ) {
++        if data.len() > 128 * 1024 || !flags.is_empty() {
++            reply.error(Errno::EINVAL);
++            return;
++        }
++        let data = layerfs_workspace::WriteData::from(data);
++        let length = data.len() as u32;
++        self.submit(move |state, id| {
++            let mut ctx = context!(state, id, reply);
++            let result = ctx.file(fh.0, state.serial(ino)).and_then(|file| {
++                ctx.mutate(Operation::WriteOpen {
++                    file,
++                    position: if open_flags.0 & nix::libc::O_APPEND != 0 {
++                        Position::End
++                    } else {
++                        Position::At(offset)
++                    },
++                    data,
++                })
++            });
++            match result {
++                Ok(_) => reply.written(length),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn setattr(
++        &self,
++        _: &Request,
++        ino: INodeNo,
++        mode: Option<u32>,
++        uid: Option<u32>,
++        gid: Option<u32>,
++        size: Option<u64>,
++        _: Option<TimeOrNow>,
++        mtime: Option<TimeOrNow>,
++        _: Option<SystemTime>,
++        fh: Option<FileHandle>,
++        _: Option<SystemTime>,
++        _: Option<SystemTime>,
++        _: Option<SystemTime>,
++        flags: Option<BsdFileFlags>,
++        reply: ReplyAttr,
++    ) {
++        if uid.is_some() || gid.is_some() || flags.is_some() {
++            reply.error(Errno::EOPNOTSUPP);
++            return;
++        }
++        let mtime = mtime.map(|t| {
++            portable(match t {
++                TimeOrNow::SpecificTime(t) => t,
++                TimeOrNow::Now => SystemTime::now(),
++            })
++        });
++        self.submit(move |state, id| {
++            let mut ctx = context!(state, id, reply);
++            let serial = state.serial(ino);
++            let operation = match fh {
++                Some(fh) => ctx
++                    .file(fh.0, serial)
++                    .map(|file| Operation::SetOpenAttributes {
++                        file,
++                        mode,
++                        mtime,
++                        size,
++                    }),
++                None => Ok(Operation::SetAttributes {
++                    serial,
++                    mode,
++                    mtime,
++                    size,
++                }),
++            };
++            let result = operation
++                .and_then(|op| ctx.mutate(op))
++                .and_then(|_| ctx.stat(serial));
++            match result {
++                Ok(stat) => reply.attr(&TTL, &attr(state, &stat)),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn create(
++        &self,
++        _: &Request,
++        parent: INodeNo,
++        raw: &OsStr,
++        mode: u32,
++        umask: u32,
++        flags: OpenFlags,
++        reply: ReplyCreate,
++    ) {
++        let name = match name(raw) {
++            Ok(v) => v,
++            Err(e) => {
++                reply.error(e);
++                return;
++            }
++        };
++        self.submit(move |state, id| {
++            let mut ctx = context!(state, id, reply);
++            let result = ctx
++                .mutate(Operation::Create {
++                    parent: state.serial(parent),
++                    name,
++                    mode: (mode & 0o777) & !umask,
++                })
++                .and_then(|stat| stat.ok_or(super::worker::NativeFailure::Invalid("create stat")))
++                .and_then(|stat| {
++                    ctx.open(&stat, flags.acc_mode() != OpenAccMode::O_RDONLY)?;
++                    ctx.lookup(&stat)?;
++                    Ok(attr(state, &stat))
++                });
++            match result {
++                Ok(a) => reply.created(
++                    &TTL,
++                    &a,
++                    Generation(0),
++                    FileHandle(id),
++                    FopenFlags::FOPEN_KEEP_CACHE,
++                ),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn flush(&self, _: &Request, ino: INodeNo, fh: FileHandle, _: LockOwner, reply: ReplyEmpty) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            match ctx.file(fh.0, state.serial(ino)) {
++                Ok(_) => reply.ok(),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn release(
++        &self,
++        _: &Request,
++        ino: INodeNo,
++        fh: FileHandle,
++        _: OpenFlags,
++        _: Option<LockOwner>,
++        _: bool,
++        reply: ReplyEmpty,
++    ) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            let result = ctx
++                .file(fh.0, state.serial(ino))
++                .and_then(|file| ctx.done(crate::Command::CloseFile(file)));
++            match result {
++                Ok(()) => reply.ok(),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn fsync(&self, req: &Request, ino: INodeNo, fh: FileHandle, _: bool, reply: ReplyEmpty) {
++        self.flush(req, ino, fh, LockOwner(0), reply);
++    }
++    fn opendir(&self, _: &Request, ino: INodeNo, _: OpenFlags, reply: ReplyOpen) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            let result = ctx
++                .stat(state.serial(ino))
++                .and_then(|stat| ctx.open_directory(&stat));
++            match result {
++                Ok(()) => reply.opened(FileHandle(id), FopenFlags::empty()),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn readdir(
++        &self,
++        _: &Request,
++        ino: INodeNo,
++        fh: FileHandle,
++        offset: u64,
++        mut reply: ReplyDirectory,
++    ) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            let serial = state.serial(ino);
++            let result =
++                (|| {
++                    ctx.directory(fh.0, serial)?;
++                    let mut after = if offset == 0 {
++                        None
++                    } else {
++                        Some(
++                            ctx.get(fh.0, 3, offset)?
++                                .ok_or(super::worker::NativeFailure::Invalid("directory cookie"))?,
++                        )
++                    };
++                    let mut cookie = offset;
++                    loop {
++                        let page = ctx.call(ctx.view.list(
++                            ctx.operation.overlay(),
++                            serial,
++                            after.as_deref(),
++                        ))?;
++                        for (name, serial) in page.entries {
++                            let stat = ctx.stat(serial)?;
++                            let next = cookie.checked_add(1).ok_or(
++                                super::worker::NativeFailure::Invalid("directory cookie exhausted"),
++                            )?;
++                            if reply.add(
++                                state.inode(serial),
++                                next,
++                                kind(stat.kind),
++                                OsStr::from_bytes(&name),
++                            ) {
++                                return Ok(());
++                            }
++                            let old = ctx.get(fh.0, 3, next)?;
++                            ctx.put(fh.0, 3, next, old, Some(name))?;
++                            cookie = next;
++                        }
++                        match page.continuation {
++                            Some(next) => after = Some(next),
++                            None => return Ok(()),
++                        }
++                    }
++                })();
++            match result {
++                Ok(()) => reply.ok(),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++    fn releasedir(
++        &self,
++        _: &Request,
++        ino: INodeNo,
++        fh: FileHandle,
++        _: OpenFlags,
++        reply: ReplyEmpty,
++    ) {
++        self.submit(move |state, id| {
++            let ctx = context!(state, id, reply);
++            match ctx.close_directory(fh.0, state.serial(ino)) {
++                Ok(()) => reply.ok(),
++                Err(e) => reply.error(state.fault(e)),
++            };
++            ctx.finish();
++        });
++    }
++}
+diff --git a/core/crates/layerfs-daemon/src/native/context.rs b/core/crates/layerfs-daemon/src/native/context.rs
+new file mode 100644
+index 000000000..9642d3b11
+--- /dev/null
++++ b/core/crates/layerfs-daemon/src/native/context.rs
+@@ -0,0 +1,166 @@
++//! One request's source, descriptor-read and published-reply custody.
++use super::{
++    attributes,
++    worker::{NativeFailure, Result, State},
++};
++use crate::{store::StoreOperation, Command, Completion, OwnerError, Response};
++use layerfs_overlay::{BaseSource, FileRead, OpenFile, Publication};
++use layerfs_workspace::{Operation, Outcome, SourceView, ViewStat};
++pub(super) struct Context<'a> {
++    pub state: &'a State,
++    pub operation: StoreOperation,
++    pub view: SourceView,
++    pub id: u64,
++    source: BaseSource,
++    publication: Option<Publication>,
++    read: Option<FileRead>,
++}
++pub(super) fn job(operation: &StoreOperation, command: Command) -> Result<Completion> {
++    operation
++        .overlay()
++        .try_submit(Some(operation.workspace().route()), command)
++        .map_err(|(cause, command)| {
++            NativeFailure::Owner(OwnerError::Unattempted {
++                cause: Box::new(cause),
++                command: Box::new(command),
++            })
++        })?
++        .wait()
++        .map_err(NativeFailure::Owner)
++}
++impl<'a> Context<'a> {
++    pub fn new(state: &'a State, id: u64) -> Result<Self> {
++        if id == 0 || id > i64::MAX as u64 {
++            return Err(NativeFailure::Invalid("request identity exhausted"));
++        }
++        if state
++            .failure
++            .lock()
++            .map_err(|_| NativeFailure::Invalid("failure lock poisoned"))?
++            .is_some()
++        {
++            return Err(NativeFailure::Invalid(
++                "native owner retained an original failure",
++            ));
++        }
++        let operation = state
++            .workspace
++            .operation()
++            .map_err(|cause| NativeFailure::Workspace {
++                cause,
++                provider: None,
++            })?;
++        let done = job(&operation, Command::AcquireBaseSource { owner: id })?;
++        let source = match done.result() {
++            Ok(Response::BaseSource(source)) => *source,
++            _ => return Err(NativeFailure::Completion(Box::new(done))),
++        };
++        let view = operation
++            .workspace()
++            .view_for_source(source)
++            .map_err(|cause| NativeFailure::Workspace {
++                cause,
++                provider: None,
++            })?;
++        Ok(Self {
++            state,
++            operation,
++            view,
++            id,
++            source,
++            publication: None,
++            read: None,
++        })
++    }
++    pub fn call<T>(&self, result: layerfs_workspace::WorkspaceResult<T>) -> Result<T> {
++        result.map_err(|cause| NativeFailure::Workspace {
++            cause,
++            provider: self.operation.ports().failure().ok().flatten(),
++        })
++    }
++    pub fn done(&self, command: Command) -> Result<()> {
++        let done = job(&self.operation, command)?;
++        match done.result() {
++            Ok(Response::Done) => Ok(()),
++            _ => Err(NativeFailure::Completion(Box::new(done))),
++        }
++    }
++    pub fn stat(&self, serial: u64) -> Result<ViewStat> {
++        self.call(self.view.stat(self.operation.overlay(), serial))
++    }
++    pub fn file(&self, fh: u64, serial: u64) -> Result<OpenFile> {
++        let done = job(&self.operation, Command::RetainedFile { request: fh })?;
++        match done.result() {
++            Ok(Response::File(Some(file))) if file.serial() == serial => Ok(*file),
++            _ => Err(NativeFailure::Completion(Box::new(done))),
++        }
++    }
++    pub fn open(&self, stat: &ViewStat, writable: bool) -> Result<()> {
++        let done = job(
++            &self.operation,
++            Command::OpenFile {
++                source: self.source,
++                request: self.id,
++                base: attributes::base(stat),
++                writable,
++            },
++        )?;
++        match done.result() {
++            Ok(Response::File(Some(_))) => Ok(()),
++            _ => Err(NativeFailure::Completion(Box::new(done))),
++        }
++    }
++    pub fn read(&mut self, file: OpenFile, offset: u64, size: u32) -> Result<Vec<u8>> {
++        let done = job(
++            &self.operation,
++            Command::AcquireFileRead {
++                source: self.source,
++                file,
++                request: self.id,
++            },
++        )?;
++        let read = match done.result() {
++            Ok(Response::FileReader(Some(read))) => *read,
++            _ => return Err(NativeFailure::Completion(Box::new(done))),
++        };
++        self.read = Some(read);
++        let mut bytes = Vec::with_capacity(size as usize);
++        self.call(
++            self.view
++                .read_file(self.operation.overlay(), read, offset, size, &mut bytes),
++        )?;
++        Ok(bytes)
++    }
++    pub fn mutate(&mut self, operation: Operation) -> Result<Option<ViewStat>> {
++        let result = self.call(self.operation.workspace().mutate(
++            self.operation.overlay(),
++            self.operation.ports(),
++            &self.view,
++            operation,
++            attributes::portable(std::time::SystemTime::now()),
++        ))?;
++        match result {
++            Outcome::Applied { publication, stat } => {
++                self.publication = Some(publication);
++                Ok(stat)
++            }
++            Outcome::Unchanged { stat } => Ok(stat),
++        }
++    }
++    /// Called only after the one kernel reply attempt. Drop does no inferred SQL.
++    pub fn finish(mut self) {
++        if let Some(publication) = self.publication.take() {
++            if let Err(e) = self.done(Command::ReplyAttempted(publication)) {
++                self.state.fault(e);
++            }
++        }
++        if let Some(read) = self.read.take() {
++            if let Err(e) = self.done(Command::ReleaseFileRead(read)) {
++                self.state.fault(e);
++            }
++        }
++        if let Err(e) = self.done(Command::ReleaseBaseSource(self.source)) {
++            self.state.fault(e);
++        }
++    }
++}
+diff --git a/core/crates/layerfs-daemon/src/native/mod.rs b/core/crates/layerfs-daemon/src/native/mod.rs
+new file mode 100644
+index 000000000..8efa832d6
+--- /dev/null
++++ b/core/crates/layerfs-daemon/src/native/mod.rs
+@@ -0,0 +1,10 @@
++//! Native Linux projection over the existing direct Store and Workspace.
++//! Attachment proves a kernel round trip; complete S8 qualification is separate.
++mod attributes;
++mod callbacks;
++mod context;
++mod mount;
++mod records;
++mod worker;
++pub use mount::{AttachFailure, NativeMount};
++pub use worker::NativeFailure;
+diff --git a/core/crates/layerfs-daemon/src/native/mount.rs b/core/crates/layerfs-daemon/src/native/mount.rs
+new file mode 100644
+index 000000000..eea1daf15
+--- /dev/null
++++ b/core/crates/layerfs-daemon/src/native/mount.rs
+@@ -0,0 +1,217 @@
++//! First-party mount ownership: plain busy-preserving detach, no Drop unmount.
++use super::{
++    context::job,
++    worker::{self, Adapter, NativeFailure, State},
++};
++use crate::{store::BoundWorkspace, Command, Response};
++use fuser::{Config, Session, SessionACL};
++use nix::mount::{mount, umount, MsFlags};
++use std::{
++    fs::{self, File, OpenOptions},
++    io,
++    os::fd::AsRawFd,
++    path::{Path, PathBuf},
++    sync::{mpsc, Arc, Mutex},
++    thread::{self, JoinHandle},
++};
++pub struct NativeMount {
++    path: PathBuf,
++    device: Option<File>,
++    adapter: Option<Adapter>,
++    session: Option<JoinHandle<io::Result<()>>>,
++    worker: Option<JoinHandle<()>>,
++    failure: Arc<Mutex<Option<NativeFailure>>>,
++    attached: bool,
++    detached: bool,
++}
++pub struct AttachFailure {
++    pub cause: io::Error,
++    /// Some after kernel mount effect: caller retains the original owner.
++    pub mount: Option<Box<NativeMount>>,
++}
++impl std::fmt::Debug for AttachFailure {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("AttachFailure")
++            .field("cause", &self.cause)
++            .field("retained_mount", &self.mount.is_some())
++            .finish()
++    }
++}
++impl std::fmt::Display for AttachFailure {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "native attachment: {self:?}")
++    }
++}
++impl std::error::Error for AttachFailure {}
++impl NativeMount {
++    /// The caller supplies an empty, protected mountpoint and the command UID/GID.
++    /// A successful return includes one actual kernel root getattr round trip.
++    /// It does not assert complete two-loop S8 readiness or failure-path drain.
++    pub fn attach(
++        workspace: Arc<BoundWorkspace>,
++        path: &Path,
++        uid: u32,
++        gid: u32,
++    ) -> Result<Self, AttachFailure> {
++        let before = |cause| AttachFailure { cause, mount: None };
++        if uid == 0 || gid == 0 {
++            return Err(before(io::Error::other(
++                "ordinary command identity required",
++            )));
++        }
++        let operation = workspace
++            .operation()
++            .map_err(|e| before(io::Error::other(e)))?;
++        let root = operation
++            .workspace()
++            .base()
++            .map_err(|e| before(io::Error::other(e)))?
++            .root()
++            .root_inode()
++            .serial();
++        let device = OpenOptions::new()
++            .read(true)
++            .write(true)
++            .open("/dev/fuse")
++            .map_err(before)?;
++        let session_device = device.try_clone().map_err(before)?;
++        let done = job(&operation, Command::AcquireOperation { request: 1 })
++            .map_err(|e| before(io::Error::other(format!("{e:?}"))))?;
++        let records = match done.result() {
++            Ok(Response::Operation(Some(owner))) => *owner,
++            _ => return Err(before(io::Error::other(format!("{done:?}")))),
++        };
++        let failure = Arc::new(Mutex::new(None));
++        let state = State {
++            workspace,
++            root,
++            uid,
++            gid,
++            records,
++            failure: failure.clone(),
++        };
++        let (adapter, worker) = worker::start(state).map_err(before)?;
++        let mut owned = Self {
++            path: path.to_owned(),
++            device: Some(device),
++            adapter: Some(adapter),
++            session: None,
++            worker: Some(worker),
++            failure,
++            attached: false,
++            detached: false,
++        };
++        let options=format!("fd={},rootmode=40000,user_id=0,group_id=0,allow_other,default_permissions,max_read=131072",owned.device.as_ref().expect("device owner").as_raw_fd());
++        if let Err(e) = mount(
++            Some("layerfs"),
++            path,
++            Some("fuse"),
++            MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOATIME,
++            Some(options.as_str()),
++        ) {
++            return Err(AttachFailure {
++                cause: e.into(),
++                mount: Some(Box::new(owned)),
++            });
++        }
++        owned.attached = true;
++        let mut config = Config::default();
++        config.acl = SessionACL::All;
++        config.n_threads = Some(2);
++        config.clone_fd = false;
++        let fs = owned.adapter.as_ref().expect("adapter owner").clone();
++        let (ready, received) = mpsc::sync_channel(1);
++        let session = thread::Builder::new()
++            .name("layerfs-native-session".into())
++            .spawn(move || {
++                let session = Session::from_fd(fs, session_device.into(), SessionACL::All, config);
++                let _ = ready.send(session.is_ok());
++                session?.run()
++            });
++        match session {
++            Ok(thread) => owned.session = Some(thread),
++            Err(cause) => {
++                return Err(AttachFailure {
++                    cause,
++                    mount: Some(Box::new(owned)),
++                })
++            }
++        }
++        if received.recv() != Ok(true) {
++            return Err(AttachFailure {
++                cause: io::Error::other("native handshake failed; original session retained"),
++                mount: Some(Box::new(owned)),
++            });
++        }
++        let probe = fs::metadata(path);
++        if let Err(cause) = probe {
++            return Err(AttachFailure {
++                cause,
++                mount: Some(Box::new(owned)),
++            });
++        }
++        Ok(owned)
++    }
++    pub fn path(&self) -> &Path {
++        &self.path
++    }
++    pub fn failure(
++        &self,
++    ) -> std::sync::LockResult<std::sync::MutexGuard<'_, Option<NativeFailure>>> {
++        self.failure.lock()
++    }
++    /// Normal kernel busy refusal leaves this mount and its service usable.
++    /// No command process is signalled. A failed drain retains the owner.
++    pub fn detach(&mut self) -> io::Result<()> {
++        if !self.detached && self.attached {
++            umount(&self.path)?;
++            self.detached = true;
++        }
++        if let Some(session) = self.session.take() {
++            session.join().map_err(|_| {
++                io::Error::other("native session panicked; complete receiver drain unproven")
++            })??;
++        }
++        if let Some(adapter) = self.adapter.as_ref() {
++            let (sent, received) = mpsc::sync_channel(1);
++            adapter.submit(move |state, id| {
++                let result = (|| {
++                    let ctx = state.context(id)?;
++                    let result = ctx
++                        .drain_lookups()
++                        .and_then(|_| ctx.done(Command::ReleaseOperation(state.records)));
++                    ctx.finish();
++                    result
++                })();
++                let ok = result.is_ok();
++                if let Err(e) = result {
++                    state.fault(e);
++                }
++                let _ = sent.send(ok);
++            });
++            if received.recv() != Ok(true) {
++                return Err(io::Error::other(
++                    "native custody drain failed; original failure retained",
++                ));
++            }
++        }
++        self.adapter.take();
++        if let Some(worker) = self.worker.take() {
++            worker
++                .join()
++                .map_err(|_| io::Error::other("native service panicked"))?;
++        }
++        if self
++            .failure
++            .lock()
++            .map_err(|_| io::Error::other("native failure lock poisoned"))?
++            .is_some()
++        {
++            return Err(io::Error::other(
++                "native request failed; original receipt retained",
++            ));
++        }
++        self.device.take();
++        Ok(())
++    }
++}
+diff --git a/core/crates/layerfs-daemon/src/native/records.rs b/core/crates/layerfs-daemon/src/native/records.rs
+new file mode 100644
+index 000000000..cc8f5bfe7
+--- /dev/null
++++ b/core/crates/layerfs-daemon/src/native/records.rs
+@@ -0,0 +1,170 @@
++//! Indexed kernel references and directory cookies under one mount owner.
++use super::{
++    attributes,
++    context::{job, Context},
++    worker::{NativeFailure, Result},
++};
++use crate::{Command, Response};
++use layerfs_overlay::{
++    IndexedOperationRecordChange as Change, IndexedOperationRecordKey as Key,
++    IndexedOperationRecordScope as Scope, OperationRecordExpectedValue as Expected,
++};
++use layerfs_workspace::{OperationRecordApply, OverlayOperationRecords, ViewStat};
++fn key(kind: u32, id: u64) -> Key {
++    let mut key = [0; 32];
++    key[24..].copy_from_slice(&id.to_be_bytes());
++    Key { kind, key }
++}
++impl Context<'_> {
++    fn scope(&self, file_scope: u64) -> Scope {
++        Scope {
++            owner: self.state.records,
++            file_scope,
++        }
++    }
++    pub fn get(&self, scope: u64, kind: u32, id: u64) -> Result<Option<Vec<u8>>> {
++        self.call(
++            self.operation
++                .overlay()
++                .operation_record_get(self.scope(scope), key(kind, id)),
++        )
++        .map(|r| r.value)
++    }
++    pub fn put(
++        &self,
++        scope: u64,
++        kind: u32,
++        id: u64,
++        old: Option<Vec<u8>>,
++        value: Option<Vec<u8>>,
++    ) -> Result<()> {
++        let change = Change {
++            key: key(kind, id),
++            expected: old.map_or(Expected::Missing, Expected::ExactBytes),
++            value,
++        };
++        let result = self.call(
++            self.operation
++                .overlay()
++                .operation_record_apply(self.scope(scope), vec![change]),
++        )?;
++        match result.value {
++            OperationRecordApply::Applied => Ok(()),
++            OperationRecordApply::NotApplied { original, .. } => self.call(Err(original)),
++        }
++    }
++    pub fn lookup(&self, stat: &ViewStat) -> Result<()> {
++        let old = self.get(0, 1, stat.serial)?;
++        let (request, count) = match &old {
++            Some(bytes) if bytes.len() == 16 => (
++                number(&bytes[..8])?,
++                number(&bytes[8..])?
++                    .checked_add(1)
++                    .ok_or(NativeFailure::Invalid("lookup count overflow"))?,
++            ),
++            Some(_) => return Err(NativeFailure::Invalid("lookup record")),
++            None => {
++                self.acquire_lookup(stat, self.id)?;
++                (self.id, 1)
++            }
++        };
++        let mut value = request.to_be_bytes().to_vec();
++        value.extend_from_slice(&count.to_be_bytes());
++        self.put(0, 1, stat.serial, old, Some(value))
++    }
++    fn acquire_lookup(&self, stat: &ViewStat, id: u64) -> Result<()> {
++        let done = job(
++            &self.operation,
++            Command::AcquireLookup {
++                source: self.view.source(),
++                request: id,
++                base: attributes::base(stat),
++                root: self.state.root,
++            },
++        )?;
++        match done.result() {
++            Ok(Response::Lookup(Some(_))) => Ok(()),
++            _ => Err(NativeFailure::Completion(Box::new(done))),
++        }
++    }
++    fn release_lookup(&self, request: u64) -> Result<()> {
++        let done = job(&self.operation, Command::RetainedLookup { request })?;
++        let owner = match done.result() {
++            Ok(Response::Lookup(Some(owner))) => *owner,
++            _ => return Err(NativeFailure::Completion(Box::new(done))),
++        };
++        self.done(Command::ReleaseLookup(owner))
++    }
++    pub fn forget(&self, serial: u64, count: u64) -> Result<()> {
++        let old = self
++            .get(0, 1, serial)?
++            .ok_or(NativeFailure::Invalid("unknown lookup forget"))?;
++        if old.len() != 16 {
++            return Err(NativeFailure::Invalid("lookup record"));
++        }
++        let held = number(&old[8..])?;
++        let remaining = held
++            .checked_sub(count)
++            .ok_or(NativeFailure::Invalid("lookup forget underflow"))?;
++        if remaining == 0 {
++            self.release_lookup(number(&old[..8])?)?;
++            self.put(0, 1, serial, Some(old), None)
++        } else {
++            let mut next = old[..8].to_vec();
++            next.extend_from_slice(&remaining.to_be_bytes());
++            self.put(0, 1, serial, Some(old), Some(next))
++        }
++    }
++    pub fn open_directory(&self, stat: &ViewStat) -> Result<()> {
++        self.acquire_lookup(stat, self.id)?;
++        self.put(
++            0,
++            2,
++            self.id,
++            None,
++            Some(stat.serial.to_be_bytes().to_vec()),
++        )
++    }
++    pub fn directory(&self, fh: u64, serial: u64) -> Result<()> {
++        if self.get(0, 2, fh)?.as_deref() == Some(serial.to_be_bytes().as_slice()) {
++            Ok(())
++        } else {
++            Err(NativeFailure::Invalid("directory handle association"))
++        }
++    }
++    pub fn close_directory(&self, fh: u64, serial: u64) -> Result<()> {
++        self.directory(fh, serial)?;
++        self.release_lookup(fh)?;
++        self.put(0, 2, fh, Some(serial.to_be_bytes().to_vec()), None)
++    }
++    pub fn drain_lookups(&self) -> Result<()> {
++        loop {
++            let keys = self
++                .call(
++                    self.operation
++                        .overlay()
++                        .operation_record_keys(self.scope(0), 1, None),
++                )?
++                .value;
++            if keys.is_empty() {
++                break;
++            }
++            for key in keys {
++                let serial = number(&key[24..])?;
++                let bytes = self
++                    .get(0, 1, serial)?
++                    .ok_or(NativeFailure::Invalid("lookup drain"))?;
++                if bytes.len() != 16 {
++                    return Err(NativeFailure::Invalid("lookup record"));
++                }
++                self.forget(serial, number(&bytes[8..])?)?;
++            }
++        }
++        Ok(())
++    }
++}
++fn number(bytes: &[u8]) -> Result<u64> {
++    Ok(u64::from_be_bytes(bytes.try_into().map_err(|_| {
++        NativeFailure::Invalid("native integer record")
++    })?))
++}
+diff --git a/core/crates/layerfs-daemon/src/native/worker.rs b/core/crates/layerfs-daemon/src/native/worker.rs
+new file mode 100644
+index 000000000..63662ec6b
+--- /dev/null
++++ b/core/crates/layerfs-daemon/src/native/worker.rs
+@@ -0,0 +1,118 @@
++//! Fixed request service, separate from the kernel receiver threads.
++use super::context::Context;
++use crate::{
++    store::{BoundWorkspace, PortError},
++    Completion, OwnerError,
++};
++use layerfs_workspace::WorkspaceError;
++use std::{
++    io,
++    sync::{
++        atomic::{AtomicU64, Ordering},
++        mpsc::{self, SyncSender},
++        Arc, Mutex,
++    },
++    thread::{self, JoinHandle},
++};
++
++#[derive(Debug)]
++pub enum NativeFailure {
++    Workspace {
++        cause: WorkspaceError,
++        provider: Option<Arc<PortError>>,
++    },
++    Owner(OwnerError),
++    Completion(Box<Completion>),
++    Invalid(&'static str),
++    Io(io::Error),
++}
++pub(super) type Result<T> = std::result::Result<T, NativeFailure>;
++pub(super) type Job = Box<dyn FnOnce(&mut State) + Send>;
++pub(super) struct State {
++    pub workspace: Arc<BoundWorkspace>,
++    pub root: u64,
++    pub uid: u32,
++    pub gid: u32,
++    pub records: layerfs_overlay::OperationOwner,
++    pub failure: Arc<Mutex<Option<NativeFailure>>>,
++}
++#[derive(Clone)]
++pub(super) struct Adapter {
++    pub sender: SyncSender<Job>,
++    pub sequence: Arc<AtomicU64>,
++}
++impl Adapter {
++    pub fn submit(&self, job: impl FnOnce(&mut State, u64) + Send + 'static) {
++        let id = self.sequence.fetch_add(1, Ordering::Relaxed);
++        // Admission backpressure precedes any Workspace operation. Each queued
++        // job owns its reply and at most one 128 KiB request window.
++        let _ = self.sender.send(Box::new(move |state| job(state, id)));
++    }
++}
++impl State {
++    pub fn fault(&self, error: NativeFailure) -> fuser::Errno {
++        if let NativeFailure::Workspace { cause, .. } = &error {
++            use layerfs_content::ContentError;
++            use layerfs_workspace::{Refusal as R, WorkspaceError as E};
++            let errno = match cause {
++                E::Content(ContentError::PathNotFound) | E::Refused(R::Missing) => {
++                    Some(fuser::Errno::ENOENT)
++                }
++                E::Refused(R::Exists) => Some(fuser::Errno::EEXIST),
++                E::Refused(R::NotDirectory) => Some(fuser::Errno::ENOTDIR),
++                E::Refused(R::IsDirectory) => Some(fuser::Errno::EISDIR),
++                E::Refused(R::NotPermitted) => Some(fuser::Errno::EPERM),
++                E::Refused(R::Invalid) => Some(fuser::Errno::EINVAL),
++                _ => None,
++            };
++            if let Some(errno) = errno {
++                return errno;
++            }
++        }
++        if let Ok(mut first) = self.failure.lock() {
++            if first.is_none() {
++                *first = Some(error);
++            }
++        }
++        fuser::Errno::EIO
++    }
++    pub fn serial(&self, ino: fuser::INodeNo) -> u64 {
++        if ino.0 == 1 {
++            self.root
++        } else if ino.0 == self.root {
++            1
++        } else {
++            ino.0
++        }
++    }
++    pub fn inode(&self, serial: u64) -> fuser::INodeNo {
++        fuser::INodeNo(if serial == self.root {
++            1
++        } else if serial == 1 {
++            self.root
++        } else {
++            serial
++        })
++    }
++    pub fn context(&self, id: u64) -> Result<Context<'_>> {
++        Context::new(self, id)
++    }
++}
++pub(super) fn start(state: State) -> io::Result<(Adapter, JoinHandle<()>)> {
++    let (sender, receiver) = mpsc::sync_channel::<Job>(8);
++    let worker = thread::Builder::new()
++        .name("layerfs-native-service".into())
++        .spawn(move || {
++            let mut state = state;
++            while let Ok(job) = receiver.recv() {
++                job(&mut state);
++            }
++        })?;
++    Ok((
++        Adapter {
++            sender,
++            sequence: Arc::new(AtomicU64::new(2)),
++        },
++        worker,
++    ))
++}

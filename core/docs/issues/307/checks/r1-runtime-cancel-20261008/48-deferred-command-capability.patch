@@ -1,0 +1,1972 @@
+diff --git a/core/Cargo.lock b/core/Cargo.lock
+index 64112a6ef..137adfac6 100644
+--- a/core/Cargo.lock
++++ b/core/Cargo.lock
+@@ -569,6 +569,7 @@ name = "layerfs-sandbox"
+ version = "0.1.6"
+ dependencies = [
+  "nix",
++ "sha2 0.10.9",
+ ]
+ 
+ [[package]]
+diff --git a/core/crates/layerfs-sandbox/Cargo.toml b/core/crates/layerfs-sandbox/Cargo.toml
+index e75b3fd4c..0354ed113 100644
+--- a/core/crates/layerfs-sandbox/Cargo.toml
++++ b/core/crates/layerfs-sandbox/Cargo.toml
+@@ -8,3 +8,4 @@ license.workspace = true
+ 
+ [dependencies]
+ nix = { version = "=0.31.3", features = ["poll", "socket", "fs"] }
++sha2 = "=0.10.9"
+diff --git a/core/crates/layerfs-sandbox/examples/runtime_cancel.rs b/core/crates/layerfs-sandbox/examples/runtime_cancel.rs
+new file mode 100644
+index 000000000..115519b6e
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/examples/runtime_cancel.rs
+@@ -0,0 +1,123 @@
++//! Positive-path exact external cancellation; explicit caller-owned Engine target/client.
++use layerfs_sandbox::{
++    backend::docker::{
++        admin::{CtrAdmin, Signal},
++        Docker, ExecRequest,
++    },
++    CommandIdentity, ContainerId,
++};
++use std::{io, time::Duration};
++fn main() -> Result<(), Box<dyn std::error::Error>> {
++    let args: Vec<String> = std::env::args().collect();
++    assert_eq!(
++        args.len(),
++        4,
++        "Engine endpoint, owned read-only admin CID, owned ordinary target CID"
++    );
++    let docker = Docker::new(&args[1], Duration::from_secs(3))?;
++    let client = ContainerId::parse(&args[2])?;
++    let target = ContainerId::parse(&args[3])?;
++    let mut admin = CtrAdmin::qualify(
++        docker.clone(),
++        client,
++        "/run/containerd/containerd.sock".into(),
++    )
++    .map_err(|e| format!("qualify {e:?}"))?;
++    println!(
++        "QUALIFIED_EXTERNAL_CLIENT {:?} artifact={:?} helper={:?}",
++        admin.version(),
++        admin.artifact(),
++        admin.version_receipt()
++    );
++    let command = "sleep 86400 </dev/null >/dev/null 2>&1 & child=$!; trap 'printf \"ROOT_TERM\\n\"; exit 47' TERM; printf 'READY child=%s\\n' \"$child\"; wait \"$child\"";
++    let created = docker
++        .create_exec(
++            target,
++            ExecRequest {
++                identity: CommandIdentity { uid: 501, gid: 20 },
++                arguments: vec!["bash".into(), "-c".into(), command.into()],
++                environment: vec![],
++                directory: "/".into(),
++                stdin: false,
++            },
++        )
++        .map_err(|e| format!("target create {e:?}"))?;
++    let attached = created.start().map_err(|e| format!("target start {e:?}"))?;
++    let (_input, mut output, handle) = attached
++        .into_parts()
++        .map_err(|e| format!("target split {e:?}"))?;
++    let mut line = [0; 128];
++    let mut used = 0;
++    while used < line.len() {
++        let n = output
++            .read_stdout(&mut line[used..used + 1], &mut io::stderr())
++            .map_err(|e| format!("ready read {e:?}"))?;
++        if n == 0 {
++            return Err("target EOF before original READY".into());
++        }
++        used += n;
++        if line[used - 1] == b'\n' {
++            break;
++        }
++    }
++    let text = std::str::from_utf8(&line[..used])?;
++    let child = text
++        .strip_prefix("READY child=")
++        .ok_or("target READY syntax")?
++        .trim()
++        .parse::<u32>()?;
++    println!(
++        "TARGET_READY identity={:?} child_namespace_pid={child}",
++        handle.identity()
++    );
++    let active = handle
++        .inspect()
++        .map_err(|e| format!("running snapshot {e:?}"))?;
++    assert!(active.running && active.known_root_exit().is_none());
++    let receipt = handle
++        .cancel_with(&mut admin, Signal::Terminate)
++        .map_err(|e| format!("original signal {e:?}"))?;
++    println!("EXACT_SIGNAL {:?}", receipt);
++    let progress = output
++        .copy_to(&mut io::stdout(), &mut io::stderr())
++        .map_err(|e| format!("target output {e:?}"))?;
++    let ended = handle
++        .inspect()
++        .map_err(|e| format!("target exit snapshot {e:?}"))?;
++    assert_eq!(ended.known_root_exit(), Some(47));
++    println!("ROOT_EXIT {:?} {:?}", ended, progress);
++    // Namespace PID is used only to read proc metadata, never as a signal target.
++    let probe = "set -e; test -d \"/proc/$1\"; test \"$(cat /proc/$1/comm)\" = sleep; grep -q '^Uid:[[:space:]]*501[[:space:]]*501[[:space:]]*501[[:space:]]*501$' /proc/$1/status; test ! -e /run/containerd/containerd.sock; printf 'DESCENDANT_SURVIVES admin_socket_not_visible=true\\n'";
++    let created = docker
++        .create_exec(
++            target,
++            ExecRequest {
++                identity: CommandIdentity { uid: 501, gid: 20 },
++                arguments: vec![
++                    "bash".into(),
++                    "-c".into(),
++                    probe.into(),
++                    "--".into(),
++                    child.to_string(),
++                ],
++                environment: vec![],
++                directory: "/".into(),
++                stdin: false,
++            },
++        )
++        .map_err(|e| format!("survival create {e:?}"))?;
++    let (_input, output, probe) = created
++        .start()
++        .map_err(|e| format!("survival start {e:?}"))?
++        .into_parts()
++        .map_err(|e| format!("survival split {e:?}"))?;
++    output
++        .copy_to(&mut io::stdout(), &mut io::stderr())
++        .map_err(|e| format!("survival output {e:?}"))?;
++    let observed = probe
++        .inspect()
++        .map_err(|e| format!("survival exit {e:?}"))?;
++    assert_eq!(observed.known_root_exit(), Some(0));
++    println!("CANCEL_SCOPE root_only=true signal_not_exit=true descendant_or_fs_drain=NOT_CLAIMED");
++    Ok(())
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/artifact.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/artifact.rs
+new file mode 100644
+index 000000000..55eaa966b
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/artifact.rs
+@@ -0,0 +1,196 @@
++//! Read-only verification of the fixed official binary before any privileged Exec.
++use super::super::{body::exact, Docker};
++use super::types::ArtifactObservation;
++use crate::{ContainerId, RuntimeError, WireFailure};
++use sha2::{Digest, Sha256};
++use std::io::Read;
++const BYTES: u64 = 20_840_632;
++const SHA: &str = "dba23ecfa03867ccd3a7ae442f5cef7f0d37564f8c96639500997b5bef5e03d8";
++pub(super) fn check(
++    docker: &Docker,
++    client: ContainerId,
++    observed: &mut ArtifactObservation,
++) -> Result<(), Box<WireFailure>> {
++    let mut r = docker.exchange(
++        "GET",
++        &format!("/v1.54/containers/{client}/archive?path=/usr/local/bin/ctr"),
++        false,
++        |_| Ok(()),
++    )?;
++    if r.status != 200 {
++        return Err(r.fail(RuntimeError::Http(r.status), None));
++    }
++    let parsed = (|| {
++        let mut hash = Sha256::new();
++        let mut header = [0; 512];
++        let mut seen = false;
++        let mut pax = false;
++        loop {
++            exact(&mut r.body, &mut header)?;
++            if header == [0; 512] {
++                if !seen {
++                    return Err(RuntimeError::Protocol(
++                        "missing fixed client archive member",
++                    ));
++                }
++                exact(&mut r.body, &mut header)?;
++                if header != [0; 512] {
++                    return Err(RuntimeError::Protocol("client archive end blocks"));
++                }
++                let mut bytes = [0; 8192];
++                loop {
++                    let n = r.body.read(&mut bytes)?;
++                    if n == 0 {
++                        break;
++                    }
++                    if bytes[..n].iter().any(|b| *b != 0) {
++                        return Err(RuntimeError::Protocol("client archive trailing member"));
++                    }
++                }
++                observed.complete = true;
++                break;
++            }
++            let declared = octal(&header[148..156])?;
++            let sum: u64 = header
++                .iter()
++                .enumerate()
++                .map(|(i, b)| {
++                    if (148..156).contains(&i) {
++                        32
++                    } else {
++                        u64::from(*b)
++                    }
++                })
++                .sum();
++            if sum != declared || header[257..263] != *b"ustar\0" {
++                return Err(RuntimeError::Protocol("fixed client ustar header/checksum"));
++            }
++            let size = octal(&header[124..136])?;
++            if header[156] == b'x' && !pax && !seen {
++                if size > 4096 {
++                    return Err(RuntimeError::Protocol("client PAX metadata window"));
++                }
++                let mut records = [0; 4096];
++                exact(&mut r.body, &mut records[..size as usize])?;
++                pax_records(&records[..size as usize])?;
++                padding(&mut r.body, size)?;
++                pax = true;
++                continue;
++            }
++            if seen
++                || !matches!(header[156], 0 | b'0')
++                || name(&header[..100]) != b"ctr"
++                || header[345..500].iter().any(|b| *b != 0)
++                || size != BYTES
++                || octal(&header[108..116])? != 0
++                || octal(&header[116..124])? != 0
++                || octal(&header[100..108])? & 0o022 != 0
++            {
++                return Err(RuntimeError::Protocol(
++                    "exact protected regular official client member",
++                ));
++            }
++            observed.declared_bytes = Some(size);
++            seen = true;
++            let mut remaining = size;
++            let mut bytes = [0; 8192];
++            while remaining != 0 {
++                let wanted = remaining.min(bytes.len() as u64) as usize;
++                let n = r.body.read(&mut bytes[..wanted])?;
++                if n == 0 {
++                    return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
++                }
++                observed.read_bytes += n as u64;
++                hash.update(&bytes[..n]);
++                remaining -= n as u64;
++            }
++            observed.sha256 = Some(format!("{:x}", hash.clone().finalize()));
++            padding(&mut r.body, size)?;
++        }
++        if observed.sha256.as_deref() != Some(SHA) {
++            return Err(RuntimeError::Protocol(
++                "exact unchanged ctr2.2.4 arm64 binary from verified official archive",
++            ));
++        }
++        Ok(())
++    })();
++    parsed.map_err(|cause| {
++        let mut failure = r.fail(cause, None);
++        failure.requested_container = Some(client);
++        failure
++    })
++}
++fn name(bytes: &[u8]) -> &[u8] {
++    &bytes[..bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len())]
++}
++fn octal(bytes: &[u8]) -> Result<u64, RuntimeError> {
++    let mut value = 0u64;
++    let mut digits = false;
++    let mut ended = false;
++    for &byte in bytes {
++        if byte == 0 || byte == b' ' {
++            if digits {
++                ended = true;
++            }
++            continue;
++        }
++        if ended || !(b'0'..=b'7').contains(&byte) {
++            return Err(RuntimeError::Protocol("client ustar numeric field"));
++        }
++        digits = true;
++        value = value
++            .checked_mul(8)
++            .and_then(|v| v.checked_add(u64::from(byte - b'0')))
++            .ok_or(RuntimeError::Protocol("client ustar numeric width"))?;
++    }
++    Ok(value)
++}
++fn padding(input: &mut impl Read, size: u64) -> Result<(), RuntimeError> {
++    let mut zeros = [0; 512];
++    let n = ((512 - size % 512) % 512) as usize;
++    exact(input, &mut zeros[..n])?;
++    if zeros[..n].iter().any(|b| *b != 0) {
++        return Err(RuntimeError::Protocol("client archive padding"));
++    }
++    Ok(())
++}
++fn pax_records(mut bytes: &[u8]) -> Result<(), RuntimeError> {
++    while !bytes.is_empty() {
++        let space = bytes
++            .iter()
++            .position(|b| *b == b' ')
++            .ok_or(RuntimeError::Protocol("client PAX record length"))?;
++        let length = std::str::from_utf8(&bytes[..space])
++            .ok()
++            .and_then(|s| s.parse::<usize>().ok())
++            .ok_or(RuntimeError::Protocol("client PAX numeric length"))?;
++        if length <= space + 2 || length > bytes.len() || bytes[length - 1] != b'\n' {
++            return Err(RuntimeError::Protocol("client PAX record framing"));
++        }
++        let record = &bytes[space + 1..length - 1];
++        let equal = record
++            .iter()
++            .position(|b| *b == b'=')
++            .ok_or(RuntimeError::Protocol("client PAX assignment"))?;
++        if ![b"mtime".as_slice(), b"atime", b"ctime"].contains(&&record[..equal]) {
++            return Err(RuntimeError::Protocol(
++                "client PAX path/identity/unsupported extension",
++            ));
++        }
++        let time = std::str::from_utf8(&record[equal + 1..])
++            .map_err(|_| RuntimeError::Protocol("client PAX timestamp UTF8"))?;
++        let (seconds, fraction) = match time.split_once('.') {
++            Some((s, f)) => (s, Some(f)),
++            None => (time, None),
++        };
++        if seconds.parse::<i64>().is_err()
++            || fraction.is_some_and(|f| f.is_empty() || !f.bytes().all(|b| b.is_ascii_digit()))
++        {
++            return Err(RuntimeError::Protocol(
++                "client PAX signed seconds/fraction syntax",
++            ));
++        }
++        bytes = &bytes[length..];
++    }
++    Ok(())
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/client.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/client.rs
+new file mode 100644
+index 000000000..93a9662a4
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/client.rs
+@@ -0,0 +1,343 @@
++//! Fixed-command trusted client; endpoint/CNI metadata and signal completion stay distinct.
++use super::super::{Docker, ExecHandle};
++use super::{commands::Command, input::Input, metadata, types::*};
++use crate::{ContainerId, RuntimeError};
++/// Version-qualified isolated administrative client, borrowed from its acknowledged external owner.
++/// Caller excludes competing mutation of the selected target's containerd Extensions during cancel.
++#[derive(Debug)]
++pub struct CtrAdmin {
++    docker: Docker,
++    client: ContainerId,
++    address: String,
++    version: RuntimeVersion,
++    version_helper: AdminReceipt,
++    artifact: ArtifactObservation,
++}
++impl CtrAdmin {
++    /// Qualifies one actual fixed client/endpoint command. Client container ownership remains with caller.
++    /// Its isolated/read-only deployment is checked before root commands; no shared Store is accessed.
++    pub fn qualify(
++        docker: Docker,
++        client: ContainerId,
++        address: String,
++    ) -> Result<Self, Box<AdminFailure>> {
++        let invalid = |message| {
++            failure(
++                client,
++                None,
++                AdminPhase::Validate,
++                AdminCause::Runtime(RuntimeError::Protocol(message)),
++            )
++        };
++        if address != "/run/containerd/containerd.sock" {
++            return Err(invalid("explicit supported VM containerd endpoint"));
++        }
++        super::profile::check(&docker, client, &address).map_err(|cause| {
++            failure(
++                client,
++                None,
++                AdminPhase::Validate,
++                AdminCause::Inspect(cause),
++            )
++        })?;
++        let mut artifact = ArtifactObservation::default();
++        if let Err(cause) = super::artifact::check(&docker, client, &mut artifact) {
++            let mut original = failure(
++                client,
++                None,
++                AdminPhase::Validate,
++                AdminCause::Inspect(cause),
++            );
++            original.artifact = Some(artifact);
++            return Err(original);
++        }
++        let mut observed = VersionObservation::default();
++        let receipt = match run(&docker, client, &address, Command::Version, None, |input| {
++            metadata::version(input, &mut observed)
++        }) {
++            Ok(((), receipt)) => receipt,
++            Err(mut original) => {
++                original.version_observation = Some(observed);
++                original.artifact = Some(artifact);
++                return Err(original);
++            }
++        };
++        let version = RuntimeVersion {
++            client: observed.client.clone().expect("complete"),
++            client_revision: observed.client_revision.clone().expect("complete"),
++            server: observed.server.clone().expect("complete"),
++            server_revision: observed.server_revision.clone().expect("complete"),
++            server_uuid: observed.server_uuid.clone().expect("complete"),
++        };
++        if version.client != "v2.2.4"
++            || version.server != "v2.2.4"
++            || version.client_revision != metadata::REVISION
++            || version.server_revision != metadata::REVISION
++        {
++            let mut original = failure(
++                client,
++                None,
++                AdminPhase::Result,
++                AdminCause::Runtime(RuntimeError::Protocol(
++                    "exact pinned ctr and live server profile",
++                )),
++            );
++            original.observed_version = Some(version);
++            original.version_observation = Some(observed);
++            original.artifact = Some(artifact);
++            original.version_helper = Some(receipt);
++            return Err(original);
++        }
++        Ok(Self {
++            docker,
++            client,
++            address,
++            version,
++            version_helper: receipt,
++            artifact,
++        })
++    }
++    /// Exact completed client/server facts. UUID is an observation, not a new authority/incarnation guarantee.
++    pub fn version(&self) -> &RuntimeVersion {
++        &self.version
++    }
++    /// Exact initial helper's original output/status receipt.
++    pub fn version_receipt(&self) -> &AdminReceipt {
++        &self.version_helper
++    }
++    /// Installed official binary facts verified read-only before root command selection.
++    pub fn artifact(&self) -> &ArtifactObservation {
++        &self.artifact
++    }
++    /// Signals this acknowledged ordinary Exec once through the fixed external client.
++    /// CNI absence is observed immediately before signal under caller-owned administrative interval.
++    /// A later requested escalation is a separate operation; an unknown original signal is never replayed.
++    pub fn cancel(
++        &mut self,
++        target: &ExecHandle,
++        signal: Signal,
++    ) -> Result<Cancellation, Box<AdminFailure>> {
++        let (cid, eid) = target.identity();
++        let selected = Some((cid, eid));
++        if target.created.docker.socket != self.docker.socket
++            || cid == self.client
++            || target.created.request.identity.uid == 0
++            || target.created.request.identity.gid == 0
++        {
++            let mut original = failure(
++                self.client,
++                selected,
++                AdminPhase::Validate,
++                AdminCause::Runtime(RuntimeError::Protocol(
++                    "same Engine context/ordinary target/isolated admin identity",
++                )),
++            );
++            original.signal = Some(signal);
++            return Err(original);
++        }
++        let mut observed = TargetObservation::default();
++        let metadata_helper = match run(
++            &self.docker,
++            self.client,
++            &self.address,
++            Command::ContainerInfo(cid),
++            selected,
++            |input| metadata::info(input, &mut observed),
++        ) {
++            Ok(((), receipt)) => receipt,
++            Err(mut original) => {
++                original.target_observation = Some(observed);
++                original.signal = Some(signal);
++                return Err(original);
++            }
++        };
++        if observed.observed_container != Some(cid)
++            || !observed.extensions_present
++            || observed.cni_present
++            || observed.runtime_name.as_deref() != Some("io.containerd.runc.v2")
++            || !observed.complete
++        {
++            let mut original = failure(
++                self.client,
++                selected,
++                AdminPhase::Result,
++                AdminCause::Runtime(RuntimeError::Protocol(
++                    "exact runc target/CNI-free complete metadata",
++                )),
++            );
++            original.target_observation = Some(observed);
++            original.metadata_helper = Some(metadata_helper);
++            original.signal = Some(signal);
++            return Err(original);
++        }
++        let metadata = TargetMetadata {
++            container: cid,
++            cni_extension_absent: true,
++            runtime_name: observed.runtime_name.clone().expect("qualified"),
++        };
++        match run(
++            &self.docker,
++            self.client,
++            &self.address,
++            Command::Signal(cid, eid, signal),
++            selected,
++            |input| metadata::drain(input),
++        ) {
++            Ok(((), signal_helper)) => Ok(Cancellation {
++                container: cid,
++                exec: eid,
++                signal,
++                metadata,
++                metadata_helper,
++                signal_helper,
++            }),
++            Err(mut original) => {
++                original.metadata = Some(metadata);
++                original.target_observation = Some(observed);
++                original.metadata_helper = Some(metadata_helper);
++                Err(original)
++            }
++        }
++    }
++}
++fn failure(
++    client: ContainerId,
++    target: Option<(ContainerId, crate::ExecId)>,
++    phase: AdminPhase,
++    cause: AdminCause,
++) -> Box<AdminFailure> {
++    Box::new(AdminFailure {
++        client,
++        target,
++        phase,
++        cause,
++        handle: None,
++        output: None,
++        stderr: AdminStderr::default(),
++        inspection: None,
++        fence_error: None,
++        signal_start_attempted: false,
++        metadata: None,
++        metadata_helper: None,
++        signal: None,
++        observed_version: None,
++        version_helper: None,
++        artifact: None,
++        version_observation: None,
++        target_observation: None,
++    })
++}
++fn run<T>(
++    docker: &Docker,
++    client: ContainerId,
++    address: &str,
++    command: Command,
++    target: Option<(ContainerId, crate::ExecId)>,
++    parse: impl FnOnce(&mut Input<'_>) -> Result<T, RuntimeError>,
++) -> Result<(T, AdminReceipt), Box<AdminFailure>> {
++    let explicit_signal = match command {
++        Command::Signal(_, _, signal) => Some(signal),
++        _ => None,
++    };
++    let created = docker
++        .create_selected_exec(client, command.request(address))
++        .map_err(|cause| {
++            let mut original = failure(
++                client,
++                target,
++                AdminPhase::Create,
++                AdminCause::Create(cause),
++            );
++            original.signal = explicit_signal;
++            original
++        })?;
++    let signal = explicit_signal.is_some();
++    let attached = created.start().map_err(|cause| {
++        let mut original = failure(client, target, AdminPhase::Start, AdminCause::Start(cause));
++        original.signal_start_attempted = signal;
++        original.signal = explicit_signal;
++        original
++    })?;
++    let (_input, mut output, handle) = attached.into_parts().map_err(|cause| {
++        let mut original = failure(client, target, AdminPhase::Split, AdminCause::Split(cause));
++        original.signal_start_attempted = signal;
++        original.signal = explicit_signal;
++        original
++    })?;
++    let mut stderr = AdminStderr::default();
++    let (parsed, read_fence_error) = {
++        let mut reader = Input {
++            output: &mut output,
++            stderr: &mut stderr,
++            original: None,
++            fence_error: None,
++        };
++        let result = parse(&mut reader);
++        let parsed = match reader.original {
++            Some(error) => Err(error),
++            None => result,
++        };
++        (parsed, reader.fence_error)
++    };
++    let value = match parsed {
++        Ok(value) => value,
++        Err(error) => {
++            let fence_error = read_fence_error.or_else(|| output.fence());
++            let mut original = failure(
++                client,
++                target,
++                AdminPhase::Output,
++                AdminCause::Runtime(error),
++            );
++            original.handle = Some(handle);
++            original.output = Some(output);
++            original.stderr = stderr;
++            original.fence_error = fence_error;
++            original.signal_start_attempted = signal;
++            original.signal = explicit_signal;
++            return Err(original);
++        }
++    };
++    let inspection = match handle.inspect() {
++        Ok(value) => value,
++        Err(cause) => {
++            let mut original = failure(
++                client,
++                target,
++                AdminPhase::Inspect,
++                AdminCause::Inspect(cause),
++            );
++            original.handle = Some(handle);
++            original.output = Some(output);
++            original.stderr = stderr;
++            original.signal_start_attempted = signal;
++            original.signal = explicit_signal;
++            return Err(original);
++        }
++    };
++    if inspection.known_root_exit() != Some(0) {
++        let mut original = failure(
++            client,
++            target,
++            AdminPhase::Result,
++            AdminCause::Runtime(RuntimeError::Protocol(
++                "helper root exit not known zero; no CLI/RPC success credited",
++            )),
++        );
++        original.inspection = Some(inspection);
++        original.handle = Some(handle);
++        original.output = Some(output);
++        original.stderr = stderr;
++        original.signal_start_attempted = signal;
++        original.signal = explicit_signal;
++        return Err(original);
++    }
++    Ok((
++        value,
++        AdminReceipt {
++            helper: inspection,
++            output: output.progress(),
++            stderr,
++        },
++    ))
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/commands.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/commands.rs
+new file mode 100644
+index 000000000..b4453ecf4
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/commands.rs
+@@ -0,0 +1,47 @@
++//! The only root command vocabulary; no arbitrary privileged argv/env/cwd surface.
++use super::super::ExecRequest;
++use super::types::Signal;
++use crate::{CommandIdentity, ContainerId, ExecId};
++#[derive(Clone, Copy, Debug)]
++pub(super) enum Command {
++    Version,
++    ContainerInfo(ContainerId),
++    Signal(ContainerId, ExecId, Signal),
++}
++impl Command {
++    pub fn request(self, address: &str) -> ExecRequest {
++        let mut arguments = vec![
++            "/usr/local/bin/ctr".into(),
++            "--address".into(),
++            address.into(),
++            "--namespace".into(),
++            "moby".into(),
++            "--timeout".into(),
++            "5s".into(),
++            "--connect-timeout".into(),
++            "2s".into(),
++        ];
++        match self {
++            Self::Version => arguments.push("version".into()),
++            Self::ContainerInfo(cid) => {
++                arguments.extend(["containers".into(), "info".into(), cid.to_string()])
++            }
++            Self::Signal(cid, eid, signal) => arguments.extend([
++                "tasks".into(),
++                "kill".into(),
++                "--exec-id".into(),
++                eid.to_string(),
++                "--signal".into(),
++                signal.text().into(),
++                cid.to_string(),
++            ]),
++        }
++        ExecRequest {
++            identity: CommandIdentity { uid: 0, gid: 0 },
++            arguments,
++            environment: vec!["CONTAINERD_SUPPRESS_DEPRECATION_WARNINGS=true".into()],
++            directory: "/".into(),
++            stdin: false,
++        }
++    }
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/input.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/input.rs
+new file mode 100644
+index 000000000..976f526e4
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/input.rs
+@@ -0,0 +1,27 @@
++//! One pull owner over the existing mux, with original runtime errors retained.
++use super::{super::RuntimeOutput, types::AdminStderr};
++use crate::RuntimeError;
++use std::io::{self, Read};
++pub(super) struct Input<'a> {
++    pub output: &'a mut RuntimeOutput,
++    pub stderr: &'a mut AdminStderr,
++    pub original: Option<RuntimeError>,
++    pub fence_error: Option<io::Error>,
++}
++impl Read for Input<'_> {
++    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
++        if self.original.is_some() {
++            return Err(io::Error::other("terminal admin stdout owner"));
++        }
++        match self.output.read_stdout(out, self.stderr) {
++            Ok(n) => Ok(n),
++            Err(error) => {
++                self.original = Some(error.cause);
++                self.fence_error = error.fence_error;
++                Err(io::Error::other(
++                    "original admin runtime output failure retained",
++                ))
++            }
++        }
++    }
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/metadata.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/metadata.rs
+new file mode 100644
+index 000000000..91cc62e3a
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/metadata.rs
+@@ -0,0 +1,166 @@
++//! Streamed selected ctr facts; unselected spec/env/output never becomes a resident document.
++use super::super::json::{once, Json};
++use super::types::{TargetObservation, VersionObservation};
++use crate::{ContainerId, RuntimeError};
++use std::io::Read;
++pub(super) const REVISION: &str = "193637f7ee8ae5f5aa5248f49e7baa3e6164966e";
++pub(super) fn version(
++    input: &mut impl Read,
++    observed: &mut VersionObservation,
++) -> Result<(), RuntimeError> {
++    let mut section = 0;
++    let mut bits = [0u8; 2];
++    loop {
++        let Some(line) = line(input)? else { break };
++        let line = line.trim();
++        if line.is_empty() {
++            continue;
++        }
++        if line == "Client:" {
++            if section != 0 {
++                return Err(RuntimeError::Protocol(
++                    "duplicate/misordered ctr client section",
++                ));
++            }
++            section = 1;
++            continue;
++        }
++        if line == "Server:" {
++            if section != 1 || bits[0] & 3 != 3 {
++                return Err(RuntimeError::Protocol("ctr server section"));
++            }
++            section = 2;
++            continue;
++        }
++        if section == 0 {
++            return Err(RuntimeError::Protocol("ctr version header"));
++        }
++        let (name, value) = line
++            .split_once(':')
++            .ok_or(RuntimeError::Protocol("ctr version field"))?;
++        let (bit, index) = match (section, name) {
++            (1, "Version") => (1, 0),
++            (1, "Revision") => (2, 1),
++            (1, "Go version") => (4, 5),
++            (2, "Version") => (1, 2),
++            (2, "Revision") => (2, 3),
++            (2, "UUID") => (4, 4),
++            _ => return Err(RuntimeError::Protocol("ctr version deciding field")),
++        };
++        once(&mut bits[section - 1], bit)?;
++        let value = Some(value.trim().to_owned());
++        match index {
++            0 => observed.client = value,
++            1 => observed.client_revision = value,
++            2 => observed.server = value,
++            3 => observed.server_revision = value,
++            4 => observed.server_uuid = value,
++            _ => (),
++        };
++    }
++    if bits != [7, 7] || !observed.server_uuid.as_deref().is_some_and(uuid) {
++        return Err(RuntimeError::Protocol(
++            "complete ctr/client/server version-revision-UUID fields",
++        ));
++    }
++    observed.complete = true;
++    Ok(())
++}
++
++fn line(input: &mut impl Read) -> Result<Option<String>, RuntimeError> {
++    let mut row = [0; 256];
++    let mut used = 0;
++    loop {
++        let mut byte = [0];
++        let n = input.read(&mut byte)?;
++        if n == 0 {
++            if used == 0 {
++                return Ok(None);
++            }
++            return Err(RuntimeError::Protocol("ctr version incomplete line"));
++        }
++        if byte[0] == b'\n' {
++            return Ok(Some(
++                std::str::from_utf8(&row[..used])
++                    .map_err(|_| RuntimeError::Protocol("ctr version UTF8"))?
++                    .into(),
++            ));
++        }
++        if used == row.len() {
++            return Err(RuntimeError::Protocol("ctr2.2.4 version field window"));
++        }
++        row[used] = byte[0];
++        used += 1;
++    }
++}
++fn uuid(s: &str) -> bool {
++    s.len() == 36
++        && s.bytes().enumerate().all(|(i, b)| {
++            if [8, 13, 18, 23].contains(&i) {
++                b == b'-'
++            } else {
++                b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
++            }
++        })
++}
++pub(super) fn info(
++    input: &mut impl Read,
++    observed: &mut TargetObservation,
++) -> Result<(), RuntimeError> {
++    let mut json = Json::new(input);
++    let mut bits = 0;
++    json.object(|j, key| {
++        if key.equals("ID") {
++            once(&mut bits, 1)?;
++            let value = j.string(true)?;
++            if value.overflow {
++                return Err(RuntimeError::Protocol("ctr target identity width"));
++            }
++            observed.observed_container = Some(ContainerId::parse(value.text())?);
++        } else if key.equals("Extensions") {
++            once(&mut bits, 2)?;
++            observed.extensions_present = true;
++            if !j.null()? {
++                j.object(|j, key| {
++                    if key.equals("ctr.cni-containerd.metadata") {
++                        observed.cni_present = true;
++                    }
++                    j.skip(2)
++                })?;
++            }
++        } else if key.equals("Runtime") {
++            once(&mut bits, 4)?;
++            let mut selected = 0;
++            j.object(|j, key| {
++                if key.equals("Name") {
++                    once(&mut selected, 1)?;
++                    let value = j.string(true)?;
++                    if value.overflow {
++                        return Err(RuntimeError::Protocol("ctr runtime metadata field window"));
++                    }
++                    observed.runtime_name = Some(value.text().into());
++                } else {
++                    j.skip(2)?;
++                }
++                Ok(())
++            })?;
++            if selected != 1 {
++                return Err(RuntimeError::Protocol("ctr runtime Name missing"));
++            }
++        } else {
++            j.skip(1)?;
++        }
++        Ok(())
++    })?;
++    json.finish()?;
++    observed.complete = true;
++    if bits != 7 {
++        return Err(RuntimeError::Protocol("ctr target deciding fields missing"));
++    }
++    Ok(())
++}
++pub(super) fn drain(input: &mut impl Read) -> Result<(), RuntimeError> {
++    let mut bytes = [0; 8192];
++    while input.read(&mut bytes)? != 0 {}
++    Ok(())
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/mod.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/mod.rs
+new file mode 100644
+index 000000000..b270ec7d0
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/mod.rs
+@@ -0,0 +1,13 @@
++//! Qualified fixed-command external runtime capability, separate from ordinary commands.
++mod artifact;
++mod client;
++mod commands;
++mod input;
++mod metadata;
++mod profile;
++mod types;
++pub use client::CtrAdmin;
++pub use types::{
++    AdminCause, AdminFailure, AdminPhase, AdminReceipt, AdminStderr, ArtifactObservation,
++    Cancellation, RuntimeVersion, Signal, TargetMetadata, TargetObservation, VersionObservation,
++};
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/profile.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/profile.rs
+new file mode 100644
+index 000000000..5a582ff96
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/profile.rs
+@@ -0,0 +1,167 @@
++//! Actual isolated client deployment facts checked before any privileged command.
++use super::super::{
++    json::{once, Json},
++    Docker,
++};
++use crate::{ContainerId, RuntimeError, WireFailure};
++use std::io::Read;
++pub(super) fn check(
++    docker: &Docker,
++    client: ContainerId,
++    address: &str,
++) -> Result<(), Box<WireFailure>> {
++    let mut response = docker.exchange(
++        "GET",
++        &format!("/v1.54/containers/{client}/json"),
++        false,
++        |_| Ok(()),
++    )?;
++    if response.status != 200 {
++        return Err(response.fail(RuntimeError::Http(response.status), None));
++    }
++    let mut observed = None;
++    let result = (|| {
++        let mut fields = 0;
++        let mut valid = true;
++        let mut json = Json::new(&mut response.body);
++        json.object(|j, key| {
++            if key.equals("Id") {
++                once(&mut fields, 1)?;
++                let id = j.string(true)?;
++                if id.overflow {
++                    return Err(RuntimeError::Protocol("admin CID width"));
++                }
++                observed = Some(ContainerId::parse(id.text())?);
++            } else if key.equals("Config") {
++                once(&mut fields, 2)?;
++                let mut bits = 0;
++                j.object(|j, key| {
++                    if key.equals("User") {
++                        once(&mut bits, 1)?;
++                        valid &= j.string_equals("0:0")?;
++                    } else if key.equals("Tty") {
++                        once(&mut bits, 2)?;
++                        valid &= !j.boolean()?;
++                    } else if key.equals("Cmd") {
++                        once(&mut bits, 4)?;
++                        valid &= strings(j, &["sleep", "infinity"])?;
++                    } else if key.equals("Entrypoint") {
++                        once(&mut bits, 8)?;
++                        if !j.null()? {
++                            valid &= strings(j, &[])?;
++                        }
++                    } else {
++                        j.skip(2)?;
++                    }
++                    Ok(())
++                })?;
++                valid &= bits == 15;
++            } else if key.equals("HostConfig") {
++                once(&mut fields, 4)?;
++                let mut bits = 0;
++                let mut tmpfs = 0;
++                j.object(|j, key| {
++                    if key.equals("Tmpfs") {
++                        once(&mut tmpfs, 1)?;
++                        if !j.null()? {
++                            j.object(|_, _| {
++                                Err(RuntimeError::Protocol("admin mutable tmpfs exposure"))
++                            })?;
++                        }
++                    } else if key.equals("Privileged") {
++                        once(&mut bits, 1)?;
++                        valid &= !j.boolean()?;
++                    } else if key.equals("ReadonlyRootfs") {
++                        once(&mut bits, 2)?;
++                        valid &= j.boolean()?;
++                    } else if key.equals("PidMode") {
++                        once(&mut bits, 4)?;
++                        valid &= j.string_equals("")?;
++                    } else if key.equals("SecurityOpt") {
++                        once(&mut bits, 8)?;
++                        valid &= strings(j, &["no-new-privileges=true"])?;
++                    } else if key.equals("CapDrop") {
++                        once(&mut bits, 16)?;
++                        valid &= strings(j, &["ALL"])?;
++                    } else if key.equals("CapAdd") {
++                        once(&mut bits, 32)?;
++                        if !j.null()? {
++                            valid &= strings(j, &[])?;
++                        }
++                    } else if key.equals("Devices") {
++                        once(&mut bits, 64)?;
++                        if !j.null()? {
++                            j.array(|_| Err(RuntimeError::Protocol("admin device exposure")))?;
++                        }
++                    } else {
++                        j.skip(2)?;
++                    }
++                    Ok(())
++                })?;
++                valid &= bits == 127;
++            } else if key.equals("Mounts") {
++                once(&mut fields, 8)?;
++                let mut count = 0;
++                j.array(|j| {
++                    if count != 0 {
++                        return Err(RuntimeError::Protocol("isolated admin single socket mount"));
++                    }
++                    count = 1;
++                    let mut bits = 0;
++                    j.object(|j, key| {
++                        if key.equals("Type") {
++                            once(&mut bits, 1)?;
++                            valid &= j.string_equals("bind")?;
++                        } else if key.equals("Source") {
++                            once(&mut bits, 2)?;
++                            valid &= j.string_equals(address)?;
++                        } else if key.equals("Destination") {
++                            once(&mut bits, 4)?;
++                            valid &= j.string_equals(address)?;
++                        } else if key.equals("RW") {
++                            once(&mut bits, 8)?;
++                            valid &= j.boolean()?;
++                        } else {
++                            j.skip(3)?;
++                        }
++                        Ok(())
++                    })?;
++                    valid &= bits == 15;
++                    Ok(())
++                })?;
++                valid &= count == 1;
++            } else {
++                j.skip(1)?;
++            }
++            Ok(())
++        })?;
++        json.finish()?;
++        if observed != Some(client) || fields != 15 || !valid {
++            return Err(RuntimeError::Protocol(
++                "exact isolated read-only admin deployment",
++            ));
++        }
++        Ok(())
++    })();
++    result.map_err(|cause| {
++        let mut failure = response.fail(cause, None);
++        failure.observed_container = observed;
++        failure.requested_container = Some(client);
++        failure
++    })
++}
++fn strings<R: Read>(j: &mut Json<R>, expected: &[&str]) -> Result<bool, RuntimeError> {
++    let mut index = 0;
++    let mut valid = true;
++    j.array(|j| {
++        if let Some(value) = expected.get(index) {
++            valid &= j.string_equals(value)?;
++        } else {
++            valid = false;
++            j.skip(3)?;
++        }
++        index = index.saturating_add(1);
++        Ok(())
++    })?;
++    Ok(valid && index == expected.len())
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/admin/types.rs b/core/crates/layerfs-sandbox/src/backend/docker/admin/types.rs
+new file mode 100644
+index 000000000..13c19ee14
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/src/backend/docker/admin/types.rs
+@@ -0,0 +1,148 @@
++//! Exact external runtime operation phases and original helper/target custody.
++use super::super::{
++    ExecCreateFailure, ExecHandle, OutputProgress, RuntimeOutput, SplitFailure, StartFailure,
++};
++use crate::{ContainerId, ExecId, ExecInspection, RuntimeError, WireFailure};
++use std::{fmt, io};
++/// Explicit one-process signal. No implicit escalation or descendant/all-task signal.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum Signal {
++    Terminate,
++    Kill,
++}
++impl Signal {
++    pub(super) fn text(self) -> &'static str {
++        match self {
++            Self::Terminate => "TERM",
++            Self::Kill => "KILL",
++        }
++    }
++}
++/// Concrete original helper boundary; CLI acknowledgment is independent of target exit.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum AdminPhase {
++    Validate,
++    Create,
++    Start,
++    Split,
++    Output,
++    Inspect,
++    Result,
++}
++/// Bounded stderr diagnostics with total received bytes, never whole-output collection.
++#[derive(Default)]
++pub struct AdminStderr {
++    pub prefix: Vec<u8>,
++    pub received: u64,
++}
++impl fmt::Debug for AdminStderr {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        f.debug_struct("AdminStderr")
++            .field("prefix_bytes", &self.prefix.len())
++            .field("received", &self.received)
++            .finish()
++    }
++}
++impl io::Write for AdminStderr {
++    fn write(&mut self, input: &[u8]) -> io::Result<usize> {
++        let n = input.len().min(1024 - self.prefix.len());
++        self.prefix.extend_from_slice(&input[..n]);
++        self.received = self.received.saturating_add(input.len() as u64);
++        Ok(input.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++/// Read-only original binary transfer/hash facts, even after malformed/truncated archive.
++#[derive(Clone, Debug, Default, Eq, PartialEq)]
++pub struct ArtifactObservation {
++    pub declared_bytes: Option<u64>,
++    pub read_bytes: u64,
++    pub sha256: Option<String>,
++    pub complete: bool,
++}
++/// Deciding version facts retained independently of parser/helper completion.
++#[derive(Clone, Debug, Default, Eq, PartialEq)]
++pub struct VersionObservation {
++    pub client: Option<String>,
++    pub client_revision: Option<String>,
++    pub server: Option<String>,
++    pub server_revision: Option<String>,
++    pub server_uuid: Option<String>,
++    pub complete: bool,
++}
++/// Actual target facts, never relabeled requested selectors or qualified absence prematurely.
++#[derive(Clone, Debug, Default, Eq, PartialEq)]
++pub struct TargetObservation {
++    pub observed_container: Option<ContainerId>,
++    pub extensions_present: bool,
++    pub cni_present: bool,
++    pub runtime_name: Option<String>,
++    pub complete: bool,
++}
++/// Exact pinned version observations from complete output of a successful helper.
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct RuntimeVersion {
++    pub client: String,
++    pub client_revision: String,
++    pub server: String,
++    pub server_revision: String,
++    pub server_uuid: String,
++}
++/// One completed administrative helper and its coherent original exit observation.
++#[derive(Debug)]
++pub struct AdminReceipt {
++    pub helper: ExecInspection,
++    pub output: OutputProgress,
++    pub stderr: AdminStderr,
++}
++/// Original qualified target metadata; absence is scoped to this read, not an atomic kill gate.
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct TargetMetadata {
++    pub container: ContainerId,
++    pub cni_extension_absent: bool,
++    pub runtime_name: String,
++}
++/// One successfully completed fixed CLI signal. Target exit/streams/descendants remain independent.
++#[derive(Debug)]
++pub struct Cancellation {
++    pub container: ContainerId,
++    pub exec: ExecId,
++    pub signal: Signal,
++    pub metadata: TargetMetadata,
++    pub metadata_helper: AdminReceipt,
++    pub signal_helper: AdminReceipt,
++}
++/// Original helper failure; signal may have occurred despite nonzero/lost completion.
++#[derive(Debug)]
++pub enum AdminCause {
++    Runtime(RuntimeError),
++    Create(Box<ExecCreateFailure>),
++    Start(Box<StartFailure>),
++    Split(Box<SplitFailure>),
++    Inspect(Box<WireFailure>),
++}
++/// Original exact request selectors, reached phase and retained helper/output state.
++#[derive(Debug)]
++pub struct AdminFailure {
++    pub client: ContainerId,
++    pub target: Option<(ContainerId, ExecId)>,
++    pub phase: AdminPhase,
++    pub cause: AdminCause,
++    pub handle: Option<ExecHandle>,
++    pub output: Option<RuntimeOutput>,
++    pub stderr: AdminStderr,
++    pub inspection: Option<ExecInspection>,
++    pub fence_error: Option<io::Error>,
++    /// True when original signal helper Start entered; false is not an absence claim for other stages.
++    pub signal_start_attempted: bool,
++    pub metadata: Option<TargetMetadata>,
++    pub metadata_helper: Option<AdminReceipt>,
++    pub signal: Option<Signal>,
++    pub observed_version: Option<RuntimeVersion>,
++    pub version_helper: Option<AdminReceipt>,
++    pub artifact: Option<ArtifactObservation>,
++    pub version_observation: Option<VersionObservation>,
++    pub target_observation: Option<TargetObservation>,
++}
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/mod.rs b/core/crates/layerfs-sandbox/src/backend/docker/mod.rs
+index b4aaf1bf1..7a4e58b35 100644
+--- a/core/crates/layerfs-sandbox/src/backend/docker/mod.rs
++++ b/core/crates/layerfs-sandbox/src/backend/docker/mod.rs
+@@ -1,4 +1,5 @@
+ //! Local Docker Engine API1.54, with exact IDs and no command replay.
++pub mod admin;
+ mod archive;
+ mod body;
+ mod container;
+@@ -23,6 +24,6 @@ pub use http::Docker;
+ pub use listener::{ListenerFailure, ListenerObservation};
+ pub use request::{ExecCreateFailure, ExecCreated, ExecRequest};
+ pub use streams::{
+-    Attached, ExecHandle, InputCloseFailure, InputEnd, OutputFailure, OutputProgress, RuntimeInput,
+-    RuntimeOutput, SplitFailure, StartFailure,
++    Attached, ExecHandle, InputCloseFailure, InputEnd, OutputFailure, OutputProgress,
++    OutputReadFailure, RuntimeInput, RuntimeOutput, SplitFailure, StartFailure,
+ };
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/request.rs b/core/crates/layerfs-sandbox/src/backend/docker/request.rs
+index a3e479add..5f5f28121 100644
+--- a/core/crates/layerfs-sandbox/src/backend/docker/request.rs
++++ b/core/crates/layerfs-sandbox/src/backend/docker/request.rs
+@@ -30,8 +30,7 @@ impl fmt::Debug for ExecRequest {
+     }
+ }
+ impl ExecRequest {
+-    fn check(&self) -> Result<(), RuntimeError> {
+-        self.identity.check()?;
++    pub(super) fn check_shape(&self) -> Result<(), RuntimeError> {
+         if self.arguments.is_empty()
+             || self.arguments[0].is_empty()
+             || !std::path::Path::new(&self.directory).is_absolute()
+@@ -99,10 +98,27 @@ impl Docker {
+         &self,
+         container: ContainerId,
+         request: ExecRequest,
++    ) -> Result<ExecCreated, Box<ExecCreateFailure>> {
++        if let Err(cause) = request.identity.check() {
++            let mut transfer = super::http::failure(false, 0, None, cause, None);
++            transfer.requested_container = Some(container);
++            return Err(Box::new(ExecCreateFailure {
++                container,
++                request,
++                transfer,
++            }));
++        }
++        self.create_selected_exec(container, request)
++    }
++    /// Private shared encoder; only the concrete fixed admin command may select root.
++    pub(super) fn create_selected_exec(
++        &self,
++        container: ContainerId,
++        request: ExecRequest,
+     ) -> Result<ExecCreated, Box<ExecCreateFailure>> {
+         let mut observed = None;
+         let result = (|| {
+-            request.check().map_err(|cause| {
++            request.check_shape().map_err(|cause| {
+                 Box::new(WireFailure {
+                     attempted: false,
+                     sent_bytes: 0,
+diff --git a/core/crates/layerfs-sandbox/src/backend/docker/streams.rs b/core/crates/layerfs-sandbox/src/backend/docker/streams.rs
+index 43b588653..f2021a322 100644
+--- a/core/crates/layerfs-sandbox/src/backend/docker/streams.rs
++++ b/core/crates/layerfs-sandbox/src/backend/docker/streams.rs
+@@ -16,7 +16,7 @@ pub struct OutputProgress {
+     pub saturated: bool,
+ }
+ impl OutputProgress {
+-    fn add(value: &mut u64, n: usize, saturated: &mut bool) {
++    pub(super) fn add(value: &mut u64, n: usize, saturated: &mut bool) {
+         match value.checked_add(n as u64) {
+             Some(n) => *value = n,
+             None => {
+@@ -47,7 +47,7 @@ pub struct SplitFailure {
+ /// Original acknowledged runtime identity; inspection/cancellation owns no filesystem lifetime.
+ #[derive(Debug)]
+ pub struct ExecHandle {
+-    created: ExecCreated,
++    pub(super) created: ExecCreated,
+ }
+ impl ExecHandle {
+     pub fn inspect(&self) -> Result<ExecInspection, Box<WireFailure>> {
+@@ -61,6 +61,15 @@ impl ExecHandle {
+             "Engine per-Exec cancellation; use a qualified ordinary external runtime",
+         ))
+     }
++    /// Requests one explicit root-process signal through an artifact-qualified external runtime capability.
++    /// The returned helper result never implies target exit, descendant termination or filesystem drain.
++    pub fn cancel_with(
++        &self,
++        admin: &mut super::admin::CtrAdmin,
++        signal: super::admin::Signal,
++    ) -> Result<super::admin::Cancellation, Box<super::admin::AdminFailure>> {
++        admin.cancel(self, signal)
++    }
+     pub fn identity(&self) -> (crate::ContainerId, crate::ExecId) {
+         (self.created.container, self.created.exec)
+     }
+@@ -237,6 +246,7 @@ pub struct RuntimeOutput {
+     header: [u8; 8],
+     header_used: usize,
+     fenced: bool,
++    eof: bool,
+ }
+ impl fmt::Debug for RuntimeOutput {
+     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+@@ -247,6 +257,12 @@ impl fmt::Debug for RuntimeOutput {
+             .finish()
+     }
+ }
++/// One failed streaming read; buffers remain in the borrowed RuntimeOutput and are terminal.
++#[derive(Debug)]
++pub struct OutputReadFailure {
++    pub cause: RuntimeError,
++    pub fence_error: Option<io::Error>,
++}
+ /// Original output failure, including its remaining reader and undelivered window.
+ #[derive(Debug)]
+ pub struct OutputFailure {
+@@ -291,6 +307,7 @@ impl Attached {
+                 header: [0; 8],
+                 header_used: 0,
+                 fenced: false,
++                eof: false,
+             },
+             ExecHandle {
+                 created: self.created,
+@@ -335,66 +352,132 @@ impl RuntimeOutput {
+             }
+         }
+     }
+-    fn copy(
+-        &mut self,
+-        stdout: &mut impl Write,
+-        stderr: &mut impl Write,
+-    ) -> Result<(), RuntimeError> {
++    pub(super) fn fence(&mut self) -> Option<io::Error> {
++        if self.fenced {
++            None
++        } else {
++            self.fenced = true;
++            self.writer.stream.shutdown(Shutdown::Both).err()
++        }
++    }
++    fn next_window(&mut self) -> Result<bool, RuntimeError> {
+         if self.fenced {
+             return Err(RuntimeError::Protocol("terminal output owner; no replay"));
+         }
++        if self.delivered < self.used {
++            return Ok(true);
++        }
++        self.used = 0;
++        self.delivered = 0;
+         loop {
+-            self.header_used = 0;
+-            while self.header_used < 8 {
+-                let n = self.body.read(&mut self.header[self.header_used..])?;
+-                if n == 0 {
+-                    if self.header_used == 0 {
+-                        return Ok(());
+-                    }
+-                    return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+-                }
+-                self.header_used += n;
+-            }
+-            (self.tag, self.remaining) = super::mux::header(self.header)?;
+-            if self.tag == 3 {
+-                return Err(RuntimeError::Protocol(
+-                    "runtime system-error stream; original unread payload retained",
+-                ));
++            if self.eof {
++                return Ok(false);
+             }
+-            while self.remaining != 0 {
+-                let target = (self.remaining as usize).min(WINDOW);
+-                self.used = 0;
+-                self.delivered = 0;
+-                while self.used < target {
+-                    let n = self.body.read(&mut self.pending[self.used..target])?;
++            if self.remaining == 0 {
++                self.header_used = 0;
++                while self.header_used < 8 {
++                    let n = self.body.read(&mut self.header[self.header_used..])?;
+                     if n == 0 {
++                        if self.header_used == 0 {
++                            self.eof = true;
++                            return Ok(false);
++                        }
+                         return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+                     }
+-                    self.used += n;
+-                    self.remaining -= n as u32;
+-                    OutputProgress::add(
+-                        &mut self.progress.wire_payload,
+-                        n,
+-                        &mut self.progress.saturated,
+-                    );
++                    self.header_used += n;
+                 }
+-                while self.delivered < self.used {
+-                    let sink: &mut dyn Write = if self.tag == 2 { stderr } else { stdout };
+-                    let n = sink.write(&self.pending[self.delivered..self.used])?;
+-                    if n == 0 {
+-                        return Err(io::Error::from(io::ErrorKind::WriteZero).into());
+-                    }
+-                    self.delivered += n;
+-                    let count = if self.tag == 2 {
+-                        &mut self.progress.stderr
+-                    } else {
+-                        &mut self.progress.stdout
+-                    };
+-                    OutputProgress::add(count, n, &mut self.progress.saturated);
++                (self.tag, self.remaining) = super::mux::header(self.header)?;
++                if self.tag == 3 {
++                    return Err(RuntimeError::Protocol(
++                        "runtime system-error stream; original unread payload retained",
++                    ));
++                }
++                if self.remaining == 0 {
++                    continue;
++                }
++            }
++            let target = (self.remaining as usize).min(WINDOW);
++            while self.used < target {
++                let n = self.body.read(&mut self.pending[self.used..target])?;
++                if n == 0 {
++                    return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+                 }
+-                self.used = 0;
+-                self.delivered = 0;
++                self.used += n;
++                self.remaining -= n as u32;
++                OutputProgress::add(
++                    &mut self.progress.wire_payload,
++                    n,
++                    &mut self.progress.saturated,
++                );
+             }
++            return Ok(true);
+         }
+     }
++    fn delivered(&mut self, n: usize) {
++        self.delivered += n;
++        let count = if self.tag == 2 {
++            &mut self.progress.stderr
++        } else {
++            &mut self.progress.stdout
++        };
++        OutputProgress::add(count, n, &mut self.progress.saturated);
++    }
++    /// Reads stdout while delivering stderr to its independent caller sink, using the same bounded mux owner.
++    /// A failed read fences once and leaves the exact pending/framing/progress in this owner.
++    pub fn read_stdout(
++        &mut self,
++        out: &mut [u8],
++        stderr: &mut impl Write,
++    ) -> Result<usize, OutputReadFailure> {
++        self.read_stdout_inner(out, stderr)
++            .map_err(|cause| OutputReadFailure {
++                cause,
++                fence_error: self.fence(),
++            })
++    }
++    /// Explicitly fences this output transport once; it never signals the remote command.
++    pub fn close_output(&mut self) -> Option<io::Error> {
++        self.fence()
++    }
++    fn read_stdout_inner(
++        &mut self,
++        out: &mut [u8],
++        stderr: &mut impl Write,
++    ) -> Result<usize, RuntimeError> {
++        if out.is_empty() {
++            return Ok(0);
++        }
++        loop {
++            if !self.next_window()? {
++                return Ok(0);
++            }
++            if self.tag == 2 {
++                let n = stderr.write(self.pending_payload())?;
++                if n == 0 {
++                    return Err(io::Error::from(io::ErrorKind::WriteZero).into());
++                }
++                self.delivered(n);
++                continue;
++            }
++            let n = out.len().min(self.used - self.delivered);
++            out[..n].copy_from_slice(&self.pending[self.delivered..self.delivered + n]);
++            self.delivered(n);
++            return Ok(n);
++        }
++    }
++    fn copy(
++        &mut self,
++        stdout: &mut impl Write,
++        stderr: &mut impl Write,
++    ) -> Result<(), RuntimeError> {
++        while self.next_window()? {
++            let sink: &mut dyn Write = if self.tag == 2 { stderr } else { stdout };
++            let n = sink.write(self.pending_payload())?;
++            if n == 0 {
++                return Err(io::Error::from(io::ErrorKind::WriteZero).into());
++            }
++            self.delivered(n);
++        }
++        Ok(())
++    }
+ }
+diff --git a/core/crates/layerfs-sandbox/tests/admin_protocol.rs b/core/crates/layerfs-sandbox/tests/admin_protocol.rs
+new file mode 100644
+index 000000000..08dee7f0b
+--- /dev/null
++++ b/core/crates/layerfs-sandbox/tests/admin_protocol.rs
+@@ -0,0 +1,350 @@
++//! Fixed administrative command public path through the bounded external Engine peer.
++#[allow(dead_code)]
++mod support {
++    pub mod engine;
++}
++use layerfs_sandbox::{
++    backend::docker::{
++        admin::{AdminCause, AdminPhase, CtrAdmin, Signal},
++        Docker, ExecHandle, ExecRequest,
++    },
++    CommandIdentity, ContainerId, RuntimeError,
++};
++use support::engine::{fixed, frame, upgrade, Peer};
++const CLIENT: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
++const TARGET: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
++const EID: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
++const HELPER: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
++fn cid(value: &str) -> ContainerId {
++    ContainerId::parse(value).unwrap()
++}
++fn create() -> Vec<u8> {
++    fixed(201, format!("{{\"Id\":\"{HELPER}\"}}").as_bytes())
++}
++fn inspection(code: i32) -> Vec<u8> {
++    fixed(200,format!("{{\"ID\":\"{HELPER}\",\"ContainerID\":\"{CLIENT}\",\"Running\":false,\"ExitCode\":{code},\"Pid\":0}}").as_bytes())
++}
++fn profile(readonly: bool) -> Vec<u8> {
++    fixed(200,format!(r#"{{"Id":"{CLIENT}","Config":{{"User":"0:0","Tty":false,"Cmd":["sleep","infinity"],"Entrypoint":null}},"HostConfig":{{"Privileged":false,"ReadonlyRootfs":{readonly},"PidMode":"","SecurityOpt":["no-new-privileges=true"],"CapDrop":["ALL"],"CapAdd":null,"Devices":[]}},"Mounts":[{{"Type":"bind","Source":"/run/containerd/containerd.sock","Destination":"/run/containerd/containerd.sock","RW":true}}]}}"#).as_bytes())
++}
++fn version(server: &str) -> Vec<u8> {
++    format!("Client:\n  Version: v2.2.4\n  Revision: 193637f7ee8ae5f5aa5248f49e7baa3e6164966e\n  Go version: go1.25.10\n\nServer:\n  Version: {server}\n  Revision: 193637f7ee8ae5f5aa5248f49e7baa3e6164966e\n  UUID: dab2dd8c-483f-4fe2-a79b-eb12df4ca696\n").into_bytes()
++}
++fn artifact() -> Vec<u8> {
++    let path = std::env::var("LAYERFS_TEST_CTR_BINARY")
++        .expect("explicit unchanged published ctr fixture path");
++    let data = std::fs::read(path).unwrap();
++    assert_eq!(data.len(), 20_840_632);
++    let mut h = [0; 512];
++    h[..3].copy_from_slice(b"ctr");
++    for (range, value) in [
++        (100..108, 0o755u64),
++        (108..116, 0),
++        (116..124, 0),
++        (124..136, data.len() as u64),
++        (136..148, 0),
++    ] {
++        let text = format!("{:0width$o}\0", value, width = range.len() - 1);
++        h[range].copy_from_slice(text.as_bytes());
++    }
++    h[148..156].fill(b' ');
++    h[156] = b'0';
++    h[257..263].copy_from_slice(b"ustar\0");
++    h[263..265].copy_from_slice(b"00");
++    let sum: u32 = h.iter().map(|b| u32::from(*b)).sum();
++    h[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
++    let mut tar = h.to_vec();
++    tar.extend(data);
++    let n = (512 - tar.len() % 512) % 512;
++    tar.extend(vec![0; n + 1024]);
++    fixed(200, &tar)
++}
++fn info_fields(extra: &str) -> String {
++    format!("{{\"ID\":\"{TARGET}\",\"Extensions\":null,\"Runtime\":{{\"Name\":\"io.containerd.runc.v2\"}}{extra}}}")
++}
++fn qualification() -> Vec<Vec<u8>> {
++    vec![
++        profile(true),
++        artifact(),
++        create(),
++        upgrade(&frame(1, &version("v2.2.4"))),
++        inspection(0),
++    ]
++}
++fn target(docker: &Docker) -> ExecHandle {
++    let created = docker
++        .create_exec(
++            cid(TARGET),
++            ExecRequest {
++                identity: CommandIdentity { uid: 501, gid: 20 },
++                arguments: vec!["bash".into()],
++                environment: vec![],
++                directory: "/".into(),
++                stdin: false,
++            },
++        )
++        .unwrap();
++    let (_input, output, handle) = created.start().unwrap().into_parts().unwrap();
++    output
++        .copy_to(&mut std::io::sink(), &mut std::io::sink())
++        .unwrap();
++    handle
++}
++fn target_responses() -> Vec<Vec<u8>> {
++    vec![
++        fixed(201, format!("{{\"Id\":\"{EID}\"}}").as_bytes()),
++        upgrade(&[]),
++    ]
++}
++#[test]
++fn exact_root_client_commands_stream_giant_spec_and_preserve_both_helper_receipts() {
++    let mut responses = target_responses();
++    responses.extend(qualification());
++    let info = info_fields(&format!(
++        ",\"Spec\":{{\"Args\":[\"{}\"]}}",
++        "x".repeat(1024 * 1024)
++    ));
++    let mut output = frame(2, &vec![b'e'; 2000]);
++    output.extend(frame(1, info.as_bytes()));
++    responses.extend([
++        create(),
++        upgrade(&output),
++        inspection(0),
++        create(),
++        upgrade(&[]),
++        inspection(0),
++    ]);
++    let (docker, peer) = Peer::new(responses, 8192);
++    let handle = target(&docker);
++    let mut admin = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap();
++    let result = admin.cancel(&handle, Signal::Terminate).unwrap();
++    assert_eq!(result.container, cid(TARGET));
++    assert_eq!(result.exec.as_str(), EID);
++    assert!(result.metadata.cni_extension_absent);
++    assert_eq!(result.metadata_helper.stderr.received, 2000);
++    assert_eq!(result.metadata_helper.stderr.prefix.len(), 1024);
++    assert!(result.metadata_helper.output.stdout > 1024 * 1024);
++    let calls = peer.finish();
++    let root = std::str::from_utf8(&calls[4]).unwrap();
++    assert!(root.contains("\"User\":\"0:0\"") && root.contains("/usr/local/bin/ctr"));
++    let signal = std::str::from_utf8(&calls[10]).unwrap();
++    assert!(
++        signal.contains(EID)
++            && signal.contains(TARGET)
++            && signal.contains("--exec-id")
++            && signal.contains("TERM")
++    );
++    assert!(!signal.contains("--all"));
++}
++#[test]
++fn cni_extension_or_malformed_info_prevents_any_signal_helper() {
++    for (info,malformed) in [
++        (format!("{{\"ID\":\"{TARGET}\",\"Extensions\":{{\"ctr.cni-containerd.metadata\":{{}}}},\"Runtime\":{{\"Name\":\"io.containerd.runc.v2\"}}}}"),false),
++        (format!("{{\"ID\":\"{TARGET}\",\"Extensions\":null,\"Extensions\":{{}}}}"),true),
++        (format!("{{\"ID\":\"{CLIENT}\",\"Extensions\":null,\"Runtime\":{{\"Name\":\"io.containerd.runc.v2\"}}}}"),false),
++    ] {
++        let mut responses=target_responses();responses.extend(qualification());responses.extend([create(),upgrade(&frame(1,info.as_bytes()))]);if !malformed {responses.push(inspection(0));}
++        let (docker,peer)=Peer::new(responses,8192);let handle=target(&docker);let mut admin=CtrAdmin::qualify(docker,cid(CLIENT),"/run/containerd/containerd.sock".into()).unwrap();
++        let failure=admin.cancel(&handle,Signal::Kill).unwrap_err();assert_eq!(failure.phase,if malformed {AdminPhase::Output} else {AdminPhase::Result});assert!(!failure.signal_start_attempted);assert_eq!(failure.signal,Some(Signal::Kill));
++        let observed=failure.target_observation.as_ref().unwrap();assert!(observed.observed_container.is_some());assert_eq!(observed.complete,!malformed);assert!(matches!(failure.cause,AdminCause::Runtime(RuntimeError::Protocol(_))));assert_eq!(peer.finish().len(),if malformed {9} else {10});
++    }
++}
++
++#[test]
++fn actual_server_profile_and_client_isolation_are_required() {
++    let (docker, peer) = Peer::new(vec![profile(false)], 11);
++    let failure = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Validate);
++    assert_eq!(peer.finish().len(), 1);
++    let (docker, peer) = Peer::new(
++        vec![
++            profile(true),
++            artifact(),
++            create(),
++            upgrade(&frame(1, &version("v2.3.0"))),
++            inspection(0),
++        ],
++        11,
++    );
++    let failure = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Result);
++    assert_eq!(failure.observed_version.unwrap().server, "v2.3.0");
++    assert!(failure.version_helper.is_some());
++    peer.finish();
++}
++#[test]
++fn lost_signal_start_keeps_original_start_owner_metadata_and_no_effect_guess() {
++    let mut responses = target_responses();
++    responses.extend(qualification());
++    let info = info_fields("");
++    responses.extend([
++        create(),
++        upgrade(&frame(1, info.as_bytes())),
++        inspection(0),
++        create(),
++        Vec::new(),
++    ]);
++    let (docker, peer) = Peer::new(responses, 8192);
++    let handle = target(&docker);
++    let mut admin = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap();
++    let failure = admin.cancel(&handle, Signal::Terminate).unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Start);
++    assert!(
++        failure.signal_start_attempted
++            && failure.metadata.is_some()
++            && failure.metadata_helper.is_some()
++    );
++    assert_eq!(failure.signal, Some(Signal::Terminate));
++    match failure.cause {
++        AdminCause::Start(original) => assert_eq!(original.created.identity().1.as_str(), HELPER),
++        other => panic!("{other:?}"),
++    };
++    assert_eq!(peer.finish().len(), 12);
++}
++
++#[test]
++fn changed_installed_binary_is_refused_before_any_root_exec() {
++    let mut tar = artifact();
++    let body = tar.windows(4).position(|b| b == b"\r\n\r\n").unwrap() + 4;
++    tar[body + 512 + 1024] ^= 1;
++    let (docker, peer) = Peer::new(vec![profile(true), tar], 8192);
++    let failure = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Validate);
++    let fact = failure.artifact.unwrap();
++    assert!(fact.complete);
++    assert_eq!(fact.read_bytes, 20_840_632);
++    assert_ne!(
++        fact.sha256.as_deref(),
++        Some("dba23ecfa03867ccd3a7ae442f5cef7f0d37564f8c96639500997b5bef5e03d8")
++    );
++    assert_eq!(peer.finish().len(), 2);
++}
++#[test]
++fn parsed_facts_survive_original_helper_inspection_failure() {
++    let (docker, peer) = Peer::new(
++        vec![
++            profile(true),
++            artifact(),
++            create(),
++            upgrade(&frame(1, &version("v2.2.4"))),
++            Vec::new(),
++        ],
++        8192,
++    );
++    let failure = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Inspect);
++    let facts = failure.version_observation.unwrap();
++    assert!(facts.complete);
++    assert_eq!(facts.server.as_deref(), Some("v2.2.4"));
++    assert!(failure.artifact.unwrap().complete);
++    peer.finish();
++    let mut responses = target_responses();
++    responses.extend(qualification());
++    responses.extend([
++        create(),
++        upgrade(&frame(1, info_fields("").as_bytes())),
++        Vec::new(),
++    ]);
++    let (docker, peer) = Peer::new(responses, 8192);
++    let handle = target(&docker);
++    let mut admin = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap();
++    let failure = handle.cancel_with(&mut admin, Signal::Kill).unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Inspect);
++    assert_eq!(failure.signal, Some(Signal::Kill));
++    assert!(!failure.signal_start_attempted);
++    let fact = failure.target_observation.unwrap();
++    assert!(fact.complete && fact.extensions_present && !fact.cni_present);
++    assert_eq!(fact.observed_container, Some(cid(TARGET)));
++    assert_eq!(fact.runtime_name.as_deref(), Some("io.containerd.runc.v2"));
++    peer.finish();
++}
++#[test]
++fn partial_version_and_nonzero_signal_helper_preserve_exact_known_facts() {
++    let incomplete=b"Client:\n Version: v2.2.4\n Revision: 193637f7ee8ae5f5aa5248f49e7baa3e6164966e\n Go version: go1.25.10\nServer:\n Version: v2.2.4\n";
++    let (docker, peer) = Peer::new(
++        vec![
++            profile(true),
++            artifact(),
++            create(),
++            upgrade(&frame(1, incomplete)),
++        ],
++        8192,
++    );
++    let failure = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Output);
++    let facts = failure.version_observation.unwrap();
++    assert!(!facts.complete);
++    assert_eq!(facts.client.as_deref(), Some("v2.2.4"));
++    assert_eq!(facts.server.as_deref(), Some("v2.2.4"));
++    peer.finish();
++    let mut responses = target_responses();
++    responses.extend(qualification());
++    responses.extend([
++        create(),
++        upgrade(&frame(1, info_fields("").as_bytes())),
++        inspection(0),
++        create(),
++        upgrade(&frame(2, b"original RPC acknowledgment unknown\n")),
++        inspection(78),
++    ]);
++    let (docker, peer) = Peer::new(responses, 8192);
++    let handle = target(&docker);
++    let mut admin = CtrAdmin::qualify(
++        docker,
++        cid(CLIENT),
++        "/run/containerd/containerd.sock".into(),
++    )
++    .unwrap();
++    let failure = handle
++        .cancel_with(&mut admin, Signal::Terminate)
++        .unwrap_err();
++    assert_eq!(failure.phase, AdminPhase::Result);
++    assert!(
++        failure.signal_start_attempted
++            && failure.metadata.is_some()
++            && failure.metadata_helper.is_some()
++    );
++    assert_eq!(failure.inspection.unwrap().known_root_exit(), Some(78));
++    assert!(failure.stderr.received > 0);
++    peer.finish();
++}

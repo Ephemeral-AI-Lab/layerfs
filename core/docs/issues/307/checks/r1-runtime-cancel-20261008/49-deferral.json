@@ -1,0 +1,27 @@
+{
+  "status": "DEFERRED outside immediate filesystem PoC; incomplete final qualification",
+  "base": "e5e95e76c16da65172d17b6a52bb9a25613547ec",
+  "patch_sha256": "8162672c8575ad9a6c39581b4dcfa2e59a900edd762939208a2a64612d1b8797",
+  "files": {
+    "core/Cargo.lock": "5fa218b472ce764b6e219700d8316104921417ed2ee87f5c57f45d5c2da90e56",
+    "core/crates/layerfs-sandbox/Cargo.toml": "1b6000a4d94995602f9ebc5be72bdb42c4cf022ada61e7aff0affa0d13820925",
+    "core/crates/layerfs-sandbox/src/backend/docker/mod.rs": "e20d5e5fdd41b3e9cb1f4262bf839f98af55e6298e92e57c73780c365311ece2",
+    "core/crates/layerfs-sandbox/src/backend/docker/request.rs": "f7eb53d03e680be291820fd08be85db0ae2ac4aa2575668fe16b4267f121e1c2",
+    "core/crates/layerfs-sandbox/src/backend/docker/streams.rs": "ec3de36746278eed0b2813f1f461a4a98d6308581fe739f54fd3c425c3357337",
+    "core/crates/layerfs-sandbox/examples/runtime_cancel.rs": "41192d886d4643357601d0d3b58a301afe310c6b0b794fdba33cdaf790ffd43f",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/artifact.rs": "49ec4be9d7ba5bf0ce3053f03d84f83d016d081bb3fe01f93b967bcb2b4283d3",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/client.rs": "9b48dc96f21c620521397d20fb9974c0110d0ef75ab0b4b2a8d6a20a3f606064",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/commands.rs": "b02c4193f84b95e110b5b6454b75607d8dfae117987a585a6f2d1463426a3329",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/input.rs": "3225abf62f2ed37367c21a536e7b0928d223c643bc33fa13d8a9a5e59a82b58c",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/metadata.rs": "50b8b6fabb1a0b500a58fd24582facbfdc8936f3d2c27523e2a73f20ee839ad8",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/mod.rs": "920e364e0fffebf72a26819283ca72722e4aa04bd05c81e10b70765a908b7b18",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/profile.rs": "a7caabd60ae647ebe009901873927ec94df207394b0f76dfacd947ae255d33d3",
+    "core/crates/layerfs-sandbox/src/backend/docker/admin/types.rs": "45d523ca71c67d97bfd9b94b4948eb204f9824fc4a4e17ed4ad65e6f0ce0c5c2",
+    "core/crates/layerfs-sandbox/tests/admin_protocol.rs": "96bec59558e06243a36d88b3747f5b09c6fcd724740b90e22a583929d2e8db82"
+  },
+  "interrupted_sessions": {
+    "26595": 0,
+    "34915": 0
+  },
+  "reason": "Owner directs quick filesystem PoC, ordinary Bash semantics, no command provenance or cancellation."
+}

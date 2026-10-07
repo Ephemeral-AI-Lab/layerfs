@@ -1,0 +1,25 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r1e-sealed-admin-aa0ae2ae878d448d8cd6064548547229",
+    "--label",
+    "layerfs.owner=r1e-20261008",
+    "--user",
+    "0:0",
+    "--cap-drop",
+    "ALL",
+    "--read-only",
+    "--security-opt",
+    "no-new-privileges=true",
+    "--mount",
+    "type=bind,src=/run/containerd/containerd.sock,dst=/run/containerd/containerd.sock",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "sleep",
+    "infinity"
+  ],
+  "exit_code": 0,
+  "stdout": "5e3c98074b364e45e6bdf6a095d3f359826787041afa32e54d8930bd0835aba6\n",
+  "stderr": ""
+}

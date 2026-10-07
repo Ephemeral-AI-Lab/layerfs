@@ -1,0 +1,9 @@
+
+running 4 tests
+test actual_server_profile_and_client_isolation_are_required ... ok
+test cni_extension_or_malformed_info_prevents_any_signal_helper ... ok
+test exact_root_client_commands_stream_giant_spec_and_preserve_both_helper_receipts ... ok
+test lost_signal_start_keeps_original_start_owner_metadata_and_no_effect_guess ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+

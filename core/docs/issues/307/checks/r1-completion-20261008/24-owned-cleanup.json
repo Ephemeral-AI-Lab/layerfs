@@ -1,0 +1,83 @@
+[
+  {
+    "command": [
+      "docker",
+      "inspect",
+      "--format",
+      "{{index .Config.Labels \"layerfs.receipt\"}}",
+      "d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0"
+    ],
+    "exit": 0,
+    "stdout": "r1-completion-20261008\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "stop",
+      "--timeout",
+      "2",
+      "d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0"
+    ],
+    "exit": 0,
+    "stdout": "d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "rm",
+      "d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0"
+    ],
+    "exit": 0,
+    "stdout": "d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "volume",
+      "inspect",
+      "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3"
+    ],
+    "exit": 0,
+    "stdout": "[\n    {\n        \"CreatedAt\": \"2026-10-07T23:14:28Z\",\n        \"Driver\": \"local\",\n        \"Labels\": {\n            \"layerfs.receipt\": \"r1-completion-20261008\"\n        },\n        \"Mountpoint\": \"/var/lib/docker/volumes/layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3/_data\",\n        \"Name\": \"layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3\",\n        \"Options\": null,\n        \"Scope\": \"local\"\n    }\n]\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "ps",
+      "-a",
+      "--filter",
+      "volume=layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3",
+      "--format",
+      "{{.ID}}"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "volume",
+      "rm",
+      "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3"
+    ],
+    "exit": 0,
+    "stdout": "layerfs-r1-final-store-0396a283a7b4457e95de2e59928a89a3\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "docker",
+      "ps",
+      "-aq",
+      "--no-trunc"
+    ],
+    "exit": 0,
+    "stdout": "cc5a3fdf93c9ada3043e49b45557a0cbeb6dba3b82f87e260b3904bee3ae5afa\n8dbf00a20405ce03d87ae63de7c46d0d4a68bcf4d06b8934203d52859604b9aa\n282382b7471da55c42d857191d32f61b45a66180c6c8be7f150a770ea5c3245f\nd73ececb518313a5d87680298ecdc20b3bf42555c1962fb0aed0395c45934293\n7b6f8be08ae041ae7fe827c47b800aadfd4f85570d12fbdd17c62ce88c2f9e73\nd79ac40f17b8632f901a69ec67caaa1168e0ca56b81bac6d2f4b03c1493334e5\n135ac26660eefa9ed86f348540baa693d5751694bd085b297664c419d009e7d5\n4b2b6fab935142d0ae73422dc785dbe5292d39363dbf243e9ccde4feb56cc0ff\n74f00c22609e1be2825c98126bb557e9347a055d8b73729d5d05dc09892a45fd\nf9ad2396ba59b46a4280af809f911e65b7207a45dc57f422093cb11c97ceb86f\n9b18a3ba01dae4300e0c0047b1acf382e763f96e7bd5927ecfabd00148387406\n7dc0a380f5321ff7e02580d83b79344615da3e51c8687f7356f3619c35dfc7fa\n9cf2fe345496b45d79ff272e6c698552948f1e92ea106926826a770592623b24\nce75ac504df9d0e58cedcdd0df93fe7ef39c3b66ef3c13b0bb6b580def64516c\nd2433851ea5990e273b0673fdbd5c180917f1216f3c81bdfb4517da0207e2c2a\nd2550144998b4b71de98cb9ecf6448f87c7b99a3c2f69ea778a29413fffa5ffb\n",
+    "stderr": ""
+  }
+]

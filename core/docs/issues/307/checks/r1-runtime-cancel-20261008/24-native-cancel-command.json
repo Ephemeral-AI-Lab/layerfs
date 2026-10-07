@@ -1,0 +1,15 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "9",
+    "core/target/debug/examples/runtime_cancel",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "884fb41ed6af1cd25444ad167014923507fb367a75a16b7c5e6ab190a5554e01",
+    "cf5c7f4faf4890a779d3bd10043fee2bca08efb6a67091f027ce6ed6c6f8df55"
+  ],
+  "binary_sha256": "8b9b5727597ff0eec252363f0c3d6c3e82b8959007b23b962224c0756fe30fb3",
+  "source": "23-native-source.json",
+  "scope": "Functional original9s bound; no Store/performance/cold/RSS claim. One signal, owned admin interval excludes other target extension mutation."
+}

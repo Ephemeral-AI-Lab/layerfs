@@ -1,0 +1,25 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r1-final-linux-checks-20261008",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-c",
+    "import hashlib,json,subprocess,re,sys,os\nfrom pathlib import Path\nc=Path(\"core/docs/issues/307/checks/r1-completion-20261008\")\nm=json.loads((c/\"02-source-identity.json\").read_text())\nbad=[p for p,h in m[\"files\"].items() if hashlib.sha256(Path(p).read_bytes()).hexdigest()!=h]\nprint(\"source_hashes_match=\"+str(not bad),flush=True)\nif bad: print(bad);sys.exit(2)\nbase=[\"--manifest-path\",\"core/Cargo.toml\",\"--locked\",\"-p\",\"layerfs-sdk\",\"-p\",\"layerfs-sandbox\",\"-p\",\"layerfs-bridge\",\"-p\",\"layerfs-daemon\",\"--all-targets\"]\nr=subprocess.run([\"cargo\",\"test\",*base,\"--no-run\"],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)\nprint(r.stdout,flush=True)\nif r.returncode:sys.exit(r.returncode)\nfor name in [\"engine_protocol\",\"engine_lifecycle\",\"init\",\"native\",\"native_application\"]:\n binary=re.search(r\"Executable tests/\"+name+r\"\\.rs \\(([^)]+)\\)\",r.stdout).group(1)\n print(\"test=\"+name+\" binary=\"+binary+\" sha256=\"+hashlib.sha256(Path(binary).read_bytes()).hexdigest(),flush=True)\n seconds=\"9s\" if name==\"native_application\" else \"100s\"\n rc=subprocess.call([\"timeout\",\"--kill-after=1s\",seconds,binary,\"--nocapture\",\"--test-threads=1\"])\n print(\"test=\"+name+\" exit=\"+str(rc),flush=True)\n if rc:sys.exit(rc)\nrc=subprocess.call([\"cargo\",\"clippy\",*base,\"--\",\"-D\",\"warnings\"])\nprint(\"clippy_exit=\"+str(rc),flush=True)\nif rc:sys.exit(rc)\nos.makedirs(\"core/target/r1-completion\",exist_ok=True)\nsubprocess.run([\"cp\",\"core/target/cluster2-linux/debug/layerfs-daemon\",\"core/target/r1-completion/layerfs-daemon\"],check=True)\nsubprocess.run([\"strip\",\"--strip-debug\",\"core/target/r1-completion/layerfs-daemon\"],check=True)\nfor p in [\"core/target/cluster2-linux/debug/layerfs-daemon\",\"core/target/r1-completion/layerfs-daemon\"]:\n print(\"binary=\"+p+\" sha256=\"+hashlib.sha256(Path(p).read_bytes()).hexdigest()+\" bytes=\"+str(Path(p).stat().st_size),flush=True)\n"
+  ],
+  "source": "02-source-identity.json",
+  "scope": "Final R1 no-admin scoped verification; no FUSE/no Durable"
+}

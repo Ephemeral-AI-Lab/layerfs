@@ -1,0 +1,23 @@
+{
+  "commit": "e5e95e76c16da65172d17b6a52bb9a25613547ec",
+  "first_parent": "1b3e90e1fdb53d0af79fb3b5cc88215a96a00cb1",
+  "committed_tree": "354854c787a4f3ec2f8a73079d499337c857a8fc",
+  "index_matches_commit": true,
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "counted_product_trees_match_commit": true,
+  "production_loc": {
+    "before": 169065,
+    "after": 170673,
+    "delta": 1608
+  },
+  "migration_subtotals": {
+    "active": 62382,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443
+  },
+  "source_relocation_or_retirement": false,
+  "committed_production_count_recomputed_matches": true
+}

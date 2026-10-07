@@ -2,8 +2,10 @@
 
 > **Status:** Implemented R1c foundation after `cd541ae927`; scoped checks are
 > retained under [runtime receipts](../issues/307/checks/r1-sandbox-runtime-20261008/).
-> Full Sandbox lifecycle/SDK readiness/access/cancellation integration remains
-> incomplete. This source does not establish R1 acceptance or a native mount.
+> Later [R1 completion](../issues/307/R1-COMPLETE-FUSE-HANDOFF-20261008.md)
+> covers owned lifecycle/SDK readiness/access. Optional privileged cancellation
+> and command-client provenance are deferred by owner direction. Native FUSE
+> remains R2; ordinary execution adds no filesystem registration.
 
 The active replacement Sandbox provides a concrete Docker Engine API1.54 Unix
 adapter for ordinary command creation, non-TTY launch, independent stdin/output
@@ -58,23 +60,21 @@ backpressure; count saturation is reported and never becomes a total-flow cap.
 Output EOF establishes transport completion, not process/descendant exit,
 filesystem-request drain or complete production of every potential future byte.
 
-The adapter's process-specific cancel currently returns an explicit unsupported
-capability before effects. Engine has no per-Exec kill API; local attach/CLI closure
-is not remote cancellation. Current runtime metadata reports containerd2.2.4 at
-`/run/containerd/containerd.sock`, namespace `moby`. An isolated, pinned standard
-client using ContainerID+ExecID is a concrete next route, with actual socket/client
-access and CNI-extension absence to qualify. Its signal acknowledgment, root exit,
-streams and descendants remain separate; no whole-Sandbox scope is inferred.
-The [capability investigation](../issues/307/checks/r1-sandbox-runtime-20261008/78-cancellation-prerequisites.md)
-preserves exact primary-source limits. The filesystem daemon gains no Exec wire.
+The adapter's process-specific cancel returns an explicit unsupported capability
+before effects. Ordinary stdin/stdout/stderr and exit inspection remain available.
+Owner direction2026-10-08 defers the optional ctr administrative subsystem and
+command-client provenance. The uncommitted implementation and original outcomes
+are preserved in the [deferral receipt](../issues/307/checks/r1-runtime-cancel-20261008/49-deferral.json);
+none of its modules, root helper wiring or extra Sandbox sha2 dependency remains
+in the active build. Cancellation is not required for R1 completion. Runtime
+process ownership remains outside the filesystem daemon, and teardown never
+implicitly signals caller-owned processes.
 
 Excluded old Sandbox source/test bytes were moved intact to
 `layerfs-sandbox-legacy`, with only its package manifest name adjusted. It is
 unbuilt reference integration, not a replacement dependency or fallback. The
-replacement has no API-core/Server/host-data-runtime edge. Its current first-party
-production dependency set is empty; only existing nix polling is activated.
-Future actual daemon/bootstrap composition can add the existing Bridge edge.
-SDK SandboxApi will wrap that real lifecycle; no placeholder SDK facade is exposed.
+replacement has no API-core/Server/host-data-runtime edge. The later owned lifecycle uses the existing Bridge dependency and concrete
+SDK SandboxApi; see [lifecycle architecture](72-owned-sandbox-lifecycle.md).
 
 Functional evidence exercises public Unix endpoints with strict malformed/partial
 metadata and delivery cases, plus the actual macOS-controller/Linux-Engine route:

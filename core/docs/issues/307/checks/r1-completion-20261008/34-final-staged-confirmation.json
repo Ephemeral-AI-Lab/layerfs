@@ -1,0 +1,12 @@
+{
+  "staged_tree": "0f5392de27dfb5106975e97268b2f216731c0242",
+  "product_trees_match_counted": true,
+  "final_product_source_hashes_match_proofs": true,
+  "links_checked": 111,
+  "missing_links": [],
+  "staged_paths_count": 99,
+  "production_loc_before": 170673,
+  "production_loc_after": 170673,
+  "delta": 0,
+  "no_product_or_manifest_diff": true
+}

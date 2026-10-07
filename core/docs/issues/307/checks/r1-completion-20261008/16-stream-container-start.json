@@ -1,0 +1,10 @@
+{
+  "command": [
+    "docker",
+    "start",
+    "d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0"
+  ],
+  "exit": 0,
+  "stdout": "d4fc9eb564f809f6c4abd51b234eae052158f8506608b62dc369e41affae19e0\n",
+  "stderr": ""
+}

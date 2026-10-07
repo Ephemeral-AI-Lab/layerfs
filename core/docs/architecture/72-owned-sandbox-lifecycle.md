@@ -3,8 +3,10 @@
 > **Status:** Implemented R1d source over `1b3e90e1fdb53d0af79fb3b5cc88215a96a00cb1`.
 > [Final source identity](../issues/307/checks/r1-sandbox-lifecycle-20261008/88-final-source-identity.json)
 > and [actual macOS-controller/Linux-daemon proof](../issues/307/checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt)
-> establish only their recorded scope. Full R1, native FUSE Ready, mounted Commit,
-> cancellation qualification, application drain and R8/R9 acceptance remain open.
+> establish their recorded scope. [R1 completion and FUSE handoff](../issues/307/R1-COMPLETE-FUSE-HANDOFF-20261008.md)
+> closes the owner-selected startup/execution foundation. Native FUSE Ready,
+> mounted Commit, application drain and R8/R9 acceptance remain later work;
+> optional privileged cancellation/client provenance is deferred.
 
 Sandbox owns actual Engine resources. `SandboxApi` owns the concrete Engine endpoint
 and composes `SandboxCreate` into an exact acknowledged runtime container,
@@ -97,8 +99,10 @@ claim. The failed predecessor proof and original test/build/review failures rema
 append-only. Global Store execution is Disposable/WAL/OFF only; Durable NOT_RUN,
 disabled by owner. Overlay remains separate MEMORY/OFF/EXCLUSIVE.
 
-Official unchanged static ctr2.2.4 archive preparation is checksum verified,
-but endpoint/CNI/exact process-signal qualification is still open. Engine's
-per-Exec cancellation remains typed Unsupported before effects. Native FUSE,
+The optional ctr administrative subsystem and command-client provenance are
+deferred by owner direction. Their exact uncommitted patch and original receipts
+are retained outside the active build. Engine per-Exec cancellation remains typed
+Unsupported before effects; no additional privilege is needed for ordinary Bash.
+Native FUSE,
 mounted mutation/Commit, sustained drain/reclamation and conditional reference
 retirement are not established by this checkpoint.

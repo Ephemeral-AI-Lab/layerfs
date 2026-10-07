@@ -1,0 +1,47 @@
+[
+  {
+    "test": "engine_protocol",
+    "binary": "core/target/debug/deps/engine_protocol-01f38219de246eb8",
+    "sha256": "fb3fe3598bf7399b9d1fbc0c3531afe15c58499dbeecfe6b4d13ddc5802698f3",
+    "command": [
+      "perl",
+      "-e",
+      "alarm shift; exec @ARGV",
+      "100",
+      "core/target/debug/deps/engine_protocol-01f38219de246eb8",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit": 0
+  },
+  {
+    "test": "engine_lifecycle",
+    "binary": "core/target/debug/deps/engine_lifecycle-3bbe5b863a42c19d",
+    "sha256": "3b22b768a5de4ac80211270a794c6d5ea2ab81b8a1f9ee115cee93510a0b72e7",
+    "command": [
+      "perl",
+      "-e",
+      "alarm shift; exec @ARGV",
+      "100",
+      "core/target/debug/deps/engine_lifecycle-3bbe5b863a42c19d",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit": 0
+  },
+  {
+    "test": "init",
+    "binary": "core/target/debug/deps/init-178223e4e6325ac4",
+    "sha256": "2ebf33a2310111ca0deadf3b3e6d8b0beec326531550936529e2a57b00e353d2",
+    "command": [
+      "perl",
+      "-e",
+      "alarm shift; exec @ARGV",
+      "100",
+      "core/target/debug/deps/init-178223e4e6325ac4",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit": 0
+  }
+]

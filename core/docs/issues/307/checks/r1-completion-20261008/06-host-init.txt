@@ -1,0 +1,8 @@
+
+running 2 tests
+test init_seals_complete_root_and_first_branch_without_retained_handles ... SDK_INIT entries=6 full_file_oracle_bytes=140014 host_sqlite=3.51.0 store_bytes=172032 profile=Disposable
+ok
+test refusal_preserves_existing_output_and_original_request ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

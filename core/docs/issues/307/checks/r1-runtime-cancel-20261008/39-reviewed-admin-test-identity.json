@@ -1,0 +1,15 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "100",
+    "core/target/debug/deps/admin_protocol-649cb438224d5d44",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "binary_sha256": "198d27d70a468b5661b7c51f6a10acbbdbdd5b480649e696c893a0a14593dd4d",
+  "exit_code": 0,
+  "fixture_sha256": "dba23ecfa03867ccd3a7ae442f5cef7f0d37564f8c96639500997b5bef5e03d8",
+  "scope": "Existing exact official closed artifact reuse; no product hook or phase warmth claim"
+}

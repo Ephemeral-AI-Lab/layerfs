@@ -75,8 +75,11 @@ product mental model or campaign-specific benchmark procedures.
   Bridge retains pinned authenticated KK channels, bounded native records and
   independent fences and bounded native install/control. FUSE/Exec qualification
   and complete kernel mount readiness remain S8.
-  FUSE/sandbox directories remain excluded integration source; their presence
-  does not establish an implemented replacement.
+  The replacement Sandbox is an active member with ordinary Engine execution,
+  owned lifecycle and authenticated SDK/daemon startup. Optional privileged
+  command cancellation/client provenance is outside the current owner scope.
+  The dormant FUSE directory remains excluded integration source; its presence
+  does not establish an implemented native replacement.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,

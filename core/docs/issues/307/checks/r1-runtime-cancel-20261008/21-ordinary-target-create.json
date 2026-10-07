@@ -1,0 +1,22 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r1e-target-f8975dd3d4214b4daa9d08fd12c32009",
+    "--label",
+    "layerfs.owner=r1e-20261008",
+    "--user",
+    "0:0",
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges=true",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "sleep",
+    "infinity"
+  ],
+  "exit_code": 0,
+  "stdout": "cf5c7f4faf4890a779d3bd10043fee2bca08efb6a67091f027ce6ed6c6f8df55\n",
+  "stderr": ""
+}

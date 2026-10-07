@@ -1,0 +1,16 @@
+{
+  "admin_directory_absent": true,
+  "symbols": {
+    "CtrAdmin": [],
+    "cancel_with": [],
+    "pub mod admin": [],
+    "create_selected_exec": [],
+    "Signal::Terminate": []
+  },
+  "sandbox_sha2_edge_absent": true,
+  "product_diff": "",
+  "sha256_lock": "05d0c98c3fef6bdd46d33ed161ac913fad5a4406a50445fdb835dfe3a3eee159",
+  "runtime_cancel_example_absent": true,
+  "admin_test_absent": true,
+  "r2_native_source_absent": true
+}

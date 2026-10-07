@@ -1,0 +1,45 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error[E0560]: struct `Input<'_>` has no field named `fence_error`
+   --> crates/layerfs-sandbox/src/backend/docker/admin/client.rs:196:13
+    |
+196 |             fence_error: None,
+    |             ^^^^^^^^^^^ `Input<'_>` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0609]: no field `fence_error` on type `Input<'_>`
+   --> crates/layerfs-sandbox/src/backend/docker/admin/client.rs:199:35
+    |
+199 |         read_fence_error = reader.fence_error.take();
+    |                                   ^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `output`, `stderr`, `original`
+
+error[E0308]: mismatched types
+  --> crates/layerfs-sandbox/src/backend/docker/admin/input.rs:18:38
+   |
+18 |                 self.original = Some(error);
+   |                                 ---- ^^^^^ expected `RuntimeError`, found `OutputReadFailure`
+   |                                 |
+   |                                 arguments to this enum variant are incorrect
+   |
+help: the type constructed contains `OutputReadFailure` due to the type of the argument passed
+  --> crates/layerfs-sandbox/src/backend/docker/admin/input.rs:18:33
+   |
+18 |                 self.original = Some(error);
+   |                                 ^^^^^-----^
+   |                                      |
+   |                                      this argument influences the type of `Some`
+note: tuple variant defined here
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/option.rs:580:5
+
+Some errors have detailed explanations: E0308, E0560, E0609.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `layerfs-sandbox` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-sandbox` (lib test) due to 3 previous errors

@@ -1,0 +1,17 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.36s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_sandbox-795c0abe719116a2)
+  Executable tests/admin_protocol.rs (core/target/debug/deps/admin_protocol-649cb438224d5d44)
+  Executable tests/engine_lifecycle.rs (core/target/debug/deps/engine_lifecycle-697e680969186f76)
+  Executable tests/engine_protocol.rs (core/target/debug/deps/engine_protocol-1307a5bde6d6d8c8)
+  Executable unittests examples/engine_streams.rs (core/target/debug/examples/engine_streams-208e0d852c51f9ea)
+  Executable unittests examples/runtime_cancel.rs (core/target/debug/examples/runtime_cancel-80d9a2eb7bc070bf)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-2930e3c3518ccf0b)
+  Executable tests/init.rs (core/target/debug/deps/init-477133a23004ebb2)
+  Executable unittests examples/sandbox_lifecycle.rs (core/target/debug/examples/sandbox_lifecycle-0e7ba5348369afa0)

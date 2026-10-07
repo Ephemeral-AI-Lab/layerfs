@@ -1,0 +1,50 @@
+{
+  "acknowledged_container": "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50",
+  "operations": [
+    {
+      "command": [
+        "docker",
+        "cp",
+        "core/target/runtime-tools/containerd-2.2.4/ctr",
+        "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50:/usr/local/bin/ctr"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "start",
+        "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50"
+      ],
+      "exit_code": 0,
+      "stdout": "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "--user",
+        "0:0",
+        "--env",
+        "CONTAINERD_SUPPRESS_DEPRECATION_WARNINGS=true",
+        "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50",
+        "/usr/local/bin/ctr",
+        "--address",
+        "/run/containerd/containerd.sock",
+        "--namespace",
+        "moby",
+        "--timeout",
+        "5s",
+        "--connect-timeout",
+        "2s",
+        "version"
+      ],
+      "exit_code": 0,
+      "stdout": "Client:\n  Version:  v2.2.4\n  Revision: 193637f7ee8ae5f5aa5248f49e7baa3e6164966e\n  Go version: go1.25.10\n\nServer:\n  Version:  v2.2.4\n  Revision: 193637f7ee8ae5f5aa5248f49e7baa3e6164966e\n  UUID: dab2dd8c-483f-4fe2-a79b-eb12df4ca696\n",
+      "stderr": ""
+    }
+  ]
+}

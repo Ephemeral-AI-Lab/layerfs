@@ -1,0 +1,25 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r1e-admin-e1ffde54eae049b4b90c217d6358bf80",
+    "--label",
+    "layerfs.owner=r1e-20261008",
+    "--user",
+    "0:0",
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges=true",
+    "--mount",
+    "type=bind,src=/run/containerd/containerd.sock,dst=/run/containerd/containerd.sock",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "sleep",
+    "infinity"
+  ],
+  "exit_code": 0,
+  "stdout": "fc722b9adacaecd167ea454020eb89f33c1abce68c6318e1a7089a6e8382ea50\n",
+  "stderr": "",
+  "scope": "original isolated administrative client creation, socket only; no Store/Overlay/config/FUSE/hostPID bind; no command signal"
+}

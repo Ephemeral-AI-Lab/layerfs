@@ -1,0 +1,28 @@
+{
+  "status": "UNQUALIFIED R2 draft; not built or executed; NOT implementation or acceptance; stop boundary R1",
+  "base": "e5e95e76c16da65172d17b6a52bb9a25613547ec",
+  "patch_sha256": "afcbf80ef96b5fa392140392d576c04753c4c062a26f547d6e37a7fadf6aa830",
+  "files": {
+    "core/Cargo.lock": "5ebe8433ed66a81e2a67a1987f5241a48e8b393f8cf9da91d0f6a4414a9441fb",
+    "core/crates/layerfs-daemon/Cargo.toml": "9f323d414eee484cdd03fc80a3b3101bc6cfd7b5039333738bc1258eb287ac23",
+    "core/crates/layerfs-daemon/src/lib.rs": "5ef2d2187bbd3ba5066c7c4debc1742b1fe73f6d55ddd7102c1c9ecd557df247",
+    "core/crates/layerfs-daemon/src/native/attributes.rs": "475e7b35a1e577d5157b43a4dc9c7ba4fe17072865a70fa2f4b07522e0249447",
+    "core/crates/layerfs-daemon/src/native/callbacks.rs": "e1c891b12d18495bfa24ad1e842cdf4b393c40ea0fc12de05e94a58062bd7cca",
+    "core/crates/layerfs-daemon/src/native/context.rs": "3af85a49c7c91f3d0c8c064bc2021b92be991831258ad5944028df0a5c6b27fd",
+    "core/crates/layerfs-daemon/src/native/mod.rs": "9ca447e6058e2b08fdc7650856f56f5aeccf886aa57c51bec289cef54d217806",
+    "core/crates/layerfs-daemon/src/native/mount.rs": "9f32a09515dee4a76fb8ec781a68a8e03b599bbee13e24b0200381371e27a9ef",
+    "core/crates/layerfs-daemon/src/native/records.rs": "54c073f64fd98be4d776094ee585171d11c352a043c58271e1404e566ef93fd9",
+    "core/crates/layerfs-daemon/src/native/worker.rs": "b1a014f94d54d0cf94605ad78389f8d4d522d09a416752bb0066fd9d6804615d"
+  },
+  "known_blockers": [
+    "fuser ownership in daemon violates selected separate adapter boundary",
+    "create callback signature mismatch",
+    "blocking per-mount service not full resumable daemon service",
+    "admission before copying is not implemented",
+    "startup/source/failure custody gaps",
+    "cookie reuse and end-of-open cleanup not qualified",
+    "mount failure and session-loop error drain unqualified",
+    "complete Ready witness absent",
+    "no actual native build/mount/read/write/Commit proof"
+  ]
+}

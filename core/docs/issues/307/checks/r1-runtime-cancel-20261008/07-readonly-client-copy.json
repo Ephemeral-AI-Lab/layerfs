@@ -1,0 +1,12 @@
+{
+  "command": [
+    "docker",
+    "cp",
+    "core/target/runtime-tools/containerd-2.2.4/ctr",
+    "5e3c98074b364e45e6bdf6a095d3f359826787041afa32e54d8930bd0835aba6:/usr/local/bin/ctr"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "time=\"2026-10-08T06:39:02+08:00\" level=error msg=\"Can't add file /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/runtime-tools/containerd-2.2.4/ctr to tar: io: read/write on closed pipe\"\ntime=\"2026-10-08T06:39:02+08:00\" level=error msg=\"Can't close tar writer: io: read/write on closed pipe\"\nError response from daemon: container rootfs is marked read-only\n",
+  "acknowledged_client": "5e3c98074b364e45e6bdf6a095d3f359826787041afa32e54d8930bd0835aba6"
+}
