@@ -1,0 +1,2993 @@
+{
+  "schema": "pre-s8-retained-evidence-index-v1",
+  "timestamp": "2026-10-07T13:36:52.573712+00:00",
+  "source_commit": "02922afa160510c0d7ed5ec3e0ccb7b5fbf326d0",
+  "scope": "all retained pre-s8-* and s9-root-qualification files before this index; not a verdict generator",
+  "classification": "owning feature reports establish eligibility; exit0 alone is never PASS; missing footer is unavailable",
+  "known_footer_discrepancy": {
+    "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/11-linux-build.stdout",
+    "result": "compiler failure despite exit0; retain failure"
+  },
+  "file_count": 489,
+  "nonzero_footer_count": 42,
+  "nonzero_exit_receipts": [
+    "core/docs/issues/307/checks/pre-s8-accounting-20261007/04-observer-tests.txt",
+    "core/docs/issues/307/checks/pre-s8-accounting-20261007/34-host-store-run.txt",
+    "core/docs/issues/307/checks/pre-s8-accounting-20261007/53-host-store-v2-run.txt",
+    "core/docs/issues/307/checks/pre-s8-accounting-20261007/55-store-validator-tests.txt",
+    "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/03-regression-before-correct-binary.stdout",
+    "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/06-host-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/09-host-commit-proof.stdout",
+    "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/22-clippy.stdout",
+    "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/01-host-build.txt",
+    "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/03-host-mixed.txt",
+    "core/docs/issues/307/checks/pre-s8-direct-store-20261007/01-host-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-direct-store-20261007/04-host-proof.stdout",
+    "core/docs/issues/307/checks/pre-s8-native-control-20261007/01-library-build.txt",
+    "core/docs/issues/307/checks/pre-s8-native-control-20261007/03-host-build.txt",
+    "core/docs/issues/307/checks/pre-s8-native-control-20261007/08-clippy.txt",
+    "core/docs/issues/307/checks/pre-s8-native-control-20261007/20-final-linux-build.txt",
+    "core/docs/issues/307/checks/pre-s8-native-install-20261007/02-host-tests-build.txt",
+    "core/docs/issues/307/checks/pre-s8-native-install-20261007/07-clippy.txt",
+    "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/02-before-proof.txt",
+    "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/02-reproduced-failure.stdout",
+    "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/04-host-content-proof.stdout",
+    "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/01-host-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/01-host-build.txt",
+    "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/02-host-build.txt",
+    "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/04-host-overwrite-sharing.txt",
+    "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/01-host-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/03-host-serverless-store.stdout",
+    "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/06-linux-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/13-host-reclamation-disposable.stdout",
+    "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/18-host-clippy.stdout",
+    "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/24-linux-build-all-targets.stdout",
+    "core/docs/issues/307/checks/pre-s8-terminology-20261007/04-host-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-terminology-20261007/05-host-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-terminology-20261007/25-linux-build.stdout",
+    "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/02-host-build.txt",
+    "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/03-host-build.txt",
+    "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/07-clippy.txt",
+    "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/10-linux-build.txt",
+    "core/docs/issues/307/checks/pre-s8-wal-init-20261007/05-verifier-clippy.stdout",
+    "core/docs/issues/307/checks/s9-root-qualification-20261007/01-host-filesystem-qualify.stdout",
+    "core/docs/issues/307/checks/s9-root-qualification-20261007/02-host-filesystem-qualify.stdout",
+    "core/docs/issues/307/checks/s9-root-qualification-20261007/04-host-daemon-root-qualification.stdout"
+  ],
+  "files": [
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/01-validator-tests.txt",
+      "sha256": "a28938834c27f1c326eb0514e3a0fa610f1e5b1460bc3e01d966ef268ed752bd",
+      "bytes": 621,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/02-host-examples-build.txt",
+      "sha256": "1d0986fe221e939ef7f68969700e6564eb0399367725402699ab56193cb6fc51",
+      "bytes": 2074,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/03-registration-tests.txt",
+      "sha256": "0c05fd176ecf2a7d0aba1740f663c580f99c2910ac6ddbe31234ed8540a9f1be",
+      "bytes": 621,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/04-observer-tests.txt",
+      "sha256": "3ff1f1316dc25efc217ad6e00494fbb6b4519f9d3074fd6edad5441b8c47d388",
+      "bytes": 1544,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/05-observer-tests.txt",
+      "sha256": "14833abaaf807a8ee6773295b4d4ae03be61a05fb3ba21788ad950eddb5c0ae5",
+      "bytes": 610,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/06-legacy-registration-tests.txt",
+      "sha256": "e49e8da26a8ae7da37382358152386ce80f264a9d54dc3703bf51c87f27508ad",
+      "bytes": 660,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/07-engine-validator-final-tests.txt",
+      "sha256": "e073eb022af7452827b7d4cf2242873cb8adc642a44d59f0d205153ef5869186",
+      "bytes": 621,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/08-clippy.txt",
+      "sha256": "03dad1831e806a5bdf22d96bad168f59aba5cf7bbb3c1b5288940bb2883bd6d3",
+      "bytes": 1093,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/09-fmt.txt",
+      "sha256": "9b30f2353016438e1f81ced13144b36ac50dfb17ac113aaeb6dc8dcf1c1e133a",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/10-example-source.json",
+      "sha256": "4818cdb3bfe89f3375b09ec39d733216b70aa359bb7154cc657a257b23171a9e",
+      "bytes": 1877,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/11-linux-examples-build.txt",
+      "sha256": "abbeefd76470da13c84ed29ef6e04e8c32b6ccd5b5cdac987bde76d59346a46a",
+      "bytes": 2374,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/12-boundary.txt",
+      "sha256": "eee9279601a01d5a3d9d78d911cd7f2a542be525c2058189296d25b38cbbaf41",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/13-guard-tests.txt",
+      "sha256": "77aa5f7d73ba7bd842edb3d08c3c6b40021c0db8d1f341ade6482f66f4e7533b",
+      "bytes": 616,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/14-tooling-loc.json",
+      "sha256": "9eef7987b1c191790c80eca73468eca42c3816eab3afe9118ad2c569910ece43",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/15-byte-copy-host-build.txt",
+      "sha256": "563a037a201fdf471419c6943748f26d5a5449f08b53b4c16b9306d8cc221d56",
+      "bytes": 1213,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/16-byte-copy-host-proof.txt",
+      "sha256": "0939fe182027ca710a31c486863cb6f801e7555d41a27805ecc2451a875a8015",
+      "bytes": 1648,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/17-final-host-examples-build.txt",
+      "sha256": "babc6422742a8ebdeb572c5d58dcce012ecb4e410f1815365cc3de2e9a6d8fd5",
+      "bytes": 1148,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/18-final-example-source.json",
+      "sha256": "92d0c07ec2909fd2056e72b813903e4675acfe12511c0956e953974d91e43fda",
+      "bytes": 1877,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/19-final-linux-build.txt",
+      "sha256": "86413d850907754729ff8f0863e214442772082dce91227f92b61a4d2b0cc69d",
+      "bytes": 2549,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/20-phase-report-tests.txt",
+      "sha256": "956a3587f402e95f1e49a1ac0979331b5bd3b37588462a32b4d30dcf96bc459d",
+      "bytes": 646,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/21-byte-copy-linux-proof.txt",
+      "sha256": "3e5c4c203436907107c85aeaa4d5ec28b407019541f71e56654c7ec5bfc844f3",
+      "bytes": 2077,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/22-final-clippy.txt",
+      "sha256": "450d324ce153360c918e66fa3e8eb1000563f5cca109208cf94cb631711d0fb4",
+      "bytes": 1127,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/23-final-fmt.txt",
+      "sha256": "788fe44d50b444a7110c0257fbc2a389c085e51719049625da6e469cbbd7127f",
+      "bytes": 462,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/24-final-observer-tests.txt",
+      "sha256": "48226eef9615edeffce27e4c916d9cbf98874345d8e3a5af124a626045ac831c",
+      "bytes": 650,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/25-final-tooling-loc.json",
+      "sha256": "fe9f903a5213a73b0963507d3000817d4a7933c74457c94c69b81482fb7d200c",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/26-host-engine-finite-registration.json",
+      "sha256": "454c389450ce34ad551c73e076678a25e843e8563ca0c906cd6374864ad2442b",
+      "bytes": 77419,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/27-host-store-commit-registration.json",
+      "sha256": "d7e761632eb349607d0180c840f8caeafbfe00fd486873c9f1a592320380da92",
+      "bytes": 77872,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/28-linux-engine-finite-registration.json",
+      "sha256": "ae6f5d3a22f62ccbd9b443f13efa7a400c8f959fd4fa1ddd126eb8b15580fb92",
+      "bytes": 77384,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/29-linux-store-commit-registration.json",
+      "sha256": "2fd2decac6639edd229b4ceddd200065bb6924d72d8183fc9f8bef05a28091a9",
+      "bytes": 77837,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/30-host-engine-registration.txt",
+      "sha256": "4c353d3b0b7ee75e5cd6381db6e44e528c8f4403810e20ebc12957e7a5009212",
+      "bytes": 817,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/31-host-engine-run.txt",
+      "sha256": "ae57d77242a84418d7a15b10e56fd5c5393cbfbcdb358ff18193df0cab22c389",
+      "bytes": 2601,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/32-host-engine/invocation.json",
+      "sha256": "e1aef0571d0b129dd5a9f0ac74c4afac45761e44a5c287ede766611f17f64c18",
+      "bytes": 1480,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/32-host-engine/jobs.jsonl",
+      "sha256": "e43d68aa4e301b0b27ac0202a88540fd0050ab5006a35d0e28e30792341b90ca",
+      "bytes": 5827353,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/32-host-engine/outcome.json",
+      "sha256": "b1cb7726bdad6bda15d6fccc39e9195be685d54b659032773bb52f0c98649c6b",
+      "bytes": 1269,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/32-host-engine/resources.jsonl",
+      "sha256": "50041d2cfe58a092b9c03dc53602f17b6c32c975abac92ce9e69f6b979046dea",
+      "bytes": 116797,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/32-host-engine/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/32-host-engine/stdout.txt",
+      "sha256": "cd609c9c627e0d70f0b57ad53d3795ba15e1dcb0857e0abd57d0a10d8ceb6981",
+      "bytes": 703,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/33-host-store-registration.txt",
+      "sha256": "fe2e9b7f6ef0463e6d50fbc4539c645eea0c64e95f6cf619813eca33356a27ed",
+      "bytes": 815,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/34-host-store-run.txt",
+      "sha256": "d70c25b12b2d2f892705b56086f257c0421f26be217deb733a16526d68867d9c",
+      "bytes": 2702,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/35-host-store/invocation.json",
+      "sha256": "0103523cb529f26c6e45097cd004073b184602f9209588d5e90c6d50760b03fc",
+      "bytes": 1866,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/35-host-store/jobs.jsonl",
+      "sha256": "8607e5da8d52609be792cd5d1e14967f6229ce8ba1bb89dbd50c58a446ce1be8",
+      "bytes": 21614,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/35-host-store/outcome.json",
+      "sha256": "e2a391a8210147ba586e3dfc20090a15ece5aac925414a19a255889774fb9b46",
+      "bytes": 1324,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/35-host-store/resources.jsonl",
+      "sha256": "8bb8b1edf22c939a9995ac4506e5cdb5655b1b9dee7a5ce1e27af6af3c6fe80d",
+      "bytes": 628218,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/35-host-store/stderr.txt",
+      "sha256": "b8456e8445c58358f484e31e742e2e8fe398695a9cc1246c74ce46166050a668",
+      "bytes": 219,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/35-host-store/stdout.txt",
+      "sha256": "e1a8627c734923864b647f98ca5f44713f4337496fb228e941507fc9acd062be",
+      "bytes": 460,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/36-signature-cause-raw.txt",
+      "sha256": "16b6f5bf17753ef3d3e6534f10c0701fbca0123b4c7c315d5e7bfc333e58afc9",
+      "bytes": 295,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/37-signature-cause.json",
+      "sha256": "8dfe81023ed4d8d781d353985e8b61d609b328ebd03a5bc6a77d4e83e2ee7a41",
+      "bytes": 1557,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/38-linux-engine-registration.txt",
+      "sha256": "0db622b63cf4b6809887f9fbf1fe52bd73beac6a2c82b28aa4dc759ebcfc6ae2",
+      "bytes": 1089,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/39-linux-engine-run.txt",
+      "sha256": "988d64cb0f8bd36853c52c3a4d926433960dc2808ded71f7f69108599e70f3c8",
+      "bytes": 2638,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/40-linux-engine/invocation.json",
+      "sha256": "2cf2e990bf9877216b14fbda2d717ba595dc3a38b9781e6c5363745e44f55748",
+      "bytes": 1387,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/40-linux-engine/jobs.jsonl",
+      "sha256": "fa3f01a4aba2313fc1e48156747c334e7257cebdd7d069a625422b2d6c42b32b",
+      "bytes": 5831794,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/40-linux-engine/outcome.json",
+      "sha256": "52f81c5c5704e1fa851eee562799661a127725fd54a00954e8b93ef5becd5829",
+      "bytes": 1248,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/40-linux-engine/resources.jsonl",
+      "sha256": "9723f01a58ab42e43043d826634f47328c47d793eef5b4e5bf5cb8fc4a7e88c4",
+      "bytes": 340874,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/40-linux-engine/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/40-linux-engine/stdout.txt",
+      "sha256": "48f1e63fb7b03ae52d401ee5d5e986c05a85cef94f58da87bd41d4cb0f4600dd",
+      "bytes": 675,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/41-signature-immutable-raw.txt",
+      "sha256": "455b4125990d38e472fcd6c2e4dfdec8d712796f2559bfc3305738f1e8aefd56",
+      "bytes": 1207723,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/42-signature-immutable.json",
+      "sha256": "6635c7cf9e5cda062e0ed16a923fb21144008e36e9cb6437f05a34bf7acb4807",
+      "bytes": 1694,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/43-engine-independent-validation.txt",
+      "sha256": "bd10261628cfdf753f21ad7c29a1e570419e2abcc9a4c7bd2e43cb4856c727e7",
+      "bytes": 19881,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/44-ring-host-build.txt",
+      "sha256": "8bf1b697b8f9f5d8d6bdde5ea7e1a44021a7e033925072733e65be96af4f953f",
+      "bytes": 1118,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/45-ring-source.json",
+      "sha256": "133c1249b1d24878025f51f430e990d59f97b04afe4f9037a87454ce2c66b04b",
+      "bytes": 264,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/46-ring-linux-build.txt",
+      "sha256": "e8003af1f3edbe6b6c3594884cca7c937a0caf6c700a75aa71a9c470bca0259a",
+      "bytes": 1759,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/47-ring-clippy.txt",
+      "sha256": "2ff8175616d34156c3339f33a20d299d3500a0882609dc62adf686386511d9ea",
+      "bytes": 1127,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/48-ring-fmt.txt",
+      "sha256": "b8eaabd8f08f3d7ce9a76abf9867b73116f1b28bd7ccac23186a6d610d7322a2",
+      "bytes": 462,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/49-ring-loc.json",
+      "sha256": "04dc40e63a6a1e466f602fdc449d0fc21649d72aba721e3e7b8422d2f9f50c0b",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/50-host-store-v2-registration.json",
+      "sha256": "16ba904994da32a0bb12b2c2c5bde2ac24a1c8366cfb96bbacef247b9797c716",
+      "bytes": 78012,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/51-linux-store-v2-registration.json",
+      "sha256": "007f358d23517adf00f86e258152993a82d6c9fc57cd755a0474262c24055c68",
+      "bytes": 77987,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/52-host-store-v2-registration.txt",
+      "sha256": "a55423f72738d284f88ee9419eaff42217d868e62620a8a4c6b0539bd5b71e81",
+      "bytes": 811,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/53-host-store-v2-run.txt",
+      "sha256": "0290b7defe4b118e023955cd790e0c2e7d705d71254baf1c417cc74ee9185eed",
+      "bytes": 2717,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/54-host-store-v2/invocation.json",
+      "sha256": "ee33604a3136972552ae7e3099c5a8168bbe53f54980b16b045f473b80af8665",
+      "bytes": 1875,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/54-host-store-v2/jobs.jsonl",
+      "sha256": "625b6b434da158b78f57bfce818f826fd6d5036ea2c7e0cf957cac0969b7ef3c",
+      "bytes": 42837,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/54-host-store-v2/outcome.json",
+      "sha256": "b848bd1de130707914649992f72f2fd9f15fe0214c66ba8ab9a38a587d467430",
+      "bytes": 1342,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/54-host-store-v2/resources.jsonl",
+      "sha256": "a88c5273957d1f743f5172e91832ac44637f33c8d79ae4914bc540abd201aa0a",
+      "bytes": 632350,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/54-host-store-v2/stderr.txt",
+      "sha256": "ece16cc473f6977bbf7ddbeec43f637c519d569fe1b68fd511e07a119e4965b3",
+      "bytes": 216,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/54-host-store-v2/stdout.txt",
+      "sha256": "6d77521ac6313a5446b53931d3c8dce8984b0b559eafcf3fb5c455ba729b5094",
+      "bytes": 620,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/55-store-validator-tests.txt",
+      "sha256": "fc6519a0f417b83688acfa0c10eecc972a660133e9702b43501c72663c50ea65",
+      "bytes": 15232,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/56-store-validator-tests.txt",
+      "sha256": "6f283f1784826f8e895841902f707938c50886d583c818611aaa26732ede0530",
+      "bytes": 666,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/57-both-saves-host-build.txt",
+      "sha256": "09a0aa52b1cacbd85f1e5eac152d05b6a513d358092b69021cf81f410059dd7a",
+      "bytes": 1118,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/58-both-saves-source.json",
+      "sha256": "c22a81189b3b544303b99dfbc579c8283de1d86528bf28992d05c15010119aa3",
+      "bytes": 201,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/59-both-saves-linux-build.txt",
+      "sha256": "fcfc0a929696e1208d49c30d9d50220fc50d6e9ba245c4af2e807f9015fef854",
+      "bytes": 1771,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/60-both-saves-clippy.txt",
+      "sha256": "d378d5ea72e47c4567b00302ed993d49407baab4107b6f50772703e88bbcf60c",
+      "bytes": 1126,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/61-both-saves-fmt.txt",
+      "sha256": "9ca6bade6b0726e6a2f03b8e8763ba96df495bf6ed324325c74755fe503e1cde",
+      "bytes": 462,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/62-both-saves-loc.json",
+      "sha256": "1b258d2d54c50c3b5ddcb8eeab1a90ac688185df15781ceaf772c7b48f106903",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/63-host-store-v3-registration.json",
+      "sha256": "9e615b3d52ade42809b848efc1296857412edec89c1765079575367ca7b8999c",
+      "bytes": 78164,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/64-linux-store-v3-registration.json",
+      "sha256": "dbb3c49c9bc2af032b5e30f0a0d6b918d6e3813b54a6c5803fafa9b295974b8c",
+      "bytes": 78139,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/65-host-store-v3-registration.txt",
+      "sha256": "2ff9181273dca2d03829eab3c891b03b2756a098b2b9e3a2e17aafd8537a8d87",
+      "bytes": 811,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/66-host-store-v3-run.txt",
+      "sha256": "ab73d8c059b353403d9476030e9df23159e6fc994f6b254f714944f53ccb1b9d",
+      "bytes": 2716,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/67-host-store-v3/invocation.json",
+      "sha256": "5699b8ee514949929daa9f4e82040b8256ff1d7965e6f3d5c647fe05b4e03b45",
+      "bytes": 1875,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/67-host-store-v3/jobs.jsonl",
+      "sha256": "44b8f6c039bdaa1a09b65ea68c657d0d8e32894e07dede604e47431f2c57860b",
+      "bytes": 42843,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/67-host-store-v3/outcome.json",
+      "sha256": "95a841612d96c3c6dda27a20defa80b69802e3dde7591ae66dc190f2d4742712",
+      "bytes": 1341,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/67-host-store-v3/resources.jsonl",
+      "sha256": "46eaa97b847654ff5a54cbb02f304a8b73b47fb84566c803f0b891c6bb75cdf3",
+      "bytes": 680989,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/67-host-store-v3/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/67-host-store-v3/stdout.txt",
+      "sha256": "0b9d1ec52a66c48b61ec83b19448f50f2b457c023d7d47de00f54c9f414d6df6",
+      "bytes": 1044,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/68-linux-store-v3-registration.txt",
+      "sha256": "2d90541005a74eb12c137c7f5d12fbe6b352b248bfb62a3626875611d4bd66c0",
+      "bytes": 1068,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/69-linux-store-v3-run.txt",
+      "sha256": "3228f1af498ab7419f78f75ce898557e1d4f9e0a3f6e5b6596888ba8e0e648ff",
+      "bytes": 2802,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/70-linux-store-v3/invocation.json",
+      "sha256": "abc5e5c570416cac0cfc3064d0c6262eaf99431900d9165e022fd3ac4043e2a0",
+      "bytes": 1713,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/70-linux-store-v3/jobs.jsonl",
+      "sha256": "d47f175e8d141d417802a69f65f41e08310b929353b1a87d49e6cb72ca7c0fda",
+      "bytes": 42854,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/70-linux-store-v3/outcome.json",
+      "sha256": "d14317cfa047e7da9dec8021b016bc061c77eafb06815c6dcbfde83d0637341d",
+      "bytes": 1289,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/70-linux-store-v3/resources.jsonl",
+      "sha256": "f13f78b2640a6cce36f812388725791b4ef0a50dfbca5a7aca33a6449eabaf85",
+      "bytes": 1425175,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/70-linux-store-v3/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/70-linux-store-v3/stdout.txt",
+      "sha256": "2acd1ddea7390dfbeeb460dce5aef21d00f130badda7eb6f828dd9c59e212031",
+      "bytes": 835,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/71-final-independent-validation.txt",
+      "sha256": "9f30139fa6bc80df5af185dcbcd1b8b71056e66f159cae00678b00c7e05481e2",
+      "bytes": 8610,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-accounting-20261007/72-final-accounting-report.json",
+      "sha256": "3ddd3a4873525964205cd36d0a14ad371597b00351aa992e69cd39bf5f73a2fc",
+      "bytes": 61553,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/01-host-build.stdout",
+      "sha256": "f7447f9726bf20a354d9d250c1ad4da3d727aca4d677ba7aaac739fa255ed25a",
+      "bytes": 1422,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/02-host-proof.stdout",
+      "sha256": "2db00ffa2319f60fbbeefadc24363ff48717ce6d00f2312661fbfd6196e4717c",
+      "bytes": 1223,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/03-source.json",
+      "sha256": "5b865fd5739ff381360d627300fd56cde405483ed1efed439cba8d3b44924bb8",
+      "bytes": 777,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/04-linux-build.stdout",
+      "sha256": "ed1a921c9b4c2859eac18cf428a95535a499729203db7b5e87bbe910ade737b6",
+      "bytes": 1997,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/05-linux-proof.stdout",
+      "sha256": "4aa505cfddc1b61af1e40e25ddf46cc6fc00d791dec62316144910a4a76a56c0",
+      "bytes": 1590,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/06-clippy.stdout",
+      "sha256": "07fda3851f95e7749627d0bf6be20c4614db78f113331e17af3f4ed918952429",
+      "bytes": 1621,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/07-fmt.stdout",
+      "sha256": "ef708f78764ae6c116086cfcc8c84cbe3cc92779eb93bafcbce101d28366f01e",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/08-boundary.stdout",
+      "sha256": "1c1193df7ee889881e067fd6a108400207954cba4f827b0db7e8d83a77fcdb5e",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/09-guard-tests.stdout",
+      "sha256": "a9b645f47ffc6821e3a279d8e7b42f92074bfff4d2e35432859319148bbcfd59",
+      "bytes": 613,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-atomic-history-20261007/10-production-loc.json",
+      "sha256": "423656a21aa61ad77a7d94436625a165dbf4ea34b842020698bc888e68ecf087",
+      "bytes": 921,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/01-host-history-build.txt",
+      "sha256": "2cede7d54a25e8b94df4697c6cf49f16b86facbec3b4266d369981eba1fb3591",
+      "bytes": 1583,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/02-host-atomic-publication.txt",
+      "sha256": "578040d7e501f5f5f079c729e792629393cc773afe8033659f5d058d19b4fbad",
+      "bytes": 1268,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/03-host-separate-stage.txt",
+      "sha256": "3fea3ef1cf8fe1a327e4df98479527370ecc6dcf3aaef0a614e4c45561d47e82",
+      "bytes": 1141,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/04-host-daemon-build.txt",
+      "sha256": "d68a3eb4ea0409ae36b7857afcbd3d7c9ba3075cf32a0ad66dba38afb33a3265",
+      "bytes": 1853,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/05-host-store-commit.txt",
+      "sha256": "4f116d41529dbc60425b4042e91c7e44bc35ce35124fee2ee5201fd5814e8a1c",
+      "bytes": 2878,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/06-host-native-control.txt",
+      "sha256": "3b8e0d67b3f409b8ba2f3f7e783e53aad7b58f1c6ae726c38463a8e5af582aa9",
+      "bytes": 3423,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/07-source.json",
+      "sha256": "74b03f8daf3fe8b37b517cb8208cfd00bbfbf6ac1d52d52037bb153bcc42d347",
+      "bytes": 2376,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/08-linux-build.txt",
+      "sha256": "4d595970fc1f82f880ce9cf8bbf31fa91ae02735ced657a9ffa2b995e6c1e496",
+      "bytes": 2828,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/09-linux-atomic.txt",
+      "sha256": "2bcadaa21930532c6b2bd8d2a81044e0dbeac66da2174b760ca360c087d71290",
+      "bytes": 1627,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/10-linux-separate-stage.txt",
+      "sha256": "3a4515d98cbafba6bd60237e72606926a689098053567b8533484e7b39c08917",
+      "bytes": 1508,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/11-linux-store-commit.txt",
+      "sha256": "015d76c46de29f45e622d478988310e5e7fc751fc3217e3a9078ed938c48092b",
+      "bytes": 3231,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/12-linux-native-control.txt",
+      "sha256": "68c3475f9b19a8f1d083cd684c441253a18617fa6c0e6018aa5b16b38d69d729",
+      "bytes": 3673,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/13-clippy.txt",
+      "sha256": "84352effb654f2ba97064b30906ee9462bc8db37effb56c477afbd94e67ac453",
+      "bytes": 2217,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/14-fmt.txt",
+      "sha256": "7b9a4813ab251efbe01dda39a02b341e87749795174ff62304e2de7a31737977",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/15-boundary.txt",
+      "sha256": "4794290b34fdfac442924e2fb8f43a1bc3483fc8a41859fc2d2f0771d0e91f2c",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/16-guard-tests.txt",
+      "sha256": "87a3293b0140eb94cf3dcf0d01c7b7f86e63b7743dc902ba471b46cb88cead0d",
+      "bytes": 616,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-branch-overwrite-20261007/17-loc.json",
+      "sha256": "30afd750c096fb34d35821eaefbecba1ebe8df32065480a1e3ba7eac484034bf",
+      "bytes": 921,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/01-regression-build.stdout",
+      "sha256": "b5ba16354392dae1d05cd9cfac855201de9a45dc353ec6280ce2d891e3e7cc64",
+      "bytes": 1546,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/02-regression-before.stdout",
+      "sha256": "019b95b9d10860bb9df8ea5b52228fa0de71c80e69b3eb5a8c82a9db27391ae6",
+      "bytes": 789,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/03-regression-before-correct-binary.stdout",
+      "sha256": "f18909cd4afa8f08097457bb7b5ad564291ffdb330136ded0d0b2359ac8eba14",
+      "bytes": 1309,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/04-regression-build.stdout",
+      "sha256": "c8425d6a63503bb80106bc4b85f7dfc49994dc3f3f52758b0fe89302373ea752",
+      "bytes": 1334,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/05-regression-after.stdout",
+      "sha256": "74eda8175df7d9498f72ca2641f310f0bfabff5af4111919345273b194ad6491",
+      "bytes": 860,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/06-host-build.stdout",
+      "sha256": "92b70411a907011d628f683c30864cbc273f3bb80dc566487415a20e3234d7ea",
+      "bytes": 2138,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/07-host-build.stdout",
+      "sha256": "bd9e1592034d0812f3b2e3c91499250365cc79370f4acda65499c9be3c8db58b",
+      "bytes": 1651,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/08-host-build.stdout",
+      "sha256": "ad51e14785e701143b86b6e594a63619e7f5d40e120e34fc5deec45987440016",
+      "bytes": 1177,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/09-host-commit-proof.stdout",
+      "sha256": "9e23ca7167aeb3eb9b8d562a7a53224ba949f0fab9a995e8a4f770321336dd66",
+      "bytes": 2010,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/10-host-build.stdout",
+      "sha256": "b8ce131ea95a650ee6a6afc3f3f50b60f33392a0d84533e76556979ddfdc2cf3",
+      "bytes": 1177,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/11-host-refusals.stdout",
+      "sha256": "d885d8ffa17a88cad8ef0aadb8fb84a8efce2bb00490b98dbfce70be691b6251",
+      "bytes": 1107,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/12-host-build.stdout",
+      "sha256": "a4e6a3008aa2ad3b866c801fd531d65cb1682c6bfdca0542279944905dc550f6",
+      "bytes": 1177,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/13-host-history-boundaries.stdout",
+      "sha256": "f6d49708f5fb65f0e9df6238164570e5262cab9ed6a56aed8166ee153b69826d",
+      "bytes": 1219,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/14-host-build.stdout",
+      "sha256": "d7ac2e5dccf2f397051eb4c089fcff13cd54df008d6c63b7107bcb48d289ee2d",
+      "bytes": 1177,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/15-host-later-mutation.stdout",
+      "sha256": "f33207b44ade1dc251eed26df85fffaab5f5b3f25cc96ad2dbe479703f9ea01c",
+      "bytes": 1020,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/16-host-installed-store.stdout",
+      "sha256": "b2c8fb5e64cf895c5a260e1a0bda3ddb1a68cb23f5ece647550d2e0df8b2d2f1",
+      "bytes": 2021,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/17-source.json",
+      "sha256": "88cebcd29bc511c39546f3006592b76c692b8c9abe20b490d515046a69500043",
+      "bytes": 1995,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/18-linux-build.stdout",
+      "sha256": "468a082a23ebd73cbb41fdf364a998b42a573d0e5f8944e78b840976abebadf3",
+      "bytes": 2427,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/19-linux-commit-proof.stdout",
+      "sha256": "72723a630b50658f75275cf4e27b0da3091982ac88e756d05d7ac0cf0c4bfb3e",
+      "bytes": 2821,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/20-linux-read-custody.stdout",
+      "sha256": "e9ddf24dfcec9bc1f8929f874e20d777e8060be61cf3711afc53d82e995e7f20",
+      "bytes": 1229,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/21-linux-installed-store.stdout",
+      "sha256": "a027ac9c9a06471be0ee025cc47e1a4a18c3187c8c452cd1d7a0720147da3012",
+      "bytes": 2385,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/22-clippy.stdout",
+      "sha256": "8c84b626e0505e56bbb3d1a86acb4d78bdc73cabfbb528f2b7d1d8402b123de0",
+      "bytes": 2392,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/23-fmt.stdout",
+      "sha256": "96921f1a42f799eaa3dc27d16ebcab8db9d01df4ea051cc25da105d61a579ec4",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/24-boundary.stdout",
+      "sha256": "951d160d84b1ad4d26ec56c2be25c94bdb7bf17a25b77c7b45e184ccf1ea0adf",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/25-guard-tests.stdout",
+      "sha256": "cfe8c885f816f7fa201163b8049f5e7a58aafb58ec144cf4f63e0b81e52897db",
+      "bytes": 614,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/26-clippy.stdout",
+      "sha256": "b8ac18144f8bb3c932b46050614f94d1dc2d01cdb335c2530d8697e5fd0e1879",
+      "bytes": 1147,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/27-final-fmt.txt",
+      "sha256": "26664de2cc4138e0a1dc02ae8ad209f8ce4889d115b7a385b990b43b3c784cb5",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/28-final-boundary.txt",
+      "sha256": "9aaeb471dfa9f037b475f5a2c64f03f765e1530a87d07da605298c4952d61c21",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/29-final-source.json",
+      "sha256": "b1b450bfc793e7cdd4efde56b4614c51bffe87a9328b0c4775bddfd8e51456ee",
+      "bytes": 2098,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/30-final-linux-build.txt",
+      "sha256": "23c428aa55ed9ff2be2edf2889b13fa09525d1822fb3fcb5054db8b8a365b7c9",
+      "bytes": 2146,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-commit-composition-20261007/31-loc.json",
+      "sha256": "637ca7a5d2f0039548bf73beeaf03504cd3d0480c1fecff6048e6fde8fb93174",
+      "bytes": 924,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/01-host-build.txt",
+      "sha256": "6dddb75fbbd6431202d4492b0362fa359a52a4f4504e084968f56c17037ee0b0",
+      "bytes": 3837,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/02-host-build.txt",
+      "sha256": "7d85435d0818c7fb83ed54c532d237c785aeadf8a9c483e312a6d9cd6d39c8ef",
+      "bytes": 1213,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/03-host-mixed.txt",
+      "sha256": "abe3d33794ff6ee2cd8e6dbb3b09f9dac71df0fe6cc382b77522e0a02bb19b4a",
+      "bytes": 1597,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/04-host-portable-mode-build.txt",
+      "sha256": "66113bbf90b9c278635401faba923f500666a180368cd76f09689429e35e448b",
+      "bytes": 1213,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/05-host-mixed.txt",
+      "sha256": "b18c19bf6d36e9b0c08110cd5926772bb714628d43009dd71f181b2d81ca9829",
+      "bytes": 1560,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/06-host-cache-label-build.txt",
+      "sha256": "4085a98bae23dd1be9a9b82f603b3114b1c4e0a260ab1f0450344c2e1f361fe3",
+      "bytes": 1213,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/07-host-dense.txt",
+      "sha256": "9a9d6f6b072961301d1628217fb30221190df83dccfbfefe870962821b24c718",
+      "bytes": 1594,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/08-host-wide.txt",
+      "sha256": "9580b2ef3489b38edc13bf1279a315addc480036a14cce54ede38494c49b9ab9",
+      "bytes": 1573,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/09-host-sparse.txt",
+      "sha256": "796590fb0c1486262c246a81b131057a3373ab7d8e15bbd13f4549adb15c3973",
+      "bytes": 1572,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/10-host-clone-build.txt",
+      "sha256": "92a72da2d6d9060fe2c53f989fc841946621c535e5b3c95d7fc1b3ead1d9437e",
+      "bytes": 1213,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/11-host-wide-prepare.txt",
+      "sha256": "424c9e73a885da0ee49dc48cb98926cf03b1300b703105df40add3c1e5d25da0",
+      "bytes": 1079,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/12-host-wide-clone-proof.txt",
+      "sha256": "a2e1991b72b7d8f7950632598362b018d7076c2ab98f04a0ccdd25e766350fb4",
+      "bytes": 1598,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/13-source-prepared.json",
+      "sha256": "598904392e29dddc4a578fbd2f159ca7c38a2c75cd1ea224fe3390892c0106d1",
+      "bytes": 1591,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/14-linux-build.txt",
+      "sha256": "e6abff630462450feca3cc9e7aaf880a0cdd61b9600ca793e157252899a71699",
+      "bytes": 1833,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/15-linux-mixed.txt",
+      "sha256": "c546f40a8cf3ada09e71eefbaace0e37934a86032ed980e2ef03256e5e2c214b",
+      "bytes": 1913,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/16-linux-wide-clone.txt",
+      "sha256": "38226509fefa72dd5a0565f6b3db7302dd37701fcea6b016c5991181462d268d",
+      "bytes": 2389,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/17-linux-dense.txt",
+      "sha256": "d8241319c875c280f8ae971dbf26525f7f702914126b996749709ebe5fe0b129",
+      "bytes": 1945,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/18-linux-sparse.txt",
+      "sha256": "8d300a5b52bf4a431b76d9d00187e576210f752a75e66933331af4a7a280046f",
+      "bytes": 1924,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/19-clippy.txt",
+      "sha256": "71ddf2e2d6f6e0e00eb13a86bc59636757b9e7f996cff668c7547263a6c4baff",
+      "bytes": 1093,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/20-fmt.txt",
+      "sha256": "cf74b5c9c62670a97a744ac893dd6590c546f2b16fa2f5f1f6620b1bd02ae067",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/21-boundary.txt",
+      "sha256": "a63e81f0ed850e1937ece9eb215b7c464897124db4e44cfb1e1ba140191e6449",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/22-guard-tests.txt",
+      "sha256": "d8f3535e214b5c403a6f0dccb225a84e33a599a72cee266c8f040441eda0ddb4",
+      "bytes": 616,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-complete-roots-20261007/23-loc.json",
+      "sha256": "a55101ea16d583e6687a860abeb4c750e79773a351f75f861a6845d8056a3cb0",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/01-host-build.stdout",
+      "sha256": "e808bc6c4ed4151460715a579ed6f2dd891c997ee5556b94c5c3574eb1eba4a0",
+      "bytes": 3486,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/02-host-build.stdout",
+      "sha256": "8eb7918c808b556106e7c2956463cd36b9afbf8498db5c2c65e55a31f5f750f3",
+      "bytes": 1186,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/03-host-build.stdout",
+      "sha256": "bcb5686d9d94d5da7a764a272273e0ac234d0f2f0147f1334a957dfb7b4447bb",
+      "bytes": 1186,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/04-host-proof.stdout",
+      "sha256": "8bde56ef111053264c6d69bbbc0f485d4503d1147e478d369cb079c8d77d4b0e",
+      "bytes": 2488,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/05-host-build.stdout",
+      "sha256": "7904b124c7b3b5ebde49e2435b1704034511843e9eb691d74b3f4b334003201f",
+      "bytes": 1186,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/06-source.json",
+      "sha256": "e3183019239cf9151cba465cc8d52dd4b2d3d73780e3535c9d194e6889ec591c",
+      "bytes": 1951,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/07-host-concurrent-proof.stdout",
+      "sha256": "450ffac5b8cfbf1e416df873ba87e54ef6f7adfd05d1a593ac067b83e4023141",
+      "bytes": 1086,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/08-linux-build.stdout",
+      "sha256": "3a982eda52451d906781985c6f357f4c06dc4b0cd3640feef0567f5b836c544e",
+      "bytes": 1825,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/09-linux-proof.stdout",
+      "sha256": "3291e8373065b22412455ea300ca59bdb65179f78f47cb1edfe18a7cf0ef6455",
+      "bytes": 2381,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/10-host-clippy.stdout",
+      "sha256": "3bfdf2717f0f35c244506ce44f495da746e20be1a40545e153f8f75cc2a14b57",
+      "bytes": 1093,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/11-fmt.stdout",
+      "sha256": "b4324f4ae0a92178c819f4de9e757d7c2294f9ee63a6ea9f4f29f3572853fd06",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/12-boundary.stdout",
+      "sha256": "85c5ad73df56c3acceb93559e51cfdd05fca94db4d37d30992db6cc52477b076",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/13-guard-tests.stdout",
+      "sha256": "151a669bdb04d115699a295ea7eafb53f404914eb6f7e7d8feeabb5cb98300ea",
+      "bytes": 613,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-direct-store-20261007/14-production-loc.json",
+      "sha256": "e5b7fe89250dfb8908fd9df9435ff2d0523d42fe657e1170765f2ec1fae65bbf",
+      "bytes": 924,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/01-host-build.txt",
+      "sha256": "76de1e9f7d509c34df670876cf0064b291f7f2d77566106dd0bb896393867a5b",
+      "bytes": 1322,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/02-host-proof.txt",
+      "sha256": "df3e59482159c1196b50747a46f6fab5a2023656ab0252a50bb6edf15b481a66",
+      "bytes": 1548,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/03-source.json",
+      "sha256": "5f58c952d7b2dd8b44935a4c383a91fc1a01eb15b97a30e1654a4b0a366b6912",
+      "bytes": 1190,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/04-host-jobs.jsonl.gz",
+      "sha256": "73993c5bc421de044b4468b628d71df85f7d3bb3e77f6121568796bd847c21b0",
+      "bytes": 122549,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/05-host-job-artifact.json",
+      "sha256": "494e57a32d24e423f6c3dc50bcbf5604d418222f4d98fd4bd37684a8364f0f18",
+      "bytes": 318,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/06-linux-build.txt",
+      "sha256": "d590e87ea15716ec361e4001624b3c5d92878c12229e21084196d1eb75b7b4ff",
+      "bytes": 1945,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/07-linux-proof.txt",
+      "sha256": "80d127740113f1a327ed47af36260598f259c12c7fbb7ae888b254867d00d5da",
+      "bytes": 1891,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/08-linux-jobs.jsonl.gz",
+      "sha256": "c8548bc84b1859de09d9447450526faecaa0d2a02011a19b3be6c8f79e227207",
+      "bytes": 122816,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/09-linux-job-artifact.json",
+      "sha256": "bf58e3e97139acac7bceea2c560177654bbefcbc01fa583c7c86340edb28fe04",
+      "bytes": 319,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/10-host-terminal-build.txt",
+      "sha256": "35ecb45057480abbbfd81e4c2e9ca07899266ad0275d84aa8c89843d8cc90f5b",
+      "bytes": 1322,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/11-host-terminal-proof.txt",
+      "sha256": "4fee9fb7bb7570e680942109ffe8bf27175c20ce47525abc058b77cd3b514e4a",
+      "bytes": 1542,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/12-host-terminal-jobs.jsonl.gz",
+      "sha256": "a91ec478194bdc8b0b8023d32f7e87f80ddb18cbb42f7b75d15ffd0704b23f41",
+      "bytes": 122358,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/13-host-terminal-artifact.json",
+      "sha256": "0bfdfa93e2b2fa1c391163b8f647d014d6a29c50a174f2c939e6d229a52c7241",
+      "bytes": 318,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/14-terminal-source.json",
+      "sha256": "50281e0a7081cbb07339a764aa5471ac1a00573083d0a943e1bf521f7071405d",
+      "bytes": 1436,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/15-linux-terminal-build.txt",
+      "sha256": "ed44dbf64fa71f268448d3587558ee7f12a69b245de768ad26434ec83c9f2cfb",
+      "bytes": 1956,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/16-linux-terminal-proof.txt",
+      "sha256": "e1c480a5e9db804d6de8894a380cd946f9312ef6c42a8ad20b6a0447e1af8ffb",
+      "bytes": 1895,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/17-linux-terminal-jobs.jsonl.gz",
+      "sha256": "e123d600adc7eb16a273633563fe23f2ee6351c0af9ba8648e20c469dbedc094",
+      "bytes": 122354,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/18-linux-terminal-artifact.json",
+      "sha256": "809f2a607396a42f7014a09b84aad3352ae074146d797cfaaaf1a7a36cbb1e8b",
+      "bytes": 319,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/19-clippy.txt",
+      "sha256": "9b23239bbce267a198be240616c91eb517ee598131797d964326d070dbca4dbd",
+      "bytes": 1093,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/20-fmt.txt",
+      "sha256": "6a657d9ac0d4961a1bf409a072281f2794c2c0b6e95c29cdacd35f3397a65a03",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/21-boundary.txt",
+      "sha256": "fba0d7569b08a829eeb75fddcf38601f137d7908996909ccc7e533a556c6ae18",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/22-guard-tests.txt",
+      "sha256": "97bed02d41a4933aa82f0dc32c12df66f556010031c5be15130c8cf8646d74e8",
+      "bytes": 616,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-finite-engine-20261007/23-loc.json",
+      "sha256": "1b4ebf943a288ab10f50ff7342ebe3964c8358e9568e898b49a73683e5222d11",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/01-host-build.txt",
+      "sha256": "b44ec57379d8c97051aa7b6d78f1b54add71081d7042f9c27a222a35442d2cbb",
+      "bytes": 2102,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/02-host-build.txt",
+      "sha256": "200b05e89b4ea2a826cb82b7e18791b4a7db55242134ea9cde70260d09a74582",
+      "bytes": 1210,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/03-host-proof.txt",
+      "sha256": "db86bdd52c0a20ed3d8e1b4c7b16d4a081d052eb122656984f2fdfa6ff7415b9",
+      "bytes": 1820,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/04-source.json",
+      "sha256": "71bb43279a43c66c64cd3b78efe1e1d5d76b4d80d5b26109e5d50c78d30c0db1",
+      "bytes": 941,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/05-linux-build.txt",
+      "sha256": "1dded664a8ea4439c9adbeee1694cd3a9813842755b706be195a160df3f5a856",
+      "bytes": 1841,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/06-linux-proof.txt",
+      "sha256": "13f55731e7af2ae1a8241ebc961ee0046aa72d00e0772a30be433592dbbda721",
+      "bytes": 2187,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/07-clippy.txt",
+      "sha256": "c11623a6a424c5aed15336c7ae61b74706ea465e14ff3925f3705d395619925c",
+      "bytes": 1093,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/08-fmt.txt",
+      "sha256": "3799ee9862bab19a74f12a3e6498f558f15fa72779f298bd9c11027de0a52a7f",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/09-boundary.txt",
+      "sha256": "ceccc7d311527b64804dc827ef598d8da752399e55e4f8fa4b24bd4518f79b64",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/10-guard-tests.txt",
+      "sha256": "b2b4bb72ef91596c69c4b80a87d3c0b4ff3b06cea36c78cbab5e11b2fa5a492a",
+      "bytes": 616,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/11-loc.json",
+      "sha256": "750b3ab36544e1d9794ea97c3d76e8c3c3893768d3ccbfa1e8326ee922771bd3",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/01-library-build.txt",
+      "sha256": "94e4f3639745cf88e2852ae4948bd5f39e3a99364f6738a012ed749542247b4b",
+      "bytes": 2578,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/02-library-build.txt",
+      "sha256": "7c58fe14f7287d888af374f5d888180ecae77962314d0c3dff8a949313fe6f17",
+      "bytes": 1591,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/03-host-build.txt",
+      "sha256": "5594127508da9aca9990dcd0b77d7c0f69485baedb8ae4e674c70882a9a7a67d",
+      "bytes": 1994,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/04-host-build.txt",
+      "sha256": "60675b04aec84de2723c219fefbf825b81f01cbb37e183a5f95b0b7f14d20fca",
+      "bytes": 1804,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/05-host-build.txt",
+      "sha256": "174d995fce57e550b3499774972da87513463cfd4898fd39334638a0ec118bfc",
+      "bytes": 1332,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/06-host-control.txt",
+      "sha256": "9c2e41c33b7dad15a92003dc14b03edd03f2c915366d0c99d865343724c8a4e2",
+      "bytes": 2929,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/07-host-records.txt",
+      "sha256": "9fb1e8543cc781a9368545fe82713f78c869ae0a123dc728453a52134635a6e3",
+      "bytes": 864,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/08-clippy.txt",
+      "sha256": "fd551f289f50a32f78edd95a925a04b0376beec040738aa84c32b607c5937e85",
+      "bytes": 2590,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/09-clippy.txt",
+      "sha256": "15662ebf2be3cb239324f2491f2cff81cb4b483c8a17dd2774d4c861dda2def4",
+      "bytes": 1487,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/10-source.json",
+      "sha256": "f36bf7662fec0ad57ad2343ea647251bf45148232d0a9b7a0d419a0f4cb18801",
+      "bytes": 3511,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/11-linux-build.txt",
+      "sha256": "9e7f5ec350ee4937b5b98cec500c3708c5ac53d1a5cfa32c30c9eca16ef0dd56",
+      "bytes": 8054,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/12-linux-control.txt",
+      "sha256": "98e2885f43ba66b7907404e8bd89ed58f1c3497ce5b93239f72a8c2a4eb89746",
+      "bytes": 3184,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/13-linux-records.txt",
+      "sha256": "52c997f3c7ac282371771acfd8fca5382e91bea187f8c7ff387710d6993622f6",
+      "bytes": 1230,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/14-host-build.txt",
+      "sha256": "48b05c194cd1333c056b6e82dc19918d7e935b7a5aac193f622d7e239d625866",
+      "bytes": 1652,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/15-host-build.txt",
+      "sha256": "bd708f16f9ce9aaa1441a9512a2571287c9ef4a574de44374d45cb592d6ffb73",
+      "bytes": 1332,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/16-host-status-control.txt",
+      "sha256": "6b177519d39c2b6c4a600c79249b62e221d0fe635bd1b2bbe16cecf272ad5ce4",
+      "bytes": 3297,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/17-host-status-record.txt",
+      "sha256": "d732a605b331fa9b1001a793040edc9ddea9915b6b428938e54945400214cb2b",
+      "bytes": 866,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/18-clippy.txt",
+      "sha256": "cf462691c030a3395b1156f50357b73fe2132bdecc5319a4cb516321299025b7",
+      "bytes": 2237,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/19-final-source.json",
+      "sha256": "3d8b761ff08ed998c9030cfd4ae4e996deb109474bd9badac16f4c14cee89e58",
+      "bytes": 3618,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/20-final-linux-build.txt",
+      "sha256": "d9a77bc78e9c78b2831c72f7dcc7973b2a53f4f826dd0bb82e480676e1d1bb05",
+      "bytes": 1723,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/21-mount-diagnostic.txt",
+      "sha256": "ac056dce636400e3caf6ca16d1af80bc43e9d2e51af20e2ef8446a7fa3ed147a",
+      "bytes": 943,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/22-final-linux-build.txt",
+      "sha256": "ee31807ee89f6db969ad7d34fcc856aaefd028b10ab1f6b8589d097331d5f18d",
+      "bytes": 2192,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/23-final-linux-control.txt",
+      "sha256": "aa9e5b1059be7a70a6616b9e96e312a84609825d8255550baa04ac2fadf4879f",
+      "bytes": 3565,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/24-final-linux-records.txt",
+      "sha256": "fe224eccc7485b14a658ddc0d7196a51ecf0727b266cba1578d602dbc0dcd5ff",
+      "bytes": 1236,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/25-fmt.txt",
+      "sha256": "339648e47309340318c0adaaa90cb88cc295e0ac3637dd18e3ed7cebcc8bb3d7",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/26-boundary.txt",
+      "sha256": "9da7f9da776aaa71085701986aa87e84ff231e31a3bf0afcb039d90309e6bd34",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/27-guard-tests.txt",
+      "sha256": "3a8c55afb1370963bcfb74d2b52996d5d15372b2506e03a34c48c1fdd971aa82",
+      "bytes": 613,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-control-20261007/28-loc.json",
+      "sha256": "77b822f98b8cbad22e354a95fbd79be571ce566302b3311d904cc52173b4d617",
+      "bytes": 926,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/01-host-build.txt",
+      "sha256": "ea1ee55943d4ebcbfdcb973e8f0b8a8cd7c4bcd48c629a6027a2a4ef60bb36a1",
+      "bytes": 1591,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/02-host-tests-build.txt",
+      "sha256": "ce03bdfebc3149be27a71edfd4fd3a94a72ece7b04165f7985792b8a701a8b2a",
+      "bytes": 1702,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/03-host-tests-build.txt",
+      "sha256": "3c81c853b7f56b01975d1cf1a4061b30570628e4d3ab3ec88ca10b1c6cbd9fcb",
+      "bytes": 1332,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/04-host-build.txt",
+      "sha256": "f1bcedd7212e468b5983f0f3dd64475d3d6ca188a6e46a52a0857d8b9326d9f8",
+      "bytes": 3478,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/05-host-install.txt",
+      "sha256": "25d555745e93214f8a02da0b91394713fadb9916bde8aec3fcbddb8989bc4d30",
+      "bytes": 1285,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/06-host-records.txt",
+      "sha256": "738fcca9468f7e2be15a90f21c5bf9ada12f53551fcc98e98fb7994de2b504d8",
+      "bytes": 856,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/07-clippy.txt",
+      "sha256": "022253f0187bec1272968c19329745d6f1033c4bcfa20f0d89ed807d14c8555a",
+      "bytes": 2715,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/08-host-build.txt",
+      "sha256": "a9f1f359549a99ae9099199202b35ea11c66f43cae54962c81123cee73255337",
+      "bytes": 3478,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/09-host-refusals.txt",
+      "sha256": "83f9fe4e414a26546b3ed1b1841c4d7c317318da99e6b6872052975ca5aebffc",
+      "bytes": 1055,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/10-host-refusal-record.txt",
+      "sha256": "e1c2b8aa96d25a3f575c5820bb1de6096127922916ff7cd4dc8f7afe617e4f83",
+      "bytes": 858,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/11-clippy.txt",
+      "sha256": "62979f1f0be5f90a3867693d27f1d3f0eb17b1f05a8b76288adde075eb45c6bf",
+      "bytes": 1344,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/12-source.json",
+      "sha256": "8de5934dd3d3cd67f44529186d1b0463be119a18f0722c8d2c603173fca58d71",
+      "bytes": 2864,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/13-linux-build.txt",
+      "sha256": "6818ae9137d76706a703b081d588b59bde7b0acf4add8078804184003d8540a0",
+      "bytes": 4355,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/14-linux-install.txt",
+      "sha256": "5ed5d6020f2189d4f29766f54c4ae2e4eb86a038eb0139f4173c0120a8e03510",
+      "bytes": 1648,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/15-linux-records.txt",
+      "sha256": "154bf9bbf6d1da3e0c2b40c2c9364a4dfa47d12a25fd55aa25285ce6e194b4ea",
+      "bytes": 1222,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/16-handoff-binaries.json",
+      "sha256": "8768a6ca6defc2723c00c7b75e86172d3f25fc9562d0c20d36f478a74f5b7ea0",
+      "bytes": 539,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/17-macos-linux-handoff.txt",
+      "sha256": "d5873f09edda1129e0bac180e99afe16ae43f504021675971a2461141b16e012",
+      "bytes": 2543,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/18-installed.manifest",
+      "sha256": "0ed77e9432c7087c472735a1d4a65d214456302e818559d7a109160f4ba17bc1",
+      "bytes": 166,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/19-install-manifest-receipt.json",
+      "sha256": "cfb4853a717ef42e0f47be14786f7a7d5723eb07ba4febf34ac2e3c06a8644b5",
+      "bytes": 685,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/20-fmt.txt",
+      "sha256": "8f08eee5947a07bb04659d74529a1215553b115d411a94dd3873b904d6e3cd21",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/21-boundary.txt",
+      "sha256": "6111e90d27038472aac0bc2bc54e5f04b038962f9afd9845574d26fa6c97bb8d",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/22-guard-tests.txt",
+      "sha256": "2d57451dd60a81256bc204b740bc0fa6f4e0368a751b078ab416e4360cca215d",
+      "bytes": 612,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-native-install-20261007/23-loc.json",
+      "sha256": "513dd20d7ce50a33cc2902cc019fb3fa82926749de7f036807e593608767c5ef",
+      "bytes": 922,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/01-before-build.txt",
+      "sha256": "0a194140b4bacc86875db556df9ade2d785f4092cbc1e1c4f8e022095d8bec0d",
+      "bytes": 1383,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/02-before-proof.txt",
+      "sha256": "ef2dd789355f596c659f49f4a7f354a631fafc93e6995e9af5a50aac69e4adc0",
+      "bytes": 1318,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/03-after-build.txt",
+      "sha256": "c8c2b23a09d6a5a2877cfc29adc7c4aa3ba425202eef2235ee3ce81751cefc55",
+      "bytes": 1605,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/04-after-proof.txt",
+      "sha256": "e01c456ef78c5a436021d0d986131f34486232dcad66c66a65684d25899eb180",
+      "bytes": 1074,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/05-source.json",
+      "sha256": "b25c40c26a97ac2d7e8f53b45914bdc9ff87e0dd0559b8e91a6a2388900f6ddd",
+      "bytes": 604,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/06-linux-build.txt",
+      "sha256": "f2cd21c1768dd3c918136a68e4936f8dcc7ac4e6820964c77786714b5b7bc438",
+      "bytes": 2092,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/07-linux-proof.txt",
+      "sha256": "0cc0cb684e67c8d899c3630635b2bfcc4f92d197af7d76c0b5f93c5ca3c4a3bc",
+      "bytes": 1429,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/08-clippy.txt",
+      "sha256": "cf09875708b511bc8b77c9dcc4b85fd91dc8b56093a7da3bcb6182b8760b2128",
+      "bytes": 2188,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/09-fmt.txt",
+      "sha256": "e974819a888ffabf75f7d99b529f5a2b3867321b69882790f2d20a9f85e681b3",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/10-boundary.txt",
+      "sha256": "0ed9bf36543bcf4d56f23508dd95d5053c6c893b49a8fa1f7e720a97f62b9867",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/11-guard-tests.txt",
+      "sha256": "a5edef3650aea03f3feba17772e1b12b7ca9b3f73176f30b8d2cbd026b752058",
+      "bytes": 612,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-nested-unknown-20261007/12-loc.json",
+      "sha256": "2c5249e81b23d1f76c6bb5b80d7e473432a1ca12609ac9480554bf2d8a1bdcc9",
+      "bytes": 916,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/01-regression-build.stdout",
+      "sha256": "45af575b3cf6648e7a85a454d7d36ac6fcc03af76a6583589f8ec938376cc4e4",
+      "bytes": 1198,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/02-reproduced-failure.stdout",
+      "sha256": "0009b5d80320c894ead55c15cd5ba576d458e0f53fcfe0d311da77d8275748f8",
+      "bytes": 1879,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/03-host-build-corrected.stdout",
+      "sha256": "e2ffcb6ea340aff394b72ca981af6529322b73f35ef3c791fd0bc95a33b85726",
+      "bytes": 2104,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/04-host-content-proof.stdout",
+      "sha256": "a04a33a0d7ba6e816d5dfdcaaf0efb5faf42b5d0c773c8c4444082f65e7b0569",
+      "bytes": 2617,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/05-host-content-correct-binary.stdout",
+      "sha256": "a642992cb35c36bf563ec0c955bdfc33280465f296618bec8fa682f25201cacd",
+      "bytes": 1595,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/06-host-daemon-proof.stdout",
+      "sha256": "be5e12b5f022220b23d5c31ae0ff46310fc11847ab446a18ae153079222a1be8",
+      "bytes": 1058,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/07-source.json",
+      "sha256": "fa96954b7e354985ab5e24d162efa5371a075a458f049b02c727885636c35c76",
+      "bytes": 396,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/08-linux-build.stdout",
+      "sha256": "398ff46b62e43ced67207c8993be2f52b938b4216cd78aadd5eebfb161496ac6",
+      "bytes": 2502,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/09-linux-content-proof.stdout",
+      "sha256": "e4b0f915ac8006ec96fd50ad9808abee6965b77a1f7f6ecdf7ba91f095e6fc20",
+      "bytes": 1963,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/10-linux-daemon-proof.stdout",
+      "sha256": "f8abe6caddb2b5d505be908cb14b7094081dc9aba81b28955c4690652d41e040",
+      "bytes": 1425,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/11-clippy.stdout",
+      "sha256": "6982297b09e11947e706524ca15f30438e32c3d6d80032973007f817daeaa1ef",
+      "bytes": 1868,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/12-format.stdout",
+      "sha256": "8cb215222ce04d836a64ed566e469bd67a85d46def229582030b2067cecaa7ba",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/13-boundary.stdout",
+      "sha256": "4deff8df50cd28457b023159d199afe047db059668080c49ca870d85cb584a32",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/14-boundary-tests.stdout",
+      "sha256": "ad3a64f667a1f5f6450d0ceb4d96659603554d6d4b7524cb246a5bf2a3e6d1dc",
+      "bytes": 612,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-r2-counter-custody-20261007/15-production-loc.json",
+      "sha256": "5862bb4794db85b339b18969d6b5c5e58672ba70c955f77a5cfc56f3d3bdc464",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/01-host-build.stdout",
+      "sha256": "b7860a8d32ea6dd4db2dc6c0376b52d10ca0798acba721a401a2f3556d5e2e19",
+      "bytes": 2141,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/02-host-build.stdout",
+      "sha256": "349c389a7a712833f36d83f8116adf35789abf881eb1044b07150e14d1e8f2e0",
+      "bytes": 1947,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/03-host-ordinals.stdout",
+      "sha256": "8689a060a768f7db9b4d5d979dc04ace1cf1d44d6231c56bbcb4d9d518f1b715",
+      "bytes": 1278,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/04-host-transactions.stdout",
+      "sha256": "32a6bb9792db34e91da1850860d1c644514099dd8fdc5209c8257cc87f7ebb8a",
+      "bytes": 1633,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/05-host-installed-store.stdout",
+      "sha256": "d1e3d28a396cd9ca5a5eb13cd90c5f984feaee5a0a1ffb6d1460292cf055b9ae",
+      "bytes": 2021,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/06-source.json",
+      "sha256": "be56881567ae75c54ff04a01aba09fe1b4ffcc0e8bfdd71d9bc12b0eec59832b",
+      "bytes": 2239,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/07-linux-build.stdout",
+      "sha256": "0f77e295107ce134f00040cc618493d1573d2d2eeb607fde738d57b918a35119",
+      "bytes": 2461,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/08-linux-ordinals.stdout",
+      "sha256": "90674a243ebeea65638a550764a6b0cc2bba441837f38be0401f23efc50ec4dd",
+      "bytes": 1651,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/09-linux-transactions.stdout",
+      "sha256": "4fa37b52355d57abd97f479af9bbfc31f83871611c5a06054a3dcf9c8a699463",
+      "bytes": 2010,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/10-linux-installed-store.stdout",
+      "sha256": "84d56db7fd0963d3450564087d4d7b4712988913efcfd3e783a0c9285a768040",
+      "bytes": 2384,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/11-clippy.stdout",
+      "sha256": "c002723985fd2e13996923e03d82bd7bff1f921af55704203fcf2dfd65dedcdc",
+      "bytes": 1621,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/12-fmt.stdout",
+      "sha256": "3e04892c2156660e74e5131abe686bbc9cb9712387029caab34340282b4b6c6d",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/13-boundary.stdout",
+      "sha256": "a7870e8762e313c2bd0ccd4182cbc55f9dc2b242a51cd71748b7ffa75d7baed6",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/14-guard-tests.stdout",
+      "sha256": "dffbb1fe01c9d39543acc78bebc50a5a9020691a77eae65edf6e558c328c93f2",
+      "bytes": 613,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-save-blocks-20261007/15-production-loc.json",
+      "sha256": "d95551bf929c6cc6a011b931d1f4fa4e351840e57d61f8978d6731dae41133dd",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/01-host-build.txt",
+      "sha256": "98b7f9339ad2623953d6bae6747ae821ef29746413919b317a32ea6f5349e15f",
+      "bytes": 2378,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/02-host-build.txt",
+      "sha256": "e117f75ca6631f449a5c4ae252a8f0c7992bd95bf256c0c327b1f9c1acbceddc",
+      "bytes": 2058,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/03-host-build.txt",
+      "sha256": "b7563528b7ead04c3a0710e5d337465af2831a33cd30715f95a91da896b78cd5",
+      "bytes": 1189,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/04-host-overwrite-sharing.txt",
+      "sha256": "ca9be334f283fd9c57059d345171002d3a63ed0a143d0a40310900694504a6e1",
+      "bytes": 1338,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/05-host-valid-name-build.txt",
+      "sha256": "433416679dd89c8de9f1f99913505068084ef124c55edd81605dd9445675a332",
+      "bytes": 1189,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/06-host-sharing.txt",
+      "sha256": "6ef29f219d87addd23cef964c1414c46d652587359f44b881f9940ad38c06a13",
+      "bytes": 5055,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/07-volume-create.txt",
+      "sha256": "136f978ea080f3b6fda1efd85622ddf06383e6753e35c90aa8864431b83149ad",
+      "bytes": 434,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/08-linux-sharing.txt",
+      "sha256": "5d80e653d957ce49398cd99836c6fb6df9f9a770ff41b0ab5711ab9f2fddec1d",
+      "bytes": 5179,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-shared-processes-20261007/09-volume-remove.txt",
+      "sha256": "7a55a29a3a3cc11d005055ff72fc1e3ad02e931b050446c1f52bd50655c8b710",
+      "bytes": 430,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/01-host-build.stdout",
+      "sha256": "bc8833059fdfc7963606eeb8d9279f9b884d7af9c7e3ea9ea1ada21bda1a5b55",
+      "bytes": 2538,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/02-host-build.stdout",
+      "sha256": "8685600fe9fc0d94dc711f2ea7b927448c2e69b752c3982059cd316f7b53bb33",
+      "bytes": 8341,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/03-host-serverless-store.stdout",
+      "sha256": "c81d782e9924201f3a127eb9851d54cc5e07dbf2f5d880b35f5766b50c28f40f",
+      "bytes": 4582,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/04-system-sqlite-seal-diagnostic.py",
+      "sha256": "27070a0ac63c4f065d908843f54f93849338bcff728892706af5be86c4377fdd",
+      "bytes": 1270,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/04-system-sqlite-seal-diagnostic.stdout",
+      "sha256": "4bbf96f06015471b94a718d48a7584187e22532ade6412e576e166f82cb578e2",
+      "bytes": 823,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/05-linux-source.json",
+      "sha256": "57492c2b5fb5ef881f172704b932f08c75fd1189f5fa33681ef083b1e82c9cb7",
+      "bytes": 3960,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/06-linux-build.stdout",
+      "sha256": "9e189a07e27af10689be7be4a4fac04995d1780c5fa733cdee96ed3c27b94d99",
+      "bytes": 1476,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/07-bind-mount-diagnosis.json",
+      "sha256": "53921a86cb4030e00551c14633734e4a7b1bc8da0ebcb7a4fe244267d1e23ed6",
+      "bytes": 737,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/08-linux-build.stdout",
+      "sha256": "9f82179eafd5faa94b9cb3eedb7dbbded9ecf31a0018494488abc899e22efa27",
+      "bytes": 2115,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/09-linux-serverless-store.stdout",
+      "sha256": "330d2166f49e34808d02fa9a9932d30855491b0a135f94f0adb205bbef4262ff",
+      "bytes": 6805,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/10-host-build-final.stdout",
+      "sha256": "77c9d810a675dcc3f989dca73b05bb5dfad4f180188252b9b79557125ec554e0",
+      "bytes": 8553,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/11-host-serverless-final.stdout",
+      "sha256": "f497c1217871c86fb2509e9990d4a28b83a972e7fa8bdb25294dc84b228dc408",
+      "bytes": 7833,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/12-host-publication-disposable.stdout",
+      "sha256": "640966f73befc6be2821b5eedc004e8644d992fea1d125de1e6f2558f5de3caf",
+      "bytes": 873,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/13-host-reclamation-disposable.stdout",
+      "sha256": "ff0f08c85002f4376c242867f3a0b6a479fa994d493c3a048a04e4b3aa203266",
+      "bytes": 1271,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/14-system-readonly-diagnostic.py",
+      "sha256": "cb450494b366b2b879f13be5400a707f9feed046604723a0f27c1f5002d0899d",
+      "bytes": 1527,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/14-system-readonly-diagnostic.stdout",
+      "sha256": "9f280ef79f02d93d2bec6e262ca5c49fdc55d4c5f597c3fec683d09dc329c394",
+      "bytes": 640,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/15-affected-host-build.stdout",
+      "sha256": "b7c3fde4b0b8d167e5aa1c8c634cd365e92d065fa2dbac02be234f6455165293",
+      "bytes": 1643,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/16-host-reclamation-final.stdout",
+      "sha256": "16c1b7bd064583b75eb920720dfa1d22d5285c1d1625102e026005b567ce2fe5",
+      "bytes": 872,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/17-host-init-disposable.stdout",
+      "sha256": "d7cd2fb5f8a405762960554eb8fd9e3801b92bf43b4508edfa7e50bf06e83467",
+      "bytes": 4345,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/18-host-clippy.stdout",
+      "sha256": "69eda411a72fec54a723e010cb13061c9c635866f1fcf5d002d533b548807152",
+      "bytes": 5645,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/19-host-clippy-corrected.stdout",
+      "sha256": "ec33c25227a3173c60885761d0ad89d333364bd3b024a3df5cf4a77c50c6e640",
+      "bytes": 1515,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/20-format.stdout",
+      "sha256": "340feeb1706455dae0a7e4de72d1feb5187ba5e8182e266be98df8887da52d96",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/21-boundary.stdout",
+      "sha256": "06da4086832eeef4e15cfd98c512e2e1c78bc0f35829df48db54f5e1e3166780",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/22-boundary-self-tests.stdout",
+      "sha256": "6de4f143b9d5fa998fe65b251cf9876b2401a55b597967adc2fa53ace11c3379",
+      "bytes": 612,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/23-final-source.json",
+      "sha256": "bee90d180dd40e1400b8532e6e47e5c071aefd0c226bc4d2ef63a4089c0a895d",
+      "bytes": 4365,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/24-linux-build-all-targets.stdout",
+      "sha256": "9238bd92c0a1a46aa2a1608f337a7300f6de29609bfd77b4d114feb3bb67acad",
+      "bytes": 3235,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/25-linux-build-cfg-corrected.stdout",
+      "sha256": "94f4ef1f3d9fa3a5be60cd8634e64cf17708c8974a7f1eb641951581be1f7d70",
+      "bytes": 12048,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/26-production-loc.json",
+      "sha256": "76dbb7a9a236329583d5160af648bc2d169e6d9259a65c737230bbdded6bc325",
+      "bytes": 927,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-store-foundation-20261007/27-final-custody.json",
+      "sha256": "0cf3b0ae43dea04808f70c2e03977c39531a5e32e2462204d63078eb574ae66b",
+      "bytes": 435,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/01-file-plan.json",
+      "sha256": "7259b3b8d1643b7d8acfaf885d98146f8d140f7f67df4fb722fc48b83ab81a84",
+      "bytes": 4707,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/02-related-file-plan.json",
+      "sha256": "c060db76f9ea8497d1e091aec44dddae95ac8c783c919c6afe1c345688f22085",
+      "bytes": 1824,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/03-renamed-files.json",
+      "sha256": "82bf877a93b48f3ac60c9c7e8f1d9d8d62a8b49564a30cc1eb678bd00f255bc3",
+      "bytes": 2131,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/04-host-build.stdout",
+      "sha256": "d866b30ba1584c7f2a8763ea5f7a52ddd59a18952c1265c7d1f25bb5a556b9be",
+      "bytes": 9315,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/05-host-build.stdout",
+      "sha256": "6159dad9641a933199f690ba35766897405ee87f17139699a0a6114174a530dd",
+      "bytes": 2159,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/06-host-build.stdout",
+      "sha256": "18e69e4576706d55245c08bfc0e25dd331731d2dfa908d82df59010e1eb46496",
+      "bytes": 5904,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/07-host-engine.stdout",
+      "sha256": "3efd754aa956d4dbae92dede6eefb418323cf300b6501abe44d38b2b175b9d8d",
+      "bytes": 1639,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/08-host-compound.stdout",
+      "sha256": "75c1e74d46b07bd0b972b738f9a20189d43563752f62d2e518caeedf7aad56f0",
+      "bytes": 915,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/09-host-records.stdout",
+      "sha256": "7eb5ff4428b2fb6f606edd4acfa7e1285b7b39853b7102a03ae7faeaaefdacf4",
+      "bytes": 1211,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/10-document-scope.json",
+      "sha256": "f2e86cf3dc9ba5ca08ff09a3e0a27d5d26e9b5b2870f427d2e3eb8da0189fcc6",
+      "bytes": 1694,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/11-host-record-cursor.stdout",
+      "sha256": "d13cb409432044d695b11c83b774b754c5d25abec50c189d802239507ceeaa10",
+      "bytes": 893,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/12-sql-naming-equivalence.json",
+      "sha256": "1310652114a28299d348df7dc2e73d6b6a8673f1cba8531f24b28f98dd6a0e59",
+      "bytes": 1274,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/13-host-source.stdout",
+      "sha256": "af620db24835f052021d0754cbb63b78697d88fc540c815130f696bf81402e2e",
+      "bytes": 1036,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/14-host-owner.stdout",
+      "sha256": "a5c7fb711cacef50af5bf1d8c47c74044165ac9f231ce3704d25210755d7ab9b",
+      "bytes": 1481,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/15-host-daemon-records.stdout",
+      "sha256": "5619122f7b36ccb8ea6e0ffd37cf4b4fef405c5975141d33216f7df0bf020182",
+      "bytes": 888,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/16-host-root-qualification.stdout",
+      "sha256": "39f0f345d68372f66c1cf69814e818b4e37f055277f5ce98a47d1e55e5429124",
+      "bytes": 1075,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/17-host-namespace-daemon.stdout",
+      "sha256": "ae1d77489ae18f608f540cb48d89fcc10c884a534f254abf48877bf185ee2710",
+      "bytes": 1408,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/18-host-captured-edits.stdout",
+      "sha256": "9b3d3f3721e6c6d63a1de1a84608fd23240ddc6709b67aa046df465f74bab9cf",
+      "bytes": 1890,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/19-host-invocation-order.json",
+      "sha256": "a88be3e32c0e583639753e3ace652c22346613651c26d2ba6cb3a2767bacd296",
+      "bytes": 722,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/20-host-namespace-daemon-serialized.stdout",
+      "sha256": "4654af60c6a6b27c8b7bd106ee05ad971b3a9751cd5fe150a55e32226345d507",
+      "bytes": 1408,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/21-host-captured-edits-serialized.stdout",
+      "sha256": "34bdc3a1a56818808e11ed91971ca02ace492b6f63dc08cf90d9b411d1cb26a4",
+      "bytes": 1890,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/22-host-construction-cursor.stdout",
+      "sha256": "2815b3762535ecd7ac5ce774f0805545541801703dccc0489352a4badad45072",
+      "bytes": 967,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/23-host-edit-backing.stdout",
+      "sha256": "545e3b5cd6bd9e7785ad53ea5eeec852f10bf46647798941adb54b975d31b3a2",
+      "bytes": 1034,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/24-source.json",
+      "sha256": "bb1f09300d818321b147e10978a4ea8e4bfa03f3cebc4fc771612710a7544647",
+      "bytes": 10804,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/25-linux-build.stdout",
+      "sha256": "c774b13d4618ca38843e03db8f4fcec426e487056fed532437252451e4ccbbc1",
+      "bytes": 1651,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/26-container-view-diagnostic.stdout",
+      "sha256": "9a88479083e9943239f4bad6ff28b6f1b012a4a119e3929aa96a30c2950fabf3",
+      "bytes": 1033,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/27-linux-build.stdout",
+      "sha256": "497447bca2fef13d354b660cb50097f2eb8622f3602955aedbb82347e59fee70",
+      "bytes": 7733,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/28-linux-engine.stdout",
+      "sha256": "d581ba6ae11429eb34a96b7501ffda0ca83dc89949974319362cb420714ccdc0",
+      "bytes": 1989,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/29-linux-compound.stdout",
+      "sha256": "b5f2b7a7301f90b8a30f6da55ce540414da684ecccc378ce5f240847e7f06c16",
+      "bytes": 1269,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/30-linux-records.stdout",
+      "sha256": "ba033a1e31f6b68772ef6f143622245d4b4a83a449d0e5b7ac427e45b0dafffc",
+      "bytes": 1580,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/31-linux-record-cursor.stdout",
+      "sha256": "68ce8baf4bd95a333137cd1658f0d26213ef64f78225046682b3113a535aca81",
+      "bytes": 1268,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/32-linux-source.stdout",
+      "sha256": "99bb18fcb1dd3eb27c12f4c2469a845a65a75568b795696009b6991f53480fc6",
+      "bytes": 1386,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/33-linux-owner.stdout",
+      "sha256": "78d9838ba3d9516ab4f0bc8ecde891ee7e07480009835ed54c39e292e44581a1",
+      "bytes": 1829,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/34-linux-daemon-records.stdout",
+      "sha256": "0e4c751b28ba9885930a9091f93eed326c5786eadf10f4dd803a0b97815d788e",
+      "bytes": 1264,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/35-linux-root-qualification.stdout",
+      "sha256": "412679fadf57dfb0ac287102b5e50086b68f6c28d57893e2a7adc146900f2def",
+      "bytes": 1442,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/36-linux-namespace-daemon.stdout",
+      "sha256": "926ea5878c3d31abf543297e429fd759d104b47b932b90fcf2d70215536f9188",
+      "bytes": 1771,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/37-linux-captured-edits.stdout",
+      "sha256": "99210432733c50a587ee370176a6753bd99ab97fd4621b19c2c95a3c3ca679a9",
+      "bytes": 2261,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/38-linux-construction-cursor.stdout",
+      "sha256": "5cde25028ec9921ed2675a3e63207ac147c7f30bd65e52e791459a993c256222",
+      "bytes": 1343,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/39-linux-edit-backing.stdout",
+      "sha256": "9780f5ae44d18c6ecc274b3b63a6f7400b04466ead0288e4937b7dae11e81000",
+      "bytes": 1396,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/40-clippy.stdout",
+      "sha256": "68c1f31b57fa2085aa16063ad8850ebfe4f68b1f461bfeeddd81e2b3f4dca0f8",
+      "bytes": 2026,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/41-fmt.stdout",
+      "sha256": "453b3efefbfa639552fa46e1e2d26ffe58913878da5e669c19d58a8475101004",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/42-boundary.stdout",
+      "sha256": "470e7124657ea739a3f98e5779095c3a366cba0c4e9c76d888965a71cdf1f5fd",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/43-guard-tests.stdout",
+      "sha256": "5fc58d4b42df2ebbc1c9b1650756ee93d783653cd650faed8728762696f39c86",
+      "bytes": 614,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/44-proof-index.json",
+      "sha256": "0783252e81a084388d565e16746685234832db1f8e593b973b56dc972732f311",
+      "bytes": 10347,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-terminology-20261007/45-production-loc.json",
+      "sha256": "c8be7c76aec866dfca0d9823c40ae0292223d6f004ece0b7e2591e1b5fae674b",
+      "bytes": 924,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/01-retired-paths.json",
+      "sha256": "0979dbf4c9e773cb9da5f9436b4b81c23b8c12d08d8ecf9fe3d4946c6336df74",
+      "bytes": 6458,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/02-host-build.txt",
+      "sha256": "30233b16bbb92e0760bda9472e28be2072c5081b62ec73160dee4709609f0f9b",
+      "bytes": 2383,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/03-host-build.txt",
+      "sha256": "af2f6cdf90fae6ba6aedc61daced480d8348ac849f51e5300a6390b98a353c89",
+      "bytes": 2580,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/04-host-build.txt",
+      "sha256": "db4c845bdb2f8cefde4f782702fbe05d0ff6fb6e8c59784c512d26ea2adeceec",
+      "bytes": 3094,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/05-host-init.txt",
+      "sha256": "8cc7ad496f368788303635e33a51297888367411a9721b4a5b7db9ae184c73ec",
+      "bytes": 947,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/06-host-native.txt",
+      "sha256": "91b897f7a7cbfce8b65ae30afe3e4dad86b8ee2ec484c75528bef96645395c0a",
+      "bytes": 3835,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/07-clippy.txt",
+      "sha256": "25dbe6f742c73ca445a19b75755412e415c70380a253e487dec05a699059afe5",
+      "bytes": 2949,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/08-clippy.txt",
+      "sha256": "9bb4a183e3f55c7bf978acadf9c383707477d12b33098780ca3db2bb75742b61",
+      "bytes": 1240,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/09-source.json",
+      "sha256": "9e29acb970584c41045b3edd927cf3d8bdb135d26cd6ab4b8ad070ca16ff1003",
+      "bytes": 1900,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/10-linux-build.txt",
+      "sha256": "020b82770ce515d89c3d82e47153722068652e8b463dcd9e781da26fa9157e54",
+      "bytes": 1535,
+      "exit_footer": 1
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/11-mount-diagnostic.txt",
+      "sha256": "ce68487c328ccaea6a80a6b4c11262bea521f6994381063b241f1609131cdbab",
+      "bytes": 1124,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/12-linux-build.txt",
+      "sha256": "34bbdbe94bd6c30d3e3fa256ecc63fd33c3104adb3a570f46cd079a1a1b3e468",
+      "bytes": 4195,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/13-linux-init.txt",
+      "sha256": "7adb9693d5504dc7d7a37059f8015de8da5a1328c466f31a6f65ee063fb4462d",
+      "bytes": 1295,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/14-linux-native.txt",
+      "sha256": "538249d93d5fe96b34ac7b2d5cd5a670ceb0f311849dba0632fb3460abfcc8ec",
+      "bytes": 4187,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/15-workspace-build.txt",
+      "sha256": "928b4f910cecc5f1676a92bfd6075b22a5a218da26899c86592c42538bec3c02",
+      "bytes": 19742,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/16-workspace-clippy.txt",
+      "sha256": "b5c6ffbcd5efd0df10eb78fd1de2b4d6c1b62ff77abaa17378559eaa9e48df99",
+      "bytes": 2154,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/17-fmt.txt",
+      "sha256": "3ea456f4763957dabdaaf58ad2fd2cfe1e2854f4f957c8c3c90f5c6311278e21",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/18-boundary.txt",
+      "sha256": "db01ad45051b50722964830567683723a3ef0b6e722c43f40a891fa72b16b814",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/19-guard-tests.txt",
+      "sha256": "e0e2efe2ca5fc1c624ec1d08522842f26bf818ac0cabebd5427c60b1ca20697e",
+      "bytes": 612,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/20-loc.json",
+      "sha256": "f34812159276d9b37023d03a4e5a6d1af1b12b09d736fd1815bdcb44f0662b2b",
+      "bytes": 932,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/01-registration-tests.stdout",
+      "sha256": "f95a21f611989841d86c8b1313476f955cac0721e0db83d43a393166b700b457",
+      "bytes": 610,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/02-verifier-build.stdout",
+      "sha256": "7e606322c82fe8ab97f6fa1b0c898355088be3df5627a6da1ec63ab7f3c2a727",
+      "bytes": 1432,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/03-registration-final.stdout",
+      "sha256": "9f6f9d3314cc560f1658b9d9c4133748e62a9cce8944a50cf762aa85b4ef18a5",
+      "bytes": 610,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/04-retained-registry-tests.stdout",
+      "sha256": "e379aeedc8cbea26b94462aedcd6a20246e82a3b8345ec12eb634a8299a702f0",
+      "bytes": 624,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/05-verifier-clippy.stdout",
+      "sha256": "893ad0029cead9bc462ba7b418f3e6c37fe32dd68cac2cc1b130f7471ae67b2d",
+      "bytes": 2121,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/06-example-clippy-corrected.stdout",
+      "sha256": "b3f2b6a374710c04dcff6172c867e4a406d51c88e8d29b00a8950a616dc97bac",
+      "bytes": 1143,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/07-format.stdout",
+      "sha256": "3111c9f37eb92414845447247411507e623e23d3548bbaaf50277e832ac5067b",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/08-production-loc.json",
+      "sha256": "8b75e60d5f39bddad0878eef2b0541216ae8c5042dbb12858ce7c79ee79c6637",
+      "bytes": 918,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/09-invocation.stdout",
+      "sha256": "c0fab753ea65f603a09df54a30c2bdb45e4e24d0464ea7caaf67fd63163512c4",
+      "bytes": 748,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/build.stderr",
+      "sha256": "608a3fbc1fcc351603df0bf4414b31953765a5dfabc2ce9f9dcf22d20142f07c",
+      "bytes": 2089,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/cold-build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/cold-build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/cold.stdout",
+      "sha256": "534f95d1eb0d66d661243d47c2f67084d258b82564b9dc852c368bffd388e909",
+      "bytes": 344,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/driver.stderr",
+      "sha256": "b696b476d2f4dc94bf84e8e9600da494b016527d10b6120d72d45eff43e98550",
+      "bytes": 8462,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/driver.stdout",
+      "sha256": "6ffc0218db8f6cf82cd12f6733653f9b688c709008bc558acdf1feb92bc2a82f",
+      "bytes": 347,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/manifest.json",
+      "sha256": "7613172499958a0eff977b8929e9099816bb26105a2fdee6727157daedc0c5a6",
+      "bytes": 1666,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/receipt.json",
+      "sha256": "6a5406aaf866a7c4ce616cd706f02be1a55650fb31c0f1da4a37f488b6e796d9",
+      "bytes": 17043,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/verifier.stderr",
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add",
+      "bytes": 123,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/verifier.stdout",
+      "sha256": "3e4cfe2f97847d03108054027d8db8a4260436c8e5d6844ea33e69b10a576c4d",
+      "bytes": 391,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/11-result.json",
+      "sha256": "520312bd2ae5bcdc299960c4d7a44ea6c4df697535395f640a42b1fc5e248d98",
+      "bytes": 4923,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/12-private-host-build.stdout",
+      "sha256": "f99d9ea6d33fe4997043b6feba3bb5bfa81e34a825887aaaffd113e31a747d65",
+      "bytes": 1436,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/13-private-host-proof.stdout",
+      "sha256": "dcd0dc673d971892ebe80fa052de1a6df1dcc908d375364cf02403ef4bdfa574",
+      "bytes": 940,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/14-private-init-oracle.stdout",
+      "sha256": "567d4feae6052534f4bcd48950e96b2922c0419cb957c6d0b7854997bcd9117b",
+      "bytes": 4350,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/15-private-clippy.stdout",
+      "sha256": "542dd7c0a7a3d7203e30b29a684f5e2127eb032ffde4ed6362f5973dc2af8d11",
+      "bytes": 1596,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/16-private-source.json",
+      "sha256": "da5e457a6d02356a8a478b90adf797db9de934465308bc15b1e6faa28da261dd",
+      "bytes": 779,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/17-private-linux-build.stdout",
+      "sha256": "71db09dd94991e6a63c99653110c37f4c70f97c479561e9df82fde71716426f3",
+      "bytes": 1982,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/18-private-linux-proof.stdout",
+      "sha256": "f6381f4b030d9df090b4e5e49c1ffc9c35a6e2af461362c6cf2b9d23ee4ef6ee",
+      "bytes": 1304,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/19-private-format.stdout",
+      "sha256": "84bb67d90dbe9e3f09839ee7999e7d3aa05a1bf4479571893cb0202706fe8903",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/20-private-boundary.stdout",
+      "sha256": "f4fc7c37a732ea1ac8011807b6c7a9001a7605150e69c84123a65858117b0cd6",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/21-private-boundary-tests.stdout",
+      "sha256": "d44fa55bc47e2f64e76153687c67fa6ce3000f7361e5fed8e5ec16a44f5f6c90",
+      "bytes": 612,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-init-20261007/22-private-production-loc.json",
+      "sha256": "5a987aecef1e78a32f427897a7dea7ac2c8d4daf39f31b429cc979be431b2b29",
+      "bytes": 921,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/01-restored-source.json",
+      "sha256": "36d401bfe7788821ce8711bb2037d933bce3b13539af6735593f12ab090bbb60",
+      "bytes": 1055,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/02-host-build.stdout",
+      "sha256": "4a81466dbfa28e6f2dabfb8a0245c1f7436cf423be9797801b8e6ed8a2ddcb81",
+      "bytes": 9182,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/03-harness-tests.stdout",
+      "sha256": "00034a7598828dbe05273ce3247555af8d4156f65720ec7d348f9453b26afd53",
+      "bytes": 610,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/04-registry-tests.stdout",
+      "sha256": "6104a0c82801ae009f2373cb4fa7cc95a1de48803e86aaa97e29eab18312fc73",
+      "bytes": 624,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/05-host-clippy.stdout",
+      "sha256": "157de787013d2fb470062407f933a2e5f4fcdeea0a88bba158cae1676883b526",
+      "bytes": 1490,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/06-fmt.stdout",
+      "sha256": "ea222b3a8b8d9585e71dd0393e7486e8c73f64b056479178b54052f295329457",
+      "bytes": 428,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/07-boundary.stdout",
+      "sha256": "e8f2892a472772093e1e59d12b7388a6ef9ec8a0ce873400ff27bda0298f5090",
+      "bytes": 470,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/08-guard-tests.stdout",
+      "sha256": "f8937f4504f017331b2e8e189de822caf5aad4ad85307722fb4b4be899400f4a",
+      "bytes": 612,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/09-linux-build.stdout",
+      "sha256": "cc3a1112e831b840d47fd135dc089e76a91ac730aa5c31c88f0ce3900351c3a4",
+      "bytes": 10352,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/10-baseline-disposition.json",
+      "sha256": "85abe2111a4f5a57fe66bf75993754d338743f3b8f4dcc97b10a303b1ac6d8fb",
+      "bytes": 909,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/pre-s8-wal-restoration-20261007/11-production-loc.json",
+      "sha256": "888cf9116c28fc80fbcd42e59ae33a35e2cf2dc673b98dc7e3f7bfafdeaca728",
+      "bytes": 924,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/01-host-filesystem-qualify.stdout",
+      "sha256": "78c9b55038ddaf4bba7d73c975f089c0ca14a59d69a2dadfa964f41167f18bbf",
+      "bytes": 1873,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/02-host-filesystem-qualify.stdout",
+      "sha256": "9902e5a0e700014547111f723f81e5112b876d5328a88c73c437a36bd06a3dfe",
+      "bytes": 1506,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/03-host-filesystem-qualify.stdout",
+      "sha256": "c3fc4ee86f1cb3456e33de8cf7d248343aa588c3e86e8a81e203e4a3491b8bb8",
+      "bytes": 1170,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/04-host-daemon-root-qualification.stdout",
+      "sha256": "debc3c0c7046fb8d4b737ec8d04db040ad0246a06b391934636d69093fb9b024",
+      "bytes": 1157,
+      "exit_footer": 101
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/05-host-daemon-root-qualification.stdout",
+      "sha256": "c00fc1328315ade98b4ab3c12b9c16f6fe76b450869fd179e82edf074219c150",
+      "bytes": 715,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/06-host-build-test-binaries.txt",
+      "sha256": "b2cdf22b42f50c93a3e080866cf0d4c75aa1389051d9b125aa21c5a5c900fb23",
+      "bytes": 8442,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/07-host-affected-selections.stdout",
+      "sha256": "054b2cc49d728b85f049b901f486318ed58751ee62d662dd21491401e1d17f84",
+      "bytes": 22682,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/08-host-filesystem-attributes-package-cwd.stdout",
+      "sha256": "7054fc0daf15667197913273e4d1e48b22889fdbd1f2b5eccdf0c9e31c807df7",
+      "bytes": 1232,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/09-host-clippy-fmt-boundary.stdout",
+      "sha256": "d43165f6c9afe5a1af40156fd6278556d0451316b4243b2e5e87f4c59c69c593",
+      "bytes": 1152,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/10-linux-build.stdout",
+      "sha256": "3b095347e613e1546811bcfbd86635a9b420a64698f972658e8a2d031f1e7546",
+      "bytes": 310,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/11-linux-build.stdout",
+      "sha256": "63577de4fb43910aca995ee007001d79e77110641dfefe7bcb9295ebfa5cbb7e",
+      "bytes": 553,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/12-linux-build.stdout",
+      "sha256": "d210eb57ff774627e802c85cb863e6f0f5bd3b91d53e1773ae3e2a78e6ac52e9",
+      "bytes": 609,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/13-source-refresh.json",
+      "sha256": "194842b526c05c5f82ea81603f5cfa93b8bec0358dc3c14d0926e0b3854283e6",
+      "bytes": 1666,
+      "exit_footer": null
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/14-linux-build.stdout",
+      "sha256": "cc8ff3042c58fa9e7ea3bbbce20b52560116b7d8f541ec79a973af599a233275",
+      "bytes": 3148,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/15-linux-filesystem-qualify.stdout",
+      "sha256": "efa7102f0251de15f61489b029b837159a936d5dc420a2191451ad6ac99afcf7",
+      "bytes": 1545,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/16-linux-root-qualification.stdout",
+      "sha256": "8c6fd8617987064680e0ed0578ace3713ba1313b3bb703fec22d71ac57d32f90",
+      "bytes": 1083,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/17-boundary-self-tests.stdout",
+      "sha256": "d70862378b51a467b3fbfe15a9e022d222aafc7c1b71e01f9f44b698ca1c3dde",
+      "bytes": 505,
+      "exit_footer": 0
+    },
+    {
+      "path": "core/docs/issues/307/checks/s9-root-qualification-20261007/18-production-loc.json",
+      "sha256": "23f0697b99de13d483bc9df7707dd0809d2904237e2f3be3e5429005b73c617e",
+      "bytes": 924,
+      "exit_footer": null
+    }
+  ]
+}

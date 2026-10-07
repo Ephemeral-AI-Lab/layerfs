@@ -6,7 +6,7 @@
 > Original source links below refer to their recorded Git revisions, not the
 > current tree. Historical measurements and verdicts are unchanged.
 
-The active SDK [runtime/service](../../crates/layerfs-api/sdk/src/runtime/service/mod.rs)
+The active SDK runtime/service (`core/crates/layerfs-api/sdk/src/runtime/service/mod.rs` at local Git `52e1f2e18`)
 borrows an initialized authenticated Sessions registry. It supplies real bounded
 local host dispatch for policy, serials, object/length demands, Save and history
 handlers. The application supplies native Bridge VerifiedPeer authentication;

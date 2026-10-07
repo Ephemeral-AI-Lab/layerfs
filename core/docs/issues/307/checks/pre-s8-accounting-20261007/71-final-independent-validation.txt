@@ -1,0 +1,212 @@
+# {"timestamp": "2026-10-07T13:31:45.491878+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-c", "\nimport json,sys,time,hashlib,re\nfrom pathlib import Path\nsys.path.insert(0,\"core/benchmark/fs-bench-pro\")\nfrom shared import evidence_engine,evidence_store_operation\nfrom shared.pre_s8_phase_report import phase_report\nfrom shared.pre_s8_registration import digest\nstart=time.monotonic_ns();base=Path(\"core/docs/issues/307/checks/pre-s8-accounting-20261007\")\nselections=[(\"32-host-engine\",\"26-host-engine-finite-registration.json\",\"31-host-engine-run.txt\"),(\"40-linux-engine\",\"28-linux-engine-finite-registration.json\",\"39-linux-engine-run.txt\"),(\"67-host-store-v3\",\"63-host-store-v3-registration.json\",\"66-host-store-v3-run.txt\"),(\"70-linux-store-v3\",\"64-linux-store-v3-registration.json\",\"69-linux-store-v3-run.txt\")]\nresults={}\nfor name,reg,log in selections:\n p=base/name;outcome=json.loads((p/\"outcome.json\").read_text());invocation=json.loads((p/\"invocation.json\").read_text());registration=json.loads((base/reg).read_text())\n assert outcome[\"status\"]==\"RECORDED\" and outcome[\"child_exit\"]==0 and outcome[\"child_joined\"] and outcome[\"original_failure\"] is None\n assert outcome[\"attempt_count\"]==invocation[\"attempt_count\"]==1\n assert invocation[\"registration_sha256\"]==digest(base/reg) and invocation[\"binary_sha256\"]==registration[\"binary\"][\"sha256\"]\n assert outcome[\"phases\"]==registration[\"workload\"][\"phases\"]\n for key,file in [(\"jobs_sha256\",\"jobs.jsonl\"),(\"resources_sha256\",\"resources.jsonl\")]:assert outcome[key]==digest(p/file)\n whole=int(re.search(r\"# complete_command_ns=(\\d+)\",(base/log).read_text()).group(1));assert whole<=15000000000 and outcome[\"collector_wall_ns\"]<=15000000000\n count=(evidence_engine if \"engine\" in name else evidence_store_operation).validate(p/\"jobs.jsonl\")\n phase=phase_report(p/\"resources.jsonl\");assert phase[\"records\"]==outcome[\"resource_records\"]\n assert list(phase[\"phases\"])==outcome[\"phases\"]\n results[name]={\"registration\":reg,\"source_commit\":registration[\"source_commit\"],\"binary\":registration[\"binary\"],\"whole_command_ns\":whole,\"collector_wall_ns\":outcome[\"collector_wall_ns\"],\"counts\":count,\"resource_observations\":phase,\"child_joined\":True,\"artifact_directory_at_exit\":outcome[\"artifact_directory\"],\"after_command_custody\":\"host files retained\" if \"host\" in name else \"owned --rm container removed after child success; local backing removed; original JSON/text receipts retained\"}\nwall=time.monotonic_ns()-start;assert wall<10000000000\nvalue={\"schema\":\"pre-s8-final-accounting-validation-v1\",\"scope\":\"selected original direct routes, supported observations, no numerical admission\",\"verification_ns\":wall,\"results\":results,\"numeric_acceptance\":\"OWNER_DEFERRED\"}\nwith (base/\"72-final-accounting-report.json\").open(\"x\") as f:json.dump(value,f,indent=2)\nprint(json.dumps({k:{\"counts\":v[\"counts\"],\"whole_command_ns\":v[\"whole_command_ns\"],\"resource_records\":v[\"resource_observations\"][\"records\"]} for k,v in results.items()},indent=2));print(\"verification_ns\",wall)\n"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "02922afa160510c0d7ed5ec3e0ccb7b5fbf326d0", "wall_stop": "specified in command; build is not test execution"}
+{
+  "32-host-engine": {
+    "counts": {
+      "schema": "cluster-two-engine-validation-v1",
+      "functional_count_status": "PASS",
+      "jobs": 1060,
+      "phases": {
+        "setup": 20,
+        "wave": 768,
+        "dependency": 256,
+        "release": 12,
+        "verify_close": 4
+      },
+      "classes": [
+        128,
+        132,
+        132,
+        412,
+        128,
+        128
+      ],
+      "wave_counts": [
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ]
+      ],
+      "closed_namespaces": 4,
+      "foreground_statements": 5500,
+      "maintenance_statements": 716,
+      "numeric_acceptance": "OWNER_DEFERRED",
+      "continuous_phase_peak": "NOT_CLAIMED",
+      "limitations": [
+        "statement families are actual work, not per-fingerprint/visited-page attribution",
+        "SQL/service spans overlap; queue wait includes readiness parking",
+        "payload counters exclude internal SQLite/driver/kernel copies",
+        "this stream alone supplies no physical I/O or phase-residency evidence"
+      ]
+    },
+    "whole_command_ns": 3623864958,
+    "resource_records": 56
+  },
+  "40-linux-engine": {
+    "counts": {
+      "schema": "cluster-two-engine-validation-v1",
+      "functional_count_status": "PASS",
+      "jobs": 1060,
+      "phases": {
+        "setup": 20,
+        "wave": 768,
+        "dependency": 256,
+        "release": 12,
+        "verify_close": 4
+      },
+      "classes": [
+        128,
+        132,
+        132,
+        412,
+        128,
+        128
+      ],
+      "wave_counts": [
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ]
+      ],
+      "closed_namespaces": 4,
+      "foreground_statements": 5500,
+      "maintenance_statements": 718,
+      "numeric_acceptance": "OWNER_DEFERRED",
+      "continuous_phase_peak": "NOT_CLAIMED",
+      "limitations": [
+        "statement families are actual work, not per-fingerprint/visited-page attribution",
+        "SQL/service spans overlap; queue wait includes readiness parking",
+        "payload counters exclude internal SQLite/driver/kernel copies",
+        "this stream alone supplies no physical I/O or phase-residency evidence"
+      ]
+    },
+    "whole_command_ns": 1194282417,
+    "resource_records": 94
+  },
+  "67-host-store-v3": {
+    "counts": {
+      "schema": "pre-s8-store-operation-validation-v1",
+      "functional_count_status": "PASS",
+      "operations": [
+        {
+          "outcome": "Committed",
+          "write_transactions": 3,
+          "statements": 820,
+          "engine_statements": 20,
+          "pack_write_bytes": 8292,
+          "bounded_signature_scan_steps": 8191,
+          "unexplained_scan_steps": 0
+        },
+        {
+          "outcome": "UpToDate",
+          "write_transactions": 3,
+          "statements": 31,
+          "engine_statements": 20,
+          "pack_write_bytes": 0,
+          "bounded_signature_scan_steps": 8191,
+          "unexplained_scan_steps": 0
+        }
+      ],
+      "numeric_acceptance": "OWNER_DEFERRED",
+      "limitations": [
+        "Scope is the Store half with direct Content construction, not S10 normalization",
+        "Counts are logical calls/rows/bytes; no physical-I/O or phase-peak inference"
+      ]
+    },
+    "whole_command_ns": 3863019875,
+    "resource_records": 171
+  },
+  "70-linux-store-v3": {
+    "counts": {
+      "schema": "pre-s8-store-operation-validation-v1",
+      "functional_count_status": "PASS",
+      "operations": [
+        {
+          "outcome": "Committed",
+          "write_transactions": 3,
+          "statements": 820,
+          "engine_statements": 20,
+          "pack_write_bytes": 8292,
+          "bounded_signature_scan_steps": 8191,
+          "unexplained_scan_steps": 0
+        },
+        {
+          "outcome": "UpToDate",
+          "write_transactions": 3,
+          "statements": 31,
+          "engine_statements": 20,
+          "pack_write_bytes": 0,
+          "bounded_signature_scan_steps": 8191,
+          "unexplained_scan_steps": 0
+        }
+      ],
+      "numeric_acceptance": "OWNER_DEFERRED",
+      "limitations": [
+        "Scope is the Store half with direct Content construction, not S10 normalization",
+        "Counts are logical calls/rows/bytes; no physical-I/O or phase-peak inference"
+      ]
+    },
+    "whole_command_ns": 2448592958,
+    "resource_records": 266
+  }
+}
+verification_ns 443933250
+
+# complete_command_ns=562403833
+
+# exit=0

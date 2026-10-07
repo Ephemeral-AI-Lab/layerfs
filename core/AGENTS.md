@@ -53,8 +53,12 @@ product mental model or campaign-specific benchmark procedures.
   see [Store Commit](docs/architecture/65-store-commit-composition.md).
   The external E01 example records original startup work, diagnostics and Stop
   without creating a Workspace route. It supplies diagnostic receipt consistency,
-  not E1/E2 performance admission. Its relocated predecessor remains excluded; native executable/control/
-  Exec integration is unfinished.
+  not E1/E2 performance admission. Its relocated predecessor remains excluded;
+  standalone native executable/Exec integration is unfinished.
+  Pre-S8 direct-operation accounting now has actual registered macOS/Linux engine
+  and Store-half Commit runs, independent family/count validation, and supported
+  phase observations. Numerical latency/residency and exact continuous peaks
+  remain unqualified; see the [accounting scope](docs/issues/307/PRE-S8-F14-20261007.md).
   SDK creates/imports the initial Store, publishes the first Branch and consumes
   seal, returning a closed file plus explicit provider/locator/profile metadata.
   It retains no Store handle or data service. Native install now streams the

@@ -6,7 +6,7 @@
 > Original source links below refer to their recorded Git revisions, not the
 > current tree. Historical measurements and verdicts are unchanged.
 
-The active Daemon [upstream owner](../../crates/layerfs-daemon/src/upstream/owner.rs)
+The active Daemon upstream owner (`core/crates/layerfs-daemon/src/upstream/owner.rs` at local Git `52e1f2e18`)
 composes the existing SDK Attachment/Calls and public Workspace/Content ports with
 an already initialized OwnerClient. It opens no global Store, performs no initial full-root acquisition,
 starts no host service and depends on no excluded predecessor or Server. Host callers
@@ -16,7 +16,7 @@ per daemon. This is a library composition boundary, not native mount readiness.
 
 ## Exact assignment and original attachment
 
-[ExpectedBinding](../../crates/layerfs-daemon/src/upstream/types.rs) carries the
+ExpectedBinding (`core/crates/layerfs-daemon/src/upstream/types.rs` at local Git `52e1f2e18`) carries the
 oriented host-responder and local-initiator public keys, runtime/catalog/provider
 incarnations, Workspace, complete coherent BranchSnapshot, root serial, exact
 StoragePolicy and required SqlitePersistenceProfile. The complete snapshot comparison
@@ -66,7 +66,7 @@ permits no cross-peer/Workspace cache sharing. The original checked BaseView ret
 its successful bootstrap client solely as its base binding. Upstream hides unscoped
 Workspace reads, so that bootstrap provider does not serve ordinary operations.
 
-[UpstreamOperation](../../crates/layerfs-daemon/src/upstream/operation.rs) creates
+UpstreamOperation (`core/crates/layerfs-daemon/src/upstream/operation.rs` at local Git `52e1f2e18`) creates
 a fresh Arc<RemoteObjects>, lengths/serial ports and CanonicalClient using that cache,
 then obtains `Workspace::scoped(client)`. It shares the current original checked base,
 paired installs and reserved serial ranges; it does not copy a mutable filesystem
@@ -119,7 +119,7 @@ residency, physical I/O, rate, queue or latency qualification.
 
 ## Evidence boundary
 
-The portable [upstream tests](../../crates/layerfs-daemon/tests/upstream.rs) use real
+The portable upstream tests (`core/crates/layerfs-daemon/tests/upstream.rs` at local Git `52e1f2e18`) use real
 KK/native framing, SDK Attachment/Calls and initialized overlay Owner with explicitly
 scripted external protocol fixtures. They cover oriented responder/profile mismatch
 before wire/Open, same-root different history context, original Policy/Binding

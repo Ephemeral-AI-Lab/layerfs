@@ -6,7 +6,7 @@
 > Original source links below refer to their recorded Git revisions, not the
 > current tree. Historical measurements and verdicts are unchanged.
 
-The SDK's [custody owner](../../crates/layerfs-api/sdk/src/runtime/custody/owner.rs)
+The SDK's custody owner (`core/crates/layerfs-api/sdk/src/runtime/custody/owner.rs` at local Git `52e1f2e18`)
 adds one explicit consuming `Sessions::fence`. It ends the host-local borrowed serving
 scope and returns `ServingCustody`, containing every original configured slot in
 order, including vacant positions. It does not open a provider, call SaveFinish,
@@ -44,7 +44,7 @@ of a recorded terminal attempt, not proof that no global objects were published.
 
 ## Disposition and exact retained results
 
-[Typed knowledge](../../crates/layerfs-api/sdk/src/runtime/custody/knowledge.rs)
+Typed knowledge (`core/crates/layerfs-api/sdk/src/runtime/custody/knowledge.rs` at local Git `52e1f2e18`)
 uses owning error variants and predicates rather than Display strings or provider
 reads. Direct UnknownOutcome and unknown original/cleanup causes nested inside
 CleanupFailed remain TerminalUnknown. CleanupFailed with known causes is a distinct
@@ -112,7 +112,7 @@ namespace walk, payload copy, new SQL statement/schema, database creation or imm
 construction. Original Binding names/errors/receipts retain their existing allocations;
 the report Vec is an additional allocation chosen before effects.
 
-The external [custody tests](../../crates/layerfs-api/sdk/tests/custody.rs) cover
+The external custody tests (`core/crates/layerfs-api/sdk/tests/custody.rs` at local Git `52e1f2e18`) cover
 original fixed slots, active/finished/aborted producers, acknowledged-stage retention,
 cancelled and known dispatched completions preventing a pre-effect fence, stale
 capabilities across scope/runtime epochs and an already acknowledged publication

@@ -1,0 +1,1590 @@
+{
+  "schema": "pre-s8-final-accounting-validation-v1",
+  "scope": "selected original direct routes, supported observations, no numerical admission",
+  "verification_ns": 443933250,
+  "results": {
+    "32-host-engine": {
+      "registration": "26-host-engine-finite-registration.json",
+      "source_commit": "a2189c2501219a7d624777eaf2c600225386d374",
+      "binary": {
+        "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/engine_finite",
+        "sha256": "fc6d0bebfad3bb2ec6a4a6fe67ced4614ace04084f9d71df855c6ed18582dae8"
+      },
+      "whole_command_ns": 3623864958,
+      "collector_wall_ns": 3475745875,
+      "counts": {
+        "schema": "cluster-two-engine-validation-v1",
+        "functional_count_status": "PASS",
+        "jobs": 1060,
+        "phases": {
+          "setup": 20,
+          "wave": 768,
+          "dependency": 256,
+          "release": 12,
+          "verify_close": 4
+        },
+        "classes": [
+          128,
+          132,
+          132,
+          412,
+          128,
+          128
+        ],
+        "wave_counts": [
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ],
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ],
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ],
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ]
+        ],
+        "closed_namespaces": 4,
+        "foreground_statements": 5500,
+        "maintenance_statements": 716,
+        "numeric_acceptance": "OWNER_DEFERRED",
+        "continuous_phase_peak": "NOT_CLAIMED",
+        "limitations": [
+          "statement families are actual work, not per-fingerprint/visited-page attribution",
+          "SQL/service spans overlap; queue wait includes readiness parking",
+          "payload counters exclude internal SQLite/driver/kernel copies",
+          "this stream alone supplies no physical I/O or phase-residency evidence"
+        ]
+      },
+      "resource_observations": {
+        "schema": "pre-s8-phase-report-v1",
+        "admission_eligible": false,
+        "scope": "sampled diagnostic observations; no exact or continuous peak",
+        "records": 56,
+        "phases": {
+          "startup": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 2097152,
+            "rss_final_bytes": 5128192,
+            "rss_observed_max_bytes": 5128192,
+            "first_sample_ns": 653800454083041,
+            "last_sample_ns": 653800470574791,
+            "maximum_sample_gap_ns": 10631000,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268435456
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "setup": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 5128192,
+            "rss_final_bytes": 5963776,
+            "rss_observed_max_bytes": 5963776,
+            "first_sample_ns": 653800474590750,
+            "last_sample_ns": 653800490776750,
+            "maximum_sample_gap_ns": 9701333,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "arrivals": {
+            "samples": 42,
+            "interior_samples": 40,
+            "rss_baseline_bytes": 5963776,
+            "rss_final_bytes": 6176768,
+            "rss_observed_max_bytes": 6176768,
+            "first_sample_ns": 653800496359333,
+            "last_sample_ns": 653800878056041,
+            "maximum_sample_gap_ns": 10433917,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "release": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 6176768,
+            "rss_final_bytes": 6569984,
+            "rss_observed_max_bytes": 6569984,
+            "first_sample_ns": 653800881295166,
+            "last_sample_ns": 653800893911291,
+            "maximum_sample_gap_ns": 9215709,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "idle": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 6569984,
+            "rss_final_bytes": 6586368,
+            "rss_observed_max_bytes": 6586368,
+            "first_sample_ns": 653800896970000,
+            "last_sample_ns": 653800902639750,
+            "maximum_sample_gap_ns": 5669750,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "stop": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 6586368,
+            "rss_final_bytes": 6258688,
+            "rss_observed_max_bytes": 6586368,
+            "first_sample_ns": 653800905864541,
+            "last_sample_ns": 653800909799041,
+            "maximum_sample_gap_ns": 3934500,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "finished": {
+            "samples": 1,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 6258688,
+            "rss_final_bytes": null,
+            "rss_observed_max_bytes": 6258688,
+            "first_sample_ns": 653800913017208,
+            "last_sample_ns": 653800913017208,
+            "maximum_sample_gap_ns": 0,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "END_MARKER_ONLY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          }
+        },
+        "unavailable": [
+          "exclusive macOS file-cache/kernel/physical-I/O attribution",
+          "internal SQLite copy/pager-page attribution",
+          "continuous phase maxima",
+          "cross-size RSS acceptance"
+        ],
+        "category_rule": "overlapping process/cgroup fields must not be summed"
+      },
+      "child_joined": true,
+      "artifact_directory_at_exit": "/private/tmp/layerfs-pre-s8-accounting-host-engine-20261007",
+      "after_command_custody": "host files retained"
+    },
+    "40-linux-engine": {
+      "registration": "28-linux-engine-finite-registration.json",
+      "source_commit": "a2189c2501219a7d624777eaf2c600225386d374",
+      "binary": {
+        "path": "/work/core/target/cluster2-linux/debug/examples/engine_finite",
+        "sha256": "b153a9e11acb10dae0848347201beb5894c7a7129b1edd98873051af51151a86"
+      },
+      "whole_command_ns": 1194282417,
+      "collector_wall_ns": 836660250,
+      "counts": {
+        "schema": "cluster-two-engine-validation-v1",
+        "functional_count_status": "PASS",
+        "jobs": 1060,
+        "phases": {
+          "setup": 20,
+          "wave": 768,
+          "dependency": 256,
+          "release": 12,
+          "verify_close": 4
+        },
+        "classes": [
+          128,
+          132,
+          132,
+          412,
+          128,
+          128
+        ],
+        "wave_counts": [
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ],
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ],
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ],
+          [
+            32,
+            32,
+            32,
+            32,
+            32,
+            32
+          ]
+        ],
+        "closed_namespaces": 4,
+        "foreground_statements": 5500,
+        "maintenance_statements": 718,
+        "numeric_acceptance": "OWNER_DEFERRED",
+        "continuous_phase_peak": "NOT_CLAIMED",
+        "limitations": [
+          "statement families are actual work, not per-fingerprint/visited-page attribution",
+          "SQL/service spans overlap; queue wait includes readiness parking",
+          "payload counters exclude internal SQLite/driver/kernel copies",
+          "this stream alone supplies no physical I/O or phase-residency evidence"
+        ]
+      },
+      "resource_observations": {
+        "schema": "pre-s8-phase-report-v1",
+        "admission_eligible": false,
+        "scope": "sampled diagnostic observations; no exact or continuous peak",
+        "records": 94,
+        "phases": {
+          "startup": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 2871296,
+            "rss_final_bytes": 5775360,
+            "rss_observed_max_bytes": 5775360,
+            "first_sample_ns": 498058784402632,
+            "last_sample_ns": 498058793354423,
+            "maximum_sample_gap_ns": 6688416,
+            "cgroup_observed_max_bytes": 20291584,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 9306112,
+              "file": 9322496,
+              "file_dirty": 184320,
+              "file_writeback": 0,
+              "kernel": 1183744,
+              "kernel_stack": 81920,
+              "pagetables": 192512,
+              "shmem": 0,
+              "slab": 829056,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268435456
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "setup": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 5775360,
+            "rss_final_bytes": 6164480,
+            "rss_observed_max_bytes": 6164480,
+            "first_sample_ns": 498058793750132,
+            "last_sample_ns": 498058805921590,
+            "maximum_sample_gap_ns": 6280541,
+            "cgroup_observed_max_bytes": 20553728,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 9576448,
+              "file": 9510912,
+              "file_dirty": 196608,
+              "file_writeback": 0,
+              "kernel": 1183744,
+              "kernel_stack": 81920,
+              "pagetables": 192512,
+              "shmem": 0,
+              "slab": 833264,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "arrivals": {
+            "samples": 80,
+            "interior_samples": 78,
+            "rss_baseline_bytes": 6164480,
+            "rss_final_bytes": 6328320,
+            "rss_observed_max_bytes": 6328320,
+            "first_sample_ns": 498058806329465,
+            "last_sample_ns": 498059276941423,
+            "maximum_sample_gap_ns": 6097375,
+            "cgroup_observed_max_bytes": 26550272,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 9740288,
+              "file": 15474688,
+              "file_dirty": 217088,
+              "file_writeback": 0,
+              "kernel": 1196032,
+              "kernel_stack": 81920,
+              "pagetables": 192512,
+              "shmem": 0,
+              "slab": 839744,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "release": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 6328320,
+            "rss_final_bytes": 6451200,
+            "rss_observed_max_bytes": 6451200,
+            "first_sample_ns": 498059277292215,
+            "last_sample_ns": 498059286764548,
+            "maximum_sample_gap_ns": 5756667,
+            "cgroup_observed_max_bytes": 26812416,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 9854976,
+              "file": 15552512,
+              "file_dirty": 217088,
+              "file_writeback": 0,
+              "kernel": 1196032,
+              "kernel_stack": 81920,
+              "pagetables": 192512,
+              "shmem": 0,
+              "slab": 839744,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "idle": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 6451200,
+            "rss_final_bytes": 6451200,
+            "rss_observed_max_bytes": 6451200,
+            "first_sample_ns": 498059287280882,
+            "last_sample_ns": 498059290710340,
+            "maximum_sample_gap_ns": 3429458,
+            "cgroup_observed_max_bytes": 27070464,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 9854976,
+              "file": 15585280,
+              "file_dirty": 217088,
+              "file_writeback": 0,
+              "kernel": 1196032,
+              "kernel_stack": 81920,
+              "pagetables": 192512,
+              "shmem": 0,
+              "slab": 839744,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "stop": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 6451200,
+            "rss_final_bytes": 6516736,
+            "rss_observed_max_bytes": 6516736,
+            "first_sample_ns": 498059291105465,
+            "last_sample_ns": 498059291980090,
+            "maximum_sample_gap_ns": 874625,
+            "cgroup_observed_max_bytes": 27070464,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 9854976,
+              "file": 15626240,
+              "file_dirty": 217088,
+              "file_writeback": 0,
+              "kernel": 1196032,
+              "kernel_stack": 81920,
+              "pagetables": 192512,
+              "shmem": 0,
+              "slab": 839744,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "finished": {
+            "samples": 1,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 6516736,
+            "rss_final_bytes": null,
+            "rss_observed_max_bytes": 6516736,
+            "first_sample_ns": 498059292329048,
+            "last_sample_ns": 498059292329048,
+            "maximum_sample_gap_ns": 0,
+            "cgroup_observed_max_bytes": 27070464,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 9854976,
+              "file": 15630336,
+              "file_dirty": 217088,
+              "file_writeback": 0,
+              "kernel": 1196032,
+              "kernel_stack": 65536,
+              "pagetables": 192512,
+              "shmem": 0,
+              "slab": 839744,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 217088,
+                "allocated_observed_max_bytes": 268652544
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "END_MARKER_ONLY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          }
+        },
+        "unavailable": [
+          "exclusive macOS file-cache/kernel/physical-I/O attribution",
+          "internal SQLite copy/pager-page attribution",
+          "continuous phase maxima",
+          "cross-size RSS acceptance"
+        ],
+        "category_rule": "overlapping process/cgroup fields must not be summed"
+      },
+      "child_joined": true,
+      "artifact_directory_at_exit": "/tmp/layerfs-pre-s8-accounting-linux-engine",
+      "after_command_custody": "owned --rm container removed after child success; local backing removed; original JSON/text receipts retained"
+    },
+    "67-host-store-v3": {
+      "registration": "63-host-store-v3-registration.json",
+      "source_commit": "02922afa160510c0d7ed5ec3e0ccb7b5fbf326d0",
+      "binary": {
+        "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/store_accounting",
+        "sha256": "c556bb15401a15682714f56074397fe1cf65ba8a64731bda3b5f2806b326e291"
+      },
+      "whole_command_ns": 3863019875,
+      "collector_wall_ns": 3722518667,
+      "counts": {
+        "schema": "pre-s8-store-operation-validation-v1",
+        "functional_count_status": "PASS",
+        "operations": [
+          {
+            "outcome": "Committed",
+            "write_transactions": 3,
+            "statements": 820,
+            "engine_statements": 20,
+            "pack_write_bytes": 8292,
+            "bounded_signature_scan_steps": 8191,
+            "unexplained_scan_steps": 0
+          },
+          {
+            "outcome": "UpToDate",
+            "write_transactions": 3,
+            "statements": 31,
+            "engine_statements": 20,
+            "pack_write_bytes": 0,
+            "bounded_signature_scan_steps": 8191,
+            "unexplained_scan_steps": 0
+          }
+        ],
+        "numeric_acceptance": "OWNER_DEFERRED",
+        "limitations": [
+          "Scope is the Store half with direct Content construction, not S10 normalization",
+          "Counts are logical calls/rows/bytes; no physical-I/O or phase-peak inference"
+        ]
+      },
+      "resource_observations": {
+        "schema": "pre-s8-phase-report-v1",
+        "admission_eligible": false,
+        "scope": "sampled diagnostic observations; no exact or continuous peak",
+        "records": 171,
+        "phases": {
+          "clone": {
+            "samples": 5,
+            "interior_samples": 3,
+            "rss_baseline_bytes": 2277376,
+            "rss_final_bytes": 10371072,
+            "rss_observed_max_bytes": 10371072,
+            "first_sample_ns": 654387877481708,
+            "last_sample_ns": 654387914607583,
+            "maximum_sample_gap_ns": 10778125,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "startup": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 10371072,
+            "rss_final_bytes": 11878400,
+            "rss_observed_max_bytes": 11878400,
+            "first_sample_ns": 654387919754166,
+            "last_sample_ns": 654387945457625,
+            "maximum_sample_gap_ns": 16267875,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              },
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268435456
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "bind": {
+            "samples": 4,
+            "interior_samples": 2,
+            "rss_baseline_bytes": 11878400,
+            "rss_final_bytes": 16678912,
+            "rss_observed_max_bytes": 16678912,
+            "first_sample_ns": 654387951546625,
+            "last_sample_ns": 654387977644166,
+            "maximum_sample_gap_ns": 10849208,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "write": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 16678912,
+            "rss_final_bytes": 17432576,
+            "rss_observed_max_bytes": 17432576,
+            "first_sample_ns": 654387981217041,
+            "last_sample_ns": 654387996557250,
+            "maximum_sample_gap_ns": 9181334,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "commit": {
+            "samples": 141,
+            "interior_samples": 139,
+            "rss_baseline_bytes": 17432576,
+            "rss_final_bytes": 48152576,
+            "rss_observed_max_bytes": 48152576,
+            "first_sample_ns": 654388000965166,
+            "last_sample_ns": 654389344382291,
+            "maximum_sample_gap_ns": 11967084,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 144232,
+                "allocated_observed_max_bytes": 200704
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "up_to_date": {
+            "samples": 5,
+            "interior_samples": 3,
+            "rss_baseline_bytes": 48152576,
+            "rss_final_bytes": 48218112,
+            "rss_observed_max_bytes": 49004544,
+            "first_sample_ns": 654389348747416,
+            "last_sample_ns": 654389385120583,
+            "maximum_sample_gap_ns": 9741042,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 200704
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "verify": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 48218112,
+            "rss_final_bytes": 48267264,
+            "rss_observed_max_bytes": 48267264,
+            "first_sample_ns": 654389388996916,
+            "last_sample_ns": 654389401821041,
+            "maximum_sample_gap_ns": 9031750,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 200704
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "release": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 48267264,
+            "rss_final_bytes": 48316416,
+            "rss_observed_max_bytes": 48316416,
+            "first_sample_ns": 654389405589750,
+            "last_sample_ns": 654389409560125,
+            "maximum_sample_gap_ns": 3970375,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 200704
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "idle": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 48316416,
+            "rss_final_bytes": 48316416,
+            "rss_observed_max_bytes": 48316416,
+            "first_sample_ns": 654389412800333,
+            "last_sample_ns": 654389416248916,
+            "maximum_sample_gap_ns": 3448583,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 200704
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "stop": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 48316416,
+            "rss_final_bytes": 44990464,
+            "rss_observed_max_bytes": 48316416,
+            "first_sample_ns": 654389420333875,
+            "last_sample_ns": 654389425670041,
+            "maximum_sample_gap_ns": 5336166,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 200704
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "finished": {
+            "samples": 1,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 44990464,
+            "rss_final_bytes": null,
+            "rss_observed_max_bytes": 44990464,
+            "first_sample_ns": 654389429299875,
+            "last_sample_ns": 654389429299875,
+            "maximum_sample_gap_ns": 0,
+            "cgroup_observed_max_bytes": null,
+            "cgroup_categories_observed_max_bytes": {},
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 200704
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "END_MARKER_ONLY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          }
+        },
+        "unavailable": [
+          "exclusive macOS file-cache/kernel/physical-I/O attribution",
+          "internal SQLite copy/pager-page attribution",
+          "continuous phase maxima",
+          "cross-size RSS acceptance"
+        ],
+        "category_rule": "overlapping process/cgroup fields must not be summed"
+      },
+      "child_joined": true,
+      "artifact_directory_at_exit": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-31325-Wide-clone",
+      "after_command_custody": "host files retained"
+    },
+    "70-linux-store-v3": {
+      "registration": "64-linux-store-v3-registration.json",
+      "source_commit": "02922afa160510c0d7ed5ec3e0ccb7b5fbf326d0",
+      "binary": {
+        "path": "/work/core/target/cluster2-linux/debug/examples/store_accounting",
+        "sha256": "31ed8d64977621e9693b92013f12f2ba6dd6aef046672bfb0444112956f3bcb9"
+      },
+      "whole_command_ns": 2448592958,
+      "collector_wall_ns": 2095856918,
+      "counts": {
+        "schema": "pre-s8-store-operation-validation-v1",
+        "functional_count_status": "PASS",
+        "operations": [
+          {
+            "outcome": "Committed",
+            "write_transactions": 3,
+            "statements": 820,
+            "engine_statements": 20,
+            "pack_write_bytes": 8292,
+            "bounded_signature_scan_steps": 8191,
+            "unexplained_scan_steps": 0
+          },
+          {
+            "outcome": "UpToDate",
+            "write_transactions": 3,
+            "statements": 31,
+            "engine_statements": 20,
+            "pack_write_bytes": 0,
+            "bounded_signature_scan_steps": 8191,
+            "unexplained_scan_steps": 0
+          }
+        ],
+        "numeric_acceptance": "OWNER_DEFERRED",
+        "limitations": [
+          "Scope is the Store half with direct Content construction, not S10 normalization",
+          "Counts are logical calls/rows/bytes; no physical-I/O or phase-peak inference"
+        ]
+      },
+      "resource_observations": {
+        "schema": "pre-s8-phase-report-v1",
+        "admission_eligible": false,
+        "scope": "sampled diagnostic observations; no exact or continuous peak",
+        "records": 266,
+        "phases": {
+          "clone": {
+            "samples": 6,
+            "interior_samples": 4,
+            "rss_baseline_bytes": 3321856,
+            "rss_final_bytes": 11485184,
+            "rss_observed_max_bytes": 11485184,
+            "first_sample_ns": 498537647190350,
+            "last_sample_ns": 498537679765183,
+            "maximum_sample_gap_ns": 7017292,
+            "cgroup_observed_max_bytes": 77475840,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 12873728,
+              "file": 61804544,
+              "file_dirty": 24711168,
+              "file_writeback": 0,
+              "kernel": 2027520,
+              "kernel_stack": 65536,
+              "pagetables": 200704,
+              "shmem": 0,
+              "slab": 1691648,
+              "sock": 0
+            },
+            "artifacts": {
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "startup": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 11485184,
+            "rss_final_bytes": 12734464,
+            "rss_observed_max_bytes": 12734464,
+            "first_sample_ns": 498537680463433,
+            "last_sample_ns": 498537687690058,
+            "maximum_sample_gap_ns": 5790167,
+            "cgroup_observed_max_bytes": 79044608,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 13479936,
+              "file": 62439424,
+              "file_dirty": 24899584,
+              "file_writeback": 0,
+              "kernel": 2015232,
+              "kernel_stack": 81920,
+              "pagetables": 204800,
+              "shmem": 0,
+              "slab": 1652992,
+              "sock": 0
+            },
+            "artifacts": {
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              },
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268435456
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "bind": {
+            "samples": 4,
+            "interior_samples": 2,
+            "rss_baseline_bytes": 12734464,
+            "rss_final_bytes": 16662528,
+            "rss_observed_max_bytes": 16662528,
+            "first_sample_ns": 498537688130350,
+            "last_sample_ns": 498537705623725,
+            "maximum_sample_gap_ns": 8527916,
+            "cgroup_observed_max_bytes": 82415616,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 15966208,
+              "file": 63242240,
+              "file_dirty": 24907776,
+              "file_writeback": 0,
+              "kernel": 2027520,
+              "kernel_stack": 81920,
+              "pagetables": 212992,
+              "shmem": 0,
+              "slab": 1654392,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "write": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 16662528,
+            "rss_final_bytes": 16797696,
+            "rss_observed_max_bytes": 16797696,
+            "first_sample_ns": 498537706078975,
+            "last_sample_ns": 498537718509683,
+            "maximum_sample_gap_ns": 7004916,
+            "cgroup_observed_max_bytes": 82173952,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 16044032,
+              "file": 63369216,
+              "file_dirty": 24907776,
+              "file_writeback": 0,
+              "kernel": 2027520,
+              "kernel_stack": 81920,
+              "pagetables": 212992,
+              "shmem": 0,
+              "slab": 1654392,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 0,
+                "allocated_observed_max_bytes": 0
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "commit": {
+            "samples": 231,
+            "interior_samples": 229,
+            "rss_baseline_bytes": 16797696,
+            "rss_final_bytes": 27553792,
+            "rss_observed_max_bytes": 44158976,
+            "first_sample_ns": 498537719016641,
+            "last_sample_ns": 498539268095600,
+            "maximum_sample_gap_ns": 9985709,
+            "cgroup_observed_max_bytes": 110862336,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 43003904,
+              "file": 65200128,
+              "file_dirty": 25055232,
+              "file_writeback": 0,
+              "kernel": 2080768,
+              "kernel_stack": 81920,
+              "pagetables": 266240,
+              "shmem": 0,
+              "slab": 1659592,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 144232,
+                "allocated_observed_max_bytes": 147456
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "up_to_date": {
+            "samples": 9,
+            "interior_samples": 7,
+            "rss_baseline_bytes": 27553792,
+            "rss_final_bytes": 42586112,
+            "rss_observed_max_bytes": 42586112,
+            "first_sample_ns": 498539268679434,
+            "last_sample_ns": 498539318566850,
+            "maximum_sample_gap_ns": 8986167,
+            "cgroup_observed_max_bytes": 109699072,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 41390080,
+              "file": 65282048,
+              "file_dirty": 25063424,
+              "file_writeback": 0,
+              "kernel": 2076672,
+              "kernel_stack": 81920,
+              "pagetables": 262144,
+              "shmem": 0,
+              "slab": 1659592,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 172032
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "verify": {
+            "samples": 3,
+            "interior_samples": 1,
+            "rss_baseline_bytes": 42586112,
+            "rss_final_bytes": 42586112,
+            "rss_observed_max_bytes": 42586112,
+            "first_sample_ns": 498539318963684,
+            "last_sample_ns": 498539329475184,
+            "maximum_sample_gap_ns": 6058000,
+            "cgroup_observed_max_bytes": 109699072,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 41414656,
+              "file": 65335296,
+              "file_dirty": 25079808,
+              "file_writeback": 0,
+              "kernel": 2076672,
+              "kernel_stack": 81920,
+              "pagetables": 262144,
+              "shmem": 0,
+              "slab": 1659592,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 172032
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "release": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 42586112,
+            "rss_final_bytes": 42586112,
+            "rss_observed_max_bytes": 42586112,
+            "first_sample_ns": 498539329971684,
+            "last_sample_ns": 498539330739309,
+            "maximum_sample_gap_ns": 767625,
+            "cgroup_observed_max_bytes": 109699072,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 41414656,
+              "file": 65343488,
+              "file_dirty": 25079808,
+              "file_writeback": 0,
+              "kernel": 2076672,
+              "kernel_stack": 81920,
+              "pagetables": 262144,
+              "shmem": 0,
+              "slab": 1659592,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 172032
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "idle": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 42586112,
+            "rss_final_bytes": 42586112,
+            "rss_observed_max_bytes": 42586112,
+            "first_sample_ns": 498539331124059,
+            "last_sample_ns": 498539331626892,
+            "maximum_sample_gap_ns": 502833,
+            "cgroup_observed_max_bytes": 109699072,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 41414656,
+              "file": 65355776,
+              "file_dirty": 25079808,
+              "file_writeback": 0,
+              "kernel": 2076672,
+              "kernel_stack": 81920,
+              "pagetables": 262144,
+              "shmem": 0,
+              "slab": 1659592,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 172032
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "stop": {
+            "samples": 2,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 42586112,
+            "rss_final_bytes": 39968768,
+            "rss_observed_max_bytes": 42586112,
+            "first_sample_ns": 498539331993350,
+            "last_sample_ns": 498539333602642,
+            "maximum_sample_gap_ns": 1609292,
+            "cgroup_observed_max_bytes": 109699072,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 41414656,
+              "file": 65372160,
+              "file_dirty": 25079808,
+              "file_writeback": 0,
+              "kernel": 2076672,
+              "kernel_stack": 81920,
+              "pagetables": 262144,
+              "shmem": 0,
+              "slab": 1659592,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 172032
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          },
+          "finished": {
+            "samples": 1,
+            "interior_samples": 0,
+            "rss_baseline_bytes": 39968768,
+            "rss_final_bytes": null,
+            "rss_observed_max_bytes": 39968768,
+            "first_sample_ns": 498539333970892,
+            "last_sample_ns": 498539333970892,
+            "maximum_sample_gap_ns": 0,
+            "cgroup_observed_max_bytes": 107048960,
+            "cgroup_categories_observed_max_bytes": {
+              "anon": 38764544,
+              "file": 65372160,
+              "file_dirty": 25079808,
+              "file_writeback": 0,
+              "kernel": 2076672,
+              "kernel_stack": 65536,
+              "pagetables": 262144,
+              "shmem": 0,
+              "slab": 1659592,
+              "sock": 0
+            },
+            "artifacts": {
+              "overlay.sqlite": {
+                "logical_observed_max_bytes": 196608,
+                "allocated_observed_max_bytes": 268632064
+              },
+              "store.sqlite": {
+                "logical_observed_max_bytes": 24678400,
+                "allocated_observed_max_bytes": 24678400
+              },
+              "store.sqlite-wal": {
+                "logical_observed_max_bytes": 168952,
+                "allocated_observed_max_bytes": 172032
+              },
+              "store.sqlite-shm": {
+                "logical_observed_max_bytes": 32768,
+                "allocated_observed_max_bytes": 32768
+              }
+            },
+            "phase_peak_bytes": null,
+            "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+            "scope": "external-acknowledged-phase-window",
+            "coverage": "END_MARKER_ONLY",
+            "numeric_acceptance": "OWNER_DEFERRED"
+          }
+        },
+        "unavailable": [
+          "exclusive macOS file-cache/kernel/physical-I/O attribution",
+          "internal SQLite copy/pager-page attribution",
+          "continuous phase maxima",
+          "cross-size RSS acceptance"
+        ],
+        "category_rule": "overlapping process/cgroup fields must not be summed"
+      },
+      "child_joined": true,
+      "artifact_directory_at_exit": "/tmp/layerfs-q1-9-Wide-clone",
+      "after_command_custody": "owned --rm container removed after child success; local backing removed; original JSON/text receipts retained"
+    }
+  },
+  "numeric_acceptance": "OWNER_DEFERRED"
+}

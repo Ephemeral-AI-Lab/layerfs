@@ -6,7 +6,7 @@
 > Original source links below refer to their recorded Git revisions, not the
 > current tree. Historical measurements and verdicts are unchanged.
 
-The active SDK's [history handler](../../crates/layerfs-api/sdk/src/runtime/handlers/history.rs)
+The active SDK's history handler (`core/crates/layerfs-api/sdk/src/runtime/handlers/history.rs` at local Git `52e1f2e18`)
 uses the existing initialized HistoryProvider and Storage owners. It extends the
 [serving-scope Save registry](22-sdk-runtime.md), preserving its public entry points.
 The new real handler group follows the owner-selected S7–S13 organization.

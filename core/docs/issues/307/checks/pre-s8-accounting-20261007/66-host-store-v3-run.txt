@@ -1,0 +1,44 @@
+# {"timestamp": "2026-10-07T13:30:29.662579+00:00", "command": ["python3", "-B", "-c", "import fcntl,subprocess,sys; from pathlib import Path; f=Path(\"benchmark-results/fs-bench-pro/.run.lock\").open(\"a+b\"); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB); sys.exit(subprocess.run(sys.argv[1:]).returncode)", "perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "core/benchmark/fs-bench-pro/diagnostics/pre_s8_resources.py", "--binary", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/store_accounting", "--out", "core/docs/issues/307/checks/pre-s8-accounting-20261007/67-host-store-v3", "--database", "/tmp/layerfs-pre-s8-accounting-host-store-v3-20261007", "--case", "store-commit", "--registration", "core/docs/issues/307/checks/pre-s8-accounting-20261007/63-host-store-v3-registration.json", "--prepared", "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide"], "construction_workers": "1", "binaries": {"/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/store_accounting": "c556bb15401a15682714f56074397fe1cf65ba8a64731bda3b5f2806b326e291"}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "02922afa160510c0d7ed5ec3e0ccb7b5fbf326d0", "wall_stop": "specified in command; build is not test execution"}
+{
+  "admission_eligible": false,
+  "artifact_directory": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-31325-Wide-clone",
+  "attempt_count": 1,
+  "case": "store-commit",
+  "child_exit": 0,
+  "child_joined": true,
+  "child_pid": 31325,
+  "collector_wall_ns": 3722518667,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "44b8f6c039bdaa1a09b65ea68c657d0d8e32894e07dede604e47431f2c57860b",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": null,
+  "phases": [
+    "clone",
+    "startup",
+    "bind",
+    "write",
+    "commit",
+    "up_to_date",
+    "verify",
+    "release",
+    "idle",
+    "stop",
+    "finished"
+  ],
+  "resource_records": 171,
+  "resources_sha256": "46eaa97b847654ff5a54cbb02f304a8b73b47fb84566c803f0b891c6bb75cdf3",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "RECORDED"
+}
+
+# complete_command_ns=3863019875
+
+# exit=0

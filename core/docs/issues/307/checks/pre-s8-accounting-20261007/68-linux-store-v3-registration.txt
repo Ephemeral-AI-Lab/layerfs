@@ -1,0 +1,14 @@
+# {"timestamp": "2026-10-07T13:30:51.687976+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-register-store-v3", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "python3", "-B", "core/benchmark/fs-bench-pro/runner.py", "register", "--family", "cluster-two-evidence", "--manifest", "core/docs/issues/307/checks/pre-s8-accounting-20261007/64-linux-store-v3-registration.json"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "02922afa160510c0d7ed5ec3e0ccb7b5fbf326d0", "wall_stop": "specified in command; build is not test execution"}
+{
+  "case": "store-commit",
+  "errors": [],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "qualification": "NOT_EVALUATED",
+  "registration_only": true,
+  "schema": "pre-s8-accounting-registration-result-v1",
+  "status": "PASS"
+}
+
+# complete_command_ns=690279500
+
+# exit=0

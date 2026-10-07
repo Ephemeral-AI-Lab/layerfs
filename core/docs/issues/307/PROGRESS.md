@@ -8,7 +8,24 @@ The [implementation plan](../303/07-implementation-validation.md) owns milestone
 dependencies and exits. S1–S6 are complete with their exit audits and covering evidence. S0 and S7–S13 remain
 unchecked until their complete implementation and required evidence exist.
 
-## Current completion plan (2026-10-07)
+## Current pre-S8 handoff (2026-10-07)
+
+The owner-dispatched serverless Store assignment is recorded in the
+[pre-S8 completion handoff](PRE-S8-COMPLETION-20261007.md). F0–F13 and F15 have
+Disposable functional/count proofs. F14's registered direct routes, original
+whole-operation accounting and supported phase diagnostics are complete under
+the [owner's diagnostic acceptance scope](PRE-S8-ACCEPTANCE-DECISION-20261007.md);
+continuous phase-peak/physical attribution remains explicitly incomplete.
+
+Daemons open the shared Store directly; SDK host-mediated transport is retired.
+Current Branch Commit is overwrite-only in successful database effect order,
+with captured parent provenance retained. Old HeadMoved and transport receipts
+remain historical. Durable execution is deferred; actual native files above4GiB
+are waived. S8 FUSE/Bash and S10 live namespace normalization remain separate
+work. No release or whole S7–S13 completion is claimed. The earlier entries below
+retain their original checkpoint scope and do not dispatch the retired topology.
+
+## Previous completion plan (2026-10-07)
 
 The [complete S7–S13 plan](IMPLEMENTATION-PLAN-S7-S13-20261007.md) now owns
 remaining-work ordering for a whole-cluster-two assignment, with its

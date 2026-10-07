@@ -1,0 +1,24 @@
+# {"timestamp": "2026-10-07T13:38:29.430743+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-c", "\nfrom pathlib import Path\nimport json,hashlib,re,subprocess\nroot=Path.cwd();base=root/\"core/docs/issues/307/checks/pre-s8-accounting-20261007\"\ndef digest(p):\n h=hashlib.sha256()\n with Path(p).open(\"rb\") as f:\n  while b:=f.read(65536):h.update(b)\n return h.hexdigest()\nindex=json.loads((base/\"73-retained-evidence-index.json\").read_text())\nfor row in index[\"files\"]:assert digest(root/row[\"path\"])==row[\"sha256\"],row[\"path\"]\noriginal=json.loads((root/\"core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/receipt.json\").read_text())[\"declared_noninputs\"]\nfor p,h in original.items():assert digest(root/p)==h,p\nassert not subprocess.check_output([\"git\",\"diff\",\"21ff451fa\",\"--\",\"crates\"])\nassert digest(root/\"tools/production_loc.py\")==\"c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb\"\nchanged=subprocess.check_output([\"git\",\"diff\",\"--name-only\"],text=True).splitlines()+[\"core/docs/issues/307/PRE-S8-COMPLETION-20261007.md\"]\nlinks=0\nfor file in changed:\n if not file.endswith(\".md\"):continue\n p=root/file\n for target in re.findall(r\"\\]\\(([^)]+)\\)\",p.read_text()):\n  if \"://\" in target or target.startswith(\"#\"):continue\n  name=target.split(\"#\",1)[0];assert (p.parent/name).exists(),(file,target);links+=1\nsubprocess.run([\"git\",\"diff\",\"--check\",\"--\",\".\",\":!core/docs/issues/307/checks\"],check=True)\ncontainers=subprocess.check_output([\"docker\",\"ps\",\"--format\",\"{{.ID}}\"],text=True).splitlines()\nprotected=[\"9cf2fe345496\",\"ce75ac504df9\",\"d2433851ea59\",\"d2550144998b\"]\nassert all(c in containers for c in protected)\nprint(json.dumps({\"status\":\"PASS\",\"unchanged_indexed_artifacts\":index[\"file_count\"],\"local_document_targets\":links,\"preserved_note_hashes\":original,\"protected_running_containers\":protected,\"root_reference\":\"unchanged since21ff451fa\",\"product_changes_in_document_checkpoint\":False,\"counter_sha256\":\"c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb\"},indent=2))\n"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "02922afa160510c0d7ed5ec3e0ccb7b5fbf326d0", "wall_stop": "specified in command; build is not test execution"}
+{
+  "status": "PASS",
+  "unchanged_indexed_artifacts": 489,
+  "local_document_targets": 188,
+  "preserved_note_hashes": {
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  },
+  "protected_running_containers": [
+    "9cf2fe345496",
+    "ce75ac504df9",
+    "d2433851ea59",
+    "d2550144998b"
+  ],
+  "root_reference": "unchanged since21ff451fa",
+  "product_changes_in_document_checkpoint": false,
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb"
+}
+
+# complete_command_ns=524090792
+
+# exit=0

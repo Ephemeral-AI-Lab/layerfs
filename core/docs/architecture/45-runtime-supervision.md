@@ -6,7 +6,7 @@
 > Original source links below refer to their recorded Git revisions, not the
 > current tree. Historical measurements and verdicts are unchanged.
 
-The [SDK Supervisor](../../crates/layerfs-api/sdk/src/runtime/supervisor/owner.rs)
+The SDK Supervisor (`core/crates/layerfs-api/sdk/src/runtime/supervisor/owner.rs` at local Git `52e1f2e18`)
 composes an already initialized `Runtime::sessions()` serving scope, the existing
 fair `Service`, shared `InputPool`/`OutputPool`, and authenticated native `Connection`
 owners. The application supplies completed KK connections and drives the supervisor
@@ -25,7 +25,7 @@ That partial startup is not a completed attachment.
 
 ## Bounded serving turns and independent I/O
 
-Each [turn](../../crates/layerfs-api/sdk/src/runtime/supervisor/drive.rs) selects the
+Each turn (`core/crates/layerfs-api/sdk/src/runtime/supervisor/drive.rs` at local Git `52e1f2e18`) selects the
 next occupied attachment by scanning at most the configured slots, polls that one
 owner, then invokes at most one existing fair service job. Unused connection
 admission slots do not consume separate caller turns. The cursor advances after
@@ -85,7 +85,7 @@ capacity plus fixed ownership charge before entering its queue.
 
 ## Explicit local completion fences
 
-The [fence owner](../../crates/layerfs-api/sdk/src/runtime/supervisor/fences.rs)
+The fence owner (`core/crates/layerfs-api/sdk/src/runtime/supervisor/fences.rs` at local Git `52e1f2e18`)
 first disconnects the exact service connection after synchronous provider work has
 returned. Its queued requests become `Unattempted`; already-dispatched results and
 Saves remain unchanged. It then starts both independent socket fences and detaches
@@ -166,7 +166,7 @@ and decides no publication. No default RPC/Exec deadline or new budget is select
 
 ## Consumer attachment
 
-[Attachment](../../crates/layerfs-api/sdk/src/client/attachment.rs) consumes one
+Attachment (`core/crates/layerfs-api/sdk/src/client/attachment.rs` at local Git `52e1f2e18`) consumes one
 authenticated Connection and a shared Reply-kind ReceiveBudget, returning original
 native ownership on configuration/start refusal before any request. It assembles
 existing `ClientSender`, `ClientReceiver`, `Calls` and independent CloseHandle, and
@@ -220,7 +220,7 @@ R1's scoped validation receipts own their original check outcomes. The subsequen
 [sparse serial/progress checkpoint](../issues/307/SPARSE-SERIAL-PROGRESS-20261007.md)
 records occupied-slot fairness, observed phase/provider progress, native queue/
 sender/credit wakes and two real application queue cases. The
-[application proofs](../../crates/layerfs-api/sdk/tests/supervisor_application.rs)
+application proofs (`core/crates/layerfs-api/sdk/tests/supervisor_application.rs` at local Git `52e1f2e18`)
 keep one initialized Store/Sessions/provider owner on the main thread. The native
 consumer publishes original authenticated Attach/Fence commands into a bounded
 queue, then notifies. A command queued before the latch clear is still found by

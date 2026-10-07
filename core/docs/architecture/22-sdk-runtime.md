@@ -7,13 +7,13 @@
 > current tree. Historical measurements and verdicts are unchanged.
 
 The #307 checkpoint after `042849109` embeds an initial runtime at the planned
-[SDK composition path](../../crates/layerfs-api/sdk/src/runtime/mod.rs). The active
+SDK composition path (`core/crates/layerfs-api/sdk/src/runtime/mod.rs` at local Git `52e1f2e18`). The active
 package is `layerfs-sdk`; its normal product dependency graph contains content,
 storage, history, persistence, telemetry and the native bridge. It has no server
 dependency. Logical bridge service, history adapters, five Workspace operations
 and complete S9 exits remain unfinished.
 
-[Runtime](../../crates/layerfs-api/sdk/src/runtime/owner.rs) receives already-open
+Runtime (`core/crates/layerfs-api/sdk/src/runtime/owner.rs` at local Git `52e1f2e18`) receives already-open
 `Handles`, initializes one demand Storage plus configured independent Save Storage
 handles once, and owns application authority. It neither creates/reopens the
 provider per call nor starts another named service. The current owning provider
@@ -27,7 +27,7 @@ Caller-controlled terminal scope drop ends local producer ownership; it does not
 roll back acknowledged global objects/history. Cross-process disconnect/close
 fences and restart receipt recovery remain integration work.
 
-[Binding](../../crates/layerfs-api/sdk/src/runtime/binding.rs) ties an application-
+Binding (`core/crates/layerfs-api/sdk/src/runtime/binding.rs` at local Git `52e1f2e18`) ties an application-
 authenticated peer, exact Workspace incarnation, Branch snapshot, catalog and
 catalog/runtime incarnations. The application assigns a fresh nonzero runtime
 incarnation and must never reuse it. Bind authorizes the peer/Workspace/Branch,
@@ -39,7 +39,7 @@ from a completed native KK handshake at SDK bind; raw bytes cannot construct it.
 See [native channels](23-native-bridge.md). Wire capabilities, logical codecs and
 complete framed service remain unfinished; direct SDK proofs do not qualify them.
 
-[Sessions](../../crates/layerfs-api/sdk/src/runtime/sessions.rs) indexes a fixed
+Sessions (`core/crates/layerfs-api/sdk/src/runtime/sessions.rs` at local Git `52e1f2e18`) indexes a fixed
 configured set of live/retained processing slots, each with a monotonically burned
 serial. Capabilities are private typed values, checked against the runtime and
 the complete binding. Slot reuse and a new serving scope cannot reuse an exposed
@@ -125,8 +125,8 @@ R4 integrated consumers and complete S7/S9 qualification remain open.
 ## R2 root-binding context
 
 The S7–S13 continuation after `da331dfb607f5939b3e150c82480faabf6fb258c`
-extends [`Sessions::bind`](../../crates/layerfs-api/sdk/src/runtime/sessions.rs)
-through [authorized root demands](../../crates/layerfs-api/sdk/src/runtime/root_binding.rs).
+extends `Sessions::bind` (`core/crates/layerfs-api/sdk/src/runtime/sessions.rs` at local Git `52e1f2e18`)
+through authorized root demands (`core/crates/layerfs-api/sdk/src/runtime/root_binding.rs` at local Git `52e1f2e18`).
 The coherent Branch snapshot still fixes the expected root, scope and profile.
 Binding now reads the actual root inode along its indexed canonical table path,
 checks the root-directory/zero-reference invariant, decodes its directory root
@@ -153,7 +153,7 @@ The continuation after `a41d131f262c926015798d05096ebeaa01c70cdc` adds
 [`FinalizedObject::validate_context`](../../crates/layerfs-content/src/object/output.rs)
 before the original Save accepts an SDK object. Local admission re-derives exact
 references; fresh authority checks cover every further child demand through the
-[authorized object adapter](../../crates/layerfs-api/sdk/src/runtime/authorized_objects.rs).
+authorized object adapter (`core/crates/layerfs-api/sdk/src/runtime/authorized_objects.rs` at local Git `52e1f2e18`).
 The adapter calls that same Save's read method, so pending children are visible
 without creating another provider or reopening a Store. Each Content demand uses
 a one-ID window, with actual chunk slice, child fill/level/summary, inode placement,

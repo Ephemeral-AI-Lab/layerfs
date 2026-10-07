@@ -210,3 +210,10 @@ to observe an exact finite drain without submitting a SQL/status cleanup pump;
 it is cumulative, not a new retention or runtime capacity limit. The
 [finite engine plan/proof](../issues/307/PRE-S8-F10-F14-ENGINE-PLAN-20261007.md)
 retains the earlier partial-drain observations and the successor receipts.
+
+The pre-S8 [accounting checkpoint](../issues/307/PRE-S8-F14-20261007.md) now
+registers and executes the direct finite-engine and Store-half Commit routes on
+macOS/Linux. Independent validation reconciles original family receipts and all
+opened Store-handle counters, with supported process/cgroup/file observations.
+Continuous phase peaks, exclusive physical attribution and numerical acceptance
+remain explicitly unqualified; diagnostic observations do not change Owner policy.

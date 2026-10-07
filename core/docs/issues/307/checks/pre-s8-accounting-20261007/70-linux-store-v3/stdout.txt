@@ -1,0 +1,16 @@
+ENGINE_PHASE clone pid=9
+Q1_CLONE setup=clone bytes=24678400 provider=buffered_byte_copy window=131072 original_retained=true no_native_source=true prepared=/prepared
+STORE_ARTIFACT_DIRECTORY /tmp/layerfs-q1-9-Wide-clone
+ENGINE_PHASE startup pid=9
+ENGINE_PHASE bind pid=9
+ENGINE_PHASE write pid=9
+ENGINE_PHASE commit pid=9
+STORE_WHOLE_COMMIT outcome=Committed owner_jobs=2 writes=3 initial=1 refills=0 publication=1 history=1 namespace_files=100000
+ENGINE_PHASE up_to_date pid=9
+STORE_WHOLE_COMMIT outcome=UpToDate owner_jobs=2 writes=3 initial=1 refills=0 publication=1 history=1 namespace_files=100000
+ENGINE_PHASE verify pid=9
+ENGINE_PHASE release pid=9
+ENGINE_PHASE idle pid=9
+ENGINE_PHASE stop pid=9
+STORE_RETAINED directory=/tmp/layerfs-q1-9-Wide-clone physical_cleanup=gone original_results=released
+ENGINE_PHASE finished pid=9
