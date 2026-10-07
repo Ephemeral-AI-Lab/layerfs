@@ -120,10 +120,7 @@ fn non_native_windows_skip_the_native_insert_without_losing_targets_or_charges()
 
 #[test]
 fn narrow_bindings_preserve_mixed_payloads_after_an_existing_alias_boundary() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("acquisition-mixed-window-prefix");
         let handles = create(&temp, profile);
         let port = &handles.acquisition;
@@ -251,10 +248,7 @@ fn directory_uniqueness_and_native_evidence_keep_the_first_refusal_after_a_prefi
 
 #[test]
 fn windows_amortize_execution_without_losing_aliases_or_atomic_completion() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("acquisition-window-execution");
         let handles = create(&temp, profile);
         let port = &handles.acquisition;
@@ -547,3 +541,9 @@ fn entry_refusal_order_and_full_unit_rollback_survive_execution_windows() {
         1
     );
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

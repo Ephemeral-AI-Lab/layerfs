@@ -180,3 +180,21 @@ and (3) service acceptance. This does not waive S7/S9 exits. Future routine
 collection uses run-level identities, compact events and fixed aggregates;
 focused detailed traces require a named unresolved requirement. The500MB and
 prospective120s owner decisions remain in force.
+
+
+## Operation accounting checkpoint 4 (2026-10-07)
+
+A later human-dispatched assignment resumed from the E04-closed handoff. The
+[completion-ownership checkpoint](S7-COMPLETION-OWNERSHIP-20261007.md) implements
+per-original-job statement families, publication of the foreground aggregate
+before completion visibility, and explicit charging of receipt, queue and held
+storage under the unchanged 8 MiB / 64 KiB / 16-namespace / two-slot limits.
+Host and Linux functional proofs pass; all 32 lifecycle slots are admitted at a
+1,968-byte real charge under ordinary saturation. The same commit makes the
+mixed-profile external Rust tests select Disposable.
+
+E2 stays INCOMPLETE: nine of E04's eleven dimensions remain unavailable, the
+retained evidence schema has no family-carrying successor, and no diagnostic
+was collected at the new source. E1 samples remain zero, all 27 proposals
+NOT_RUN, qualification NOT_EVALUATED; E3, E4 and every S9 row are unchanged.
+Outstanding Durable execution remains NOT_RUN — deferred by owner.

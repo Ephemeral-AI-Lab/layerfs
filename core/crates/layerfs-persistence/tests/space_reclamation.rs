@@ -73,10 +73,7 @@ fn number(path: &std::path::Path, pragma: &str) -> u64 {
 
 #[test]
 fn bounded_reclamation_preserves_another_live_operation_and_survives_reopen() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("bounded-reclamation");
         let path = temp.join("store.sqlite");
         let handles = Handles::create(
@@ -240,3 +237,9 @@ fn path_windows_use_actual_lengths_without_exceeding_column_or_row_budgets() {
         }
     }
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

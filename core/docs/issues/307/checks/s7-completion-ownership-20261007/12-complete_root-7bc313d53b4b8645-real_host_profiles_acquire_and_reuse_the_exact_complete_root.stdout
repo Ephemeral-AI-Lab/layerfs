@@ -1,0 +1,7 @@
+
+running 1 test
+test real_host_profiles_acquire_and_reuse_the_exact_complete_root ... S9_COMPLETE_ROOT entries=25 work=NamespaceWork { unique_files: 8, regular_aliases: 1, entries: 25, jobs: 9, frontier: 5, directory_children: 12, wide_directories: 0, child_window_rows: 12, directory_bindings: 24, read_units: 17, write_units: 7, read_window_rows: 25, write_window_rows: 12, write_window_bytes: 2759, discard_units: 1, backing_rows: 33, backing_bytes: 4296 }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+

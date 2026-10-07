@@ -447,3 +447,22 @@ remains INCOMPLETE with eleven gaps, qualification NOT_EVALUATED and E1 samples0
 this is not S7/S9 completion. Original failed runs, validator timeout and host
 admission refusal remain retained. The next independent E2 work is real per-job
 family and credit/capacity ownership, with no product cap increase.
+
+## Per-job families and completion ownership (2026-10-07)
+
+After `490c3ab3a`, Daemon Completion receipts carry exact per-family statement
+rows whose sums equal the foreground family deltas on success, failure, parked
+and unattempted paths, and the aggregate is published before a completion is
+visible. Receipt, queue-pointer and held-result storage is charged as the
+largest of three non-coexisting stages; the lane table is fixed at startup and
+removed from job bytes. Caps are unchanged and every lifecycle slot fits at its
+real 1,968-byte charge. See the [checkpoint](S7-COMPLETION-OWNERSHIP-20261007.md)
+and [receipts](checks/s7-completion-ownership-20261007/00-index.json): 73 host
+and 40 Linux bodies pass, with three earlier invocations retained as failures.
+
+This closes the "per-original-job statement families" gap in source and scoped
+proof, and makes queue-only job occupancy observable. It is not an E2 exit:
+whole-operation Needs/base/publication/reply accounting, provider facts,
+copies, SQL bind/EXPLAIN correlation, visited rows, eligible debt, waits,
+residency, physical I/O and cache enforcement remain open, and the retained
+evidence schema has no family successor. S7 remains CHECKPOINT/unchecked.

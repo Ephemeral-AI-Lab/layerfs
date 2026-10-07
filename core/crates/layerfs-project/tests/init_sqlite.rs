@@ -13,10 +13,7 @@ use support::*;
 #[test]
 fn an_unsupported_platform_refuses_the_store_before_any_file_exists() {
     use layerfs_storage::port::PersistenceError;
-    for selected in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for selected in DEVELOPMENT_PROFILES {
         let fixture = Fixture::new(0);
         let store = fixture.path.join("store.sqlite");
         let refused = Handles::create(
@@ -38,10 +35,7 @@ fn an_unsupported_platform_refuses_the_store_before_any_file_exists() {
 #[cfg(target_os = "macos")]
 #[test]
 fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
-    for selected in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for selected in DEVELOPMENT_PROFILES {
         for count in [100, 1000] {
             let fixture = Fixture::new(count);
             let h = Handles::create(
@@ -181,3 +175,9 @@ fn a_store_inside_the_source_is_refused_before_an_operation_begins() {
         .unwrap();
     assert_eq!((owner.operation, owner.epoch), (1, 1));
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

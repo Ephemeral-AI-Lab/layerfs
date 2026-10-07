@@ -1,0 +1,19 @@
+
+running 14 tests
+test accepted_children_remain_with_consumer_when_final_file_root_is_refused ... ok
+test changed_context_or_missing_edit_is_terminal_before_consumer_acceptance ... ok
+test first_provider_absence_denial_identity_and_length_mismatch_never_prove_newness ... ok
+test inherited_gap_and_window_crossing_authenticated_eof_are_zero_without_base_fallback ... ok
+test length_growth_and_true_new_file_do_not_use_a_fabricated_base ... ok
+test logical_close_allows_retained_reads_but_refuses_normalization_record_mutation ... ok
+test many_edits_use_numbered_records_after_install_and_reads_survive_close ... ok
+test new_hole_above_four_gib_uses_bounded_original_run_work ... ok
+test occupied_context_and_retired_reader_keep_original_completions_without_replay ... ok
+test overlapping_writes_shrink_regrow_and_cross_cell_spans_match_final_bytes ... ok
+test prepare_after_actual_binding_install_rebinds_only_the_retained_original_root ... ok
+test same_byte_overwrite_retains_original_root_with_one_classification ... ok
+test small_window_with_oversized_retained_capacity_refuses_before_pending_or_output ... ok
+test unchanged_or_restarted_continuation_refuses_without_spinning_or_output ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+

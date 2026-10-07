@@ -144,7 +144,7 @@ fn terminal_refusal_keeps_original_completion_and_other_scope_progresses() {
             layerfs_daemon::IndexedScratchReply::Applied(IndexedApply::NotApplied { index: 0, .. })
         ))
     ));
-    assert!(done.work().sql.vm_steps > 0);
+    assert!(done.work().sql.total().vm_steps > 0);
     let before = client.diagnostics().unwrap();
     assert_eq!(before.outstanding, 1);
     assert!(before.credited_bytes > 0);

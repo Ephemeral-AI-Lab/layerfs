@@ -1,0 +1,6 @@
+
+running 1 test
+test stage_saved_candidate_retains_original_denied_and_absent_descendant_failures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.02s
+

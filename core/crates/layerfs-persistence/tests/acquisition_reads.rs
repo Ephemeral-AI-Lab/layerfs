@@ -108,10 +108,7 @@ fn stale(port: &dyn Acquisition, owner: Owner) {
 
 #[test]
 fn valid_empty_missing_released_and_foreign_owners_remain_distinct() {
-    for profile in [
-        SqlitePersistenceProfile::Disposable,
-        SqlitePersistenceProfile::Durable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("owned-empty-reads");
         let path = temp.join("store.sqlite");
         let handles = create(&path, profile);
@@ -282,3 +279,9 @@ fn typed_reads_and_narrow_bindings_preserve_operation_isolation_order_and_bounds
         .is_empty());
     assert_eq!(port.job(other, 3).unwrap(), None);
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

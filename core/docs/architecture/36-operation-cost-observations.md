@@ -75,7 +75,15 @@ retains its platform/exclusive-dense-file assumptions and S6 qualification limit
 original owner's completion, including failed attempts and readiness checks which
 park that job. The result/receipt retains the same aggregate byte credit until
 all Pending/Completion owners release it. Admission charges the receipt's size
-and includes it in lifecycle reservation validation. Foreground and automatic
+and includes it in lifecycle reservation validation. Since the checkpoint after
+`490c3ab3a` its SQL is [JobSql](../../crates/layerfs-daemon/src/service/job_sql.rs):
+exact per-family rows of that job's own connection deltas, with `total()` and a
+family-indexed `expanded()` form. The same deltas feed the foreground owner
+aggregate before the completion is visible, so per-job family sums equal the
+foreground family deltas; see [completion ownership](21-daemon-owner.md#s7-completion-ownership-and-family-receipts-307).
+The retained E01/E04 serializations keep their historical statement-total
+schema and its `statement_family_status` field; no family record is added to
+those streams by inference. Foreground and automatic
 maintenance keep separate SQL, payload and allocation aggregates. Parked turns
 are counted; no failed operation is replayed. Queue admission-to-final-turn wall
 includes parking; final service and inclusive SQL observations overlap, and must

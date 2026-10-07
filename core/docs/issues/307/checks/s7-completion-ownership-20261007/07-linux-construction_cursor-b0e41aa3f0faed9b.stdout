@@ -1,0 +1,8 @@
+
+running 3 tests
+test attempted_and_unattempted_range_failures_keep_original_custody_without_resend ... ok
+test real_owner_preserves_sealed_keys_and_observes_bounded_reply_copies ... ok
+test unavailable_capability_retains_typed_original_without_provider_substitution ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

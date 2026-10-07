@@ -518,7 +518,7 @@ fn pack_insert_pages_keep_large_blob_binding_ownership_separate() {
 #[test]
 fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
     use layerfs_persistence::SqlitePersistenceProfile::{Disposable, Durable};
-    for selected in [Durable, Disposable] {
+    for selected in DEVELOPMENT_PROFILES {
         let t = Temp::new("explicit-profile");
         let path = t.join("db");
         let cfg = PersistenceConfig::sqlite(&path).with_sqlite_profile(selected);
@@ -603,10 +603,7 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
 
 #[test]
 fn multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity() {
-    for profile in [
-        layerfs_persistence::SqlitePersistenceProfile::Durable,
-        layerfs_persistence::SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("publication-subpages");
         let h = Handles::create(
             PersistenceConfig::sqlite(temp.join("db")).with_sqlite_profile(profile),
@@ -654,3 +651,10 @@ fn multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomi
         );
     }
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [layerfs_persistence::SqlitePersistenceProfile; 1] =
+    [layerfs_persistence::SqlitePersistenceProfile::Disposable];

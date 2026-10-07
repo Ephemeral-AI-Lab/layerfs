@@ -360,10 +360,7 @@ impl Fixture {
 
 #[test]
 fn binding_checks_actual_root_directory_and_child_roles_under_both_store_profiles() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let mut valid = Fixture::new(Shape::Valid, false, profile);
         assert_eq!(valid.bind().unwrap().root_serial(), 1);
         assert!(valid.demands.borrow().contains(&valid.table));
@@ -662,10 +659,7 @@ fn save_candidate(
 
 #[test]
 fn stage_saved_candidate_cannot_change_the_captured_root_inode_serial() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let mut fixture = Fixture::new(Shape::Valid, false, profile);
         let binding = fixture.bind().unwrap();
         assert_eq!(binding.root_serial(), 1);
@@ -701,10 +695,7 @@ fn stage_saved_candidate_cannot_change_the_captured_root_inode_serial() {
 
 #[test]
 fn stage_saved_candidate_validates_actual_root_inode_metadata_and_descended_summary() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let mut fixture = Fixture::new(Shape::Valid, false, profile);
         let binding = fixture.bind().unwrap();
         for shape in [
@@ -744,10 +735,7 @@ fn stage_saved_candidate_validates_actual_root_inode_metadata_and_descended_summ
 
 #[test]
 fn stage_saved_candidate_retains_original_denied_and_absent_descendant_failures() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let mut fixture = Fixture::new(Shape::Valid, false, profile);
         let binding = fixture.bind().unwrap();
         let candidate = save_candidate(
@@ -807,3 +795,9 @@ fn stage_saved_candidate_retains_original_denied_and_absent_descendant_failures(
         assert!(!history.terminal_unknown());
     }
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

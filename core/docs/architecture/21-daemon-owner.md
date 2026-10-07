@@ -52,8 +52,10 @@ before copying request arguments; that dispatch integration is S8 work.
 Owner shutdown fences future admission and returns Stopped for unattempted queued
 work. A capture returning from readiness cannot requeue behind the stopping fence.
 An already attempted short job can complete with its actual result; stopping does
-not claim rollback of published state. Single-slot result channels have one sender
-and one send per job. No queue lock spans SQL, result delivery or worker join.
+not claim rollback of published state. Each job has one publisher and one
+publication (see the completion-ownership checkpoint below; the earlier
+single-slot result channel is replaced). No queue lock spans SQL, result
+delivery or worker join.
 Whole daemon shutdown is distinct from one Workspace's terminal unmount.
 
 The overlay's new schema v3 records an installed-generation floor. A known install
@@ -142,3 +144,57 @@ See [shared physical capacity](35-shared-physical-capacity.md) and the
 [S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
 checkpoint limitations and numbers above retain their original source identity.
 Native/runtime/kernel and integrated qualification remain later milestones.
+
+## S7 completion ownership and family receipts (#307)
+
+Implemented source: the checkpoint after `490c3ab3a`. Admission numbers are
+unchanged: 8 MiB total, 64 KiB lifecycle reserve, 16 namespaces, two lifecycle
+slots each. This describes source and scoped functional proofs, not S7
+qualification; see the [checkpoint report](../issues/307/S7-COMPLETION-OWNERSHIP-20261007.md).
+
+[Completion](../../crates/layerfs-daemon/src/service/completion.rs) gives each
+admitted job one typed cell shared by the caller's `Pending`/`Completion` and
+the owner's single publisher. The cell carries the job's credit, so the credit
+lasts exactly as long as anything can still reach the result. A publication is
+handed out once; later takes report `Disconnected`, and a job lost without an
+outcome disconnects its waiter. A blocked `wait` registers its thread before
+the transition the publisher observes and is unparked by that publication; no
+per-job channel, lock or condition variable is allocated.
+
+A job's storage is one of three stages which never coexist: the boxed queued
+job, the boxed outcome (result plus receipt) allocated when the job finishes,
+or an unattempted outcome returning the original boxed command and cause. The
+queued box is released before the outcome is allocated.
+[Queues](../../crates/layerfs-daemon/src/overlay/queue.rs) hold job pointers in
+a lane table whose capacity is allocated once at startup from the configured
+namespace and slot limits; it never grows. Those fixed scheduler bytes are
+reported as `OwnerWork::scheduler_bytes` and subtracted from the bytes
+available to jobs, so the configured total still bounds scheduler plus credits.
+`queued`/`peak_queued` count admitted jobs waiting in a lane, including parked
+ones; they exclude the executing job and caller-held results.
+
+[JobSql](../../crates/layerfs-daemon/src/service/job_sql.rs) is the receipt's
+statement-family attribution: one exact row per family that observed work in
+this job's exclusive turns, including readiness turns which parked it. The
+owner takes one connection delta per turn and gives the same delta to the
+foreground aggregate and to the job, publishing the aggregate before the
+completion is visible. Original-job family sums therefore equal the foreground
+family deltas, on success, failure, parked and unattempted paths. Every
+terminal outcome other than a stop cancellation is counted in `completed`.
+
+A job is charged the largest of its three stages, the cell, the declared reply
+(never less than the inline result value) and the unchanged 512-byte
+bookkeeping allowance. Lifecycle jobs never park and are charged for seven
+family rows: the pre-BEGIN freelist read, BEGIN, COMMIT or ROLLBACK, and at
+most four domain families. That bound is a maintained source invariant reached
+exactly by `ResolveFailed` and `ReleaseClosedCapture`; it limits the admitted
+charge only. A further actual family is retained, charged when observed and
+reported in `receipt_overruns`/`receipt_overrun_bytes`, never dropped. Other
+classes are charged for all fourteen families in whichever stage holds them.
+Startup refuses a configuration whose lifecycle slots, at this real charge, do
+not fit the reserve, or whose scheduler state leaves no ordinary bytes.
+
+These are logical ownership credits over requested Rust allocation sizes.
+Allocator rounding is the allowance; SQLite, pager, kernel and process
+residency are not measured here. The lanes table is O(namespaces x slots)
+pointers; admission scans at most the configured namespaces.

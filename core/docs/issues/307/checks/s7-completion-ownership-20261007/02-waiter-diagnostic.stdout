@@ -1,0 +1,16 @@
+
+running 1 test
+test a_completion_is_handed_out_once_and_wakes_its_blocked_waiter ... 
+thread 'a_completion_is_handed_out_once_and_wakes_its_blocked_waiter' panicked at crates/layerfs-daemon/tests/completion_ownership.rs:72:9:
+job never parked: queued=0 outstanding=2 attempts=42 before=41
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    a_completion_is_handed_out_once_and_wakes_its_blocked_waiter
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 20.03s
+
+exit=101 wall_s=21

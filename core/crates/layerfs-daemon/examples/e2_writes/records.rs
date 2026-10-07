@@ -256,7 +256,7 @@ fn response(out: &mut Json, value: &Response) -> io::Result<&'static str> {
 }
 pub fn work(out: &mut Json, value: &JobWork) -> io::Result<()> {
     out.raw("{\"sql_scope\":\"original-job-statement-total\",\"statement_family_status\":\"UNAVAILABLE\",\"sql\":")?;
-    observed::statement(out, value.sql)?;
+    observed::statement(out, value.sql.total())?;
     out.raw(",\"payload\":")?;
     observed::payload(out, value.payload)?;
     out.raw(",\"allocation\":")?;

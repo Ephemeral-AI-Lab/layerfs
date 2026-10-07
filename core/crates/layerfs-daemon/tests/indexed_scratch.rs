@@ -135,7 +135,7 @@ fn original_atomic_refusal_and_credits_survive_independent_owner_jobs() {
             IndexedApply::Applied
         )))
     ));
-    assert!(done.work().sql.vm_steps > 0);
+    assert!(done.work().sql.total().vm_steps > 0);
     drop(done);
     let before = credits(&client, 0);
     let deciding = scratch(
@@ -182,7 +182,7 @@ fn original_atomic_refusal_and_credits_survive_independent_owner_jobs() {
         )))
     ));
     assert_eq!(
-        missed.work().sql.returned_blob_bytes,
+        missed.work().sql.total().returned_blob_bytes,
         32 // Only the owning Workspace root; membership projects no draft BLOB.
     );
     drop(missed);

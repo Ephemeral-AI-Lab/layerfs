@@ -56,10 +56,7 @@ fn real_host_store_and_supervisor_serve_source_removed_root_under_both_profiles(
         std::env::var_os("LAYERFS_R4_PROOF_OUTPUT")
             .expect("supply fresh append-only proof output directory"),
     );
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let mut fixture = host::Host::new(profile);
         let output_directory = output_root.join(format!("{profile:?}"));
         std::fs::create_dir(&output_directory).expect("fresh profile proof output");
@@ -221,3 +218,9 @@ fn real_host_store_and_supervisor_serve_source_removed_root_under_both_profiles(
         );
     }
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

@@ -197,10 +197,7 @@ fn native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets()
 #[test]
 #[cfg(target_os = "macos")]
 fn real_host_profiles_acquire_and_reuse_the_exact_complete_root() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let fixture = Fixture::new(0);
         let handles = Handles::create(
             PersistenceConfig::sqlite(fixture.path.join("store.sqlite"))
@@ -220,3 +217,9 @@ fn real_host_profiles_acquire_and_reuse_the_exact_complete_root() {
         assert!(handles.acquisition.abandoned(None, 8).unwrap().is_empty());
     }
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

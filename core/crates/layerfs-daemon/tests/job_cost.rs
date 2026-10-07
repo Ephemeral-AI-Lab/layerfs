@@ -42,8 +42,9 @@ fn completion_cost_matches_exclusive_owner_aggregate_and_retained_credit() {
     };
     assert!(matches!(done.result(), Ok(Response::Opened(_))));
     let after = client.diagnostics().unwrap();
-    let sql = after.sql_foreground.since(&before.sql_foreground).total();
-    assert_eq!(done.work().sql, sql);
+    let sql = after.sql_foreground.since(&before.sql_foreground);
+    assert_eq!(done.work().sql.expanded(), sql);
+    assert_eq!(done.work().sql.total(), sql.total());
     assert_eq!(
         done.work().allocation,
         after
@@ -53,7 +54,12 @@ fn completion_cost_matches_exclusive_owner_aggregate_and_retained_credit() {
     assert_eq!(done.work().allocation.freelist_queries, 1);
     assert_eq!(done.work().parked_turns, 0);
     assert_eq!(after.outstanding, 1);
-    assert!(after.credited_bytes >= std::mem::size_of::<JobWork>());
+    assert!(
+        after.credited_bytes
+            >= std::mem::size_of::<JobWork>()
+                + done.work().sql.families()
+                    * std::mem::size_of::<layerfs_overlay::StatementWork>()
+    );
     println!(
         "S7_OWNER_COST receipt={:?} aggregate={after:?}",
         done.work()

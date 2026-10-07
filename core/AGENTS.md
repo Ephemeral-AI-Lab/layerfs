@@ -26,7 +26,9 @@ product mental model or campaign-specific benchmark procedures.
   excluded.
   Daemon now exposes the fair SQL owner library and an authority-bound SDK
   upstream with operation-owned Workspace providers and one shared immutable
-  cache. Overlay/Daemon also expose bounded indexed operation-scratch records
+  cache. Its completions carry exact per-job statement-family receipts under
+  explicit stage charging and a fixed lane table; see the
+  [completion checkpoint](docs/issues/307/S7-COMPLETION-OWNERSHIP-20261007.md). Overlay/Daemon also expose bounded indexed operation-scratch records
   in the same database, with guarded atomic changes and automatic last-owner
   cleanup. Content now exposes a backed file editor over these records and
   Workspace supplies an explicit operation/file adapter with first-original

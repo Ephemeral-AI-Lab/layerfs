@@ -1,13 +1,14 @@
 //! Bounded scheduling state, independent of authoritative filesystem metadata.
 use crate::{
-    commands::{Command, Response, ServiceClass},
-    credits::Credit,
-    owner::OwnerError,
+    commands::{Command, ServiceClass},
+    owner::{OwnerConfig, OwnerError},
+    service::completion::{Outcome, Publisher},
 };
 use layerfs_overlay::Route;
 use std::{
-    collections::{BTreeMap, VecDeque},
-    sync::{mpsc::SyncSender, Arc, Condvar, Mutex},
+    collections::VecDeque,
+    mem::size_of,
+    sync::{Arc, Condvar, Mutex},
     time::Instant,
 };
 
@@ -27,43 +28,79 @@ pub struct OwnerWork {
     pub credited_bytes: usize,
     pub peak_credited_bytes: usize,
     pub outstanding: usize,
+    /// Fixed scheduler state and actual lane queue capacity, allocated once at
+    /// startup and excluded from the admission bytes available to jobs.
+    pub scheduler_bytes: usize,
+    /// Admitted jobs waiting in a lane, including parked ones; excludes the
+    /// executing job and caller-held results.
+    pub queued: usize,
+    pub peak_queued: usize,
+    /// Jobs whose retained receipt rows exceeded their admitted allowance, and
+    /// the bytes charged for them when observed.
+    pub receipt_overruns: u64,
+    pub receipt_overrun_bytes: usize,
     pub maintenance_jobs: u64,
     pub maintenance_rows: u64,
     pub maintenance_data_bytes: u64,
     pub maintenance_ns: u64,
 }
-pub(crate) struct Envelope {
-    pub result: Result<Response, OwnerError>,
-    pub work: crate::JobWork,
-    pub _credit: Arc<Credit>,
-}
 pub(crate) struct Job {
     pub id: u64,
     pub route: Option<Route>,
     pub command: Command,
-    pub credit: Arc<Credit>,
-    pub reply: SyncSender<Envelope>,
+    pub publisher: Publisher,
     pub admitted: Instant,
     pub blocked: bool,
     pub wait_consolidation: bool,
     pub work: crate::JobWork,
 }
+impl Job {
+    /// Returns the original command with any earlier readiness receipt. The
+    /// job's storage is released before its outcome is allocated.
+    pub fn refuse(self: Box<Self>, cause: OwnerError) {
+        let Job {
+            command,
+            publisher,
+            work,
+            ..
+        } = *self;
+        publisher.publish(Box::new(Outcome {
+            result: Err(OwnerError::Unattempted {
+                cause: Box::new(cause),
+                command: Box::new(command),
+            }),
+            work,
+        }));
+    }
+}
+/// One namespace's admitted jobs. Queues hold job pointers in capacity fixed at
+/// startup; a lane is reused once its last credit is released.
 pub(crate) struct Lane {
-    pub queues: [VecDeque<Job>; 6],
+    pub namespace: i64,
+    pub active: bool,
+    pub queues: [VecDeque<Box<Job>>; 6],
     pub next: usize,
     pub ordinary: usize,
     pub lifecycle: usize,
 }
 impl Lane {
-    pub fn new() -> Self {
+    fn new(config: OwnerConfig) -> Self {
         Self {
-            queues: std::array::from_fn(|_| VecDeque::new()),
+            namespace: 0,
+            active: false,
+            queues: std::array::from_fn(|class| {
+                VecDeque::with_capacity(if class == ServiceClass::Lifecycle as usize {
+                    config.lifecycle_jobs_per_namespace
+                } else {
+                    config.jobs_per_namespace
+                })
+            }),
             next: 0,
             ordinary: 0,
             lifecycle: 0,
         }
     }
-    fn take(&mut self) -> Option<Job> {
+    fn take(&mut self) -> Option<Box<Job>> {
         for _ in 0..6 {
             let index = self.next;
             self.next = (self.next + 1) % 6;
@@ -116,7 +153,7 @@ impl Lane {
     }
 }
 pub(crate) struct State {
-    pub lanes: BTreeMap<i64, Lane>,
+    pub lanes: Vec<Lane>,
     pub rotation: VecDeque<i64>,
     pub stopping: bool,
     pub next: u64,
@@ -124,12 +161,50 @@ pub(crate) struct State {
     pub event: u64,
     pub maintenance_error: Option<Arc<layerfs_overlay::OverlayError>>,
 }
+impl State {
+    pub fn lane(&mut self, namespace: i64) -> Option<&mut Lane> {
+        self.lanes
+            .iter_mut()
+            .find(|lane| lane.active && lane.namespace == namespace)
+    }
+    pub fn queued(&mut self) {
+        self.work.queued += 1;
+        self.work.peak_queued = self.work.peak_queued.max(self.work.queued);
+    }
+    /// Returns one job's slot; its lane leaves the rotation with its last job.
+    pub fn release(&mut self, namespace: i64, class: ServiceClass) {
+        let Some(lane) = self.lane(namespace) else {
+            return;
+        };
+        if class == ServiceClass::Lifecycle {
+            lane.lifecycle -= 1;
+        } else {
+            lane.ordinary -= 1;
+        }
+        if lane.lifecycle == 0 && lane.ordinary == 0 {
+            lane.active = false;
+            self.rotation.retain(|ns| *ns != namespace);
+        }
+    }
+}
 pub(crate) struct Shared {
     pub state: Mutex<State>,
     pub wake: Condvar,
-    pub config: crate::owner::OwnerConfig,
+    pub config: OwnerConfig,
 }
 impl Shared {
+    /// Startup scheduler bytes for a configuration, before any is allocated.
+    pub fn planned_bytes(config: OwnerConfig) -> Option<usize> {
+        let pointers = config
+            .jobs_per_namespace
+            .checked_mul(5)?
+            .checked_add(config.lifecycle_jobs_per_namespace)?
+            .checked_mul(size_of::<Box<Job>>())?;
+        pointers
+            .checked_add(size_of::<Lane>() + size_of::<i64>())?
+            .checked_mul(config.namespaces)?
+            .checked_add(2 * size_of::<usize>() + size_of::<Self>())
+    }
     pub fn sql_progress(
         &self,
         work: layerfs_overlay::DatabaseWork,
@@ -149,14 +224,30 @@ impl Shared {
             }
         }
     }
-    pub fn new(config: crate::owner::OwnerConfig) -> Self {
+    pub fn new(config: OwnerConfig) -> Self {
+        let mut lanes = Vec::with_capacity(config.namespaces);
+        lanes.resize_with(config.namespaces, || Lane::new(config));
+        let rotation = VecDeque::with_capacity(config.namespaces);
+        // Actual capacities, which an allocator may round above the request.
+        let scheduler_bytes = 2 * size_of::<usize>()
+            + size_of::<Self>()
+            + lanes.capacity() * size_of::<Lane>()
+            + rotation.capacity() * size_of::<i64>()
+            + lanes
+                .iter()
+                .flat_map(|lane| &lane.queues)
+                .map(|queue| queue.capacity() * size_of::<Box<Job>>())
+                .sum::<usize>();
         Self {
             state: Mutex::new(State {
-                lanes: BTreeMap::new(),
-                rotation: VecDeque::new(),
+                lanes,
+                rotation,
                 stopping: false,
                 next: 1,
-                work: OwnerWork::default(),
+                work: OwnerWork {
+                    scheduler_bytes,
+                    ..OwnerWork::default()
+                },
                 event: 0,
                 maintenance_error: None,
             }),
@@ -164,7 +255,12 @@ impl Shared {
             config,
         }
     }
-    pub fn poll(&self) -> Option<(Option<Job>, u64)> {
+    pub fn scheduler_bytes(&self) -> usize {
+        self.state
+            .lock()
+            .map_or(usize::MAX, |state| state.work.scheduler_bytes)
+    }
+    pub fn poll(&self) -> Option<(Option<Box<Job>>, u64)> {
         let mut state = self.state.lock().ok()?;
         if state.stopping {
             return None;
@@ -172,7 +268,8 @@ impl Shared {
         for _ in 0..state.rotation.len() {
             let ns = state.rotation.pop_front()?;
             state.rotation.push_back(ns);
-            if let Some(job) = state.lanes.get_mut(&ns)?.take() {
+            if let Some(job) = state.lane(ns)?.take() {
+                state.work.queued -= 1;
                 return Some((Some(job), state.event));
             }
         }
@@ -192,7 +289,7 @@ impl Shared {
     pub fn maintenance(&self, step: layerfs_overlay::ReclaimStep, ns: u64) {
         if let Ok(mut state) = self.state.lock() {
             state.event = state.event.wrapping_add(1);
-            if let Some(lane) = state.lanes.get_mut(&(step.namespace as i64)) {
+            if let Some(lane) = state.lane(step.namespace as i64) {
                 for job in &mut lane.queues[ServiceClass::Capture as usize] {
                     job.blocked = false;
                 }
@@ -215,48 +312,22 @@ impl Shared {
     pub fn stopped(&self) -> bool {
         self.state.lock().map_or(true, |state| state.stopping)
     }
-    pub fn park(&self, mut job: Job) {
-        let mut state = match self.state.lock() {
-            Ok(state) => state,
-            Err(_) => {
-                let _ = job.reply.send(Envelope {
-                    result: Err(OwnerError::Unattempted {
-                        cause: Box::new(OwnerError::Stopped),
-                        command: Box::new(job.command),
-                    }),
-                    work: job.work,
-                    _credit: job.credit,
-                });
+    /// Requeues a job whose readiness check found it not yet runnable. A job
+    /// which can no longer wait gets its original command back unattempted.
+    pub fn park(&self, mut job: Box<Job>) {
+        if let Ok(mut state) = self.state.lock() {
+            let stopping = state.stopping;
+            let namespace = job.route.map_or(0, Route::namespace);
+            if let Some(lane) = state.lane(namespace).filter(|_| !stopping) {
+                job.work.parked_turns = job.work.parked_turns.saturating_add(1);
+                job.blocked = true;
+                lane.queues[job.command.class() as usize].push_front(job);
+                state.queued();
                 return;
             }
-        };
-        if state.stopping {
-            drop(state);
-            let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Unattempted {
-                    cause: Box::new(OwnerError::Stopped),
-                    command: Box::new(job.command),
-                }),
-                work: job.work,
-                _credit: job.credit,
-            });
-            return;
         }
-        let Some(lane) = state.lanes.get_mut(&job.route.map_or(0, Route::namespace)) else {
-            drop(state);
-            let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Unattempted {
-                    cause: Box::new(OwnerError::Stopped),
-                    command: Box::new(job.command),
-                }),
-                work: job.work,
-                _credit: job.credit,
-            });
-            return;
-        };
-        job.work.parked_turns = job.work.parked_turns.saturating_add(1);
-        job.blocked = true;
-        lane.queues[job.command.class() as usize].push_front(job);
+        // The outcome and its credit are released outside the queue lock.
+        job.refuse(OwnerError::Stopped);
     }
     pub fn progress(&self, ns: i64, class: ServiceClass, wait: u64, service: u64) {
         if let Ok(mut state) = self.state.lock() {
@@ -268,7 +339,7 @@ impl Shared {
             work.service_ns[class as usize] =
                 work.service_ns[class as usize].saturating_add(service);
             if matches!(class, ServiceClass::Mutation | ServiceClass::Lifecycle) {
-                if let Some(lane) = state.lanes.get_mut(&ns) {
+                if let Some(lane) = state.lane(ns) {
                     for job in &mut lane.queues[ServiceClass::Capture as usize] {
                         job.blocked = false;
                     }
@@ -281,24 +352,18 @@ impl Shared {
         let jobs = if let Ok(mut state) = self.state.lock() {
             state.stopping = true;
             state.event = state.event.wrapping_add(1);
+            state.work.queued = 0;
             state
                 .lanes
-                .values_mut()
+                .iter_mut()
                 .flat_map(|lane| lane.queues.iter_mut().flat_map(|q| q.drain(..)))
                 .collect::<Vec<_>>()
         } else {
             Vec::new()
         };
-        // Drop/send retained credits outside the queue lock.
+        // Publish outcomes and drop retained credits outside the queue lock.
         for job in jobs {
-            let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Unattempted {
-                    cause: Box::new(OwnerError::Stopped),
-                    command: Box::new(job.command),
-                }),
-                work: job.work,
-                _credit: job.credit,
-            });
+            job.refuse(OwnerError::Stopped);
         }
         self.wake.notify_all();
     }

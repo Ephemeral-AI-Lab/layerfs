@@ -72,10 +72,7 @@ fn file(position: u64) -> NewEntry {
 
 #[test]
 fn final_bounded_disposal_releases_in_one_ack_and_preserves_another_owner() {
-    for profile in [
-        SqlitePersistenceProfile::Durable,
-        SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("acquisition-final-disposal");
         let handles = create(&temp, profile);
         let port = &handles.acquisition;
@@ -154,3 +151,9 @@ fn zero_budget_retains_work_and_can_release_an_empty_owner() {
     assert!(disposal.released);
     assert_eq!(port.work(owner), Err(AcquisitionError::Stale));
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

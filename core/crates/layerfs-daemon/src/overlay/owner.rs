@@ -1,17 +1,15 @@
 //! Readiness, short owner jobs and fair typed admission; no whole-operation lock.
 use crate::{
-    commands::{Command, Response, ServiceClass},
+    commands::{Command, ServiceClass},
     credits::Credit,
-    queue::{Envelope, Job, Lane, OwnerWork, Shared},
+    queue::{Job, OwnerWork, Shared},
+    service::completion::{self, Outcome, Pending},
 };
 use layerfs_overlay::{DatabaseProfile, Overlay, OverlayError, ProfileConfig, Route};
 use std::{
     fmt, io,
     path::Path,
-    sync::{
-        mpsc::{self, Receiver},
-        Arc,
-    },
+    sync::{atomic::AtomicUsize, mpsc, Arc},
     thread::{self, JoinHandle},
     time::Instant,
 };
@@ -85,42 +83,6 @@ pub struct Owner {
 pub struct OwnerClient {
     shared: Arc<Shared>,
 }
-/// A pending original operation. Waiting never occupies a native dispatch worker
-/// unless its caller chooses to wait synchronously there.
-pub struct Pending {
-    receiver: Receiver<Envelope>,
-    credit: Arc<Credit>,
-}
-/// Result and its retained aggregate credit. Data is borrowed until this drops.
-pub struct Completion {
-    envelope: Envelope,
-}
-impl Completion {
-    /// Complete exclusive SQL/allocation work, including readiness turns which
-    /// parked this original job. Queue/service spans are diagnostic wall.
-    pub fn work(&self) -> &crate::JobWork {
-        &self.envelope.work
-    }
-    pub fn result(&self) -> &Result<Response, OwnerError> {
-        &self.envelope.result
-    }
-}
-impl Pending {
-    pub fn wait(self) -> Result<Completion, OwnerError> {
-        let _credit = &self.credit;
-        self.receiver
-            .recv()
-            .map(|envelope| Completion { envelope })
-            .map_err(|_| OwnerError::Disconnected)
-    }
-    pub fn try_complete(&self) -> Result<Option<Completion>, OwnerError> {
-        match self.receiver.try_recv() {
-            Ok(envelope) => Ok(Some(Completion { envelope })),
-            Err(mpsc::TryRecvError::Empty) => Ok(None),
-            Err(mpsc::TryRecvError::Disconnected) => Err(OwnerError::Disconnected),
-        }
-    }
-}
 impl Owner {
     /// Initializes exactly one overlay before reporting readiness. No retries.
     pub fn start(
@@ -149,21 +111,24 @@ impl Owner {
             {
                 return Err(OwnerError::InvalidAdmission);
             }
+            // Every configured lifecycle slot must fit the reserve at its real
+            // charge, and the fixed scheduler state must leave ordinary bytes.
             let reserved = config
                 .namespaces
                 .checked_mul(config.lifecycle_jobs_per_namespace)
-                .and_then(|slots| {
-                    slots.checked_mul(
-                        std::mem::size_of::<Command>()
-                            + std::mem::size_of::<crate::JobWork>()
-                            + 768,
-                    )
-                })
+                .zip(Command::lifecycle_charge())
+                .and_then(|(slots, charge)| slots.checked_mul(charge))
                 .ok_or(OwnerError::InvalidAdmission)?;
-            if config.lifecycle_reserve < reserved {
+            if config.lifecycle_reserve < reserved
+                || Shared::planned_bytes(config)
+                    .is_none_or(|fixed| fixed >= config.bytes - config.lifecycle_reserve)
+            {
                 return Err(OwnerError::InvalidAdmission);
             }
             let shared = Arc::new(Shared::new(config));
+            if shared.scheduler_bytes() >= config.bytes - config.lifecycle_reserve {
+                return Err(OwnerError::InvalidAdmission);
+            }
             let owner_shared = shared.clone();
             let path = path.to_owned();
             let (ready, receiver) = mpsc::sync_channel(1);
@@ -270,59 +235,73 @@ impl OwnerClient {
             return Err((OwnerError::Stopped, command));
         }
         let config = self.shared.config;
+        // Fixed scheduler state is never available to jobs; ordinary classes
+        // additionally leave the lifecycle reserve.
+        let capacity = config.bytes.saturating_sub(state.work.scheduler_bytes);
         let limit = if class == ServiceClass::Lifecycle {
-            config.bytes
+            capacity
         } else {
-            config.bytes - config.lifecycle_reserve
+            capacity.saturating_sub(config.lifecycle_reserve)
         };
         if bytes > limit || state.work.credited_bytes > limit - bytes {
             return Err((OwnerError::AdmissionFull, command));
         }
-        let new = !state.lanes.contains_key(&namespace);
-        if new && state.lanes.len() == config.namespaces {
-            return Err((OwnerError::AdmissionFull, command));
-        }
-        if let Some(lane) = state.lanes.get(&namespace) {
-            if (class == ServiceClass::Lifecycle
-                && lane.lifecycle == config.lifecycle_jobs_per_namespace)
-                || (class != ServiceClass::Lifecycle && lane.ordinary == config.jobs_per_namespace)
-            {
-                return Err((OwnerError::AdmissionFull, command));
+        let active = |lane: &crate::queue::Lane| lane.active && lane.namespace == namespace;
+        let slot = match state.lanes.iter().position(active) {
+            Some(slot) => {
+                let lane = &state.lanes[slot];
+                if (class == ServiceClass::Lifecycle
+                    && lane.lifecycle == config.lifecycle_jobs_per_namespace)
+                    || (class != ServiceClass::Lifecycle
+                        && lane.ordinary == config.jobs_per_namespace)
+                {
+                    return Err((OwnerError::AdmissionFull, command));
+                }
+                slot
             }
-        }
+            None => match state.lanes.iter().position(|lane| !lane.active) {
+                Some(slot) => slot,
+                None => return Err((OwnerError::AdmissionFull, command)),
+            },
+        };
         let id = state.next;
         let Some(next) = id.checked_add(1) else {
             return Err((OwnerError::IdentityExhausted, command));
         };
         state.next = next;
         state.event = state.event.wrapping_add(1);
-        let credit = Arc::new(Credit {
+        let (publisher, pending) = completion::admit(Credit {
             shared: Arc::downgrade(&self.shared),
             namespace,
-            bytes,
+            bytes: AtomicUsize::new(bytes),
             class,
         });
-        let (reply, receiver) = mpsc::sync_channel(1);
-        let lane = state.lanes.entry(namespace).or_insert_with(Lane::new);
+        let lane = &mut state.lanes[slot];
+        let new = !lane.active;
+        if new {
+            lane.active = true;
+            lane.namespace = namespace;
+            lane.next = 0;
+        }
         if class == ServiceClass::Lifecycle {
             lane.lifecycle += 1;
         } else {
             lane.ordinary += 1;
         }
-        lane.queues[class as usize].push_back(Job {
+        lane.queues[class as usize].push_back(Box::new(Job {
             id,
             route,
             command,
-            credit: credit.clone(),
-            reply,
+            publisher,
             admitted: Instant::now(),
             blocked: false,
             wait_consolidation: false,
             work: crate::JobWork::default(),
-        });
+        }));
         if new {
             state.rotation.push_back(namespace);
         }
+        state.queued();
         state.work.credited_bytes += bytes;
         state.work.outstanding += 1;
         state.work.peak_credited_bytes = state
@@ -332,7 +311,7 @@ impl OwnerClient {
         state.work.admitted = state.work.admitted.saturating_add(1);
         drop(state);
         self.shared.wake.notify_one();
-        Ok(Pending { receiver, credit })
+        Ok(pending)
     }
     pub fn diagnostics(&self) -> Result<OwnerWork, OwnerError> {
         self.shared
@@ -356,23 +335,55 @@ fn ns(route: Option<Route>) -> i64 {
 fn elapsed(start: Instant) -> u64 {
     start.elapsed().as_nanos().min(u64::MAX as u128) as u64
 }
-struct SqlObservation<'a> {
+/// Connection snapshots around one exclusive owner turn.
+struct Turn<'a> {
     db: &'a Overlay,
-    shared: &'a Shared,
-    before: layerfs_overlay::DatabaseWork,
-    maintenance: bool,
-    allocation_before: layerfs_overlay::AllocationWork,
-    payload_before: layerfs_overlay::PayloadWork,
+    sql: layerfs_overlay::DatabaseWork,
+    allocation: layerfs_overlay::AllocationWork,
+    payload: layerfs_overlay::PayloadWork,
 }
-impl Drop for SqlObservation<'_> {
-    fn drop(&mut self) {
-        self.shared.sql_progress(
-            self.db.diagnostics().since(&self.before),
-            self.db.allocation_work().since(self.allocation_before),
-            self.db.payload_work().since(self.payload_before),
-            self.maintenance,
-        );
+impl<'a> Turn<'a> {
+    fn begin(db: &'a Overlay) -> Self {
+        Self {
+            db,
+            sql: db.diagnostics(),
+            allocation: db.allocation_work(),
+            payload: db.payload_work(),
+        }
     }
+    /// Publishes this turn to an owner aggregate. A job's receipt takes the
+    /// same deltas, so original-job sums equal the foreground aggregate, and
+    /// the aggregate is current before that job's completion is visible.
+    fn settle(self, shared: &Shared, job: Option<&mut crate::JobWork>) {
+        let sql = self.db.diagnostics().since(&self.sql);
+        let allocation = self.db.allocation_work().since(self.allocation);
+        let payload = self.db.payload_work().since(self.payload);
+        let maintenance = job.is_none();
+        if let Some(work) = job {
+            work.sql.accumulate(&sql);
+            work.allocation.accumulate(allocation);
+            work.payload.accumulate(payload);
+        }
+        shared.sql_progress(sql, allocation, payload, maintenance);
+    }
+}
+/// Read-only readiness of a capture or known install before its one attempt.
+fn ready(db: &Overlay, job: &mut Job) -> Result<bool, OverlayError> {
+    if matches!(job.command, Command::Capture) {
+        if let Some(route) = job.route {
+            if !db.capture_ready(route)? {
+                job.wait_consolidation = db.state(route)?.consolidating.is_some();
+                return Ok(false);
+            }
+        }
+    }
+    if let Some(capture) = job.command.install_capture() {
+        if job.route != Some(capture.route()) {
+            return Err(OverlayError::Stale);
+        }
+        return db.install_ready(capture);
+    }
+    Ok(true)
 }
 fn run(shared: &Shared, db: &Overlay) {
     let mut served = 0_u8;
@@ -383,21 +394,14 @@ fn run(shared: &Shared, db: &Overlay) {
     while let Some((job, event)) = shared.poll() {
         let mut maintained = false;
         if !maintenance_failed && (served >= 8 || job.is_none()) {
-            let _sql = SqlObservation {
-                db,
-                shared,
-                before: db.diagnostics(),
-                maintenance: true,
-                allocation_before: db.allocation_work(),
-                payload_before: db.payload_work(),
-            };
+            let turn = Turn::begin(db);
             let start = Instant::now();
             let maintenance = maintenance_turn(db, &mut live_cursor, &mut cursor, &mut live_turn);
+            turn.settle(shared, None);
             served = 0;
             match maintenance {
                 Ok(Some(step)) => {
                     shared.maintenance(step, elapsed(start));
-                    served = 0;
                     maintained = true;
                 }
                 Ok(None) => {}
@@ -415,126 +419,49 @@ fn run(shared: &Shared, db: &Overlay) {
         };
         served = served.saturating_add(1);
         if shared.stopped() {
-            let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Unattempted {
-                    cause: Box::new(OwnerError::Stopped),
-                    command: Box::new(job.command),
-                }),
-                work: job.work,
-                _credit: job.credit,
-            });
+            job.refuse(OwnerError::Stopped);
             continue;
         }
-        let _sql = SqlObservation {
-            db,
-            shared,
-            before: db.diagnostics(),
-            maintenance: false,
-            allocation_before: db.allocation_work(),
-            payload_before: db.payload_work(),
-        };
-        let before = db.diagnostics();
-        let allocation_before = db.allocation_work();
-        let payload_before = db.payload_work();
-        if matches!(job.command, Command::Capture) {
-            if let Some(route) = job.route {
-                match db.capture_ready(route) {
-                    Ok(false) => {
-                        match db.state(route) {
-                            Ok(state) => job.wait_consolidation = state.consolidating.is_some(),
-                            Err(error) => {
-                                record_job_work(
-                                    &mut job,
-                                    db,
-                                    before,
-                                    allocation_before,
-                                    payload_before,
-                                );
-                                let _ = job.reply.send(Envelope {
-                                    result: Err(OwnerError::Unattempted {
-                                        cause: Box::new(OwnerError::Overlay(error)),
-                                        command: Box::new(job.command),
-                                    }),
-                                    work: job.work,
-                                    _credit: job.credit,
-                                });
-                                continue;
-                            }
-                        }
-                        record_job_work(&mut job, db, before, allocation_before, payload_before);
-                        shared.park(job);
-                        continue;
-                    }
-                    Err(error) => {
-                        let class = job.command.class();
-                        shared.progress(ns(job.route), class, elapsed(job.admitted), 0);
-                        record_job_work(&mut job, db, before, allocation_before, payload_before);
-                        let _ = job.reply.send(Envelope {
-                            result: Err(OwnerError::Unattempted {
-                                cause: Box::new(OwnerError::Overlay(error)),
-                                command: Box::new(job.command),
-                            }),
-                            work: job.work,
-                            _credit: job.credit,
-                        });
-                        continue;
-                    }
-                    Ok(true) => {}
-                }
+        let turn = Turn::begin(db);
+        match ready(db, &mut job) {
+            Ok(true) => {}
+            Ok(false) => {
+                turn.settle(shared, Some(&mut job.work));
+                job.work.queue_wait_ns = elapsed(job.admitted);
+                shared.park(job);
+                continue;
             }
-        }
-        if let Some(capture) = job.command.install_capture() {
-            let ready = if job.route == Some(capture.route()) {
-                db.install_ready(capture)
-            } else {
-                Err(OverlayError::Stale)
-            };
-            match ready {
-                Ok(false) => {
-                    record_job_work(&mut job, db, before, allocation_before, payload_before);
-                    shared.park(job);
-                    continue;
-                }
-                Err(error) => {
-                    let class = job.command.class();
-                    shared.progress(ns(job.route), class, elapsed(job.admitted), 0);
-                    record_job_work(&mut job, db, before, allocation_before, payload_before);
-                    let _ = job.reply.send(Envelope {
-                        result: Err(OwnerError::Unattempted {
-                            cause: Box::new(OwnerError::Overlay(error)),
-                            command: Box::new(job.command),
-                        }),
-                        work: job.work,
-                        _credit: job.credit,
-                    });
-                    continue;
-                }
-                Ok(true) => {}
+            Err(error) => {
+                turn.settle(shared, Some(&mut job.work));
+                job.work.queue_wait_ns = elapsed(job.admitted);
+                shared.progress(
+                    ns(job.route),
+                    job.command.class(),
+                    job.work.queue_wait_ns,
+                    0,
+                );
+                job.refuse(OwnerError::Overlay(error));
+                continue;
             }
         }
         let class = job.command.class();
         let namespace = ns(job.route);
         let wait = elapsed(job.admitted);
         let start = Instant::now();
-        let result = job.command.perform(db, job.route);
-        job.work
-            .sql
-            .accumulate(db.diagnostics().since(&before).total());
-        job.work
-            .allocation
-            .accumulate(db.allocation_work().since(allocation_before));
-        job.work
-            .payload
-            .accumulate(db.payload_work().since(payload_before));
-        job.work.queue_wait_ns = wait;
-        job.work.service_ns = elapsed(start);
-        drop(_sql);
-        shared.progress(namespace, class, wait, job.work.service_ns);
-        let _ = job.reply.send(Envelope {
-            result,
-            work: job.work,
-            _credit: job.credit,
-        });
+        // The queued job's storage is released before its outcome exists.
+        let Job {
+            route,
+            command,
+            publisher,
+            mut work,
+            ..
+        } = *job;
+        let result = command.perform(db, route);
+        turn.settle(shared, Some(&mut work));
+        work.queue_wait_ns = wait;
+        work.service_ns = elapsed(start);
+        shared.progress(namespace, class, wait, work.service_ns);
+        publisher.publish(Box::new(Outcome { result, work }));
     }
 }
 
@@ -558,43 +485,4 @@ fn maintenance_turn(
         }
     }
     Ok(None)
-}
-
-impl fmt::Debug for Completion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.envelope.result.fmt(f)
-    }
-}
-impl fmt::Display for Completion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "owner completion: {:?}", self.envelope.result)
-    }
-}
-impl std::error::Error for Completion {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.envelope
-            .result
-            .as_ref()
-            .err()
-            .map(|error| error as &dyn std::error::Error)
-    }
-}
-
-fn record_job_work(
-    job: &mut Job,
-    db: &Overlay,
-    before: layerfs_overlay::DatabaseWork,
-    allocation: layerfs_overlay::AllocationWork,
-    payload: layerfs_overlay::PayloadWork,
-) {
-    job.work
-        .sql
-        .accumulate(db.diagnostics().since(&before).total());
-    job.work
-        .allocation
-        .accumulate(db.allocation_work().since(allocation));
-    job.work
-        .payload
-        .accumulate(db.payload_work().since(payload));
-    job.work.queue_wait_ns = elapsed(job.admitted);
 }

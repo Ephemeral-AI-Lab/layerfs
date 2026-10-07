@@ -1,0 +1,12 @@
+selection=linux:completion_ownership-94e0501f034a43ba stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s 
+selection=linux:completion_storage-ffd2e8ccfb822e64 stop_s=100 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s 
+selection=linux:job_cost-9e5e0d5b60e23c8e stop_s=100 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s 
+selection=linux:owner-00e2738abbdf74df stop_s=100 exit=0 wall_s=1 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s 
+selection=linux:startup_cost-162818a62e9b3f0a stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s 
+selection=linux:e2_startup_receipts-77c44e8dce9a7837 stop_s=100 exit=0 wall_s=1 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s 
+selection=linux:indexed_scratch-f3d060076840d39b stop_s=100 exit=0 wall_s=1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s 
+selection=linux:edit_backing-8552214ab09a28b1 stop_s=100 exit=0 wall_s=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s 
+selection=linux:construction_cursor-b0e41aa3f0faed9b stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s 
+selection=linux:captured_runs-82f9513705accf1e stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s 
+selection=linux:device_capacity-7ef52d08bf399851 stop_s=100 exit=0 wall_s=1 test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s 
+selection=linux:upstream-bb46ce3560aa9066 stop_s=100 exit=0 wall_s=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s 

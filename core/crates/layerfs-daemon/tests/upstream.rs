@@ -436,8 +436,8 @@ fn successful_attachment_returns_original_results_until_their_actual_release() {
     )
     .unwrap();
     assert!(matches!(open.result(), Ok(Response::Opened(route)) if *route == upstream.route()));
-    assert!(open.work().sql.attempts > 0);
-    assert!(open.work().sql.rows_changed > 0);
+    assert!(open.work().sql.total().attempts > 0);
+    assert!(open.work().sql.total().rows_changed > 0);
     assert_eq!(owner.client().diagnostics().unwrap().outstanding, 1);
     assert!(matches!(
         ReplyView::decode(binding_reply.bytes()).unwrap(),

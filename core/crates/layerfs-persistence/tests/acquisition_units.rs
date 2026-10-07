@@ -155,10 +155,7 @@ fn refused(error: AcquisitionError) -> String {
 #[test]
 fn a_tree_streams_in_acquisition_order_with_exact_charges_and_bounded_cleanup() {
     // Working rows follow the Store's selected profile; both behave the same.
-    for profile in [
-        SqlitePersistenceProfile::Disposable,
-        SqlitePersistenceProfile::Durable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         tree_under(profile);
     }
 }
@@ -684,3 +681,9 @@ fn every_statement_is_an_indexed_search_and_window_work_ignores_population() {
     assert!(large_read[1] <= small_read[1] + small_read[1] / 10);
     assert!(large_removed[1] <= small_removed[1] + small_removed[1] / 10);
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];

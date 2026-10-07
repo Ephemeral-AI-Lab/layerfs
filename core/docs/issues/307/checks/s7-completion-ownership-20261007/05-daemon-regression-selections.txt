@@ -1,0 +1,13 @@
+selection=job_cost-823dc893f9b59a95 stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s 
+selection=owner-8c032b71f8dbb691 stop_s=110 exit=0 wall_s=1 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s 
+selection=startup_cost-aec3958a7026f220 stop_s=110 exit=0 wall_s=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s 
+selection=e2_startup_receipts-b7b9b7da0b22ad5b stop_s=110 exit=0 wall_s=0 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s 
+selection=indexed_scratch-343a585492aaeb3b stop_s=110 exit=0 wall_s=1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s 
+selection=edit_backing-456a394b29281b71 stop_s=110 exit=0 wall_s=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s 
+selection=construction_cursor-269bf22ff6728668 stop_s=110 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s 
+selection=captured_runs-d29f6f9970138158 stop_s=110 exit=0 wall_s=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s 
+selection=device_capacity-9a562182fce135b4 stop_s=110 exit=0 wall_s=1 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s 
+selection=upstream-e97965d3bcf6eeaa stop_s=110 exit=0 wall_s=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s 
+selection=e04_disposal_control-27b5e54b4018ebb2 stop_s=110 exit=0 wall_s=1 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s 
+selection=namespace_daemon-93217fc8145bcb7f stop_s=110 exit=0 wall_s=2 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s 
+selection=captured_file_edits-c409cd1597d4fc4b stop_s=110 exit=0 wall_s=1 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s 

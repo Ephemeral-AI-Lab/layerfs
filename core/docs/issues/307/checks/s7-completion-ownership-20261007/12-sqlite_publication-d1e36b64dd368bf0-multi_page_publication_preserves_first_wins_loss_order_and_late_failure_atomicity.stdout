@@ -1,0 +1,6 @@
+
+running 1 test
+test multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s
+

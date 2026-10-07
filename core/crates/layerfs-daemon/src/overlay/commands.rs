@@ -5,6 +5,9 @@ use layerfs_overlay::{
     ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
 };
 
+/// Declared reply bytes of a command without a larger owned reply window.
+const DEFAULT_REPLY: usize = 256;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(usize)]
 pub enum ServiceClass {
@@ -301,10 +304,12 @@ impl Command {
             Self::PutScratch { .. } | Self::ScratchPage { .. } => ServiceClass::Scratch,
         }
     }
+    /// Per-slot charge of a Lifecycle job with no owned input and the default
+    /// reply. Startup reserves this for every configured lifecycle slot.
+    pub(crate) fn lifecycle_charge() -> Option<usize> {
+        crate::service::completion::charge(true, 0, DEFAULT_REPLY)
+    }
     pub(crate) fn charge(&self) -> Option<usize> {
-        let base = std::mem::size_of::<Self>()
-            .checked_add(std::mem::size_of::<crate::JobWork>())?
-            .checked_add(512)?;
         let (input, reply) = match self {
             Self::IndexedScratch(job) => (job.charge()?, 0),
             Self::Resources { .. } => (0, std::mem::size_of::<layerfs_overlay::Resources>()),
@@ -367,9 +372,9 @@ impl Command {
                 2 * PAGE_ROWS * (std::mem::size_of::<Dentry>() + 255)
                     + std::mem::size_of::<NameWindow>(),
             ),
-            _ => (0, 256),
+            _ => (0, DEFAULT_REPLY),
         };
-        base.checked_add(input)?.checked_add(reply)
+        crate::service::completion::charge(self.class() == ServiceClass::Lifecycle, input, reply)
     }
     pub(crate) fn install_capture(&self) -> Option<Capture> {
         match self {

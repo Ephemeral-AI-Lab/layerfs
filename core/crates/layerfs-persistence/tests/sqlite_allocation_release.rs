@@ -275,10 +275,7 @@ fn disposable_completion_refuses_new_hardlink_ownership() {
 
 #[test]
 fn shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes() {
-    for profile in [
-        layerfs_persistence::SqlitePersistenceProfile::Durable,
-        layerfs_persistence::SqlitePersistenceProfile::Disposable,
-    ] {
+    for profile in DEVELOPMENT_PROFILES {
         let t = support::Temp::new("bounded-headroom");
         let path = t.join("db");
         let h = Handles::create(
@@ -327,3 +324,10 @@ fn shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes()
         );
     }
 }
+
+/// Owner direction 2026-10-07: Disposable is the sole active development
+/// verification profile. Durable execution of these bodies is NOT_RUN —
+/// deferred by owner for Disposable-only development. Durable support and its
+/// retained historical receipts are unchanged.
+const DEVELOPMENT_PROFILES: [layerfs_persistence::SqlitePersistenceProfile; 1] =
+    [layerfs_persistence::SqlitePersistenceProfile::Disposable];

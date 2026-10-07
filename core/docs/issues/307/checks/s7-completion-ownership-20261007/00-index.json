@@ -1,0 +1,181 @@
+{
+ "schema": "s7-completion-ownership-checks-v1",
+ "kind": "functional-checks; uncontrolled cache; no measurement, E1 sample or qualification",
+ "parent": "490c3ab3a71823268e476e6affdcfbf0c6f9fef0",
+ "checked_core_crates_tree": "f38c9627ca31be9d1b773fa3e611b5b8835e5879",
+ "identity_note": "Final-identity runs 07 (Linux) and 10 (host) and the Disposable bodies 12 were built from the working tree whose core/crates content is this tree; they predate the commit, so they are not sealed-arm evidence.",
+ "toolchain": {
+  "rustc": "1.85.1 (4eb161250 2025-03-15)",
+  "locked": true,
+  "cargo_lock_sha256": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c",
+  "host": "aarch64-apple-darwin; repository .cargo/config.toml ARM64 inputs",
+  "linux_image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "profile": "test (opt-level 1, debuginfo)"
+ },
+ "construction_workers": 1,
+ "store_profile": "Disposable for every body that opens a global Store; Durable NOT_RUN \u2014 deferred by owner for Disposable-only development",
+ "wall_stops_s": {
+  "host": 110,
+  "linux": 100,
+  "first_runs": 100
+ },
+ "receipts": {
+  "01": {
+   "file": "01-completion-ownership-first-run.stdout",
+   "outcome": "FAILED 2 of 3 bodies; test-design errors (held lifecycle results filled both namespace slots; second capture refused CaptureInFlight). Saturation body passed. Retained."
+  },
+  "02": {
+   "file": "02-waiter-diagnostic.stdout",
+   "outcome": "FAILED as the named diagnostic of receipt 01's waiter body before the test correction"
+  },
+  "03": {
+   "file": "03-completion-ownership.stdout",
+   "outcome": "PASS 3 bodies after test corrections; pre-format source"
+  },
+  "04": {
+   "file": "04-completion-storage.stdout",
+   "outcome": "PASS 1 body; pre-format source"
+  },
+  "05": {
+   "file": "05-daemon-regression-selections.txt",
+   "outcome": "PASS 13 selections; pre-format source"
+  },
+  "06": {
+   "files": [
+    "06-linux-no-run.stdout",
+    "06-linux-no-run.stderr"
+   ],
+   "outcome": "Linux test build exit 0"
+  },
+  "07": {
+   "file": "07-linux-selections.txt",
+   "outcome": "PASS 12 Linux selections, 40 bodies, 1 ignored (device_capacity explicit device proof NOT_RUN)",
+   "selections": [
+    "selection=linux:completion_ownership-94e0501f034a43ba stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s ",
+    "selection=linux:completion_storage-ffd2e8ccfb822e64 stop_s=100 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s ",
+    "selection=linux:job_cost-9e5e0d5b60e23c8e stop_s=100 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s ",
+    "selection=linux:owner-00e2738abbdf74df stop_s=100 exit=0 wall_s=1 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s ",
+    "selection=linux:startup_cost-162818a62e9b3f0a stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s ",
+    "selection=linux:e2_startup_receipts-77c44e8dce9a7837 stop_s=100 exit=0 wall_s=1 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s ",
+    "selection=linux:indexed_scratch-f3d060076840d39b stop_s=100 exit=0 wall_s=1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s ",
+    "selection=linux:edit_backing-8552214ab09a28b1 stop_s=100 exit=0 wall_s=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s ",
+    "selection=linux:construction_cursor-b0e41aa3f0faed9b stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s ",
+    "selection=linux:captured_runs-82f9513705accf1e stop_s=100 exit=0 wall_s=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s ",
+    "selection=linux:device_capacity-7ef52d08bf399851 stop_s=100 exit=0 wall_s=1 test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s ",
+    "selection=linux:upstream-bb46ce3560aa9066 stop_s=100 exit=0 wall_s=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s "
+   ]
+  },
+  "08": {
+   "files": [
+    "08-host-final-no-run.stdout",
+    "08-host-final-no-run.stderr"
+   ],
+   "outcome": "host test build exit 0 at formatted source"
+  },
+  "09": {
+   "file": "09-shell-invocation-failed.stdout",
+   "outcome": "shell error: zsh loop variable `path` replaced PATH; zero test binaries executed"
+  },
+  "10": {
+   "file": "10-host-final-selections.txt",
+   "outcome": "PASS 15 host selections, 73 bodies (device_capacity has no host body)",
+   "selections": [
+    "selection=host:captured_runs-d29f6f9970138158 stop_s=110 exit=0 wall_s=2 sha256=ecbd1dceec873cf091d62968b556bd2542bf9258c1267ebf4d9d22b857a36046 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s ",
+    "selection=host:completion_ownership-5ced79fe2268b4f7 stop_s=110 exit=0 wall_s=1 sha256=945b87c55320d897c17c6e6f23c771aea470161df2fc0a0adaaa691cc8ec208e test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s ",
+    "selection=host:completion_storage-6ae40f21f27ea32f stop_s=110 exit=0 wall_s=0 sha256=bd72b7223eac0ce2e89417a121b2926b9b8694eba82a802c3307ba2752d0ac8f test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s ",
+    "selection=host:construction_cursor-269bf22ff6728668 stop_s=110 exit=0 wall_s=1 sha256=8d37a27206b35cf703990e04fd63c19480848269493c866594a471f058c6695f test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s ",
+    "selection=host:device_capacity-9a562182fce135b4 stop_s=110 exit=0 wall_s=0 sha256=7d793d601cea9eb0a05ee5a59c46f463e9b7de6a11649d7203432f90c125c4f3 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s ",
+    "selection=host:e04_disposal_control-27b5e54b4018ebb2 stop_s=110 exit=0 wall_s=0 sha256=e669e9a91de0c37f6f8fd1e27a26d7951682b2d0992a80be07a6b85398328d73 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s ",
+    "selection=host:e2_startup_receipts-b7b9b7da0b22ad5b stop_s=110 exit=0 wall_s=1 sha256=81338df5c1547c5bac286f896fa91f02588b578eeb2a82003f897a16114e6bc7 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s ",
+    "selection=host:edit_backing-456a394b29281b71 stop_s=110 exit=0 wall_s=0 sha256=8da7ebc69d1ddbef2ee79e5b670814ad4e5cd9b9adcb4acf874291edb5da6d5b test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s ",
+    "selection=host:indexed_scratch-343a585492aaeb3b stop_s=110 exit=0 wall_s=1 sha256=57690061d1d072bc4c6deff2f2c44245591acd079ab6701716e9e85dd2be0ea3 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s ",
+    "selection=host:job_cost-823dc893f9b59a95 stop_s=110 exit=0 wall_s=1 sha256=5788f00e6413b3763a9a065cee84338895cf65dc4916b7e2795f3c74a9406a71 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s ",
+    "selection=host:owner-8c032b71f8dbb691 stop_s=110 exit=0 wall_s=1 sha256=7551f1d3b348a770fd2a5a92fbccf17631369a790d47873aad669a634f50e347 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s ",
+    "selection=host:startup_cost-aec3958a7026f220 stop_s=110 exit=0 wall_s=0 sha256=59277a1d7c63a4d3adefdcbbafb13d7570362d1376cc04e2c02fd35af664fb2b test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s ",
+    "selection=host:upstream-e97965d3bcf6eeaa stop_s=110 exit=0 wall_s=1 sha256=be5c3c3e28660aee3f130dee59638d713e091ccea23ff22f85f93ddf1fabe478 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s ",
+    "selection=host:captured_file_edits-c409cd1597d4fc4b stop_s=110 exit=0 wall_s=2 sha256=a553798c3e51f7762fec4586c2f278dd1344be806c39793db794443b15b72371 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s ",
+    "selection=host:namespace_daemon-93217fc8145bcb7f stop_s=110 exit=0 wall_s=3 sha256=4aa4a6444b5c487da33717c5e3249a03acf66cebc00d89770597785440cae48c test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.09s "
+   ]
+  },
+  "11": {
+   "files": [
+    "11-disposable-selection-no-run.stdout",
+    "11-disposable-selection-no-run.stderr"
+   ],
+   "outcome": "Persistence/Project/SDK test build exit 0"
+  },
+  "12": {
+   "file": "12-disposable-selected-bodies.txt",
+   "outcome": "16 selections of converted bodies on Disposable: 15 PASS, 1 with no macOS body NOT_RUN",
+   "selections": [
+    "selection=host:acquisition_disposal-09c229cf6d90b258::final_bounded_disposal_releases_in_one_ack_and_preserves_another_owner profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s",
+    "selection=host:sqlite_allocation_release-38c16b717c74d776::shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.01s",
+    "selection=host:acquisition_units-5fd24c91be0680f3::a_tree_streams_in_acquisition_order_with_exact_charges_and_bounded_cleanup profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.01s",
+    "selection=host:acquisition_reads-816e8daad95aeaa0::valid_empty_missing_released_and_foreign_owners_remain_distinct profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s",
+    "selection=host:space_reclamation-d26d57e6061fdbed::bounded_reclamation_preserves_another_live_operation_and_survives_reopen profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.10s",
+    "selection=host:acquisition_batching-22dc56f552159580::narrow_bindings_preserve_mixed_payloads_after_an_existing_alias_boundary profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.01s",
+    "selection=host:acquisition_batching-22dc56f552159580::windows_amortize_execution_without_losing_aliases_or_atomic_completion profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.01s",
+    "selection=host:sqlite_publication-d1e36b64dd368bf0::multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s",
+    "selection=host:sqlite_publication-d1e36b64dd368bf0::explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s",
+    "selection=host:init_sqlite-a81263fb89d61840::an_unsupported_platform_refuses_the_store_before_any_file_exists profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s",
+    "selection=host:init_sqlite-a81263fb89d61840::selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.66s",
+    "selection=host:complete_root-7bc313d53b4b8645::real_host_profiles_acquire_and_reuse_the_exact_complete_root profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s",
+    "selection=host:runtime_binding-0a552fee5322ab0f::binding_checks_actual_root_directory_and_child_roles_under_both_store_profiles profile=Disposable stop_s=110 exit=0 wall_s=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.11s",
+    "selection=host:runtime_binding-0a552fee5322ab0f::stage_saved_candidate_cannot_change_the_captured_root_inode_serial profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.01s",
+    "selection=host:runtime_binding-0a552fee5322ab0f::stage_saved_candidate_validates_actual_root_inode_metadata_and_descended_summary profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.03s",
+    "selection=host:runtime_binding-0a552fee5322ab0f::stage_saved_candidate_retains_original_denied_and_absent_descendant_failures profile=Disposable stop_s=110 exit=0 wall_s=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.02s"
+   ]
+  },
+  "13": {
+   "file": "13-production-loc-comparison.json",
+   "outcome": "Production LOC: 170108 -> 170293 (delta +185)"
+  }
+ },
+ "static_checks": {
+  "format": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check: PASS",
+  "clippy": "cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings: PASS",
+  "boundary_guard": "python3 -B core/tools/check_product_boundary.py: PASS, 738 production Rust/SQL files"
+ },
+ "observed": {
+  "host": {
+   "scheduler_bytes": 18776,
+   "lifecycle_charge": 1968,
+   "lifecycle_slots": 32,
+   "lifecycle_slot_bytes": 62976,
+   "ordinary_default_charge": 3336,
+   "ordinary_held": 133,
+   "ordinary_credited": 8304275,
+   "peak_credited": 8367251,
+   "live_heap_per_job": {
+    "held_lifecycle": 624,
+    "parked_capture": 944,
+    "unattempted_stop": 1128
+   },
+   "lifecycle_max_families": 7,
+   "receipt_overruns": 0,
+   "original_jobs": 41,
+   "lifecycle_jobs": 35,
+   "foreground_attempts": 288,
+   "parked_turns": 3
+  },
+  "linux": {
+   "scheduler_bytes": 18760,
+   "lifecycle_charge": 1968,
+   "ordinary_default_charge": 3336,
+   "live_heap_per_job": {
+    "held_lifecycle": 624,
+    "parked_capture": 944,
+    "unattempted_stop": 1152
+   },
+   "lifecycle_max_families": 7
+  }
+ },
+ "not_run": [
+  "Durable profile execution: NOT_RUN \u2014 deferred by owner for Disposable-only development",
+  "device_capacity: no host body; Linux explicit-device body ignored",
+  "upstream_docker: ignored explicit Docker proof",
+  "an_unsupported_platform_refuses_the_store_before_any_file_exists: no macOS body",
+  "E01/E04 diagnostics, E05, every E1 proposal, Init and history families",
+  "aggregate `cargo test --all-targets` over unchanged packages"
+ ]
+}
