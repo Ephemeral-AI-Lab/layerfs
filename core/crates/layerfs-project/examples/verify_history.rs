@@ -69,8 +69,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("root count mismatch".into());
     }
     let profile_identity = match selected_profile {
-        SqlitePersistenceProfile::Durable => "sqlite-wal-full-macos-fullfsync-v1",
-        SqlitePersistenceProfile::Disposable => "sqlite-memory-off-macos-v1",
+        SqlitePersistenceProfile::Durable => "sqlite-wal-full-v2",
+        SqlitePersistenceProfile::Disposable => "sqlite-wal-off-v2",
     };
     if child.get("profile_identity").and_then(json::Value::as_str) != Some(profile_identity) {
         return Err("producer effective profile identity mismatch".into());
@@ -78,9 +78,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut independent_pins = false;
     if let Some(path) = args.get(7) {
         let pins = json::parse(&std::fs::read_to_string(path)?)?;
-        if pins.get("kind").and_then(json::Value::as_str) != Some("matched-phase4.5-root-pins-v1")
-            || pins.get("source_commit").and_then(json::Value::as_str)
-                != Some("7edddbdb8e8512627aed0ed42533ef099d802384")
+        if !matches!(
+            pins.get("kind").and_then(json::Value::as_str),
+            Some("matched-phase4.5-root-pins-v1" | "retained-phase4.5-receipt-root-pins-v1")
+        ) || pins.get("source_commit").and_then(json::Value::as_str)
+            != Some("7edddbdb8e8512627aed0ed42533ef099d802384")
         {
             return Err("independent reference provenance missing".into());
         }
@@ -127,11 +129,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let config = retained::config();
     let custody_start = std::time::Instant::now();
-    let handles = Handles::open_read_only(
-        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),
-        &config.binding_key,
-        config.cursor_key,
-    )?;
+    let persistence = PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile);
+    let writer =
+        Handles::open_writable(persistence.clone(), &config.binding_key, config.cursor_key)?;
+    let handles = Handles::open_read_only(persistence, &config.binding_key, config.cursor_key)?;
     let custody = retained::verify(&handles.history, producer::scope_of(row), &roots)?;
     let storage = Storage::new(handles.storage.clone())?;
     let reader = storage.reader()?;
@@ -198,6 +199,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if probe_states.is_none() && paths != row.path_states() {
         return Err("all-state structural path census mismatch".into());
     }
+    drop(reader);
+    drop(storage);
+    drop(handles);
+    writer.seal()?;
     println!("{{\"status\":\"{}\",\"states\":{},\"custody_states\":{},\"paths\":{},\"sampled_content_paths\":{},\"authenticated_bytes\":{},\"sample_policy\":\"{}\",\"acquired_content_bytes\":{},\"independent_root_pins\":\"{}\",\"admission\":\"NOT_RUN\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"CHECKED"},count,custody,paths,sampled,bytes,if probe_states.is_some(){"every-tenth-content-path-and-final"}else{lite_scope::POLICY},acquired_bytes,if independent_pins {"CHECKED"} else {"NOT_CHECKED"});
     Ok(())
 }

@@ -1,0 +1,23 @@
+# {"timestamp": "2026-10-07T14:49:24.411906+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-m", "unittest", "test_disposable_wal", "test_serverless_init", "test_phase7_sqlite", "test_phase7_history_runner", "test_phase7_history_proof", "test_group_row_registry"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "f91697d135168fb451e633cef8750822ddadda18c6651cfb3a7af379e0dbd9fa", "source_parent": "54d9c745778fd12d52791d91a33d64f704f18eee", "wall_stop": "specified in command; build is not test execution"}
+.........................F.............
+======================================================================
+FAIL: test_unresolved_contract_refuses_before_build_setup_or_sample (test_phase7_sqlite.SqliteStep10.test_unresolved_contract_refuses_before_build_setup_or_sample)
+----------------------------------------------------------------------
+ValueError: Durable execution disabled by owner until explicit reauthorization
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_phase7_sqlite.py", line 187, in test_unresolved_contract_refuses_before_build_setup_or_sample
+    with self.assertRaisesRegex(ValueError,'qualified reference pins'):f.run(f.REQUIRED[4],None,'candidate',None,None)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "qualified reference pins" does not match "Durable execution disabled by owner until explicit reauthorization"
+
+----------------------------------------------------------------------
+Ran 39 tests in 0.582s
+
+FAILED (failures=1)
+
+# complete_command_ns=842489334
+
+# exit=1

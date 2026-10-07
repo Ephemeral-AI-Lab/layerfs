@@ -9,7 +9,7 @@ import subprocess
 import time
 
 from families import init_namespace, phase7_sqlite
-from shared import cold_native, sqlite_contract
+from shared import cold_native, sqlite_contract, disposable_wal
 
 CONTROL = ('core/docs/issues/307/checks/incumbent-restoration-20261007/raw/'
            'phase7-sqlite-disposable-init-1000-incumbent-restored-v1/candidate/receipt.json')
@@ -66,8 +66,10 @@ def decision(row, reference):
 
 
 def run(case, output, arm, common):
-    if arm != 'candidate' or case.id != phase7_sqlite.SERVERLESS_WAL_CASE:
+    matrix = case.id in disposable_wal.ROWS
+    if arm != 'candidate' or (case.id != phase7_sqlite.SERVERLESS_WAL_CASE and not matrix):
         raise ValueError('one registered candidate; retained control is never rerun')
+    disposable_wal.require_profile(case)
     if platform.system() != 'Darwin':
         raise ValueError('host Init decision requires macOS/system SQLite')
     out = common.owned(output)
@@ -104,8 +106,13 @@ def run(case, output, arm, common):
         'treatment': 'WAL/OFF, allocation mechanism retired, consuming seal',
         'image_identity': {'status': 'N/A', 'reason': 'native macOS Init'},
         'strict_allocation_status': 'NOT_RUN — mechanism removed',
-        'durable_execution': 'NOT_RUN — deferred by owner for Disposable-only development',
+        'durable_execution': 'NOT_RUN — disabled by owner until explicit reauthorization',
     }
+    if matrix:
+        row.update(schema='owner-disposable-wal-init-v1', family_id='disposable-wal-matrix',
+                   mode='owner-requested-current-source-observation',
+                   required_case_ids=list(disposable_wal.ROWS),
+                   operation_contract_id='disposable-wal-matrix-init-v1')
     lock = None
     try:
         lock_path = common.RESULTS / 'phase7-sqlite.lock'
@@ -134,8 +141,9 @@ def run(case, output, arm, common):
         compilation += list((common.ROOT / 'core/crates').glob('*/examples/**/*.rs'))
         compilation += [common.ROOT / p for p in ('core/Cargo.toml', 'core/Cargo.lock', '.cargo/config.toml')]
         row['compilation_seal'] = common.seal(compilation)
-        reference = control(common.ROOT)
-        row['control'] = {'path': CONTROL, 'sha256': CONTROL_SHA, 'source': CONTROL_SOURCE,
+        reference = disposable_wal.reference(case.id) if matrix else control(common.ROOT)
+        control_pin = disposable_wal.ROWS[case.id]['reference'] if matrix else {'path': CONTROL, 'sha256': CONTROL_SHA}
+        row['control'] = {**control_pin, 'source': reference['measured_source_commit'],
                           'original_case': reference['case'], 'comparison_ns': reference['comparison_ns'],
                           'storage_bytes': reference['storage_bytes'], 'original_status': reference['status']}
         row['build'] = phase7_sqlite.build(common.ROOT, 'candidate', out, common)
@@ -208,7 +216,7 @@ def run(case, output, arm, common):
         proof = phase7_sqlite.invoke(proof_command, out, 'verifier', case.verification_budget_ns, env, common.ROOT)
         row.update(verification=proof, verification_wall_ns=proof['wall_ns'])
         row['verification_status'] = 'PASS' if proof['exit_code'] == 0 and not proof['timed_out'] and common.lite_verification_pass(proof['child'], fixture_case, child, fixture) and child['root'] == reference['performance']['child']['root'] else 'FAIL'
-        row['decision'] = decision(row, reference)
+        row['decision'] = disposable_wal.comparison(row, case.id) if matrix else decision(row, reference)
         return out
     except Exception as error:
         row.update(status='INCOMPLETE', failure_class=type(error).__name__, reason=str(error))

@@ -314,6 +314,8 @@ def main():
     """One bounded proof child owns census/export, native proof and preservation."""
     import argparse
     import subprocess
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     parser = argparse.ArgumentParser()
     parser.add_argument('--request', required=True)
     args = parser.parse_args()
@@ -322,14 +324,22 @@ def main():
     child = request['producer']
     native_env = native_environment(request, out)
     if request['arm'] == 'candidate':
-        validate_pins(json.loads(Path(request['pins']).read_text()), request['identity'])
+        pins = json.loads(Path(request['pins']).read_text())
+        if request.get('retained_reference_case'):
+            from shared import disposable_wal
+            case_id = request['retained_reference_case']
+            if request['profile'] != 'disposable' or request['row'] != disposable_wal.root_pins(case_id)['row']:
+                raise ValueError('retained reference request profile/row mismatch')
+            disposable_wal.validate_pins(pins, case_id)
+        else:
+            validate_pins(pins, request['identity'])
     metadata = out/'reference-metadata.tsv' if request['arm'] == 'baseline' else None
     census = collect(request['db'], request['arm'], child, request['row'], metadata, request.get('sqlite_schema_version',1))
     (out/'census.json').write_text(json.dumps(census, sort_keys=True, indent=2)+'\n')
     receipt = out/'producer-proof-input.json'
     receipt.write_text(json.dumps({'run': {'child': child}})+'\n')
     verify_db = request['db']
-    if request['arm'] == 'candidate' and request['profile'] == 'durable':
+    if request['arm'] == 'candidate' and (request['profile'] == 'durable' or request.get('wal_proof_copy')):
         verify_db = str(out/'independent-proof.sqlite')
         limit = request['copy_limit_bytes']
         total_length = Path(request['db']).stat().st_size + sum(r['length_bytes'] for r in census['owners'][0]['closed_sidecars'])

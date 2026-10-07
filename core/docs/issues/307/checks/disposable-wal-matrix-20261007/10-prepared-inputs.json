@@ -1,0 +1,71 @@
+{
+  "namespace": [
+    {
+      "case": "namespace-100-compact-v3",
+      "directories": 2,
+      "files": 100,
+      "logical_bytes": 5000000,
+      "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1,
+      "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload",
+      "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/manifest.tsv",
+      "preparation_wall_ns": 5899583,
+      "reused": true
+    },
+    {
+      "case": "namespace-1000-compact-v3",
+      "directories": 11,
+      "files": 1000,
+      "logical_bytes": 20000000,
+      "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1,
+      "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/payload",
+      "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/manifest.tsv",
+      "preparation_wall_ns": 39043000,
+      "reused": true
+    },
+    {
+      "case": "namespace-10000",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1,
+      "files": 10000,
+      "directories": 101,
+      "logical_bytes": 300000000,
+      "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+      "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/payload",
+      "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/manifest.tsv",
+      "preparation_wall_ns": 2058748833,
+      "reused": false
+    },
+    {
+      "case": "namespace-100000",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1,
+      "files": 100000,
+      "directories": 1001,
+      "logical_bytes": 500000000,
+      "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+      "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/payload",
+      "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+      "preparation_wall_ns": 15111166167,
+      "reused": false
+    }
+  ],
+  "history_corpus": {
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "checkpoints": 157,
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320,
+    "reachable_commits": 15632
+  },
+  "setup": "prepared source reuse only; fresh Store creation remains measured",
+  "construction_workers": "1"
+}

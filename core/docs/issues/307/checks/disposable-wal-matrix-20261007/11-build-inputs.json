@@ -1,0 +1,29 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/benchmark_init",
+      "sha256": "65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/verify_namespace",
+      "sha256": "c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736"
+    },
+    "benchmark_history": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/benchmark_history",
+      "sha256": "2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62"
+    },
+    "verify_history": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/verify_history",
+      "sha256": "af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf"
+    }
+  },
+  "changed_native_inputs": {
+    "core/crates/layerfs-project/examples/verify_history.rs": "608f327f1ec7d5589a871658d93821e54fbeea25db64246d40b141aad197756c"
+  },
+  "toolchain": "Rust 1.85.1 release locked",
+  "profile": "sqlite-wal-off-v2",
+  "image": "N/A native macOS",
+  "construction_workers": 1,
+  "initialization_constructors": 4,
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

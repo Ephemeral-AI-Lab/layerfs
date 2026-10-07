@@ -9,7 +9,7 @@ import sys
 import time
 from diagnostics.history_reference_vehicle import generate, generate_verifier
 from families import history_retention as history
-from shared import cold_native, history_observer, phase7_history_proof as proof
+from shared import cold_native, history_observer, phase7_history_proof as proof, disposable_wal
 
 
 def build(root, arm, out, common, vehicle):
@@ -73,8 +73,10 @@ def boundaries(stderr, states, arm):
 
 def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pins=None):
     from families.phase7_sqlite import invoke, BASE, PROFILE_IDS, REQUIRED_BY_PROFILE, GROUP_ROW_CASES, INDEXED_GROUP_ROW_CASES, CASES, OWNER_CLOSURE_CASES_BY_PROFILE
+    matrix = case.id in disposable_wal.ROWS
+    disposable_wal.require_profile(case)
     if arm not in ('baseline', 'candidate'): raise ValueError('explicit history arm required')
-    if arm == 'candidate' and reference_pins is None:
+    if arm == 'candidate' and reference_pins is None and not matrix:
         raise ValueError('history candidate requires qualified reference pins before build/setup/sample')
     if os.uname().sysname != 'Darwin': raise ValueError('history cold/SQLite profile requires macOS')
     root = common.ROOT if arm == 'candidate' else Path(baseline_root).resolve()
@@ -90,20 +92,40 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
               'comparison_scope':'Corpus open through all real retained-state construction/save/C5, measured cold boundaries, final custody/checkpoint/close and canonical census',
               'margin_arithmetic':'10*candidate_ns<=11*baseline_ns','allocation_ceiling':case.storage_ceiling,
               'observer_status':'NOT_RUN', 'cache_contract':'history-source-cold-and-database-state-boundaries-v1'}
+    if matrix:
+        record.update(schema='owner-disposable-wal-history-v1', family_id='disposable-wal-matrix',
+                      profile=disposable_wal.PROFILE, required_case_ids=list(disposable_wal.ROWS),
+                      admission_eligible=False, comparison_kind='historical-unpaired',
+                      image_identity='N/A — native macOS component',
+                      durable_execution='NOT_RUN — disabled by owner until explicit reauthorization')
     locks=[]
     try:
         for path in [common.RESULTS/'phase7-sqlite.lock'] + ([root/'target/phase7-sqlite.lock'] if arm == 'baseline' else []):
             path.parent.mkdir(parents=True,exist_ok=True); handle=path.open('a+b'); fcntl.flock(handle,fcntl.LOCK_EX|fcntl.LOCK_NB);locks.append(handle)
         identity=common.identities()
-        if identity['source_dirty']: raise ValueError('freeze committed source/harness before a history arm')
+        if matrix:
+            from families.serverless_init import check_scope, NONINPUTS
+            check_scope(identity)
+            record['measurement_scope_clean']=True
+            record['declared_noninputs']={p:common.digest(common.ROOT/p) for p in NONINPUTS if (common.ROOT/p).exists()}
+        elif identity['source_dirty']: raise ValueError('freeze committed source/harness before a history arm')
         record['identity']=identity
         if arm == 'candidate':
-            pins=json.loads(Path(reference_pins).read_text()); source=proof.validate_pins(pins,identity)
-            reference=source['receipt']
-            if reference['case'] != case.id or reference['workload_row'] != row: raise ValueError('history reference selection mismatch')
+            if matrix:
+                pins=disposable_wal.root_pins(case.id)
+                reference=disposable_wal.reference(case.id)
+                record['retained_reference']=disposable_wal.ROWS[case.id]['reference']
+            else:
+                pins=json.loads(Path(reference_pins).read_text()); source=proof.validate_pins(pins,identity)
+                reference=source['receipt']
+                if reference['case'] != case.id: raise ValueError('history reference case mismatch')
+            if reference['workload_row'] != row: raise ValueError('history reference selection mismatch')
             common.write_json(out/'reference-pins.json',pins); record['reference_pins_sha256']=common.digest(out/'reference-pins.json')
         corpus=Path(corpus_root or history.corpus.DEFAULT_ROOT).resolve()
         record['fixture']=history.corpus.identity(corpus)
+        if matrix and record['fixture']['manifest_sha256'] != reference['fixture']['manifest_sha256']:
+            raise ValueError('historical/current corpus identity mismatch')
+        record['report_template_sha256']=common.digest(common.ROOT/'benchmark_agent_report.md')
         record['setup_method']='reuse original pinned immutable corpus; no prepared Store or product work shifted to setup'
         record['measured_source_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
         record['dependency_seal']=common.digest(root/'core/Cargo.lock'); record['root_cargo_config_sha256']=common.digest(root/'.cargo/config.toml')
@@ -155,12 +177,15 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
         if arm=='candidate':
             settings=[json.loads(line.removeprefix('EFFECTIVE_PROFILE ')) for line in stderr.splitlines() if line.startswith('EFFECTIVE_PROFILE ')]
             expected={'identity':PROFILE_IDS[case.profile],'journal_mode':'wal' if case.profile=='durable' else 'memory','synchronous':2 if case.profile=='durable' else 0,'foreign_keys':1,'fullfsync':1 if case.profile=='durable' else 0,'checkpoint_fullfsync':1,'page_size':4096,'cache_size':-2048,'mmap_size':0,'temp_store':2,'wal_checkpoint_performed':case.profile=='durable'}
+            if matrix:
+                expected.update(identity=disposable_wal.PROFILE,journal_mode='wal',synchronous=0,fullfsync=0,wal_checkpoint_performed=True)
             if settings!=[expected]:raise ValueError('history actual profile/completion mismatch')
             record['effective_profile']=settings[0]
             layouts=[json.loads(line.removeprefix('EFFECTIVE_PACK_LAYOUT ')) for line in stderr.splitlines() if line.startswith('EFFECTIVE_PACK_LAYOUT ')]
             if layouts!=[{'layout':'GroupRowsIndexed' if case.pack_layout=='group-rows-indexed' else 'GroupRows' if case.pack_layout=='group-rows' else 'Monolithic'}]:raise ValueError('actual SQLite pack layout mismatch')
             record['effective_pack_layout']=layouts[0]
         request={'copy_limit_bytes':case.storage_ceiling,'copy_cold_helper':record['cold_helper'],'observer':record['observer'],'proof_policy':case.proof_policy,'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json'),'sqlite_schema_version':3 if case.pack_layout=='group-rows-indexed' else 2 if case.pack_layout=='group-rows' else 1}
+        if matrix:request.update(retained_reference_case=case.id,wal_proof_copy=True)
         common.write_json(out/'proof-request.json',request)
         proof_env={**os.environ,**history.ENV,'LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
         verification=invoke([sys.executable,str(common.ROOT/'core/benchmark/fs-bench-pro/shared/phase7_history_proof.py'),'--request',str(out/'proof-request.json')],out,'verifier',case.verification_budget_ns,proof_env,common.ROOT)
@@ -170,6 +195,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
     except Exception as error:
         record['status']='INCOMPLETE'; record['reason']=str(error); raise
     finally:
+        if matrix:record['historical_comparison']=disposable_wal.comparison(record,case.id)
         common.write_json(out/'receipt.json',record)
         if arm=='baseline' and record.get('verification_status')=='PASS' and record.get('status')=='COMPLETE' and record.get('command_wall_ns',case.command_budget_ns+1)<=case.command_budget_ns and record.get('cleanup',{}).get('status')=='PASS':
             census=json.loads((out/'census.json').read_text()); native=record['verification']['child']
