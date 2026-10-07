@@ -31,11 +31,20 @@ pub use file::{
     EditRecordExpected, EditRecordKey, EditRequest, EditSequence, EditSource, FileContent, FileRun,
     FileRuns, FileView, IndexedEditBacking, PredecessorBase, RunConstruction,
 };
+/// Neutral names for the same opaque construction-record protocol. Existing
+/// file-edit names remain public and refer to these identical types/trait.
+pub use file::{
+    EditRecordApply as ConstructionRecordApply, EditRecordChange as ConstructionRecordChange,
+    EditRecordExpected as ConstructionRecordExpected, EditRecordKey as ConstructionRecordKey,
+    IndexedEditBacking as IndexedConstructionBacking,
+};
 pub use filesystem::inode::InodeChange;
 pub use filesystem::{
-    build_filesystem, update_filesystem, DirectoryRoot, DirectoryUpdate, FilesystemInput,
-    FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemResult, FilesystemRoot,
-    InodeIdentity, InodeScope, InodeUpdate, LogicalPath, ObjectWork, PathName, Stat,
+    build_filesystem, build_filesystem_streamed_backed, build_filesystem_streamed_backed_timed,
+    update_filesystem, update_filesystem_streamed_backed, update_filesystem_streamed_backed_timed,
+    DirectoryRoot, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemRead,
+    FilesystemResources, FilesystemResult, FilesystemRoot, InodeIdentity, InodeScope, InodeUpdate,
+    LogicalPath, ObjectWork, PathName, Stat,
 };
 pub use object::inode_leaf;
 pub use object::{

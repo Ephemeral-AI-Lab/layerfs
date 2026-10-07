@@ -22,6 +22,7 @@
 use std::io::Read;
 
 use crate::error::{ContentError, ContentResult};
+use crate::file::FileRun;
 
 /// One replacement range in current-result coordinates.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -118,6 +119,18 @@ pub trait EditSource {
 
     /// Reads replacement `index` from `offset` into `buffer`.
     fn read_at(&self, index: usize, offset: u64, buffer: &mut [u8]) -> ContentResult<usize>;
+
+    /// Reads stable replacement data or declares a logical zero span. Data must
+    /// be nonempty and fit `output`; Zero must be nonempty and fit the declared
+    /// replacement remainder, but may exceed this byte window. End is valid only
+    /// at the declared end. Replaying an offset must describe the same bytes.
+    /// Existing byte providers keep their behavior through this default.
+    fn read_run_at(&self, index: usize, offset: u64, output: &mut [u8]) -> ContentResult<FileRun> {
+        match self.read_at(index, offset, output)? {
+            0 => Ok(FileRun::End),
+            count => Ok(FileRun::Data(count)),
+        }
+    }
 }
 
 /// `Read` adapter over one declared replacement range.

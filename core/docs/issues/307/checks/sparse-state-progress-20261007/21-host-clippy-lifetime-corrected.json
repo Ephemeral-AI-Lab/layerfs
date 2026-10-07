@@ -1,0 +1,30 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-content",
+    "-p",
+    "layerfs-overlay",
+    "-p",
+    "layerfs-workspace",
+    "-p",
+    "layerfs-daemon",
+    "-p",
+    "layerfs-sdk",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 5697709666,
+  "kind": "static",
+  "workers": 1
+}

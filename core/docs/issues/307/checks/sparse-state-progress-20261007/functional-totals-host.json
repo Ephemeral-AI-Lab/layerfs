@@ -1,0 +1,97 @@
+{
+  "09-new-public-bodies": {
+    "passed_by_target": [
+      11,
+      10,
+      2,
+      5,
+      6,
+      4,
+      3,
+      9
+    ],
+    "raw_total": 50,
+    "wall_ns": 6053396958,
+    "timeout": false,
+    "exit_code": 0
+  },
+  "11-content-regressions": {
+    "passed_by_target": [
+      7,
+      9,
+      7,
+      12,
+      5,
+      3,
+      8,
+      6,
+      7,
+      3,
+      11,
+      4,
+      10,
+      12,
+      17,
+      8,
+      6,
+      18,
+      1,
+      3,
+      5,
+      2,
+      6,
+      2,
+      6,
+      7,
+      7,
+      2,
+      19,
+      6,
+      13,
+      4,
+      9,
+      1
+    ],
+    "raw_total": 246,
+    "wall_ns": 25499862958,
+    "timeout": false,
+    "exit_code": 0
+  },
+  "15-captured-point-app-bodies": {
+    "passed_by_target": [
+      3,
+      2
+    ],
+    "raw_total": 5,
+    "wall_ns": 1755411875,
+    "timeout": false,
+    "exit_code": 0
+  },
+  "17-host-ownership": {
+    "passed_by_target": [
+      4,
+      2,
+      1,
+      9,
+      3,
+      2,
+      5,
+      21,
+      10,
+      7,
+      5,
+      8,
+      1,
+      5,
+      3,
+      4,
+      3
+    ],
+    "raw_total": 93,
+    "wall_ns": 18501205834,
+    "timeout": false,
+    "exit_code": 0
+  },
+  "distinct_host_selected_bodies": 392,
+  "reuse": "09 Daemon captured_runs2 superseded by15 captured_runs3; same body old result remains immutable. E1sample0/no performance qualification."
+}

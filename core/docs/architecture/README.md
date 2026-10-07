@@ -389,3 +389,10 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 - [Workspace edit backing port](52-workspace-edit-backing-port.md): explicit
   operation/file custody, original terminal refusals and bounded conversion/copy
   observations over Direct Overlay or the fair Daemon owner.
+- [Backed filesystem serial state](53-backed-filesystem-serial-state.md): exact
+  context/membership/count/root records and streamed final rows; validator,
+  reducer/release state and full topology qualification remain explicit.
+- [Run-aware localized edits](54-run-aware-localized-file-edits.md): shared
+  sparse Scanner and authenticated positive-zero evidence within fixed windows.
+- [Captured sparse run cursor](55-captured-sparse-run-cursor.md): exact retained
+  metadata/root/floor points, indexed forward discovery and original read custody.

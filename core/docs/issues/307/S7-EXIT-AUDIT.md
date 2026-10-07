@@ -328,3 +328,33 @@ performance treatment, service-rate attribution or E1/E2 gate. S7 stays
 CHECKPOINT/unchecked; the full goal continues.
 
 [Source, original failures, checks and remaining scope](K1-BACKED-STREAM-SUPERVISOR-20261007.md).
+
+## Sparse serial state and observed-turn continuation (2026-10-07)
+
+The [sparse serial/progress checkpoint](SPARSE-SERIAL-PROGRESS-20261007.md)
+records run-aware canonical editing and its full-domain positive zero evidence,
+selected indexed filesystem serial/count/root state with sealed fresh membership,
+exact captured inode points and forward cell metadata discovery. The captured
+Read command charges its fixed boxed input/reply and original bounded window;
+successful service return still clones that window while the Completion is held.
+Original attempted Completion and unattempted command/cause custody remain.
+Metadata EQP and correlated runtime counts pay root/lease/layer work explicitly;
+Payload-only zero BLOB delivery does not imply zero root BLOBs or physical I/O.
+
+Supervisor observations execute the same selected phase and at most one original
+provider unit. Publication, actual sender drop and ledger-unlocked credit release
+notify one fixed latch; a full quiet rotation can yield a borrowed park permit,
+while pending actual joins prevent parking. Two real macOS application queue
+proofs cover publication before latch clear and after an Empty predicate, bounded
+control inspection even without a permit, original Delivery/fence and final
+credit release. These bodies have no Linux executions or latency attribution.
+
+The checkpoint's component functional checks and source counters establish no
+eligible whole-operation SQL/page/journal/device I/O, physical allocation/
+reservation/high-water/freelist, aggregate phase residency, copies, queue/debt or
+sustainable-rate gate. Captured normalization, remaining reducer/release state,
+complete root qualification and actual Commit/Save/history/install composition
+remain engineering work. All 27 E1 proposals remain NOT_RUN with qualification
+NOT_EVALUATED; E1–E4 and Q exits remain open. Earlier Init failures, history passes
+and E01 diagnostic receipts retain their exact source and scope. S7 remains
+CHECKPOINT/unchecked; the full goal continues.

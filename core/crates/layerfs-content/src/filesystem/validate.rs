@@ -18,6 +18,7 @@ use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::view::{DirectoryRow, OperationInput, ResidentInput};
 use crate::filesystem::rows::{check_operation_input, DirectoryChangeLookup, PreparedRows};
 use crate::filesystem::sorted::finish::DirectoryRoot;
+use crate::filesystem::state::DroppedParents;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
@@ -199,7 +200,7 @@ pub(crate) struct CheckedOperationInput<'a> {
 pub(crate) fn check_operation<'a>(
     reader: &dyn AuthenticatedObjects,
     input: &'a dyn OperationInput,
-    unreachable: &BTreeMap<u64, ()>,
+    unreachable: &dyn DroppedParents,
     work: &mut ValidationWork,
 ) -> ContentResult<CheckedOperationInput<'a>> {
     check_operation_input(input)?;
@@ -403,17 +404,19 @@ fn check_parent_aliases(
     input: &dyn OperationInput,
     topology: &FilesystemTopology,
     by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
-    unreachable: &BTreeMap<u64, ()>,
+    unreachable: &dyn DroppedParents,
     work: &mut ValidationWork,
     state: &mut ValidationState,
 ) -> ContentResult<()> {
     // A directory the same batch drops is not part of the result, so the bindings
     // it states are not bindings the result has to satisfy.
-    let by_parent: BTreeMap<u64, Vec<Vec<u8>>> = by_parent
-        .iter()
-        .filter(|(parent, _)| !unreachable.contains_key(parent))
-        .map(|(&parent, names)| (parent, names.clone()))
-        .collect();
+    let mut retained = BTreeMap::new();
+    for (&parent, names) in by_parent {
+        if !unreachable.contains(parent)? {
+            retained.insert(parent, names.clone());
+        }
+    }
+    let by_parent = retained;
     if by_parent.is_empty() {
         return Ok(());
     }

@@ -1,0 +1,3 @@
+crates/layerfs-content/src/filesystem/state/mod.rs:15: implementation construct in declaration/delegation entry file
+crates/layerfs-content/src/filesystem/state/mod.rs:18: implementation construct in declaration/delegation entry file
+FAIL: 2 product-source boundary violations

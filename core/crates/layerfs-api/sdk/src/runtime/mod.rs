@@ -19,6 +19,7 @@ mod sessions;
 /// Host-thread composition of provider service and independently fenced sockets.
 pub mod supervisor;
 mod types;
+mod wake;
 
 pub use binding::{Authorization, Binding};
 pub use error::{RuntimeError, RuntimeResult};

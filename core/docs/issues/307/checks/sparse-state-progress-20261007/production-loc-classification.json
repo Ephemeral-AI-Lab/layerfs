@@ -1,0 +1,88 @@
+{
+  "before": {
+    "snapshot": "dcdf527584675849e7839ca4118d71ac9aa4b193",
+    "counts": {
+      "active_core": 57134,
+      "excluded_predecessors": 40321,
+      "excluded_integration": 2844,
+      "reference": 65417
+    },
+    "packages": {
+      "core/crates/layerfs-api/core": 291,
+      "core/crates/layerfs-api/sdk": 6592,
+      "core/crates/layerfs-bridge": 1259,
+      "core/crates/layerfs-bridge-legacy": 6834,
+      "core/crates/layerfs-content": 16311,
+      "core/crates/layerfs-daemon": 2513,
+      "core/crates/layerfs-daemon-legacy": 2151,
+      "core/crates/layerfs-fuse": 1447,
+      "core/crates/layerfs-history": 817,
+      "core/crates/layerfs-overlay": 7005,
+      "core/crates/layerfs-persistence": 6706,
+      "core/crates/layerfs-project": 1562,
+      "core/crates/layerfs-sandbox": 1106,
+      "core/crates/layerfs-sdk-legacy": 505,
+      "core/crates/layerfs-server": 3996,
+      "core/crates/layerfs-storage": 9336,
+      "core/crates/layerfs-telemetry": 2262,
+      "core/crates/layerfs-workspace": 2771,
+      "core/crates/layerfs-workspace-legacy": 26835
+    },
+    "manifest_members": [
+      "core/crates/layerfs-content",
+      "core/crates/layerfs-storage",
+      "core/crates/layerfs-persistence",
+      "core/crates/layerfs-project",
+      "core/crates/layerfs-history",
+      "core/crates/layerfs-telemetry",
+      "core/crates/layerfs-overlay",
+      "core/crates/layerfs-workspace",
+      "core/crates/layerfs-daemon",
+      "core/crates/layerfs-api/sdk",
+      "core/crates/layerfs-bridge"
+    ]
+  },
+  "after": {
+    "snapshot": "8661e42d1b361eceb9e7c3092fdbac0af1548f97",
+    "counts": {
+      "active_core": 59094,
+      "excluded_predecessors": 40321,
+      "excluded_integration": 2844,
+      "reference": 65417
+    },
+    "packages": {
+      "core/crates/layerfs-api/core": 291,
+      "core/crates/layerfs-api/sdk": 6985,
+      "core/crates/layerfs-bridge": 1259,
+      "core/crates/layerfs-bridge-legacy": 6834,
+      "core/crates/layerfs-content": 17417,
+      "core/crates/layerfs-daemon": 2592,
+      "core/crates/layerfs-daemon-legacy": 2151,
+      "core/crates/layerfs-fuse": 1447,
+      "core/crates/layerfs-history": 817,
+      "core/crates/layerfs-overlay": 7362,
+      "core/crates/layerfs-persistence": 6706,
+      "core/crates/layerfs-project": 1562,
+      "core/crates/layerfs-sandbox": 1106,
+      "core/crates/layerfs-sdk-legacy": 505,
+      "core/crates/layerfs-server": 3996,
+      "core/crates/layerfs-storage": 9336,
+      "core/crates/layerfs-telemetry": 2262,
+      "core/crates/layerfs-workspace": 2796,
+      "core/crates/layerfs-workspace-legacy": 26835
+    },
+    "manifest_members": [
+      "core/crates/layerfs-content",
+      "core/crates/layerfs-storage",
+      "core/crates/layerfs-persistence",
+      "core/crates/layerfs-project",
+      "core/crates/layerfs-history",
+      "core/crates/layerfs-telemetry",
+      "core/crates/layerfs-overlay",
+      "core/crates/layerfs-workspace",
+      "core/crates/layerfs-daemon",
+      "core/crates/layerfs-api/sdk",
+      "core/crates/layerfs-bridge"
+    ]
+  }
+}

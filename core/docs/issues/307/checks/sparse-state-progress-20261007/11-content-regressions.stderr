@@ -1,0 +1,98 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/chunk_predecessor.rs (core/target/debug/deps/chunk_predecessor-370cc89c7f55b8c2)
+     Running tests/edit_backed.rs (core/target/debug/deps/edit_backed-54e9dde5e2f41af8)
+     Running tests/edit_batch.rs (core/target/debug/deps/edit_batch-16513af13f6403e3)
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-171a21beb2eb1d79)
+     Running tests/edit_cache.rs (core/target/debug/deps/edit_cache-f4ac7d869651eece)
+     Running tests/edit_lazy_plan.rs (core/target/debug/deps/edit_lazy_plan-9b5e757afdff8e37)
+     Running tests/edit_localized.rs (core/target/debug/deps/edit_localized-6b3e672532146568)
+     Running tests/edit_model.rs (core/target/debug/deps/edit_model-be02524d95b5a417)
+     Running tests/edit_noop.rs (core/target/debug/deps/edit_noop-8d66936deb28d310)
+     Running tests/edit_reference.rs (core/target/debug/deps/edit_reference-8670d2abe57506d1)
+     Running tests/edit_single.rs (core/target/debug/deps/edit_single-2e1bf09b8a6a0405)
+     Running tests/edit_timing.rs (core/target/debug/deps/edit_timing-ba40441586125e5a)
+     Running tests/edit_transitions.rs (core/target/debug/deps/edit_transitions-56d063218fea32c7)
+     Running tests/filesystem_attributes.rs (core/target/debug/deps/filesystem_attributes-c3beface54fc1aee)
+     Running tests/filesystem_bounds.rs (core/target/debug/deps/filesystem_bounds-6a5d10a6b1d3fc43)
+     Running tests/filesystem_failure.rs (core/target/debug/deps/filesystem_failure-3ab14e7b7e14d8c2)
+     Running tests/filesystem_hardlinks.rs (core/target/debug/deps/filesystem_hardlinks-63a7485f91aaf1f9)
+     Running tests/filesystem_ordering.rs (core/target/debug/deps/filesystem_ordering-b07997645b40395c)
+     Running tests/filesystem_ordering_consolidate.rs (core/target/debug/deps/filesystem_ordering_consolidate-fe5582263e7e7fa5)
+     Running tests/filesystem_ordering_scan.rs (core/target/debug/deps/filesystem_ordering_scan-1031f588b8d6fa8c)
+     Running tests/filesystem_parent_lookup.rs (core/target/debug/deps/filesystem_parent_lookup-c2b6251d280fd5e5)
+parent lookup demands for batches 1/3/64: [22, 10, 6]
+explicit parent value demands for batches 1/3/64: [18, 9, 6]
+quota pending=1 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+quota pending=1 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+quota pending=1 bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+quota pending=1 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+quota pending=1 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 864 }
+quota pending=1 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 864 }
+quota pending=1 bytes=864 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=864 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=960 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=960 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1152 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1152 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=864 batch=1 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=864 batch=64 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=960 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=960 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1152 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1152 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+     Running tests/filesystem_profile.rs (core/target/debug/deps/filesystem_profile-cbc923fe4ac3c992)
+     Running tests/filesystem_read.rs (core/target/debug/deps/filesystem_read-74b9ee6c7d86651a)
+     Running tests/filesystem_reference.rs (core/target/debug/deps/filesystem_reference-a68f0cc5be2a48a2)
+     Running tests/filesystem_rows.rs (core/target/debug/deps/filesystem_rows-693f80d7588e60d3)
+     Running tests/filesystem_sorted.rs (core/target/debug/deps/filesystem_sorted-cafa159be4f47f29)
+     Running tests/filesystem_streamed.rs (core/target/debug/deps/filesystem_streamed-26327536ba8072bf)
+     Running tests/filesystem_timing.rs (core/target/debug/deps/filesystem_timing-e4b5d48dde6f0c17)
+     Running tests/filesystem_topology.rs (core/target/debug/deps/filesystem_topology-52112ab7d09244ae)
+     Running tests/filesystem_updates.rs (core/target/debug/deps/filesystem_updates-86b9911038e50d5d)
+     Running tests/object_context.rs (core/target/debug/deps/object_context-546585297a15e2b8)
+     Running tests/runs.rs (core/target/debug/deps/runs-5c6ef8e3bd9527f3)
+     Running tests/streaming.rs (core/target/debug/deps/streaming-c345efb6c36a40d8)
+     Running tests/zero_cdc.rs (core/target/debug/deps/zero_cdc-2695498d0341aab8)

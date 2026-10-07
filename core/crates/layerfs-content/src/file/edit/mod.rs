@@ -13,9 +13,11 @@ mod input;
 mod objects;
 mod references;
 mod resolution;
+mod runs;
 mod split;
 mod state;
 mod tree;
+mod zero;
 
 pub use apply::{apply_edits, apply_edits_backed, EditRequest};
 pub use backing::{

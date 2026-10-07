@@ -12,10 +12,12 @@ use layerfs_telemetry::timer::TimingScope;
 
 use layerfs_telemetry::timer::Active;
 
+use super::{runs::ReplacementRuns, zero::ZeroEvidence};
 use crate::error::{ContentError, ContentResult};
 use crate::file::edit::input::{EditSequence, EditSource, Plan, Segment};
-use crate::file::mapping::{PageCache, RangeCursor};
+use crate::file::mapping::{NodeSummary, PageCache, RangeCursor};
 use crate::file::view::FileView;
+use crate::file::{FileRun, FileRuns};
 use crate::object::AuthenticatedObjects;
 
 /// Bytes compared per window.
@@ -72,6 +74,7 @@ fn compare_windows(
     compare: &TimingScope<'_, Active>,
 ) -> ContentResult<NoOpVerdict> {
     let mut plan = Plan::new(stream);
+    let mut zero = ZeroEvidence::default();
     let mut base_window: Vec<u8> = Vec::new();
     let mut replacement_window: Vec<u8> = Vec::new();
     while let Some(segment) = plan.advance()? {
@@ -84,37 +87,80 @@ fn compare_windows(
         if len == 0 {
             continue;
         }
-        let mut offset = 0_u64;
-        while offset < len {
-            let take = (len - offset).min(COMPARE_WINDOW_BYTES as u64);
-            let window = base.0 + offset..base.0 + offset + take;
+        let mut replacement = ReplacementRuns::for_comparison(source, index, len)?;
+        replacement_window.resize(COMPARE_WINDOW_BYTES, 0);
+        loop {
+            let offset = replacement.position();
+            let run = replacement.read_run(&mut replacement_window)?;
+            let length = match run {
+                FileRun::End => break,
+                FileRun::Data(count) => count as u64,
+                FileRun::Zero(length) => length,
+            };
+            let start = base
+                .0
+                .checked_add(offset)
+                .ok_or(ContentError::LengthOverflow)?;
+            let end = start
+                .checked_add(length)
+                .ok_or(ContentError::LengthOverflow)?;
+            let window = start..end;
+            if let FileRun::Zero(_) = run {
+                let equal =
+                    compare
+                        .child("edit.compare.zero")
+                        .run(|scope| match view.file_state()? {
+                            Some(state) => zero.mapping(
+                                reader,
+                                pages,
+                                NodeSummary {
+                                    id: state.mapping_root,
+                                    bytes: state.logical_len,
+                                    extents: state.extent_count,
+                                    level: state.tree_level,
+                                },
+                                window,
+                                true,
+                                scope,
+                            ),
+                            None => {
+                                let payload = view
+                                    .whole_file_bytes()?
+                                    .ok_or(ContentError::WrongLogicalRole)?;
+                                let low = usize::try_from(start)
+                                    .map_err(|_| ContentError::LengthOverflow)?;
+                                let high = usize::try_from(end)
+                                    .map_err(|_| ContentError::LengthOverflow)?;
+                                Ok(payload
+                                    .get(low..high)
+                                    .ok_or(ContentError::InvalidRecord("whole-file range"))?
+                                    .iter()
+                                    .all(|byte| *byte == 0))
+                            }
+                        })?;
+                if !equal {
+                    return Ok(NoOpVerdict::Differs);
+                }
+                continue;
+            }
             base_window.clear();
             compare
                 .child("edit.compare.window")
                 .run(|scope| match cursor.as_mut() {
                     Some(cursor) => cursor
-                        .read_segment(window.clone(), &mut base_window, pages)
+                        .read_segment(window, &mut base_window, pages)
                         .map(|_| ()),
-                    None => view.read_range(reader, window.clone(), &mut base_window, scope),
+                    None => view.read_range(reader, window, &mut base_window, scope),
                 })?;
-            if base_window.len() as u64 != take {
+            if base_window.len() as u64 != length {
                 return Err(ContentError::LengthMismatch {
-                    expected: take,
+                    expected: length,
                     actual: base_window.len() as u64,
                 });
             }
-            replacement_window.clear();
-            replacement_window.resize(take as usize, 0);
-            let read = source.read_at(index, offset, &mut replacement_window[..take as usize])?;
-            if read as u64 != take {
-                return Err(ContentError::InvalidEdit {
-                    what: "replacement bytes",
-                });
-            }
-            if base_window != replacement_window {
+            if base_window != replacement_window[..length as usize] {
                 return Ok(NoOpVerdict::Differs);
             }
-            offset += take;
         }
     }
     Ok(NoOpVerdict::Equal)

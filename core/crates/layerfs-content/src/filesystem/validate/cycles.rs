@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{charge_site, walk_limit, CheckedOperationInput, ValidationState, ValidationWork};
 use crate::error::{ContentError, ContentResult};
+use crate::filesystem::state::DroppedParents;
 use crate::object::inode_leaf::InodeKind;
 use crate::object::AuthenticatedObjects;
 
@@ -25,7 +26,7 @@ use crate::object::AuthenticatedObjects;
 pub(super) fn check_effective_cycles(
     reader: &dyn AuthenticatedObjects,
     checked: &CheckedOperationInput<'_>,
-    unreachable: &BTreeMap<u64, ()>,
+    unreachable: &dyn DroppedParents,
     work: &mut ValidationWork,
     state: &mut ValidationState,
 ) -> ContentResult<()> {
@@ -116,7 +117,7 @@ pub(super) fn check_effective_cycles(
 fn check_build_reachability(
     _reader: &dyn AuthenticatedObjects,
     checked: &CheckedOperationInput<'_>,
-    unreachable: &BTreeMap<u64, ()>,
+    unreachable: &dyn DroppedParents,
     work: &mut ValidationWork,
 ) -> ContentResult<()> {
     // A build states its own bindings: the walk reads no base object, and the
@@ -128,7 +129,7 @@ fn check_build_reachability(
     let mut serials = checked.input.new_inodes()?;
     let mut declared: BTreeSet<u64> = BTreeSet::new();
     while let Some(serial) = serials.next_row()? {
-        if serial == checked.input.root_serial() || unreachable.contains_key(&serial) {
+        if serial == checked.input.root_serial() || unreachable.contains(serial)? {
             continue;
         }
         if checked
@@ -147,7 +148,7 @@ fn check_build_reachability(
         if !seen.insert(serial) {
             continue;
         }
-        if unreachable.contains_key(&serial) {
+        if unreachable.contains(serial)? {
             continue;
         }
         let Some(row) = checked.input.directory_for(serial)? else {

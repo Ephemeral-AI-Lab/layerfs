@@ -30,9 +30,13 @@ product mental model or campaign-specific benchmark procedures.
   in the same database, with guarded atomic changes and automatic last-owner
   cleanup. Content now exposes a backed file editor over these records and
   Workspace supplies an explicit operation/file adapter with first-original
-  failure custody. Streamed directory inputs share the existing canonical
-  filesystem algorithm; other growing filesystem state remains under its
-  existing resource limits. Captured normalization and Commit integration
+  failure custody. Run-aware localized edits reuse the frozen sparse scanner
+  and bounded positive immutable zero evidence. Streamed directory inputs share
+  the canonical filesystem algorithm; backed serial state supplies new-parent
+  membership, rebuilt roots and initial counts/final row streams. Remaining
+  validation/reducer/release state stays under its existing resource limits.
+  Captured local inode/run points retain exact reader root/floor and bounded
+  forward metadata progress. Captured normalization and Commit integration
   remain unfinished.
   The external E01 example records original startup work, diagnostics and Stop
   without creating a Workspace route. It supplies diagnostic receipt consistency,

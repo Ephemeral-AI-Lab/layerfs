@@ -8,6 +8,7 @@ pub mod mapping;
 
 mod construction;
 pub(crate) use construction::bytes as content;
+pub(crate) use construction::chunk_runs;
 mod read;
 pub(crate) use construction::runs;
 mod view;

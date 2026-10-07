@@ -1,9 +1,12 @@
 # Backed file edits, streamed directories and occupied-slot supervision
 
-> Status: verified local implementation checkpoint prepared after first parent
+> Status: committed locally as `dcdf527584675849e7839ca4118d71ac9aa4b193`, after first parent
 > `889836c446507c726a53f0ccf1e4418bd4d0946f`.
 > Product subtree `b99c4a3050b88f2ce47ba1daf334710ed90ee267`;
-> final staged/committed confirmation follows separately.
+> committed tree `0e83d0ac14c6ff06b4c5a68fa0a1600eca8a6c3b` matches the staged tree.
+> [Commit/count confirmation](checks/k1-backed-stream-supervisor-20261007/38-committed-verification.json)
+> and [tracker receipt](checks/k1-backed-stream-supervisor-20261007/39-tracker-receipt.json)
+> are retained by the next checkpoint; original evidence keeps its source pins.
 > S0/S7–S13 remain incomplete and unchecked.
 
 This joint slice implements the file-editor state port, its real Workspace/Daemon

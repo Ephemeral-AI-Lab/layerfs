@@ -1,4 +1,5 @@
 //! Socket output is independent of provider dispatch and rotates bounded fragments.
+use crate::runtime::wake::{PublishedSender, Signal};
 use layerfs_bridge::{
     contract::{FrameError, MessageClass, MessageKind, MAX_FRAGMENT_BYTES},
     native::{
@@ -73,6 +74,7 @@ pub enum OutputAdmissionError {
 struct Ledger {
     config: OutputConfig,
     work: OutputWork,
+    wake: Option<Arc<Signal>>,
 }
 struct OwnerLease(Arc<Mutex<Ledger>>);
 impl Drop for OwnerLease {
@@ -99,13 +101,23 @@ pub struct OutputPermit {
 }
 impl Drop for Credit {
     fn drop(&mut self) {
-        if let Ok(mut ledger) = self.ledger.lock() {
-            ledger.work.messages -= 1;
-            ledger.work.credited_bytes -= self.bytes;
-            ledger.work.packet_capacity_bytes -= self.packet_capacity;
-            if self.reserved {
-                ledger.work.reserved_bytes -= self.bytes;
+        let wake = match self.ledger.lock() {
+            Ok(mut ledger) => {
+                ledger.work.messages -= 1;
+                ledger.work.credited_bytes -= self.bytes;
+                ledger.work.packet_capacity_bytes -= self.packet_capacity;
+                if self.reserved {
+                    ledger.work.reserved_bytes -= self.bytes;
+                }
+                ledger.wake.clone()
             }
+            // Only retrieve the notifier. Poison remains set and accounting is
+            // unavailable; the next original reserve/work observation reports it.
+            Err(error) => error.get_ref().wake.clone(),
+        };
+        // Capacity becomes visible before notification; the ledger is unlocked.
+        if let Some(wake) = wake {
+            let _ = wake.notify();
         }
     }
 }
@@ -197,8 +209,17 @@ impl OutputPool {
             ledger: Arc::new(Mutex::new(Ledger {
                 config,
                 work: OutputWork::default(),
+                wake: None,
             })),
         })
+    }
+    pub(crate) fn set_wake(&mut self, wake: Arc<Signal>) -> Result<(), FrameError> {
+        let mut ledger = self.ledger.lock().map_err(|_| FrameError::Poisoned)?;
+        if ledger.work.owners != 0 {
+            return Err(FrameError::Invalid("output wake after worker startup"));
+        }
+        ledger.wake = Some(wake);
+        Ok(())
     }
     /// Starts one credited worker or returns the original send direction unchanged.
     pub fn start(&self, sender: Sender) -> Result<NativeOutput, (OutputStartError, Sender)> {
@@ -206,7 +227,7 @@ impl OutputPool {
             Ok(c) => c,
             Err(e) => return Err((OutputStartError::Native(e), sender)),
         };
-        let config = {
+        let (config, wake) = {
             let mut ledger = match self.ledger.lock() {
                 Ok(l) => l,
                 Err(_) => return Err((OutputStartError::Frame(FrameError::Poisoned), sender)),
@@ -218,7 +239,7 @@ impl OutputPool {
                 ));
             }
             ledger.work.owners += 1;
-            ledger.config
+            (ledger.config, ledger.wake.clone())
         };
         let owner = Arc::new(OwnerLease(self.ledger.clone()));
         let writer = match RecordSender::new(sender) {
@@ -227,6 +248,7 @@ impl OutputPool {
         };
         let (jobs, incoming) = mpsc::sync_channel(config.messages);
         let (outgoing, receipts) = mpsc::sync_channel(1);
+        let outgoing = PublishedSender::new(outgoing, wake);
         let parts = Arc::new(Mutex::new(Some((writer, incoming, outgoing))));
         let thread_parts = parts.clone();
         let thread_owner = owner.clone();
@@ -551,7 +573,7 @@ fn class(class: MessageClass) -> usize {
 fn run(
     mut writer: RecordSender,
     incoming: mpsc::Receiver<Job>,
-    outgoing: mpsc::SyncSender<OutputReceipt>,
+    outgoing: PublishedSender<OutputReceipt>,
     owner: Arc<OwnerLease>,
 ) -> OutputReport {
     let mut queues: [VecDeque<Job>; 3] = std::array::from_fn(|_| VecDeque::new());

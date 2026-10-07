@@ -1,0 +1,12 @@
+{
+  "command": [
+    "python3",
+    "core/target/cluster2-307/check_sparse_docs.py"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 91264167,
+  "kind": "static",
+  "workers": 1
+}

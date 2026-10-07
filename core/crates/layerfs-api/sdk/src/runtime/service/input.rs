@@ -1,4 +1,5 @@
 //! Blocking native input runs independently of the host provider/dispatch owner.
+use crate::runtime::wake::{PublishedSender, Signal};
 use crate::{client::RequestHeader, runtime::check_header};
 use layerfs_bridge::{
     codec::{Message, Reassembly, ReassemblyWork, ReceiveBudget},
@@ -89,6 +90,7 @@ pub struct InputPool {
     limit: usize,
     live: Arc<AtomicUsize>,
     budget: ReceiveBudget,
+    wake: Option<Arc<Signal>>,
 }
 impl InputPool {
     /// Selects simultaneous input owners once. It does not cap lifetime flows.
@@ -100,7 +102,15 @@ impl InputPool {
             limit,
             live: Arc::new(AtomicUsize::new(0)),
             budget,
+            wake: None,
         })
+    }
+    pub(crate) fn set_wake(&mut self, wake: Arc<Signal>) -> Result<(), FrameError> {
+        if self.outstanding() != 0 {
+            return Err(FrameError::Invalid("input wake after worker startup"));
+        }
+        self.wake = Some(wake);
+        Ok(())
     }
     /// Acquires actual shared connection credit before creating an I/O worker.
     /// Any admission/start refusal returns original authenticated socket ownership.
@@ -134,7 +144,7 @@ impl InputPool {
         let lease = Arc::new(InputLease {
             live: self.live.clone(),
         });
-        NativeInput::start(connection, self.budget.clone(), lease)
+        NativeInput::start(connection, self.budget.clone(), lease, self.wake.clone())
     }
     /// Actual input owners/reports still holding their admission lease.
     pub fn outstanding(&self) -> usize {
@@ -149,6 +159,7 @@ impl NativeInput {
         connection: Connection,
         budget: ReceiveBudget,
         lease: Arc<InputLease>,
+        wake: Option<Arc<Signal>>,
     ) -> Result<
         (
             Self,
@@ -166,6 +177,7 @@ impl NativeInput {
             Err(e) => return Err((InputFailure::Frame(e), connection)),
         };
         let (event_send, events) = mpsc::sync_channel(1);
+        let event_send = PublishedSender::new(event_send, wake);
         let (decision, decision_receive) = mpsc::sync_channel(1);
         // Keep the original receiver recoverable if the OS refuses thread creation.
         let parts = Arc::new(Mutex::new(Some((
@@ -296,7 +308,7 @@ impl Drop for NativeInput {
 fn run(
     mut receive: RecordReceiver,
     mut collector: Reassembly,
-    events: mpsc::SyncSender<InputEvent>,
+    events: PublishedSender<InputEvent>,
     decision: mpsc::Receiver<bool>,
     lease: Arc<InputLease>,
 ) -> InputReport {

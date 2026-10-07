@@ -88,9 +88,12 @@ new topology certificate or fixed physical-I/O/latency claim.
 This boundary removes the per-directory input Vec requirement, not every
 input-sized collection. Validation still has grouped demanded serials,
 additions/candidate maps, examined/seen/frontier state and its resource-sized
-base memo. New-parent membership, rebuilt directory roots, initial count/final
-row arrays, reducer fresh membership, touched/zero collections and release
-frontiers/prefetch records remain under their existing ceilings and algorithms.
+base memo. The additive [backed serial-state route](53-backed-filesystem-serial-state.md)
+now puts new-parent membership, rebuilt directory roots and initial count/final
+row iteration behind the existing neutral construction records and sealed input
+cursors. The resident route keeps its former maps/arrays. Reducer fresh membership,
+touched/zero collections and release frontiers/prefetch records remain under
+their existing ceilings and algorithms in both routes.
 The legacy explicit row/spool APIs retain their existing resident-row limits.
 
 Workspace still owes the real normalized captured source, with retained
@@ -99,7 +102,9 @@ ordered name queries, provider failure retention and no hidden materialization.
 Overlay supplies neutral owned records/queries in its existing daemon database.
 Content continues to own interpretation, canonical sorted merges, reference
 effects and the validator. Root-qualified parent evidence, backed reducer and
-release state, sparse construction and actual Commit remain later slices.
+release state, real captured normalization and actual Commit remain later slices.
+The [run-aware file editor](54-run-aware-localized-file-edits.md) supplies selected
+sparse construction behavior without closing that integration scope.
 
 The existing `FilesystemResources` ordering allowances still govern this
 driver, including validation work and touched-state refusals. A streamed input

@@ -1,0 +1,10 @@
+{
+  "receipt": "02-overlay-runs.json",
+  "failed_test": "sparse_cutoff_gap_above_four_gib_has_no_byte_window_or_blob_delivery",
+  "cause": "new assertion accidentally covered all statement families; check_captured_reader pays two Workspace root metadata BLOB32 deliveries for Gap plus End; cumulative288 ->352, delta64",
+  "product_failure": false,
+  "repair": "assert Payload BLOB delivery0 and Workspace root metadata64 explicitly, retain original failure; no byte-window/payload counters, workload, timeout or product algorithm changed",
+  "retained_passes": 3,
+  "covering_repair": "build exact target then run changed failed body only; prior unchanged three bodies reused",
+  "eligibility": "FUNCTIONAL_ONLY, no physical IO/whole resident/performance gate"
+}

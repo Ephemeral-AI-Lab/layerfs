@@ -61,6 +61,40 @@ addition, topology, count and frontier domains and their resource refusals;
 those domains are the next backed-state scope. See
 [streamed directory input](51-streamed-directory-input.md).
 
+The subsequent [sparse serial/progress checkpoint](../issues/307/SPARSE-SERIAL-PROGRESS-20261007.md)
+after `dcdf52758` records source and functional scope. Selected new-parent/held
+membership, rebuilt directory roots and initial counts use the same opaque
+construction-record protocol. Sealed header/fresh cursors supply iteration,
+membership and final rows without a complete resident count/root/row domain.
+Every raw batch still accounts for descriptor and nested Vec capacities within
+65,536 bytes. The resident API and remaining validator/reducer/touched/zero/
+release refusals remain. See
+[backed filesystem serial state](53-backed-filesystem-serial-state.md).
+
+Run-aware replacement spans reuse the frozen Scanner/ExtentBuilder and a separate
+positive immutable evidence memo of at most 64 entries. Full referenced byte
+domains must be proven before memoization, and summary/context checks apply to
+hits. Distinct or evicted identities pay actual demand work; this is no universal
+logarithmic bound. See [run-aware localized edits](54-run-aware-localized-file-edits.md).
+The [captured input port](55-captured-sparse-run-cursor.md) binds exact retained
+inode points and a forward metadata cursor to the original reader/root/floor.
+At most four existing layers contribute metadata; a Window is limited to one
+4,096-byte cell and its inherited mask. Daemon admission charges the boxed input,
+reply and original window, while success clones an independently returned window
+with the original credited Completion still held. Those domains exclude transient
+composition, caller-retained copies, SQL/pager/OS caches and aggregate residency.
+End/drop releases no reader and an absent local row establishes no immutable zero.
+
+[Supervisor observations and parking](45-runtime-supervision.md) retain one
+selected phase and at most one original provider unit. The fixed wake latch adds
+its own allocation and ownership beyond existing registry gauges. The application
+checks bounded control work each turn and after a borrowed park permit before
+waiting. Pending actual worker joins prevent parking; wait bounds change no
+operation, Save, Workspace or Bash lifetime. Captured normalization, complete
+root qualification, original release/Commit composition and E/Q numerical/
+resource gates remain open. Component functional checks qualify none of those
+aggregate limits or performance gates.
+
 The Service/Bridge file-save limits below describe the #252 source in the same
 commit as this note; older flow diagrams retain their historical source pins.
 The keyed namespace-tree subsection of §9 describes the #256 source of phase

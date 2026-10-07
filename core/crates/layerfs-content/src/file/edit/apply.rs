@@ -8,16 +8,16 @@
 //! replacements are all byte-identical to their base ranges returns the base root
 //! itself.
 
-use std::io::Read;
-
 use layerfs_telemetry::timer::{Active, TimingScope};
 
+use super::runs::{PlanRuns, ReplacementRuns};
 use crate::error::{ContentError, ContentResult};
 use crate::file::content::{begin_whole_file_object, ConstructedFile, WHOLE_VALUE_HEADER};
 use crate::file::edit::compare::{compare_replacements, NoOpVerdict};
 use crate::file::edit::finish::{emit_empty_representation, emit_file_state};
-use crate::file::edit::input::{EditSequence, EditSource, Plan, ReplacementReader, Segment};
+use crate::file::edit::input::{EditSequence, EditSource, Plan, Segment};
 use crate::file::view::FileView;
+use crate::file::{FileRun, FileRuns};
 use crate::object::{
     AdvisoryPredecessors, AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId,
     ObjectRole,
@@ -255,21 +255,21 @@ fn append_replacement(
             what: "replacement length",
         });
     }
-    let mut reader = ReplacementReader::new(source, index, length);
+    let mut source = ReplacementRuns::new(source, index, length)?;
     let mut buffer = [0_u8; 16 * 1024];
-    let mut remaining = length;
-    while remaining > 0 {
-        let want = remaining.min(buffer.len() as u64) as usize;
-        let read = reader
-            .read(&mut buffer[..want])
-            .map_err(|_| ContentError::Io)?;
-        if read == 0 {
-            return Err(ContentError::InvalidEdit {
-                what: "replacement bytes",
-            });
+    loop {
+        match source.read_run(&mut buffer)? {
+            FileRun::Data(count) => sink.extend_from_slice(&buffer[..count]),
+            FileRun::Zero(length) => {
+                let count = usize::try_from(length).map_err(|_| ContentError::LengthOverflow)?;
+                let end = sink
+                    .len()
+                    .checked_add(count)
+                    .ok_or(ContentError::LengthOverflow)?;
+                sink.resize(end, 0);
+            }
+            FileRun::End => break,
         }
-        sink.extend_from_slice(&buffer[..read]);
-        remaining -= read as u64;
     }
     Ok(())
 }
@@ -352,28 +352,17 @@ fn replace_chunked(
                 None => None,
             };
             edit.child("content.chunk").run(|_| {
-                let mut builder = crate::file::mapping::ExtentBuilder::new(capacities);
                 let mut sink = crate::file::edit::tree::DeferredSink::new(&mut objects);
-                let source = crate::file::edit::input::ReplacementReader::new(
-                    request.source,
-                    index,
-                    replacement_len,
-                );
-                let scanned = crate::file::cdc::FastCdc::new().scan(source, |chunk| {
-                    builder
-                        .push_chunk(chunk, predecessor, &mut sink)
-                        .map(|_| ())
-                })?;
-                if scanned.bytes_scanned != replacement_len {
-                    return Err(ContentError::InvalidEdit {
-                        what: "replacement bytes",
-                    });
-                }
-                builder.finish(&mut sink).map(|build| {
-                    build
-                        .root
-                        .map(|root| super::references::Summary::from_canonical(root, true))
-                })
+                let mut source = ReplacementRuns::new(request.source, index, replacement_len)?;
+                let build = crate::file::chunk_runs::build(
+                    capacities,
+                    &mut source,
+                    predecessor,
+                    &mut sink,
+                )?;
+                Ok(build
+                    .root
+                    .map(|root| super::references::Summary::from_canonical(root, true)))
             })?
         };
         let prefix = crate::file::edit::tree::concat_optional(&mut objects, left, middle)?;
@@ -444,10 +433,16 @@ fn stream_combined(
     consumer: &mut dyn FinalizedConsumer,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
-    let source = PlanReader::new(view, request.edits, request.source)?;
+    let mut source = PlanRuns::new(view, request.edits, request.source)?;
     let build = edit
         .child("content.chunk")
-        .run(|_| crate::file::mapping::build_streaming(capacities, source, consumer))?;
+        .run(|_| crate::file::chunk_runs::build(capacities, &mut source, None, consumer))?;
+    if build.logical_len != request.edits.final_len() {
+        return Err(ContentError::LengthMismatch {
+            expected: request.edits.final_len(),
+            actual: build.logical_len,
+        });
+    }
     let emitted = edit
         .child("edit.finish")
         .run(|_| emit_file_state(consumer, build))?;
@@ -456,94 +451,4 @@ fn stream_combined(
         logical_len: emitted.logical_len,
         counters: crate::file::edit::EditCounters::default(),
     })
-}
-
-/// `Read` adapter that yields the planned result as one continuous byte stream.
-struct PlanReader<'a> {
-    plan: Plan<'a>,
-    source: &'a dyn EditSource,
-    payload: &'a [u8],
-    current: Option<Stream<'a>>,
-    done: bool,
-}
-
-enum Stream<'a> {
-    Retained(&'a [u8]),
-    Replacement(ReplacementReader<'a>),
-}
-
-impl<'a> PlanReader<'a> {
-    fn new(
-        view: &'a FileView,
-        stream: &'a dyn EditSequence,
-        source: &'a dyn EditSource,
-    ) -> ContentResult<Self> {
-        let payload = view
-            .whole_file_bytes()?
-            .ok_or(ContentError::WrongLogicalRole)?;
-        Ok(Self {
-            plan: Plan::new(stream),
-            source,
-            payload,
-            current: None,
-            done: false,
-        })
-    }
-}
-
-impl Read for PlanReader<'_> {
-    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-        if buffer.is_empty() {
-            return Ok(0);
-        }
-        loop {
-            match &mut self.current {
-                Some(Stream::Retained(bytes)) => {
-                    if bytes.is_empty() {
-                        self.current = None;
-                        continue;
-                    }
-                    let take = bytes.len().min(buffer.len());
-                    buffer[..take].copy_from_slice(&bytes[..take]);
-                    *bytes = &bytes[take..];
-                    return Ok(take);
-                }
-                Some(Stream::Replacement(reader)) => {
-                    let read = reader.read(buffer)?;
-                    if read == 0 {
-                        self.current = None;
-                        continue;
-                    }
-                    return Ok(read);
-                }
-                None => {}
-            }
-            if self.done {
-                return Ok(0);
-            }
-            let next = self
-                .plan
-                .advance()
-                .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidData))?;
-            match next {
-                None => {
-                    self.done = true;
-                }
-                Some(Segment::Retain { base }) => {
-                    let slice = self
-                        .payload
-                        .get(base.0 as usize..base.1 as usize)
-                        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidData))?;
-                    self.current = Some(Stream::Retained(slice));
-                }
-                Some(Segment::Replace { index, len, .. }) => {
-                    self.current = Some(Stream::Replacement(ReplacementReader::new(
-                        self.source,
-                        index,
-                        len,
-                    )));
-                }
-            }
-        }
-    }
 }

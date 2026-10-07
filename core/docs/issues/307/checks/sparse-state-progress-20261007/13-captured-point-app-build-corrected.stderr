@@ -1,0 +1,19 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+warning: function `poll` is never used
+  --> crates/layerfs-api/sdk/tests/support/native.rs:49:8
+   |
+49 | pub fn poll<T>(mut f: impl FnMut() -> Option<T>) -> T {
+   |        ^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `layerfs-sdk` (test "supervisor_application") generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.88s
+  Executable tests/captured_runs.rs (core/target/debug/deps/captured_runs-d29f6f9970138158)
+  Executable tests/supervisor_application.rs (core/target/debug/deps/supervisor_application-c913ebc9a81cba3e)

@@ -1,0 +1,25 @@
+{
+  "commit": "dcdf527584675849e7839ca4118d71ac9aa4b193",
+  "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6027065090",
+  "receipt": {
+    "command": [
+      "gh",
+      "issue",
+      "comment",
+      "307",
+      "--repo",
+      "Ephemeral-AI-Lab/layerfs",
+      "--body-file",
+      "core/target/cluster2-307/tracker/k1-backed-comment.md"
+    ],
+    "wall_timeout_s": 60,
+    "exit_code": 0,
+    "timed_out": false,
+    "wall_ns": 2094382416,
+    "kind": "tracker",
+    "workers": 1
+  },
+  "body_sha256": "b4e7c69380d6b4bd0b5d58a283aadd1127ee40b2730ef3a8b567b7df216d5ddf",
+  "scope": "S7/S9/S10 component evidence only; no checkbox change, push or release",
+  "full_goal": "ACTIVE"
+}

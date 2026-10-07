@@ -1,0 +1,23 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 11.74s
+  Executable tests/edit_runs.rs (core/target/debug/deps/edit_runs-adce8285ab365071)
+  Executable tests/filesystem_state_backed.rs (core/target/debug/deps/filesystem_state_backed-ab3b2d10e6b3f649)
+  Executable tests/captured_runs.rs (core/target/debug/deps/captured_runs-d29f6f9970138158)
+  Executable tests/captured_runs.rs (core/target/debug/deps/captured_runs-8a277034d9ba40d7)
+  Executable tests/supervisor.rs (core/target/debug/deps/supervisor-633715d262640272)
+  Executable tests/supervisor_progress.rs (core/target/debug/deps/supervisor_progress-0d066d6012ec9a64)
+  Executable tests/supervisor_slots.rs (core/target/debug/deps/supervisor_slots-8220fbbb4ccd51e5)
+  Executable tests/wire.rs (core/target/debug/deps/wire-23c7eeaa14dddada)

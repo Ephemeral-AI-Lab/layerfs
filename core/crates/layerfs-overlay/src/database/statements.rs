@@ -16,6 +16,10 @@ pub(crate) const CELL_DROP: &str =
 pub(crate) const CELL_RANGE: &str = "SELECT cell_offset,epoch,data,validity FROM payload
     WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5
     ORDER BY cell_offset";
+pub(crate) const CAPTURED_CELL_METADATA: &str =
+    "SELECT cell_offset,epoch,length(data),length(validity) FROM payload
+    WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5
+    ORDER BY cell_offset LIMIT 1";
 pub(crate) const STEP_GET: &str =
     "SELECT cell_offset,epoch FROM shrink WHERE ns=?1 AND serial=?2 AND gen=?3 AND depth=?4";
 pub(crate) const STEP_PUT: &str = "INSERT INTO shrink VALUES(?1,?2,?3,?4,?5,?6)

@@ -307,3 +307,67 @@ fn occupied_slots_rotate_across_hole_and_keep_one_phase_per_turn() {
     assert_eq!(host.input_owners(), 0);
     assert_eq!(host.output_work().unwrap().credited_bytes, 0);
 }
+
+#[test]
+fn acquired_header_can_progress_and_wait_and_credit_release_wakes_original_attempt() {
+    let mut fixture = Fixture::new(1);
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let mut host = Supervisor::new(&mut sessions, config()).unwrap();
+    let (client, server) = sockets::pair();
+    let id = attach(&mut host, server, branch, 51);
+    let mut client = Raw::new(client);
+    let mut held = fill_output(&mut host, id, &mut client);
+    let mut pending = client.begin();
+    sockets::poll(|| {
+        let turn = host.step_observed();
+        assert!(turn.wake_error.is_none());
+        let selected = turn.attachment.unwrap();
+        if selected.progressed {
+            assert_eq!(selected.stage, SupervisorStage::Header);
+            assert_eq!(selected.correlation, Some(pending.correlation()));
+            assert!(matches!(
+                selected.wait,
+                Some(SupervisorWait::OutputCredit { .. })
+            ));
+            assert!(turn.event.is_none());
+            assert!(turn.provider.is_none());
+            assert!(turn.park.is_none());
+            Some(())
+        } else {
+            None
+        }
+    });
+    {
+        let turn = host.step_observed();
+        assert!(!turn.progressed());
+        let park = turn.park.expect("complete single occupied credit wait");
+        assert!(park.reasons().output_credit);
+        drop(held.pop().unwrap());
+        assert_eq!(
+            park.wait_until(Instant::now() + Duration::from_secs(3))
+                .unwrap(),
+            SupervisorWake::Notified
+        );
+    }
+    {
+        let turn = host.step_observed();
+        let selected = turn.attachment.unwrap();
+        assert!(selected.progressed);
+        assert_eq!(selected.correlation, Some(pending.correlation()));
+        assert!(selected.wait.is_none());
+        assert!(
+            turn.provider.is_none(),
+            "grant is not a provider invocation"
+        );
+    }
+    client.grant(&mut pending);
+    drop(held);
+    drop(delivery(&mut host, id));
+    client.policy(pending.correlation());
+    assert_eq!(host.work().headers, OUTPUT_MESSAGES as u64 + 1);
+    assert_eq!(host.service_work().admitted, OUTPUT_MESSAGES as u64 + 1);
+    drop(fence(&mut host, id));
+    assert_eq!(host.service_work().outstanding, 0);
+    assert_eq!(host.output_work().unwrap().credited_bytes, 0);
+}

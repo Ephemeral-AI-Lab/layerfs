@@ -1,0 +1,58 @@
+{
+  "commit": "dcdf527584675849e7839ca4118d71ac9aa4b193",
+  "tree": "0e83d0ac14c6ff06b4c5a68fa0a1600eca8a6c3b",
+  "parent": "889836c446507c726a53f0ccf1e4418bd4d0946f",
+  "product_tree": "b99c4a3050b88f2ce47ba1daf334710ed90ee267",
+  "count": {
+    "combined": 165716,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/k1-backed-committed-source",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 6883,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 16311,
+          "layerfs-daemon": 2513,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 7005,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2771,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 705,
+        "lines": 100299
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "staged_tree_matches": true,
+  "count_matches": true,
+  "protected_notes_excluded": true,
+  "performance": "NOT_EVALUATED",
+  "milestones_closed": []
+}

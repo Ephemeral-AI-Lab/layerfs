@@ -5,6 +5,7 @@
 
 #![allow(dead_code)]
 
+pub mod edit_runs;
 pub mod edits;
 pub mod filesystem;
 

@@ -1,0 +1,30 @@
+{
+  "receipt": "26-real-host-linux-proof.json",
+  "profiles": [
+    "Durable",
+    "Disposable"
+  ],
+  "status": "PASS",
+  "wall_ns": 4765769666,
+  "bounds_s": {
+    "docker": 40,
+    "host": 45,
+    "outer": 120
+  },
+  "per_profile": {
+    "real_host_deliveries": 131,
+    "paths": 13,
+    "regular_names": 7,
+    "regular_inodes": 6,
+    "transport_fragments": 262,
+    "transport_live_messages": 0,
+    "transport_credited_bytes": 0,
+    "source_removed": true,
+    "original_refusal": "RemoteRefusal",
+    "idle_maintenance": true,
+    "terminal_cleanup": "Gone"
+  },
+  "functional_scope": "small actual macOS-host/Linux-consumer native proof; cache uncontrolled; no Commit or numerical speed/storage/residency qualification",
+  "binary_identity": "consumer-binary.json",
+  "reuse_after_change": "DropppedParents private trait/impl declaration-only relocation; consumer does not invoke filesystem update construction; earlier proof source/binary retained"
+}

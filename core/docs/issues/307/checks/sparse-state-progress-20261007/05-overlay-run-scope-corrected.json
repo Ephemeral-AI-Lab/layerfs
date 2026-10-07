@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-overlay",
+    "--test",
+    "captured_runs",
+    "sparse_cutoff_gap_above_four_gib_avoids_payload_windows_and_pays_root_metadata",
+    "--",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 982970875,
+  "kind": "functional",
+  "workers": 1
+}

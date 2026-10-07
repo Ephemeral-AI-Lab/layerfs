@@ -1,0 +1,126 @@
+
+running 11 tests
+test original_zero_evidence_refusal_and_absence_end_without_construction_or_fallback ... ok
+test zero_witness_reuse_rejects_changed_summary_and_underfilled_child_context ... ok
+test a_large_zero_no_op_proves_real_repeated_pages_without_backing_or_byte_loops ... ok
+test zero_payload_identity_role_and_shape_failures_end_on_the_original_demand ... ok
+test a_partial_zero_payload_never_certifies_its_nonzero_repeated_slice ... ok
+test equal_length_comparison_end_is_one_invalid_replacement_without_output_or_backing ... ok
+test malformed_runs_and_original_late_source_failure_preserve_one_attempt ... ok
+test sparse_emission_preserves_predecessor_and_refuses_occupied_scope_before_acceptance ... ok
+test zero_evidence_eviction_handles_more_than_sixty_four_distinct_payloads ... ok
+test a_zero_replacement_above_four_gib_keeps_bounded_calls_and_exact_boundary_bytes ... ok
+test mixed_runs_keep_the_byte_route_root_across_localized_and_representation_transitions ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 10 tests
+test original_parent_count_and_post_accept_root_failures_stop_without_another_job ... ok
+test missing_declared_count_or_directory_root_never_uses_a_default_or_supplied_draft_root ... ok
+test stale_serial_state_refuses_its_missing_guard_and_file_editor_kinds_remain_separate ... ok
+test exact_context_marker_refuses_reuse_before_new_effects_and_retains_original_batch ... ok
+test disappearing_replayed_root_cannot_be_overwritten_by_a_supplied_directory_value ... ok
+test backed_new_parent_membership_exceeds_only_the_old_map_allowance_and_drops_empty_parent ... ok
+test backed_update_consumes_rebuilt_roots_in_order_before_values_and_matches_move_alias_result ... ok
+test atomic_not_applied_and_malformed_root_are_refusals_not_fallbacks ... ok
+test late_initial_count_read_failure_keeps_accepted_inode_pages_and_no_final_root ... ok
+test backed_initial_counts_and_streamed_final_rows_preserve_real_alias_counts ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test original_attempted_and_unattempted_run_errors_keep_custody_and_other_scope_progress ... ok
+test actual_owner_returns_bounded_window_with_original_root_after_install_and_close ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 5 tests
+CAPTURED_GAP_ROOT_METADATA DatabaseWork { statements: [StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 2, executions: 2, rows_returned: 2, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 64, returned_value_bytes: 208, vm_steps: 46, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 80, sql_bytes: 382, statement_memory_samples: 2, statement_memory_sample_bytes: 18016, elapsed_ns: 9250 }, StatementWork { attempts: 2, executions: 2, rows_returned: 2, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 112, vm_steps: 60, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 64, sql_bytes: 292, statement_memory_samples: 2, statement_memory_sample_bytes: 15136, elapsed_ns: 24875 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 1, executions: 1, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 19, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 40, sql_bytes: 180, statement_memory_samples: 1, statement_memory_sample_bytes: 5840, elapsed_ns: 21042 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 2, executions: 2, rows_returned: 2, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 16, vm_steps: 52, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 144, sql_bytes: 230, statement_memory_samples: 2, statement_memory_sample_bytes: 7584, elapsed_ns: 22500 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }] }
+CAPTURED_RUN_PLAN captured-cell-metadata: SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)
+captured-cell-metadata-vm: 0 Init 0 31 0 None 0
+captured-cell-metadata-vm: 1 Noop 1 6 0 None 0
+captured-cell-metadata-vm: 2 Integer 1 1 0 None 0
+captured-cell-metadata-vm: 3 OpenRead 0 9 0 Some("8") 0
+captured-cell-metadata-vm: 4 OpenRead 2 15 0 Some("k(5,,,,,)") 0
+captured-cell-metadata-vm: 5 Explain 5 0 49 Some("SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)") 0
+captured-cell-metadata-vm: 6 Variable 1 2 0 None 0
+captured-cell-metadata-vm: 7 IsNull 2 30 0 None 0
+captured-cell-metadata-vm: 8 Variable 3 3 0 None 0
+captured-cell-metadata-vm: 9 IsNull 3 30 0 None 0
+captured-cell-metadata-vm: 10 Variable 2 4 0 None 0
+captured-cell-metadata-vm: 11 IsNull 4 30 0 None 0
+captured-cell-metadata-vm: 12 Variable 4 5 0 None 0
+captured-cell-metadata-vm: 13 IsNull 5 30 0 None 0
+captured-cell-metadata-vm: 14 Affinity 2 4 0 Some("CCCC") 0
+captured-cell-metadata-vm: 15 SeekGE 2 30 2 Some("4") 0
+captured-cell-metadata-vm: 16 Variable 5 5 0 None 0
+captured-cell-metadata-vm: 17 IsNull 5 30 0 None 0
+captured-cell-metadata-vm: 18 Affinity 5 1 0 Some("C") 0
+captured-cell-metadata-vm: 19 IdxGE 2 30 2 Some("4") 0
+captured-cell-metadata-vm: 20 DeferredSeek 2 0 0 None 0
+captured-cell-metadata-vm: 21 Column 2 3 6 None 0
+captured-cell-metadata-vm: 22 Column 0 5 7 None 0
+captured-cell-metadata-vm: 23 Column 0 6 10 None 64
+captured-cell-metadata-vm: 24 Function 0 10 8 Some("length(1)") 0
+captured-cell-metadata-vm: 25 Column 0 7 10 None 64
+captured-cell-metadata-vm: 26 Function 0 10 9 Some("length(1)") 0
+captured-cell-metadata-vm: 27 ResultRow 6 4 0 None 0
+captured-cell-metadata-vm: 28 DecrJumpZero 1 30 0 None 0
+captured-cell-metadata-vm: 29 Next 2 19 0 None 0
+captured-cell-metadata-vm: 30 Halt 0 0 0 None 0
+captured-cell-metadata-vm: 31 Transaction 0 0 78 Some("0") 1
+captured-cell-metadata-vm: 32 Goto 0 1 0 None 0
+test masked_cells_and_shrink_regrow_match_independent_final_bytes_after_install ... ok
+test sparse_cutoff_gap_above_four_gib_avoids_payload_windows_and_pays_root_metadata ... ok
+CAPTURED_RUN_STALE_WORK CapturedRunWork { metadata_rows: 97, stale_rows: 96 } SQL DatabaseWork { statements: [StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 99, executions: 99, rows_returned: 99, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 3168, returned_value_bytes: 10296, vm_steps: 2277, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 3960, sql_bytes: 18909, statement_memory_samples: 99, statement_memory_sample_bytes: 891792, elapsed_ns: 330498 }, StatementWork { attempts: 99, executions: 99, rows_returned: 99, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 5544, vm_steps: 2970, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 3168, sql_bytes: 14454, statement_memory_samples: 99, statement_memory_sample_bytes: 749232, elapsed_ns: 294129 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 194, executions: 194, rows_returned: 194, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 4, returned_value_bytes: 3884, vm_steps: 4957, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 6992, sql_bytes: 25872, statement_memory_samples: 194, statement_memory_sample_bytes: 918992, elapsed_ns: 521450 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 99, executions: 99, rows_returned: 99, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 792, vm_steps: 2574, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 7128, sql_bytes: 11385, statement_memory_samples: 99, statement_memory_sample_bytes: 375408, elapsed_ns: 283379 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, direct_rows_changed: 0, returned_blob_bytes: 0, returned_value_bytes: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, sql_bytes: 0, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 0 }] }
+test interleaved_live_and_stale_cells_keep_each_seek_and_trimmed_start_once ... ok
+test stale_metadata_has_bounded_continuations_and_monotone_seek_work ... ok
+test absent_local_cells_are_inherited_and_wrong_size_retains_original_reader ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+running 6 tests
+test pre_body_denial_delivers_original_refusal_then_returns_joined_custody_without_dispatch ... ok
+test fence_before_service_admission_returns_original_decoded_unattempted_input ... ok
+test idle_peer_does_not_hold_unrelated_service_and_held_delivery_keeps_both_credits ... ok
+test peer_blocked_after_grant_cannot_hold_unrelated_policy_and_partial_input_returns_at_fence ... ok
+test slow_output_does_not_hold_provider_service_and_fence_returns_dispatched_result ... ok
+test real_supervisor_delivers_binding_same_save_objects_history_and_consumer_ports ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 4 tests
+test actual_input_sender_closure_wakes_park_and_preserves_original_native_failure ... ok
+test native_header_publication_after_park_wakes_without_replacing_original_fence ... ok
+test real_policy_reports_six_original_phase_advances_and_one_provider_unit ... ok
+test whole_idle_rotation_and_notify_before_wait_preserve_wait_only_deadline ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 3 tests
+test acquired_header_can_progress_and_wait_and_credit_release_wakes_original_attempt ... ok
+test sparse_slot_gets_each_turn_and_fence_reuse_preserves_original_custody ... ok
+test occupied_slots_rotate_across_hole_and_keep_one_phase_per_turn ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+running 9 tests
+test fixed_headers_validate_every_operation_and_refuse_wrong_envelope_before_allocation ... ok
+test typed_refusal_preserves_nested_unknown_original_cleanup_and_opaque_io ... ok
+test consumer_close_fences_a_blocked_call_without_waiting_for_its_mutex_or_replay ... ok
+test consumer_wrong_result_retains_original_body_and_stops_before_another_call ... ok
+test output_permit_refuses_large_capacity_even_when_wire_length_fits ... ok
+test output_permit_charges_retained_capacity_and_refuses_terminal_second_transfer ... ok
+test refused_native_header_never_allocates_or_copies_declared_canonical_body ... ok
+test output_rotates_ready_classes_and_caller_receipts_hold_real_shared_credit ... ok
+test actual_grant_streams_canonical_input_and_disconnect_returns_partial_original ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

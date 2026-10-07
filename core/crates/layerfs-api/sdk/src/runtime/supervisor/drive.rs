@@ -21,31 +21,78 @@ impl Supervisor<'_, '_> {
     /// released. `None` means no completed event, not no outstanding work.
     /// Drive this owner independently of consumer calls and explicit fence waits.
     pub fn step(&mut self) -> Option<SupervisorEvent> {
+        self.step_observed().event
+    }
+    /// Performs the identical single turn, distinguishing real phase progress
+    /// from its event and selected wait. Parking requires a full idle rotation.
+    pub fn step_observed(&mut self) -> SupervisorTurn<'_> {
+        let mut wake_error = None;
+        if self.round_remaining == 0 {
+            self.round_reasons = ParkReasons::default();
+            self.round_blocked = false;
+            self.round_remaining = self.work.attachments;
+            if let Err(error) = self.signal.begin_round() {
+                wake_error = Some(error);
+            }
+        }
         self.work.turns = self.work.turns.saturating_add(1);
         let mut event = None;
+        let mut selected = None;
+        let mut provider = None;
         let slot = (self.next..self.attachments.len())
             .chain(0..self.next)
             .find(|&slot| self.attachments[slot].is_some());
         if let Some(slot) = slot {
             self.next = (slot + 1) % self.attachments.len();
             let mut attachment = self.attachments[slot].take().expect("selected owner");
+            let mut observation = AttachmentTurn {
+                attachment: attachment.id,
+                correlation: attachment
+                    .exchange
+                    .as_ref()
+                    .map(|e| e.custody.envelope.correlation),
+                stage: stage(&attachment),
+                progressed: false,
+                wait: None,
+            };
             if attachment.service_fence.is_none() {
-                match turn(&mut self.service, &mut attachment, &mut self.work) {
+                match turn(
+                    &mut self.service,
+                    &mut attachment,
+                    &mut self.work,
+                    &mut observation,
+                ) {
                     Ok(Some(delivery)) => {
                         self.work.delivered = self.work.delivered.saturating_add(1);
                         event = Some(SupervisorEvent::Delivered(delivery));
                     }
                     Ok(None) => (),
-                    Err(error) => self.begin_fence(&mut attachment, Some(error)),
+                    Err(error) => {
+                        self.begin_fence(&mut attachment, Some(error));
+                        observation.progressed = true;
+                    }
                 }
             }
+            let joined = (
+                attachment.input_fence.is_some(),
+                attachment.output_fence.is_some(),
+            );
             if let Some(fence) = Self::join(&mut attachment) {
                 self.work.attachments -= 1;
                 self.work.fenced = self.work.fenced.saturating_add(1);
                 event = Some(SupervisorEvent::Fenced(fence));
+                observation.progressed = true;
+                observation.wait = None;
             } else {
+                if attachment.service_fence.is_some() {
+                    let input = attachment.input_fence.is_none();
+                    let output = attachment.output_fence.is_none();
+                    observation.progressed |= joined != (!input, !output);
+                    observation.wait = Some(SupervisorWait::WorkerJoin { input, output });
+                }
                 self.attachments[slot] = Some(attachment);
             }
+            selected = Some(observation);
         }
         if let Some(ticket) = self.service.step() {
             let completion = self
@@ -65,11 +112,76 @@ impl Supervisor<'_, '_> {
                 })
                 .expect("admitted supervisor request owner");
             let exchange = attachment.exchange.as_mut().expect("owned exchange");
+            provider = Some(ProviderTurn {
+                attachment: attachment.id,
+                correlation: exchange.custody.envelope.correlation,
+                ticket,
+            });
             exchange.ticket = None;
             exchange.custody.completion = Some(completion);
             exchange.phase = Phase::Result;
         }
-        event
+        let progressed =
+            provider.is_some() || event.is_some() || selected.is_some_and(|turn| turn.progressed);
+        if progressed {
+            self.invalidate_round();
+        } else if let Some(turn) = selected {
+            self.round_remaining = self.round_remaining.saturating_sub(1);
+            if let Some(wait) = turn.wait {
+                self.round_reasons.include(wait);
+                self.round_blocked |= matches!(
+                    wait,
+                    SupervisorWait::ServiceTurn | SupervisorWait::WorkerJoin { .. }
+                );
+            }
+        } else {
+            self.round_reasons.no_attachments = true;
+        }
+        let notified = match self.signal.changed() {
+            Ok(changed) => changed,
+            Err(error) => {
+                if wake_error.is_none() {
+                    wake_error = Some(error);
+                }
+                true
+            }
+        };
+        let park = if !progressed
+            && self.round_remaining == 0
+            && !self.round_blocked
+            && !notified
+            && wake_error.is_none()
+        {
+            Some(SupervisorPark {
+                signal: self.signal.as_ref(),
+                reasons: self.round_reasons,
+            })
+        } else {
+            None
+        };
+        SupervisorTurn {
+            event,
+            attachment: selected,
+            provider,
+            park,
+            wake_error,
+        }
+    }
+}
+
+fn stage(attachment: &Attachment) -> SupervisorStage {
+    if attachment.service_fence.is_some() {
+        return SupervisorStage::Fence;
+    }
+    match attachment.exchange.as_ref().map(|e| e.phase) {
+        None | Some(Phase::Header) => SupervisorStage::Header,
+        Some(Phase::Grant) => SupervisorStage::Grant,
+        Some(Phase::Body) => SupervisorStage::Body,
+        Some(Phase::Ready) => SupervisorStage::Ready,
+        Some(Phase::Queued) => SupervisorStage::Queued,
+        Some(Phase::Result) => SupervisorStage::Result,
+        Some(Phase::Reply) => SupervisorStage::Reply,
+        Some(Phase::Refusal) => SupervisorStage::Refusal,
     }
 }
 
@@ -77,10 +189,13 @@ fn turn(
     service: &mut Service<'_, '_>,
     attachment: &mut Attachment,
     work: &mut SupervisorWork,
+    observation: &mut AttachmentTurn,
 ) -> Result<Option<Delivery>, SupervisorFailure> {
     if attachment.exchange.is_none() {
         match attachment.input.try_event() {
             Ok(InputEvent::Admission { envelope, header }) => {
+                observation.progressed = true;
+                observation.correlation = Some(envelope.correlation);
                 work.headers = work.headers.saturating_add(1);
                 attachment.exchange = Some(Exchange {
                     custody: RequestCustody {
@@ -104,7 +219,10 @@ fn turn(
                     "input without admission",
                 )));
             }
-            Err(TryRecvError::Empty) => return Ok(None),
+            Err(TryRecvError::Empty) => {
+                observation.wait = Some(SupervisorWait::InputHeader);
+                return Ok(None);
+            }
             Err(TryRecvError::Disconnected) => return Err(SupervisorFailure::InputStopped),
         }
     }
@@ -129,6 +247,10 @@ fn turn(
                 .map_err(SupervisorFailure::Frame)?
             else {
                 work.output_waits = work.output_waits.saturating_add(1);
+                observation.wait = Some(SupervisorWait::OutputCredit {
+                    class: MessageClass::Control,
+                    capacity,
+                });
                 return Ok(None);
             };
             exchange.custody.reservation = Some(permit);
@@ -149,10 +271,12 @@ fn turn(
             } else {
                 Phase::Grant
             };
+            observation.progressed = true;
         }
         Phase::Grant | Phase::Refusal | Phase::Reply => {
             match attachment.output.try_receipt() {
                 Ok(receipt) => {
+                    observation.progressed = true;
                     if receipt.packet.correlation != exchange.custody.envelope.correlation
                         || !receipt.complete
                     {
@@ -193,19 +317,29 @@ fn turn(
                         _ => unreachable!(),
                     }
                 }
-                Err(TryRecvError::Empty) => (),
+                Err(TryRecvError::Empty) => {
+                    observation.wait = Some(match exchange.phase {
+                        Phase::Grant => SupervisorWait::GrantReceipt,
+                        Phase::Refusal => SupervisorWait::RefusalReceipt,
+                        Phase::Reply => SupervisorWait::ReplyReceipt,
+                        _ => unreachable!(),
+                    });
+                }
                 Err(TryRecvError::Disconnected) => return Err(SupervisorFailure::OutputStopped),
             }
         }
         Phase::Body => match attachment.input.try_event() {
-            Ok(InputEvent::Ready(message)) => receive(exchange, message, work)?,
+            Ok(InputEvent::Ready(message)) => {
+                observation.progressed = true;
+                receive(exchange, message, work)?;
+            }
             Ok(event) => {
                 attachment.input_events.push(event);
                 return Err(SupervisorFailure::Frame(FrameError::Invalid(
                     "input body event order",
                 )));
             }
-            Err(TryRecvError::Empty) => (),
+            Err(TryRecvError::Empty) => observation.wait = Some(SupervisorWait::InputBody),
             Err(TryRecvError::Disconnected) => return Err(SupervisorFailure::InputStopped),
         },
         Phase::Ready => {
@@ -220,6 +354,10 @@ fn turn(
                 .map_err(SupervisorFailure::Frame)?
             else {
                 work.output_waits = work.output_waits.saturating_add(1);
+                observation.wait = Some(SupervisorWait::OutputCredit {
+                    class: exchange.custody.header.operation.class(),
+                    capacity,
+                });
                 return Ok(None);
             };
             exchange.custody.reservation = Some(permit);
@@ -242,6 +380,7 @@ fn turn(
                     exchange.phase = Phase::Result;
                 }
             }
+            observation.progressed = true;
         }
         Phase::Result => {
             let capacity = reply_capacity(exchange.custody.header);
@@ -268,8 +407,9 @@ fn turn(
                 exchange.custody.header.operation.class(),
             )?;
             exchange.phase = Phase::Reply;
+            observation.progressed = true;
         }
-        Phase::Queued => (),
+        Phase::Queued => observation.wait = Some(SupervisorWait::ServiceTurn),
     }
     Ok(None)
 }

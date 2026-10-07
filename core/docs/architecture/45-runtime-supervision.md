@@ -1,6 +1,6 @@
 # Host runtime supervision and consumer attachment
 
-> **Status:** Current general guide. R1 implementation checkpoint; S7/S9 qualification remains open.
+> **Status:** Current general guide. Source and functional checkpoints; S7/S9 qualification remains open.
 
 The [SDK Supervisor](../../crates/layerfs-api/sdk/src/runtime/supervisor/owner.rs)
 composes an already initialized `Runtime::sessions()` serving scope, the existing
@@ -100,7 +100,65 @@ Dropping a supervisor revokes remaining attachments and wakes workers through th
 native owners. The caller uses the explicit fence/join route to retain completion
 reports. This local composition supplies no process-crash receipt recovery and no
 automatic unknown resolver; host/consumer restart and durable session custody remain
-R3 work. Application/daemon/Sandbox integration remains R4.
+R3 work. Complete application/daemon/Sandbox integration remains R4 work.
+
+## Observed turns and wait-only parking
+
+`step_observed` executes the same one selected attachment turn and at most one
+provider unit. Existing `step` is its thin event projection. `AttachmentTurn`
+records the original attachment/correlation, existing stage before its turn,
+actual progress and an observed unavailable prerequisite. Header acquisition can
+progress while waiting for output credit. Partial actual worker joins count as
+progress before the complete fence event exists. The separate `ProviderTurn`
+identifies the exact dispatched attachment/correlation/ticket; it may belong to
+an attachment other than the selected turn. No aggregate-counter comparison,
+extra phase, draining loop or new provider route produces those observations.
+
+InputHeader/InputBody and receipt waits mean the actual bounded receiver returned
+Empty. They do not identify socket, crypto or scheduler latency. OutputCredit
+means the existing class/count/byte reservation was unavailable before an attempt.
+ServiceTurn requires the existing local dispatch step. Service admission refusal
+still returns its original request/result; released credit never replays it.
+WorkerJoin records which actual native joins remain pending. No park permission is
+issued while such joins need observation, and no exit flag substitutes for
+`JoinHandle::is_finished` or permits a blocking join/helper lane.
+
+One shared coalescing boolean latch/condition variable is initialized before
+attachments. Its fixed allocation, Arc ownership and per-worker references are
+additional source work; existing registry-capacity gauges do not describe the
+whole wake allocation or allocator overhead. Raw InputPool/OutputPool constructors
+retain their standalone behavior. Supervisor wires the same latch into its
+actual input-event/output-receipt publication and output credit release.
+
+The latch is cleared before a complete occupied rotation. A turn with phase,
+provider or join progress invalidates that idle rotation; attach/fence/explicit
+join also invalidate it. After a complete no-progress rotation, and only when
+no local service turn or actual join requires polling, an unnotified latch permits
+`SupervisorPark`. Its fixed reason flags describe the prerequisite classes seen
+in that rotation, not a physical latency cause. The permit is non-clonable and
+borrows the owner, preventing a local step/attach/fence from making it stale.
+
+Successful bounded sender publication notifies afterwards. Its owned sender is
+dropped before the terminal notification, including during unwind and original
+worker-start refusal. The queue, original values and SendError custody remain
+unchanged. Output capacity release updates the ledger, unlocks it, then notifies.
+The waiter checks the latch under that same latch mutex and uses a predicate
+loop across spurious wakes. No event history or lifetime sequence cap is added.
+Notification poison/unavailability is explicit in `SupervisorTurn::wake_error`
+or the wait result, independently of original native/provider failures and queued
+custody; it does not guess a channel fence or zero readiness.
+
+`wake_handle` lets an application notify after publishing bounded listener/control
+work. The application inspects at most its chosen bounded amount of control work
+on each normal turn, including turns without a park permit. It must also inspect
+its own queues after obtaining a permit and before waiting; Supervisor cannot
+inspect those queues, and notification is only a hint to resume ordinary fair
+inspection. The application discards the borrowed permit before attach/fence or
+another owner mutation. Wakes do not promote an attachment
+or change Workspace/class fairness. `wait_until` holds no provider/Workspace/SQL
+lock and affects only the caller's wait: Notified resumes inspection, while
+DeadlineReached closes no socket, terminates no Bash, releases no Save/Workspace
+and decides no publication. No default RPC/Exec deadline or new budget is selected.
 
 ## Consumer attachment
 
@@ -138,9 +196,10 @@ The composition adds no SQL/schema, immutable construction or filesystem algorit
 Across M calls, its registry routing costs O(M*C), with C a declared simultaneous
 admission window, plus actual cumulative bodies/errors/service/native work. It
 retains no namespace-sized or lifetime-call-sized collection. Occupancy selection
-adds no registry, allocation, provider attempt or extra phase to a turn. It does
-not provide a wakeup/progress API: `None` still means no completed event, and an
-idle or parked occupied attachment still takes its fair share of turns. The R4
+adds no registry, allocation, provider attempt or extra phase to a turn. Observed
+turns retain one selected phase and one possible provider unit; idle-round state
+and coalesced wake state are fixed. `None` from step still means no completed event,
+and an idle or parked occupied attachment still takes its fair share of turns. The R4
 functional proof's existing caller sleep and budgets are unchanged; its retained
 wall receipts do not establish a latency improvement or packet-level cause.
 Held events, permits,
@@ -153,8 +212,26 @@ External public tests cover the real initialized macOS provider/socket route,
 same-Save objects/history/consumer ports, blocked header/body/output peers with
 independent Policy progress, pre-body denial, pre-service fencing, retained Delivery
 and AttachmentFence credits, and independent consumer shutdown during a blocked call.
-R1's scoped validation receipts own actual check outcomes. Full contextual/root
-acceptance, process restart, macOS-host/Docker integration and S7/E/Q qualification
+R1's scoped validation receipts own their original check outcomes. The subsequent
+[sparse serial/progress checkpoint](../issues/307/SPARSE-SERIAL-PROGRESS-20261007.md)
+records occupied-slot fairness, observed phase/provider progress, native queue/
+sender/credit wakes and two real application queue cases. The
+[application proofs](../../crates/layerfs-api/sdk/tests/supervisor_application.rs)
+keep one initialized Store/Sessions/provider owner on the main thread. The native
+consumer publishes original authenticated Attach/Fence commands into a bounded
+queue, then notifies. A command queued before the latch clear is still found by
+the post-permit queue predicate. A publication after an Empty predicate wakes
+the same owner; the following turn processes control even without a permit.
+The consumer awaits actual host Delivery before asking for its own fence. Exact
+correlation/provider/Delivery counts, original joined custody, retired identities
+and final credits are checked. Native joins may complete in either order.
+
+These macOS Store/native application bodies have no Linux executions.
+Their bounded coordination/watchdogs change no runtime deadline or operation
+lifetime. Notification poison with retained originals and some partial-join/
+partial-round schedules remain source-reviewed without private test hooks.
+Full contextual/root acceptance, process restart, complete native application/
+daemon/Sandbox integration and S7/E/Q qualification
 remain open; those milestones are not completed by this source or these small cases.
 
 The following [R3 local custody checkpoint](46-runtime-custody.md) adds explicit

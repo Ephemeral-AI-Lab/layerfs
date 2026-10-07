@@ -1,0 +1,239 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+warning: unused import: `ObjectId`
+  --> crates/layerfs-content/src/filesystem/update.rs:30:60
+   |
+30 | use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectId, ObjectRole};
+   |                                                            ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:10:5
+   |
+10 |     Header,
+   |     ^^^^^^
+   |
+note: the lint level is defined here
+  --> crates/layerfs-api/sdk/src/lib.rs:3:9
+   |
+3  | #![deny(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:11:5
+   |
+11 |     Grant,
+   |     ^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:12:5
+   |
+12 |     Body,
+   |     ^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:13:5
+   |
+13 |     Ready,
+   |     ^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:14:5
+   |
+14 |     Queued,
+   |     ^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:15:5
+   |
+15 |     Result,
+   |     ^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:16:5
+   |
+16 |     Reply,
+   |     ^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:17:5
+   |
+17 |     Refusal,
+   |     ^^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:18:5
+   |
+18 |     Fence,
+   |     ^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:23:5
+   |
+23 |     InputHeader,
+   |     ^^^^^^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:24:5
+   |
+24 |     InputBody,
+   |     ^^^^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:25:5
+   |
+25 |     GrantReceipt,
+   |     ^^^^^^^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:26:5
+   |
+26 |     RefusalReceipt,
+   |     ^^^^^^^^^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:27:5
+   |
+27 |     ReplyReceipt,
+   |     ^^^^^^^^^^^^
+
+error: missing documentation for a variant
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:28:5
+   |
+28 |     OutputCredit {
+   |     ^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:29:9
+   |
+29 |         class: MessageClass,
+   |         ^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:30:9
+   |
+30 |         capacity: usize,
+   |         ^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:36:9
+   |
+36 |         input: bool,
+   |         ^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:37:9
+   |
+37 |         output: bool,
+   |         ^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:43:5
+   |
+43 |     pub attachment: AttachmentId,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:44:5
+   |
+44 |     pub correlation: Option<u64>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:45:5
+   |
+45 |     pub stage: SupervisorStage,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:54:5
+   |
+54 |     pub attachment: AttachmentId,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:55:5
+   |
+55 |     pub correlation: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:56:5
+   |
+56 |     pub ticket: Ticket,
+   |     ^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:62:5
+   |
+62 |     pub input_header: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:63:5
+   |
+63 |     pub input_body: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:64:5
+   |
+64 |     pub output_receipt: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:65:5
+   |
+65 |     pub output_credit: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:66:5
+   |
+66 |     pub no_attachments: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+  --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:88:5
+   |
+88 |     pub const fn reasons(&self) -> ParkReasons {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+   --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:101:5
+    |
+101 |     pub event: Option<SupervisorEvent>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+   --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:102:5
+    |
+102 |     pub attachment: Option<AttachmentTurn>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+   --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:103:5
+    |
+103 |     pub provider: Option<ProviderTurn>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs:110:5
+    |
+110 |     pub fn progressed(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: could not compile `layerfs-sdk` (lib) due to 35 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: `layerfs-content` (lib) generated 1 warning (run `cargo fix --lib -p layerfs-content` to apply 1 suggestion)

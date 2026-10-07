@@ -61,6 +61,7 @@ pub enum Command {
         offset: u64,
         length: u32,
     },
+    CapturedRun(Box<layerfs_overlay::CapturedRunCursor>),
     AcquireOperation {
         request: u64,
     },
@@ -95,6 +96,10 @@ pub enum Command {
     ReaderInodes {
         reader: CapturedReader,
         after: u64,
+    },
+    ReaderInode {
+        reader: CapturedReader,
+        serial: u64,
     },
     ReaderDentries {
         reader: CapturedReader,
@@ -202,6 +207,7 @@ pub enum Command {
 }
 #[derive(Debug)]
 pub enum Response {
+    CapturedRun(Box<layerfs_overlay::CapturedRunReply>),
     IndexedScratch(crate::IndexedScratchReply),
     Lookup(Option<LookupOwner>),
     Operation(Option<OperationOwner>),
@@ -247,7 +253,9 @@ impl Command {
             Self::PutOwnedScratch { .. } | Self::OwnedScratchPage { .. } => ServiceClass::Scratch,
             Self::FileRead { .. }
             | Self::CapturedRead { .. }
+            | Self::CapturedRun(_)
             | Self::ReaderInodes { .. }
+            | Self::ReaderInode { .. }
             | Self::ReaderDentries { .. } => ServiceClass::Read,
             Self::OpenFile { .. }
             | Self::RetainedFile { .. }
@@ -328,6 +336,14 @@ impl Command {
             Self::CapturedCell { .. } | Self::SourceCell { .. } => {
                 (0, CELL_BYTES + MASK_BYTES + std::mem::size_of::<Cell>())
             }
+            Self::CapturedRun(_) => (
+                std::mem::size_of::<layerfs_overlay::CapturedRunCursor>(),
+                std::mem::size_of::<layerfs_overlay::CapturedRunReply>()
+                    + std::mem::size_of::<layerfs_overlay::LocalRead>()
+                    + CELL_BYTES
+                    + MASK_BYTES,
+            ),
+            Self::ReaderInode { .. } => (0, std::mem::size_of::<Inode>()),
             // Decided bytes plus one inherited bit per byte of the window.
             Self::SourceRead { length, .. }
             | Self::FileRead { length, .. }
@@ -565,6 +581,19 @@ impl Command {
             Self::DatabaseWork => {
                 db.state(route)?;
                 Ok(Response::DatabaseWork(Box::new(db.diagnostics())))
+            }
+            Self::CapturedRun(cursor) => {
+                if cursor.reader().capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.captured_run_step(*cursor)
+                    .map(|value| Response::CapturedRun(Box::new(value)))
+            }
+            Self::ReaderInode { reader, serial } => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.reader_inode(reader, serial).map(Response::Inode)
             }
             Self::LifetimePlans => db.explain_lifetimes(route).map(Response::LifetimePlans),
             Self::MaintenanceIdle => db.maintenance_idle(route).map(Response::MaintenanceIdle),

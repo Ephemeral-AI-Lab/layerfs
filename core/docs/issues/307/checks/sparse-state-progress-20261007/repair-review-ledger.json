@@ -1,0 +1,25 @@
+{
+  "parent": "dcdf527584675849e7839ca4118d71ac9aa4b193",
+  "source_reviews": {
+    "Content run/zero": "independent evidence_registry review, no material source blocker;11 public cases cover extra EOF/identity/role/shape errors",
+    "FS serial state": "runtime review found missing required rebuilt ROOT could overwrite with supplied value; repaired based on declared retained header; tenth public case passes",
+    "SDK progress/wake/park": "Native review no material blocker; poison/partial-join/race scheduling source-only gaps remain; real app queue2 cases pass",
+    "captured Overlay cursor": "runtime review no blocker; stronger old-root/reader and interleaved/trimmed seek oracles added",
+    "captured port/admission": "evidence review no blocker; fixed boxes/window charges and original-cause custody confirmed"
+  },
+  "failures": {
+    "02": "scope error in new test assertion: actual root metadata64B was counted as payload; retained and corrected, no product/cache/budget change",
+    "03": "external since argument expected reference; corrected borrow",
+    "06": "SDK35 missing_docs and Content unused import; precise docs/import fix, no suppression/behavior change",
+    "12": "new scalar Inode result is Clone, not Copy; fixed bounded scalar clone and original-value fixture clones",
+    "20": "private redundant lifetime in filesystem/update.rs; naming-only elision",
+    "21": "external test drop_non_drop on borrowed permit; ordinary lifetime analysis ends unused borrow before control mutation",
+    "28": "DroppedParents trait and BTreeMap implementation were in state/mod.rs; moved verbatim to private types.rs and retained thin same-visibility reexport"
+  },
+  "extra_preexecution_test_correction": "new trimmed-prefix point accepts bounded Continue progression; stopped test uses never-submitted position, no failed cursor replay",
+  "all_source_frozen": true,
+  "performance_admission": "NOT_EVALUATED",
+  "E1_samples": 0,
+  "qualification_scope": "functional/component only; full goal remains active",
+  "covering_evidence_reuse": "392host/352Linux functional bodies and native proof26 precede declaration-only relocation of DroppedParents, without behavior/API change; final affected compilation/lint/boundary/format covers relocation. Native consumer does not call the filesystem update constructor; pinned existing proof/binary remains unchanged, not resealed or relabeled."
+}

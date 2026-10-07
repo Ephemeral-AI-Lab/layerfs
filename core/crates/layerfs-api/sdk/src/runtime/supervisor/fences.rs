@@ -6,6 +6,7 @@ impl Supervisor<'_, '_> {
     /// Starts this attachment's explicit service/socket fences once. It does not
     /// abort/release Saves, resolve unknown publication or terminate a Workspace.
     pub fn fence(&mut self, id: AttachmentId) -> RuntimeResult<()> {
+        self.invalidate_round();
         let slot = self.slot(id)?;
         let mut attachment = self.attachments[slot].take().expect("checked attachment");
         self.begin_fence(&mut attachment, None);
@@ -15,6 +16,7 @@ impl Supervisor<'_, '_> {
     /// Observes both actual worker exits without waiting, returning original
     /// request/result/partial/error custody once. A close result alone is no fence.
     pub fn try_join(&mut self, id: AttachmentId) -> RuntimeResult<Option<AttachmentFence>> {
+        self.invalidate_round();
         let slot = self.slot(id)?;
         let mut attachment = self.attachments[slot].take().expect("checked attachment");
         let fence = Self::join(&mut attachment);

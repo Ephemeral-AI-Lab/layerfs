@@ -15,6 +15,7 @@ pub mod references;
 pub mod root;
 pub mod rows;
 pub mod sorted;
+mod state;
 pub mod symlink;
 pub mod update;
 pub mod validate;
@@ -39,5 +40,9 @@ pub use update::{
     build_filesystem_timed, update_filesystem, update_filesystem_streamed,
     update_filesystem_streamed_timed, update_filesystem_timed, FilesystemResult,
     FilesystemUpdateCounters,
+};
+pub use update::{
+    build_filesystem_streamed_backed, build_filesystem_streamed_backed_timed,
+    update_filesystem_streamed_backed, update_filesystem_streamed_backed_timed,
 };
 pub use validate::{check, CheckedInput, FilesystemTopology};

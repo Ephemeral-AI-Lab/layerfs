@@ -43,6 +43,9 @@ pub use diagnostics::payload::PayloadWork;
 pub use error::{OverlayError, OverlayResult};
 pub use maintenance::{MaintenanceCursor, MaintenanceStep};
 pub use metrics::{DatabaseWork, StatementKind, StatementWork};
+pub use payload::captured_types::{
+    CapturedGap, CapturedRunCursor, CapturedRunReply, CapturedRunStep, CapturedRunWork,
+};
 pub use profile::{DatabaseProfile, ProfileConfig};
 pub use reclaim::ReclaimStep;
 pub use types::{

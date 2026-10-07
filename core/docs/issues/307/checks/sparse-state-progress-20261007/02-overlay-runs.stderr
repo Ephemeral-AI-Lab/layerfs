@@ -1,0 +1,14 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/captured_runs.rs (core/target/debug/deps/captured_runs-8a277034d9ba40d7)
+
+thread 'sparse_cutoff_gap_above_four_gib_has_no_byte_window_or_blob_delivery' panicked at crates/layerfs-overlay/tests/captured_runs.rs:112:9:
+assertion `left == right` failed
+  left: 288
+ right: 352
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: test failed, to rerun pass `-p layerfs-overlay --test captured_runs`

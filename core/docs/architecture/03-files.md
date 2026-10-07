@@ -442,3 +442,44 @@ See [backed file-edit state](50-backed-file-edit-state.md) and the explicit
 This source supplies backed file-edit state, not captured sparse normalization,
 Save/history/known install, total process residency or Commit qualification.
 Earlier source-pinned descriptions and failed receipts retain their scope.
+
+### Run-aware edits and selected filesystem state, 2026-10-07
+
+The [sparse serial/progress checkpoint](../issues/307/SPARSE-SERIAL-PROGRESS-20261007.md)
+records the subsequent source and functional checks after `dcdf52758`. Its
+[run-aware edit boundary](54-run-aware-localized-file-edits.md) adds
+`EditSource::read_run_at` while preserving the existing byte-source default.
+Complete run construction and localized replacements use the same frozen
+Scanner/ExtentBuilder; zero spans preserve continuous CDC state, canonical
+partitioning and actual predecessor hints. Comparison's positive zero memo
+retains at most 64 witnesses. A whole payload/subtree is remembered only after
+its entire referenced byte domain is proven zero; every hit rechecks the exact
+summary and root/non-root context. Partial zero does not certify a larger domain.
+Original comparison provider identity, absence, denial and decoder errors stop
+before construction or backing effects. Later run-source/consumer failures stop
+at their original boundary and retain already accepted output, without fallback
+or failed-operation replay.
+
+The additive [backed filesystem serial state](53-backed-filesystem-serial-state.md)
+uses the existing opaque indexed record protocol for its context, new-parent
+membership/held state, rebuilt directory roots and initial counts. Sealed
+header/fresh cursors provide exact membership, root iteration and final inode
+rows without collecting those domains in resident maps or complete row vectors.
+The resident API keeps its prior containers and error order. Required missing
+records refuse; a declared retained directory must still have its rebuilt ROOT
+during the later supplied-value pass. The attempt marker binds local record
+interpretation, not complete root reachability, alias uniqueness or authority.
+
+The [captured input port](55-captured-sparse-run-cursor.md) supplies exact retained
+inode points and a fixed forward run cursor under the original reader/root/
+generation/installed floor. A cell-sized Window still pays existing byte/mask
+composition and the Daemon's bounded return clone. Missing cells alone remain
+Inherited; actual cutoff or lower EOF establishes local Zero. Reader acquisition,
+original failure custody and explicit release remain with the caller.
+
+These are component source and functional boundaries. Captured final-state edit
+normalization, grouped validator/addition/graph state, whole-base alias walks,
+reducer/touched/zero/release backing, complete root qualification and the actual
+Save/history/Commit/install composition remain unfinished. Existing remaining
+state refusals and earlier evidence retain their scope. No whole-operation
+residency, physical I/O, performance or E/Q gate follows from these checks.

@@ -1,0 +1,126 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.35s
+     Running tests/chunk_predecessor.rs (core/target/cluster2-linux/debug/deps/chunk_predecessor-6fb302648620ed9e)
+     Running tests/edit_backed.rs (core/target/cluster2-linux/debug/deps/edit_backed-1bca015aab588ab5)
+     Running tests/edit_batch.rs (core/target/cluster2-linux/debug/deps/edit_batch-536a34ff39098973)
+     Running tests/edit_bounds.rs (core/target/cluster2-linux/debug/deps/edit_bounds-9ad89045591139cb)
+     Running tests/edit_cache.rs (core/target/cluster2-linux/debug/deps/edit_cache-6a33a1f8a2289699)
+     Running tests/edit_lazy_plan.rs (core/target/cluster2-linux/debug/deps/edit_lazy_plan-31daa78a7df080aa)
+     Running tests/edit_localized.rs (core/target/cluster2-linux/debug/deps/edit_localized-48b1591e2cbf7425)
+     Running tests/edit_model.rs (core/target/cluster2-linux/debug/deps/edit_model-6b58f3ab4a9d1c1e)
+     Running tests/edit_noop.rs (core/target/cluster2-linux/debug/deps/edit_noop-d3171d1779de2d1e)
+     Running tests/edit_reference.rs (core/target/cluster2-linux/debug/deps/edit_reference-a58ced9e97499905)
+     Running tests/edit_runs.rs (core/target/cluster2-linux/debug/deps/edit_runs-075c2347dd3ec88a)
+     Running tests/edit_single.rs (core/target/cluster2-linux/debug/deps/edit_single-599770d52afd8a0d)
+     Running tests/edit_timing.rs (core/target/cluster2-linux/debug/deps/edit_timing-f8cccd5ee744fbae)
+     Running tests/edit_transitions.rs (core/target/cluster2-linux/debug/deps/edit_transitions-6a52631abe973526)
+     Running tests/filesystem_attributes.rs (core/target/cluster2-linux/debug/deps/filesystem_attributes-4cd072a49b44cedd)
+     Running tests/filesystem_bounds.rs (core/target/cluster2-linux/debug/deps/filesystem_bounds-3fd623288663ccd0)
+     Running tests/filesystem_failure.rs (core/target/cluster2-linux/debug/deps/filesystem_failure-26d8c3d17d15370c)
+     Running tests/filesystem_hardlinks.rs (core/target/cluster2-linux/debug/deps/filesystem_hardlinks-bfc13f15659e5115)
+     Running tests/filesystem_ordering.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering-55529eb2332b4338)
+     Running tests/filesystem_ordering_consolidate.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering_consolidate-873b06d0a71f290b)
+     Running tests/filesystem_ordering_scan.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering_scan-671b0ba04970f3bc)
+     Running tests/filesystem_parent_lookup.rs (core/target/cluster2-linux/debug/deps/filesystem_parent_lookup-de5175b7fbeaab6b)
+parent lookup demands for batches 1/3/64: [22, 10, 6]
+explicit parent value demands for batches 1/3/64: [18, 9, 6]
+quota pending=1 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+quota pending=1 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+quota pending=1 bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+quota pending=1 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+quota pending=1 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 864 }
+quota pending=1 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 864 }
+quota pending=1 bytes=864 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=864 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=960 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=960 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1152 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1152 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=864 batch=1 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=864 batch=64 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=960 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=960 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1152 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1152 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+     Running tests/filesystem_profile.rs (core/target/cluster2-linux/debug/deps/filesystem_profile-7c9cd65b9364042b)
+     Running tests/filesystem_read.rs (core/target/cluster2-linux/debug/deps/filesystem_read-de2eb917cdaa3717)
+     Running tests/filesystem_reference.rs (core/target/cluster2-linux/debug/deps/filesystem_reference-0e84d9cc893cec15)
+     Running tests/filesystem_rows.rs (core/target/cluster2-linux/debug/deps/filesystem_rows-41c56c54709eb9f2)
+     Running tests/filesystem_sorted.rs (core/target/cluster2-linux/debug/deps/filesystem_sorted-61118c36bdba18b5)
+     Running tests/filesystem_state_backed.rs (core/target/cluster2-linux/debug/deps/filesystem_state_backed-5c627e825595e4cf)
+     Running tests/filesystem_streamed.rs (core/target/cluster2-linux/debug/deps/filesystem_streamed-4dbcffce7a3df287)
+     Running tests/filesystem_timing.rs (core/target/cluster2-linux/debug/deps/filesystem_timing-cee76f233fc95b31)
+     Running tests/filesystem_topology.rs (core/target/cluster2-linux/debug/deps/filesystem_topology-7dc2dd70d454b0d5)
+     Running tests/filesystem_updates.rs (core/target/cluster2-linux/debug/deps/filesystem_updates-522b4c0e530c4fe9)
+     Running tests/object_context.rs (core/target/cluster2-linux/debug/deps/object_context-bb421c3fc1f5616a)
+     Running tests/runs.rs (core/target/cluster2-linux/debug/deps/runs-6a1ca5ddccc03558)
+     Running tests/streaming.rs (core/target/cluster2-linux/debug/deps/streaming-29f105409b035385)
+     Running tests/zero_cdc.rs (core/target/cluster2-linux/debug/deps/zero_cdc-c68a806a10f1b0fc)
+     Running tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-82f9513705accf1e)
+     Running tests/edit_backing.rs (core/target/cluster2-linux/debug/deps/edit_backing-8552214ab09a28b1)
+     Running tests/indexed_scratch.rs (core/target/cluster2-linux/debug/deps/indexed_scratch-f3d060076840d39b)
+     Running tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-9e5e0d5b60e23c8e)
+     Running tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-00e2738abbdf74df)
+     Running tests/upstream.rs (core/target/cluster2-linux/debug/deps/upstream-bb46ce3560aa9066)
+     Running tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-c4b28586055ca3e5)
+     Running tests/indexed_scratch.rs (core/target/cluster2-linux/debug/deps/indexed_scratch-24072faf5fde7bbf)
+     Running tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-2e39ef49bedee8ea)
+     Running tests/attachment.rs (core/target/cluster2-linux/debug/deps/attachment-6150b4ce9ebbee40)
+     Running tests/custody.rs (core/target/cluster2-linux/debug/deps/custody-5158bf958b0131ac)
+     Running tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-2ea06079303783d8)
+     Running tests/runtime_binding.rs (core/target/cluster2-linux/debug/deps/runtime_binding-dd90b3e5650076e0)
+     Running tests/supervisor.rs (core/target/cluster2-linux/debug/deps/supervisor-f3ab80dd5ed8afd7)
+     Running tests/supervisor_application.rs (core/target/cluster2-linux/debug/deps/supervisor_application-adf0afd668c881c4)
+     Running tests/supervisor_progress.rs (core/target/cluster2-linux/debug/deps/supervisor_progress-f37b4633be3da8f9)
+     Running tests/supervisor_slots.rs (core/target/cluster2-linux/debug/deps/supervisor_slots-12952d8ef552e632)
+     Running tests/wire.rs (core/target/cluster2-linux/debug/deps/wire-9d2d1e92d334f131)
+     Running tests/base.rs (core/target/cluster2-linux/debug/deps/base-6f19aeb96150d118)
+     Running tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-274bb5fb97e9cb45)
+     Running tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-70451fe8637ffc96)
+     Running tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-adfcc5a827eba1c4)
+     Running tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-45a37ddec13e6a9e)
+     Running tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-c8a4170c72e1e7dd)
+     Running tests/operation_scope.rs (core/target/cluster2-linux/debug/deps/operation_scope-b362ca1c42fdbb38)
+     Running tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-30931ce7b6eb5d36)

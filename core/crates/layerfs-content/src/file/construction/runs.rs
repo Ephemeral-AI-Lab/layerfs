@@ -1,7 +1,6 @@
 //! Hole-aware complete construction through the ordinary canonical builder.
 use crate::file::{
-    cdc::{CdcCounters, Scanner, MAXIMUM_CHUNK_BYTES},
-    construct_bytes, mapping, ConstructedFile, ExtentBuilder,
+    cdc::MAXIMUM_CHUNK_BYTES, chunk_runs::ChunkRuns, construct_bytes, mapping, ConstructedFile,
 };
 use crate::{
     ConstructionCapacities, ConstructionPolicy, ContentError, ContentResult, FinalizedConsumer,
@@ -23,7 +22,8 @@ pub enum FileRun {
 /// neither logical file size nor the total number of runs is capped.
 pub trait FileRuns {
     /// Fills a prefix of `output`, declares a zero run, or ends the input.
-    /// Zero-length data/zero runs and lengths exceeding `output` are invalid.
+    /// Data/Zero must be nonempty. Data must fit `output`; Zero is a logical
+    /// span and may exceed it.
     /// The caller owns `output`; it may be reused after this call is consumed.
     fn read_run(&mut self, output: &mut [u8]) -> ContentResult<FileRun>;
 }
@@ -63,9 +63,7 @@ pub fn construct_runs(
         let cutoff = policy.small_file_threshold_bytes() as usize;
         let mut prefix = Vec::with_capacity(cutoff);
         let mut input = [0; MAXIMUM_CHUNK_BYTES];
-        let mut builder = ExtentBuilder::new(capacities);
-        let mut scanner = Scanner::new();
-        let mut cdc = CdcCounters::default();
+        let mut chunks = ChunkRuns::new(capacities);
         let (mut data_bytes, mut zero_bytes, mut zeros_processed) = (0_u64, 0_u64, 0_u64);
         let mut chunked = false;
         loop {
@@ -92,30 +90,17 @@ pub fn construct_runs(
                     prefix.extend_from_slice(&input[..used as usize]);
                 }
                 if prefix.len() == cutoff {
-                    scanner.consume(
-                        &prefix,
-                        &mut |chunk| builder.push_chunk(chunk, None, consumer).map(|_| ()),
-                        &mut cdc,
-                    )?;
+                    chunks.data(&prefix, None, consumer)?;
                     prefix.clear();
                     chunked = true;
                 }
             }
             if chunked && used < length {
                 if zero {
-                    let processed =
-                        scanner.zeros(length - used, &mut cdc, &mut |chunk, count| {
-                            builder
-                                .push_repeated_chunk(chunk, count, consumer)
-                                .map(|_| ())
-                        })?;
+                    let processed = chunks.zero(length - used, None, consumer)?;
                     zeros_processed = add(zeros_processed, processed)?;
                 } else {
-                    scanner.consume(
-                        &input[used as usize..length as usize],
-                        &mut |chunk| builder.push_chunk(chunk, None, consumer).map(|_| ()),
-                        &mut cdc,
-                    )?;
+                    chunks.data(&input[used as usize..length as usize], None, consumer)?;
                 }
             }
         }
@@ -137,11 +122,7 @@ pub fn construct_runs(
                 peak_pending: 0,
             });
         }
-        scanner.finish(
-            &mut |chunk| builder.push_chunk(chunk, None, consumer).map(|_| ()),
-            &mut cdc,
-        )?;
-        let build = builder.finish(consumer)?;
+        let build = chunks.finish(None, consumer)?;
         let summary = build
             .root
             .ok_or(ContentError::InvalidRecord("empty run mapping"))?;

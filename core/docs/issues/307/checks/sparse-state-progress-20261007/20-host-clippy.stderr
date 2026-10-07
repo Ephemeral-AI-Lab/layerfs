@@ -1,0 +1,30 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+error: the following explicit lifetimes could be elided: 'b
+   --> crates/layerfs-content/src/filesystem/update.rs:249:8
+    |
+249 | fn run<'b>(
+    |        ^^
+...
+252 |     backing: Option<&'b mut dyn OrderingBacking>,
+    |                      ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+    = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+    |
+249 ~ fn run(
+250 |     objects: &mut FilesystemObjects<'_>,
+251 |     input: &dyn OperationInput,
+252 ~     backing: Option<&mut dyn OrderingBacking>,
+    |
+
+error: could not compile `layerfs-content` (lib test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-content` (lib) due to 1 previous error

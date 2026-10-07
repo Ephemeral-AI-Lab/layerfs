@@ -1,8 +1,9 @@
 //! Initialized host composition; provider ownership never moves to I/O workers.
 use super::{attachment::Attachment, *};
-use crate::runtime::{service::*, Binding, RuntimeError, RuntimeResult, Sessions};
+use crate::runtime::{service::*, wake::Signal, Binding, RuntimeError, RuntimeResult, Sessions};
 use layerfs_bridge::{codec::ReceiveBudget, contract::FrameError, native::Connection};
 use layerfs_history::{BranchId, WorkspaceId};
+use std::sync::Arc;
 
 /// Host-thread supervisor over initialized borrowed Sessions and real native sockets.
 /// One connection serves sequential bounded exchanges; other connections progress
@@ -14,6 +15,10 @@ pub struct Supervisor<'s, 'a> {
     pub(super) attachments: Vec<Option<Attachment>>,
     pub(super) next: usize,
     pub(super) work: SupervisorWork,
+    pub(super) signal: Arc<Signal>,
+    pub(super) round_remaining: usize,
+    pub(super) round_reasons: ParkReasons,
+    pub(super) round_blocked: bool,
 }
 impl<'s, 'a> Supervisor<'s, 'a> {
     /// Selects shared windows and initializes owners once before accepting sockets.
@@ -27,8 +32,11 @@ impl<'s, 'a> Supervisor<'s, 'a> {
         {
             return Err(RuntimeError::Invalid("supervisor output owner/packet windows").into());
         }
-        let input = InputPool::new(connections, ReceiveBudget::new(config.input)?)?;
-        let output = OutputPool::new(config.output)?;
+        let signal = Arc::new(Signal::new());
+        let mut input = InputPool::new(connections, ReceiveBudget::new(config.input)?)?;
+        input.set_wake(signal.clone())?;
+        let mut output = OutputPool::new(config.output)?;
+        output.set_wake(signal.clone())?;
         let mut attachments = Vec::new();
         attachments
             .try_reserve_exact(connections)
@@ -46,6 +54,10 @@ impl<'s, 'a> Supervisor<'s, 'a> {
                 registry_capacity_bytes,
                 ..Default::default()
             },
+            signal,
+            round_remaining: 0,
+            round_reasons: ParkReasons::default(),
+            round_blocked: false,
         })
     }
     /// Binds one initial peer/Workspace/Branch, then attaches its original socket.
@@ -70,6 +82,7 @@ impl<'s, 'a> Supervisor<'s, 'a> {
         connection: Connection,
         binding: Binding,
     ) -> Result<AttachmentId, AttachFailure> {
+        self.invalidate_round();
         let slot = match self.attachments.iter().position(Option::is_none) {
             Some(slot) => slot,
             None => {
@@ -137,6 +150,17 @@ impl<'s, 'a> Supervisor<'s, 'a> {
     /// Input owner/report admission still retained across all attachments.
     pub fn input_owners(&self) -> usize {
         self.input.outstanding()
+    }
+    /// Application wake after publishing its own bounded listener/control work.
+    pub fn wake_handle(&self) -> SupervisorWakeHandle {
+        SupervisorWakeHandle {
+            signal: self.signal.clone(),
+        }
+    }
+    pub(super) fn invalidate_round(&mut self) {
+        self.round_remaining = 0;
+        self.round_reasons = ParkReasons::default();
+        self.round_blocked = false;
     }
     pub(super) fn slot(&self, id: AttachmentId) -> RuntimeResult<usize> {
         self.attachments

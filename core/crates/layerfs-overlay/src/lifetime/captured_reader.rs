@@ -90,6 +90,31 @@ impl Overlay {
             crate::inode::decode,
         )
     }
+    /// Latest local namespace inode in the reader's exact sealed range. This
+    /// excludes the current orphan domain and never substitutes current state.
+    pub fn reader_inode(
+        &self,
+        reader: CapturedReader,
+        serial: u64,
+    ) -> OverlayResult<Option<crate::Inode>> {
+        self.check_captured_reader(reader)?;
+        if serial == 0 {
+            return Err(OverlayError::Invalid("zero captured inode serial"));
+        }
+        self.query(
+            StatementKind::Capture,
+            crate::sql::INODE_LOOKUP,
+            &[
+                &reader.capture.route.ns,
+                &integer(serial)?,
+                &reader.capture.generation.0,
+                &reader.installed,
+            ],
+            32,
+            crate::inode::decode,
+        )
+        .map(|mut rows| rows.pop())
+    }
     pub fn reader_dentries(
         &self,
         reader: CapturedReader,

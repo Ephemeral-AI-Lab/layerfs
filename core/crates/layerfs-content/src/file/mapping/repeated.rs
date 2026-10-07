@@ -5,7 +5,8 @@ use super::{
     MAX_ENTRIES, MAX_LEVEL,
 };
 use crate::{
-    ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
+    AdvisoryPredecessors, ContentError, ContentResult, FinalizedConsumer, FinalizedObject,
+    ObjectId, ObjectRole, PredecessorProvenance,
 };
 
 #[derive(Clone, Copy)]
@@ -25,10 +26,27 @@ impl ExtentBuilder {
         count: u64,
         consumer: &mut dyn FinalizedConsumer,
     ) -> ContentResult<Option<ObjectId>> {
+        self.push_repeated_chunk_with_predecessor(raw, count, None, consumer)
+    }
+
+    /// The same canonical repeated run with the caller's unchanged-prefix hint.
+    /// Advisory provenance changes no chunk identity, partition or repeat count.
+    pub fn push_repeated_chunk_with_predecessor(
+        &mut self,
+        raw: &[u8],
+        count: u64,
+        predecessor: Option<ObjectId>,
+        consumer: &mut dyn FinalizedConsumer,
+    ) -> ContentResult<Option<ObjectId>> {
         if count == 0 {
             return Ok(None);
         }
-        let object = FinalizedObject::new(ObjectRole::Chunk, encode_chunk_object(raw)?)?;
+        let mut object = FinalizedObject::new(ObjectRole::Chunk, encode_chunk_object(raw)?)?;
+        if let Some(predecessor) = predecessor {
+            let mut hints = AdvisoryPredecessors::new();
+            hints.push(predecessor, PredecessorProvenance::UnchangedPrefix)?;
+            object = object.with_predecessors(hints);
+        }
         let id = object.id();
         let extent = ExtentSlice::new(id, 0, raw.len() as u32)?;
         let bytes = (raw.len() as u64)

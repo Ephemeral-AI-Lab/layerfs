@@ -1,0 +1,15 @@
+
+running 3 tests
+test original_attempted_and_unattempted_run_errors_keep_custody_and_other_scope_progress ... ok
+test actual_owner_returns_bounded_window_with_original_root_after_install_and_close ... ok
+test captured_inode_point_retains_old_metadata_and_forward_seek_bounds ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+running 2 tests
+test control_published_after_empty_predicate_wakes_and_other_owner_still_serves ... ok
+test queued_attach_survives_idle_latch_clear_and_serves_one_original_policy ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

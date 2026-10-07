@@ -130,3 +130,12 @@ Real Owner/Overlay integration belongs to the separate Workspace/Daemon adapter
 tests. State above the old deferred limit, dense/sparse >4 GiB, fragmentation,
 captured final-state normalization and qualified speed/storage/residency remain
 owning acceptance work; this component checkpoint does not close them.
+
+The subsequent [run-aware editor](54-run-aware-localized-file-edits.md) reuses this
+engine with Data/Zero/End replacements, one continuous frozen scanner and bounded
+positive immutable zero evidence. Its public >4 GiB sparse cases establish
+functional compatibility for those selected inputs. They do not establish dense
+large-file, complete captured normalization or aggregate resource qualification.
+Neutral `ConstructionRecord*`/`IndexedConstructionBacking` names alias this exact
+protocol; the [filesystem serial-state route](53-backed-filesystem-serial-state.md)
+uses disjoint private kind domains and an explicitly separate caller scope.

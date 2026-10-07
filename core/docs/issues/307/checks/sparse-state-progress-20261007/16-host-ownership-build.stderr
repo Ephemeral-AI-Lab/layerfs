@@ -1,0 +1,26 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.18s
+  Executable tests/edit_backing.rs (core/target/debug/deps/edit_backing-456a394b29281b71)
+  Executable tests/indexed_scratch.rs (core/target/debug/deps/indexed_scratch-343a585492aaeb3b)
+  Executable tests/job_cost.rs (core/target/debug/deps/job_cost-823dc893f9b59a95)
+  Executable tests/owner.rs (core/target/debug/deps/owner-8c032b71f8dbb691)
+  Executable tests/upstream.rs (core/target/debug/deps/upstream-e97965d3bcf6eeaa)
+  Executable tests/attachment.rs (core/target/debug/deps/attachment-04a532331522f12e)
+  Executable tests/custody.rs (core/target/debug/deps/custody-b36426b4a42477ab)
+  Executable tests/runtime.rs (core/target/debug/deps/runtime-0693fe70d77b0de3)
+  Executable tests/runtime_binding.rs (core/target/debug/deps/runtime_binding-0a552fee5322ab0f)
+  Executable tests/base.rs (core/target/debug/deps/base-06b165bd3f508347)
+  Executable tests/namespace.rs (core/target/debug/deps/namespace-1e0379d125d16d0a)
+  Executable tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-93217fc8145bcb7f)
+  Executable tests/namespace_profile.rs (core/target/debug/deps/namespace_profile-8dc3127204c2ecbc)
+  Executable tests/namespace_view.rs (core/target/debug/deps/namespace_view-8672aa45f387ac0b)
+  Executable tests/nonfile.rs (core/target/debug/deps/nonfile-a9c8d84b2527dd8d)
+  Executable tests/operation_scope.rs (core/target/debug/deps/operation_scope-483af2493893291e)
+  Executable tests/payload.rs (core/target/debug/deps/payload-51c450a0541d6a82)

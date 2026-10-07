@@ -519,3 +519,39 @@ scale and E/Q acceptance remain unfinished. S9 stays CHECKPOINT/unchecked;
 Init/history verdicts remain unchanged and the full goal continues.
 
 [Source, original failures, checks and remaining scope](K1-BACKED-STREAM-SUPERVISOR-20261007.md).
+
+## Sparse serial state and application wake continuation (2026-10-07)
+
+The [sparse serial/progress checkpoint](SPARSE-SERIAL-PROGRESS-20261007.md)
+adds run-aware localized replacements over the existing canonical driver and
+bounded positive witnesses which certify complete referenced byte domains.
+Selected filesystem parent/held membership, rebuilt roots and initial counts
+now use the existing indexed construction records; sealed header/fresh points
+and cursors provide exact membership and final rows. Required missing ROOT/count/
+parent records refuse with original custody. These local record checks do not
+qualify a complete immutable root, reachability, alias uniqueness or topology.
+
+The actual captured provider supplies inode points without current orphan
+overrides and forward metadata/run windows under the exact original reader/root/
+generation/installed floor. Known install and logical close do not replace that
+read's root. Success clones a bounded returned window; original failed Completion
+or unattempted command/cause remains retained. End/drop releases no reader or
+operation. Captured Data/Zero runs still need authenticated file/length binding,
+coalesced final-state edits and the owning fallible normalization source.
+
+Supervisor's observed turn and borrowed park permission preserve one selected
+phase and at most one provider dispatch, existing fairness and original custody.
+Two actual macOS Store/native application queue bodies retain pre-clear Attach
+work and wake after an Empty predicate. They poll bounded control on every turn,
+wait for actual Delivery before self-fencing, observe original worker joins in
+either order and release final credits. Linux does not execute those macOS
+provider bodies. Functional watchdogs do not impose Bash or runtime deadlines.
+
+Remaining validator/addition/graph and whole-base alias walks, reducer/touched/
+zero/release backing, complete root/topology qualification, one Save producer,
+conditional history publication, known install/unknown custody and full native
+application/Exec/kernel integration remain open. Component equality and custody
+checks are not full-root, scale, process-restart or E/Q acceptance. S9 remains
+CHECKPOINT/unchecked. All 27 E1 proposals keep samples NOT_RUN and qualification
+NOT_EVALUATED; earlier Init/history and diagnostic verdicts retain their original
+scope. No milestone checkbox or historical receipt is changed by this continuation.

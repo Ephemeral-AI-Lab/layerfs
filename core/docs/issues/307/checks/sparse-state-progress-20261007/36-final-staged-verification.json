@@ -1,0 +1,64 @@
+{
+  "first_parent": "dcdf527584675849e7839ca4118d71ac9aa4b193",
+  "final_precommit_tree": "fb7281c5635b2c98d8b4d290081fc9a07c6c10a8",
+  "product_tree": "917a84242457c1e42995e25148f82422f2ea8617",
+  "counts": {
+    "combined": 167676,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/sparse-state-final-staged-source",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 7276,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 17417,
+          "layerfs-daemon": 2592,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 7362,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2796,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 721,
+        "lines": 102259
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    },
+    "snapshot": "fb7281c5635b2c98d8b4d290081fc9a07c6c10a8",
+    "archive_sha256": "c36ddacf82cdef3816256a0e4b85e876274d0e0a70dbf14d1baa4cd138f43337",
+    "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+    "command": [
+      "python3",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/tools/production_loc.py",
+      "--root",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/sparse-state-final-staged-source",
+      "--json"
+    ]
+  },
+  "matches_prepared_counts": true,
+  "protected_notes_excluded": true,
+  "scope": "exact final staged product, production source only; receipt subsequently adds documentation metadata, product tree remains exact"
+}

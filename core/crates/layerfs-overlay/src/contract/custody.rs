@@ -51,6 +51,11 @@ impl CapturedReader {
     pub const fn root(self) -> [u8; 32] {
         self.capture.base_root
     }
+    /// Newness relative to this reader's retained installed floor. The caller
+    /// supplies the `born` field from this exact reader's inode point/page.
+    pub const fn created_above(self, born: u64) -> bool {
+        born > self.installed as u64
+    }
 }
 
 /// One nonrecycled operation owner, independent of command/process lifetime.

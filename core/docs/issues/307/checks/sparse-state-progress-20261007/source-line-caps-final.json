@@ -1,0 +1,278 @@
+[
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/mod.rs",
+    "lines": 30,
+    "limit": 200,
+    "sha256": "5c74bbed29051a1d84848c60bf3b63e06066305b7f62e3efa657d2796b80e3b9"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/service/input.rs",
+    "lines": 368,
+    "limit": 999,
+    "sha256": "cdd1dd885e861ff64c25dd6d4dc3bf3a2d907d53abd118d674ec55e76bff44f0"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/service/output.rs",
+    "lines": 647,
+    "limit": 999,
+    "sha256": "ffdd69b05a6e5cef3286afba89417673f7771d8ae1c1384e386fa0ab00e8fc4a"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/supervisor/drive.rs",
+    "lines": 475,
+    "limit": 999,
+    "sha256": "3afdbfab34fb5df52dd3b1c43a9e8a1790e43ecb68062a02a8b9d0e520edeac8"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/supervisor/fences.rs",
+    "lines": 95,
+    "limit": 999,
+    "sha256": "e20e6217422181805c76cba412dfd46ab69d7eca81fc288c4879146b6b92ab2c"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/supervisor/mod.rs",
+    "lines": 18,
+    "limit": 200,
+    "sha256": "2a6d76f4fb5c417f12e41f8aa668a88b92eafc8726ef91c1aee98b41e70a5660"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/supervisor/owner.rs",
+    "lines": 171,
+    "limit": 999,
+    "sha256": "ac3b630d737e07e3f85042a4905ecabde78987cf4a27e1e311c557ac0fab2885"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/supervisor/progress.rs",
+    "lines": 151,
+    "limit": 999,
+    "sha256": "0df0038f59a5f8fcc437867efe7b889ec7909c173ad6fd2992b4c88a5eaa4316"
+  },
+  {
+    "path": "core/crates/layerfs-api/sdk/src/runtime/wake.rs",
+    "lines": 117,
+    "limit": 999,
+    "sha256": "b9878d5cf9ea4ac17096571c81bd91ff41aebfeaeecfd7553c105c97ca9d5b65"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/construction/chunk_runs.rs",
+    "lines": 111,
+    "limit": 999,
+    "sha256": "2971d1e6d46ca9de4ce267e728dd1911f2fa5851aae79a9c40ba4af4f14a1848"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/construction/mod.rs",
+    "lines": 4,
+    "limit": 200,
+    "sha256": "ebb8b00d8312a3a6cf6cdb30cb67f158281f80c64eae014a5cf156f9fbb8d84e"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/construction/runs.rs",
+    "lines": 152,
+    "limit": 999,
+    "sha256": "bec9ba7670ede15d6970f5ae8fe3b4ca9b938fdf3b4ee94553830225ede3fd7a"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/edit/apply.rs",
+    "lines": 454,
+    "limit": 999,
+    "sha256": "b5b6af79bb96e1ac2d809ce9465dcc6e06adbe1f1890161ae8da9d648ea5c45f"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/edit/compare.rs",
+    "lines": 167,
+    "limit": 999,
+    "sha256": "d9eff47138ecb37b595e3c2ed53181057e389d6ac444ae97fdb2d70404b939a8"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/edit/input.rs",
+    "lines": 303,
+    "limit": 999,
+    "sha256": "2124e8822d6f4cab7e11dce73c4cd95d7b88b1f6a1e9123410f95d275c37dd3f"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/edit/mod.rs",
+    "lines": 32,
+    "limit": 200,
+    "sha256": "405a793cf23bfb597ae5dc5f6848815e01428a0fff1ce29c22088b4228022155"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/edit/runs.rs",
+    "lines": 155,
+    "limit": 999,
+    "sha256": "0bd53ee6ee8de8f4d932f55f2114367c6e36719c00bcd69b6125cef8188a2752"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/edit/zero.rs",
+    "lines": 212,
+    "limit": 999,
+    "sha256": "d464041354db8c9fa4183620da77dec461ca26c4f095c2130d14b5026213c007"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/mapping/repeated.rs",
+    "lines": 154,
+    "limit": 999,
+    "sha256": "4d6dea039ba99b1ddb48ed478aa62566fcff64f26f6c3f550f1fba6fa9e4026f"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/file/mod.rs",
+    "lines": 29,
+    "limit": 200,
+    "sha256": "c35cc786ea443d12d8fe6f0544356752c3e5043a1d70500a4b1cee6121460294"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/mod.rs",
+    "lines": 48,
+    "limit": 200,
+    "sha256": "13e6a0196381db919081ae263d2b94255f189050554e7e0d73e9257a2978b84f"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/state/codec.rs",
+    "lines": 77,
+    "limit": 999,
+    "sha256": "f18997e875ae76720f80558af7d354d959ca03783ba9a2d53bc46f9ae348282c"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/state/initial.rs",
+    "lines": 111,
+    "limit": 999,
+    "sha256": "bcfcf504b5a765fe383081a85f3bd179d74e12ec88f497cd36335aa048eb7d79"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/state/mod.rs",
+    "lines": 11,
+    "limit": 200,
+    "sha256": "18f2e0bd8a75502293610c803c4c8c17c9208d57ed8b3e0e4500fc5b7a81bee1"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/state/roots.rs",
+    "lines": 117,
+    "limit": 999,
+    "sha256": "7f3fbf686d1aa5822a117dc7cee3a262672a5ce4bd9721eafeae7867587642ea"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/state/store.rs",
+    "lines": 291,
+    "limit": 999,
+    "sha256": "9b4da3a8edb11438b1289c7cb8621018a2e65bc8b1eac941c0ee3c69c617eae3"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/state/types.rs",
+    "lines": 13,
+    "limit": 999,
+    "sha256": "9058f3833734b5bff848629b312ce8c32d9876b006b855bcf3282f6627f15825"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+    "lines": 807,
+    "limit": 999,
+    "sha256": "77b8bf10c27dadb480bde7a0e06b320eaa117e91ed3cacb3fe16582f3fe88c80"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+    "lines": 793,
+    "limit": 999,
+    "sha256": "bfb17ad549aa26eb432dae41463829865f17910ed362d0e3462e035424f4e30e"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/filesystem/validate/cycles.rs",
+    "lines": 182,
+    "limit": 999,
+    "sha256": "7053ce0581b402f93f2038d5e0d7c8561347511df3a3998607f743f28e6150fc"
+  },
+  {
+    "path": "core/crates/layerfs-content/src/lib.rs",
+    "lines": 60,
+    "limit": 200,
+    "sha256": "cc4c296fce64659ba8768931b2782d188f45854e2ae8c50eb3f1e0198bd621c4"
+  },
+  {
+    "path": "core/crates/layerfs-daemon/src/overlay/captured_run_port.rs",
+    "lines": 53,
+    "limit": 999,
+    "sha256": "c28d3a9f77709ec0a085ee7da9dc9878e469bfe8488bc2a5cdfdf63ab6f5cc78"
+  },
+  {
+    "path": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+    "lines": 749,
+    "limit": 999,
+    "sha256": "c025bd5beff0307f5e9b617bad3d59e48dda8ea2e9cc52188639bb37299b1160"
+  },
+  {
+    "path": "core/crates/layerfs-daemon/src/overlay/mod.rs",
+    "lines": 10,
+    "limit": 200,
+    "sha256": "7538fae29f267d0656150ffa44df0be884e0e8c2ac0d4e9902fe85180e55c8b4"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/contract/custody.rs",
+    "lines": 88,
+    "limit": 999,
+    "sha256": "902f4c96e4e21ec4c3c8f57d477c6b236872b4b76d201d64e5edd8e707ab5f28"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/database/statements.rs",
+    "lines": 106,
+    "limit": 999,
+    "sha256": "eb074634a7b4e428b930088a68489f327b47b7f21f3b430ca0ec1c4e351e4e10"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/diagnostics/captured_runs.rs",
+    "lines": 49,
+    "limit": 999,
+    "sha256": "dd15fbabeaa636d4dc7562f9ef3f204b27a35b90c6645a90ce27438fa75dc5dc"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/diagnostics/mod.rs",
+    "lines": 11,
+    "limit": 200,
+    "sha256": "bdbb9709ad02554f5c8650d1eaf0ef72d13c561a440844be673238ec38b0675a"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/lib.rs",
+    "lines": 56,
+    "limit": 200,
+    "sha256": "bd321f5d03de152971a2622c51225bb56259834d2e61de7c8426a56a075320b2"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/lifetime/captured_reader.rs",
+    "lines": 199,
+    "limit": 999,
+    "sha256": "2f34d11a1fa64fedf1cfc10ac2167e54ab13834269fa5cf0e295f0fcbd2296ae"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/payload/captured_runs.rs",
+    "lines": 171,
+    "limit": 999,
+    "sha256": "f5ceb9bf401669973b9c5fd5b770f883cf4fa7ecd82d7c2e39bed88bf1f082c0"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/payload/captured_types.rs",
+    "lines": 127,
+    "limit": 999,
+    "sha256": "0a7ee858c43b1ab581b47e4a655e5b87130c367414fa25b0546495962764e311"
+  },
+  {
+    "path": "core/crates/layerfs-overlay/src/payload/mod.rs",
+    "lines": 8,
+    "limit": 200,
+    "sha256": "b16023a27a653c33cf3ca58ea5d2bc03a575de83840ef662d25bf0e7d91b71ca"
+  },
+  {
+    "path": "core/crates/layerfs-workspace/src/lib.rs",
+    "lines": 52,
+    "limit": 200,
+    "sha256": "29da274ccdc2e03692b90b3587e041eece68a748c7e264e2ffa2c14fbe77bc5b"
+  },
+  {
+    "path": "core/crates/layerfs-workspace/src/ports/captured_runs.rs",
+    "lines": 23,
+    "limit": 999,
+    "sha256": "c688f53cf194e6d1efde3582d051b5e8ac0b54d62aa02b23a7fcb04aef87d92a"
+  },
+  {
+    "path": "core/crates/layerfs-workspace/src/ports/mod.rs",
+    "lines": 13,
+    "limit": 200,
+    "sha256": "8757a7608e1461cc20a6648f81c593570975d55466170ce5e919f485db88e90b"
+  }
+]

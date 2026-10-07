@@ -82,3 +82,11 @@ no authenticated runtime, Commit or phase-cache performance qualification.
 Scratch persists after adapter Drop and becomes automatically reclaimable only
 after explicit last-owner release. Existing schema15/accounting/cleanup scope
 remains the [indexed operation provider](49-indexed-operation-scratch.md).
+
+`IndexedConstructionRecords`, `ConstructionBackingCustody` and
+`ConstructionBackingWork` are neutral aliases of the same adapter and custody
+types. They add no provider or failure owner. Filesystem serial state uses its
+own explicit scope and disjoint kinds. The separate
+[captured point/run port](55-captured-sparse-run-cursor.md) retains reader/root/floor
+custody through existing fair Daemon Read jobs; it still requires the owning
+normalizer to retain the first failure and fence all owners before release.
