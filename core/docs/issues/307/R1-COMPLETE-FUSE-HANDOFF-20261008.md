@@ -4,6 +4,10 @@
 > Owner stop boundary2026-10-08: finish verified R1 and this actionable handoff,
 > then pause the full R0–R9 objective. Do not automatically start R2.
 
+The owner-requested [ready-to-paste R2–R5 next-agent prompt](HANDOFF-R2-R5-IMPLEMENTATION-20261008.md)
+provides the complete next assignment. It is a prompt artifact only; no next agent
+has been dispatched and R2–R5 implementation has not resumed.
+
 ## Scope and exact source
 
 The owner removed only optional privileged command administration: per-Exec ctr

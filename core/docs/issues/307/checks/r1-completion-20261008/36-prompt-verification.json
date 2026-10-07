@@ -1,0 +1,48 @@
+{
+  "prompt": "core/docs/issues/307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md",
+  "prompt_sha256": "a7366863134f3c9ce4d2a1e84e3d37007a0de8a3e77278bbd7f8e328cea3affb",
+  "coverage": {
+    "R1_exact_commit": true,
+    "scope_cut_only_admin": true,
+    "R2_complete": true,
+    "R3_complete": true,
+    "R4_complete": true,
+    "R5_complete": true,
+    "dependency_sequence": true,
+    "R2_ready_mechanism": true,
+    "exact_failure_custody": true,
+    "bounded_resources": true,
+    "full_oracle": true,
+    "profile": true,
+    "fuser_integrity": true,
+    "loc": true,
+    "no_dispatch": true,
+    "deferred_admin": true,
+    "unqualified_r2": true,
+    "no_early_retirement": true,
+    "goal_limitation": true
+  },
+  "mandatory_paths_checked": 34,
+  "missing_paths": [],
+  "local_markdown_links_checked": 38,
+  "source_hash_mismatches": [],
+  "build_artifacts_match_verified_R1": {
+    "core/target/debug/examples/sandbox_lifecycle": true,
+    "core/target/debug/examples/engine_streams": true,
+    "core/target/r1-completion/layerfs-daemon": true,
+    ".cargo/config.toml": true,
+    "core/Cargo.toml": true,
+    "core/Cargo.lock": true,
+    "tools/production_loc.py": true
+  },
+  "owner_notes_unchanged": {
+    "HANDOFF-PRE-S8-SERVERLESS-20261007.md": true,
+    "HANDOFF-S7-S9-RESUME-20261006.md": true,
+    "S7-S9-SPEED-TEST-PLAN.md": true
+  },
+  "Rust_runtime_checks": "NOT_RERUN: documentation-only addition; exact product/config/lock/binary identity preserved and final R1 proofs reused at their original scope",
+  "new_agent_or_chat_dispatched": false,
+  "R2_R5_execution_started": false,
+  "initial_validator_failure": "36a-initial-prompt-check.json",
+  "coverage_method": "Normalize whitespace for content-presence checks; inspect actual contracts and source separately"
+}

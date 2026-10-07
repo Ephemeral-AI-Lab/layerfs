@@ -1,0 +1,27 @@
+{
+  "commit": "ed965f895dbe5f835a690180b6c76f93fe368d74",
+  "first_parent": "e5e95e76c16da65172d17b6a52bb9a25613547ec",
+  "committed_tree": "f8f2df8a94b69b46e2aab91f0aa6175d569c346f",
+  "index_matches_commit": true,
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "counted_product_trees_match_commit": true,
+  "production_loc": {
+    "before": 170673,
+    "after": 170673,
+    "delta": 0
+  },
+  "migration_subtotals": {
+    "active": 62382,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443
+  },
+  "committed_production_count_recomputed_matches": true,
+  "r1_status": "COMPLETE at owner-selected scope",
+  "r2_status": "NOT_STARTED active product; unqualified draft archived",
+  "full_objective": "R0-R9 incomplete; owner requests pause after R1 closure",
+  "native_fuse": "NOT_RUN",
+  "owned_live_resources_remaining": 0
+}

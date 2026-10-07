@@ -1,0 +1,19 @@
+{
+  "counted_product_trees_match_final_staged": true,
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "prompt_sha256": "a7366863134f3c9ce4d2a1e84e3d37007a0de8a3e77278bbd7f8e328cea3affb",
+  "full_staged_whitespace_exit": 0,
+  "full_staged_whitespace_stdout": "",
+  "staged_docs_only": true,
+  "rust_runtime_proofs_reused_at_unchanged_identity": true,
+  "production_loc": {
+    "before": 170673,
+    "after": 170673,
+    "delta": 0
+  },
+  "no_agent_dispatched": true,
+  "no_R2_R5_execution": true
+}

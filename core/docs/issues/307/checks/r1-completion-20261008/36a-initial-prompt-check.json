@@ -1,0 +1,9 @@
+{
+  "outcome": "FAIL in document validator, before staging",
+  "deciding_check": "goal_limitation",
+  "expected_literal": "this thread has no goal",
+  "actual_text": "this thread\nhas no goal",
+  "cause": "Exact raw substring check did not normalize Markdown line wrapping. The required limitation was present.",
+  "following_git_add": "FAILED pathspec 36-prompt-verification.json absent because validation exited before writing it",
+  "repair": "Normalize document whitespace for text coverage checks; no product or proof changes"
+}
