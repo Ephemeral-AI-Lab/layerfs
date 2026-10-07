@@ -202,3 +202,11 @@ These are logical ownership credits over requested Rust allocation sizes.
 Allocator rounding is the allowance; SQLite, pager, kernel and process
 residency are not measured here. The lanes table is O(namespaces x slots)
 pointers; admission scans at most the configured namespaces.
+
+A later pre-S8 diagnostic adds `OwnerWork.closed_namespaces`, counted only after
+an acknowledged terminal reclaim step completes a namespace. Live maintenance
+and logical Close do not increment it. This memory observation permits an owner
+to observe an exact finite drain without submitting a SQL/status cleanup pump;
+it is cumulative, not a new retention or runtime capacity limit. The
+[finite engine plan/proof](../issues/307/PRE-S8-F10-F14-ENGINE-PLAN-20261007.md)
+retains the earlier partial-drain observations and the successor receipts.

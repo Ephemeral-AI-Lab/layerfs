@@ -1,0 +1,16 @@
+# {"timestamp": "2026-10-07T12:20:08.228175+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-finite-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-e", "LAYERFS_ENGINE_RECEIPTS=/work/core/target/pre-s8-finite-engine-linux-v1.jsonl", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "sha256sum core/target/cluster2-linux/debug/deps/finite_service-e89175fd32abb991; exec timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/finite_service-e89175fd32abb991 --exact every_class_and_workspace_completes_its_finite_arrivals --nocapture --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "916aa7d812b7f8f41e901c75d1188fb87491ea0a", "wall_stop": "specified in command; build is not test execution"}
+31e0b2e83301c3e8c9d94ed8fac938b009068519d0c101230810273924308c00  core/target/cluster2-linux/debug/deps/finite_service-e89175fd32abb991
+
+running 1 test
+test every_class_and_workspace_completes_its_finite_arrivals ... ENGINE_CLOSE workspace=0 original=Ok(CleanupState(Gone))
+ENGINE_CLOSE workspace=1 original=Ok(CleanupState(Gone))
+ENGINE_CLOSE workspace=2 original=Ok(CleanupState(Gone))
+ENGINE_CLOSE workspace=3 original=Ok(CleanupState(Gone))
+ENGINE_FINITE jobs=1060 wave_counts=[[32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32]] peak_queued=24 peak_credit=92320 maintenance_rows=144 record_cleanup_bytes=16384 physical_final_debt=separately_reported
+ENGINE_RETAINED receipts=/work/core/target/pre-s8-finite-engine-linux-v1.jsonl database=/tmp/layerfs-finite-engine-8
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+
+# exit=0

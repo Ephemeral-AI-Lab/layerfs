@@ -41,6 +41,9 @@ pub struct OwnerWork {
     pub receipt_overrun_bytes: usize,
     pub maintenance_jobs: u64,
     pub maintenance_rows: u64,
+    /// Acknowledged terminal namespace reclamations; neither logical Close nor
+    /// a completed live-maintenance step increments this observation.
+    pub closed_namespaces: u64,
     pub maintenance_data_bytes: u64,
     pub maintenance_ns: u64,
 }
@@ -286,7 +289,7 @@ impl Shared {
             state = next;
         }
     }
-    pub fn maintenance(&self, step: layerfs_overlay::ReclaimStep, ns: u64) {
+    pub fn maintenance(&self, step: layerfs_overlay::ReclaimStep, closed: bool, ns: u64) {
         if let Ok(mut state) = self.state.lock() {
             state.event = state.event.wrapping_add(1);
             if let Some(lane) = state.lane(step.namespace as i64) {
@@ -295,6 +298,9 @@ impl Shared {
                 }
             }
             state.work.maintenance_jobs = state.work.maintenance_jobs.saturating_add(1);
+            if closed && step.done {
+                state.work.closed_namespaces = state.work.closed_namespaces.saturating_add(1);
+            }
             state.work.maintenance_rows = state.work.maintenance_rows.saturating_add(step.rows);
             state.work.maintenance_data_bytes = state
                 .work

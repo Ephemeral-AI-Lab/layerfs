@@ -1,0 +1,15 @@
+# {"timestamp": "2026-10-07T12:18:10.153173+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/finite_service-9ad3b02efda61021", "--exact", "every_class_and_workspace_completes_its_finite_arrivals", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/finite_service-9ad3b02efda61021": "6ae644d0e62e26597456cc414420b110fcfce8092d02a9329b252dc8eb0442c0"}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "916aa7d812b7f8f41e901c75d1188fb87491ea0a", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test every_class_and_workspace_completes_its_finite_arrivals ... ENGINE_CLOSE workspace=0 original=Ok(CleanupState(Queued))
+ENGINE_CLOSE workspace=1 original=Ok(CleanupState(Queued))
+ENGINE_CLOSE workspace=2 original=Ok(CleanupState(Queued))
+ENGINE_CLOSE workspace=3 original=Ok(CleanupState(Queued))
+ENGINE_FINITE jobs=1060 wave_counts=[[32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32]] peak_queued=24 peak_credit=92320 maintenance_rows=134 record_cleanup_bytes=16384 physical_final_debt=separately_reported
+ENGINE_RETAINED receipts=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/pre-s8-finite-engine-host-v1.jsonl database=/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-finite-engine-25043
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+
+# exit=0

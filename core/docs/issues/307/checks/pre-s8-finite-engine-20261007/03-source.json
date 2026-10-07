@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-10-07T12:19:48.115266+00:00",
+  "parent": "916aa7d812b7f8f41e901c75d1188fb87491ea0a",
+  "files": {
+    "core/crates/layerfs-daemon/tests/finite_service.rs": "0926ace4914525e06fe4a24cb8243949b0f8730367d293286fa1214517d7b748",
+    "core/crates/layerfs-daemon/examples/engine_finite.rs": "a4c7fb556226393cd8f3439f0587408601c7f9b075a17b25482c5786975a32de",
+    "core/crates/layerfs-daemon/examples/engine_finite/driver.rs": "4a7b688bd702b8f15485f27b57c8247c99d8eb07ff194d15d58313cc3594f430",
+    "core/crates/layerfs-daemon/examples/engine_finite/receipt.rs": "f5731ede853ffcb2b4111f45745f1de82fda865a70a8011a26d0715213ff10ca",
+    "core/crates/layerfs-daemon/examples/e2_startup/json.rs": "535362ce9367855bc638c914c9b39c1da746707a2bdd1ae349c5ca56acc6511a",
+    "core/crates/layerfs-daemon/examples/e2_startup/records.rs": "c673200b75d9c76905d998284a35e945109e6eb0c529b180512bce8406a15113",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.toml": "441b1162aacb628b299ed1e660a1bd08f9ce76e82ced5af5f777fb501f254544",
+    "core/Cargo.lock": "1339a41bdfcca8ec0f2f3569d46054f58251ef5d830daabbead35f07fbaf5b29"
+  }
+}

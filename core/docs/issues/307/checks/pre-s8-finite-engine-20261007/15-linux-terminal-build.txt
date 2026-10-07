@@ -1,0 +1,13 @@
+# {"timestamp": "2026-10-07T12:24:47.285985+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-terminal-build", "-e", "CARGO_HOME=/work/core/target/cluster2-linux-cargo", "-e", "CARGO_TARGET_DIR=/work/core/target/cluster2-linux", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; python3 -c 'import json,hashlib; m=json.load(open(\"core/docs/issues/307/checks/pre-s8-finite-engine-20261007/14-terminal-source.json\")); bad=[p for p,h in m[\"files\"].items() if hashlib.sha256(open(p,\"rb\").read()).hexdigest()!=h]; print(\"source hashes match:\",not bad); assert not bad,bad'; cargo test --manifest-path core/Cargo.toml --locked -p layerfs-daemon --test finite_service --example engine_finite --no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "8978781035fb3e9cca49726105b201c8f19d7dc732d740481eb3610f2eb65fee", "source_parent": "916aa7d812b7f8f41e901c75d1188fb87491ea0a", "wall_stop": "specified in command; build is not test execution"}
+source hashes match: True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.87s
+  Executable tests/finite_service.rs (core/target/cluster2-linux/debug/deps/finite_service-e89175fd32abb991)
+  Executable unittests examples/engine_finite.rs (core/target/cluster2-linux/debug/examples/engine_finite-5a24d4e236db19d2)
+
+# exit=0

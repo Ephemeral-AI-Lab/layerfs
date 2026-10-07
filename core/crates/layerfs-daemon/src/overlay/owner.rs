@@ -404,8 +404,8 @@ fn run(shared: &Shared, db: &Overlay) {
             turn.settle(shared, None);
             served = 0;
             match maintenance {
-                Ok(Some(step)) => {
-                    shared.maintenance(step, elapsed(start));
+                Ok(Some((step, closed))) => {
+                    shared.maintenance(step, closed, elapsed(start));
                     maintained = true;
                 }
                 Ok(None) => {}
@@ -474,18 +474,18 @@ fn maintenance_turn(
     live: &mut layerfs_overlay::MaintenanceCursor,
     closed: &mut u64,
     live_turn: &mut bool,
-) -> Result<Option<layerfs_overlay::ReclaimStep>, OverlayError> {
+) -> Result<Option<(layerfs_overlay::ReclaimStep, bool)>, OverlayError> {
     let first = *live_turn;
     *live_turn = !*live_turn;
     for use_live in [first, !first] {
         if use_live {
             if let Some(step) = db.maintain(*live)? {
                 *live = step.cursor;
-                return Ok(Some(step.work));
+                return Ok(Some((step.work, false)));
             }
         } else if let Some(step) = db.reclaim_closed(*closed)? {
             *closed = step.namespace;
-            return Ok(Some(step));
+            return Ok(Some((step, true)));
         }
     }
     Ok(None)
