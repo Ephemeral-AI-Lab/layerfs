@@ -1,6 +1,10 @@
 # Provisioned Daemon upstream and operation-owned consumers
 
-> **Status:** Current general guide. R4 consumer composition checkpoint; native mount and full S9 qualification remain separate exits.
+> **Status:** Historical implementation record. The host-mediated transport
+> described here was retired by F12 after `52e1f2e18`; use
+> [the current retirement/Init guide](66-host-transport-retirement.md).
+> Original source links below refer to their recorded Git revisions, not the
+> current tree. Historical measurements and verdicts are unchanged.
 
 The active Daemon [upstream owner](../../crates/layerfs-daemon/src/upstream/owner.rs)
 composes the existing SDK Attachment/Calls and public Workspace/Content ports with

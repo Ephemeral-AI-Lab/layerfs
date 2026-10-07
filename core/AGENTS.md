@@ -29,7 +29,8 @@ product mental model or campaign-specific benchmark procedures.
   binding and operation-owned exact failures. Concrete opening stays outside
   the provider-independent adapter; see the
   [direct Store boundary](docs/architecture/61-direct-store-adapter.md).
-  The prior SDK upstream remains pending explicit transport retirement.
+  The host-mediated SDK/upstream transport is retired; see
+  [the retirement record](docs/issues/307/PRE-S8-F12-20261007.md).
   Completions carry exact per-job statement-family receipts under
   explicit stage charging and a fixed lane table; see the
   [completion checkpoint](docs/issues/307/S7-COMPLETION-OWNERSHIP-20261007.md). Overlay/Daemon also expose bounded indexed operation records
@@ -47,30 +48,26 @@ product mental model or campaign-specific benchmark procedures.
   consumes them once through the retained FileView/fallible edit source. Backed
   reference reduction/release uses fixed rows, sealed membership passes and
   guarded FIFO/cursor transitions. Namespace normalization, remaining validation/
-  topology state and complete Save/Commit integration remain unfinished.
+  topology state and live namespace normalization remain unfinished. The Store
+  half of Commit is implemented with exact original failure/unknown custody;
+  see [Store Commit](docs/architecture/65-store-commit-composition.md).
   The external E01 example records original startup work, diagnostics and Stop
   without creating a Workspace route. It supplies diagnostic receipt consistency,
   not E1/E2 performance admission. Its relocated predecessor remains excluded; native executable/control/
   Exec integration is unfinished.
-  SDK now embeds host object/Save/history handlers, scoped sessions, bounded
-  fair authenticated service and native logical codecs/client/input/output ownership. Its
-  predecessor is preserved in excluded `layerfs-sdk-legacy`. Native consumer ports now connect
-  one bounded authenticated exchange owner to the object/length/serial interfaces;
-  initialized host supervision, direct-child admission, explicit local custody
-  and provisioned daemon upstream composition now exist. A small source-removed
-  macOS-host/Linux-consumer proof covers both persistence profiles; see the
-  [upstream checkpoint](docs/issues/307/R4-UPSTREAM-CACHE-20261007.md).
-  Complete topology/provenance, crash/unknown recovery, native application/control
-  integration and full runtime acceptance remain unfinished. Project native import preserves opaque symlink targets and complete
-  path membership and regular hard-link identity, and holds input-sized acquisition
-  state as operation rows behind the acquisition port; its speed and S9 acceptance
-  remain unqualified.
-  Bridge now builds pinned native KK channels, checked logical fragmentation,
-  aggregate partial/result credits and explicit independent socket fences. Its old protocol source is excluded at
-  `layerfs-bridge-legacy`; complete transport/runtime/restart and resource
-  qualification remain unfinished.
-  FUSE/API-core/sandbox directories are presently excluded reference/
-  integration source; existence is not an implemented replacement.
+  SDK creates/imports the initial Store, publishes the first Branch and consumes
+  seal, returning a closed file plus explicit provider/locator/profile metadata.
+  It retains no Store handle or data service. Install/control are separate work.
+  The prior client/runtime, daemon upstream, Bridge logical data framing and
+  excluded API-core are retired. Historical receipts keep their original topology
+  and verdicts; excluded predecessor crates and root reference remain intact.
+  Project native import preserves opaque symlinks, complete membership and hard
+  links, with indexed acquisition state. The accepted host WAL baseline retains
+  its recorded speed FAIL; no new timing is implied by SDK composition.
+  Bridge retains pinned authenticated KK channels, bounded native records and
+  independent fences; native install/control and FUSE/Exec qualification follow.
+  FUSE/sandbox directories remain excluded integration source; their presence
+  does not establish an implemented replacement.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,

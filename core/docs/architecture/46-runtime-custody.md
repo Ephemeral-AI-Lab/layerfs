@@ -1,6 +1,10 @@
 # Serving-scope completion and exact terminal custody
 
-> **Status:** Current general guide. R3 local custody checkpoint; process-crash recovery and complete S9 qualification remain open.
+> **Status:** Historical implementation record. The host-mediated transport
+> described here was retired by F12 after `52e1f2e18`; use
+> [the current retirement/Init guide](66-host-transport-retirement.md).
+> Original source links below refer to their recorded Git revisions, not the
+> current tree. Historical measurements and verdicts are unchanged.
 
 The SDK's [custody owner](../../crates/layerfs-api/sdk/src/runtime/custody/owner.rs)
 adds one explicit consuming `Sessions::fence`. It ends the host-local borrowed serving

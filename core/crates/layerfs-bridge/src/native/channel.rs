@@ -233,9 +233,6 @@ impl Receiver {
             Err(error) => Err(self.shared.fail(&self.stream, error)),
         }
     }
-    pub(super) fn last_record(&self) -> &[u8] {
-        &self.plain
-    }
     /// Explicitly fences both socket directions after a logical protocol refusal.
     /// Already quarantined ownership is not closed/retried a second time.
     pub fn close(&self) -> ChannelResult<()> {

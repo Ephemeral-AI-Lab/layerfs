@@ -508,7 +508,6 @@ dependencies = [
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
- "layerfs-sdk",
  "layerfs-storage",
  "layerfs-telemetry",
  "layerfs-workspace",
@@ -562,9 +561,9 @@ dependencies = [
  "layerfs-content",
  "layerfs-history",
  "layerfs-persistence",
+ "layerfs-project",
  "layerfs-storage",
  "layerfs-telemetry",
- "layerfs-workspace",
 ]
 
 [[package]]

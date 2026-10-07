@@ -23,7 +23,6 @@ members = [
 ]
 exclude = [
     "vendor/fuser-0.18.0",
-    "crates/layerfs-api/core",
     "crates/layerfs-sdk-legacy",
     "crates/layerfs-sandbox",
     "crates/layerfs-daemon-legacy",

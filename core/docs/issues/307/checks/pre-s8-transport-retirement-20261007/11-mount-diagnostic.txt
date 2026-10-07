@@ -1,0 +1,6 @@
+# {"timestamp": "2026-10-07T09:23:54.988861+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-retirement-view", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "python3", "-c", "import os,json,hashlib; base=\"core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/\"; m=json.load(open(base+\"09-source.json\")); print(\"mismatched_changed_files\",[p for p,h in m[\"files\"].items() if hashlib.sha256(open(p,\"rb\").read()).hexdigest()!=h]); print(\"retired_still_visible\",[p for p in json.load(open(base+\"01-retired-paths.json\"))[\"files\"] if os.path.exists(p)]); print(\"bridge_tests\",os.listdir(\"core/crates/layerfs-bridge/tests\"))"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "afa94ba7665399330fe3fa4e8d898d45dc144ffa1b6d2c760424a8e77f5f4d2c", "source_parent": "52e1f2e18dbedad03582aa5dde077092a3e07ea1", "wall_stop": "specified in command; build is not test execution"}
+mismatched_changed_files []
+retired_still_visible []
+bridge_tests ['native.rs']
+
+# exit=0

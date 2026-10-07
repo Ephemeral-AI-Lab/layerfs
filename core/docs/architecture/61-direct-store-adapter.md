@@ -1,7 +1,7 @@
 # Direct daemon Store adapter
 
-> **Status:** Implemented source boundary; native control and Commit integration
-> follow separately. Source introduced after `4e8247af5`.
+> **Status:** Implemented source boundary and Store-half Commit; native control
+> follows separately. Source introduced after `4e8247af5`.
 
 `layerfs-daemon::bootstrap::open_store` opens the configured global provider
 writer first, then a fixed set of read-only sessions. It passes Storage and
@@ -52,5 +52,5 @@ that closed file into an independent fixture placement, removes the native
 source and original sealed file, then uses normal daemon bootstrap. That copy
 is fixture setup; it does not establish the product host install/control path.
 Linux fixtures live on the container filesystem, never the repository share.
-See [F6/F7 evidence](../issues/307/PRE-S8-F6-F7-20261007.md). Existing upstream
-source is still present pending the separately recorded F12 transport retirement.
+See [F6/F7 evidence](../issues/307/PRE-S8-F6-F7-20261007.md). The old upstream
+source is retired in [F12](../issues/307/PRE-S8-F12-20261007.md).

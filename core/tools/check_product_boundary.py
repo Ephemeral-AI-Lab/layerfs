@@ -51,8 +51,8 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
     # Concrete Store open/install belongs to application composition. The
     # provider-independent daemon store/ subtree has a narrower source boundary.
-    "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-sdk", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence"},
-    "layerfs-sdk": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry", "layerfs-bridge", "layerfs-workspace"},
+    "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence"},
+    "layerfs-sdk": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry", "layerfs-bridge", "layerfs-project"},
     "layerfs-bridge": set(),
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
@@ -93,6 +93,14 @@ def dependency_violations(source):
 def component_violations(path, source):
     """Reject forbidden crate references in domain code and first-party imports."""
     name = crate_name(path)
+    retired = {
+        "layerfs-sdk": ("/src/client/", "/src/runtime/"),
+        "layerfs-daemon": ("/src/upstream/",),
+        "layerfs-bridge": ("/src/codec/", "/src/contract/", "/src/native/framing.rs"),
+        "layerfs-api-core": ("/src/",),
+    }
+    if any(part in path.as_posix() for part in retired.get(name, ())):
+        return [(1, "retired host-mediated transport path; use direct Store or native control")]
     if name not in ALLOWED_DEPENDENCIES:
         return []
     found = []

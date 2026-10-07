@@ -38,40 +38,52 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]"))
         self.assertTrue(unsafe_violations(base / "lib.rs", "pub mod store;"))
 
+    def test_retired_transport_paths_cannot_return(self):
+        for relative in ("layerfs-api/sdk/src/client/call.rs", "layerfs-api/sdk/src/runtime/owner.rs",
+                         "layerfs-daemon/src/upstream/owner.rs", "layerfs-bridge/src/codec/frame.rs",
+                         "layerfs-bridge/src/contract/frame.rs", "layerfs-bridge/src/native/framing.rs",
+                         "layerfs-api/core/src/lib.rs"):
+            findings = violations(Path("core/crates") / relative, "pub use std::io::Read;")
+            self.assertTrue(any("retired host-mediated" in message for _, message in findings), relative)
+
     def test_sdk_source_edges_and_unsafe_boundary(self):
-        path = Path("core/crates/layerfs-api/sdk/src/runtime/owner.rs")
+        path = Path("core/crates/layerfs-api/sdk/src/init.rs")
         self.assertFalse(violations(path, "use layerfs_persistence::Handles;"))
         self.assertTrue(violations(path, "use layerfs_server::Server;"))
         self.assertTrue(unsafe_violations(path, "unsafe fn extend_lifetime() {}"))
         root = Path("core/crates/layerfs-api/sdk/src/lib.rs")
-        self.assertTrue(unsafe_violations(root, "pub mod runtime;"))
-        self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\npub mod runtime;"))
+        self.assertTrue(unsafe_violations(root, "mod init;"))
+        self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
     def test_sdk_dependency_edges(self):
         prefix = '[package]\nname="layerfs-sdk"\n[dependencies]\n'
         self.assertFalse(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
+        self.assertFalse(dependency_violations(prefix + 'layerfs-project={path="../../layerfs-project"}'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-workspace={path="../../layerfs-workspace"}'))
 
-    def test_daemon_upstream_uses_existing_public_consumers_without_reverse_edge(self):
+    def test_daemon_direct_store_and_control_edges_without_host_runtime(self):
         prefix = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
-        path = Path("core/crates/layerfs-daemon/src/upstream/types.rs")
-        for dependency in ("layerfs-sdk", "layerfs-bridge", "layerfs-content",
+        path = Path("core/crates/layerfs-daemon/src/bootstrap.rs")
+        for dependency in ("layerfs-bridge", "layerfs-content",
                            "layerfs-storage", "layerfs-history", "layerfs-persistence"):
             with self.subTest(dependency=dependency):
                 self.assertFalse(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
                 self.assertFalse(violations(path, f'use {dependency.replace("-", "_")}::PublicType;'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../layerfs-server"}'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-sdk={path="../layerfs-api/sdk"}'))
+        self.assertTrue(violations(path, 'use layerfs_sdk::Runtime;'))
         sdk = '[package]\nname="layerfs-sdk"\n[dependencies]\n'
         self.assertTrue(dependency_violations(sdk + 'layerfs-daemon={path="../../layerfs-daemon"}'))
-        self.assertTrue(violations(Path("core/crates/layerfs-api/sdk/src/runtime/owner.rs"),
+        self.assertTrue(violations(Path("core/crates/layerfs-api/sdk/src/init.rs"),
                                    'use layerfs_daemon::Owner;'))
 
     def test_workspace_composition_edges_preserve_domain_and_reverse_boundaries(self):
         for package in ("layerfs-sdk", "layerfs-daemon"):
             source=f'[package]\nname="{package}"\n[dependencies]\nlayerfs-workspace={{path="../layerfs-workspace"}}\n'
-            self.assertFalse(dependency_violations(source))
-            path=Path("core/crates/layerfs-api/sdk/src/runtime/length_port.rs") if package=="layerfs-sdk" else Path("core/crates/layerfs-daemon/src/commands.rs")
-            self.assertFalse(violations(path,"use layerfs_workspace::Workspace;"))
+            self.assertEqual(bool(dependency_violations(source)), package == "layerfs-sdk")
+            path=Path("core/crates/layerfs-api/sdk/src/init.rs") if package=="layerfs-sdk" else Path("core/crates/layerfs-daemon/src/commands.rs")
+            self.assertEqual(bool(violations(path,"use layerfs_workspace::Workspace;")), package == "layerfs-sdk")
             self.assertTrue(violations(path,"use layerfs_server::Server;"))
         self.assertTrue(dependency_violations('[package]\nname="layerfs-workspace"\n[dependencies]\nlayerfs-daemon={path="../layerfs-daemon"}\n'))
         self.assertTrue(dependency_violations('[package]\nname="layerfs-content"\n[dependencies]\nlayerfs-workspace={path="../layerfs-workspace"}\n'))

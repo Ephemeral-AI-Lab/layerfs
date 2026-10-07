@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-10-07T09:22:45.953259+00:00",
+  "parent": "52e1f2e18dbedad03582aa5dde077092a3e07ea1",
+  "files": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.lock": "f6cff57d687913907fc78127b28c1d18ef3685e1723335b6d9de25ef19af19a2",
+    "core/Cargo.toml": "441b1162aacb628b299ed1e660a1bd08f9ce76e82ced5af5f777fb501f254544",
+    "core/crates/layerfs-api/sdk/Cargo.toml": "7d665f6e03b05ee37151983dbfa6bf29707973878ad52050422d44ea06f3b27a",
+    "core/crates/layerfs-api/sdk/src/init.rs": "0469ff7bc67f411c05e034a069fdba7931b450dd94d41d85811d4950f1420836",
+    "core/crates/layerfs-api/sdk/src/init_types.rs": "e86ebc2c2b6a667a70f7b38fd6facf5882372ababef6ed3b5045742dd6d58dde",
+    "core/crates/layerfs-api/sdk/src/lib.rs": "8a1c0cdbeff5fb03f97e6d1c520c762b145565a4407b6eea397d539ba9148176",
+    "core/crates/layerfs-api/sdk/tests/init.rs": "6f8f38844db83435bfeeaaa284759c19752fd9d727c47a4068c0232351f40b11",
+    "core/crates/layerfs-bridge/src/lib.rs": "2f85c4518764ede07ee893d623161f7500466cece213792dec5469d7e7631605",
+    "core/crates/layerfs-bridge/src/native/channel.rs": "37fe5a0d1f2a96b8e114039938726af641871994ee004a525b64835096f1fb84",
+    "core/crates/layerfs-bridge/src/native/mod.rs": "b0010175f630cc78ad59b50eae7c43fb4fa579e65c2557035a4d109e6fb1ce58",
+    "core/crates/layerfs-bridge/src/native/profile.rs": "d723950598ce13800fbbfe08977900af06022fac08ee034bdcb3176d7100897b",
+    "core/crates/layerfs-bridge/src/provision.rs": "6c60e1a1aacb3d6720e2f022f0894f95d1c19b220bdf14523c62147d97435c4d",
+    "core/crates/layerfs-daemon/Cargo.toml": "43f9de21959946be338f80f24c5bd2c46d2b0b96776e9c41a5060e71dd3cb5a7",
+    "core/crates/layerfs-daemon/src/lib.rs": "764611c99bf5379afa30450d7e6d82aa898d0d2e03208ebacd37ed0b64ed8ff5"
+  },
+  "refresh": "byte-identical copy and rename",
+  "deleted_files": "01-retired-paths.json"
+}

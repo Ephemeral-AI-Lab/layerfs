@@ -1,0 +1,7 @@
+# {"timestamp": "2026-10-07T09:22:46.010745+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-retirement-build", "-e", "CARGO_HOME=/work/core/target/cluster2-linux-cargo", "-e", "CARGO_TARGET_DIR=/work/core/target/cluster2-linux", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; python3 -c 'import json,hashlib,os; base=\"core/docs/issues/307/checks/pre-s8-transport-retirement-20261007/\"; m=json.load(open(base+\"09-source.json\")); bad=[p for p,h in m[\"files\"].items() if hashlib.sha256(open(p,\"rb\").read()).hexdigest()!=h]; bad.extend(p for p in json.load(open(base+\"01-retired-paths.json\"))[\"files\"] if os.path.exists(p)); print(\"source hashes and retirement match:\",not bad); assert not bad,bad'; cargo test --manifest-path core/Cargo.toml --locked -p layerfs-sdk -p layerfs-daemon -p layerfs-bridge --all-targets --no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "afa94ba7665399330fe3fa4e8d898d45dc144ffa1b6d2c760424a8e77f5f4d2c", "source_parent": "52e1f2e18dbedad03582aa5dde077092a3e07ea1", "wall_stop": "specified in command; build is not test execution"}
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+AssertionError: ['core/crates/layerfs-bridge/tests/logical_frames.rs', 'core/crates/layerfs-bridge/tests/native_framing.rs']
+source hashes and retirement match: False
+
+# exit=1

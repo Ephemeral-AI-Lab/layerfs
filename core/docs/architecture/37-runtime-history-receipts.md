@@ -1,7 +1,10 @@
 # Bound host history attempts and retained receipts
 
-> **Status:** Current general guide.
-> S9 checkpoint after the S6 stopping boundary; complete runtime admission remains open.
+> **Status:** Historical implementation record. The host-mediated transport
+> described here was retired by F12 after `52e1f2e18`; use
+> [the current retirement/Init guide](66-host-transport-retirement.md).
+> Original source links below refer to their recorded Git revisions, not the
+> current tree. Historical measurements and verdicts are unchanged.
 
 The active SDK's [history handler](../../crates/layerfs-api/sdk/src/runtime/handlers/history.rs)
 uses the existing initialized HistoryProvider and Storage owners. It extends the

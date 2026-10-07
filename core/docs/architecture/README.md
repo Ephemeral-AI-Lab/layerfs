@@ -61,9 +61,10 @@ The initial fair daemon SQL service is described in
 [21 — Daemon owner](21-daemon-owner.md), including finite capture ordering,
 retained-result credits, installed floors and remaining native/reclaim scope.
 
-The initial application-embedded host runtime is described in
-[22 — SDK runtime](22-sdk-runtime.md), with scoped Save borrows, typed local
-authority/custody and explicit remaining transport/history/control qualification.
+The host-mediated transport in [22 — SDK runtime](22-sdk-runtime.md) is retired.
+Current SDK Init and the preserved native channel are described in
+[66 — Host transport retirement](66-host-transport-retirement.md); historical
+runtime evidence retains its original topology and verdicts.
 
 The initial native authenticated channel is described in
 [23 — Native bridge](23-native-bridge.md), with completed KK peer binding, bounded

@@ -1,6 +1,10 @@
 # Host runtime supervision and consumer attachment
 
-> **Status:** Current general guide. Source and functional checkpoints; S7/S9 qualification remains open.
+> **Status:** Historical implementation record. The host-mediated transport
+> described here was retired by F12 after `52e1f2e18`; use
+> [the current retirement/Init guide](66-host-transport-retirement.md).
+> Original source links below refer to their recorded Git revisions, not the
+> current tree. Historical measurements and verdicts are unchanged.
 
 The [SDK Supervisor](../../crates/layerfs-api/sdk/src/runtime/supervisor/owner.rs)
 composes an already initialized `Runtime::sessions()` serving scope, the existing

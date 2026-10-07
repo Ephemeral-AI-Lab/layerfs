@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-sdk"
-description = "Application-embedded LayerFS host runtime and explicit Workspace APIs"
+description = "LayerFS host Init, sealed Store handoff and authenticated control"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,4 +13,4 @@ layerfs-history = { path = "../../layerfs-history" }
 layerfs-persistence = { path = "../../layerfs-persistence" }
 layerfs-storage = { path = "../../layerfs-storage" }
 layerfs-telemetry = { path = "../../layerfs-telemetry" }
-layerfs-workspace = { path = "../../layerfs-workspace" }
+layerfs-project = { path = "../../layerfs-project" }

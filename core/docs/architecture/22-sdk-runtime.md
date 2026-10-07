@@ -1,6 +1,10 @@
 # SDK-owned scoped host runtime
 
-> **Status:** Current general guide; implemented slice, not runtime qualification.
+> **Status:** Historical implementation record. The host-mediated transport
+> described here was retired by F12 after `52e1f2e18`; use
+> [the current retirement/Init guide](66-host-transport-retirement.md).
+> Original source links below refer to their recorded Git revisions, not the
+> current tree. Historical measurements and verdicts are unchanged.
 
 The #307 checkpoint after `042849109` embeds an initial runtime at the planned
 [SDK composition path](../../crates/layerfs-api/sdk/src/runtime/mod.rs). The active

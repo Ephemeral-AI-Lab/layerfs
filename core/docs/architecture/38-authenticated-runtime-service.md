@@ -1,7 +1,10 @@
 # Authenticated typed host service and receipt ownership
 
-> **Status:** Current general guide.
-> S9 implementation checkpoint; logical transport and complete S9 acceptance remain open.
+> **Status:** Historical implementation record. The host-mediated transport
+> described here was retired by F12 after `52e1f2e18`; use
+> [the current retirement/Init guide](66-host-transport-retirement.md).
+> Original source links below refer to their recorded Git revisions, not the
+> current tree. Historical measurements and verdicts are unchanged.
 
 The active SDK [runtime/service](../../crates/layerfs-api/sdk/src/runtime/service/mod.rs)
 borrows an initialized authenticated Sessions registry. It supplies real bounded

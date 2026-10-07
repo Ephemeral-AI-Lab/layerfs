@@ -1,11 +1,8 @@
-//! Application-embedded host runtime over the initialized cluster-one provider.
+//! Host Project Init and sealed Store provisioning, with no Store data service.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-pub mod client;
-pub mod runtime;
-pub use runtime::{
-    Authorization, Binding, BoundLengths, BoundSerials, Completion, CompletionPhase, Config,
-    HistoryReceipts, LengthReply, ObjectReply, Runtime, RuntimeError, RuntimeResult, SaveId,
-    Sessions, SERIAL_WINDOW,
-};
+mod init;
+mod init_types;
+pub use init::initialize;
+pub use init_types::{InitError, InitFailure, InitRequest, SealedProject};
