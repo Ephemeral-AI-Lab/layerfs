@@ -1,7 +1,7 @@
 //! One authority-bound upstream and initialized overlay owner, no whole-Save checkout.
 use super::{
-    binding, AttachPhase, AttachRefusal, BindingMismatch, ExpectedBinding, PersistenceBootstrap,
-    UpstreamError,
+    binding, AttachPhase, AttachRefusal, AttachSuccess, BindingMismatch, ExpectedBinding,
+    PersistenceBootstrap, UpstreamError,
 };
 use crate::{Command, OwnerClient, OwnerError, Response};
 use layerfs_content::filesystem::{FilesystemRootId, InodeScope};
@@ -37,6 +37,20 @@ impl Upstream {
         owner: OwnerClient,
         cache_bytes: usize,
     ) -> Result<Self, AttachRefusal> {
+        Self::attach_with_receipts(attachment, expected, bootstrap, owner, cache_bytes)
+            .map(|attached| attached.upstream)
+    }
+    /// Performs the same single attachment attempt while returning original
+    /// known Open and Binding/Policy replies instead of releasing those receipts.
+    /// Failure follows the identical first-cause/custody path as `attach`.
+    #[allow(clippy::result_large_err)]
+    pub fn attach_with_receipts(
+        attachment: Attachment,
+        expected: ExpectedBinding,
+        bootstrap: PersistenceBootstrap,
+        owner: OwnerClient,
+        cache_bytes: usize,
+    ) -> Result<AttachSuccess, AttachRefusal> {
         let calls = attachment.calls();
         let mut phase = AttachPhase::Provision;
         let mut binding_reply = None;
@@ -125,18 +139,28 @@ impl Upstream {
                 Ok(Response::Opened(route)) => *route,
                 _ => return Err(UpstreamError::Completion(Box::new(completion))),
             };
-            Ok((binding, cache, Arc::new(Workspace::bind(route, base))))
+            Ok((
+                binding,
+                cache,
+                Arc::new(Workspace::bind(route, base)),
+                completion,
+            ))
         })();
         match result {
-            Ok((binding, cache, workspace)) => Ok(Self {
-                attachment,
-                calls,
-                binding,
-                expected,
-                bootstrap,
-                cache,
-                workspace,
-                owner,
+            Ok((binding, cache, workspace, open)) => Ok(AttachSuccess {
+                upstream: Self {
+                    attachment,
+                    calls,
+                    binding,
+                    expected,
+                    bootstrap,
+                    cache,
+                    workspace,
+                    owner,
+                },
+                open,
+                binding_reply: binding_reply.expect("known original Binding reply"),
+                policy_reply: policy_reply.expect("known original Policy reply"),
             }),
             Err(error) => Err(AttachRefusal {
                 phase,

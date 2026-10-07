@@ -1,0 +1,40 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error: use of `format!` to build up a string from an iterator
+   --> crates/layerfs-daemon/examples/e2_writes/fixture.rs:705:42
+    |
+705 |     let raw = |bytes: &[u8]| -> String { bytes.iter().map(|byte| format!("{byte:02x}")).collect() };
+    |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: call `fold` instead
+   --> crates/layerfs-daemon/examples/e2_writes/fixture.rs:705:55
+    |
+705 |     let raw = |bytes: &[u8]| -> String { bytes.iter().map(|byte| format!("{byte:02x}")).collect() };
+    |                                                       ^^^
+help: ... and use the `write!` macro here
+   --> crates/layerfs-daemon/examples/e2_writes/fixture.rs:705:66
+    |
+705 |     let raw = |bytes: &[u8]| -> String { bytes.iter().map(|byte| format!("{byte:02x}")).collect() };
+    |                                                                  ^^^^^^^^^^^^^^^^^^^^^
+    = note: this can be written more efficiently by appending to a `String` directly
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+    = note: `-D clippy::format-collect` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::format_collect)]`
+
+error: could not compile `layerfs-daemon` (example "e2_writes_host") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: redundant closure
+   --> crates/layerfs-daemon/examples/e2_writes/oracle.rs:190:22
+    |
+190 |             .map_err(|failure| PortFailure::Call(failure))?;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the function itself: `PortFailure::Call`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure
+    = note: `-D clippy::redundant-closure` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::redundant_closure)]`
+
+error: could not compile `layerfs-daemon` (example "e2_writes") due to 2 previous errors

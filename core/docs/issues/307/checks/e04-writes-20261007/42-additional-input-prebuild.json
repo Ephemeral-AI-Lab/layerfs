@@ -1,0 +1,11 @@
+{
+  "schema": "e04-additional-build-inputs-v1",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+      "sha256": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c"
+    }
+  ],
+  "status": "PREBUILD",
+  "reason": "shared included benchmark digest omitted from receipt26; source accurate final no-op builds follow, no product invocation"
+}

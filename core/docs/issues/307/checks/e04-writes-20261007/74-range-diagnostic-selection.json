@@ -1,0 +1,27 @@
+{
+  "schema": "e04-range-diagnostic-prospective-selection-v1",
+  "question": "Does repeated same KEEP_SIZE range add physical blocks on actual host share, versus observed guest overlayfs?",
+  "paths": [
+    "/work/core/target/cluster2-307/e04-reservation-range-probe-20261007.bin",
+    "/tmp/e04-reservation-range-control-20261007.bin"
+  ],
+  "calls_per_route": 2,
+  "offset": 0,
+  "range_bytes": 65536,
+  "flags": "FALLOC_FL_KEEP_SIZE=1",
+  "complete_command_limit_s": 10,
+  "stat_command_limit_s": 2,
+  "cache": "uncontrolled",
+  "samples": 0,
+  "qualification_status": "NOT_EVALUATED",
+  "stop_on_original_failure": true,
+  "no_retries": true,
+  "retention": "both files and owned exited container retained",
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "script": {
+    "path": "core/target/cluster2-307/probe_e04_allocation_ranges.py",
+    "sha256": "f550ca54f834d1d52525a4662196792d9c5684465efc8b99de37585f46b3e2c5"
+  },
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "claim_limit": "two-call primitive diagnostic; guest overlayfs is not claimed ext4 or full-capacity-qualified"
+}

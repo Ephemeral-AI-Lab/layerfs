@@ -1,0 +1,28 @@
+{
+  "schema": "cluster-two-e2-observation-consistency-v1",
+  "case": "E04-write-16m",
+  "observation_consistency": "FAIL",
+  "write_window_consistency": "FAIL",
+  "qualification_status": "NOT_EVALUATED",
+  "admission_eligible": false,
+  "e1_sample_status": "NOT_RUN",
+  "e1_sample_count": 0,
+  "E05_status": "NOT_RUN",
+  "unavailable": [
+    "private-base-facts-provider-id-trace",
+    "per-original-job-statement-families",
+    "whole-operation-copies",
+    "statement-fingerprint-bind-correlation",
+    "indexed-visited-rows",
+    "exact-eligible-debt",
+    "queue-only-peak",
+    "isolated-resource-runnable-wait",
+    "host-linux-kernel-phase-residency",
+    "physical-io",
+    "cache-enforcement-calibration"
+  ],
+  "errors": [
+    "OriginalFixtureFailure { cause: Io(Kind(UnexpectedEof)), attach: None, operation: None, retained_upstream: false, retained_receipts: false }",
+    "Docker host/container input path mapping UNAVAILABLE"
+  ]
+}

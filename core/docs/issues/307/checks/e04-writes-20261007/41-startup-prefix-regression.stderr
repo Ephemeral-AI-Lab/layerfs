@@ -1,0 +1,22 @@
+F
+======================================================================
+FAIL: test_original_startup_failure_keeps_actual_not_run_stop_prefix (test_evidence_jobs.E04Retained.test_original_startup_failure_keeps_actual_not_run_stop_prefix)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1055, in test_original_startup_failure_keeps_actual_not_run_stop_prefix
+    self.assertEqual(result["errors"], [original, "original E04 startup failed; no write result is inferred"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['Ove[28 chars])', 'failed E04 startup error/Stop was replaced'] != ['Ove[28 chars])', 'original E04 startup failed; no write result is inferred']
+
+First differing element 1:
+'failed E04 startup error/Stop was replaced'
+'original E04 startup failed; no write result is inferred'
+
+  ['Overlay(Io(Kind(AlreadyExists)))',
+-  'failed E04 startup error/Stop was replaced']
++  'original E04 startup failed; no write result is inferred']
+
+----------------------------------------------------------------------
+Ran 1 test in 0.942s
+
+FAILED (failures=1)

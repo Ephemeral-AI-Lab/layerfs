@@ -1,0 +1,19 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_evidence_jobs.E04Retained.test_actual_open_has_no_route_until_original_opened_result",
+    "test_evidence_jobs.E04DockerMapping.test_actual_container_process_must_invoke_declared_collector",
+    "test_evidence_jobs.E04DockerMapping.test_cid_witness_must_be_written_by_declared_outer_command"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 1865689792,
+  "kind": "tool-selftest",
+  "workers": 1
+}

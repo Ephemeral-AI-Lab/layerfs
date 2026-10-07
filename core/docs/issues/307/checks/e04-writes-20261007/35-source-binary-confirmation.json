@@ -1,0 +1,47 @@
+{
+  "schema": "e04-source-build-verification-v1",
+  "source_inputs_unchanged": true,
+  "input_inventory": "26-final-build-inputs.json",
+  "build_receipts": [
+    "27-host-final-e04-build.json",
+    "28-linux-final-e04-build.json"
+  ],
+  "static_receipts": [
+    "21-host-e04-clippy-corrected.json",
+    "29-linux-e04-clippy.json",
+    "32-e04-format.json",
+    "33-e04-boundary.json",
+    "34-boundary-selftests.json"
+  ],
+  "reused_attachment_tests": [
+    "02-attach-receipts-bodies.json",
+    "06-linux-attach-bodies.json"
+  ],
+  "reuse_scope": "human handoff records four host/four Linux passes and corrected host all-target Clippy on unchanged pending upstream source; no new attachment mutation since reconciliation",
+  "resource_tests": "31-resource-final-tests.json",
+  "files": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "bytes": 15842464,
+      "sha256": "4cf8894318aae31885fe6820917164755c36d2711fd207e348094a3e43ffefbb"
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "bytes": 72403240,
+      "sha256": "3ab78cc85fa1a5e05ee25329818abe27957adc6b7d076898f081188fc506ab6d"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_resources.py",
+      "bytes": 12533,
+      "sha256": "bb4bbf78cc22c55e1f91ac69a9ae87469deb9c8413515e49764eade9d816da8f"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_resources.py",
+      "bytes": 14942,
+      "sha256": "882830d5aa71df4aa58247d4d42d4d8a714f737da3fbeb0fc2c505338e6fef8d"
+    }
+  ],
+  "cache": "uncontrolled",
+  "qualification_status": "NOT_EVALUATED",
+  "e1_samples": 0
+}

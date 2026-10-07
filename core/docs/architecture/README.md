@@ -399,3 +399,9 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 - [Captured file normalization](56-captured-file-normalization.md): authenticated
   base classification, coalesced final edits, bounded indexed replay and one
   consuming construction with original custody; namespace/Commit remains open.
+- [External resource observations](57-external-resource-observations.md):
+  original process/cgroup/artifact reads and terminal JSONL custody; phase,
+  clock/overhead calibration and numerical resource qualification remain open.
+- [E04 original write receipts](58-e04-original-write-receipts.md): actual host
+  acquisition, authenticated Linux writes and independent retained-data oracle;
+  diagnostic accounting and qualification keep separate outcomes.

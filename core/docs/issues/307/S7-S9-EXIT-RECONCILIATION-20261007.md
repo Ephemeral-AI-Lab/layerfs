@@ -1,0 +1,137 @@
+# S7 and S9 exit reconciliation
+
+> Status: current priority ledger following local `a08bbe39d`.
+> S7 and S9 remain unchecked; the full cluster-two goal remains active.
+
+The owning milestone boundaries are the S7/S9 rows in
+[#303 validation](../303/07-implementation-validation.md#3-slices), the named
+R1–R4/E1–E4/Q1 packages in the
+[current plan](IMPLEMENTATION-PLAN-S7-S13-20261007.md#4-next-batch-finish-s7-and-s9-foundations)
+and the [performance companion](PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md).
+Current execution prioritizes these exits before broadening into later milestones.
+The [captured-file/reference checkpoint](CAPTURED-FILE-REDUCER-20261007.md)
+is preserved as a coherent local source prerequisite; its component body counts
+do not establish either milestone exit.
+
+## S7 independent engine evidence
+
+| Requirement | Current evidence | Remaining exit |
+| --- | --- | --- |
+| E1 registration | 27-row fail-closed registry/tooling and source-scoped tests | Actual sealed route/binary/fixture/cache/oracle/observer identities, numerical authorities or eligible control formulas, unresolved finite schedules and feasible Q05 budget before samples |
+| E2 whole original operation | Creation/Completion SQL, payload, allocation and queue/service observations; E01 diagnostic consistency | Every Needs/base/publication/reply/release and retained result across the complete public operation; source-derived work bounds, correlated SQL/bind/EXPLAIN, missing copies/index/physical dimensions explicitly retained |
+| E3 physical and phase resources | Maintained logical/page/file observations; external process/smaps/cgroup/stat helpers and focused proofs | Real phase baseline/interior/final coverage, owner/topology inventories, clock/precision/gap/overhead calibration, physical I/O/residency and registered resource limits |
+| E4 sustained service/debt | Functional fair-service and live/idle automatic cleanup mechanisms | Frozen finite arrivals and class/Workspace mix, numerical progress and headroom, eligible debt production/service/final idle drain without a benchmark maintenance pump |
+| Native dimension | Existing bounded transport/custody mechanisms | Actual S8 request/open/lookup/reply/cache/thread/kernel ownership and exact send/disposal evidence |
+
+All 27 E1 proposals retain NOT_RUN and qualification NOT_EVALUATED. E01 is a
+startup diagnostic, with no Workspace route and an explicitly empty jobs stream.
+Its consistency PASS is not E2 completion. A full measurement cannot replace
+unknown physical/index/copy or residency facts with logical counters, statements'
+heap estimates, high-water or queue/result credit. SQL service spans overlap SQL;
+queue wait includes parking. Neither is an exclusive CPU/device/runnable-wait
+decomposition. Retained-result credits are not queue-only occupancy; debt_upper
+is not exact eligible debt.
+
+The next selected independent E2 implementation is E04-write-16m under the
+[committed original-job specification](../../../../docs/roadmap/0.1/0.1.7/cluster-two-e2-job-receipts-v1.md).
+It uses the frozen 1,000 aligned 4 KiB writes, a true closed 16 MiB saved fixture,
+actual Workspace/OwnerClient/authenticated runtime ports and an independent
+complete final-byte/namespace oracle. The original successful Open and
+Binding/Policy receipts now have an additive owning attachment API; its four
+public cases pass on host/Linux after matching builds. The E04 vehicle and
+retained validator now have scoped checks and three failed original diagnostic
+invocations; [the retained checkpoint](E04-ORIGINAL-RECEIPTS-20261007.md)
+records the nonblocking/idle socket corrections and the actual host-share
+allocation failure. No full write-window/oracle PASS exists. The immediate
+next correction is explicit backing capability refusal and declared native
+guest backing evidence, without changing the exact-range primitive or budgets.
+E05 stays unrun. Known diagnostic scalar coverage must retain its narrow meaning;
+private provider facts/IDs, per-job statement families, whole copies, visited
+index rows and physical/phase resources cannot be invented from aggregates.
+
+[External resource helpers](../../architecture/57-external-resource-observations.md)
+have eighteen parser/custody proofs at the implementation-owner continuation,
+with the original thirteen-case and host/Linux point-read checks retained.
+Those observe only their Python process and the explicitly read visible cgroup.
+They supply no product phase, continuous peak, cross-clock conversion or
+resource admission. Observation integration/calibration and prospective E1
+authorities precede eligible collection. Sequential E04 writes do not supply E4
+fairness, sustained pressure or reclamation qualification.
+
+Independent E1–E4 work does not require a finished S8. Full S7 retains its exact
+native residual rather than omitting it or treating every engine requirement
+as dependent on mounted readiness. Required S8 work follows the independent
+engine gates; the pinned fuser public INTERRUPT dependency remains explicit,
+with no extension of the authorized timestamp patch or fabricated cancellation.
+
+## S9 runtime and complete roots
+
+| Requirement | Implemented scope | Remaining exit |
+| --- | --- | --- |
+| R1 supervision | Independent socket workers, charged results, bounded original provider units, exact joins and wake/fairness proofs | Actual application assembly and complete owner accounting; frozen service/resource qualification remains distinct |
+| R2 context/root admission | Peer/Workspace/Branch/catalog/runtime/Save identity, derived child roles, bounded root inode/content/metadata checks | Shared owning Content membership/alias/cycle/context qualification and provenance; no caller boolean, unqualified hash or hidden full scan at repeated bind |
+| R3 restart custody | Connection/service/consumer/session fences, unattempted vs dispatched outcomes and stale capability refusal | Actual process-boundary restart/disconnect proofs, surviving-host known results and host-loss terminal unknown ownership; no inferred session recovery |
+| R4 assembly | Real macOS Store/Project/Runtime/Supervisor to authenticated Linux Upstream on both profiles | API-core/Sandbox owning application activation; native mount/Exec remains S8 |
+| Q1 complete root | Small source-removed native fixture with all 13 paths, seven file names, aliases, raw symlinks and metadata | Two interleaved remote Saves/same-Save reads/history conflict/exact disconnect, huge namespace, dense >4 GiB and large sparse native data with full oracles and resource criteria |
+
+The bounded DirectoryLeaf context checks serial/scope and root-binding refusal;
+the FilesystemRoot context checks the root inode/content. Those facts alone do
+not establish every directory target's membership or graph topology. Owning
+Content regressions and correction must cover dangling non-root serials,
+illegal directory aliases, cycles, unreachable/count-inconsistent inodes and
+wrong qualified root/context. Initial full-root qualification is explicitly
+paid before root enablement. Repeated bind cannot hide that walk. Incremental
+changed-root provenance shares the owning Content correction with K2; a new
+opaque token by itself proves neither authority nor a graph transition.
+
+The next concrete S9 composition is an owning remote Save consumer over actual
+Begin/Accept/Objects(Some original SaveToken)/Finish, with a separate same-Save
+reader and a real two-interleaved-Save proof. It retains the original accepted
+object/reply or first failure and stops before another call after failure.
+Existing canonical-only Accept transport does not carry advisory predecessor
+provenance; physical-selection equivalence cannot be claimed from it. A direct
+canonical Content candidate can prove this runtime component without requiring
+the complete captured namespace or mounted Commit pipeline.
+
+R3 distinguishes queued/unattempted cancellation, an attempted known result
+surviving lost delivery on the host, and host-process loss with unavailable
+outcome. Store persistence is not persisted session/attempt knowledge. Unknown
+custody is terminal unless an exact owning resolver contract supplies more;
+neither disconnect nor process exit permits guessed Finish, abort, replay or
+history deletion.
+
+Captured directory normalization and the complete Save→Stage→history→install
+pipeline remain S10 K0–K6. They are advanced now only where a named S9 owning
+validation prerequisite requires the same correction. S9 runtime history and
+conflict proofs remain in S9; paired local install is K4. The ledger does not
+move later milestone requirements into S9 to justify unrelated implementation.
+
+## Retained failures and execution rules
+
+Owner update forwarded on 2026-10-07 from side chat
+`01a1142b-61e0-7111-8ef3-8db004727afc`: “we do not need to actually test >4 GiB
+case, i think 500mb should be good.” Q1 now selects a real dense native
+500 MB (500,000,000-byte) proof. Actual >4 GiB execution is
+**NOT_RUN — waived by owner**, rather than a remaining Q1 execution gate.
+Historical >4 GiB NOT_RUN evidence is preserved; empirical claims stay limited
+to the actual verified size. This execution waiver does not restore a 4 GiB
+implementation cap or waive checked large-offset arithmetic, sparse/namespace,
+resource, authority, topology, interleaved-Save, restart or application-wiring
+requirements. This ledger records the explicitly relayed owner decision; no
+side-chat files or goal were altered.
+
+The restored public Project comparison retains eight speed FAILs and eight
+strict-allocation FAILs under unchanged controls, 1.10× arithmetic and owning
+30 s/19 s limits. Earlier failures and larger-tier NOT_RUN rows retain their
+source identities. Six approved history pairs are a separate route. No helper
+point-read, functional watchdog or native proof wall replaces those criteria.
+
+Root serializes all checks and uses fresh append-only outputs, locked builds,
+explicit test stops at most 120 s and one normal construction producer. Native
+Project acquisition keeps its separately supported fixed four-worker profile;
+the environment value 1 does not relabel that acquisition as one worker.
+Fixture copy bytes are actual source copies, not an imported-I/O counter.
+Eligible measurement still requires its separately frozen smaller budgets,
+cache enforcement, compilation/source pins, original single sample and proof.
+Production LOC is counted against exact snapshots before each commit, including
+the retained reference/excluded product sources; tooling and docs contribute zero.

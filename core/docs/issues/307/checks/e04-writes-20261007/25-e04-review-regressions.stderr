@@ -1,0 +1,35 @@
+FFF
+======================================================================
+FAIL: test_actual_open_has_no_route_until_original_opened_result (test_evidence_jobs.E04Retained.test_actual_open_has_no_route_until_original_opened_result)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 970, in test_actual_open_has_no_route_until_original_opened_result
+    self.assertEqual(result["write_window_consistency"], "PASS", result)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'INCOMPLETE' != 'PASS'
+- INCOMPLETE
++ PASS
+ : {'schema': 'cluster-two-e2-observation-consistency-v1', 'case': 'E04-write-16m', 'observation_consistency': 'INCOMPLETE', 'write_window_consistency': 'INCOMPLETE', 'qualification_status': 'NOT_EVALUATED', 'admission_eligible': False, 'e1_sample_status': 'NOT_RUN', 'e1_sample_count': 0, 'E05_status': 'NOT_RUN', 'unavailable': ['private-base-facts-provider-id-trace', 'per-original-job-statement-families', 'whole-operation-copies', 'statement-fingerprint-bind-correlation', 'indexed-visited-rows', 'exact-eligible-debt', 'queue-only-peak', 'isolated-resource-runnable-wait', 'host-linux-kernel-phase-residency', 'physical-io', 'cache-enforcement-calibration'], 'errors': ['outside-write job claimed another operation/route']}
+
+======================================================================
+FAIL: test_actual_container_process_must_invoke_declared_collector (test_evidence_jobs.E04DockerMapping.test_actual_container_process_must_invoke_declared_collector)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 681, in test_actual_container_process_must_invoke_declared_collector
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_cid_witness_must_be_written_by_declared_outer_command (test_evidence_jobs.E04DockerMapping.test_cid_witness_must_be_written_by_declared_outer_command)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 689, in test_cid_witness_must_be_written_by_declared_outer_command
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 3 tests in 1.684s
+
+FAILED (failures=3)

@@ -1,0 +1,215 @@
+{
+  "schema": "e04-persistent-idle-failure-v1",
+  "receipt": "60-disposable-socket-corrected-diagnostic.json",
+  "run": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007",
+  "status": "FAILED",
+  "streams": {
+    "startup.jsonl": {
+      "records": 1,
+      "bytes": 12506,
+      "sha256": "a4cca2b83d42d2a15c20504230c753ebdcb1266f74c6b925ac4316f58dea7abf",
+      "kinds": {
+        "startup": 1
+      },
+      "applied_completions": 0,
+      "last": {
+        "kind": "startup",
+        "command_kind": null,
+        "operation_index": null,
+        "record_index": 0,
+        "closed_ns": 37488125,
+        "outcome": null
+      }
+    },
+    "jobs.jsonl": {
+      "records": 268,
+      "bytes": 1698648,
+      "sha256": "4aef49baea619becf5460e050e271de64bfb8fc59369420241bb01e900d77006",
+      "kinds": {
+        "Open": 1,
+        "AcquireBaseSource": 67,
+        "Namespace": 68,
+        "ReplyAttempted": 66,
+        "ReleaseBaseSource": 66
+      },
+      "applied_completions": 67,
+      "last": {
+        "kind": "owner-job",
+        "command_kind": "Namespace",
+        "operation_index": 66,
+        "record_index": 267,
+        "closed_ns": 8328269545,
+        "outcome": null
+      }
+    },
+    "probes.jsonl": {
+      "records": 4,
+      "bytes": 42085,
+      "sha256": "2ff2a1e4852aa54ddea5115c19e0170bc2ba56f5e142dbd202536e4604f9e9b6",
+      "kinds": {
+        "owner-diagnostics": 2,
+        "bootstrap-messages": 1,
+        "base-fact-interval": 1
+      },
+      "applied_completions": 0,
+      "last": {
+        "kind": "base-fact-interval",
+        "command_kind": null,
+        "operation_index": 0,
+        "record_index": 3,
+        "closed_ns": null,
+        "outcome": null
+      }
+    },
+    "trace.jsonl": {
+      "records": 66,
+      "bytes": 357624,
+      "sha256": "151b40f10299fb481c1814624d9cafce212db7525bf54e315606e53624e1c595",
+      "kinds": {
+        "write-operation": 66
+      },
+      "applied_completions": 0,
+      "last": {
+        "kind": "write-operation",
+        "command_kind": null,
+        "operation_index": 65,
+        "record_index": 65,
+        "closed_ns": 8283936670,
+        "outcome": "Applied"
+      }
+    }
+  },
+  "host_last_delivery_ns": 12758487542,
+  "host_fence_ns": 17757891542,
+  "difference_ns": 4999404000,
+  "host_fence": {
+    "schema": "cluster-two-e04-host-v1",
+    "case": "E04-write-16m",
+    "mode": "diagnostic",
+    "sample_count": 0,
+    "admission_eligible": false,
+    "qualification_status": "NOT_EVALUATED",
+    "kind": "attachment-fence",
+    "record_index": 32,
+    "at_ns": 17757891542,
+    "deliveries": 29,
+    "attachment_matches": true,
+    "inflight_request": false,
+    "known_final_binding_completion": false,
+    "tail_receipt_count": 0,
+    "tail_receipts_match": true,
+    "input_events": 0,
+    "output_receipts": 0,
+    "service_cancelled": 0,
+    "service_completed": 0,
+    "input_close": "Some(Err(Quarantined))",
+    "output_close": "Some(Err(Quarantined))",
+    "supervisor_failure": "InputStopped",
+    "input_worker": {
+      "status": "JOINED",
+      "original_failure": "Native(Native(Io(Os { code: 35, kind: WouldBlock, message: \"Resource temporarily unavailable\" })))",
+      "expected_eof": false,
+      "complete_record_accounting": true,
+      "partial_messages": 0,
+      "undelivered": false,
+      "close_failure": "None",
+      "native_debug": "ChannelWork { channel_calls: 57, record_io_attempts: 57, records: 56, plaintext_bytes: 6120, io_calls: 112, io_attempts: 113, wire_bytes: 7128, zeroed_bytes: 4162, crypto_attempts: 56, crypto_input_bytes: 7016, crypto_output_bytes: 6120, buffer_allocation_attempts: 2, requested_buffer_bytes: 131054, stack_window_bytes: 0, plain_capacity: 65519, sealed_capacity: 65535 }",
+      "reassembly_debug": "Ok(ReassemblyWork { admitted: 29, allocation_attempts: 29, requested_body_bytes: 3880, refused: 0, fragments: 56, copied_bytes: 3880, live_messages: 0, credited_bytes: 0, peak_credited_bytes: 232 })"
+    },
+    "output_worker": {
+      "status": "JOINED",
+      "original_failure": "None",
+      "retained_receipts": 0,
+      "framing_debug": "FramingWork { encoding_attempts: 58, encoded_fragments: 58, header_bytes: 2320, fragments: 58, copied_bytes: 4890, frame_capacity: 65519, allocation_attempts: 1, requested_buffer_bytes: 65519, zeroed_bytes: 65519 }",
+      "native_debug": "ChannelWork { channel_calls: 58, record_io_attempts: 58, records: 58, plaintext_bytes: 7210, io_calls: 116, io_attempts: 116, wire_bytes: 8254, zeroed_bytes: 4490, crypto_attempts: 58, crypto_input_bytes: 7210, crypto_output_bytes: 8138, buffer_allocation_attempts: 1, requested_buffer_bytes: 65535, stack_window_bytes: 0, plain_capacity: 0, sealed_capacity: 65535 }"
+    },
+    "expected_clean_eof_fence": false,
+    "scope": "original-joined-input-output-service-custody-no-product-publication-inference"
+  },
+  "original_infrastructure_outcome": {
+    "E05_status": "NOT_RUN",
+    "admission_eligible": false,
+    "cache_state": "uncontrolled",
+    "command": [
+      "core/target/cluster2-307/run_e04_owner_diagnostic.py",
+      "--run-dir",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007",
+      "--profile",
+      "disposable",
+      "--setup",
+      "clone",
+      "--build-input-receipt",
+      "core/docs/issues/307/checks/e04-writes-20261007/53b-formatted-corrected-build-inputs.json",
+      "--additional-build-witness",
+      "core/docs/issues/307/checks/e04-writes-20261007/56-corrected-build-witness.json"
+    ],
+    "complete_command_limit_ns": 90000000000,
+    "complete_command_status": "UNAVAILABLE-requires-enclosing-90-second-process-receipt",
+    "consumer_client_exit": 137,
+    "container_id": "f9ad2396ba59b46a4280af809f911e65b7207a45dc57f422093cb11c97ceb86f",
+    "container_known_removed": false,
+    "container_last_observed_inspect_state": {
+      "Dead": false,
+      "Error": "",
+      "ExitCode": 137,
+      "FinishedAt": "2026-10-07T02:25:05.588471293Z",
+      "OOMKilled": false,
+      "Paused": false,
+      "Pid": 0,
+      "Restarting": false,
+      "Running": false,
+      "StartedAt": "2026-10-07T02:24:53.648899177Z",
+      "Status": "exited"
+    },
+    "container_removal_disposition": "NOT_ATTEMPTED",
+    "e1_sample_count": 0,
+    "e1_sample_status": "NOT_RUN",
+    "external_forced_stop": true,
+    "host_exit": 1,
+    "inputs_and_all_receipts_retained": true,
+    "mode": "diagnostic",
+    "no_failed_operation_replay": true,
+    "observation_consistency": "INCOMPLETE",
+    "original_error": "RuntimeError('original host failed; later product calls forbidden')",
+    "original_product_outcome": "UNAVAILABLE-external-failure-does-not-replace-original-host-and-consumer-custody",
+    "owner_prefix_scope": "helper-start-through-before-terminal-record-encoding-write-hash-print",
+    "owner_prefix_wall_ns": 20189762584,
+    "product_cutoff_seconds": 80,
+    "profile": "disposable",
+    "qualification_status": "NOT_EVALUATED",
+    "result": null,
+    "schema": "e04-one-original-owner-diagnostic-v1",
+    "secondary_infrastructure_errors": [],
+    "started_utc": "2026-10-07T02:24:45.557521+00:00",
+    "status": "FAILED",
+    "store_and_database_retained": true,
+    "unavailable": [
+      "private-base-facts-provider-id-trace",
+      "per-original-job-statement-families",
+      "whole-operation-copies",
+      "statement-fingerprint-bind-correlation",
+      "indexed-visited-rows",
+      "exact-eligible-debt",
+      "queue-only-peak",
+      "isolated-resource-runnable-wait",
+      "host-linux-kernel-phase-residency",
+      "physical-io",
+      "cache-enforcement-calibration"
+    ]
+  },
+  "binaries": [
+    {
+      "original": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "retained": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/retained-binaries/e2_writes_host",
+      "sha256": "7c87a53a623ee6a869d04d519fe313483eff072a3d7e61a830938d1644c09f79"
+    },
+    {
+      "original": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "retained": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/retained-binaries/e2_writes",
+      "sha256": "3ab78cc85fa1a5e05ee25329818abe27957adc6b7d076898f081188fc506ab6d"
+    }
+  ],
+  "diagnosis": "Host input worker inherits handshake read timeout5s. Local writes continue without upstream input after29deliveries. Host observes WouldBlock5s after last delivery and correctly refuses expected EOF. Original wrapper stops only its running consumer. Missing terminal manifest/oracle are incomplete, not successful cleanup.",
+  "qualification_status": "NOT_EVALUATED",
+  "e1_samples": 0
+}

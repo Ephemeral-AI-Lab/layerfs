@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "from pathlib import Path; p='core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py'; compile(Path(p).read_text(),p,'exec')"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 74561542,
+  "kind": "syntax-build",
+  "workers": 1
+}

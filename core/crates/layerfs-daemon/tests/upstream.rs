@@ -179,6 +179,13 @@ struct Server {
     requests: Arc<AtomicU64>,
 }
 fn start(expected: &ExpectedBinding, objects: BTreeMap<ObjectId, Vec<u8>>) -> (Attachment, Server) {
+    start_receiving(expected, objects, budget())
+}
+fn start_receiving(
+    expected: &ExpectedBinding,
+    objects: BTreeMap<ObjectId, Vec<u8>>,
+    credits: ReceiveBudget,
+) -> (Attachment, Server) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -287,7 +294,7 @@ fn start(expected: &ExpectedBinding, objects: BTreeMap<ObjectId, Vec<u8>>) -> (A
     )
     .unwrap();
     (
-        Attachment::new(client, budget())
+        Attachment::new(client, credits)
             .map_err(|_| "attachment")
             .unwrap(),
         Server { worker, requests },
@@ -380,9 +387,10 @@ fn policy_mismatch_retains_both_original_replies_and_does_not_open_overlay() {
             } else {
                 0
             });
-    let mut refused = Upstream::attach(attachment, wanted, bootstrap, owner.client(), 8192)
-        .err()
-        .unwrap();
+    let mut refused =
+        Upstream::attach_with_receipts(attachment, wanted, bootstrap, owner.client(), 8192)
+            .err()
+            .unwrap();
     assert_eq!(refused.phase, AttachPhase::Policy);
     assert!(matches!(
         refused.error,
@@ -399,6 +407,79 @@ fn policy_mismatch_retains_both_original_replies_and_does_not_open_overlay() {
     assert_eq!(owner.client().diagnostics().unwrap().admitted, 0);
     joined(&mut refused.attachment);
     server.worker.join().unwrap();
+    owner.stop().unwrap();
+}
+
+#[test]
+fn successful_attachment_returns_original_results_until_their_actual_release() {
+    let (expected, bootstrap, objects, _) = fixture();
+    let credits = budget();
+    let (attachment, server) = start_receiving(&expected, objects, credits.clone());
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("db"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let AttachSuccess {
+        mut upstream,
+        open,
+        binding_reply,
+        policy_reply,
+    } = Upstream::attach_with_receipts(
+        attachment,
+        expected.clone(),
+        bootstrap,
+        owner.client(),
+        8192,
+    )
+    .unwrap();
+    assert!(matches!(open.result(), Ok(Response::Opened(route)) if *route == upstream.route()));
+    assert!(open.work().sql.attempts > 0);
+    assert!(open.work().sql.rows_changed > 0);
+    assert_eq!(owner.client().diagnostics().unwrap().outstanding, 1);
+    assert!(matches!(
+        ReplyView::decode(binding_reply.bytes()).unwrap(),
+        ReplyView::Binding(binding) if binding.snapshot == expected.snapshot
+    ));
+    assert!(matches!(
+        ReplyView::decode(policy_reply.bytes()).unwrap(),
+        ReplyView::Policy(policy) if policy == expected.policy
+    ));
+    assert_ne!(
+        binding_reply.envelope().message,
+        policy_reply.envelope().message
+    );
+    assert_eq!(credits.work().unwrap().live_messages, 2);
+    assert!(credits.work().unwrap().credited_bytes > 0);
+    assert_eq!(server.requests.load(Ordering::Acquire), 3);
+    // A socket fence does not consume the caller's credited successful replies.
+    upstream.fence();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let fence = loop {
+        if let Some(fence) = upstream.try_join().unwrap() {
+            break fence;
+        }
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(1));
+    };
+    assert_eq!(fence.receive.unwrap().live_messages, 2);
+    server.worker.join().unwrap();
+    drop(open);
+    assert_eq!(owner.client().diagnostics().unwrap().outstanding, 0);
+    drop((binding_reply, policy_reply));
+    assert_eq!(credits.work().unwrap().live_messages, 0);
+    assert_eq!(credits.work().unwrap().credited_bytes, 0);
+    let close = owner
+        .client()
+        .try_submit(Some(upstream.route()), Command::Close)
+        .map_err(|(error, _)| error)
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert!(matches!(close.result(), Ok(Response::Done)));
+    drop((close, upstream));
     owner.stop().unwrap();
 }
 #[test]

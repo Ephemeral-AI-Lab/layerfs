@@ -1,0 +1,33 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-307-e04-resource-point-20261007",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "timeout",
+    "--kill-after=1s",
+    "20s",
+    "python3",
+    "-B",
+    "-c",
+    "import os,sys,json; from pathlib import Path; sys.path.insert(0,str(Path('core/benchmark/fs-bench-pro').resolve())); from shared import evidence_resources as r; p=r.linux_process(os.getpid()); assert p['smaps_rollup_bytes']['Rss']>0; c=r.linux_cgroup(Path('/sys/fs/cgroup')); print(json.dumps({'mode':'uncontrolled-functional-point-read','sample_count':0,'qualification_status':'NOT_EVALUATED','source_scope':'observer Python process and explicitly read container-visible cgroup, topology unqualified','observations':[p,c]},sort_keys=True))"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 331314875,
+  "kind": "functional-observer-point-not-calibration",
+  "workers": 1
+}

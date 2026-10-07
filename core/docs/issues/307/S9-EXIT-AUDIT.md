@@ -606,3 +606,19 @@ bodies while 35 selected macOS-only bodies are omitted. Failures 07/12/16 and
 historical checkpoint evidence remain unchanged. Final lint/native verification,
 source identity and exact production LOC are separate owning evidence; none is
 claimed by these functional totals.
+
+## Implementation-owner continuation and dense-proof scope (2026-10-07)
+
+The [E04 checkpoint](E04-ORIGINAL-RECEIPTS-20261007.md) implements original
+attachment-result custody and corrects the external host socket lifetime, but
+all three original E04 diagnostics fail at their recorded boundaries. None
+completes R1–R4 or Q1. The physical reservation failure and exact retained
+publication/source/Stop state remain engineering evidence, not a root/runtime
+qualification. S9 stays unchecked; earlier Init/history outcomes are unchanged.
+
+The [current reconciliation](S7-S9-EXIT-RECONCILIATION-20261007.md) records the
+human's forwarded scope update: Q1's actual dense native proof is 500 MB
+(500,000,000 bytes). Actual >4 GiB execution is NOT_RUN — waived by owner.
+Large-offset correctness and the no-artificial-4-GiB-cap requirement remain,
+as do topology, interleaved Saves, restart/custody, resource, sparse/namespace
+and owning application integration. Historical large-case evidence is preserved.

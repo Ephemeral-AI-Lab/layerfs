@@ -1,0 +1,51 @@
+{
+  "schema": "e04-owner-authorized-physical-replacement-v1",
+  "authorization": "Human selected Replace the three files (Recommended) in this chat after reviewing request and receipt69",
+  "status": "COMPLETE",
+  "original_physical_allocations_retired": true,
+  "original_logical_bytes_preserved": true,
+  "historical_physical_receipt": "69-failed-allocation-custody.json",
+  "artifacts": [
+    {
+      "path": "core/target/cluster2-307/e04-owner-disposable-20261007/overlay.sqlite",
+      "logical_bytes": 192512,
+      "sha256_logical_bytes": "b907a37d481ca7846c4ae990e57b887dc9f97fe0606899c3a90aea110c7a637a",
+      "before_allocated_bytes": 268435456,
+      "after_allocated_bytes": 192512,
+      "before_device": 16777230,
+      "before_inode": 870749263,
+      "after_device": 16777230,
+      "after_inode": 870758050,
+      "method": "create-new independent copy then atomic os.replace; no SQL, sync, guessed Commit, Store deletion or container change",
+      "independent_readonly_copy_retained": "core/target/cluster2-307/e04-owner-disposable-20261007/overlay-logical-byte-copy.sqlite"
+    },
+    {
+      "path": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/overlay.sqlite",
+      "logical_bytes": 503808,
+      "sha256_logical_bytes": "0d0b0c3a2e8ce575753dc1c66d92dc4c6db11a7fe81defbd7a60b7c14abc715d",
+      "before_allocated_bytes": 54358179840,
+      "after_allocated_bytes": 503808,
+      "before_device": 16777230,
+      "before_inode": 870753135,
+      "after_device": 16777230,
+      "after_inode": 870758051,
+      "method": "create-new independent copy then atomic os.replace; no SQL, sync, guessed Commit, Store deletion or container change",
+      "independent_readonly_copy_retained": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/overlay-logical-byte-copy.sqlite"
+    },
+    {
+      "path": "core/target/cluster2-307/e04-owner-disposable-persistent-input-20261007/overlay.sqlite",
+      "logical_bytes": 626688,
+      "sha256_logical_bytes": "87f48ec3d8d7633160170b64e7d930aa198c62ed991a500931b3d89e91dbf1b3",
+      "before_allocated_bytes": 76504104960,
+      "after_allocated_bytes": 626688,
+      "before_device": 16777230,
+      "before_inode": 870755901,
+      "after_device": 16777230,
+      "after_inode": 870758052,
+      "method": "create-new independent copy then atomic os.replace; no SQL, sync, guessed Commit, Store deletion or container change",
+      "independent_readonly_copy_retained": "core/target/cluster2-307/e04-owner-disposable-persistent-input-20261007/overlay-logical-byte-copy.sqlite"
+    }
+  ],
+  "released_allocation_bytes": 131129397248,
+  "scope": "only three newly failed E04 overlay.sqlite artifacts; all other evidence, Stores, inputs and containers preserved"
+}

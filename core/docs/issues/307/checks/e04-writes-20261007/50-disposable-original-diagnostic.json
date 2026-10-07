@@ -1,0 +1,21 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/target/cluster2-307/run_e04_owner_diagnostic.py",
+    "--run-dir",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-owner-disposable-20261007",
+    "--profile",
+    "disposable",
+    "--setup",
+    "clone",
+    "--additional-build-witness",
+    "core/docs/issues/307/checks/e04-writes-20261007/45-additional-build-witness.json"
+  ],
+  "wall_timeout_s": 90,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 16588374791,
+  "kind": "diagnostic-functional",
+  "workers": 1
+}

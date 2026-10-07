@@ -1,0 +1,42 @@
+{
+  "schema": "e04-retirement-and-artifact-availability-v1",
+  "receipt70_clarification": "released_allocation_bytes is current-path allocated-byte reduction, not a filesystem free-space measurement",
+  "known_original_descriptors": [
+    "com.apple 34603 yifanxu 4665r   REG   1,14    192512     0 870749263 /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-owner-disposable-20261007/overlay.sqlite",
+    "com.apple 34603 yifanxu 6958r   REG   1,14    503808     0 870753135 /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/overlay.sqlite",
+    "com.apple 34603 yifanxu 7494r   REG   1,14    626688     0 870755901 /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-owner-disposable-persistent-input-20261007/overlay.sqlite"
+  ],
+  "actual_physical_reclamation": "PENDING-original-VM-descriptor-release",
+  "df_observation": "Filesystem   1024-blocks      Used Available Capacity iused      ifree %iused  Mounted on\n/dev/disk3s5   971350180 816030000 128763224    87% 7353683 1287632240    1%   /System/Volumes/Data\n",
+  "binary_availability": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "exists": false
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "exists": false
+    },
+    {
+      "path": "core/target/cluster2-307/e04-owner-disposable-20261007/retained-binaries/e2_writes",
+      "exists": false
+    },
+    {
+      "path": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/retained-binaries/e2_writes",
+      "exists": false
+    }
+  ],
+  "unexpected_change": "All listed built/archived Linux binaries and current host target binary disappeared after receipt75. This task issued no target/archive removal; exact external cause unavailable. Source and retained receipts remain. Final host copy attempted before this observation failed ENOENT; no file was created.",
+  "no_prior_receipt_relabelled": true,
+  "retained_helpers": [
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/helpers/run_e04_owner_diagnostic.py",
+      "sha256": "e8ed213b894c782dc50fdcf6bad3ebec4cbdde0f2341bb2e3517d020372d13ff"
+    },
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/helpers/probe_e04_allocation_ranges.py",
+      "sha256": "f550ca54f834d1d52525a4662196792d9c5684465efc8b99de37585f46b3e2c5"
+    }
+  ],
+  "source_status": " M core/benchmark/fs-bench-pro/shared/evidence_jobs.py\n M core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py\n M core/crates/layerfs-daemon/src/upstream/mod.rs\n M core/crates/layerfs-daemon/src/upstream/owner.rs\n M core/crates/layerfs-daemon/src/upstream/types.rs\n M core/crates/layerfs-daemon/tests/upstream.rs\n M core/docs/architecture/47-daemon-upstream.md\n M core/docs/architecture/README.md\n M core/docs/issues/307/CAPTURED-FILE-REDUCER-20261007.md\n?? core/benchmark/fs-bench-pro/shared/evidence_resources.py\n?? core/benchmark/fs-bench-pro/tests/test_evidence_resources.py\n?? core/crates/layerfs-daemon/examples/e2_writes.rs\n?? core/crates/layerfs-daemon/examples/e2_writes/\n?? core/crates/layerfs-daemon/examples/e2_writes_host.rs\n?? core/docs/architecture/57-external-resource-observations.md\n?? core/docs/architecture/58-e04-original-write-receipts.md\n?? core/docs/issues/307/E04-ORIGINAL-RECEIPTS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-EXIT-RECONCILIATION-20261007.md\n?? core/docs/issues/307/S7-S9-IMPLEMENTATION-OWNER-20261007.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/captured-reducer-20261007/38-committed-verification.json\n?? core/docs/issues/307/checks/captured-reducer-20261007/39-tracker-receipt.json\n?? core/docs/issues/307/checks/e04-writes-20261007/\n"
+}

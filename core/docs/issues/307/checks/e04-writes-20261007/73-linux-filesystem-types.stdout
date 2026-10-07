@@ -1,0 +1,2 @@
+type=UNKNOWN (0x6a656a63) magic=6a656a63 block_size=1048576 fundamental_block=4096
+type=overlayfs magic=794c7630 block_size=4096 fundamental_block=4096

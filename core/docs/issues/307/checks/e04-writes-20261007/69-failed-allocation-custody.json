@@ -1,0 +1,49 @@
+{
+  "schema": "e04-failed-allocation-custody-v1",
+  "original_files_retained": true,
+  "physical_tail_release": "NOT_ATTEMPTED-requires-owner-disposition",
+  "copies": "independent exact logical byte copies; physical preallocation/layout/dev/inode are not reproduced",
+  "artifacts": [
+    {
+      "run": "e04-owner-disposable-20261007",
+      "original": "core/target/cluster2-307/e04-owner-disposable-20261007/overlay.sqlite",
+      "logical_bytes": 192512,
+      "allocated_bytes": 268435456,
+      "device": 16777230,
+      "inode": 870749263,
+      "mtime_ns": 1791339679143337376,
+      "sha256_logical_bytes": "b907a37d481ca7846c4ae990e57b887dc9f97fe0606899c3a90aea110c7a637a",
+      "independent_logical_copy": "core/target/cluster2-307/e04-owner-disposable-20261007/overlay-logical-byte-copy.sqlite",
+      "copy_allocated_bytes": 192512,
+      "original_unchanged": true
+    },
+    {
+      "run": "e04-owner-disposable-socket-fix-20261007",
+      "original": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/overlay.sqlite",
+      "logical_bytes": 503808,
+      "allocated_bytes": 54358179840,
+      "device": 16777230,
+      "inode": 870753135,
+      "mtime_ns": 1791339905586618900,
+      "sha256_logical_bytes": "0d0b0c3a2e8ce575753dc1c66d92dc4c6db11a7fe81defbd7a60b7c14abc715d",
+      "independent_logical_copy": "core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/overlay-logical-byte-copy.sqlite",
+      "copy_allocated_bytes": 503808,
+      "original_unchanged": true
+    },
+    {
+      "run": "e04-owner-disposable-persistent-input-20261007",
+      "original": "core/target/cluster2-307/e04-owner-disposable-persistent-input-20261007/overlay.sqlite",
+      "logical_bytes": 626688,
+      "allocated_bytes": 76504104960,
+      "device": 16777230,
+      "inode": 870755901,
+      "mtime_ns": 1791340235015710784,
+      "sha256_logical_bytes": "87f48ec3d8d7633160170b64e7d930aa198c62ed991a500931b3d89e91dbf1b3",
+      "independent_logical_copy": "core/target/cluster2-307/e04-owner-disposable-persistent-input-20261007/overlay-logical-byte-copy.sqlite",
+      "copy_allocated_bytes": 626688,
+      "original_unchanged": true
+    }
+  ],
+  "sum_allocated_bytes": 131130720256,
+  "qualified_performance": false
+}

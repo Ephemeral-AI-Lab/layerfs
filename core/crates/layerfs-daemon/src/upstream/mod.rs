@@ -7,6 +7,6 @@ mod types;
 pub use operation::{OperationFailure, OperationRefusal, OperationSuccess, UpstreamOperation};
 pub use owner::Upstream;
 pub use types::{
-    AttachPhase, AttachRefusal, BindingMismatch, ExpectedBinding, PersistenceBootstrap,
-    UpstreamError,
+    AttachPhase, AttachRefusal, AttachSuccess, BindingMismatch, ExpectedBinding,
+    PersistenceBootstrap, UpstreamError,
 };

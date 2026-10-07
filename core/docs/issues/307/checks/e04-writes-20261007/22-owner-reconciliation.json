@@ -1,0 +1,62 @@
+{
+  "schema": "s7-s9-owner-reconciliation-v1",
+  "head": "a08bbe39deb7d892a7a5a69b0daa001ab7e53774",
+  "tree": "c2b1a7c0662120803525dd43f518607441b827b0",
+  "status": " M core/benchmark/fs-bench-pro/shared/evidence_jobs.py\n M core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py\n M core/crates/layerfs-daemon/src/upstream/mod.rs\n M core/crates/layerfs-daemon/src/upstream/owner.rs\n M core/crates/layerfs-daemon/src/upstream/types.rs\n M core/crates/layerfs-daemon/tests/upstream.rs\n M core/docs/architecture/47-daemon-upstream.md\n M core/docs/architecture/README.md\n M core/docs/issues/307/CAPTURED-FILE-REDUCER-20261007.md\n?? core/benchmark/fs-bench-pro/shared/evidence_resources.py\n?? core/benchmark/fs-bench-pro/tests/test_evidence_resources.py\n?? core/crates/layerfs-daemon/examples/e2_writes.rs\n?? core/crates/layerfs-daemon/examples/e2_writes/\n?? core/crates/layerfs-daemon/examples/e2_writes_host.rs\n?? core/docs/architecture/57-external-resource-observations.md\n?? core/docs/architecture/58-e04-original-write-receipts.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-EXIT-RECONCILIATION-20261007.md\n?? core/docs/issues/307/S7-S9-IMPLEMENTATION-OWNER-20261007.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/captured-reducer-20261007/38-committed-verification.json\n?? core/docs/issues/307/checks/captured-reducer-20261007/39-tracker-receipt.json\n?? core/docs/issues/307/checks/e04-writes-20261007/\n",
+  "files": [
+    {
+      "path": "tools/production_loc.py",
+      "bytes": 15212,
+      "sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb"
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "bytes": 24153,
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7"
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "bytes": 28245,
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+    },
+    {
+      "path": "core/target/cluster2-307/e04-prepared-20261007/base.bin",
+      "bytes": 16777216,
+      "sha256": "a813c22ec9b6429809beafdeed2903207e31f2c68c4ab5795c11a857d26e6f17"
+    },
+    {
+      "path": "core/target/cluster2-307/e04-prepared-20261007/replacements.bin",
+      "bytes": 4096000,
+      "sha256": "c9440baeb12b6f5d6fe142092fe3f862611f8c4ab36788a078922ea764489290"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_jobs.py",
+      "bytes": 98951,
+      "sha256": "52ef24875bacb990b2d8773a33adc7a58e84229f3997a1a5974126d2fbfbf162"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_resources.py",
+      "bytes": 11975,
+      "sha256": "80c6295364783720365e1a17de278714de3a0c55f506541b9fd08e9653bf78ee"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py",
+      "bytes": 58938,
+      "sha256": "971297cbf1b88f9b015c7bdd253cb53ece58fe1167b473c5bf08fa67b6ff05de"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_resources.py",
+      "bytes": 14799,
+      "sha256": "05727cb45525a0bb42dae8985c66f9d05908c1dd00a1fcc61aef16e4cebd4ae4"
+    }
+  ],
+  "protected_notes": "hashed only; not read as assignment authority; preserve unstaged",
+  "container_preservation": [
+    "9cf2fe345496",
+    "ce75ac504df9",
+    "d2433851ea59",
+    "d2550144998b"
+  ],
+  "qualification_status": "NOT_EVALUATED",
+  "e1_samples": 0
+}

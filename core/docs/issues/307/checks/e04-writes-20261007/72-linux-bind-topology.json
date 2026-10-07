@@ -1,0 +1,23 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--read-only",
+    "--name",
+    "layerfs-e04-bind-topology-20261007",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work:ro",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-B",
+    "-c",
+    "import json,os; from pathlib import Path; paths=[Path(\"/work/core/target/cluster2-307\")/name/\"overlay.sqlite\" for name in [\"e04-owner-disposable-20261007\",\"e04-owner-disposable-socket-fix-20261007\",\"e04-owner-disposable-persistent-input-20261007\"]]; print(json.dumps({\"scope\":\"readonly current replacement paths and actual bind mount; not original inode or allocation equivalence\",\"mountinfo\":[s for s in Path(\"/proc/self/mountinfo\").read_text().splitlines() if \" /work \" in s],\"paths\":[{\"path\":str(p),\"dev\":p.stat().st_dev,\"inode\":p.stat().st_ino,\"logical_bytes\":p.stat().st_size,\"allocated_bytes\":p.stat().st_blocks*512} for p in paths]},indent=2))"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 405463292,
+  "kind": "read-only-topology",
+  "workers": 1
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "e04-additional-build-inputs-v1",
+  "status": "MATCH",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+      "sha256": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c"
+    }
+  ],
+  "prior_input_inventory": {
+    "path": "core/docs/issues/307/checks/e04-writes-20261007/62-persistent-input-build-inputs.json",
+    "sha256": "b37f9e19565825d333a68f43a321d60b89ec94e1036d13d5cfcb069b543e4fc7"
+  },
+  "build_receipts": [
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/63-host-persistent-input-build.json",
+      "sha256": "db70264f2a7baf26944967d963555d338ffda4dabddbb3147b79e69a28a5ca0c"
+    },
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/64-linux-persistent-input-build.json",
+      "sha256": "d3513ec469da9955014c2564afa89c4c7af3a13447f1a79ef609dc9a9537468a"
+    }
+  ],
+  "binary_identity_unchanged": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "sha256": "7b5e6e32ac69e7992d1f6a368c391a6179bd4d676864cf4787d4b1f9e21cd87b",
+      "bytes": 15843568
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "sha256": "3ab78cc85fa1a5e05ee25329818abe27957adc6b7d076898f081188fc506ab6d",
+      "bytes": 72403240
+    }
+  ],
+  "previous_failed_invocation": "60-disposable-socket-corrected-diagnostic.json",
+  "transport_profile": "e04-host-persistent-input-v2",
+  "no_changed_budgets": "per-socket handshake read/write5s; active consumer read5s; original-job/fence5s; whole product80s and external90s unchanged",
+  "idle_read_disposition": "Only host independent input worker clears idle SO_RCVTIMEO after successful authentication; explicit fence and original outer watchdog retain termination ownership."
+}

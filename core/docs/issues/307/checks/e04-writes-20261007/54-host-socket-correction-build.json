@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-daemon",
+    "--example",
+    "e2_writes",
+    "--example",
+    "e2_writes_host"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1348256000,
+  "kind": "example-build",
+  "workers": 1
+}

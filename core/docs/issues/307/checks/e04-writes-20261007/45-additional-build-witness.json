@@ -1,0 +1,37 @@
+{
+  "schema": "e04-additional-build-inputs-v1",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+      "sha256": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c"
+    }
+  ],
+  "status": "MATCH",
+  "reason": "shared included benchmark digest omitted from receipt26; source accurate final no-op builds follow, no product invocation",
+  "build_receipts": [
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/43-host-source-complete-build.json",
+      "sha256": "053b9b36bdecc4c622511055d2815ea84d7c7300ef8025e4a85af64c1b6f20e4"
+    },
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/44-linux-source-complete-build.json",
+      "sha256": "b609bd876f0b2289bccef6f1dfa2a1a27b4eb9d28ab587460f0995e52b164e6c"
+    }
+  ],
+  "binary_identity_unchanged": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "bytes": 15842464,
+      "sha256": "4cf8894318aae31885fe6820917164755c36d2711fd207e348094a3e43ffefbb"
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "bytes": 72403240,
+      "sha256": "3ab78cc85fa1a5e05ee25329818abe27957adc6b7d076898f081188fc506ab6d"
+    }
+  ],
+  "prior_input_inventory": {
+    "path": "core/docs/issues/307/checks/e04-writes-20261007/26-final-build-inputs.json",
+    "sha256": "809fff390846bf396ae2752e155deee8ca725437462584deea291de925e6aa2c"
+  }
+}

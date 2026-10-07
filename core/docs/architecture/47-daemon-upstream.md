@@ -136,3 +136,23 @@ mount, physical deletion/shrink, resident bound or speed qualification. API-core
 huge/dense>4GiB acquisition, E/Q numerical/resource acceptance and S10–S13 remain
 separate work. Existing Init gate failures and history comparison verdicts remain
 unchanged.
+
+## Original successful attachment receipts
+
+`Upstream::attach_with_receipts` performs the same single attempt and returns
+`AttachSuccess`: the authority-bound Upstream, original known local Open
+Completion and original validated Binding/Policy Messages. Their real owner and
+receive credits remain charged until the caller releases those values. Socket
+fencing does not consume caller-held successful replies. The older `attach`
+delegates to this path and releases the known receipts as it did before; the
+shared refusal path retains original phase/cause/messages/provider and any
+attempted Open Completion. There is no second Open, refresh or inferred close.
+
+The new public case proves one outstanding Open result and two held transport
+Messages, including after the actual consumer fence, then zero credits after
+their explicit release. The same four-case scope passes on host and Linux after
+matching locked builds in the
+[E04 prerequisite receipts](../issues/307/checks/e04-writes-20261007).
+This enables actual bootstrap result accounting in the prospective original-job
+collector. It supplies no private base-fact trace, per-job statement-family
+inventory, whole-operation copy/physical-I/O/residency or milestone qualification.

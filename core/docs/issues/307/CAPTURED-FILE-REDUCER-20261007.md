@@ -1,9 +1,9 @@
 # Captured file normalization and indexed reference reduction
 
-> Status: implementation checkpoint following local first parent
-> `71a3a24b8f25fbb5cb5821c554c050be5e6a1182`. Captured product tree
-> `d97312c619f0726ff863e05b9dbe450759cce0e1`; final committed verification
-> follows this prepared checkpoint. S0/S7–S13 remain incomplete.
+> Status: implemented and verified local checkpoint `a08bbe39deb7d892a7a5a69b0daa001ab7e53774`, first parent
+> `71a3a24b8f25fbb5cb5821c554c050be5e6a1182`, committed tree `c2b1a7c0662120803525dd43f518607441b827b0` and product tree
+> `d97312c619f0726ff863e05b9dbe450759cce0e1`. Exact committed production counts match the prepared and staged
+> comparison. S0/S7–S13 remain incomplete.
 
 This continues the [full goal](IMPLEMENTATION-PLAN-S7-S13-20261007.md).
 [Append-only receipts](checks/captured-reducer-20261007) retain exact commands,

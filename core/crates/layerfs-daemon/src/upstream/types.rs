@@ -8,6 +8,20 @@ use layerfs_sdk::client::{Attachment, CallFailure, RemoteObjects};
 use layerfs_storage::{StorageError, StoragePolicy};
 use std::{fmt, sync::Arc};
 
+/// Known attachment and its original successful bootstrap results.
+/// Holding these receipts retains their actual owner/transport credits. They
+/// establish no additional authority or native mount readiness.
+pub struct AttachSuccess {
+    /// Authority-bound upstream with the known opened local namespace.
+    pub upstream: super::Upstream,
+    /// Original attempted local Open, including all JobWork and result credit.
+    pub open: Completion,
+    /// Original validated Binding reply, retaining its receive credit.
+    pub binding_reply: Message,
+    /// Original validated Policy reply, retaining its receive credit.
+    pub policy_reply: Message,
+}
+
 /// Trusted requested authority context, provisioned separately from wire replies.
 #[derive(Clone, Debug)]
 pub struct ExpectedBinding {

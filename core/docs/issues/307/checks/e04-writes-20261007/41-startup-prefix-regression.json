@@ -1,0 +1,17 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_evidence_jobs.E04Retained.test_original_startup_failure_keeps_actual_not_run_stop_prefix"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 1103990250,
+  "kind": "tool-selftest",
+  "workers": 1
+}

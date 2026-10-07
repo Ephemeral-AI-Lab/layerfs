@@ -1,0 +1,25 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--read-only",
+    "--name",
+    "layerfs-e04-fstype-20261007",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work:ro",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "stat",
+    "-f",
+    "--printf",
+    "type=%T magic=%t block_size=%s fundamental_block=%S\\n",
+    "/work",
+    "/tmp"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 401586792,
+  "kind": "read-only-topology",
+  "workers": 1
+}

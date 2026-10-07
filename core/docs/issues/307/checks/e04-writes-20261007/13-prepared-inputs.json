@@ -1,0 +1,18 @@
+{
+  "base_input": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-prepared-20261007/base.bin",
+    "sha256": "a813c22ec9b6429809beafdeed2903207e31f2c68c4ab5795c11a857d26e6f17",
+    "bytes": 16777216
+  },
+  "replacements": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-prepared-20261007/replacements.bin",
+    "sha256": "c9440baeb12b6f5d6fe142092fe3f862611f8c4ab36788a078922ea764489290",
+    "bytes": 4096000
+  },
+  "inputs_manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-prepared-20261007/inputs.json",
+  "inputs_manifest_sha256": "f95a6fda400b5ffce75e9c2c8016919c11bc699d7394e76f4371eb7263eb939a",
+  "preparation_wall_ns": 649086375,
+  "setup_reuse": "none, first newly closed exact frozen inputs",
+  "resident_generator_window_bytes": 65536,
+  "claim": "setup source window only; not aggregate-residency or eligible timing evidence"
+}

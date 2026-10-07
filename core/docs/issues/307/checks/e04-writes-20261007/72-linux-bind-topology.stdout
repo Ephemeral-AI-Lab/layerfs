@@ -1,0 +1,29 @@
+{
+  "scope": "readonly current replacement paths and actual bind mount; not original inode or allocation equivalence",
+  "mountinfo": [
+    "269 260 0:43 /yifanxu/Ephemeral-AI-Lab/layerfs /work ro,nosuid,nodev,relatime - fakeowner /run/host_mark/Users rw,fakeowner"
+  ],
+  "paths": [
+    {
+      "path": "/work/core/target/cluster2-307/e04-owner-disposable-20261007/overlay.sqlite",
+      "dev": 41,
+      "inode": 658797,
+      "logical_bytes": 192512,
+      "allocated_bytes": 192512
+    },
+    {
+      "path": "/work/core/target/cluster2-307/e04-owner-disposable-socket-fix-20261007/overlay.sqlite",
+      "dev": 41,
+      "inode": 658799,
+      "logical_bytes": 503808,
+      "allocated_bytes": 503808
+    },
+    {
+      "path": "/work/core/target/cluster2-307/e04-owner-disposable-persistent-input-20261007/overlay.sqlite",
+      "dev": 41,
+      "inode": 658801,
+      "logical_bytes": 626688,
+      "allocated_bytes": 626688
+    }
+  ]
+}

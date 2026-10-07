@@ -1,0 +1,122 @@
+{
+  "schema": "exact-parent-staged-production-loc-v1",
+  "parent": "a08bbe39deb7d892a7a5a69b0daa001ab7e53774",
+  "staged_tree_before_receipt": "da7eda6ea6b702d9201aa0442d371b72c96cd4cf",
+  "staged_core_crates_tree": "2cccbfaff072a2f91ab70346083a011d2e478b81",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "command": [
+    "python3",
+    "-B",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/tools/production_loc.py",
+    "--root",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/e04-owner-staged-source",
+    "--json"
+  ],
+  "scope": "First-party product Rust and runtime SQL in core/crates and root crates; excludes tests/inline-test-only/examples/docs/tools/artifacts/third-party, includes retained/excluded product source",
+  "before": {
+    "combined": 170041,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/e04-owner-parent-source",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 7276,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 18613,
+          "layerfs-daemon": 2623,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 7435,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 3861,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 736,
+        "lines": 104624
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 170068,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/e04-owner-staged-source",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 7276,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 18613,
+          "layerfs-daemon": 2650,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 7435,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 3861,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 736,
+        "lines": 104651
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "delta": 27,
+  "migration_subtotals": {
+    "root_reference_before": 65417,
+    "root_reference_after": 65417,
+    "core_before": 104624,
+    "core_after": 104651,
+    "excluded_predecessors": 40321,
+    "excluded_integration": 2844,
+    "active_core_before": 61459,
+    "active_core_after": 61486,
+    "content_before": 18613,
+    "content_after": 18613
+  },
+  "classification": "Additive original attachment receipt custody. No relocation, algorithmic shrink or legacy retirement."
+}

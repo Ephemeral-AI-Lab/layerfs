@@ -1,0 +1,32 @@
+{
+  "schema": "e04-original-failure-diagnosis-v1",
+  "run": "core/target/cluster2-307/e04-owner-disposable-20261007",
+  "receipt": "50-disposable-original-diagnostic.json",
+  "status": "FAILED",
+  "write_attempts": 0,
+  "completed_writes": 0,
+  "host_original": "Io(Os { code: 35, kind: WouldBlock, message: Resource temporarily unavailable })",
+  "consumer_original": "OriginalFixtureFailure: Io(Kind(UnexpectedEof))",
+  "stage": "accepted socket authentication, before Upstream attach or any write",
+  "source_cause": "E04 host sets listener nonblocking but omits set_nonblocking(false) on accepted socket before one native::accept. Existing working tests/upstream_docker.rs:137 and tests/upstream.rs:56 explicitly clear it. Socket read/write5s bounds stay unchanged.",
+  "selected_correction": "Set accepted socket blocking before unchanged bounded one-attempt handshake; no retry, replay, timeout increase or workload change.",
+  "custody": "Host/consumer exited1; no forced stop; new container9b18a3ba01da exited1 and retained, OOMKilled false. Owner/startup/Store/overlay and originals held through process error exit; no guessed Close or Stop. Source removed after known Init as recorded.",
+  "retained_binaries": [
+    {
+      "original": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "retained": "core/target/cluster2-307/e04-owner-disposable-20261007/retained-binaries/e2_writes_host",
+      "sha256": "4cf8894318aae31885fe6820917164755c36d2711fd207e348094a3e43ffefbb",
+      "bytes": 15842464
+    },
+    {
+      "original": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "retained": "core/target/cluster2-307/e04-owner-disposable-20261007/retained-binaries/e2_writes",
+      "sha256": "3ab78cc85fa1a5e05ee25329818abe27957adc6b7d076898f081188fc506ab6d",
+      "bytes": 72403240
+    }
+  ],
+  "validation": "51-failed-diagnostic-retained-validation.json: failed prefix, no successful mapping witness",
+  "e1_samples": 0,
+  "qualification_status": "NOT_EVALUATED",
+  "next_invocation": "Only after changed host source/build and fresh source/input/binary identity, fresh paths; old failed attempt unchanged."
+}

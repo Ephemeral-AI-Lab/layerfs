@@ -1,0 +1,34 @@
+{
+  "schema": "e04-harness-source-checks-v1",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_jobs.py",
+      "sha256": "23aaa691c15a0425385235fcb73536f6cdb3e065eeb73944d9898b60fb6c426f"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py",
+      "sha256": "ce62dfcc4630f33ef90aeb9f52006be95c99fb1f5bde8acae45bbda459f25cea"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_resources.py",
+      "sha256": "bb4bbf78cc22c55e1f91ac69a9ae87469deb9c8413515e49764eade9d816da8f"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_resources.py",
+      "sha256": "882830d5aa71df4aa58247d4d42d4d8a714f737da3fbeb0fc2c505338e6fef8d"
+    }
+  ],
+  "checks": [
+    "30-resource-final-syntax.json",
+    "31-resource-final-tests.json",
+    "36-validator-final-syntax.json",
+    "37-validator-final-tests.json"
+  ],
+  "retained_failures": [
+    "24-resource-custody-regression.json",
+    "25-e04-review-regressions.json"
+  ],
+  "e04_diagnostic_status": "NOT_RUN",
+  "e1_samples": 0,
+  "qualification_status": "NOT_EVALUATED"
+}

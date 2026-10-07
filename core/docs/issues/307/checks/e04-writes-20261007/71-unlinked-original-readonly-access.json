@@ -1,0 +1,21 @@
+{
+  "schema": "e04-authorized-original-retirement-readonly-capability-v1",
+  "scope": "only three approved original inode identities; no modification",
+  "rows": [
+    {
+      "path": "/.vol/16777230/870749263",
+      "status": "UNAVAILABLE",
+      "error": "[Errno 2] No such file or directory: '/.vol/16777230/870749263'"
+    },
+    {
+      "path": "/.vol/16777230/870753135",
+      "status": "UNAVAILABLE",
+      "error": "[Errno 2] No such file or directory: '/.vol/16777230/870753135'"
+    },
+    {
+      "path": "/.vol/16777230/870755901",
+      "status": "UNAVAILABLE",
+      "error": "[Errno 2] No such file or directory: '/.vol/16777230/870755901'"
+    }
+  ]
+}

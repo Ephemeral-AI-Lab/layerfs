@@ -1,0 +1,38 @@
+{
+  "schema": "e04-additional-build-inputs-v1",
+  "status": "MATCH",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+      "sha256": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c"
+    }
+  ],
+  "prior_input_inventory": {
+    "path": "core/docs/issues/307/checks/e04-writes-20261007/53b-formatted-corrected-build-inputs.json",
+    "sha256": "1fdd127d089e24a0e98eb9edc06aefa69535882df2589a8d660dd3b22825147e"
+  },
+  "build_receipts": [
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/54b-host-formatted-socket-build.json",
+      "sha256": "1cab0c310edf2758fcfd56369133a997a2d7b172f7727b4b454477a877ceec94"
+    },
+    {
+      "path": "core/docs/issues/307/checks/e04-writes-20261007/55-linux-socket-correction-build.json",
+      "sha256": "a05c7ec1fef974e5bb82674038da2e59c5cf46710025c4bf0cc2ac8eeebe735a"
+    }
+  ],
+  "binary_identity_unchanged": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "sha256": "7c87a53a623ee6a869d04d519fe313483eff072a3d7e61a830938d1644c09f79",
+      "bytes": 15842784
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "sha256": "3ab78cc85fa1a5e05ee25329818abe27957adc6b7d076898f081188fc506ab6d",
+      "bytes": 72403240
+    }
+  ],
+  "previous_failed_invocation": "50-disposable-original-diagnostic.json",
+  "changed_source": "host example explicitly clears accepted socket nonblocking flag before unchanged5s handshake"
+}

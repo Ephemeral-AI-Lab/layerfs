@@ -1,0 +1,13 @@
+{
+  "command": [
+    "docker",
+    "inspect",
+    "4b2b6fab935142d0ae73422dc785dbe5292d39363dbf243e9ccde4feb56cc0ff"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 135965084,
+  "kind": "read-only-topology",
+  "workers": 1
+}

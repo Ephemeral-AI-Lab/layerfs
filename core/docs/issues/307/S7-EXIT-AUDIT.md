@@ -404,3 +404,19 @@ failed receipt 16 with only the corrected failed body in receipt 18; Linux recei
 22 covers the final fourteen. Original failures 07/12/16 remain retained. These
 results establish no final lint/native proof, source seal, LOC comparison or new
 numerical/resource verdict; those owning receipts are recorded separately.
+
+## Implementation-owner E04 continuation (2026-10-07)
+
+The [original E04 checkpoint](E04-ORIGINAL-RECEIPTS-20261007.md) retains 18 resource
+and 88 distinct validator cases, original attachment receipts, source-accurate
+host/Linux builds and three failed actual diagnostic invocations. No complete
+write window or oracle passed. The final failure exposes additive physical
+allocation on the actual host-share filesystem; a finite same-range probe
+confirms its distinction from the guest overlayfs control and prior ext4 proof.
+Original reservation refusal, earlier publications, absent Stop/cleanup and the
+owner-approved byte-identical artifact replacements remain explicit. A later
+external loss of built/archived Linux binaries is recorded as a provenance gap.
+E1–E4 and the exact S8 native residual remain open; no numerical gate, kernel
+ownership, calibrated resource or sustained service result follows. S7 stays
+unchecked. The next selected correction refuses the evidenced incompatible
+backing before bulk reservation and registers the authentic guest backing.

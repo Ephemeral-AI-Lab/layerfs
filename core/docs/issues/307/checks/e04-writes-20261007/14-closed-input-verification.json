@@ -1,0 +1,25 @@
+{
+  "status": "MATCH",
+  "inputs": [
+    {
+      "input": "base_input",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-prepared-20261007/base.bin",
+      "closed_file_sha256": "a813c22ec9b6429809beafdeed2903207e31f2c68c4ab5795c11a857d26e6f17",
+      "closed_file_bytes": 16777216,
+      "matches_prepared_descriptor": true,
+      "write_bits_removed": true
+    },
+    {
+      "input": "replacements",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-prepared-20261007/replacements.bin",
+      "closed_file_sha256": "c9440baeb12b6f5d6fe142092fe3f862611f8c4ab36788a078922ea764489290",
+      "closed_file_bytes": 4096000,
+      "matches_prepared_descriptor": true,
+      "write_bits_removed": true
+    }
+  ],
+  "scope_clarification": "13 resident_generator_window_bytes is a misnamed logical 65536-byte flush trigger only. Actual Python bytearray capacity/process peak were not observed and remain UNAVAILABLE; no retrospective resident bound is claimed. Original13 retained unchanged. Closed input hashes/physical file lengths independently confirmed after closing.",
+  "setup_cache": "uncontrolled; verification reads are setup work and supply no cold claim",
+  "qualification_status": "NOT_EVALUATED",
+  "sample_count": 0
+}

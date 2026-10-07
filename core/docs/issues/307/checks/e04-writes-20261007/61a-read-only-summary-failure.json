@@ -1,0 +1,8 @@
+{
+  "status": "FAILED",
+  "operation": "read-only retained prefix summarizer",
+  "original_error": "AttributeError: NoneType object has no attribute get",
+  "cause": "some recorded original_result values are explicitly null; summarizer assumed dict",
+  "effects": "no new product calls or evidence writes completed before exception",
+  "correction": "use empty mapping solely for absent result-kind counting, never fabricate a result"
+}

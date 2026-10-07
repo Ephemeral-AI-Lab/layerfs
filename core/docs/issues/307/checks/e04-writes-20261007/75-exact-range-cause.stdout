@@ -1,0 +1,141 @@
+{
+  "schema": "e04-exact-range-cause-diagnostic-v1",
+  "rows": [
+    {
+      "path": "/work/core/target/cluster2-307/e04-reservation-range-probe-20261007.bin",
+      "calls": [
+        {
+          "index": 0,
+          "flags": "FALLOC_FL_KEEP_SIZE=1",
+          "offset": 0,
+          "length": 65536,
+          "result": 0,
+          "errno": 0,
+          "opened_ns": 459470910591974,
+          "closed_ns": 459470910681557,
+          "after": {
+            "dev": 41,
+            "inode": 658823,
+            "links": 1,
+            "logical_bytes": 0,
+            "allocated_bytes": 65536
+          }
+        },
+        {
+          "index": 1,
+          "flags": "FALLOC_FL_KEEP_SIZE=1",
+          "offset": 0,
+          "length": 65536,
+          "result": 0,
+          "errno": 0,
+          "opened_ns": 459470910723432,
+          "closed_ns": 459470910785265,
+          "after": {
+            "dev": 41,
+            "inode": 658823,
+            "links": 1,
+            "logical_bytes": 0,
+            "allocated_bytes": 131072
+          }
+        }
+      ],
+      "profile": "diagnostic-two-identical-64k-keep-size-ranges",
+      "close_error": null,
+      "filesystem": "UNKNOWN (0x6a656a63) 6a656a63 1048576 4096",
+      "mountinfo": [
+        "260 162 0:80 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/138189/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/137845/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120408/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120407/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120406/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120405/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120404/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/138190/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/138190/work",
+        "262 260 0:109 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw",
+        "263 260 0:110 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755",
+        "264 263 0:111 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666",
+        "265 260 0:112 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro",
+        "266 265 0:39 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw",
+        "267 263 0:107 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw",
+        "268 263 0:113 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k",
+        "269 260 0:43 /yifanxu/Ephemeral-AI-Lab/layerfs /work rw,nosuid,nodev,relatime - fakeowner /run/host_mark/Users rw,fakeowner",
+        "185 262 0:114 / /proc/scsi ro,relatime - tmpfs tmpfs ro",
+        "187 265 0:115 / /sys/firmware ro,relatime - tmpfs tmpfs ro"
+      ],
+      "before": {
+        "dev": 41,
+        "inode": 658823,
+        "links": 1,
+        "logical_bytes": 0,
+        "allocated_bytes": 0
+      },
+      "same_range_added_bytes": 65536,
+      "range_idempotence": "OBSERVED_ADDITIVE"
+    },
+    {
+      "path": "/tmp/e04-reservation-range-control-20261007.bin",
+      "calls": [
+        {
+          "index": 0,
+          "flags": "FALLOC_FL_KEEP_SIZE=1",
+          "offset": 0,
+          "length": 65536,
+          "result": 0,
+          "errno": 0,
+          "opened_ns": 459470914085724,
+          "closed_ns": 459470914103099,
+          "after": {
+            "dev": 80,
+            "inode": 1044542,
+            "links": 1,
+            "logical_bytes": 0,
+            "allocated_bytes": 65536
+          }
+        },
+        {
+          "index": 1,
+          "flags": "FALLOC_FL_KEEP_SIZE=1",
+          "offset": 0,
+          "length": 65536,
+          "result": 0,
+          "errno": 0,
+          "opened_ns": 459470914150140,
+          "closed_ns": 459470914169474,
+          "after": {
+            "dev": 80,
+            "inode": 1044542,
+            "links": 1,
+            "logical_bytes": 0,
+            "allocated_bytes": 65536
+          }
+        }
+      ],
+      "profile": "diagnostic-two-identical-64k-keep-size-ranges",
+      "close_error": null,
+      "filesystem": "overlayfs 794c7630 4096 4096",
+      "mountinfo": [
+        "260 162 0:80 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/138189/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/137845/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120408/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120407/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120406/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120405/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120404/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/138190/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/138190/work",
+        "262 260 0:109 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw",
+        "263 260 0:110 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755",
+        "264 263 0:111 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666",
+        "265 260 0:112 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro",
+        "266 265 0:39 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw",
+        "267 263 0:107 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw",
+        "268 263 0:113 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k",
+        "269 260 0:43 /yifanxu/Ephemeral-AI-Lab/layerfs /work rw,nosuid,nodev,relatime - fakeowner /run/host_mark/Users rw,fakeowner",
+        "185 262 0:114 / /proc/scsi ro,relatime - tmpfs tmpfs ro",
+        "187 265 0:115 / /sys/firmware ro,relatime - tmpfs tmpfs ro"
+      ],
+      "before": {
+        "dev": 80,
+        "inode": 1044542,
+        "links": 1,
+        "logical_bytes": 0,
+        "allocated_bytes": 0
+      },
+      "same_range_added_bytes": 0,
+      "range_idempotence": "OBSERVED_EQUAL"
+    }
+  ],
+  "status": "RECORDED",
+  "original_error": null,
+  "elapsed_ns": 6389333,
+  "files_retained": true,
+  "sample_count": 0,
+  "qualification_status": "NOT_EVALUATED",
+  "cache": "uncontrolled",
+  "scope": "primitive idempotence only, not full-device capacity qualification"
+}

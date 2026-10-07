@@ -1,0 +1,61 @@
+{
+  "schema": "exact-parent-production-loc-v1",
+  "commit": "a08bbe39deb7d892a7a5a69b0daa001ab7e53774",
+  "tree": "c2b1a7c0662120803525dd43f518607441b827b0",
+  "archive_sha256": "e49aec2c84f09ef398c2c2b43e61d44e0eb44dc14e74893f3ddfd07659439e12",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "command": [
+    "python3",
+    "-B",
+    "tools/production_loc.py",
+    "--root",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/e04-owner-parent-source",
+    "--json"
+  ],
+  "result": {
+    "combined": 170041,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/e04-owner-parent-source",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 7276,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 18613,
+          "layerfs-daemon": 2623,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 7435,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 3861,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 736,
+        "lines": 104624
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  }
+}

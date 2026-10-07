@@ -1,0 +1,22 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--name",
+    "layerfs-e04-range-cause-20261007",
+    "--cidfile",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e04-range-cause-20261007.cid",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-B",
+    "/work/core/target/cluster2-307/probe_e04_allocation_ranges.py"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 429620500,
+  "kind": "count-diagnostic",
+  "workers": 1
+}

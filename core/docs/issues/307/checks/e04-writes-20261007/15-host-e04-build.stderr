@@ -1,0 +1,48 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0308]: mismatched types
+   --> crates/layerfs-daemon/examples/e2_writes/records.rs:86:43
+    |
+86  |                 out.text("name_hex", &hex(name.as_bytes()))?;
+    |                                       --- ^^^^^^^^^^^^^^^ expected `&[u8; 32]`, found `&[u8]`
+    |                                       |
+    |                                       arguments to this function are incorrect
+    |
+    = note: expected reference `&[u8; 32]`
+               found reference `&[u8]`
+note: function defined here
+   --> crates/layerfs-daemon/examples/../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs:270:8
+    |
+270 | pub fn hex(digest: &[u8; 32]) -> String {
+    |        ^^^ -----------------
+
+error[E0596]: cannot borrow `fixture.runtime` as mutable, as `fixture` is not declared as mutable
+   --> crates/layerfs-daemon/examples/e2_writes/host.rs:263:24
+    |
+263 |     let mut sessions = fixture.runtime.sessions();
+    |                        ^^^^^^^^^^^^^^^ cannot borrow as mutable
+    |
+help: consider changing this to be mutable
+    |
+158 |     let mut fixture = fixture::prepare_host(
+    |         +++
+
+For more information about this error, try `rustc --explain E0596`.
+error: could not compile `layerfs-daemon` (example "e2_writes_host") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-daemon` (example "e2_writes") due to 1 previous error

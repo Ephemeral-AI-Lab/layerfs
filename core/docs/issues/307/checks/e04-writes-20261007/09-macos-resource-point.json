@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "import os,sys,json; from pathlib import Path; sys.path.insert(0,str(Path('core/benchmark/fs-bench-pro').resolve())); from shared import evidence_resources as r; value=r.macos_process(os.getpid()); assert value['read_closed_ns']>=value['read_open_ns']; assert value['memory_bytes']['rss']>0; print(json.dumps({'mode':'uncontrolled-functional-point-read','sample_count':0,'qualification_status':'NOT_EVALUATED','source_scope':'observer Python process only, no product phase','observation':value},sort_keys=True))"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 81597625,
+  "kind": "functional-observer-point-not-calibration",
+  "workers": 1
+}

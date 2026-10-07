@@ -1,0 +1,14 @@
+.............F....
+======================================================================
+FAIL: test_read_and_close_failures_retain_original_read_and_secondary_close (test_evidence_resources.ResourceOwnership.test_read_and_close_failures_retain_original_read_and_secondary_close)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_resources.py", line 163, in test_read_and_close_failures_retain_original_read_and_secondary_close
+    self.assertIs(cause.exception, primary)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: OSError('original observation close refusal') is not OSError('original observation read refusal')
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.018s
+
+FAILED (failures=1)
