@@ -23,7 +23,7 @@ UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
     "layerfs-persistence": "src/backend/sqlite/file_control.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-daemon", "layerfs-sdk", "layerfs-bridge")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-daemon", "layerfs-sdk", "layerfs-bridge", "layerfs-sandbox")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
@@ -35,6 +35,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-daemon": "#![forbid(unsafe_code)]",
     "layerfs-sdk": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
+    "layerfs-sandbox": "#![forbid(unsafe_code)]",
 }
 
 
@@ -54,6 +55,7 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence"},
     "layerfs-sdk": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry", "layerfs-bridge", "layerfs-project"},
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
+    "layerfs-sandbox": set(),
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
 ENGINES_AND_CLUSTER2 = {

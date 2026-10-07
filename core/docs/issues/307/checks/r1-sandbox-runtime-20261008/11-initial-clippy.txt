@@ -1,0 +1,43 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error: this `if` statement can be collapsed
+   --> crates/layerfs-sandbox/src/backend/docker/http.rs:239:16
+    |
+239 |           } else if name.eq_ignore_ascii_case(b"upgrade") {
+    |  ________________^
+240 | |             if protocol
+241 | |                 .replace(value.eq_ignore_ascii_case(b"tcp"))
+242 | |                 .is_some()
+...   |
+246 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+239 ~         } else if name.eq_ignore_ascii_case(b"upgrade") && protocol
+240 +                 .replace(value.eq_ignore_ascii_case(b"tcp"))
+241 +                 .is_some() {
+242 +             return Err(RuntimeError::Protocol("duplicate HTTP upgrade"));
+243 +         }
+    |
+
+error: useless conversion to the same type: `std::io::Error`
+   --> crates/layerfs-sandbox/src/backend/docker/streams.rs:162:28
+    |
+162 |                 return Err(io::Error::from(io::ErrorKind::WriteZero).into());
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider removing `.into()`: `io::Error::from(io::ErrorKind::WriteZero)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion
+    = note: `-D clippy::useless-conversion` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_conversion)]`
+
+error: could not compile `layerfs-sandbox` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-sandbox` (lib test) due to 2 previous errors

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "9",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/engine_streams",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6"
+  ],
+  "bound_s": 9,
+  "cache": "natural functional, no numeric eligibility"
+}

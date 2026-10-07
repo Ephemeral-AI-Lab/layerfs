@@ -1,0 +1,21 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r1c-streams-20261008",
+    "--label",
+    "layerfs.owner=r1c-streams-20261008",
+    "--security-opt",
+    "no-new-privileges:true",
+    "--cap-drop",
+    "ALL",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "/bin/bash",
+    "-c",
+    "exec sleep infinity"
+  ],
+  "exit": 0,
+  "stdout": "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6\n",
+  "stderr": ""
+}

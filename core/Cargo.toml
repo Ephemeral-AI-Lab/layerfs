@@ -20,11 +20,12 @@ members = [
     "crates/layerfs-daemon",
     "crates/layerfs-api/sdk",
     "crates/layerfs-bridge",
+    "crates/layerfs-sandbox",
 ]
 exclude = [
     "vendor/fuser-0.18.0",
     "crates/layerfs-sdk-legacy",
-    "crates/layerfs-sandbox",
+    "crates/layerfs-sandbox-legacy",
     "crates/layerfs-daemon-legacy",
     "crates/layerfs-fuse",
     "crates/layerfs-workspace-legacy",

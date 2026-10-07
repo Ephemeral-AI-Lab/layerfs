@@ -1,0 +1,13 @@
+{
+  "first_parent": "cd541ae927ab2728b734f49a78c6f8e8d3498a4d",
+  "staged_tree_before_receipt": "1e5ebb14cbf9ccd519303dfa0da7de7ec3875a6a",
+  "counted_product_trees_match": true,
+  "product_trees": {
+    "core/crates": "2f07fddc2f3b7d2a90f8cd498d28c7c71b2c1329",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "final_source_hashes_match_staged": 23,
+  "local_link_targets_checked": 132,
+  "missing": [],
+  "scope": "exact staged source and counted product snapshots; no broader native/CI claim"
+}

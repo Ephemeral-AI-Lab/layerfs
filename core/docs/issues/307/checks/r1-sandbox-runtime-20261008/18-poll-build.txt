@@ -1,0 +1,44 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling nix v0.31.3
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error[E0412]: cannot find type `Socket` in this scope
+   --> crates/layerfs-sandbox/src/backend/docker/streams.rs:122:13
+    |
+122 |     stream: Socket,
+    |             ^^^^^^ not found in this scope
+    |
+help: consider importing this struct
+    |
+2   + use crate::backend::docker::socket::Socket;
+    |
+
+error[E0412]: cannot find type `Socket` in this scope
+   --> crates/layerfs-sandbox/src/backend/docker/streams.rs:170:26
+    |
+170 |     body: Body<BufReader<Socket>>,
+    |                          ^^^^^^ not found in this scope
+    |
+help: consider importing this struct
+    |
+2   + use crate::backend::docker::socket::Socket;
+    |
+
+error[E0412]: cannot find type `Socket` in this scope
+   --> crates/layerfs-sandbox/src/backend/docker/streams.rs:171:13
+    |
+171 |     writer: Socket,
+    |             ^^^^^^ not found in this scope
+    |
+help: consider importing this struct
+    |
+2   + use crate::backend::docker::socket::Socket;
+    |
+
+For more information about this error, try `rustc --explain E0412`.
+error: could not compile `layerfs-sandbox` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-sandbox` (lib test) due to 3 previous errors

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r1c-linux-protocol-20261008",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work,readonly",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-c",
+    "import hashlib,json,subprocess,sys\nm=json.load(open('core/docs/issues/307/checks/r1-sandbox-runtime-20261008/71-final-source-identity.json'))\nbad=[p for p,h in m['files'].items() if hashlib.sha256(open(p,'rb').read()).hexdigest()!=h]\nprint('source hashes match:',not bad,flush=True)\nif bad:print(bad);sys.exit(2)\nexe='core/target/cluster2-linux/debug/deps/engine_protocol-8d76747d67d4da39'\nprint('test_sha256='+hashlib.sha256(open(exe,'rb').read()).hexdigest(),flush=True)\nsys.exit(subprocess.call(['timeout','--kill-after=1s','100s',exe,'--test-threads=1','--nocapture']))\n"
+  ],
+  "profile": "runtime-only external protocol tests; no Store and no numeric claim"
+}

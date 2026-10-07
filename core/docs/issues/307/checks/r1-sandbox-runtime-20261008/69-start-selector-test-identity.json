@@ -1,0 +1,15 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "100",
+    "core/target/debug/deps/engine_protocol-9854568c7ce4a8ae",
+    "partial_creation_id_and_lost_start_are_retained_without_replay",
+    "--exact",
+    "--nocapture"
+  ],
+  "build": "67-start-selector-build.txt",
+  "binary_sha256": "c4bf1a65f66189749a7bbd3b4ecad5f05eadb8c6bfb2c94d9f4a1a47349f1bee",
+  "exit": 0
+}

@@ -1,0 +1,16 @@
+
+running 1 test
+EXTERNAL_PEER_WRITE_ERROR sent=8192 expected=1048879 cause=Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" }
+
+thread 'structural_inspection_ignores_giant_arguments_and_retains_null_exit' panicked at crates/layerfs-sandbox/tests/engine_protocol.rs:39:58:
+called `Result::unwrap()` on an `Err` value: WireFailure { attempted: true, sent_bytes: 185, status: Some(200), cause: Io(Kind(UnexpectedEof)), fence_error: Some(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), observed_exec: Some(ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")) }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test structural_inspection_ignores_giant_arguments_and_retains_null_exit ... FAILED
+
+failures:
+
+failures:
+    structural_inspection_ignores_giant_arguments_and_retains_null_exit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s
+

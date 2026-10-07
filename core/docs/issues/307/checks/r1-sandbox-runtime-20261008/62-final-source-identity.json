@@ -1,0 +1,32 @@
+{
+  "parent": "cd541ae927ab2728b734f49a78c6f8e8d3498a4d",
+  "files": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.toml": "1e7491027ba16b0f7e6fc0d12e7e2b292369d652dbaac6d1be1b7e23a366a29c",
+    "core/Cargo.lock": "5b63a1f1a6709b14944f3b6bd2eec61329cb9ba3fd080c8800502fa023b3dafa",
+    "core/crates/layerfs-sandbox/Cargo.toml": "b4d729a84ebc3748f06758387969002694c3a8bb50e12f0d88232f9de98eecca",
+    "core/crates/layerfs-sandbox/examples/engine_streams.rs": "78b0943861f6742d1f305a4f59d36ca5fcfa522a85ed98332048cc7d39bac300",
+    "core/crates/layerfs-sandbox/src/backend/docker/body.rs": "7a39ca72438e71f1bf74184ca12fed106897c3049ec539235f882eb0bf1ef19c",
+    "core/crates/layerfs-sandbox/src/backend/docker/headers.rs": "383655cf2336892a79f82b17a264c73c5a01cb5247bb421ad0bfcceb6138e7ae",
+    "core/crates/layerfs-sandbox/src/backend/docker/http.rs": "1770159970afe3135fc7171dc0ee98b845785e76bad18a995e13ef20930dd8e6",
+    "core/crates/layerfs-sandbox/src/backend/docker/inspect.rs": "c4d34af0291277c3e9e9e3b1afd296f2334e5c43d82cd0edc4ba545ea47ab924",
+    "core/crates/layerfs-sandbox/src/backend/docker/json.rs": "50c1292f160932fd6c01d67f79f3f3b8ce8e58f40c17198323906ae18aea6ef7",
+    "core/crates/layerfs-sandbox/src/backend/docker/mod.rs": "b933988d22405b4ce04ded70efa1f686e566b6956bd2901ff55e1dfba0bafc38",
+    "core/crates/layerfs-sandbox/src/backend/docker/request.rs": "43257959e43d8e7b6ee525fba791f1e09ee500d28b9a884dfd628538d157ace5",
+    "core/crates/layerfs-sandbox/src/backend/docker/socket.rs": "0f2259e25e551961ba4a7dcc63ccd039e4f9be6141f7bab9f24f0bfcf069b354",
+    "core/crates/layerfs-sandbox/src/backend/docker/streams.rs": "416d9b495f0def5b54edd2bfa1536ef311f814ef7c4a35a2ca9b9808d4b08ab4",
+    "core/crates/layerfs-sandbox/src/backend/docker/strings.rs": "6f9bca306dcaacf1eee8af374ced9c5337203d0c9fb09d5a0dd3e11d3a678d0f",
+    "core/crates/layerfs-sandbox/src/backend/mod.rs": "3d923404c25734584dbd456c9a1cb8521c9cb3f5662a5d7c3fd7f798db317bc8",
+    "core/crates/layerfs-sandbox/src/lib.rs": "7db983a1978d3e901935a81b2ffa1433b3a1c44a2024c52322b2c5840f866289",
+    "core/crates/layerfs-sandbox/src/types/execution.rs": "c629cfd3e0ce5a054c80659c82de0840fe8674854f7f5f710fd37d1f596e2918",
+    "core/crates/layerfs-sandbox/src/types/failure.rs": "1088e2d351f9f7bcddde325dbe401c81b99e940d7b208c891dc0d3a25b76b231",
+    "core/crates/layerfs-sandbox/src/types/identity.rs": "56ad5b420cfa41b26acd4ee69feb08528698b027f37d6cae09727010278aadd0",
+    "core/crates/layerfs-sandbox/src/types/mod.rs": "6b451598953f2d424db5c241c666c6df9f04280549d74f203f0c7a65e65ea827",
+    "core/crates/layerfs-sandbox/tests/engine_protocol.rs": "b9efa0c284eb2bec0137cd7f7b61bafe4765995c1d4cc008fc776270559c98ed",
+    "core/crates/layerfs-sandbox/tests/support/engine.rs": "528fe632efaefd37f4687bf3b5fe95ad850ede85d681605b9689fed859ff124b"
+  },
+  "workers": 1,
+  "profile": "no Store in runtime-only proofs; inherited global policy explicitly Disposable only",
+  "compiler": "rustc1.85.1; unchanged root ARM64 cfg/flags",
+  "scope": "actual replacement ordinary Engine runtime foundation, not full R1 acceptance"
+}

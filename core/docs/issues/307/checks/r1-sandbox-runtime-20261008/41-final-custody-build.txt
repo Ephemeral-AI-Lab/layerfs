@@ -1,0 +1,29 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error[E0432]: unresolved import `crate::ErrorDiagnostic`
+ --> crates/layerfs-sandbox/src/backend/docker/http.rs:7:13
+  |
+7 | use crate::{ErrorDiagnostic, ExecId, RuntimeError, WireFailure};
+  |             ^^^^^^^^^^^^^^^ no `ErrorDiagnostic` in the root
+  |
+  = help: consider importing this struct through its public re-export instead:
+          crate::types::ErrorDiagnostic
+
+warning: unused import: `ErrorDiagnostic`
+ --> crates/layerfs-sandbox/src/types/mod.rs:6:19
+  |
+6 | pub use failure::{ErrorDiagnostic, RuntimeError, WireFailure};
+  |                   ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+For more information about this error, try `rustc --explain E0432`.
+warning: `layerfs-sandbox` (lib test) generated 1 warning (1 duplicate)
+error: could not compile `layerfs-sandbox` (lib test) due to 1 previous error; 1 warning emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `layerfs-sandbox` (lib) generated 1 warning
+error: could not compile `layerfs-sandbox` (lib) due to 1 previous error; 1 warning emitted

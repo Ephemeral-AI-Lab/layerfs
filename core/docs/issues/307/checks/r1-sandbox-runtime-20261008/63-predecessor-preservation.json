@@ -1,0 +1,6 @@
+{
+  "original_non_manifest_files": 6,
+  "all_original_bytes_unchanged": true,
+  "manifest_change": "package name layerfs-sandbox -> layerfs-sandbox-legacy; excluded, not compiled; production LOC unchanged",
+  "retirement": false
+}

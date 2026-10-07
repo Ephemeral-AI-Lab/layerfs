@@ -1,0 +1,21 @@
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/15-protocol-tests.txt:7: trailing whitespace.
++test positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes ... 
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/15-protocol-tests.txt:12: trailing whitespace.
++test structural_inspection_ignores_giant_arguments_and_retains_null_exit ... 
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/15-protocol-tests.txt:16: trailing whitespace.
++test upgrade_read_ahead_preserves_frames_and_request_identity ... 
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/15-protocol-tests.txt:29: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/19-poll-protocol-tests.txt:7: trailing whitespace.
++test positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes ... 
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/19-poll-protocol-tests.txt:12: trailing whitespace.
++test structural_inspection_ignores_giant_arguments_and_retains_null_exit ... 
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/19-poll-protocol-tests.txt:16: trailing whitespace.
++test upgrade_read_ahead_preserves_frames_and_request_identity ... 
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/19-poll-protocol-tests.txt:29: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/22-giant-metadata-tests.txt:15: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/23-upgrade-tests.txt:15: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/24-affected-tests.txt:16: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/25-affected-tests.txt:6: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/26-affected-tests.txt:6: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/45-reviewed-protocol-tests.txt:15: new blank line at EOF.
+core/docs/issues/307/checks/r1-sandbox-runtime-20261008/68-start-selector-tests.txt:6: new blank line at EOF.

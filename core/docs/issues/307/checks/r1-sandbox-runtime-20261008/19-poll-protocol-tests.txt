@@ -1,0 +1,29 @@
+
+running 7 tests
+test before_effect_identity_refusal_has_no_engine_connection ... ok
+test chunked_metadata_accepts_split_unicode_and_rejects_conflicting_framing ... ok
+test escaped_deciding_duplicates_wrong_identity_and_truncated_json_refuse ... ok
+test partial_creation_id_and_lost_start_are_retained_without_replay ... ok
+test positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes ... 
+thread 'positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes' panicked at crates/layerfs-sandbox/tests/engine_protocol.rs:139:10:
+called `Result::unwrap()` on an `Err` value: StartFailure { created: ExecCreated { docker: Docker { socket: "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-engine-80259-11/sock", control_wait: 2s }, container: ContainerId("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), exec: ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), request: ExecRequest { identity: CommandIdentity { uid: 501, gid: 20 }, arguments_count: 3, environment_count: 1, directory: "/tmp", stdin: false }, start_attempted: true }, transfer: WireFailure { attempted: true, sent_bytes: 232, status: Some(101), cause: Io(Os { code: 22, kind: InvalidInput, message: "Invalid argument" }), fence_error: Some(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), observed_exec: Some(ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")) } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test structural_inspection_ignores_giant_arguments_and_retains_null_exit ... 
+thread 'structural_inspection_ignores_giant_arguments_and_retains_null_exit' panicked at crates/layerfs-sandbox/tests/engine_protocol.rs:39:58:
+called `Result::unwrap()` on an `Err` value: WireFailure { attempted: true, sent_bytes: 185, status: Some(200), cause: Io(Kind(UnexpectedEof)), fence_error: Some(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), observed_exec: Some(ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")) }
+FAILED
+test upgrade_read_ahead_preserves_frames_and_request_identity ... 
+thread 'upgrade_read_ahead_preserves_frames_and_request_identity' panicked at crates/layerfs-sandbox/tests/engine_protocol.rs:97:49:
+called `Result::unwrap()` on an `Err` value: StartFailure { created: ExecCreated { docker: Docker { socket: "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-engine-80259-13/sock", control_wait: 2s }, container: ContainerId("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), exec: ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), request: ExecRequest { identity: CommandIdentity { uid: 501, gid: 20 }, arguments_count: 3, environment_count: 1, directory: "/tmp", stdin: false }, start_attempted: true }, transfer: WireFailure { attempted: true, sent_bytes: 232, status: Some(101), cause: Io(Os { code: 22, kind: InvalidInput, message: "Invalid argument" }), fence_error: Some(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), observed_exec: Some(ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")) } }
+FAILED
+
+failures:
+
+failures:
+    positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes
+    structural_inspection_ignores_giant_arguments_and_retains_null_exit
+    upgrade_read_ahead_preserves_frames_and_request_identity
+
+test result: FAILED. 4 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

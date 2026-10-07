@@ -559,6 +559,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-sandbox"
+version = "0.1.6"
+dependencies = [
+ "nix",
+]
+
+[[package]]
 name = "layerfs-sdk"
 version = "0.1.6"
 dependencies = [

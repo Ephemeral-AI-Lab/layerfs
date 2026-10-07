@@ -1,0 +1,16 @@
+{
+  "command": [
+    "docker",
+    "exec",
+    "--user",
+    "501:20",
+    "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6",
+    "/bin/bash",
+    "-c",
+    "if command -v ctr; then ctr version; else printf \"CTR_CLIENT_UNAVAILABLE\n\"; fi"
+  ],
+  "exit": 0,
+  "stdout": "CTR_CLIENT_UNAVAILABLE\n",
+  "stderr": "",
+  "purpose": "read-only standard containerd client availability, no signal/process/task mutation"
+}

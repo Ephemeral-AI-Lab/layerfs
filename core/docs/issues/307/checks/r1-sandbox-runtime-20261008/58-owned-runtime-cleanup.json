@@ -1,0 +1,28 @@
+{
+  "scope": "explicit whole-fixture-container stop/remove after completed ordinary commands; not per-command cancellation or filesystem drain",
+  "container": "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6",
+  "attempts": [
+    {
+      "command": [
+        "docker",
+        "stop",
+        "--timeout",
+        "1",
+        "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6"
+      ],
+      "exit": 0,
+      "stdout": "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "rm",
+        "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6"
+      ],
+      "exit": 0,
+      "stdout": "899a2ed997ec3578a8ebd6aa5a58680fdae178d1ea84d6567ef3d40f86e32cd6\n",
+      "stderr": ""
+    }
+  ]
+}

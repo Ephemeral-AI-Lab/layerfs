@@ -1,0 +1,32 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error[E0425]: cannot find value `observed` in this scope
+   --> crates/layerfs-sandbox/src/backend/docker/http.rs:180:6
+    |
+180 |     *observed = Some(status);
+    |      ^^^^^^^^ not found in this scope
+
+error[E0061]: this function takes 2 arguments but 3 arguments were supplied
+   --> crates/layerfs-sandbox/src/backend/docker/http.rs:69:34
+    |
+69  |             let (status, mode) = headers(&mut reader, upgrade, &mut observed_status)?;
+    |                                  ^^^^^^^                       -------------------- unexpected argument #3 of type `&mut Option<_>`
+    |
+note: function defined here
+   --> crates/layerfs-sandbox/src/backend/docker/http.rs:164:4
+    |
+164 | fn headers(reader: &mut impl Read, upgrade: bool) -> Result<(u16, Framing), RuntimeError> {
+    |    ^^^^^^^ ----------------------  -------------
+help: remove the extra argument
+    |
+69  -             let (status, mode) = headers(&mut reader, upgrade, &mut observed_status)?;
+69  +             let (status, mode) = headers(&mut reader, upgrade)?;
+    |
+
+Some errors have detailed explanations: E0061, E0425.
+For more information about an error, try `rustc --explain E0061`.
+error: could not compile `layerfs-sandbox` (lib test) due to 2 previous errors

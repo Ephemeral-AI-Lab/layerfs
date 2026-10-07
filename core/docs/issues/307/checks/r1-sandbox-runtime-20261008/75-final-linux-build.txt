@@ -1,0 +1,14 @@
+source hashes match: True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling nix v0.31.3
+   Compiling layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.57s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sandbox-06e96b30d3d85933)
+  Executable tests/engine_protocol.rs (core/target/cluster2-linux/debug/deps/engine_protocol-8d76747d67d4da39)
+  Executable unittests examples/engine_streams.rs (core/target/cluster2-linux/debug/examples/engine_streams-ceb8487bf099820b)
+
+exit=0

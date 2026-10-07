@@ -1,0 +1,34 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error[E0618]: expected function, found `Vec<u8>`
+   --> crates/layerfs-sandbox/src/backend/docker/body.rs:60:31
+    |
+36  |         let line = line(&mut self.inner, 8192)?;
+    |             ---- `line` has type `Vec<u8>`
+...
+60  |                 let trailer = line(&mut self.inner, 8192)?;
+    |                               ^^^^-----------------------
+    |                               |
+    |                               call expression requires function
+...
+140 | pub(super) fn line(reader: &mut impl Read, limit: usize) -> io::Result<Vec<u8>> {
+    | ------------------------------------------------------------------------------- this function of the same name is available here, but it's shadowed by the local binding
+
+error[E0277]: the trait bound `RuntimeError: From<ErrorKind>` is not satisfied
+   --> crates/layerfs-sandbox/src/backend/docker/streams.rs:237:61
+    |
+237 |                         return Err(io::ErrorKind::WriteZero.into());
+    |                                                             ^^^^ the trait `From<ErrorKind>` is not implemented for `RuntimeError`
+    |
+    = help: the trait `From<ErrorKind>` is not implemented for `RuntimeError`
+            but trait `From<std::io::Error>` is implemented for it
+    = help: for that trait implementation, expected `std::io::Error`, found `ErrorKind`
+    = note: required for `ErrorKind` to implement `Into<RuntimeError>`
+
+Some errors have detailed explanations: E0277, E0618.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `layerfs-sandbox` (lib test) due to 2 previous errors

@@ -1,0 +1,55 @@
+{
+  "build": "21-socket-build.txt",
+  "checks": [
+    {
+      "test": "structural_inspection_ignores_giant_arguments_and_retains_null_exit",
+      "command": [
+        "perl",
+        "-e",
+        "alarm shift; exec @ARGV",
+        "100",
+        "core/target/debug/deps/engine_protocol-9854568c7ce4a8ae",
+        "structural_inspection_ignores_giant_arguments_and_retains_null_exit",
+        "--exact",
+        "--nocapture"
+      ],
+      "binary_sha256": "e504d8528965b3a47150d4c6b8218a6b9dd8f2985139a1c7b3f0e4476a4bead7",
+      "exit": 101
+    },
+    {
+      "test": "upgrade_read_ahead_preserves_frames_and_request_identity",
+      "command": [
+        "perl",
+        "-e",
+        "alarm shift; exec @ARGV",
+        "100",
+        "core/target/debug/deps/engine_protocol-9854568c7ce4a8ae",
+        "upgrade_read_ahead_preserves_frames_and_request_identity",
+        "--exact",
+        "--nocapture"
+      ],
+      "binary_sha256": "e504d8528965b3a47150d4c6b8218a6b9dd8f2985139a1c7b3f0e4476a4bead7",
+      "exit": 0
+    },
+    {
+      "test": "positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes",
+      "command": [
+        "perl",
+        "-e",
+        "alarm shift; exec @ARGV",
+        "100",
+        "core/target/debug/deps/engine_protocol-9854568c7ce4a8ae",
+        "positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes",
+        "--exact",
+        "--nocapture"
+      ],
+      "binary_sha256": "e504d8528965b3a47150d4c6b8218a6b9dd8f2985139a1c7b3f0e4476a4bead7",
+      "exit": 0
+    }
+  ],
+  "invalid_prior_artifact_selections": [
+    "19-poll-protocol-tests.txt",
+    "22-giant-metadata-tests.txt",
+    "23-upgrade-tests.txt"
+  ]
+}

@@ -55,6 +55,15 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(unsafe_violations(root, "mod init;"))
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
+    def test_sandbox_active_edges_and_unsafe_boundary(self):
+        path=Path("core/crates/layerfs-sandbox/src/backend/docker/http.rs")
+        self.assertTrue(unsafe_violations(path,"unsafe fn signal_pid() {}"))
+        self.assertFalse(unsafe_violations(Path("core/crates/layerfs-sandbox/src/lib.rs"),"#![forbid(unsafe_code)]"))
+        prefix='[package]\nname="layerfs-sandbox"\n[dependencies]\n'
+        for dependency in ("layerfs-api-core","layerfs-server","layerfs-daemon","layerfs-persistence","layerfs-sdk"):
+            self.assertTrue(dependency_violations(prefix+f'{dependency}={{path="../{dependency}"}}'))
+        self.assertFalse(dependency_violations('[package]\nname="layerfs-sandbox-legacy"\n[dependencies]\nlayerfs-api-core={path="../layerfs-api/core"}'))
+
     def test_bridge_control_reuses_domain_records_without_engine_edges(self):
         prefix = '[package]\nname="layerfs-bridge"\n[dependencies]\n'
         for dependency in ("layerfs-content", "layerfs-history"):

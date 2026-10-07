@@ -424,3 +424,8 @@ Current R1 application: [69 — Project/Workspace SDK facades](69-sdk-project-wo
 and [70 — Direct-Store daemon startup/control](70-daemon-application-startup-control.md).
 Their component/application scope does not establish native FUSE Ready, ordinary
 Sandbox execution, mounted live Commit or complete daemon drain.
+
+Current ordinary runtime foundation:
+[71 — Engine command/stream/status adapter](71-ordinary-engine-runtime-foundation.md).
+Its actual Engine proof does not close Sandbox lifecycle/readiness/access or
+process-specific cancellation, and it supplies no filesystem drain evidence.

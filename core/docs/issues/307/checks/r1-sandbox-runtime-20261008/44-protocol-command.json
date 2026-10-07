@@ -1,0 +1,14 @@
+{
+  "command": [
+    "perl",
+    "-e",
+    "alarm shift; exec @ARGV",
+    "100",
+    "core/target/debug/deps/engine_protocol-9854568c7ce4a8ae",
+    "--test-threads=1",
+    "--nocapture"
+  ],
+  "build": "43-build.txt",
+  "binary_sha256": "6c2e06c4bae26cd1ccd7ba6ba081058d25943a301b39e52920ed3c32e292554b",
+  "reason": "reviewed custody/media/header/observed-ID and safe poll changes; earlier failed/invalid receipts retained"
+}

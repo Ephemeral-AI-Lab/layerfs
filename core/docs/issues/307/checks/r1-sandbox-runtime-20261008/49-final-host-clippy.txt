@@ -1,0 +1,27 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+error: stripping a prefix manually
+  --> crates/layerfs-sandbox/tests/support/engine.rs:61:34
+   |
+61 |                         length = line[16..].trim().parse().unwrap();
+   |                                  ^^^^^^^^^^
+   |
+note: the prefix was tested here
+  --> crates/layerfs-sandbox/tests/support/engine.rs:60:21
+   |
+60 |                     if line.starts_with("Content-Length: ") {
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_strip
+   = note: `-D clippy::manual-strip` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_strip)]`
+help: try using the `strip_prefix` method
+   |
+60 ~                     if let Some(<stripped>) = line.strip_prefix("Content-Length: ") {
+61 ~                         length = <stripped>.trim().parse().unwrap();
+   |
+
+error: could not compile `layerfs-sandbox` (test "engine_protocol") due to 1 previous error

@@ -1,0 +1,32 @@
+{
+  "purpose": "read-only standard runtime task-list/client reachability probe; no signal/mutation of any task",
+  "create": {
+    "command": [
+      "docker",
+      "create",
+      "--name",
+      "layerfs-r1c-containerd-probe-20261008",
+      "--label",
+      "layerfs.owner=r1c-containerd-probe-20261008",
+      "--security-opt",
+      "no-new-privileges:true",
+      "--cap-drop",
+      "ALL",
+      "--mount",
+      "type=bind,src=/usr/bin/ctr,dst=/usr/local/bin/ctr,readonly",
+      "--mount",
+      "type=bind,src=/run/containerd/containerd.sock,dst=/run/containerd/containerd.sock",
+      "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "/usr/local/bin/ctr",
+      "--address",
+      "/run/containerd/containerd.sock",
+      "--namespace",
+      "moby",
+      "tasks",
+      "list"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /usr/bin/ctr\n"
+  }
+}

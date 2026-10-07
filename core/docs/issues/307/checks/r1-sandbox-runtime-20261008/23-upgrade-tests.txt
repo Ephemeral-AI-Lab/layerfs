@@ -1,0 +1,15 @@
+
+running 1 test
+
+thread 'upgrade_read_ahead_preserves_frames_and_request_identity' panicked at crates/layerfs-sandbox/tests/engine_protocol.rs:97:49:
+called `Result::unwrap()` on an `Err` value: StartFailure { created: ExecCreated { docker: Docker { socket: "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-engine-80483-0/sock", control_wait: 2s }, container: ContainerId("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), exec: ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), request: ExecRequest { identity: CommandIdentity { uid: 501, gid: 20 }, arguments_count: 3, environment_count: 1, directory: "/tmp", stdin: false }, start_attempted: true }, transfer: WireFailure { attempted: true, sent_bytes: 232, status: Some(101), cause: Io(Os { code: 22, kind: InvalidInput, message: "Invalid argument" }), fence_error: Some(Os { code: 57, kind: NotConnected, message: "Socket is not connected" }), observed_exec: Some(ExecId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")) } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test upgrade_read_ahead_preserves_frames_and_request_identity ... FAILED
+
+failures:
+
+failures:
+    upgrade_read_ahead_preserves_frames_and_request_identity
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+

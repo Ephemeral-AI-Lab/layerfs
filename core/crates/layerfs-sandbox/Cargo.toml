@@ -1,12 +1,10 @@
 [package]
 name = "layerfs-sandbox"
-description = "Concrete host Docker owner for agent sandboxes"
+description = "Ordinary local Engine commands, streams and exact runtime status"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-layerfs-api-core = { path = "../layerfs-api/core" }
-layerfs-bridge = { path = "../layerfs-bridge" }
-layerfs-telemetry = { path = "../layerfs-telemetry", features = ["native"] }
+nix = { version = "=0.31.3", features = ["poll"] }

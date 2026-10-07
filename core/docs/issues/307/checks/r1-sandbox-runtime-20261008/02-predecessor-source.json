@@ -1,0 +1,15 @@
+{
+  "source": "core/crates/layerfs-sandbox",
+  "destination": "core/crates/layerfs-sandbox-legacy",
+  "files": {
+    "core/crates/layerfs-sandbox/Cargo.toml": "1cb34b06151572641bf36dabef617e2b4393378198ae285d3aa157c04a32d4df",
+    "core/crates/layerfs-sandbox/tests/docker_port_pending.rs": "4f50aa2622aa913cc9b380173645685ec32ae0bb02a809a61ff905a8bc15898d",
+    "core/crates/layerfs-sandbox/src/session.rs": "daf34a6bda1551cb2a4fc82ac28a3bf1185d3c2fe4f0e80a976ef2667367cac4",
+    "core/crates/layerfs-sandbox/src/docker.rs": "b3eb1489994c3d08494329994978fc0b0a717da6d4dd4e5064543d8ba3dc960f",
+    "core/crates/layerfs-sandbox/src/owner.rs": "4f3c418367ae575e10c4eb8a0b4322ebfd80ce42f9855efd3f2d36932abb1cef",
+    "core/crates/layerfs-sandbox/src/lib.rs": "b1db229277d81c36d68bc028861a4a5a1280fd3a9558b156a0305547caa0a620",
+    "core/crates/layerfs-sandbox/src/readiness.rs": "27b14488e2d33969b3283f3816555a7ff24e74844bef9bb4d5faccb3d631ec66"
+  },
+  "retirement": false,
+  "purpose": "unchanged excluded source relocation before actual replacement; original test/manifests retained"
+}
