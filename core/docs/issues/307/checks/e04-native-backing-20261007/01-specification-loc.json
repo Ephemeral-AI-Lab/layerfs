@@ -1,0 +1,24 @@
+{
+  "schema": "exact-source-equivalent-specification-loc-v1",
+  "first_parent": "7409c2922b98aefb0adc589234015feeac592102",
+  "staged_tree_before_receipt": "c870e280c91b39f9db6b19cbd058c29f9f29478e",
+  "product_subtrees_before_and_after": {
+    "core/crates": "2cccbfaff072a2f91ab70346083a011d2e478b81",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "git archive TREE crates core/crates; python3 -B tools/production_loc.py --root ARCHIVE --json; exact identical product subtrees reuse comparison79 final counted snapshot for both parent/staged values",
+  "counted_snapshot_receipt": "../e04-writes-20261007/79-production-loc-comparison.json",
+  "production_before": 170068,
+  "production_after": 170068,
+  "delta": 0,
+  "core_before": 104651,
+  "core_after": 104651,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "active_core": 61486,
+  "excluded_predecessors": 40321,
+  "excluded_integration": 2844,
+  "excluded_unstaged_work": "Overlay capability worker edits and tests are not part of this specification commit",
+  "scope": "first-party product Rust/runtime SQL; tests/inline-test-only/examples/docs/tools/thirdparty/artifacts excluded"
+}

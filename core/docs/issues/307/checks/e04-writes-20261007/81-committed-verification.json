@@ -1,0 +1,21 @@
+{
+  "schema": "e04-committed-verification-v1",
+  "commit": "7409c2922b98aefb0adc589234015feeac592102",
+  "first_parent": "a08bbe39deb7d892a7a5a69b0daa001ab7e53774",
+  "tree": "5625a92c0a54cf4fe15396496514233cd95d866f",
+  "core_crates_tree": "2cccbfaff072a2f91ab70346083a011d2e478b81",
+  "exact_staged_product_tree_match": true,
+  "production_loc_before": 170041,
+  "production_loc_after": 170068,
+  "delta": 27,
+  "core_before": 104624,
+  "core_after": 104651,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "active_core_after": 61486,
+  "excluded_predecessors": 40321,
+  "excluded_integration": 2844,
+  "source": "79 exact snapshot counter plus committed subtree identity equality; no recount of different source scope",
+  "goal_status": "ACTIVE; S7/S9 incomplete; continuation into allocation capability refusal and native backing evidence",
+  "working_tree": "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n"
+}

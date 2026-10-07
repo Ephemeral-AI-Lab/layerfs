@@ -44,6 +44,33 @@ Clippy20, the 80-case validator and 13-case resource receipts remain immutable.
 
 ## Following independent work
 
+### Checkpoint 2: backing capability and original guest artifact
+
+Parent is local `7409c2922b98aefb0adc589234015feeac592102`. E04 receipts
+68/69/75 prove the selected host share's additive range-allocation failure.
+Do not execute that route again. Reuse the existing exact-range Allocation,
+one Overlay startup owner, safe locked nix filesystem observation, real native
+guest storage and existing E04 fixed workload/oracle. No fallback or new database.
+
+| Owner / exact file | Change and named exit |
+| --- | --- |
+| Overlay `src/database/startup.rs` | E2/E3: record actual Linux fstatfs attempt/type on the fresh owned descriptor; refuse evidenced magic 0x6a656a63 before Allocation/admit/SQLite |
+| Overlay `src/contract/error.rs` | E2: typed UnsupportedFilesystem carrying observed Linux magic; original probe error remains original Io |
+| Overlay `tests/startup_cost.rs` | E2: actual independently observed descriptor type on success/schema failure, no invented observation before create failure or on macOS |
+| Tentative new Overlay `tests/allocation_filesystem.rs` | E2: explicitly selected owned host-share refusal, create/probe once, zero SQL/allocation/open and retained empty artifact |
+| Daemon `examples/e2_writes/{driver,streams,outcomes}.rs` | External E2 harness: versioned startup capability observations while retaining exact original-operation behavior |
+| Existing harness `shared/evidence_jobs.py`, `tests/test_evidence_jobs.py` | External E2/E3 evidence: preserve v1 and add independently bound guest backing/mapping v2, original guest stat versus exported byte copy |
+| Tentative ignored E04 preparation/launch successor | Declare native guest backing before start, retain its actual filesystem/container/mount custody, no `/work` assumption for database argument |
+| Architecture 35/58, S6 reservation addendum, current reconciliation/audits | Root-owned docs: narrow filesystem refusal and exact proof/qualification scope; no universal qualification of other filesystems |
+
+The capability worker owns only Overlay's two source files and two external test
+files. Root owns serializers, harness/specification, documents and all execution.
+No allocation-algorithm change, lifecycle cap increase, new dependency, unsafe
+dependency patch, SQL schema change or S10 pipeline work is part of this package.
+The new mapping/startup evidence contract is committed before its harness work.
+
+### Subsequent priorities
+
 | Requirement | Next concrete work | Dependency retained |
 | --- | --- | --- |
 | E1 | Complete actual route/source/build/input/observer registration, numerical authorities/control formulas, schedules and feasible Q05 budget | No candidate sampling while required identities/metrics are unavailable |
