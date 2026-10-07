@@ -31,8 +31,17 @@ pub(crate) fn apply(
     create: bool,
     selected: SqlitePersistenceProfile,
     acquisition: crate::SqliteAcquisitionSchema,
+    private_init: bool,
     w: &RefCell<SqlWork>,
 ) -> Result<(), BackendError> {
+    if private_init && (!create || selected != SqlitePersistenceProfile::Disposable) {
+        return Err(BackendError::Integrity);
+    }
+    let journal = if private_init {
+        "memory"
+    } else {
+        selected.journal()
+    };
     if create {
         query::run(c, "PRAGMA page_size=4096", vec![], w)?;
         if acquisition == crate::SqliteAcquisitionSchema::Tables {
@@ -50,16 +59,11 @@ pub(crate) fn apply(
         }
     }
     if create {
-        let mode = query::run(
-            c,
-            &format!("PRAGMA journal_mode={}", selected.journal()),
-            vec![],
-            w,
-        )?
-        .first()
-        .ok_or(BackendError::Integrity)?
-        .get::<String>(0)?;
-        if mode != selected.journal() {
+        let mode = query::run(c, &format!("PRAGMA journal_mode={journal}"), vec![], w)?
+            .first()
+            .ok_or(BackendError::Integrity)?
+            .get::<String>(0)?;
+        if mode != journal {
             return Err(BackendError::Integrity);
         }
     }
@@ -80,7 +84,13 @@ pub(crate) fn apply(
 }
 pub(crate) fn check(p: &ConnectionProfile) -> Result<(), BackendError> {
     let selected = p.persistence;
-    if p.journal_mode != selected.journal()
+    let journal = if p.private_init {
+        "memory"
+    } else {
+        selected.journal()
+    };
+    if (p.private_init && selected != SqlitePersistenceProfile::Disposable)
+        || p.journal_mode != journal
         || p.synchronous != selected.synchronous()
         || p.foreign_keys != 1
         || p.fullfsync != selected.fullfsync()

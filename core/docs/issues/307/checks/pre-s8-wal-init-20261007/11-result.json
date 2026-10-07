@@ -1,0 +1,111 @@
+{
+  "case": "phase7-sqlite-disposable-init-1000-serverless-wal-v1",
+  "measured_source_commit": "c5fae7e3aa783dcdb1c09bf977c0395a5b066dd5",
+  "product_seal": "0b8a71227c14eb5d9946c8d9152585f3f6248536b20b680fc7d64d89e93a5f79",
+  "compilation_seal": "a32a3ed0a9e7d5e694d321f0667ea4e48a3147c5ed40f16dad38aa29b00820d2",
+  "dependency_seal": "06392f24ff430d8e772025ea1e9fb133f20398f1ed66d14b90ed9f5592e29874",
+  "comparison_ns": 198720291,
+  "command_wall_ns": 1478753125,
+  "command_budget_ns": 30000000000,
+  "verification_wall_ns": 673972125,
+  "verification_budget_ns": 19000000000,
+  "cache_status": "PASS",
+  "verification_status": "PASS",
+  "cleanup_status": "PASS",
+  "storage_bytes": 20574208,
+  "decision": {
+    "import_route": "memory-import-wal-seal-required",
+    "speed_formula": "10*candidate<=11*control",
+    "speed_gate": "FAIL",
+    "speed_operands_ns": [
+      198720291,
+      155291459
+    ],
+    "status": "DECIDED",
+    "storage_delta_bytes": -16384,
+    "storage_delta_percent": -0.07957032027053909,
+    "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+    "time_delta_ns": 43428832,
+    "time_delta_percent": 27.966014537863284
+  },
+  "control": {
+    "comparison_ns": 155291459,
+    "original_case": "phase7-sqlite-disposable-init-1000-incumbent-restored-v1",
+    "original_status": "COMPLETE",
+    "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-1000-incumbent-restored-v1/candidate/receipt.json",
+    "sha256": "eedfd8a8a45e8a59fdae59317cee05471f99e2e118b78ffd344ceb007c21e1a8",
+    "source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0",
+    "storage_bytes": 20590592
+  },
+  "fixture": {
+    "case": "namespace-1000-compact-v3",
+    "directories": 11,
+    "files": 1000,
+    "logical_bytes": 20000000,
+    "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/manifest.tsv",
+    "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+    "preparation_wall_ns": 40328750,
+    "profile": "core-sdk-init-fixture-v2",
+    "reused": true,
+    "route": "host-direct-sdk-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/payload"
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "06392f24ff430d8e772025ea1e9fb133f20398f1ed66d14b90ed9f5592e29874",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [
+      "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md"
+    ],
+    "harness_seal": "a27614a0eabb20e19f445cb63063b1b0bcecdab904bb936d7ddf768a6c376054",
+    "product_seal": "ac6a5733a101ea40b4f658d68da9ab24ddb4cf3812cdd00c1001f8c7bb4d802e",
+    "source_commit": "c5fae7e3aa783dcdb1c09bf977c0395a5b066dd5",
+    "source_dirty": true,
+    "source_tree": "ba306ece0fe5ae4929a0ff9ad65e50b8badc9132"
+  },
+  "build": {
+    "binaries": {
+      "benchmark_init": {
+        "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/4a6e7919a7a90ca2f33ec26eba835b51a549824f66901b7dc495b3ff7503d535/benchmark_init",
+        "sha256": "4a6e7919a7a90ca2f33ec26eba835b51a549824f66901b7dc495b3ff7503d535"
+      },
+      "verify_namespace": {
+        "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/dfd6a2eadc71d91f84261302af8761ab70458e1428c7b4b65588ddcff3d8762d/verify_namespace",
+        "sha256": "dfd6a2eadc71d91f84261302af8761ab70458e1428c7b4b65588ddcff3d8762d"
+      }
+    },
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "build",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--release",
+      "--locked",
+      "-p",
+      "layerfs-project",
+      "--example",
+      "benchmark_init",
+      "--example",
+      "verify_namespace"
+    ],
+    "cpu_ns": 75016708000,
+    "dependency_reuse": "worktree-local incremental target",
+    "exit_code": 0,
+    "peak_rss_bytes": 515538944,
+    "profile": "release/locked",
+    "reference_product_unmodified": false,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "status": "PASS",
+    "timed_out": false,
+    "wall_ns": 13745649500
+  },
+  "original_output": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/pre-s8-wal-init-20261007-v1",
+  "original_manifest_sha256": "7613172499958a0eff977b8929e9099816bb26105a2fdee6727157daedc0c5a6",
+  "retention": "One original closed Store is retained in its ignored owned output; no Store or binary is copied into Git. All raw textual outputs and receipt/manifest bytes are copied without rewriting."
+}

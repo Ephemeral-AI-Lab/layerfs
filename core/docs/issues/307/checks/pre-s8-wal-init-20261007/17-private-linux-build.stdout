@@ -1,0 +1,16 @@
+# {"timestamp": "2026-10-07T07:08:57.440061+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-private-init-build", "-e", "CARGO_HOME=/work/core/target/cluster2-linux-cargo", "-e", "CARGO_TARGET_DIR=/work/core/target/cluster2-linux", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; python3 -c 'import json,hashlib; m=json.load(open(\"core/docs/issues/307/checks/pre-s8-wal-init-20261007/16-private-source.json\")); bad=[p for p,h in m.items() if hashlib.sha256(open(p,\"rb\").read()).hexdigest()!=h]; print(\"container source hashes match:\",not bad); assert not bad,bad'; cargo test --manifest-path core/Cargo.toml --locked -p layerfs-persistence --test private_init --no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "128547d6ce22809bef53438f884ea21eee1476f058f29c86227b81e86516d2af", "source_parent": "c5fae7e3aa783dcdb1c09bf977c0395a5b066dd5", "wall_stop": "specified in command; build is not test execution"}
+container source hashes match: True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling libc v0.2.189
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 10.91s
+  Executable tests/private_init.rs (core/target/cluster2-linux/debug/deps/private_init-d4f436b876d81455)
+
+# exit=0

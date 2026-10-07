@@ -165,7 +165,8 @@ an existing file; use `open_writable` or `open_read_only` for an existing Store.
 
 | API | Arguments / result | Important requirement |
 | --- | --- | --- |
-| `Handles::create` | `PersistenceConfig`, `StoragePolicy`, `&HistoryCatalogConfig` → `Result<Handles, PersistenceError>` | Fresh path; valid policy and authority config |
+| `Handles::create` | `PersistenceConfig`, `StoragePolicy`, `&HistoryCatalogConfig` → `Result<Handles, PersistenceError>` | Fresh shared WAL Store; valid policy and authority config |
+| `Handles::create_for_init` | Same inputs/result | Explicit private host acquisition; Disposable is MEMORY/OFF until seal, Durable stays WAL/FULL |
 | `Handles::open_writable` | config, binding bytes, cursor key `[u8;32]` → handles | Existing supported Store; matching authority and selected profile |
 | `Handles::open_read_only` | Same open arguments | Mutations explicitly refused |
 | `Storage::new` | `Arc<dyn PackPersistence>` → `StorageResult<Storage>` | Reads and validates persisted policy |
@@ -669,7 +670,7 @@ Source: [Save lifecycle](core/crates/layerfs-storage/src/save/operation.rs),
 
 Source update after `727476a4d`, 2026-10-07: Persistence now opens on macOS and
 Linux, using system SQLite on macOS and the existing bundled dependency on Linux.
-Both profiles create WAL Stores. Open verifies WAL without setting/converting
+Normal shared creation uses WAL for both profiles. Open verifies WAL without setting/converting
 journal mode; old memory-journal Disposable Stores must be regenerated. Profile
 identities are `sqlite-wal-full-v2` and `sqlite-wal-off-v2`. Mixed profile selection
 on a shared WAL file is a provisioning fact and cannot be detected at open.
@@ -690,6 +691,18 @@ owner-approved macOS file-control wrapper disables and verifies persistent WAL
 before checkpoint; no sidecar is manually deleted. A retained provider refuses
 before checkpoint. Provisioning excludes new openers through handoff. The result
 records path, profile, SQLite version and closed-file bytes.
+
+After the one owner-directed WAL Init measurement at `c5fae7e3a` missed its
+speed comparison, explicit `Handles::create_for_init` builds Disposable input
+privately under MEMORY/OFF. Its profile is `sqlite-private-init-memory-off-v1`
+and `private_init=true`; it has no crash-survival guarantee and is refused by
+normal opens. Sole-owner seal explicitly changes that fresh private build to WAL,
+verifies the mode, then checkpoints/closes as above. This creation-only transition
+is not migration of an existing shared Store. Durable Init remains WAL/FULL.
+An incomplete private file is retained on failure and has no automatic resume
+or promotion. The [decision and evidence](core/docs/issues/307/PRE-S8-INIT-WAL-RESULT-20261007.md)
+retain the failed WAL sample; the selected memory route has functional proof,
+not a new timing result.
 
 Host Init alone uses acquisition tables and bounded incremental reclamation.
 New acquisition Stores select incremental auto-vacuum; existing mode0 Stores

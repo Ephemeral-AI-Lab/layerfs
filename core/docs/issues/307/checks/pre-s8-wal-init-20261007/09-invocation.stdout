@@ -1,0 +1,4 @@
+# {"timestamp": "2026-10-07T06:57:29.926954+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "core/benchmark/fs-bench-pro/runner.py", "run", "--case", "phase7-sqlite-disposable-init-1000-serverless-wal-v1", "--arm", "candidate", "--out", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/pre-s8-wal-init-20261007-v1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "c5fae7e3aa783dcdb1c09bf977c0395a5b066dd5", "wall_stop": "specified in command; build is not test execution"}
+/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/pre-s8-wal-init-20261007-v1
+
+# exit=0

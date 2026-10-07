@@ -1,0 +1,8 @@
+{
+  "core/crates/layerfs-persistence/src/store/open.rs": "80a68290e3127cf97b37d5a38e9fb4d1d2a8772a1b050dfc2a0faedff3f07c70",
+  "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs": "c39451de5c2d9e00b2a0e59a0687c5024a952e83a82c348d9a0866f90fd14100",
+  "core/crates/layerfs-persistence/src/backend/sqlite/profile.rs": "7b756ea39a58ad28b7ab6c064b098398f99063e5578ad351aec35de733f7314e",
+  "core/crates/layerfs-persistence/src/backend/sqlite/seal.rs": "8772442c4c69e740c5309ff878e17869e5926d09c61670a9d73598ba6a982f67",
+  "core/crates/layerfs-persistence/tests/private_init.rs": "78ef494fa2578a32b947351fbab32bd1364ace5032602af3e931141e3750de13",
+  "core/crates/layerfs-project/tests/init_sqlite.rs": "2ccadc6a746076ebc4f6f085659a1d8917cb9ae7eaea7dcc121e5505c1cdc97a"
+}

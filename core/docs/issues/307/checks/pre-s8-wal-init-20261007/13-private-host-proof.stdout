@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T07:05:30.587730+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/private_init-c524a20d08ff0911", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/private_init-c524a20d08ff0911": "2293ce7baf0c44c33c8fcf41768e86735c748745f9f0547b5b74f6ff58067d61"}, "source_diff_sha256": "128547d6ce22809bef53438f884ea21eee1476f058f29c86227b81e86516d2af", "source_parent": "c5fae7e3aa783dcdb1c09bf977c0395a5b066dd5", "wall_stop": "specified in command; build is not test execution"}
+
+running 3 tests
+test dropping_private_init_never_promotes_the_file ... ok
+test private_content_and_history_become_a_single_shared_wal_file_only_at_seal ... ok
+test retained_provider_refuses_before_private_conversion_and_keeps_its_session ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+# exit=0
