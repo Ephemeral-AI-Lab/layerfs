@@ -71,6 +71,28 @@ No allocation-algorithm change, lifecycle cap increase, new dependency, unsafe
 dependency patch, SQL schema change or S10 pipeline work is part of this package.
 The new mapping/startup evidence contract is committed before its harness work.
 
+### Checkpoint 3: explicit original disposal and logical bind witnesses
+
+Reuse Supervisor's existing explicit fence/application-control pattern, original
+Binding Message/Delivery, Upstream fence/join, finite raw control I/O and the
+same independent E04 oracle. The prospective
+[disposal v3 contract](../../../../docs/roadmap/0.1/0.1.7/cluster-two-e04-disposal-v3.md)
+is committed before authoring this correction. No product/Bridge error is relaxed.
+
+| Owner / exact files | Change and named exit |
+| --- | --- |
+| Host worker: existing Daemon `examples/e2_writes/{host,host_fence}.rs`; tentative shared `examples/e2_writes/control.rs` | External E2/R1 prerequisite: exact received/delivered final Binding, one explicit host fence, real joins/release before acknowledgment; bounded original control publication/read |
+| Consumer/validator worker: `examples/e2_writes/{driver,oracle,streams,outcomes,fixture}.rs`, `examples/{e2_writes,e2_writes_host}.rs`; harness `shared/{evidence_jobs,evidence_backing}.py`, `tests/{test_evidence_jobs,test_evidence_backing}.py` | External E2: retain original final Message identity, coordinate after actual Close/Gone, require own later native fence; new versioned fields/argv and logical input/mount proof, preserve v1/v2 |
+| Vehicle worker: ignored `core/target/cluster2-307/{run_e04_owner_diagnostic,e04_native_backing_observation}.py` | External E2/E3: pre-host control seal, explicit actual bind/input/probe witnesses, preserve verified inspect state beside later evidence refusal |
+| Root: specification, architecture58, reports/reconciliation/audits/check receipts | Source/build/test/fixture/profile/custody identities and exact original success/failure scope |
+
+Workers coordinate the shared control interface before edits and own disjoint
+files. Tests remain outside src; tentative new control tests may be placed under
+Daemon tests only with a real public/external vehicle scope. No new product API,
+additional constructor, database, allocation window or S10 pipeline is proposed.
+After this E04 correction, the separate per-job family/capacity ownership change
+must receive its own deepest-file plan and exact unchanged-capacity proof.
+
 ### Subsequent priorities
 
 | Requirement | Next concrete work | Dependency retained |

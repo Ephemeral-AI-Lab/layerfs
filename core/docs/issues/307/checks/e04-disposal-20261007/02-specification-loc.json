@@ -1,0 +1,20 @@
+{
+  "schema": "exact-unchanged-product-tree-loc-v1",
+  "parent": "7b1b3490b10c6c8d66feb654a909718d4bacd194",
+  "staged_tree_before_receipt": "d84c52c59c2b82a1523f46e3b3dc3822c977159d",
+  "parent_and_staged_core_crates_tree": "e6a05d40a420d3bfe4b8a06389a9c7c68b10579d",
+  "parent_and_staged_reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "production_before": 170108,
+  "production_after": 170108,
+  "delta": 0,
+  "core_before_after": 104691,
+  "reference_before_after": 65417,
+  "active_core_before_after": 61526,
+  "excluded_predecessors_before_after": 40321,
+  "excluded_integration_before_after": 2844,
+  "content_before_after": 18613,
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "exact identical parent/staged product trees reuse counted native checkpoint43 snapshots with the same counter/scope; docs, whitespace and post-commit evidence only",
+  "counted_receipt": "../e04-native-backing-20261007/43-production-loc-comparison.json",
+  "staged_whitespace": "PASS"
+}
