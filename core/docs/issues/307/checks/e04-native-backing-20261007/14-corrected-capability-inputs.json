@@ -1,0 +1,324 @@
+{
+  "schema": "s7-filesystem-refusal-build-inputs-v1",
+  "head": "2df73fd79cb82bb6bbc0357ea8bcf4a6d03d1e50",
+  "files": [
+    {
+      "path": ".cargo/config.toml",
+      "sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+    },
+    {
+      "path": "core/Cargo.lock",
+      "sha256": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c"
+    },
+    {
+      "path": "core/Cargo.toml",
+      "sha256": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/Cargo.toml",
+      "sha256": "19cae3ad618c3c3e66c54b2944c52f756f5e4eb59f3cc3a1e6f62742296461ab"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/sql/accounting.sql",
+      "sha256": "d6220d6df9879ca1359a635aadeb13727ae65709e047426257184d6d382429be"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/sql/schema.sql",
+      "sha256": "0ba87529dff11d327167b62bbe3f8c2d89814f7ea9e5b729f6fa0f99ee9ebf58"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/contract/custody.rs",
+      "sha256": "cf8ce58644f847fdf45e14e30208d7ba2d2ca98c0779daa2c2334744070190ca"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/contract/error.rs",
+      "sha256": "f94b2f281f82632143b39e81fb872689f7664fea3ee59af14c747c3ce8bd4650"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/contract/indexed_scratch.rs",
+      "sha256": "6cc88c967c8da9ddc1de78a17166a11ff6a0268931a8039e5d503f8e13df9b22"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/contract/mod.rs",
+      "sha256": "37bcf38645c6c55d821b23fbdf0694ae83cbd28571c132adebb2a79b987115f5"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/contract/types.rs",
+      "sha256": "16f3007ea25d758962fcc30729609dbf316d0d76496c222e67ff6adef1b771bf"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/accounting.rs",
+      "sha256": "7b0ce097b8613d8ee8d18aae3fa1b4e9f4b91c77e0f200ffedfc94608736f2ea"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/allocation.rs",
+      "sha256": "c81ab35bcb9aeaba1725747a4385c5faa56144dad75394e5750d60b646f54f7e"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/connection.rs",
+      "sha256": "f28fbd904a720b0cfa1f55806e9e7682c3311e70fe724e677931f97a7905a253"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/mod.rs",
+      "sha256": "15961d35273fa5d42a677a85ff41319befbea89dfbf09de02d2ca5bfd207f06f"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/profile.rs",
+      "sha256": "c65f5c3132314a2fb5f782c1473e6adeacc5c70e320511cf76165f9656c28dab"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/startup.rs",
+      "sha256": "a2d3e6192d697b3006c39e67ef1c4ad18f1dd27ad199e1bc2f5766a679b9ff63"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/statements.rs",
+      "sha256": "cdf1f643768a4b944aa19792842c1f0ce33952d0e9570ec2c94015271bae5362"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/access_plan.rs",
+      "sha256": "c1262956ee91afb214e8a75b7918f2c0c815a34ac5e077bb7738a65662b0d971"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/captured_runs.rs",
+      "sha256": "dd15fbabeaa636d4dc7562f9ef3f204b27a35b90c6645a90ce27438fa75dc5dc"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/indexed_scratch_plan.rs",
+      "sha256": "09083ad2d8632dddf3cdceb78845cc726f3b53b9f548310c2c4861ad82cee434"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/lifetime_plan.rs",
+      "sha256": "68f1c0691a18a445d3b81a359e6dd8f0d47c663a74f907c9251a2e7767b1fd95"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/metrics.rs",
+      "sha256": "036c4b4886758f062e61cb476a0d6a0ae656d766ac43fa7a0d52d6d094cd0a46"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/mod.rs",
+      "sha256": "bdbb9709ad02554f5c8650d1eaf0ef72d13c561a440844be673238ec38b0675a"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/payload.rs",
+      "sha256": "beb02852b27dea08e96a06aa178141970c8bb7284ece02c9ba2c4871bcfb6c54"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/source_plan.rs",
+      "sha256": "9223077ca241ec430b637d79fbe39691192b40dd2a7625e3bd763901fc38c26c"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/startup.rs",
+      "sha256": "5e1f32b4e6502567075c506e6579055299f130ec676f4bdfa8212a1dec01b279"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lib.rs",
+      "sha256": "bd321f5d03de152971a2622c51225bb56259834d2e61de7c8426a56a075320b2"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/captured_reader.rs",
+      "sha256": "2f34d11a1fa64fedf1cfc10ac2167e54ab13834269fa5cf0e295f0fcbd2296ae"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/close.rs",
+      "sha256": "2d3d9b8aead3a77b7ea96480410fc9d5ea60eff882d7849e134fb562363c4323"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/composition.rs",
+      "sha256": "9de6c43214cdd3616d446eea39a64c33665ca467267bbdfbbcc6d5848fe91954"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/file_owners.rs",
+      "sha256": "609bdc4b3fe34e1d1713bae6188268ef42ed7ce4debf1e23e6b1bf4c58fbf4ad"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/frontier.rs",
+      "sha256": "826cb19ef6c3936b3e0edbb50a663b832786766711fb8c2d12b396d9488f9c4e"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/generation.rs",
+      "sha256": "7469023eb24e9145741266ed110395e0dafdf25db22be11becf20d86e963ab61"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/indexed_scratch.rs",
+      "sha256": "d0b69e9c01426fea93d529e15eb5832bece42dc19755c807a194929254a7c87a"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/lookup.rs",
+      "sha256": "adabea44eb2c347802fb1924efcb4c79e8b70dbe62e6951dcb9405fd580cf353"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/mod.rs",
+      "sha256": "834aa20ae0181382489c8f2ebc712a68c8d0c800c4c16f77b1a1ea6244ebdb0b"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/operation.rs",
+      "sha256": "8001ce99237c1afb51b42996e39b94e87304ff63524d88130f38543dc56ad22d"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/orphan.rs",
+      "sha256": "b4ab9d239ae88540b758b615e877733bb7101e4f47b790041f086e75b3c3ebf6"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/scratch.rs",
+      "sha256": "c83e6cca736ccfdd09f1faef33c8efa9cd6142b91f2564d9b620f3bddeaf8a4f"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/source.rs",
+      "sha256": "19814364581ac5435a87a0bba318cc942099aa9ca57772814f37f4d59889ed39"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/workspace.rs",
+      "sha256": "ad7b10169c5e404b5cd0220e7e010218f518c677d79e5dbea2a795d11411130b"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/garbage.rs",
+      "sha256": "decb44ecceb01be8ed206a52eb00c1531ca8e44456fb019192bddac0dd75ee4c"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/indexed_scratch.rs",
+      "sha256": "c6b869d90192cbfb656aa0c5ae1837327583b0bf515db1d4b989177364369e7e"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/mod.rs",
+      "sha256": "6f930b350d529fdfa2ef8a6ac66a8e53ce80187b4b2dbf3e64f51af03795ae1b"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/orphan.rs",
+      "sha256": "d00a152ada47ff13d43ea6e6459407d22ce283e79f5f17d73f3af16cad9f4eb8"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/ready.rs",
+      "sha256": "937e69d089d460b55a092d9f6be59b9284b611e332cf6b15f4d7f4b66167794a"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/reclaim.rs",
+      "sha256": "acead0411f52ccf1fc0bbf327483f3cc5a135d051380ae50ed25f7660d158f96"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/source_wait.rs",
+      "sha256": "8f99ed1f3f32e972790b5d481a6963a073977485e8a414b3a14a30db3574e973"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/namespace/compound.rs",
+      "sha256": "19751aa520d4f4a0987dec8cbe5beb021564e958a1a05cf221083ba326c497d0"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/namespace/inode.rs",
+      "sha256": "02ae5ed3a775b4fbf208411ac1466606ea8cbbde0e7a55e6c0fe7e58c0aedde5"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/namespace/mod.rs",
+      "sha256": "917d093d945f726a31d983bbd3f1cac2e2a13d3f2e15d08e3d5f0bcb02c9be74"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/namespace/names.rs",
+      "sha256": "9a733d6ee4c0bfac4a18fd6c1f627e31a13263def37b25e86840613593a5abad"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/payload/access.rs",
+      "sha256": "e52c7c59b8c2bfee3a0d372810c0e20da4be2ffbf23a70499076c0b5138c14e5"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/payload/captured_runs.rs",
+      "sha256": "f5ceb9bf401669973b9c5fd5b770f883cf4fa7ecd82d7c2e39bed88bf1f082c0"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/payload/captured_types.rs",
+      "sha256": "af39103a6616a8020ac020e51262d7ca59b6c5cd4e60970b8707c627815d4699"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/payload/cells.rs",
+      "sha256": "5900ba3db198924f84c54c3449411f4d4ffd0181b1a4d0ae619d60e1ce388d66"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/payload/layers.rs",
+      "sha256": "c70d5bc45a34963abd5ca248128c85b173153d0336ba8f39a588c5305f28cf13"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/payload/mod.rs",
+      "sha256": "b16023a27a653c33cf3ca58ea5d2bc03a575de83840ef662d25bf0e7d91b71ca"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/payload/stream.rs",
+      "sha256": "60761556b4f369b6e4076b912d2da96ccd59119499c065c1baf12d9e69bdc97e"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/allocation_filesystem.rs",
+      "sha256": "bd44e46d55544c03242ce91ca4b07f3c6504e312e9e6ce62b768e89b65f63a52"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/captured_runs.rs",
+      "sha256": "36b714460620d027bf6115a5eba5495dd01178cde1adcbd13c714864f59e9a58"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/compound.rs",
+      "sha256": "b3a027246cb6cc88754e3045db136b96fd28dddc7c3d17708ca257542afa0be8"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/costs.rs",
+      "sha256": "4df6aa9e4eb1ba0bebfe17c8ae1ef749330eef577c0df6dad8da8fa6b00a6ffb"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/device_capacity.rs",
+      "sha256": "c5c282654ea79daad0ee9d7f6cf7f361152a694b9037f3092df3ba721470f810"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/device_fixture.sh",
+      "sha256": "3a73931150d7664e9179bb0f78e90c70ee2de7ac57a911d9d5bd4268d230528c"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/engine.rs",
+      "sha256": "8a46bc22b6e73942897cec45785061fe1d686cfce81dc318233643b7899f094c"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/frontier.rs",
+      "sha256": "5eb15a76eb35eff67b33aa2199c1c13995bdfc912fd2e152cd81c968a21ec7a3"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/indexed_scratch.rs",
+      "sha256": "dc78008df3f1167870f1f6115750899367ac1bf20340ef28e5967cc7443325fc"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/indexed_scratch_cursor.rs",
+      "sha256": "2efffbc04cef789f1a115412423228c27357144810dd22810b362ac612430d87"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/lifetimes.rs",
+      "sha256": "9346c3fd76df074ce0a0f107ef8f5e15bd904b934d186038f6f7d5d43896d164"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/orphans.rs",
+      "sha256": "9c21823257de11cb2c2e60b9851857fdced46904f4c81cf0d83bfbcb23c93946"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/payload.rs",
+      "sha256": "1a4bf7f46d91f42632447b8f317e12cb2abecacbcb0ca4e775905e87a97c9ca3"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/payload_fragmentation.rs",
+      "sha256": "9523e0204ca462e30a5b244776aef6938969e182c610e4fabdbe73dc7db2a8f0"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/payload_support/mod.rs",
+      "sha256": "f706313342a2a93e0a12f55ea49e4f0835dd2172cea7f89575bd9f9afa09a570"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/resources.rs",
+      "sha256": "3eaed0b6ac265d45204d81fd811c7256776cb6c85bc5c8c59cb7fe3c1bbd7df8"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/source.rs",
+      "sha256": "00777c6868ccf0ebdbec5bfb5d18d3dd5304823c5a56cb1d8f6776ebb8d2c68d"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/tests/startup_cost.rs",
+      "sha256": "d072015946d0ff24ca6ad60e3c1342924fe99939fb5e927a787abb55d2c5cc8d"
+    }
+  ],
+  "profile": "locked test, build-first; ARM64 cfg via repository config; constructors1",
+  "mode": "functional",
+  "cache": "uncontrolled",
+  "qualification_status": "NOT_EVALUATED",
+  "prior_failed_guard": "11-linux-host-share-refusal.json",
+  "cause": "13-new-descriptor-filesystem-diagnosis.json"
+}

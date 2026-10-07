@@ -1,0 +1,16 @@
+{
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-c",
+    "from shared import evidence_jobs as j; import json; x=j.validate(\"core/target/cluster2-307/e04-native-disposable-20261007/consumer-output\"); print(json.dumps(x,indent=2)); raise SystemExit(bool(x[\"errors\"]))"
+  ],
+  "wall_timeout_s": 9,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 127819292,
+  "kind": "retained-data-validation",
+  "workers": 1
+}

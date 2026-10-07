@@ -1,0 +1,35 @@
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon/examples/e2_writes/driver.rs:456:
+         },
+     )?;
+     for (name, count) in [
+-        ("filesystem_open_calls", started.startup.filesystem_open_calls),
++        (
++            "filesystem_open_calls",
++            started.startup.filesystem_open_calls,
++        ),
+         (
+             "filesystem_identity_calls",
+             started.startup.filesystem_identity_calls,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay/src/database/startup.rs:88:
+                 || original.dev() != reopened.dev()
+                 || original.ino() != reopened.ino()
+             {
+-                return Err(crate::OverlayError::Invalid("filesystem probe file identity"));
++                return Err(crate::OverlayError::Invalid(
++                    "filesystem probe file identity",
++                ));
+             }
+             work.filesystem_probe_calls = 1;
+             let filesystem = nix::sys::statfs::fstatfs(&probe)
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay/tests/allocation_filesystem.rs:48:
+     let at_path = std::fs::symlink_metadata(&path).unwrap();
+     assert!(metadata.is_file());
+     assert!(at_path.is_file());
+-    assert_eq!((metadata.dev(), metadata.ino()), (at_path.dev(), at_path.ino()));
++    assert_eq!(
++        (metadata.dev(), metadata.ino()),
++        (at_path.dev(), at_path.ino())
++    );
+     assert_eq!(metadata.nlink(), 1);
+     assert_eq!(metadata.mode() & 0o777, 0o600);
+     assert_eq!(metadata.len(), 0);

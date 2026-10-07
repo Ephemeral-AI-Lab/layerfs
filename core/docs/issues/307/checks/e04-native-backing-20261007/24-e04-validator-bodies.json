@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/benchmark/fs-bench-pro/tests",
+    "-p",
+    "test_evidence_jobs.py"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 23896988333,
+  "kind": "harness-test",
+  "workers": 1
+}

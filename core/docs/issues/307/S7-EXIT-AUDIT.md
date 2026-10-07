@@ -420,3 +420,18 @@ E1–E4 and the exact S8 native residual remain open; no numerical gate, kernel
 ownership, calibrated resource or sustained service result follows. S7 stays
 unchecked. The next selected correction refuses the evidenced incompatible
 backing before bulk reservation and registers the authentic guest backing.
+
+
+## Native E04 backing continuation (2026-10-07)
+
+[The native backing report](E04-NATIVE-BACKING-20261007.md) retains the corrected
+Linux compatibility refusal and a real source-removed macOS-host/ext4-consumer
+attempt. The consumer completed1000 writes, full16MiB oracle, automatic Gone,
+native join and Stop, but the whole diagnostic FAILED at the original host
+EOF+NotConnected close and a secondary Docker bind-source observation refusal.
+The original input/output custody, raw artifacts, failed initial guard and
+source/build identities remain retained; no historical failure is promoted.
+E1 remains0/NOT_RUN, whole accounting/resource/service qualification remains
+INCOMPLETE, S7/S9 remain unchecked and E05 remains NOT_RUN. The next named E2/R1
+prerequisite is coordinated explicit application disposal and original logical
+bind/input witnesses; S8 native ownership and full S10 composition stay separate.

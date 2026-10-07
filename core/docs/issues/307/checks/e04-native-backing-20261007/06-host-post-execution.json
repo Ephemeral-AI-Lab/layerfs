@@ -1,0 +1,9 @@
+{
+  "binaries_unchanged": true,
+  "source_unchanged": true,
+  "binary_count": 18,
+  "passed": 61,
+  "ignored": 0,
+  "scope": "macOS Overlay public component tests; Linux filesystem refusal is not executed on macOS",
+  "qualification_status": "NOT_EVALUATED"
+}

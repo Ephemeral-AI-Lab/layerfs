@@ -126,6 +126,7 @@ fn run(state: &mut Failure, input: &Input) -> Result<()> {
         out.raw(",\"clock\":\"process-local-Instant-elapsed\",\"configuration\":")?;
         observed::configuration(&mut out, ProfileConfig::default(), OwnerConfig::default())?;
         observed::startup(&mut out, &started)?;
+        startup_filesystem(&mut out, &started)?;
         out.raw("}")?;
         r.append("startup", out.finish()?)
     })();
@@ -442,6 +443,60 @@ fn run(state: &mut Failure, input: &Input) -> Result<()> {
     finish(&mut recorder.borrow_mut(), "RECORDED", None)?;
     Ok(())
 }
+// E04 v2 extends the actual retained startup receipt. The shared E01 v1
+// serializer deliberately keeps its original field inventory and scope.
+fn startup_filesystem(out: &mut Json, started: &OwnerStart) -> io::Result<()> {
+    out.raw(",\"filesystem\":{\"scope\":\"verified-reopened-file-descriptor-before-reservation-and-sqlite\",")?;
+    out.text(
+        "status",
+        if started.creation_reported && started.startup.linux_filesystem_type.is_some() {
+            "OBSERVED"
+        } else {
+            "UNAVAILABLE"
+        },
+    )?;
+    for (name, count) in [
+        (
+            "filesystem_open_calls",
+            started.startup.filesystem_open_calls,
+        ),
+        (
+            "filesystem_identity_calls",
+            started.startup.filesystem_identity_calls,
+        ),
+        (
+            "filesystem_probe_calls",
+            started.startup.filesystem_probe_calls,
+        ),
+    ] {
+        out.raw(",")?;
+        out.string(name)?;
+        out.raw(":")?;
+        if started.creation_reported {
+            out.raw(&count.to_string())?;
+        } else {
+            out.raw("null")?;
+        }
+    }
+    out.raw(",\"linux_filesystem_type\":")?;
+    match started.startup.linux_filesystem_type {
+        Some(magic) if started.creation_reported => out.raw(&magic.to_string())?,
+        _ => out.raw("null")?,
+    }
+    out.raw(",\"original_refusal\":")?;
+    match &started.result {
+        Err(layerfs_daemon::OwnerError::Overlay(
+            layerfs_overlay::OverlayError::UnsupportedFilesystem { linux_magic },
+        )) => {
+            out.raw("{\"kind\":\"UnsupportedFilesystem\",")?;
+            out.field("linux_magic", linux_magic)?;
+            out.raw("}")?;
+        }
+        _ => out.raw("null")?,
+    }
+    out.raw("}")
+}
+
 fn write(state: &mut Failure, index: u64) -> Result<()> {
     let recorder = state.recorder.as_ref().expect("recorder").clone();
     let opened = recorder.borrow().at();

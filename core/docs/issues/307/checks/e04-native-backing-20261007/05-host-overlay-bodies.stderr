@@ -1,0 +1,24 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (core/target/cluster2-307/debug/deps/layerfs_overlay-7af2ec524cfae021)
+     Running tests/allocation_filesystem.rs (core/target/cluster2-307/debug/deps/allocation_filesystem-7f712b3a4f888869)
+     Running tests/captured_runs.rs (core/target/cluster2-307/debug/deps/captured_runs-8a277034d9ba40d7)
+     Running tests/compound.rs (core/target/cluster2-307/debug/deps/compound-f27037c54631a7cf)
+     Running tests/costs.rs (core/target/cluster2-307/debug/deps/costs-f1b14bc809c7fae2)
+     Running tests/device_capacity.rs (core/target/cluster2-307/debug/deps/device_capacity-9fc393ba6f0e8794)
+     Running tests/engine.rs (core/target/cluster2-307/debug/deps/engine-b4fac0808988bc6c)
+     Running tests/frontier.rs (core/target/cluster2-307/debug/deps/frontier-0725703cc71f2a91)
+     Running tests/indexed_scratch.rs (core/target/cluster2-307/debug/deps/indexed_scratch-3741e5e80638b314)
+     Running tests/indexed_scratch_cursor.rs (core/target/cluster2-307/debug/deps/indexed_scratch_cursor-7b76c01519264b3e)
+     Running tests/lifetimes.rs (core/target/cluster2-307/debug/deps/lifetimes-9bdeccb2fc8d6202)
+     Running tests/orphans.rs (core/target/cluster2-307/debug/deps/orphans-7a988e93ca86f715)
+     Running tests/payload.rs (core/target/cluster2-307/debug/deps/payload-68ae5eb9eeaeeafc)
+     Running tests/payload_fragmentation.rs (core/target/cluster2-307/debug/deps/payload_fragmentation-3cfdcf30996bed04)
+     Running tests/resources.rs (core/target/cluster2-307/debug/deps/resources-85eaf02848d9fc65)
+     Running tests/source.rs (core/target/cluster2-307/debug/deps/source-bbe134429b700afa)
+     Running tests/startup_cost.rs (core/target/cluster2-307/debug/deps/startup_cost-edd0e558182d3325)
+     Running unittests examples/indexed_scratch_profile.rs (core/target/cluster2-307/debug/examples/indexed_scratch_profile-002c9e2a10a95c29)

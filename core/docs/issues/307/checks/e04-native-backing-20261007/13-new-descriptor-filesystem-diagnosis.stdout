@@ -1,0 +1,32 @@
+[
+  {
+    "label": "original-create",
+    "result": 0,
+    "errno": 0,
+    "magic": "0x65735546",
+    "device": 41,
+    "inode": 660728,
+    "size": 0,
+    "allocated": 0
+  },
+  {
+    "label": "reopened-read",
+    "result": 0,
+    "errno": 0,
+    "magic": "0x6a656a63",
+    "device": 41,
+    "inode": 660728,
+    "size": 0,
+    "allocated": 0
+  },
+  {
+    "label": "reopened-write",
+    "result": 0,
+    "errno": 0,
+    "magic": "0x6a656a63",
+    "device": 41,
+    "inode": 660728,
+    "size": 0,
+    "allocated": 0
+  }
+]

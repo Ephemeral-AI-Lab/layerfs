@@ -215,7 +215,7 @@ impl Recorder {
         index: u64,
         record_id: &str,
     ) -> io::Result<()> {
-        out.raw("{\"schema\":\"cluster-two-job-receipts-v1\",\"case\":\"E04-write-16m\",\"mode\":\"diagnostic\",\"sample_count\":0,\"admission_eligible\":false,\"qualification_status\":\"NOT_EVALUATED\",\"global_persistence\":")?;
+        out.raw("{\"schema\":\"cluster-two-job-receipts-v2\",\"case\":\"E04-write-16m\",\"mode\":\"diagnostic\",\"sample_count\":0,\"admission_eligible\":false,\"qualification_status\":\"NOT_EVALUATED\",\"global_persistence\":")?;
         match self.global_profile {
             Some(profile) => out.string(profile)?,
             None => out.raw("null")?,

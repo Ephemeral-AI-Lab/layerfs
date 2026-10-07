@@ -1,0 +1,32 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-e04-native-host-share-refusal-20261007",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-e",
+    "LAYERFS_PROOF_UNSUPPORTED_ROOT=/work/core/target/cluster2-307/e04-unsupported-filesystem-proof-20261007",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "timeout",
+    "--kill-after=1s",
+    "9s",
+    "/work/core/target/cluster2-linux/debug/deps/allocation_filesystem-19d3025dd766ac5a",
+    "incompatible_host_share_refuses_before_allocation_and_retains_empty_artifact",
+    "--ignored",
+    "--exact",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 393912416,
+  "kind": "functional-proof",
+  "workers": 1
+}

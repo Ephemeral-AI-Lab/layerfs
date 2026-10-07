@@ -1,0 +1,18 @@
+{
+  "schema": "e04-post-exit-original-binary-retention-v1",
+  "copies": [
+    {
+      "original_path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "retained_path": "core/target/cluster2-307/e04-native-disposable-20261007/retained-binaries/host",
+      "sha256": "e310be3a71b4117fa369a4cc377c0d62844ccdf382d9432780877c4640db998c",
+      "bytes": 15843568
+    },
+    {
+      "original_path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "retained_path": "core/target/cluster2-307/e04-native-disposable-20261007/retained-binaries/consumer",
+      "sha256": "31a04d50e19e7d09dacc1ea452662dbd7f416af4804715d9a48887c5a920c2f9",
+      "bytes": 72502680
+    }
+  ],
+  "scope": "post-exit byte copies match original pre-build/collector identities; no historical binary recreated"
+}

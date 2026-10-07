@@ -14,6 +14,28 @@ allocation. It conservatively discards credit on a length/block decrease. Alloca
 block totals do not establish range position. No zero-fill fallback, retry, sync,
 VACUUM, shrink or second database is introduced.
 
+The S7 E04 continuation adds a narrow Linux startup compatibility refusal.
+After creating the fresh owned descriptor, Linux startup unconditionally opens
+the same path read-only with O_NOFOLLOW. Both descriptors must identify the same
+regular file with one link. One safe `fstatfs` observation on the verified reopened
+descriptor precedes the allocation owner, bulk reservation and SQLite open.
+The original create descriptor on this host share reports generic FUSE instead
+of the facade filesystem; its insufficient first guard is retained as failed
+receipt 11 in `checks/e04-native-backing-20261007`. The same-inode read-only
+reopen is a selected startup step, not a retry or fallback after allocation. Observed filesystem magic `0x6a656a63` is refused as
+`UnsupportedFilesystem { linux_magic }`. On the actual Docker `fakeowner` host
+share, two successful identical KEEP_SIZE requests each added allocation; three
+failed E04 runs and the small independent primitive diagnostic are retained in
+[the E04 checkpoint](../issues/307/E04-ORIGINAL-RECEIPTS-20261007.md). The created
+empty artifact and original probe/refusal remain in caller custody. A failed
+probe returns its original I/O cause. No retry or alternate backing is selected.
+
+This refusal does not qualify every other filesystem. Guest overlayfs has only
+the separately scoped two-call idempotence observation; full-device qualification
+remains ext4. The exact Linux range primitive and 128/256 MiB resource windows
+are unchanged. `CreationWork` reports the actual reopen, identity-read and probe attempts
+and returned Linux type; macOS and pre-probe failures contain no invented Linux observation.
+
 Ordinary jobs require 128 MiB growth plus 128 MiB cleanup capacity. Lifecycle,
 reply release, capture, known install, definite failure and maintenance use the
 128 MiB cleanup class. This costs 256 MiB once per daemon at startup, plus SQL

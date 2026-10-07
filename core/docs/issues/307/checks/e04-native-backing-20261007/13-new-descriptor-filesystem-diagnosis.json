@@ -1,0 +1,23 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-e04-new-descriptor-cause-20261007",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-B",
+    "/work/core/target/cluster2-307/probe_e04_fresh_descriptor.py"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 390281458,
+  "kind": "finite-cause",
+  "workers": 1
+}

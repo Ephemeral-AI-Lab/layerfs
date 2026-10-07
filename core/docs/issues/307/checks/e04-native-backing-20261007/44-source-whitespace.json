@@ -1,0 +1,18 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    ".",
+    ":(exclude)**/*.stdout",
+    ":(exclude)**/*.stderr"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 2,
+  "timed_out": false,
+  "wall_ns": 78492542,
+  "kind": "static",
+  "workers": 1
+}

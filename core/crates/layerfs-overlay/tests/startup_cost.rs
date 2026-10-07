@@ -1,7 +1,7 @@
 //! Real finite startup, definite refusal and incomplete-schema receipts.
 use layerfs_overlay::*;
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -27,11 +27,12 @@ impl Drop for Temp {
 #[test]
 fn startup_counts_profile_schema_accounting_and_entire_reservation() {
     let temp = Temp::new();
-    let created =
-        Overlay::create_observed(&temp.0.join("overlay.sqlite"), ProfileConfig::default());
+    let path = temp.0.join("overlay.sqlite");
+    let created = Overlay::create_observed(&path, ProfileConfig::default());
     let db = created.result.unwrap();
     let work = created.work;
     assert_eq!(work.file_create_calls, 1);
+    assert_filesystem_probe(&work, &path);
     assert_eq!(work.sqlite_open_calls, 1);
     assert_eq!(work.connection_configuration_calls, 2);
     assert_eq!(work.cache_configuration_calls, 1);
@@ -64,6 +65,10 @@ fn existing_artifact_refusal_has_no_sql_or_allocation_replay() {
     let created = Overlay::create_observed(&path, ProfileConfig::default());
     assert!(matches!(created.result, Err(OverlayError::Io(_))));
     assert_eq!(created.work.file_create_calls, 1);
+    assert_eq!(created.work.filesystem_open_calls, 0);
+    assert_eq!(created.work.filesystem_identity_calls, 0);
+    assert_eq!(created.work.filesystem_probe_calls, 0);
+    assert!(created.work.linux_filesystem_type.is_none());
     assert_eq!(created.work.sqlite_open_calls, 0);
     assert_eq!(created.work.sql.total().attempts, 0);
     assert_eq!(created.work.allocation.attempts, 0);
@@ -87,6 +92,7 @@ fn real_schema_full_failure_retains_original_error_work_and_artifact() {
     assert!(created.work.sql.total().attempts > 20);
     assert!(created.work.sql.total().vm_steps > 0);
     assert_eq!(created.work.file_create_calls, 1);
+    assert_filesystem_probe(&created.work, &path);
     assert_eq!(created.work.sqlite_open_calls, 1);
     assert_eq!(created.work.cache_configuration_calls, 0);
     assert!(path.exists());
@@ -95,4 +101,28 @@ fn real_schema_full_failure_retains_original_error_work_and_artifact() {
         created.result.err(),
         created.work
     );
+}
+
+fn assert_filesystem_probe(work: &CreationWork, path: &Path) {
+    #[cfg(target_os = "linux")]
+    {
+        let file = std::fs::File::open(path).unwrap();
+        let observed = nix::sys::statfs::fstatfs(&file).unwrap();
+        assert_eq!(work.filesystem_open_calls, 1);
+        assert_eq!(work.filesystem_identity_calls, 2);
+        assert_eq!(work.filesystem_probe_calls, 1);
+        assert_eq!(
+            i128::from(work.linux_filesystem_type.unwrap()),
+            i128::from(observed.filesystem_type().0)
+        );
+        assert_ne!(work.linux_filesystem_type, Some(0x6a656a63));
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = path;
+        assert_eq!(work.filesystem_open_calls, 0);
+        assert_eq!(work.filesystem_identity_calls, 0);
+        assert_eq!(work.filesystem_probe_calls, 0);
+        assert!(work.linux_filesystem_type.is_none());
+    }
 }

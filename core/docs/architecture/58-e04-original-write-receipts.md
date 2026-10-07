@@ -203,3 +203,21 @@ statement/bind correlation, indexed visited rows, exact eligible debt,
 queue-only peaks, isolated runnable wait, phase residency, physical I/O and
 cache calibration remain unavailable. Native aggregate counters and artifact
 stat are source-scoped and cannot replace those missing observations.
+
+
+## Native guest backing continuation
+
+The [prospective v2 contract](../../../docs/roadmap/0.1/0.1.7/cluster-two-e04-native-backing-v2.md)
+and [implementation report](../issues/307/E04-NATIVE-BACKING-20261007.md) describe
+E04-only startup filesystem observations and independently owned guest volume
+custody. Original pre/post guest stat domains remain distinct from host copies;
+shared E01 serialization and the eleven missing whole-operation dimensions do
+not change. Startup verifies a read-only reopened descriptor before refusing the
+known incompatible host filesystem. It neither switches backing automatically
+nor changes the exact per-job range admission.
+
+The first actual native consumer completed the selected writes/oracle and Stop,
+but host native CloseFailed and Docker source-domain validation prevented whole
+success. That source identity remains a failed diagnostic. A proposed explicit
+application fence must preserve the original error and refuse partial encrypted
+EOF; source presence or consumer success does not qualify S7 or S9.

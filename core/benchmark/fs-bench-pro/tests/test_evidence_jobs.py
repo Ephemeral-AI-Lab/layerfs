@@ -1055,5 +1055,165 @@ class E04Retained(unittest.TestCase):
         self.assertEqual(result["errors"], [original, "original E04 startup failed; no write result is inferred"])
 
 
+class E04NativeRetained(unittest.TestCase):
+    """V2 reuses the original full-window accounting and independent oracle."""
+    @classmethod
+    def setUpClass(cls):
+        E04Retained.setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        E04Retained.tearDownClass()
+
+    def setUp(self):
+        from test_evidence_backing import NativeFixture
+        self.case = E04Retained()
+        self.case.setUp()
+        self.addCleanup(self.case.doCleanups)
+        case, e01 = self.case, self.case.e01
+        guest = ["/state/overlay.sqlite" if index == 5 else (arg if index == 1 else
+                 "/work/" + Path(arg).relative_to(case.root).as_posix()) for index, arg in enumerate(case.host)]
+        self.native = NativeFixture(case.root, guest, e01.identity["receipt_id"])
+        product_path = case.root / e01.identity["artifacts"]["product"]["path"]
+        product = json.loads(product_path.read_bytes())
+        product["sources"].append(self.native.probe)
+        e01.identity["artifacts"]["product"] = e01.artifact("product.json", product)
+        e01.identity["execution_kind"] = "docker"
+        e01.identity["topology"]["artifact"] = e01.artifact("topology.json", {
+            "schema": "cluster-two-e2-topology-witness-v1", "status": "OBSERVED",
+            "scope": "external-observed-execution-domain", "execution_kind": "docker", "source": "independent fixture",
+            "os": "linux", "architecture": "aarch64", "kernel": "fixture-kernel"})
+        e01.identity["image"] = e01.artifact("image.json", {"schema": "cluster-two-e2-image-witness-v1",
+            "status": "OBSERVED", "source": "independent fixture", "image_id": self.native.image})
+        e01.identity["command_artifact"] = e01.artifact("command.json", {
+            "schema": "cluster-two-e2-command-v1", "execution_kind": "docker", **self.native.command})
+        e01.invocation["argv"] = guest
+        e01.reidentify()
+        for row in [case.manifest, case.started, case.outcomes, *case.rows, *case.probes, *case.traces]:
+            early = row["kind"] == "startup" or row.get("endpoint") == "before-attach"
+            row.update(case.header(row["kind"], row["record_index"], early))
+            row["schema"] = "cluster-two-job-receipts-v2"
+            if row["kind"] == "owner-job":
+                row["external_job_id"] = jobs.hash_bytes(f"{row['identity_sha256']}:job:{row['record_index']}".encode())
+            if row["kind"] == "base-fact-interval":
+                row["needs_external_job_id"] = jobs.hash_bytes(f"{row['identity_sha256']}:job:{row['needs_job_index']}".encode())
+            if row["kind"] == "write-operation":
+                row["public_attempt_id"] = jobs.hash_bytes(f"{row['identity_sha256']}:public-write:{row['index']}".encode())
+        case.manifest["driver_version"] = "e04-original-write-receipts-v2"
+        for key, path in (("assignment", guest[2]), ("acquisition", str(Path(guest[2]).with_suffix(".fixture"))),
+                          ("base", guest[3]), ("replacements", guest[4])):
+            case.manifest["fixture_inputs"][key]["path"] = path
+        case.started["filesystem"] = {"scope": "verified-reopened-file-descriptor-before-reservation-and-sqlite",
+            "status": "OBSERVED", "filesystem_open_calls": 1, "filesystem_identity_calls": 2,
+            "filesystem_probe_calls": 1, "linux_filesystem_type": 0xEF53, "original_refusal": None}
+        case.outcomes["database_artifact"].update(path=guest[5], **{key: self.native.post["database"][key]
+            for key in ("device", "inode", "logical_bytes", "allocated_bytes", "links")})
+        self.native.identity = e01.identity
+
+    def checked(self):
+        self.case.seal()
+        return jobs.validate(self.case.output, self.case.root, self.native.seal())
+
+    def test_v2_complete_original_window_is_narrow_pass_only(self):
+        result = self.checked()
+        self.assertEqual(result["write_window_consistency"], "PASS", result)
+        self.assertEqual(result["observation_consistency"], "INCOMPLETE")
+        self.assertEqual(result["unavailable"], list(jobs.E04_GAPS))
+        self.assertEqual((result["qualification_status"], result["admission_eligible"], result["e1_sample_count"]),
+                         ("NOT_EVALUATED", False, 0))
+
+    def test_v2_original_row_cannot_mix_v1_schema(self):
+        self.case.rows[0]["schema"] = "cluster-two-job-receipts-v1"
+        result = self.checked()
+        self.assertEqual(result["write_window_consistency"], "INCOMPLETE", result)
+        self.assertTrue(any("mixed E04" in error for error in result["errors"]), result)
+
+    def test_v2_driver_version_cannot_relabel_v1(self):
+        self.case.manifest["driver_version"] = "e04-original-write-receipts-v1"
+        self.assertEqual(self.checked()["write_window_consistency"], "INCOMPLETE")
+
+    def test_v2_cannot_use_v1_host_bind_mapping(self):
+        self.native.value["schema"] = "cluster-two-e2-docker-path-mapping-v1"
+        self.assertEqual(self.checked()["write_window_consistency"], "INCOMPLETE")
+
+    def test_startup_filesystem_must_match_original_native_observation(self):
+        self.case.started["filesystem"]["linux_filesystem_type"] = 0x794C7630
+        result = self.checked()
+        self.assertEqual(result["write_window_consistency"], "INCOMPLETE", result)
+        self.assertTrue(any("startup filesystem differs" in error for error in result["errors"]), result)
+
+    def test_missing_probe_is_unavailable_and_cannot_be_type_zero(self):
+        self.case.started["filesystem"].update(status="UNAVAILABLE", filesystem_probe_calls=1, linux_filesystem_type=None)
+        result = self.checked()
+        self.assertEqual(result["write_window_consistency"], "INCOMPLETE", result)
+        self.assertTrue(any("filesystem" in error for error in result["errors"]), result)
+
+    def test_original_filesystem_probe_requires_both_descriptor_identity_reads(self):
+        for key, value in (("filesystem_open_calls", 0), ("filesystem_identity_calls", 1), ("filesystem_probe_calls", 2)):
+            original = self.case.started["filesystem"][key]
+            self.case.started["filesystem"][key] = value
+            with self.assertRaises(ValueError):
+                jobs.e04_filesystem(self.case.started)
+            self.case.started["filesystem"][key] = original
+
+    def test_original_reopen_metadata_and_probe_errors_preserve_actual_prefix_counts(self):
+        started = copy.deepcopy(self.case.started)
+        started["original_outcome"] = {"status": "FAILED", "error": "Overlay(Io(original))", "profile": None}
+        started["creation"]["work"].update(calls={"file_create_calls": 1, "sqlite_open_calls": 0,
+                "connection_configuration_calls": 0, "cache_configuration_calls": 0},
+            sql=self.case.e01.sql(), allocation=dict.fromkeys(jobs.ALLOCATION, 0),
+            allocation_state={"status": "UNAVAILABLE", "values": None, "reason": "allocation-owner-not-established"})
+        for identities, probes in ((0, 0), (1, 0), (2, 0), (2, 1)):
+            started["filesystem"].update(status="UNAVAILABLE", filesystem_identity_calls=identities,
+                filesystem_probe_calls=probes, linux_filesystem_type=None)
+            self.assertIsNone(jobs.startup(started))
+            jobs.e04_filesystem(started)
+        started["filesystem"]["linux_filesystem_type"] = 0
+        with self.assertRaisesRegex(ValueError, "fabricated a type"):
+            jobs.e04_filesystem(started)
+
+    def test_v2_guest_inode_cannot_be_substituted_by_host_copy(self):
+        self.case.outcomes["database_artifact"]["inode"] += 1
+        result = self.checked()
+        self.assertEqual(result["write_window_consistency"], "INCOMPLETE", result)
+        self.assertTrue(any("same-guest" in error for error in result["errors"]), result)
+
+    def test_v2_preserves_preconsumer_fixture_seal(self):
+        path = self.case.root / "assignment"
+        path.write_bytes(path.read_bytes().replace(b"main\n", b"another\n"))
+        self.case.manifest["fixture_inputs"]["assignment"]["sha256"] = jobs.hash_bytes(path.read_bytes())
+        result = self.checked()
+        self.assertEqual(result["write_window_consistency"], "INCOMPLETE", result)
+        self.assertTrue(any("hash mismatch" in error for error in result["errors"]), result)
+
+    def test_v2_original_typed_refusal_retains_no_reservation_or_sqlite(self):
+        started = self.case.started
+        magic = 0x6A656A63
+        original = f"Overlay(UnsupportedFilesystem {{ linux_magic: {magic} }})"
+        started["filesystem"].update(linux_filesystem_type=magic,
+            original_refusal={"kind": "UnsupportedFilesystem", "linux_magic": magic})
+        started["original_outcome"] = {"status": "FAILED", "error": original, "profile": None}
+        work = started["creation"]["work"]
+        work.update(calls={"file_create_calls": 1, "sqlite_open_calls": 0,
+                    "connection_configuration_calls": 0, "cache_configuration_calls": 0},
+            sql=self.case.e01.sql(), allocation=dict.fromkeys(jobs.ALLOCATION, 0),
+            allocation_state={"status": "UNAVAILABLE", "values": None, "reason": "allocation-owner-not-established"})
+        self.case.rows, self.case.probes, self.case.traces = [], [], []
+        self.case.manifest.update(global_persistence=None, unrun_writes={"from_index": 0, "to_exclusive": 1000})
+        self.case.outcomes.update(global_persistence=None, status="FAILED", startup_status="FAILED", stop_status="NOT_RUN",
+            original_error=original, write_records=0, write_attempts=0, fixture=None, oracle=None)
+        self.case.outcomes["database_artifact"].update(logical_bytes=0, allocated_bytes=0)
+        self.native.post["database"].update(logical_bytes=0, allocated_bytes=0, hash_read_bytes=0,
+            sha256=jobs.hash_bytes(b""))
+        self.native.groups["consumer"]["outer"]["exit_code"] = 1
+        self.native.groups["consumer"]["info"][0]["State"]["ExitCode"] = 1
+        result = self.checked()
+        self.assertEqual((result["observation_consistency"], result["write_window_consistency"]), ("FAIL", "FAIL"), result)
+        self.assertEqual(result["errors"], [original, "original E04 startup failed; no write result is inferred"])
+        work["allocation"]["attempts"] = 1
+        with self.assertRaisesRegex(ValueError, "reservation or SQLite"):
+            jobs.e04_filesystem(started)
+
+
 if __name__ == "__main__":
     unittest.main()

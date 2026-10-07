@@ -1,0 +1,40 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling pkg-config v0.3.34
+   Compiling vcpkg v0.2.15
+   Compiling cfg_aliases v0.2.2
+   Compiling foldhash v0.2.0
+   Compiling libc v0.2.189
+   Compiling bitflags v2.13.1
+   Compiling fallible-iterator v0.3.0
+   Compiling smallvec v1.16.0
+   Compiling cfg-if v1.0.4
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling nix v0.31.3
+   Compiling hashbrown v0.17.1
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashlink v0.12.2
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 19.39s
+  Executable unittests src/lib.rs (core/target/cluster2-307/debug/deps/layerfs_overlay-7af2ec524cfae021)
+  Executable tests/allocation_filesystem.rs (core/target/cluster2-307/debug/deps/allocation_filesystem-7f712b3a4f888869)
+  Executable tests/captured_runs.rs (core/target/cluster2-307/debug/deps/captured_runs-8a277034d9ba40d7)
+  Executable tests/compound.rs (core/target/cluster2-307/debug/deps/compound-f27037c54631a7cf)
+  Executable tests/costs.rs (core/target/cluster2-307/debug/deps/costs-f1b14bc809c7fae2)
+  Executable tests/device_capacity.rs (core/target/cluster2-307/debug/deps/device_capacity-9fc393ba6f0e8794)
+  Executable tests/engine.rs (core/target/cluster2-307/debug/deps/engine-b4fac0808988bc6c)
+  Executable tests/frontier.rs (core/target/cluster2-307/debug/deps/frontier-0725703cc71f2a91)
+  Executable tests/indexed_scratch.rs (core/target/cluster2-307/debug/deps/indexed_scratch-3741e5e80638b314)
+  Executable tests/indexed_scratch_cursor.rs (core/target/cluster2-307/debug/deps/indexed_scratch_cursor-7b76c01519264b3e)
+  Executable tests/lifetimes.rs (core/target/cluster2-307/debug/deps/lifetimes-9bdeccb2fc8d6202)
+  Executable tests/orphans.rs (core/target/cluster2-307/debug/deps/orphans-7a988e93ca86f715)
+  Executable tests/payload.rs (core/target/cluster2-307/debug/deps/payload-68ae5eb9eeaeeafc)
+  Executable tests/payload_fragmentation.rs (core/target/cluster2-307/debug/deps/payload_fragmentation-3cfdcf30996bed04)
+  Executable tests/resources.rs (core/target/cluster2-307/debug/deps/resources-85eaf02848d9fc65)
+  Executable tests/source.rs (core/target/cluster2-307/debug/deps/source-bbe134429b700afa)
+  Executable tests/startup_cost.rs (core/target/cluster2-307/debug/deps/startup_cost-edd0e558182d3325)
+  Executable unittests examples/indexed_scratch_profile.rs (core/target/cluster2-307/debug/examples/indexed_scratch_profile-002c9e2a10a95c29)

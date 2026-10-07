@@ -1,0 +1,35 @@
+[
+  {
+    "path": "/work/core/target/cluster2-307/e04-unsupported-filesystem-proof-20261007",
+    "flags": 16384,
+    "result": 0,
+    "errno": 0,
+    "magic": "0x6a656a63",
+    "device": 41,
+    "inode": 660724,
+    "size": 96,
+    "allocated": 0
+  },
+  {
+    "path": "/work/core/target/cluster2-307/e04-unsupported-filesystem-proof-20261007/overlay.sqlite",
+    "flags": 0,
+    "result": 0,
+    "errno": 0,
+    "magic": "0x6a656a63",
+    "device": 41,
+    "inode": 660725,
+    "size": 192512,
+    "allocated": 268435456
+  },
+  {
+    "path": "/work/core/target/cluster2-307/e04-unsupported-filesystem-proof-20261007/overlay.sqlite",
+    "flags": 1,
+    "result": 0,
+    "errno": 0,
+    "magic": "0x6a656a63",
+    "device": 41,
+    "inode": 660725,
+    "size": 192512,
+    "allocated": 268435456
+  }
+]

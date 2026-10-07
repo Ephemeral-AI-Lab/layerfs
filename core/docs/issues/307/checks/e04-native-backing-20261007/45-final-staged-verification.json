@@ -1,0 +1,8 @@
+{
+  "tree_before_verification_receipt": "7561866af448e85a05ef35ff5958eb391248f8e4",
+  "core_crates_tree": "e6a05d40a420d3bfe4b8a06389a9c7c68b10579d",
+  "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "production_loc": 170108,
+  "comparison": "43-production-loc-comparison.json",
+  "matches_counted_product_trees": true
+}

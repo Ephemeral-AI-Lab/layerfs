@@ -54,17 +54,19 @@ guest storage and existing E04 fixed workload/oracle. No fallback or new databas
 
 | Owner / exact file | Change and named exit |
 | --- | --- |
-| Overlay `src/database/startup.rs` | E2/E3: record actual Linux fstatfs attempt/type on the fresh owned descriptor; refuse evidenced magic 0x6a656a63 before Allocation/admit/SQLite |
+| Overlay `src/database/startup.rs` | E2/E3: unconditionally reopen read-only/O_NOFOLLOW, verify same regular-file identity/link count, record each open/metadata/fstatfs attempt and observed type; refuse evidenced magic 0x6a656a63 before Allocation/admit/SQLite |
 | Overlay `src/contract/error.rs` | E2: typed UnsupportedFilesystem carrying observed Linux magic; original probe error remains original Io |
 | Overlay `tests/startup_cost.rs` | E2: actual independently observed descriptor type on success/schema failure, no invented observation before create failure or on macOS |
-| Tentative new Overlay `tests/allocation_filesystem.rs` | E2: explicitly selected owned host-share refusal, create/probe once, zero SQL/allocation/open and retained empty artifact |
+| Tentative new Overlay `tests/allocation_filesystem.rs` | E2: explicitly selected owned host-share refusal, create/reopen/probe once, two descriptor identity reads, zero SQL/allocation/SQLite-open and retained empty artifact |
 | Daemon `examples/e2_writes/{driver,streams,outcomes}.rs` | External E2 harness: versioned startup capability observations while retaining exact original-operation behavior |
-| Existing harness `shared/evidence_jobs.py`, `tests/test_evidence_jobs.py` | External E2/E3 evidence: preserve v1 and add independently bound guest backing/mapping v2, original guest stat versus exported byte copy |
-| Tentative ignored E04 preparation/launch successor | Declare native guest backing before start, retain its actual filesystem/container/mount custody, no `/work` assumption for database argument |
+| Existing harness `shared/evidence_jobs.py`, `tests/test_evidence_jobs.py`; tentative focused `shared/evidence_backing.py`, `tests/test_evidence_backing.py` | External E2/E3 evidence: preserve v1 and add independently bound guest backing/mapping v2, original guest stat versus exported byte copy |
+| Ignored `core/target/cluster2-307/run_e04_owner_diagnostic.py`; tentative narrow `e04_native_backing_observation.py` | Declare a new owned native guest volume before start, retain actual filesystem/container/mount custody, no `/work` assumption for database argument |
 | Architecture 35/58, S6 reservation addendum, current reconciliation/audits | Root-owned docs: narrow filesystem refusal and exact proof/qualification scope; no universal qualification of other filesystems |
 
 The capability worker owns only Overlay's two source files and two external test
-files. Root owns serializers, harness/specification, documents and all execution.
+files. Separate workers own the three named E04 Rust vehicle files plus retained
+validator/tests, and the two ignored launch/observation files, respectively.
+Root owns specification, documents, integration review and all execution.
 No allocation-algorithm change, lifecycle cap increase, new dependency, unsafe
 dependency patch, SQL schema change or S10 pipeline work is part of this package.
 The new mapping/startup evidence contract is committed before its harness work.

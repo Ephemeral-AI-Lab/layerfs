@@ -1,0 +1,41 @@
+{
+  "schema": "e04-additional-build-inputs-v1",
+  "status": "MATCH",
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+      "sha256": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c"
+    }
+  ],
+  "prior_input_inventory": {
+    "path": "core/docs/issues/307/checks/e04-native-backing-20261007/25-final-build-inputs.json",
+    "sha256": "1d9fdb538613a01a2b44a1f47a5e9dfade2233c352559ba166803bcc9bb6594a"
+  },
+  "build_receipts": [
+    {
+      "path": "core/docs/issues/307/checks/e04-native-backing-20261007/26-host-final-examples.json",
+      "sha256": "ecd56940e9a17b39b55771d6474a970498a3fdf2cb15b411081d64c75f55ac16"
+    },
+    {
+      "path": "core/docs/issues/307/checks/e04-native-backing-20261007/27-linux-final-examples.json",
+      "sha256": "c2b24678c3bdd78c8d43043aac16774afd626cc7f8a429cc0256fc94fb9e8802"
+    }
+  ],
+  "binary_identity_unchanged": [
+    {
+      "path": "core/target/cluster2-307/debug/examples/e2_writes_host",
+      "sha256": "e310be3a71b4117fa369a4cc377c0d62844ccdf382d9432780877c4640db998c",
+      "bytes": 15843568
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/examples/e2_writes",
+      "sha256": "31a04d50e19e7d09dacc1ea452662dbd7f416af4804715d9a48887c5a920c2f9",
+      "bytes": 72502680
+    }
+  ],
+  "mode": "diagnostic",
+  "profile": "debug-functional-only",
+  "cache": "uncontrolled",
+  "qualification_status": "NOT_EVALUATED",
+  "backing_profile": "prospective-e04-native-backing-v2"
+}

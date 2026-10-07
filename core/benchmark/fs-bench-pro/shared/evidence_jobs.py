@@ -1,6 +1,6 @@
 """Read-only original-job diagnostic consistency; never performance admission.
 
-Scope: the committed cluster-two-e2-job-receipts-v1 specification. E01 startup
+Scope: original v1 receipts and the E04 native-backing v2 successor. E01 startup
 and E04's frozen 1000 aligned writes have distinct predicates. E05 and all E1
 qualification dimensions remain unrun; validation never executes a collector.
 """
@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 from .evidence_workload import payload_chunks, write_trace
+from . import evidence_backing
 
 ROOT = Path(__file__).resolve().parents[4]
 WINDOW = 65_536
@@ -17,6 +18,8 @@ SHA = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 E04_BYTES = 16_777_216
 E04_WRITES = 1000
+E04_VERSIONS = {"cluster-two-job-receipts-v1": "e04-original-write-receipts-v1",
+                "cluster-two-job-receipts-v2": "e04-original-write-receipts-v2"}
 CLIENT = ("cache_hits", "cache_misses", "upstream_batches", "authenticated_bytes",
           "evictions", "charged_cache_bytes", "cached_objects")
 E04_GAPS = ("private-base-facts-provider-id-trace", "per-original-job-statement-families",
@@ -419,12 +422,16 @@ def writes_invocation(manifest, directory, root, docker_mapping=None):
     require(all(Path(argv[index]).is_absolute() for index in (0, 2, 3, 4, 5, 6, 7)), "original E04 input path is not absolute")
     command, _ = read_json(artifact(manifest["identity"].get("command_artifact"), root))
     require(command.get("argv") == argv, "E04 command differs from captured original invocation")
+    native = None
     if manifest["identity"].get("execution_kind") == "docker":
-        host = observed_docker_mapping(docker_mapping, argv, command, root)
+        if manifest["schema"] == "cluster-two-job-receipts-v2":
+            host, native = native_backing().mapping(docker_mapping, argv, command, root, manifest["identity"])
+        else:
+            host = observed_docker_mapping(docker_mapping, argv, command, root)
     else:
         require(docker_mapping is None, "standalone-host claimed unrelated Docker evidence")
         host = argv
-    for index in (0, 2, 3, 4, 5, 6, 7):
+    for index in ((0, 2, 3, 4, 6, 7) if native is not None else (0, 2, 3, 4, 5, 6, 7)):
         require(Path(host[index]) == Path(host[index]).resolve(), "mapped E04 host path is not canonical")
     require(Path(host[6]) == Path(directory).resolve(), "E04 command targets another output artifact set")
     supplied, raw = read_json(host[7], 16_384)
@@ -432,7 +439,11 @@ def writes_invocation(manifest, directory, root, docker_mapping=None):
             and value["identity_source_bytes"] == len(raw) and type(value["identity_source_bytes"]) is int
             and value["identity_copy_sha256"] == manifest["identity_sha256"]
             and hash_bytes(raw.strip()) == manifest["identity_sha256"], "E04 original identity input byte binding differs")
-    return host, command
+    return host, command, native
+
+
+def native_backing():
+    return evidence_backing.Validator(require, exact, artifact, read_json, integer)
 
 
 def direct_docker_command(external, argv, image, cid_path, inspected, host_root):
@@ -742,7 +753,10 @@ E04_FIELDS = {
 
 
 def e04_envelope(record, manifest, kind, index):
-    exact(record, E04_COMMON | E04_FIELDS[kind], "original E04 " + kind)
+    fields = E04_COMMON | E04_FIELDS[kind]
+    if kind == "startup" and manifest.get("schema") == "cluster-two-job-receipts-v2":
+        fields = fields | {"filesystem"}
+    exact(record, fields, "original E04 " + kind)
     for key in E04_COMMON - {"kind", "record_index", "record_id", "global_persistence"}:
         require(record[key] == manifest[key], "mixed E04 record identity/source/arm/input: " + key)
     require(type(record["sample_count"]) is int and record["sample_count"] == 0
@@ -906,7 +920,7 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
     failed = False
     try:
         manifest, _ = read_json(Path(directory) / "manifest.json")
-        require(manifest.get("schema") == "cluster-two-job-receipts-v1" and manifest.get("case") == "E04-write-16m"
+        require(manifest.get("schema") in E04_VERSIONS and manifest.get("case") == "E04-write-16m"
                 and manifest.get("mode") == "diagnostic" and manifest.get("sample_count") == 0 and type(manifest.get("sample_count")) is int
                 and manifest.get("admission_eligible") is False and manifest.get("qualification_status") == "NOT_EVALUATED"
                 and manifest.get("e1_sample_status") == "NOT_RUN" and manifest.get("e1_sample_count") == 0
@@ -914,7 +928,7 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                 and manifest.get("observation_consistency") == "INCOMPLETE"
                 and manifest.get("write_window_consistency") == "NOT_EVALUATED", "E04 diagnostic claimed another route/sample/qualification")
         e04_envelope(manifest, manifest, "manifest", 0)
-        require(manifest["driver_version"] == "e04-original-write-receipts-v1" and manifest["unavailable"] == list(E04_GAPS)
+        require(manifest["driver_version"] == E04_VERSIONS[manifest["schema"]] and manifest["unavailable"] == list(E04_GAPS)
                 and manifest["database_retained"] is True and manifest["source_binding"] == "base-commit-plus-current-inventory",
                 "E04 version/unavailable/source/custody scope differs")
         exact(manifest["forbidden_substitutions"], ("phase_resident_bytes", "eligible_debt_peak_bytes", "queue_peak_jobs", "whole_operation_copy_bytes"),
@@ -930,7 +944,7 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
         if failed:
             require(isinstance(outcomes["original_error"], str) and outcomes["original_error"], "original E04 failure missing")
             result["errors"].append(outcomes["original_error"])
-        host, command = writes_invocation(manifest, directory, root, docker_mapping)
+        host, command, native = writes_invocation(manifest, directory, root, docker_mapping)
         binary, _ = identity(manifest["identity"], root, 8, host[0])
         require(binary == manifest["actual_binary_sha256"] and manifest["build_target_os"] == manifest["identity"]["os"]
                 and manifest["build_target_architecture"] == manifest["identity"]["architecture"], "actual E04 binary/build topology differs")
@@ -954,6 +968,8 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
         started = stream(directory, streams[0], names[0], 1, "RECORDED", True)[0]
         e04_envelope(started, manifest, "startup", 0)
         work = startup(started)
+        if manifest["schema"] == "cluster-two-job-receipts-v2":
+            e04_filesystem(started)
         original_startup = exact(started["original_outcome"], ("status", "error", "profile"), "original E04 startup")
         require(original_startup["status"] == outcomes["startup_status"], "original E04 startup result replaced")
         if original_startup["status"] != "READY":
@@ -962,6 +978,11 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                     and outcomes["original_error"] == original_startup["error"], "failed E04 startup error/Stop was replaced")
             raise ValueError("original E04 startup failed; no write result is inferred")
         require(work is not None, "original E04 startup observations unavailable")
+        if manifest["schema"] == "cluster-two-job-receipts-v2":
+            require(native is not None, "E04 v2 successful window requires original native backing custody")
+            require(native["consumer_exit_code"] == 0, "successful E04 window has failed original consumer exit")
+            require(started["filesystem"]["linux_filesystem_type"] == native["filesystem_magic"],
+                    "original startup filesystem differs from observed native backing")
         ready_profile(started)
         require(work["calls"] == {"file_create_calls": 1, "sqlite_open_calls": 1,
                 "connection_configuration_calls": 2, "cache_configuration_calls": 1}
@@ -1133,16 +1154,20 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
         state = exact(outcomes["database_artifact"], ("scope", "status", "path", "logical_bytes", "allocated_bytes", "device", "inode", "links"), "retained E04 database artifact")
         require(state["scope"] == "separate-post-stop-or-original-failure-artifact-stat" and state["status"] == "OBSERVED"
                 and Path(state["path"]) == Path(manifest["invocation"]["argv"][5]), "original retained DB input/artifact binding differs")
-        stat = Path(host[5]).lstat()
-        require(Path(host[5]).is_file() and not Path(host[5]).is_symlink()
+        if native is not None:
+            native_backing().original_artifact(state, native)
+            result["cross_domain_physical_stat_comparison"] = "NOT_APPLICABLE-original-guest-only-no-host-equivalence"
+        else:
+            stat = Path(host[5]).lstat()
+            require(Path(host[5]).is_file() and not Path(host[5]).is_symlink()
                 and all(integer(state[key]) for key in ("logical_bytes", "allocated_bytes", "device", "inode", "links"))
                 and (stat.st_size, stat.st_nlink) == (state["logical_bytes"], state["links"])
                 and state["links"] == 1, "retained original E04 database identity/allocation changed")
-        if manifest["identity"]["execution_kind"] == "standalone-host":
-            require((stat.st_blocks * 512, stat.st_dev, stat.st_ino)
+            if manifest["identity"]["execution_kind"] == "standalone-host":
+                require((stat.st_blocks * 512, stat.st_dev, stat.st_ino)
                     == tuple(state[key] for key in ("allocated_bytes", "device", "inode")), "retained same-domain database physical identity changed")
-        else:
-            result["cross_domain_physical_stat_comparison"] = "UNAVAILABLE-bind-path-does-not-prove-guest-host-stat-equivalence"
+            else:
+                result["cross_domain_physical_stat_comparison"] = "UNAVAILABLE-bind-path-does-not-prove-guest-host-stat-equivalence"
         for item, name in zip(streams[4:], names[4:]):
             stream(directory, item, name, item["records"], item["status"], False)
         result["write_window_consistency"] = "PASS"
@@ -1151,6 +1176,53 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
     if failed:
         result["observation_consistency"] = result["write_window_consistency"] = "FAIL"
     return result
+
+
+def e04_filesystem(record):
+    """E04 v2 alone records the actual descriptor probe and typed refusal."""
+    observed = exact(record.get("filesystem"), ("scope", "status", "filesystem_open_calls", "filesystem_identity_calls", "filesystem_probe_calls",
+        "linux_filesystem_type", "original_refusal"), "original E04 filesystem observation")
+    require(observed["scope"] == "verified-reopened-file-descriptor-before-reservation-and-sqlite",
+            "filesystem observation substituted another path or phase")
+    count, magic = observed["filesystem_probe_calls"], observed["linux_filesystem_type"]
+    opened, identities = observed["filesystem_open_calls"], observed["filesystem_identity_calls"]
+    if not record["creation_reported"]:
+        require(observed["status"] == "UNAVAILABLE" and opened is None and identities is None and count is None and magic is None
+                and observed["original_refusal"] is None, "unreported filesystem work fabricated")
+        return
+    require(integer(opened) and opened <= 1 and integer(identities) and identities <= 2
+            and integer(count) and count <= 1, "filesystem verification/probe missing or replayed")
+    require(magic is None or (type(magic) is int and -(1 << 63) <= magic < (1 << 63)),
+            "Linux filesystem type is not the actual signed observation")
+    require(observed["status"] == ("UNAVAILABLE" if magic is None else "OBSERVED")
+            and (magic is None or count == 1), "failed/missing filesystem probe fabricated a type")
+    work = record["creation"]["work"]
+    require(opened <= work["calls"]["file_create_calls"] and (identities == 0 or opened == 1)
+            and (count == 0 or identities == 2), "filesystem probe precedes original reopen and identity verification")
+    refusal = observed["original_refusal"]
+    require(magic != 0x6A656A63 or refusal is not None, "observed unsupported filesystem lost its typed refusal")
+    if record["build_target_os"] == "linux" and magic is None:
+        require(all(work["calls"][key] == 0 for key in ("sqlite_open_calls", "connection_configuration_calls", "cache_configuration_calls"))
+                and all(value == 0 for value in work["sql"]["total"].values())
+                and all(value == 0 for value in work["allocation"].values()),
+                "unavailable Linux filesystem verification performed reservation or SQLite work")
+    if refusal is not None:
+        exact(refusal, ("kind", "linux_magic"), "original filesystem refusal")
+        require(refusal == {"kind": "UnsupportedFilesystem", "linux_magic": 0x6A656A63}
+                and magic == refusal["linux_magic"] and (opened, identities, count) == (1, 2, 1)
+                and record["original_outcome"]["status"] == "FAILED"
+                and record["original_outcome"]["error"] == f"Overlay(UnsupportedFilesystem {{ linux_magic: {magic} }})",
+                "typed original filesystem refusal replaced")
+        require(work["calls"] == {"file_create_calls": 1, "sqlite_open_calls": 0,
+                    "connection_configuration_calls": 0, "cache_configuration_calls": 0}
+                and all(value == 0 for value in work["sql"]["total"].values())
+                and all(value == 0 for value in work["allocation"].values())
+                and work["allocation_state"]["status"] == "UNAVAILABLE",
+                "unsupported filesystem performed reservation or SQLite work")
+    if record["original_outcome"]["status"] == "READY":
+        require(record["build_target_os"] == "linux" and (opened, identities, count) == (1, 2, 1) and magic is not None
+                and magic != 0x6A656A63 and refusal is None,
+                "ready E04 startup lacks supported original filesystem observation")
 
 
 def startup(record):

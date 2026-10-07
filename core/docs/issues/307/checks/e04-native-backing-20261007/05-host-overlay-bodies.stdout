@@ -1,0 +1,151 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test stale_metadata_has_bounded_continuations_and_monotone_seek_work ... ok
+test sparse_cutoff_gap_above_four_gib_avoids_payload_windows_and_pays_root_metadata ... ok
+test absent_local_cells_are_inherited_and_wrong_size_retains_original_reader ... ok
+test masked_cells_and_shrink_regrow_match_independent_final_bytes_after_install ... ok
+test interleaved_live_and_stale_cells_keep_each_seek_and_trimmed_start_once ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+
+running 2 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 12 tests
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+test terminal_cleanup_waits_for_exact_owners_and_reply_attempts ... ok
+test backed_owner_and_scratch_pages_have_no_total_record_limit ... ok
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test closed_capture_retains_its_existing_rows_until_explicit_known_release ... ok
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+test reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values ... ok
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+test payload_name_scratch_and_owner_access_keep_indexed_scope ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.30s
+
+
+running 3 tests
+test frozen_capture_and_tickets_reject_changed_identity_and_survive_close ... ok
+test equal_local_routing_keys_never_cross_engine_owners ... ok
+test exact_frontier_observations_visit_only_their_fixed_domain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+running 6 tests
+test first_detached_window_finds_children_inserted_below_consumed_candidates ... ok
+test optional_exclusion_keeps_zero_identity_and_finds_new_lower_keys ... ok
+test guarded_batches_are_atomic_capacity_bounded_and_allow_a_128_child_node_shape ... ok
+test complete_keys_and_full_file_scopes_never_alias_other_custody ... ok
+test exact_plans_correlate_with_bounded_executed_point_and_window_work ... ok
+test state_exceeding_eight_mib_reclaims_in_windows_without_reusing_a_released_owner ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+
+running 2 tests
+test full_binary_exclusive_boundary_and_restart_handle_lower_insertions ... ok
+test sealed_pass_preserves_all_records_across_windows_and_exact_prefixes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 3 tests
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+
+running 7 tests
+test logical_close_refuses_new_captured_owners_and_keeps_existing_consumers ... ok
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+test three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlink_reader ... ok
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_scratch ... ok
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+
+running 4 tests
+test shrink_work_is_independent_of_discarded_data_and_regrow_reads_zero ... ok
+test layered_reads_match_a_reference_model_across_writes_resizes_capture_and_install ... ok
+test holes_cost_no_rows_and_tiny_and_dense_files_report_measured_pages ... ok
+test a_tall_shrink_staircase_keeps_logarithmic_lookups_and_exact_bytes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+
+
+running 1 test
+test dense_fragmentation_does_not_enlarge_a_later_request ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.77s
+
+
+running 6 tests
+test repeated_resource_snapshots_do_not_reprepare_expired_metadata_statements ... ok
+test lost_backing_path_quarantines_without_sql_or_releasing_published_capture ... ok
+test physical_reserve_counts_allocation_separately_from_logical_rows_and_reusable_pages ... ok
+test real_backing_corruption_retains_original_sql_cause_and_quarantines_custody ... ok
+test retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_duplication ... ok
+test last_generation_release_is_fixed_work_and_wakes_retirements_in_bounded_pages ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+
+
+running 4 tests
+test source_changes_have_finite_plans_and_correlated_runtime_work ... ok
+test source_retains_selected_base_and_exact_close_custody_without_a_generation_pin ... ok
+test source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows ... ok
+test ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evidence ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+
+running 3 tests
+test existing_artifact_refusal_has_no_sql_or_allocation_replay ... ok
+test real_schema_full_failure_retains_original_error_work_and_artifact ... ok
+test startup_counts_profile_schema_accounting_and_entire_reservation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

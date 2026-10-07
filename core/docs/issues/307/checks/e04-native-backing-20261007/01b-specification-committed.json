@@ -1,0 +1,10 @@
+{
+  "commit": "2df73fd79cb82bb6bbc0357ea8bcf4a6d03d1e50",
+  "tree": "814f374d22d89b707c30bbaaf9841d76d7139f28",
+  "exact_staged_product_match": true,
+  "production_before": 170068,
+  "production_after": 170068,
+  "delta": 0,
+  "core": 104651,
+  "reference": 65417
+}

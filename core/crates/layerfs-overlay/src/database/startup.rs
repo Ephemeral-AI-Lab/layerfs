@@ -13,6 +13,8 @@ static NEXT_ENGINE: AtomicU64 = AtomicU64::new(1);
 
 /// One attempted startup and its exact original result. Failed artifacts stay
 /// in caller custody; receipt observation never retries startup or removes them.
+/// Linux verifies a read-only reopened descriptor of the fresh owned file before
+/// its filesystem probe, reservation or SQLite open. Failure retains the artifact.
 pub struct Creation {
     pub result: OverlayResult<Overlay>,
     pub work: CreationWork,
@@ -21,6 +23,20 @@ pub struct Creation {
 #[derive(Debug, Default)]
 pub struct CreationWork {
     pub file_create_calls: u64,
+    /// Actual Linux read-only O_NOFOLLOW opens of the newly created file for
+    /// filesystem identification. Zero on other platforms or creation failure.
+    pub filesystem_open_calls: u64,
+    /// Actual descriptor metadata attempts comparing the original and reopened
+    /// regular, singly linked file identities. At most two on Linux; zero elsewhere.
+    pub filesystem_identity_calls: u64,
+    /// Actual Linux fstatfs attempts on the identity-verified reopened descriptor.
+    /// Zero on other platforms or when preceding creation/identity work failed.
+    pub filesystem_probe_calls: u64,
+    /// Original successful Linux fstatfs type from the verified reopened
+    /// descriptor, represented in signed 64 bits.
+    /// None means no successful Linux observation; a failed probe's original
+    /// I/O error remains in Creation::result. A type is not a qualification.
+    pub linux_filesystem_type: Option<i64>,
     pub sqlite_open_calls: u64,
     pub connection_configuration_calls: u64,
     pub cache_configuration_calls: u64,
@@ -51,6 +67,45 @@ pub(crate) fn create(path: &Path, config: ProfileConfig) -> Creation {
         }
         work.file_create_calls = 1;
         let file = options.open(path)?;
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+            // Receipt 13: fresh create descriptors on the evidenced host share
+            // report generic FUSE. Identify the same inode through one planned open.
+            work.filesystem_open_calls = 1;
+            let probe = OpenOptions::new()
+                .read(true)
+                .custom_flags(nix::libc::O_NOFOLLOW)
+                .open(path)?;
+            work.filesystem_identity_calls = 1;
+            let original = file.metadata()?;
+            work.filesystem_identity_calls = 2;
+            let reopened = probe.metadata()?;
+            if !original.is_file()
+                || !reopened.is_file()
+                || original.nlink() != 1
+                || reopened.nlink() != 1
+                || original.dev() != reopened.dev()
+                || original.ino() != reopened.ino()
+            {
+                return Err(crate::OverlayError::Invalid(
+                    "filesystem probe file identity",
+                ));
+            }
+            work.filesystem_probe_calls = 1;
+            let filesystem = nix::sys::statfs::fstatfs(&probe)
+                .map_err(|error| std::io::Error::from_raw_os_error(error as i32))?;
+            // nix's Linux fsword type varies by ABI; preserve its signed bits.
+            #[allow(clippy::unnecessary_cast)]
+            let linux_magic = filesystem.filesystem_type().0 as i64;
+            work.linux_filesystem_type = Some(linux_magic);
+            // E04 receipt 75: this host share adds blocks for the same successful
+            // KEEP_SIZE range. Refuse before bulk reservation; do not reuse a
+            // range or infer its position from block totals to evade S6 admission.
+            if linux_magic == 0x6a656a63 {
+                return Err(crate::OverlayError::UnsupportedFilesystem { linux_magic });
+            }
+        }
         allocation = Some(super::allocation::Allocation::new(file, path)?);
         allocation
             .as_ref()

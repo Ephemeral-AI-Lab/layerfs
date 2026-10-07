@@ -58,7 +58,7 @@ pub fn finish(r: &mut Recorder, status: &str, error: Option<&str>) -> io::Result
     r.write_once("outcomes.json", &outcome)?;
     let mut manifest = Json::new();
     r.header(&mut manifest, "manifest", 0)?;
-    manifest.raw(",\"driver_version\":\"e04-original-write-receipts-v1\",\"e1_sample_status\":\"NOT_RUN\",\"e1_sample_count\":0,\"E05_status\":\"NOT_RUN\",\"observation_consistency\":\"INCOMPLETE\",\"write_window_consistency\":\"NOT_EVALUATED\",\"streams\":[")?;
+    manifest.raw(",\"driver_version\":\"e04-original-write-receipts-v2\",\"e1_sample_status\":\"NOT_RUN\",\"e1_sample_count\":0,\"E05_status\":\"NOT_RUN\",\"observation_consistency\":\"INCOMPLETE\",\"write_window_consistency\":\"NOT_EVALUATED\",\"streams\":[")?;
     for (index, stream) in [
         &r.startup, &r.jobs, &r.probes, &r.trace, &r.stdout, &r.stderr,
     ]

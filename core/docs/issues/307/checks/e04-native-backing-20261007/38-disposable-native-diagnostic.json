@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/target/cluster2-307/run_e04_owner_diagnostic.py",
+    "--run-dir",
+    "core/target/cluster2-307/e04-native-disposable-20261007",
+    "--profile",
+    "disposable",
+    "--setup",
+    "clone",
+    "--build-input-receipt",
+    "core/docs/issues/307/checks/e04-native-backing-20261007/25-final-build-inputs.json",
+    "--additional-build-witness",
+    "core/docs/issues/307/checks/e04-native-backing-20261007/30-matched-build-witness.json"
+  ],
+  "wall_timeout_s": 90,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 52116019208,
+  "kind": "uncontrolled-original-diagnostic",
+  "workers": 1
+}

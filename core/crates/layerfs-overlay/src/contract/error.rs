@@ -24,6 +24,12 @@ pub enum OverlayError {
         allocated_bytes: u64,
         cause: Box<OverlayError>,
     },
+    /// The observed Linux filesystem is incompatible with exact-range
+    /// reservation. Other filesystem types are not thereby qualified. Startup
+    /// retains its newly created empty file without allocation or SQLite open.
+    UnsupportedFilesystem {
+        linux_magic: i64,
+    },
     UnsupportedPlatform,
 }
 impl fmt::Display for OverlayError {

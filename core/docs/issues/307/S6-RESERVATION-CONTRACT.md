@@ -157,3 +157,27 @@ released, physical rows move to the independent domain without payload duplicati
 only overlapping bytes require one-cell composition. Accounting counts every
 namespace, stored payload/mask/scratch byte, row, owner/reference detail, ticket,
 wait and debt target in the same transaction, using two exact primary-key updates.
+
+### S7 host-share compatibility finding (2026-10-07)
+
+The later [E04 checkpoint](E04-ORIGINAL-RECEIPTS-20261007.md) proves that the
+observed Docker `fakeowner` host share (Linux filesystem magic `0x6a656a63`)
+does not behave like the qualified native range-reservation route: two successful
+identical 64 KiB KEEP_SIZE requests allocate 64 KiB then 128 KiB. Repeated full
+requests exhausted host capacity in an actual E04 prefix. Those failures remain
+unchanged; successful syscall return and a minimum block readback were insufficient
+to qualify this backing. This amendment does not rewrite the ext4 device receipts.
+
+Startup now reopens the created path read-only with O_NOFOLLOW, verifies both
+descriptors identify the same regular file with one link, then observes the
+verified reopened descriptor with one Linux fstatfs call. The initial guard on
+the create descriptor failed because that handle reported generic FUSE while a
+reopened handle reported fakeowner; receipts 11–13 in the native-backing checks
+retain the failure and exact zero-byte cause probe. The corrected guard refuses
+the evidenced filesystem before bulk reservation or SQLite open. It
+retains its original empty artifact and typed magic/I/O error, with no retry or
+automatic alternate path. Other filesystem types are not implicitly qualified.
+Linux's precise range call on every admission, the growth derivation and the
+selected resource windows are unchanged. A native guest E04 route requires its
+own prospective command/mount/backing identity and original-artifact observation.
+

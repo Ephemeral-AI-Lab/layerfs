@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_jobs.py",
+      "sha256": "8aeb4112d742a28bec008e2e1b330d6f228aa20569283ec7cac64e16ef41383a"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_backing.py",
+      "sha256": "bd0ba88a79be93cf25b8f9011ceae8565c4b5a55db33bd475d60c3c547ea44bf"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py",
+      "sha256": "0e0e8eea6650861248104db3e8f132133f57eeaeb602144e052405c32905c222"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/tests/test_evidence_backing.py",
+      "sha256": "7085ff6bcbe2327382d028383e9f8db731f9d1dd83faae9483b9c85031546715"
+    },
+    {
+      "path": "core/target/cluster2-307/run_e04_owner_diagnostic.py",
+      "sha256": "9a35c79062f6165d8499bbd370db80ffa0618a2951cfbb6387c2e89b3230f2c4"
+    },
+    {
+      "path": "core/target/cluster2-307/e04_native_backing_observation.py",
+      "sha256": "659bb9a8791a575d51f6ce830ed2c8630e9bb9f94a4bf249d10a8ece2fc167e9"
+    }
+  ],
+  "schema": "e04-native-harness-inputs-v1"
+}

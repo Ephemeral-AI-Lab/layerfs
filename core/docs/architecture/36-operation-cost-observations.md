@@ -36,6 +36,22 @@ Finite schema startup is O(S + V) for supplied SQL bytes S and executed VM/row
 work V, with fixed-schema resident state, plus the whole physical reservation.
 It is initialized once per daemon rather than on each Workspace bind.
 
+The E04 native-backing continuation adds `filesystem_open_calls`,
+`filesystem_identity_calls`, `filesystem_probe_calls` and `linux_filesystem_type`
+to the original creation receipt. Linux makes one unconditional read-only,
+O_NOFOLLOW reopen, two descriptor metadata attempts to establish the original
+regular-file identity and link count, then one fstatfs attempt on the verified
+reopened descriptor. Each counter increments before its own attempted call;
+later calls remain zero after an earlier failure. The type is None unless that
+observation succeeded. Other platforms and create-new refusals make zero such
+calls. The original I/O error, identity refusal or UnsupportedFilesystem remains
+in Creation.result; a field is not another outcome or positive qualification.
+No new Arc owner or per-job receipt is introduced. The existing shared startup
+receipt allocation grows by the added fields; startup stack, worker and other
+allocations remain separate. This is not a phase-memory bound.
+The versioned E04 v2 collector records these facts. Historical E01/E04 v1
+serializations do not acquire this observation by inference.
+
 [Payload observations](../../crates/layerfs-overlay/src/diagnostics/payload.rs)
 record actual cell input, intersected/partial cells, codec/merge copies and zeroed
 cell/composed-read windows. Whole-cell replacement copies input once without a
