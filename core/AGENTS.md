@@ -184,10 +184,17 @@ fixtures, examples and tools do not contribute to production LOC.
   attempt; they do not permit replay after failed/unknown publication.
 - Preserve definite-failure atomicity, original errors and exact uncertain
   custody. No resend, rollback/delete or success claim based on an unfenced read.
-- Current global persistence is host-local macOS SQLite. Durable is WAL/FULL
+- Implemented global persistence opens only on macOS today. Durable is WAL/FULL
   with declared macOS synchronization; Disposable is MEMORY/OFF without crash
   survival. Select profiles/layouts before open; do not silently migrate or claim
   a guarantee from another profile. Postgres remains unavailable.
+- Target (owner direction 2026-10-07): the same Store opened directly by every
+  Linux daemon from a shared volume, several writer processes, no host in the
+  data path, both profiles, Disposable for development verification. A contended
+  write is one exact before-effect refusal, never a wait or retry. Follow the
+  [integration contract](docs/issues/303/06-cluster-one-integration.md) and its
+  [deepest-file plan](docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md); do not
+  extend the host-mediated SDK runtime, Bridge data codec or daemon upstream.
 - The daemon overlay is a separate owner/profile from global persistence:
   one local database per daemon, Workspace-prefixed state. Its MEMORY/OFF
   single-owner proposal is not an implemented distributed Store or a universal

@@ -62,7 +62,7 @@ only by install. The base needs no lease: cluster one has no deletion path, so
 a root stays readable ([source-verified] pack rows are immutable by trigger,
 `core/crates/layerfs-persistence/sql/sqlite/objects.sql:9-12`). The day a
 collector exists, a lease becomes mandatory; that is recorded in
-[06 §7](06-cluster-one-integration.md#7-failure-boundaries).
+[06 §7](06-cluster-one-integration.md#10-failure-boundaries).
 
 **Opening the overlay does not copy or enumerate the base.** Daemon startup
 initializes the shared database. Workspace open inserts bounded logical state
@@ -230,7 +230,7 @@ the inode for O(discarded extents) and allowed cleanup to race capture/retiremen
 Sparse writes store data and hole metadata, with no row per zero byte. Current
 cluster one would still stream holes as zeros at Commit, O(logical length).
 Hole-aware canonical construction/read/edit input is a required integration
-change ([06 P4](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two));
+change ([06 P4](06-cluster-one-integration.md#9-prerequisites));
 a sparse mutation/read proof is not a sparse Commit proof.
 
 ### Read and capture contract
@@ -369,7 +369,7 @@ could scan active/retired rows and chase continuously increasing active keys.
 Record visited and returned rows separately, including every replayed pass.
 
 Cluster one's directory-change Vec and resident new-parent map remain present
-in source. They contradict bounded Commit memory and require [06 P6/P7](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two).
+in source. They contradict bounded Commit memory and require [06 P6/P7](06-cluster-one-integration.md#9-prerequisites).
 Paged overlay queries alone do not remove their materialization.
 
 ## 10. Limitation inventory

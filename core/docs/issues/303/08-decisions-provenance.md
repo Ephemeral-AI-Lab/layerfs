@@ -16,6 +16,19 @@ once before readiness; Workspace rows are namespaced within it. Bash Exec has
 no automatic runtime timeout. This supersedes the per-Workspace-file proposal;
 shared writer/pager/failure accounting and fair admission apply below.
 
+Owner direction 2026-10-07 (serverless direct Store): every Linux daemon opens
+the global SQLite Store directly from a volume the daemons share; there is no
+host or server adapter in the data path. Project Init stays on the host and
+ends with one sealed Store file installed once into that volume; afterwards the
+host is control-only (mount, Exec, Commit, status, unmount). No retry, busy
+handler or readiness wait is added. Both Store profiles are supported and
+development verification stays Disposable. A mounted SQLite volume is the raw
+shape of the serverless design; another database may later sit behind the same
+ports. This reverses the two 2026-10-03 rows of §2 marked below, revises K2 and
+K24, and retires the host-mediated runtime. The simplified contract is
+[06](06-cluster-one-integration.md); K28–K33 and O-18–O-21 record it. Nothing
+here is implemented or measured by this revision.
+
 ## 1. Provenance
 
 Every source this set was reconciled from, where it lives, and its state on
@@ -25,7 +38,7 @@ committed instructions and owner direction govern.
 | Source | Location | Git state | Identity |
 | --- | --- | --- | --- |
 | Repository rules | `AGENTS.md`, `core/AGENTS.md` | tracked on `main` | `f96d97651` |
-| Cluster one handbooks | `cluster_one_handbook.md`, `cas_cdc_deltaencoding_handbook.md` | tracked on `main` | pinned to product `8cbeadef0`; one drift found ([06 §6](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two) P11) |
+| Cluster one handbooks | `cluster_one_handbook.md`, `cas_cdc_deltaencoding_handbook.md` | tracked on `main` | pinned to product `8cbeadef0`; one drift found ([06 §6](06-cluster-one-integration.md#9-prerequisites) P11) |
 | Benchmark rules and report layout | `docs/general/benchmark_rules.md`, `benchmark_agent_report.md` | tracked on `main` | `f96d97651` |
 | Product source | `core/crates/` | tracked on `main` | `f96d97651` |
 | Issue #303, body and 4 comments | GitHub | open; last updated 2026-10-03T18:42:12Z | — |
@@ -50,9 +63,11 @@ review. Where they disagreed, §6 records the resolution.
 | --- | --- | --- |
 | Global storage is PostgreSQL plus MinIO | **superseded** | Owner direction on #302, 2026-10-03; the provider is host-local SQLite in `layerfs-persistence` |
 | Crates `layerfs-s3` and `layerfs-metadata` | **superseded** | Removed (`da0fa3a12`); `layerfs-persistence` and `layerfs-project` exist instead |
-| "Any daemon can construct, upload and register; immutability removes the coordinator" | **superseded** | One host-local Store with one writable owner; opens only on macOS |
-| "Only `layerfs-daemon` wires concrete engines" | **superseded** | The engine cannot be opened in the sandbox |
-| `layerfs-bridge` shrinks to control only | **replaced** | It carries object reads, the Save session and history calls ([06 §3](06-cluster-one-integration.md#3-bridge-operations)) |
+| "Any daemon can construct, upload and register; immutability removes the coordinator" | **superseded 2026-10-03; that supersession reversed 2026-10-07** | Every daemon opens the shared Store and constructs, saves and publishes in-process (K28). Coordination is the database: one short write transaction at a time and conditional history transitions, not a coordinator process |
+| "Only `layerfs-daemon` wires concrete engines" | **superseded 2026-10-03; that supersession reversed 2026-10-07** | The daemon opens the Store on Linux (K28, K29); the host wires Persistence only for Init |
+| `layerfs-bridge` shrinks to control only | **replaced 2026-10-03; restored 2026-10-07** | The bridge carries control only; object reads, Save and history calls leave the wire (K31) |
+| One host-local Store with one writable owner; opens only on macOS | **superseded 2026-10-07** | One Store file on a volume shared by the daemons, several writer processes, no host in the data path (K28–K30) |
+| The engine cannot be opened in the sandbox | **superseded 2026-10-07** | Persistence opens on Linux; the Store path is reachable by the daemon and hidden from Bash (K28, K32) |
 | Publication is one conditional transaction; the stage table is removed | **superseded** | `stage_changes` then `commit_staged`; one stage row per Workspace; a conflict keeps the stage |
 | Uncertain upload settled by `HEAD` on a pack digest | **superseded** | No object store; no pack-by-digest endpoint |
 | "Bytes before references" as a caller obligation across two services | **superseded** | One SQLite publication transaction inside cluster one |
@@ -71,7 +86,7 @@ R1–R8 bounds are implemented. "Reverses" names a prepared item marked decided.
 | # | Decision | Evidence that decided it | Reverses |
 | --- | --- | --- | --- |
 | K1 | **Owner update:** one overlay SQLite database/connection per daemon, initialized once before readiness | Fast logical Workspace open; Workspace-prefixed indexed metadata/payload/scratch; fair shared writer | Per-Workspace-file isolation proposal withdrawn; DB/pager/failure domain shared |
-| K2 | Content construction and logical base reads in the daemon; host semantic admission/storage/history, conditional on P1/P2 | `layerfs-persistence` opens only on macOS; `apply_edits` needs a replayable source; a cache keyed by `ObjectId` survives base changes | "Construction is local and the engines are wired in the daemon"; also conflicts with the hosting rule (O-1) |
+| K2 | **Revised 2026-10-07:** Content construction, logical base reads, Save and history publication all run in the daemon over a directly opened Store (K28) | Owner direction; Workspace ports are already backend-neutral | The 2026-10-05 split "host semantic admission/storage/history"; the hosting rule O-1 for the global Store |
 | K3 | MEMORY/OFF for disposable overlay, conditional on crash policy | No WAL checkpoint; journal/dirty-page and residency costs still require bounds | WAL/recovery alternative remains O-3 |
 | K4 | One short SQL transaction per mutating request; reads are unframed statements under the mutex | The owner's stated path; a failed batch commit would lose acknowledged operations | Nothing for writes. Review C's proposal to batch several requests per transaction is not adopted |
 | K5 | **Revised:** bounded payload update representation with no base-payload copy-up | Immutable extent boundaries failed the fragmentation counterexample; [02 §5](02-base-overlay.md#5-payload-replacement-required) requires a replacement algorithm | Original byte-exact extent algorithm withdrawn |
@@ -93,10 +108,16 @@ R1–R8 bounds are implemented. "Reverses" names a prepared item marked decided.
 | K21 | Ordinary Bash Exec with no automatic runtime timeout, explicit lifecycle and bounded streaming output | Owner direction 2026-10-05; [01 §9](01-architecture.md#9-exec-is-an-ordinary-shell-process) | Dormant sh/30 s/8 KiB/status-polling wrapper is not the target contract |
 | K22 | Terminal unmount includes logical close and automatic cleanup; no required public close | Owner direction 2026-10-05; [04 §10](04-concurrency-commit.md#10-second-commit-and-terminal-unmount) | Separate detach-only unmount and close lifecycle withdrawn |
 | K23 | Complete filesystem at one-call minimum granularity; long-lived multi-call Workspaces with incremental Commits supported | Owner clarification: lifetime independent of call/task; ignored files/dependencies/caches/output ready; Commit advances base and preserves later changes | Source-only/filter/reinstall projections and mandatory one-call teardown rejected |
-| K24 | Retired layerfs-server remains absent from target dependencies; embed cluster-one runtime through public adapters | Owner clarification plus current source: package excluded/reference, provider host-local SQLite | Earlier proposed server rewrite withdrawn; immutability is not a complete distributed protocol |
+| K24 | **Revised 2026-10-07:** `layerfs-server` stays retired and no host runtime replaces it; cluster-one libraries are embedded by the daemon, and by the host only for Init | Owner direction: no host/server adapter in the data path | "Embed cluster-one runtime through public adapters" on the host; the SDK runtime, client and Bridge data codec built under #307 are retired (K31) |
 | K25 | Capture retains existing rows; later active mutations and operation scratch create separate required state | Discussion clarification; [Commit §5.1](workspace-api/commit.md#51-existing-captured-rows-new-active-rows-and-scratch) | No bulk overlay snapshot copy or premature captured deletion |
 | K26 | Automatic bounded SQL row deletion after logical retirement, including idle periods | [engine §6.1](daemon-sqlite.md#61-automatic-batched-sql-deletion) | No manual cleanup, intentional TTL, shared-table DROP or implied file shrink; throughput still unqualified |
 | K27 | Both per-tool-call and per-task modes; per-tool-call expected commonly; Exec duration independent of either | Owner clarification: commands may be short or long-lived; multi-call reuse and incremental Commit supported | Presumed short Exec, one-call ownership limit and automatic lifecycle by command class rejected |
+| K28 | **Owner direction 2026-10-07:** every Linux daemon opens the global SQLite Store file directly from a volume the daemons share and performs reads, Save and history in-process | "Daemon directly communicates to db rather than a host/server adapter then db"; a mounted SQLite volume is the raw shape of the serverless design and another database may later sit behind the same Storage/History ports | One host-local Store with one writable owner; macOS-only open; host-mediated object/Save/history transport |
+| K29 | Persistence opens on Linux for both profiles; development verification stays Disposable | Owner: "support both profiles, but for testing purpose, focus on disposable". The profile definitions for a file shared by several processes are proposed in [06 §3](06-cluster-one-integration.md#3-the-shared-store) and need the owner's ruling O-21 | macOS gates and the macOS allocation owner in the daemon path |
+| K30 | No retry: one write transaction is attempted once; a contended Store returns one exact before-effect `Busy` refusal and the caller's state is retained | Owner: "keep it simple, we need no retry". No busy handler, timeout, readiness wait or writer gate is added | The side review's proposed bounded wait before a write |
+| K31 | The host is control-only after install: mount, Exec, Commit, status, unmount. SDK `client/` and `runtime/`, the Bridge data codec and daemon `upstream/` are retired; R1 application assembly, R3 restart custody and R4 remote Save are not built | Owner direction; they exist only to carry the data path across a process boundary that no longer exists | #307 S9 rows R1, R3, R4 as scoped on 2026-10-07 |
+| K32 | The Store volume is reachable by the daemon and not by Bash run inside a Workspace | Owner direction; mechanism in [06 §6](06-cluster-one-integration.md#6-store-visibility) | — |
+| K33 | Project Init stays on the host and ends with one sealed Store file; install copies it once into the shared volume. No collector runs under several writers | Owner direction; a sealed file has no sidecar and is safe to copy | Host-held writable Store after Init |
 
 ## 4. Disposition of prepared items
 
@@ -155,11 +176,11 @@ the #301 documents; "#304" the study.
 | Crate split: `layerfs-overlay` knows SQL only; `layerfs-workspace` knows no SQL; `layerfs-fuse` knows no storage | planning prompt | **retain** | [01 §3](01-architecture.md#3-ownership-execution-location-database-and-transport) |
 | No `LowerFilesystem` trait; the base is read with `layerfs-content` over `AuthenticatedObjects` | plan §0.2 | **retain** | The provider behind the trait is now a bridge client |
 | An empty base is a real cluster one root | plan | **retain** | — |
-| Contract C1 object reads, C3 serial reservation | plan §6 | **retain**, restated | [06 §2](06-cluster-one-integration.md#2-cluster-one-apis-cluster-two-calls) |
+| Contract C1 object reads, C3 serial reservation | plan §6 | **retain**, restated | [06 §2](06-cluster-one-integration.md#2-cluster-one-apis-the-daemon-calls) |
 | Contract C2 history over PostgreSQL; C7 composition in `engines.rs`; C8 receipt reuse keyed on removed crates | plan §6 | **superseded** | — |
 | Contract C4 Save session with Refused/Uncertain classes and a resolver | plan §6 | **replace** | `begin_save`, `accept`, `finish`, `take_failure`; no resolver exists |
 | Contract C5 one publication call; C6 a conclusive `NotPublished` | plan §6 | **replace** / **unresolved** | K15; O-4 |
-| Contract C9 cluster one stops refusing on accumulated change | plan amendment | **unresolved** | Never sent; #302 closed ([06 §6](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two) P3, P7) |
+| Contract C9 cluster one stops refusing on accumulated change | plan amendment | **unresolved** | Never sent; #302 closed ([06 §6](06-cluster-one-integration.md#9-prerequisites) P3, P7) |
 | layerfs-server retired | Owner clarification / #303 done-when | **retain** | No revival/rename; host application embeds current cluster-one libraries and bounded runtime adapters |
 | Bridge payload and history contracts deleted | #303 comment 3 | **replace** | Construction contracts deleted; history contracts kept |
 | Rename the old crate to `-legacy`, delete it at the end | plan S1 | **retain** | As a relocation of a dormant crate |
@@ -214,11 +235,11 @@ IDs are kept below so earlier references remain traceable.
 
 | # | Question | Recommendation | Blocks |
 | --- | --- | --- | --- |
-| O-1 | **Resolved routing:** target daemon overlay and logical content/construction are Linux-owned; global Store/encoding/history remain on the supported host | [Hosting scope](../../../../docs/general/benchmark_rules.md#hosting-scope-for-cluster-one-and-cluster-two) updated 2026-10-05 to match cluster-one/two boundaries; old frozen families retain their topology | Integrated implementation/registration/proof still required; no new measurement admission |
-| O-2 | Placement option C remains the proposed direction, conditional on semantic admission/Linux build | Engineering prerequisites P1/P2; owner may change placement preference | No extra approval gate inferred |
+| O-1 | **Resolved again 2026-10-07:** the global Store, encoding and history are Linux-owned too; every daemon opens the shared Store directly (K28). Host Init remains on macOS | The 2026-10-05 routing kept the global Store on the host. The [hosting scope](../../../../docs/general/benchmark_rules.md#hosting-scope-for-cluster-one-and-cluster-two) text needs the same alignment before a new measurement is admitted; old frozen families retain their topology | Integrated implementation/registration/proof still required; no new measurement admission |
+| O-2 | **Superseded 2026-10-07:** placement is construction, Save and history in the daemon (K2 revised) | Option C and its host semantic admission are withdrawn with the wire | — |
 | O-3 | Must a Workspace survive a daemon process crash? (no / yes) | No. "Yes" selects the write-ahead alternative and a restart protocol not designed here | S1 |
 | O-4 | May exact uncertain-history resolution be added, with completion fencing and coherent authorized reads, no resend/delete on a guess? | Specify policy; two unfenced reads are insufficient | Terminal Uncertain remains until permitted and implemented |
-| O-5 | Does the integrated global Store run Durable or Disposable? | — (it decides whether parallel read handles are possible on the host) | S9 tuning only |
+| O-5 | **Resolved 2026-10-07:** both profiles are supported; development verification runs Disposable | The shared-file definition of Disposable is O-21 | — |
 | O-6 | After a conflict, what does the product offer: reopen on the new head, commit to a fork, or leave it to the caller? | Leave it to the caller in the first release | — |
 | O-7 | May the overlay start writeback and drop clean pages on its own files to bound guest page cache, given that root `AGENTS.md` §4 forbids sync calls on Workspace backing? | — | Target T8 |
 | O-8 | Which uid:gid do commands run as, and is it one identity per daemon or one per Workspace? Under a shared identity a command of one Workspace can open another's mount | One per Workspace | S8 |
@@ -230,7 +251,14 @@ IDs are kept below so earlier references remain traceable.
 | O-14 | **Resolved:** unmount includes logical close and cleanup; successful unmount discards uncommitted local state, no implicit Commit | Normal Busy/Uncertain preserves state; explicit force handles cancellation/unknown custody | No separate public close |
 | O-15 | **Resolved by owner:** a Workspace may serve many sequential/concurrent calls over a long lifetime and Commit incrementally | Same mount and current live view; no automatic teardown on call exit or Commit; lifetime independent of task | Qualify both fast fresh mounts and persistent cache/ownership/reclaim behavior |
 | O-16 | For registered selections whose subject is a removed mechanism, is `NOT_RUN — mechanism removed`, shown beside a prospectively registered successor, the accepted disposition? | Yes | S12 |
-| O-17 | **Engineering linkage:** bundled SQLite for Linux daemon only, existing dependency and locked build | Verify host feature/binary scope isolation; do not patch dependencies | No additional owner gate |
+| O-17 | **Engineering linkage, extended 2026-10-07:** bundled SQLite on Linux for the overlay and now for Persistence too; existing dependency and locked build | Host Init keeps the system SQLite; the schema identity is checked at open. Do not patch dependencies | No additional owner gate |
+| O-18 | After install the Store is inside the VM and the host cannot open it. How does the host fork a Branch or read history? | Two more control verbs served by a daemon (fork, history read); nothing reopens the file on the host | Host SDK surface |
+| O-19 | Is a second host import into an installed volume supported? | No in the first slice: one sealed file per Project, and install refuses an existing target. A later import needs Init on Linux | Install |
+| O-20 | Does control stay on the authenticated native channel (Bridge about 540 lines, keeps `snow`) or move to container stdio (Bridge 0, one `docker exec` per call)? | Keep the native channel: Exec streams output and a mount is long-lived | Bridge remainder |
+| O-21 | What is Disposable for a Store shared by several processes? Today it is a memory journal with rollback locking: a daemon killed mid-commit tears the file for every daemon, and readers and the writer block each other | WAL with `synchronous=OFF`: a killed process cannot tear the file and readers never block; only a kernel or VM crash loses the Store. It is a profile-identity change and old Disposable Stores are refused, not converted | Persistence on Linux; every multi-daemon proof |
+| O-22 | May the macOS preallocation and extent-release owner (273 lines plus its call sites) be deleted? It assumes one writer, sizes from the main-file length, and its sealed output is copied and discarded | Yes. Strict-allocation selections become `NOT_RUN — mechanism removed` (O-16); Init speed needs one new measurement and the eight historical failures stay as recorded | Persistence cut |
+| O-23 | A `Busy` between stage and publish leaves a stage row. Combine stage and publish into one history transaction (a `HistoryCatalog` addition of about 20 lines), or keep two calls and specify the leftover-stage discard? | Combine: one write transaction fewer per Commit and no partial state | Commit path |
+| O-24 | Which unprivileged user runs Bash? Hiding the Store requires that it is not the daemon's user (extends O-8) | One per Workspace, as O-8 | Exec confinement, S8 |
 
 **Earlier questions on #303.** None of Q1–Q13 has a recorded answer.
 

@@ -149,7 +149,7 @@ Current source lacks this complete boundary and remains a prerequisite.
 
 Immutable objects are suitable for reuse/replication and prevent in-place version
 corruption. They do not establish durability, safe GC, distributed publication or
-mutable history isolation. [06 §5](06-cluster-one-integration.md#5-immutable-distribution-and-caller-obligations)
+mutable history isolation. [06 §5](06-cluster-one-integration.md#7-authority)
 separates content and authority planes.
 
 ## 7. Decisions that shape the architecture

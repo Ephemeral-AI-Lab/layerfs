@@ -65,11 +65,17 @@ nor qualification. Preserve source pins, limits, failures and open prerequisites
   during live activity and idle periods. Terminal unmount includes close/cleanup;
   physical SQL deletion may finish later. It does not delete global history or
   imply that the shared database file shrinks.
-- The host application embeds cluster-one libraries and supplies authenticated
-  runtime adapters. Do not revive `layerfs-server`. Immutable objects support
-  reuse/distribution; authority, reference closure, mutable history, durability
-  and safe GC still require exact contracts. Filesystem history is not a process,
-  memory, socket or stdout/stderr checkpoint.
+- Target (owner direction 2026-10-07): every daemon opens the global Store
+  directly from a volume the daemons share and reads, saves and publishes
+  in-process. The host runs Project Init, installs one sealed Store file into
+  that volume and is control-only afterwards (mount, Exec, Commit, status,
+  unmount). Do not revive `layerfs-server` or build a host/server adapter in
+  the data path; the host-mediated SDK runtime is retired, not extended. See
+  the [integration contract](core/docs/issues/303/06-cluster-one-integration.md).
+  Immutable objects support reuse/distribution; authority, reference closure,
+  mutable history, durability and safe GC still require exact contracts.
+  Filesystem history is not a process, memory, socket or stdout/stderr
+  checkpoint.
 
 ## Read the current contract for the task
 

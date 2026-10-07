@@ -191,3 +191,24 @@ live/idle drain). Checkpoint4 is the first operation-accounting change. Reuse
 run-level identities, compact referenced events and fixed aggregates; detailed
 per-job tracing is selected only where the named accounting requirement needs
 it. No generic profiling platform or unchanged E04 resampling is authorized.
+
+## Owner direction 2026-10-07: serverless Store
+
+The owner redirected the data path after checkpoint 4: every daemon opens the
+global Store directly from a shared volume and the host is control-only. The
+decision record is [K28–K33](../303/08-decisions-provenance.md#3-decisions-of-this-design),
+the contract is the rewritten [integration document](../303/06-cluster-one-integration.md)
+and the file-level plan with production LOC is the
+[serverless Store plan](SERVERLESS-STORE-PLAN-20261007.md).
+
+| Row above | Disposition |
+| --- | --- |
+| R1 application supervision | Not built; the host runtime is retired |
+| R3 restart boundaries | Not built; no remote session custody remains |
+| R4 remote Save and consumer | Not built; Save is a local of the daemon's Commit |
+| R2 Content root qualification | Valid. Implemented and uncommitted; host checks pass, Linux run NOT_RUN. The SDK proof-required bind is dropped with the SDK runtime |
+| Q1 complete roots | Valid; re-scoped to a Store shared by daemons |
+| E1–E4, S8 residual | Unchanged in intent; any host-transport accounting in them is withdrawn with the transport |
+
+No code changes follow until the owner rules on O-21 and O-22, which gate the
+first checkpoint of that plan.

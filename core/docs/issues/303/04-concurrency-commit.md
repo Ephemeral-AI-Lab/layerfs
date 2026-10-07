@@ -26,7 +26,7 @@ only daemon-acknowledged requests are covered, not unflushed mmap stores.
 
 ## 4. Construction from the captured state
 
-The [Commit doc](workspace-api/commit.md) and [integration APIs](06-cluster-one-integration.md#2-cluster-one-apis-cluster-two-calls)
+The [Commit doc](workspace-api/commit.md) and [integration APIs](06-cluster-one-integration.md#2-cluster-one-apis-the-daemon-calls)
 map normalized edits, streams and PreparedRows. A caller scratch index does not
 remove EDIT_DEFERRED_LIMIT, directory Vec/new-parent memory or sparse-zero work.
 Required integration corrections remain visible; full ignored/dependency/cache

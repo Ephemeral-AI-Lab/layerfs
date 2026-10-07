@@ -240,7 +240,7 @@ Sparse files require metadata representing holes and a hole-aware cluster-one
 construction route. Ordinary append of a committed log uses a tail edit, not
 whole-log reconstruction. Existing `apply_edits` refusal, resident directory
 changes and new-parent membership are mandatory cluster-one corrections in
-[06 §6](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two).
+[06 §6](06-cluster-one-integration.md#9-prerequisites).
 
 ## 5. Prepared SQL and service windows
 

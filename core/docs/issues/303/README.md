@@ -67,8 +67,11 @@ and quadratic-work rejection apply from the first engine slice.
 
 The [proposed file layout](07-implementation-validation.md#44-file-ownership)
 separates SQLite overlay, filesystem semantics, FUSE adaptation and daemon service
-ownership, with host runtime adapters embedded in the existing SDK. The
-[current size estimate](07-implementation-validation.md#43-estimated-future-size)
+ownership. Its host runtime adapters are superseded: since the owner direction of
+2026-10-07 the daemon opens the Store itself, and the
+[serverless file plan](../307/SERVERLESS-STORE-PLAN-20261007.md) owns the changed
+layout and size. The earlier
+[size estimate](07-implementation-validation.md#43-estimated-future-size)
 is 19,500–27,000 production LOC for the replacement cluster-two scope, including
 runtime SQL and adapters, against the unchanged 43,165-line excluded source.
 It is a planning range, not achieved size, a performance result or a size gate;
@@ -110,7 +113,7 @@ operation/engine documents. The consolidated findings are:
 | Why no filtering? | Task-granularity source-only projections cannot substitute for the per-call complete filesystem. Ignore rules are command semantics, not LayerFS membership; task mode uses the same complete-root contract |
 | No data-structure size/count/time caps? | Remove inherited metadata/edit/file/Commit/whole-stream ceilings through backed/streamed structures; no automatic Bash duration cap. Explicit windows/resources/platform formats remain, no silent omission |
 | Large amounts of files/data without Phase-4.5 limits? | Indexed metadata, generation-selective enumeration, bounded payload/namespace construction and transport backpressure; deferred edits/directory Vec/new-parent map/sparse/import constraints must change, not merely be relabelled |
-| Removed server and safe immutable distribution? | No layerfs-server revival. Embed cluster-one libraries via runtime ports; immutable content supports verified reuse/replication, while authorization/reference closure/GC/durability and mutable history CAS still require exact protocols. Current provider is host-local SQLite, not an implemented distributed store |
+| Removed server and safe immutable distribution? | No layerfs-server revival and no host runtime. Since 2026-10-07 every daemon opens one shared SQLite Store directly ([06](06-cluster-one-integration.md)); immutable content supports verified reuse, while reference closure, GC, durability and mutable history CAS still require exact protocols. Implemented source still opens the Store only on macOS |
 
 ## Smallest supported granularity: one tool call
 
@@ -176,22 +179,24 @@ Important claims carry one of these, in square brackets:
 [proposed design; see primary engine/integration contracts]
 
 ```text
- host application: embedded cluster-one runtime       Linux sandbox daemon
- Storage / Reader / Save + HistoryCatalog             FUSE + Workspace + content
-            |                              bounded             |
- current host-local global Store <------- runtime adapters ----+
- immutable objects; mutable history                            |
-                                                    overlay.sqlite
-                                                    initialized once per daemon
-                                                    WS-keyed metadata/payload/scratch
+ host: Project Init, seal, install, control only      Linux sandbox daemon (one of several)
+                                                      FUSE + Workspace + content
+            control: mount / Exec / Commit /          Storage / Reader / Save + HistoryCatalog
+            status / unmount  ------------------->         |                    |
+                                                    overlay.sqlite        store.sqlite
+                                                    one per daemon        one shared volume
+                                                    WS-keyed local state  immutable objects;
+                                                                          mutable history
 ```
 
 One shared overlay database is an owner decision; its initial MEMORY/OFF owner
 connection is a candidate, not a claim of parallel SQL writes or measured capacity.
 A WAL reader pool is unselected and would require its own resource/profile proofs.
-Construction is in the daemon; current persistence remains in host composition.
-The retired layerfs-server package is not restored or renamed as a coordinator.
-A distributed provider is future integration, not current capability.
+Construction, Save and history publication are in the daemon over a directly
+opened shared Store (owner direction 2026-10-07, K28–K33); the host is
+control-only after install. The retired layerfs-server package is not restored
+or renamed as a coordinator, and no host runtime stands in for it. Another
+database behind the same ports is future integration, not current capability.
 
 Live state uses active/captured changes over an immutable base. R1–R8 require
 bounded payload mutation, fixed captured domains, independent orphan custody,
@@ -212,11 +217,11 @@ are listed here.
 | --- | --- | --- |
 | R1 | Bound WRITE work after spatial fragmentation; logical cutoff for nonzero truncate | [02 §5](02-base-overlay.md#5-payload-replacement-required), [03](03-mutation-hot-path.md); alternating-byte overwrite and shrink/capture proof |
 | R2 | Generation-selective, terminating captured cursors | [02 §9](02-base-overlay.md#9-bounded-queries); tiny capture during growing full install, visited-row counts |
-| R3 | Remove fragmented construction refusal; back directory/touched/validation/release state; avoid mandatory whole-base alias walks; represent sparse holes | [06 §6](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two); full affected-state Commit with fixed processing windows and tiny-rename visited-work proof |
+| R3 | Remove fragmented construction refusal; back directory/touched/validation/release state; avoid mandatory whole-base alias walks; represent sparse holes | [06 §6](06-cluster-one-integration.md#9-prerequisites); full affected-state Commit with fixed processing windows and tiny-rename visited-work proof |
 | R4 | Bounded orphan state; failure resolution without foreground payload merge | [04 §7–§8](04-concurrency-commit.md#7-open-unlinked-files); repeated successful and failed Commits with a retained log descriptor |
-| R5 | Deferred busy-request replies, fair Workspace and Store scheduling, demand transport capacity | [01 §5](01-architecture.md#5-inside-the-daemon), [06 §4](06-cluster-one-integration.md#4-the-cluster-one-runtime); independent-request progress under contention |
+| R5 | Deferred busy-request replies, fair Workspace and Store scheduling, demand transport capacity | [01 §5](01-architecture.md#5-inside-the-daemon), [06 §4](06-cluster-one-integration.md#4-the-daemon-adapter); independent-request progress under contention |
 | R6 | Reserved pressure headroom, actual page accounting and shared-disk admission | [03 §7](03-mutation-hot-path.md#7-maintenance); no unbounded cleanup charged to a tiny write |
-| R7 | Host semantic admission and caller/session/history authority | [06 §4](06-cluster-one-integration.md#4-the-cluster-one-runtime); malformed/cross-session/oversized input refusals |
+| R7 | **Withdrawn 2026-10-07** with the host-mediated wire: constructed objects no longer cross a trust boundary. Bounded root checks and Store-volume confinement replace it | [06 §4](06-cluster-one-integration.md#4-the-daemon-adapter), [§6](06-cluster-one-integration.md#6-store-visibility), [§7](06-cluster-one-integration.md#7-authority) |
 | R8 | Whole-system memory/residency bounds and outcome-aware cancellation | [02 §11–§13](02-base-overlay.md#11-what-grows-with-what), [04 §10](04-concurrency-commit.md#10-second-commit-and-terminal-unmount) |
 
 The historical 334fc7437 design remains available through Git. This revision
@@ -272,7 +277,7 @@ and evidence: [08 §3](08-decisions-provenance.md#3-decisions-of-this-design).
 | Decision | Replaces |
 | --- | --- |
 | One initialized overlay file per daemon, Workspace-prefixed keys (K1, owner update) | Per-Workspace-file proposal at 334fc7437; separate writer/pager isolation withdrawn |
-| Construction in the daemon, storage and history on the host, joined by new bridge operations (K2) | Engines wired in the daemon; a control-only bridge |
+| Construction, storage and history in the daemon over a directly opened shared Store; control-only host and bridge (K2 revised, K28–K33, owner direction 2026-10-07) | Storage and history on the host, joined by bridge data operations |
 | In-memory journal, exclusive locking, one daemon-owned connection, no sync (K3) | WAL with reader connections and explicit checkpoints |
 | Bounded payload updates with byte-exact visibility; no base-payload copy-up (K5, revised) | A fixed 4 KiB block grid with copy-up |
 | Bounded failed-capture resolution without foreground payload merge (K8, replacement required) | One extra layer per failed attempt |
@@ -356,7 +361,8 @@ and qualification shape:
 
 Product/policy choices are in [08 §7](08-decisions-provenance.md#7-questions-only-the-owner-can-answer):
 One daemon database and unlimited Bash runtime are now owner decisions. Remaining
-choices concern crash survival, global Store profile, command identity isolation, SDK view and
+choices concern crash survival, the shared Store's Disposable profile (O-21), host access
+after install (O-18), command identity isolation, SDK view and
 ctime policy, conflict behavior, and exact uncertain-history resolution.
 Terminal unmount includes logical close/cleanup and discards uncommitted local
 changes; O-14 no longer requires a separate close decision.
