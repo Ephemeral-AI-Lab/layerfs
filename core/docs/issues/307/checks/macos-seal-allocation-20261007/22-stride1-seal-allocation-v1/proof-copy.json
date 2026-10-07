@@ -1,0 +1,10 @@
+{
+  "method": "independent read/write byte stream, not APFS clone",
+  "bytes": 85348352,
+  "buffer_bytes": 65536,
+  "limit_bytes": 92342273,
+  "cache_io_hint": "macOS F_NOCACHE on source/destination; hint, not a memory bound",
+  "sha256": "94613822a21812af141537decea420256f5a6118a01bcce59d6796d4828fac19",
+  "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/macos-seal-allocation-20261007-phase7-sqlite-disposable-history-stride1-group-rows-indexed-seal-allocation-v1-candidate/independent-proof.sqlite",
+  "sidecars": []
+}

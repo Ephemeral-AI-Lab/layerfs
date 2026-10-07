@@ -1,0 +1,161 @@
+{
+  "timestamp": "2026-10-07T16:15:38.735860+00:00",
+  "case": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-seal-allocation-v1",
+  "source": "4156e90707b4b9fa8ca1bdc1b28cf3b5d8999521",
+  "source_tree": "6d107c7036dea2dbafb6cbc3f405548e32da84b5",
+  "checks": "PASS",
+  "receipt_sha256": "dd156059c492aafb125436e53b4a119115585906dafd7ba34ac98a39ee569058",
+  "copied_receipts_sha256": {
+    "build.stderr": "804b7fc2c908ae357f7422b813db4cfb7ff594fdaaceaceacd8c7b83cc50b657",
+    "build.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "census.json": "f3eda49dfbe1a9b3a2877f444056f4be783f3754bc6106a2d2febd9081d9045b",
+    "close.json": "941bd299e5c0dc7556b7487868f3a49d4713056e1f78f8468317799e05f39083",
+    "cold.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "cold.stdout": "a7dc0e0143cd0a0a8e401124bcc2daaf0ec17d4a9f329258b37f30acb4946318",
+    "driver.stderr": "dc74ab297bb766ae9936b3c6349611803f64493c91bc9c09902493c7cc842d90",
+    "driver.stdout": "9caa86f8434c9293d5e924f0e4365a8b3143247bfb62b760792851ebe2eab782",
+    "manifest.json": "c7560f323bdce0f8dca1f0edf220f7f271fe6de78e4a9239d915a6e67f0d210c",
+    "namespace-proof.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "namespace-proof.stdout": "f4687c30396ce58c7ba1b45303fe3103aab692b2a378c7bf16eaec8f795885de",
+    "producer-proof-input.json": "886565316c8fff9b6c0bd64e1bd5bd1a76a65dff02b6ed8bb13391c5e6e74d66",
+    "proof-copy-cold.json": "33a2ddc256606b6120ef8b76ce511b76ac83c724eb925c1cfb2890c014824392",
+    "proof-copy-cold.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "proof-copy-cold.stdout": "d99c0a6cdb3ba388ab5787280b315408d2f42e3f724d5114d0e2c5acf1f767fc",
+    "proof-copy.json": "d232449787495c7669f7669cc074a9612f9098152cae4dd407a68dcf61c29550",
+    "proof-request.json": "52d5d7b81545e5a3f67efd277ffc5da4768cf573b51d2ea2531601ff512f2996",
+    "proof-sql-work.json": "eb48ac00dfe0473fac6a676787b236a26ede389f9eaa6de26dfceb50e7205c88",
+    "proof-vfs.json": "d5c4604f90e7be341fdd2ccc669e3e565eac14ea98cbe1cea0ad4cb3139c5ef6",
+    "receipt.json": "dd156059c492aafb125436e53b4a119115585906dafd7ba34ac98a39ee569058",
+    "reference-pins.json": "b8ae294eec98a84eb3a6ce8b9d46367201800ae7da9f0b32b31a9ac352317743",
+    "sql-work.json": "097faa26b191d2e70b511eaabea14c258f8c34df57e5c54fd6b8e88e184fadc2",
+    "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verifier.stdout": "20c828a6251e3ac308f37f0686cc4e973142b4a20ecc7bbd029644d5862ed0f8",
+    "vfs.json": "4d7561f65a2ff3545686b91f317b0f5a9d6052dcef2c338aee71bea7fe15998e"
+  },
+  "prior_wal_receipt_sha256": "fac1a26fe4c6535efb6e424c32969b3e7c6065556f5edb064ed58d57740a7462",
+  "profiles": {
+    "cache_size": -2048,
+    "checkpoint_fullfsync": 1,
+    "foreign_keys": 1,
+    "fullfsync": 0,
+    "identity": "sqlite-wal-off-v2",
+    "journal_mode": "wal",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 0,
+    "temp_store": 2,
+    "wal_checkpoint_performed": true
+  },
+  "original_owners": {
+    "new_original": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/macos-seal-allocation-20261007-phase7-sqlite-disposable-history-stride1-group-rows-indexed-seal-allocation-v1-candidate/store.sqlite",
+      "logical_bytes": 85348352,
+      "allocated_bytes": 85348352,
+      "device": 16777230,
+      "inode": 871933903,
+      "sha256": "94613822a21812af141537decea420256f5a6118a01bcce59d6796d4828fac19",
+      "sidecars": []
+    },
+    "new_proof_copy": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/macos-seal-allocation-20261007-phase7-sqlite-disposable-history-stride1-group-rows-indexed-seal-allocation-v1-candidate/independent-proof.sqlite",
+      "logical_bytes": 85348352,
+      "allocated_bytes": 85348352,
+      "device": 16777230,
+      "inode": 871934054,
+      "sha256": "94613822a21812af141537decea420256f5a6118a01bcce59d6796d4828fac19",
+      "sidecars": []
+    },
+    "prior_failed_original": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1-candidate/store.sqlite",
+      "logical_bytes": 85348352,
+      "allocated_bytes": 101498880,
+      "device": 16777230,
+      "inode": 871886648,
+      "sha256": "94613822a21812af141537decea420256f5a6118a01bcce59d6796d4828fac19",
+      "sidecars": []
+    }
+  },
+  "raw_metrics": {
+    "comparison_ns": 177632200958,
+    "command_wall_ns": 200933227625,
+    "command_budget_ns": 300000000000,
+    "verification_wall_ns": 18952711334,
+    "verification_budget_ns": 30000000000,
+    "storage_bytes": 85348352,
+    "allocation_ceiling": 92342273
+  },
+  "allocated_delta_bytes": -16150528,
+  "allocated_delta_percent": -15.912025827280065,
+  "time_delta_ns": -5222611709,
+  "time_delta_percent": -2.8561521749558687,
+  "allocation_headroom_bytes": 6993921,
+  "remaining_logical_delta_vs_memory": {
+    "bytes": 176128,
+    "percent": 0.206790420313552
+  },
+  "all_157_roots_match_prior": true,
+  "canonical_inventory": "f0966c7721109a06a84ccad49f1e7b209090df627fb31f5094a0476bf80f1d87",
+  "proof": {
+    "acquired_content_bytes": 5347088,
+    "admission": "NOT_RUN",
+    "authenticated_bytes": 921174,
+    "custody_states": 157,
+    "independent_root_pins": "CHECKED",
+    "paths": 904143,
+    "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+    "sampled_content_paths": 66,
+    "states": 157,
+    "status": "CHECKED"
+  },
+  "sealing_ns": 31452000,
+  "resources": {
+    "cpu_ns": 120397312000,
+    "peak_rss_bytes": 327057408,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+  },
+  "source_cold": {
+    "files": 180444,
+    "resident_after": 0
+  },
+  "state_cold_checks": 157,
+  "historical_comparison": {
+    "admission_eligible": false,
+    "allocation_ceiling": 92342273,
+    "allocation_gate": "PASS",
+    "historical_speed_arithmetic": "PASS",
+    "incumbent": {
+      "comparison_ns": 185189368250,
+      "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/candidate/receipt.json",
+      "sha256": "9e982606b131ae4a85f8d971172c231b9de0330076edf664825b6b9cdba812a5",
+      "storage_bytes": 85172224
+    },
+    "kind": "historical-unpaired-comparison",
+    "prior_wal": {
+      "allocation_gate": "FAIL",
+      "comparison_ns": 182854812667,
+      "path": "core/docs/issues/307/checks/disposable-wal-matrix-20261007/27-history-stride1-group-rows-indexed-wal-v1/receipt.json",
+      "sha256": "fac1a26fe4c6535efb6e424c32969b3e7c6065556f5edb064ed58d57740a7462",
+      "source": "06dc05a7d6a8e77fb1c5ffa532225ad635920275",
+      "storage_bytes": 101498880,
+      "storage_delta_bytes": -16150528,
+      "time_delta_ns": -5222611709
+    },
+    "reference": {
+      "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/baseline/receipt.json",
+      "sha256": "b52964747a9647f350b0ccd1267db5ed4cc071d72e30d4c09bc939442797b868"
+    },
+    "reference_ns": 192712692209,
+    "reference_profile": "phase4.5-memory-off",
+    "reference_source": "7edddbdb8e8512627aed0ed42533ef099d802384",
+    "reference_storage_bytes": 86179840,
+    "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+    "storage_delta_bytes": -831488,
+    "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+    "time_delta_ns": -15080491251,
+    "time_delta_percent": -7.825375214334594
+  },
+  "failed_fixture_retained": true,
+  "new_temporary_leaks": [],
+  "docker": "9cf2fe345496 layerfs-experiment-305-dev Up 4 days\nce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927 Up 4 days\nd2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab Up 5 days\nd2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d Up 5 days\n",
+  "terminal_unknown": null
+}

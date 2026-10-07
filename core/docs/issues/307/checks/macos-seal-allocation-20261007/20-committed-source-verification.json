@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-10-07T16:10:40.689795+00:00",
+  "results": [
+    {
+      "receipt": "01-plan-loc.json",
+      "commit": "122b8c1b3f97c838515b6795af9b11bd2333c736",
+      "counted_product_trees": {
+        "core/crates": "990995a2f63a8eee3f1bc0d8f6251172be469d85",
+        "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+        "core/Cargo.toml": "2d48eafded0bce0288bcab8b581f9c02daf09566"
+      },
+      "matches": true
+    },
+    {
+      "receipt": "19-implementation-loc.json",
+      "commit": "4156e90707b4b9fa8ca1bdc1b28cf3b5d8999521",
+      "counted_product_trees": {
+        "core/crates": "611c3a5387cffc73816ef0358d8b8b285c8b52cb",
+        "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+        "core/Cargo.toml": "2d48eafded0bce0288bcab8b581f9c02daf09566"
+      },
+      "matches": true
+    }
+  ],
+  "status": [
+    "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+    "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+    "?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md"
+  ]
+}

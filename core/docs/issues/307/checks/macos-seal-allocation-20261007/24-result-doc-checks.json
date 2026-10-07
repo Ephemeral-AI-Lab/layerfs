@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-10-07T16:16:59.116801+00:00",
+  "status": "PASS",
+  "links": [
+    "../../../../docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md",
+    "checks/macos-seal-allocation-20261007/",
+    "checks/macos-seal-allocation-20261007/22-stride1-seal-allocation-v1/receipt.json",
+    "checks/macos-seal-allocation-20261007/21-stride1-wrapper/run.json",
+    "checks/macos-seal-allocation-20261007/23-result-and-preservation.json",
+    "DISPOSABLE-WAL-MATRIX-20261007.md"
+  ],
+  "whitespace": "PASS",
+  "result_change_scope": "docs/retained evidence only; final product unchanged since4156e9070; no repeated runtime checks"
+}
