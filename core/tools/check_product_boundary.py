@@ -15,18 +15,20 @@ DOC_CODE = re.compile(r"^\s*(?:///|//!)\s*```", re.MULTILINE)
 UNSAFE = re.compile(r"\bunsafe\b")
 
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
-# FFI module (encoding/codec.rs); its siblings must stay unsafe-free. The
+# FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
+# seal file-control module. Their siblings stay unsafe-free. The
 # comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
+    "layerfs-persistence": "src/backend/sqlite/file_control.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-persistence", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-daemon", "layerfs-sdk", "layerfs-bridge")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-daemon", "layerfs-sdk", "layerfs-bridge")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
     "layerfs-telemetry": "#![forbid(unsafe_code)]",
-    "layerfs-persistence": "#![forbid(unsafe_code)]",
+    "layerfs-persistence": "#![deny(unsafe_code)]",
     "layerfs-project": "#![forbid(unsafe_code)]",
     "layerfs-overlay": "#![forbid(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",

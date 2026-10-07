@@ -1,0 +1,9 @@
+# {"timestamp": "2026-10-07T06:38:08.497837+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/space_reclamation-dafafa9ef0aa8a4f", "--exact", "bounded_reclamation_preserves_another_live_operation_and_survives_reopen", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/space_reclamation-dafafa9ef0aa8a4f": "c0158ffc264e1bfdeb8710395caa4699d86ce6cd8b6aa43508af0e49e3fc6662"}, "source_diff_sha256": "2ee62622ac97c2894d87aa91577c13fbbc3242a5d9ca35d92f26ef68b1f528d2", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test bounded_reclamation_preserves_another_live_operation_and_survives_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.12s
+
+
+# exit=0

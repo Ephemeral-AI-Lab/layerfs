@@ -13,34 +13,39 @@
 
 ## Hosting scope for cluster one and cluster two
 
-Owner/current-design consolidation, 2026-10-05: topology is scoped to the actual
-product operation and registered family. Both current workstreams implement in
-core; root crates are the v0.1.6 reference until cluster-two retirement.
+Owner/current-design consolidation, 2026-10-07: topology is scoped to the actual
+product operation and registered family. Both workstreams implement in core;
+root crates remain the v0.1.6 reference until cluster two completes. This section
+records the owner's serverless direction, not completed integrated qualification.
 
-- Current cluster-one global Store/storage encoding/history persistence run on
-  the supported macOS host. The host application embeds their public libraries.
-  The active provider is host-local SQLite; unavailable backends/platforms fail
-  explicitly. No Docker-owned global Store, prepared Store image or alternate
-  coordinator is an error-driven substitute.
-- The target cluster-two Linux daemon owns FUSE, mutable Workspace metadata and
-  physical payload, one local overlay SQLite per daemon, and logical content
-  reads/construction. Global Storage/Save encoding and history use bounded
-  authenticated host-runtime adapters. The retired layerfs-server is not revived.
-  This placement is a target contract, not a claim that integration is built.
-- New integrated measurements must register and exercise that authentic path,
-  include all owning process/cache/resource scopes, and establish correctness.
-  Supporting the daemon overlay does not move the global provider into Linux or
-  authorize a harness-only replacement, hidden prep, reduced root or warm credit.
-- Retained v0.1.6 host-owned Workspace/spool/SQLite families and the September
-  sandbox-snapshot exception keep their originally frozen topology and verdicts.
-  Do not retarget, rewrite or promote old receipts through this clarification.
-  A changed operation/topology requires a prospective identity/selection.
+- Project Init runs on macOS through the public cluster-one libraries and
+  system SQLite. It creates/imports/seals one Store file and installs it once
+  into a named Docker VM volume. The host is control-only after installation.
+- Each Linux daemon directly opens that shared global Store, using the existing
+  Storage/History ports in-process for object reads, encoding, Save and history.
+  There is no host runtime, server adapter, coordinator or lock service in the
+  data path. Linux uses the pinned bundled SQLite. The Store must be on a named
+  in-VM volume or container-local filesystem, never the repository host share.
+- Each daemon separately owns one local overlay SQLite database for all its
+  Workspaces. FUSE, filesystem semantics, Content and ordinary Bash Exec belong
+  to the daemon's Linux operation path. Global Store WAL and local overlay
+  MEMORY/OFF are distinct profiles and databases.
+- New integrated measurements register and exercise the implemented path with
+  exact source/build/install/provider/SQLite identities and all process, cache
+  and resource scopes. A harness-only substitute, reduced root, hidden
+  preparation or cache credit cannot establish that integration. A component
+  Init measurement remains host Init and does not prove daemon integration.
+- Retained cluster-one, host-mediated, v0.1.6 and September experimental families
+  keep their frozen topology, limits and verdicts. Changed topology requires a
+  prospective selection. Removed transport/allocation mechanisms receive an
+  explicit new NOT_RUN disposition beside their successor; old failures are
+  never relabelled or removed.
 
-The former blanket host-only Workspace/SQLite wording is superseded for the
-replacement daemon overlay/content path. Historical host-only families remain
-host-only; unsupported global providers still require real integration rather
-than a fallback. Read the [cluster-one handbook](../../cluster_one_handbook.md)
-and [cluster-two design](../../core/docs/issues/303/README.md) for current scope.
+This alignment implements owner ruling O-1/K28–K33 in the
+[cluster-two design](../../core/docs/issues/303/README.md). Read the
+[cluster-one handbook](../../cluster_one_handbook.md) for implemented APIs and
+source pins. Placement policy alone does not admit a sample: registration,
+correctness, source custody, cache enforcement and the owning gates still apply.
 
 This document is the normative policy for LayerFS performance benchmarks.
 `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative. A `MUST` or `MUST

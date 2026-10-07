@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-10-07T06:30:56.326968+00:00",
+  "receipt_06": "No build attempted: container source hash check refused three stale Project files.",
+  "diagnosis": "Separate host/container reads after the copy-and-rename invalidation now agree on sizes and SHA-256. Environment freshness established before another build.",
+  "hashes": {
+    "core/crates/layerfs-project/examples/cause_namespace.rs": "ea9df5a9d6f00fd1fb518b23b611fb7438e43f007059e920e4fa55dcd0aad780",
+    "core/crates/layerfs-project/examples/durable_init_costs.rs": "0b28487f7670b82b796f36a5bf17274223cfac8f1d89ae70b5b7eaa7cdd25224",
+    "core/crates/layerfs-project/tests/init_sqlite.rs": "1844edfe1f7895e7b2f4ef3ff6f79f9a05d74e7b23d5e9927280bbc859151603"
+  }
+}

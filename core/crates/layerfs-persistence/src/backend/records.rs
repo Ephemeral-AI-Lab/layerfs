@@ -78,14 +78,13 @@ pub(crate) enum BackendError {
     ReadOnly,
     Capacity,
     Integrity,
-    #[cfg(target_os = "macos")]
-    Filesystem(std::io::ErrorKind),
     Unknown,
 }
 impl From<BackendError> for layerfs_storage::port::PersistenceError {
     fn from(e: BackendError) -> Self {
         match e {
             BackendError::Unknown => Self::Uncertain,
+            BackendError::Busy => Self::Busy,
             BackendError::Integrity => Self::Malformed,
             _ => Self::Refused {
                 status: format!("{e:?}"),
@@ -100,8 +99,6 @@ impl From<BackendError> for layerfs_history::HistoryError {
             BackendError::ReadOnly => Self::ContinuityUnavailable,
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),
-            #[cfg(target_os = "macos")]
-            BackendError::Filesystem(_) => Self::ContinuityUnavailable,
             BackendError::Unknown => Self::UnknownOutcome,
         }
     }

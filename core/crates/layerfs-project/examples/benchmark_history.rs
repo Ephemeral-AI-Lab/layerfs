@@ -306,27 +306,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let custody_start = Instant::now();
     let custody = retained::verify(&handles.history, scope, &roots)?;
     let custody_ns = custody_start.elapsed().as_nanos();
-    let checkpoint = handles.checkpoint()?;
     let profile = handles.profile();
     eprintln!(
         "EFFECTIVE_PACK_LAYOUT {{\"layout\":\"{:?}\"}}",
         profile.pack_layout
     );
-    eprintln!("EFFECTIVE_PROFILE {{\"identity\":\"{}\",\"journal_mode\":\"{}\",\"synchronous\":{},\"foreign_keys\":{},\"fullfsync\":{},\"checkpoint_fullfsync\":{},\"page_size\":{},\"cache_size\":{},\"mmap_size\":{},\"temp_store\":{},\"wal_checkpoint_performed\":{}}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store,checkpoint.wal_checkpoint_performed);
-    if checkpoint.busy {
-        return Err("final checkpoint obstructed".into());
-    }
+    eprintln!("EFFECTIVE_PROFILE {{\"identity\":\"{}\",\"journal_mode\":\"{}\",\"synchronous\":{},\"foreign_keys\":{},\"fullfsync\":{},\"checkpoint_fullfsync\":{},\"page_size\":{},\"cache_size\":{},\"mmap_size\":{},\"temp_store\":{},\"wal_checkpoint_performed\":true}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store);
     eprintln!(
-        "DIAGNOSTIC sqlite={:?} storage={:?} checkpoint={checkpoint:?}",
+        "DIAGNOSTIC sqlite={:?} storage={:?}",
         handles.diagnostics()?,
         storage.diagnostics()
     );
-    let checkpoint_ns = checkpoint.wall_ns;
     let finalization_ns = finalization.elapsed().as_nanos();
     let close = Instant::now();
     drop(storage);
-    drop(handles);
-    let close_ns = close.elapsed().as_nanos();
+    let sealed = handles.seal()?;
+    eprintln!("SEALED_STORE {sealed:?}");
+    let seal_ns = close.elapsed().as_nanos();
+    let close_ns = seal_ns;
     eprintln!(
         "HISTORY_COLD_TOTAL {{\"checks\":{},\"wall_ns\":{}}}",
         cold.checks, cold.wall_ns
@@ -349,6 +346,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         census.update(&[*role]);
         census.update(&(*bytes as u64).to_le_bytes());
     }
-    println!("{{\"status\":\"{}\",\"selected_states\":{},\"states\":{},\"custody_states\":{},\"operation_ns\":{},\"profile_identity\":\"{}\",\"bootstrap_ns\":{},\"custody_ns\":{},\"checkpoint_ns\":{},\"finalization_ns\":{},\"close_ns\":{},\"stages_ns\":{:?},\"roots\":[{}],\"canonical_objects\":{},\"canonical_bytes\":{},\"canonical_inventory_sha256\":\"{}\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"COMPLETE"},row.states(),count,custody,begin.elapsed().as_nanos(),profile_identity,bootstrap_ns,custody_ns,checkpoint_ns,finalization_ns,close_ns,stages,list,inventory.len(),canonical_bytes,workload::digest::hex(&census.finish()));
+    println!("{{\"status\":\"{}\",\"selected_states\":{},\"states\":{},\"custody_states\":{},\"operation_ns\":{},\"profile_identity\":\"{}\",\"bootstrap_ns\":{},\"custody_ns\":{},\"seal_ns\":{},\"finalization_ns\":{},\"close_ns\":{},\"stages_ns\":{:?},\"roots\":[{}],\"canonical_objects\":{},\"canonical_bytes\":{},\"canonical_inventory_sha256\":\"{}\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"COMPLETE"},row.states(),count,custody,begin.elapsed().as_nanos(),profile_identity,bootstrap_ns,custody_ns,seal_ns,finalization_ns,close_ns,stages,list,inventory.len(),canonical_bytes,workload::digest::hex(&census.finish()));
     Ok(())
 }

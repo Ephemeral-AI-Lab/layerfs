@@ -1,9 +1,9 @@
-//! Explicit backend and host-local database selection.
+//! Explicit backend and local database selection.
 use std::path::PathBuf;
 /// Explicit persistence engine; no error-driven fallback.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackendSelection {
-    /// Embedded host-local SQLite.
+    /// Embedded local SQLite.
     Sqlite,
     /// Unavailable placeholder.
     Postgres,
@@ -11,11 +11,11 @@ pub enum BackendSelection {
 /// Explicit SQLite completion and durability contract, selected before opening.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SqlitePersistenceProfile {
-    /// WAL/FULL with macOS full synchronization; the default profile.
+    /// WAL/FULL; macOS additionally requests full synchronization.
     #[default]
     Durable,
-    /// Disk-backed MEMORY/OFF; runtime atomicity without crash durability.
-    /// A crash or power loss can corrupt the Store or lose acknowledged data.
+    /// WAL/OFF; survives process termination, without kernel-crash durability.
+    /// A kernel or VM crash can corrupt the Store or lose acknowledged data.
     Disposable,
 }
 /// Explicit physical layout for a newly created embedded Store.

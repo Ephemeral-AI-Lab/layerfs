@@ -6,6 +6,15 @@ from check_product_boundary import production_files, unsafe_violations, violatio
 
 
 class ProductBoundaryTests(unittest.TestCase):
+    def test_persistence_seal_ffi_is_limited_to_the_authorized_module(self):
+        base = Path("core/crates/layerfs-persistence/src")
+        ffi = "fn seal() { unsafe { file_control(); } }"
+        self.assertFalse(unsafe_violations(base / "backend/sqlite/file_control.rs", ffi))
+        for sibling in ["backend/sqlite/seal.rs", "store/seal.rs", "backend/sqlite/connection.rs"]:
+            self.assertTrue(unsafe_violations(base / sibling, ffi))
+        self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]"))
+        self.assertTrue(unsafe_violations(base / "lib.rs", "pub mod store;"))
+
     def test_sdk_source_edges_and_unsafe_boundary(self):
         path = Path("core/crates/layerfs-api/sdk/src/runtime/owner.rs")
         self.assertFalse(violations(path, "use layerfs_persistence::Handles;"))

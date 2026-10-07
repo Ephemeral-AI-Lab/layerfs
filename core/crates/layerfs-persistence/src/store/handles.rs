@@ -1,7 +1,5 @@
 //! Application-owned physical and history handles over one database session.
-use crate::{
-    AcquisitionProvider, Checkpoint, ConnectionProfile, HistoryProvider, SqlWork, StorageProvider,
-};
+use crate::{AcquisitionProvider, ConnectionProfile, HistoryProvider, SqlWork, StorageProvider};
 use layerfs_storage::port::PersistenceError;
 use std::sync::Arc;
 /// Store composition with no service bootstrap or implicit authority creation.
@@ -22,8 +20,8 @@ impl Handles {
     /// budget must be in `1..=RECLAMATION_PAGE_LIMIT`. A caller may continue
     /// acknowledged jobs while debt remains, releasing the writer between
     /// jobs; a refused or uncertain attempt is never replayed automatically.
-    /// Durable jobs retain WAL/FULL/fullfsync. A final checkpoint pays the WAL
-    /// and filesystem allocation release separately, within caller timing.
+    /// This host Init maintenance is unavailable through daemon Store ports.
+    /// Final seal accounts for the WAL separately within caller timing.
     pub fn reclaim_space(&self, pages: u32) -> Result<crate::SpaceReclamation, PersistenceError> {
         self.storage
             .session
@@ -62,10 +60,5 @@ impl Handles {
             crate::backend::sqlite::acquisition::statements::explain(tx)
                 .map_err(PersistenceError::from)
         })
-    }
-    /// Completes the selected profile and releases unused allocation, within caller timing.
-    /// Durable checkpoints WAL; Disposable has no WAL and retains allocation release.
-    pub fn checkpoint(&self) -> Result<Checkpoint, PersistenceError> {
-        self.storage.session.checkpoint().map_err(Into::into)
     }
 }

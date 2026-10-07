@@ -119,8 +119,15 @@ fn bounded_reclamation_preserves_another_live_operation_and_survives_reopen() {
                 .len(),
             10
         );
-        handles.checkpoint().unwrap();
-        drop(handles);
+        handles.seal().unwrap();
+        // A daemon opens its write handle before its read set. Apple SQLite
+        // cannot initialize missing WAL sidecars from a read-only connection.
+        let writer = Handles::open_writable(
+            config(&path, profile),
+            &history().binding_key,
+            history().cursor_key,
+        )
+        .unwrap();
         let opened = Handles::open_read_only(
             config(&path, profile),
             &history().binding_key,
@@ -133,16 +140,11 @@ fn bounded_reclamation_preserves_another_live_operation_and_survives_reopen() {
             Err(PersistenceError::Refused { .. })
         ));
         drop(opened);
-        let opened = Handles::open_writable(
-            config(&path, profile),
-            &history().binding_key,
-            history().cursor_key,
-        )
-        .unwrap();
         assert_eq!(
-            opened.acquisition.abandoned(None, 8).unwrap()[0].held_rows,
+            writer.acquisition.abandoned(None, 8).unwrap()[0].held_rows,
             retained.held_rows
         );
+        writer.seal().unwrap();
     }
 }
 

@@ -105,7 +105,8 @@ pub(crate) fn encode(writer: &mut Writer, error: &RuntimeError) -> FrameResult<(
                     child(&mut tasks, 2, Task::Storage(cleanup))?;
                     child(&mut tasks, 1, Task::Storage(original))?;
                 }
-                StorageError::OwnershipUnavailable | StorageError::Aborted => (),
+                StorageError::Busy | StorageError::OwnershipUnavailable | StorageError::Aborted => {
+                }
             },
             Task::History(e) => match e {
                 HistoryError::WithStage { cause, stage } => {
@@ -259,6 +260,7 @@ fn storage_code(e: &StorageError) -> u8 {
         StorageError::UnknownOutcome { .. } => 13,
         StorageError::CleanupFailed { .. } => 14,
         StorageError::Aborted => 15,
+        StorageError::Busy => 16,
     }
 }
 fn history_code(e: &HistoryError) -> u8 {
@@ -287,6 +289,7 @@ fn persistence_code(e: &PersistenceError) -> u8 {
         PersistenceError::Refused { .. } => 3,
         PersistenceError::Malformed => 4,
         PersistenceError::Uncertain => 5,
+        PersistenceError::Busy => 6,
     }
 }
 fn io_code(kind: std::io::ErrorKind) -> u8 {

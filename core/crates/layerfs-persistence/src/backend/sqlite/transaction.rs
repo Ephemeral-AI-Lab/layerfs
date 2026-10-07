@@ -26,36 +26,6 @@ impl Transaction<'_> {
     pub(crate) fn reclamation_enabled(&self) -> bool {
         self.owner.profile.auto_vacuum == 2
     }
-    pub(crate) fn before_pack(&self, capacity: usize) -> Result<(), BackendError> {
-        #[cfg(target_os = "macos")]
-        {
-            let start = Instant::now();
-            let result = self
-                .owner
-                .allocation
-                .as_ref()
-                .ok_or(BackendError::Integrity)?
-                .before_pack(capacity);
-            let wall = start.elapsed().as_nanos() as u64;
-            self.work.borrow_mut().preallocation_ns += wall;
-            if let Ok((bytes, close)) = result {
-                let mut work = self.work.borrow_mut();
-                work.preallocation_calls += u64::from(bytes != 0);
-                work.preallocation_bytes += bytes;
-                work.preallocation_close_ns += close;
-            }
-            if result.as_ref().err() == Some(&BackendError::Unknown) {
-                self.uncertain.set(true);
-            }
-            result.map(|_| ())
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = capacity;
-            Err(BackendError::Integrity)
-        }
-    }
-
     pub(crate) fn input_limit(
         &self,
         bindings: usize,

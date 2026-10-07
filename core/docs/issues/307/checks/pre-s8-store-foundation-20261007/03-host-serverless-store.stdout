@@ -1,0 +1,35 @@
+# {"timestamp": "2026-10-07T06:27:50.207545+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/serverless_store-952c1267a522d34e", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/serverless_store-952c1267a522d34e": "6e9462412e3a1f880c3e2b2314c5a6d8d7d29dfd52387742576543efde4366d2"}, "source_diff_sha256": "b43795141a4cd3154fb20cfd7045a03d87af9becaeb277ca0bc9b29a098a6ea4", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+
+running 5 tests
+test disposable_create_publish_seal_and_reopen_all_layouts ... STORE_PROFILE ConnectionProfile { persistence: Disposable, pack_layout: Monolithic, acquisition: Absent, identity: "sqlite-wal-off-v2", sqlite_version: "3.51.0", platform: "macos", vfs_selection: "SQLite default; name not directly observed", compile_options: ["ATOMIC_INTRINSICS=1", "BUG_COMPATIBLE_20160819", "CCCRYPT256", "CODEC=see-cccrypt", "COMPILER=clang-21.0.0", "DEFAULT_AUTOVACUUM", "DEFAULT_CACHE_SIZE=2000", "DEFAULT_CKPTFULLFSYNC", "DEFAULT_FILE_FORMAT=4", "DEFAULT_JOURNAL_SIZE_LIMIT=32768", "DEFAULT_LOOKASIDE=1200,102", "DEFAULT_MEMSTATUS=0", "DEFAULT_MMAP_SIZE=0", "DEFAULT_PAGE_SIZE=4096", "DEFAULT_PCACHE_INITSZ=20", "DEFAULT_RECURSIVE_TRIGGERS", "DEFAULT_SECTOR_SIZE=4096", "DEFAULT_SYNCHRONOUS=2", "DEFAULT_WAL_AUTOCHECKPOINT=1000", "DEFAULT_WAL_SYNCHRONOUS=1", "DEFAULT_WORKER_THREADS=0", "DIRECT_OVERFLOW_READ", "DQS=3", "ENABLE_API_ARMOR", "ENABLE_BYTECODE_VTAB", "ENABLE_COLUMN_METADATA", "ENABLE_DBSTAT_VTAB", "ENABLE_FTS3", "ENABLE_FTS3_PARENTHESIS", "ENABLE_FTS3_TOKENIZER", "ENABLE_FTS4", "ENABLE_FTS5", "ENABLE_LOCKING_STYLE=1", "ENABLE_MATH_FUNCTIONS", "ENABLE_NORMALIZE", "ENABLE_PREUPDATE_HOOK", "ENABLE_RTREE", "ENABLE_SESSION", "ENABLE_SETLK_TIMEOUT", "ENABLE_SNAPSHOT", "ENABLE_SQLLOG", "ENABLE_STMT_SCANSTATUS", "ENABLE_UNKNOWN_SQL_FUNCTION", "ENABLE_UPDATE_DELETE_LIMIT", "HAS_CODEC_RESTRICTED", "HAVE_ISNAN", "MALLOC_SOFT_LIMIT=1024", "MAX_ATTACHED=10", "MAX_COLUMN=2000", "MAX_COMPOUND_SELECT=500", "MAX_DEFAULT_PAGE_SIZE=8192", "MAX_EXPR_DEPTH=1000", "MAX_FUNCTION_ARG=127", "MAX_LENGTH=2147483645", "MAX_LIKE_PATTERN_LENGTH=50000", "MAX_MMAP_SIZE=1073741824", "MAX_PAGE_COUNT=1073741823", "MAX_PAGE_SIZE=65536", "MAX_SQL_LENGTH=1000000000", "MAX_TRIGGER_DEPTH=1000", "MAX_VARIABLE_NUMBER=500000", "MAX_VDBE_OP=250000000", "MAX_WORKER_THREADS=8", "MUTEX_UNFAIR", "OMIT_AUTORESET", "OMIT_LOAD_EXTENSION", "STMTJRNL_SPILL=131072", "SYSTEM_MALLOC", "TEMP_STORE=1", "THREADSAFE=2", "USE_URI"], journal_mode: "wal", synchronous: 0, foreign_keys: 1, fullfsync: 0, checkpoint_fullfsync: 1, page_size: 4096, auto_vacuum: 0, wal_autocheckpoint: 1000, journal_size_limit: 4194304, cache_size: -2048, busy_timeout: 0, mmap_size: 0, temp_store: 2, variable_limit: 500000, sql_length_limit: 1000000000, length_limit: 2147483645, column_limit: 2000 }
+
+thread 'disposable_create_publish_seal_and_reopen_all_layouts' panicked at crates/layerfs-persistence/tests/serverless_store.rs:199:37:
+called `Result::unwrap()` on an `Err` value: Refused { status: "Store sidecar remains after seal" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test lock_child ... ok
+test non_wal_store_is_refused_without_conversion ... 
+thread 'non_wal_store_is_refused_without_conversion' panicked at crates/layerfs-persistence/tests/serverless_store.rs:304:26:
+called `Result::unwrap()` on an `Err` value: Refused { status: "Store sidecar remains after seal" }
+FAILED
+test seal_refuses_retained_provider_without_effect ... 
+thread 'seal_refuses_retained_provider_without_effect' panicked at crates/layerfs-persistence/tests/serverless_store.rs:297:24:
+called `Result::unwrap()` on an `Err` value: Refused { status: "Store sidecar remains after seal" }
+FAILED
+test second_process_busy_has_no_effect_and_readers_keep_progressing ... 
+thread 'second_process_busy_has_no_effect_and_readers_keep_progressing' panicked at crates/layerfs-persistence/tests/serverless_store.rs:132:44:
+called `Result::unwrap()` on an `Err` value: Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" }
+FAILED
+
+failures:
+
+failures:
+    disposable_create_publish_seal_and_reopen_all_layouts
+    non_wal_store_is_refused_without_conversion
+    seal_refuses_retained_provider_without_effect
+    second_process_busy_has_no_effect_and_readers_keep_progressing
+
+test result: FAILED. 1 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+# exit=101

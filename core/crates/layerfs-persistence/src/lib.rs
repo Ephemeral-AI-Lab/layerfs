@@ -1,5 +1,5 @@
 //! Shared SQLite adapter with explicit Durable and disk-backed Disposable profiles.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;
 mod storage;
@@ -7,7 +7,7 @@ mod store;
 pub(crate) use store::config;
 pub(crate) use store::handles;
 mod history;
-pub use backend::sqlite::connection::{AllocationIdentity, Checkpoint, ConnectionProfile, SqlWork};
+pub use backend::sqlite::connection::{ConnectionProfile, SqlWork};
 pub use backend::sqlite::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
 pub use config::{
@@ -20,6 +20,7 @@ pub use storage::acquisition::AcquisitionProvider;
 pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
+pub use store::seal::SealedStore;
 
 mod metadata;
 mod objects;

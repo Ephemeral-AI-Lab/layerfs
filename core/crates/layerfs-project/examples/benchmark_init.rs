@@ -108,24 +108,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let reclamation_ns = reclamation_start.elapsed().as_nanos();
-    let allocation_before_checkpoint = allocated(Path::new(&args[2]))?;
-    let checkpoint = handles.checkpoint()?;
-    if checkpoint.busy {
-        return Err("final checkpoint obstructed".into());
-    }
+    let allocation_before_seal = allocated(Path::new(&args[2]))?;
     let work = handles.diagnostics()?;
     let profile = handles.profile().clone();
     let save_work = storage.save_work();
     let close = Instant::now();
     drop(storage);
-    drop(handles);
+    let sealed = handles.seal()?;
     let close_ns = close.elapsed().as_nanos();
     let allocation_after_close = allocated(Path::new(&args[2]))?;
     let complete_product_ns = start.elapsed().as_nanos();
-    println!("{{\"status\":\"COMPLETE\",\"operation_ns\":{complete_product_ns},\"bootstrap_ns\":{bootstrap_ns},\"init_ns\":{init_ns},\"reclamation_ns\":{reclamation_ns},\"reclaimed_pages\":{reclaimed_pages},\"reclamation_jobs\":{reclamation_jobs},\"checkpoint_ns\":{},\"close_ns\":{close_ns},\"root\":\"{}\",\"stack\":\"{}\",\"root_serial\":{},\"entries\":{}}}",checkpoint.wall_ns,hex(result.root.as_bytes()),hex(&[0x41;16]),result.root_serial,result.entries);
+    println!("{{\"status\":\"COMPLETE\",\"operation_ns\":{complete_product_ns},\"bootstrap_ns\":{bootstrap_ns},\"init_ns\":{init_ns},\"reclamation_ns\":{reclamation_ns},\"reclaimed_pages\":{reclaimed_pages},\"reclamation_jobs\":{reclamation_jobs},\"close_ns\":{close_ns},\"root\":\"{}\",\"stack\":\"{}\",\"root_serial\":{},\"entries\":{}}}",hex(result.root.as_bytes()),hex(&[0x41;16]),result.root_serial,result.entries);
     eprintln!("SPACE_PROFILE {{\"auto_vacuum\":{},\"page_budget\":{},\"reclaimed_pages\":{reclaimed_pages},\"jobs\":{reclamation_jobs}}}",profile.auto_vacuum,layerfs_persistence::RECLAMATION_PAGE_LIMIT);
-    eprintln!("EFFECTIVE_PROFILE {{\"identity\":\"{}\",\"journal_mode\":\"{}\",\"synchronous\":{},\"foreign_keys\":{},\"fullfsync\":{},\"checkpoint_fullfsync\":{},\"page_size\":{},\"cache_size\":{},\"mmap_size\":{},\"temp_store\":{},\"wal_checkpoint_performed\":{}}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store,checkpoint.wal_checkpoint_performed);
-    eprintln!("DIAGNOSTIC profile={profile:?} allocation_before_checkpoint={allocation_before_checkpoint} allocation_after_close={allocation_after_close}");
-    eprintln!("DIAGNOSTIC sqlite={work:?} checkpoint={checkpoint:?} storage={:?} saves={save_work:?} namespace={:?}",result.diagnostics,result.namespace_work);
+    eprintln!("EFFECTIVE_PROFILE {{\"identity\":\"{}\",\"journal_mode\":\"{}\",\"synchronous\":{},\"foreign_keys\":{},\"fullfsync\":{},\"checkpoint_fullfsync\":{},\"page_size\":{},\"cache_size\":{},\"mmap_size\":{},\"temp_store\":{},\"wal_checkpoint_performed\":true}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store);
+    eprintln!("DIAGNOSTIC profile={profile:?} allocation_before_seal={allocation_before_seal} allocation_after_close={allocation_after_close}");
+    eprintln!("DIAGNOSTIC sqlite={work:?} sealed={sealed:?} storage={:?} saves={save_work:?} namespace={:?}",result.diagnostics,result.namespace_work);
     Ok(())
 }

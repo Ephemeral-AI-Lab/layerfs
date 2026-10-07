@@ -41,7 +41,6 @@ fn crash_child() {
             count: 7,
         })
         .unwrap();
-    h.checkpoint().unwrap();
     println!("ACKNOWLEDGED_RECOVERY_UNIT");
     std::io::stdout().flush().unwrap();
     // Parent kills this process while its live Store/connection are still owned.
@@ -100,5 +99,6 @@ fn sigkill_preserves_acknowledged_body_locator_and_reservation() {
             .start,
         8
     );
-    assert!(!h.checkpoint().unwrap().busy);
+    drop(storage);
+    h.seal().unwrap();
 }

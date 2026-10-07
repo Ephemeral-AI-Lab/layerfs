@@ -68,7 +68,7 @@ fn wal_full_settings_and_unavailable_engine_are_explicit() {
     assert!(!path.exists());
     let h = create(&path);
     let p = h.profile();
-    assert_eq!(p.identity, "sqlite-wal-full-macos-fullfsync-v1");
+    assert_eq!(p.identity, "sqlite-wal-full-v2");
     assert_eq!(
         (
             &*p.journal_mode,
@@ -223,9 +223,7 @@ fn readonly_refusal_and_external_writer_busy_do_not_retry() {
             packs: 1,
             ordinals: 0
         }),
-        Err(PersistenceError::Refused {
-            status: "Busy".to_owned()
-        })
+        Err(PersistenceError::Busy)
     );
     let after = h.diagnostics().unwrap();
     assert_eq!(after.statements - before.statements, 1);
@@ -287,7 +285,7 @@ fn canonical_save_read_reuse_and_persisted_reservations_survive_reopen() {
             .start,
         8
     );
-    assert!(!h.checkpoint().unwrap().busy);
+    h.seal().unwrap();
 }
 
 #[test]
@@ -517,7 +515,7 @@ fn pack_insert_pages_keep_large_blob_binding_ownership_separate() {
 
 #[test]
 fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
-    use layerfs_persistence::SqlitePersistenceProfile::{Disposable, Durable};
+    use layerfs_persistence::SqlitePersistenceProfile::Durable;
     for selected in DEVELOPMENT_PROFILES {
         let t = Temp::new("explicit-profile");
         let path = t.join("db");
@@ -525,10 +523,7 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
         let h = Handles::create(cfg.clone(), StoragePolicy::frozen_default(), &config()).unwrap();
         let profile = h.profile();
         assert_eq!(profile.persistence, selected);
-        assert_eq!(
-            profile.journal_mode,
-            if selected == Durable { "wal" } else { "memory" }
-        );
+        assert_eq!(profile.journal_mode, "wal");
         assert_eq!(profile.synchronous, if selected == Durable { 2 } else { 0 });
         assert_eq!(profile.fullfsync, i64::from(selected == Durable));
         assert_eq!((profile.checkpoint_fullfsync, profile.temp_store), (1, 2));
@@ -554,26 +549,12 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
             h.storage.read_packs(&[9999], &mut absent),
             Err(PersistenceError::Missing)
         );
-        let completed = h.checkpoint().unwrap();
-        assert_eq!(completed.persistence, selected);
-        assert_eq!(completed.wal_checkpoint_performed, selected == Durable);
-        assert!(!completed.busy);
-        assert!(completed.allocation_before_bytes.is_some());
-        if selected == Disposable {
-            assert_eq!(
-                (completed.log_frames, completed.checkpointed_frames),
-                (-1, -1)
-            );
-            assert!(!t.join("db-wal").exists());
-        }
         drop(storage);
-        drop(h);
-        let mismatched = cfg.clone().with_sqlite_profile(if selected == Durable {
-            Disposable
-        } else {
-            Durable
-        });
-        assert!(Handles::open_writable(mismatched, b"durable-publication", [71; 32]).is_err());
+        let completed = h.seal().unwrap();
+        assert_eq!(completed.profile, selected);
+        assert!(!t.join("db-wal").exists());
+        assert!(!t.join("db-shm").exists());
+        // Both profiles use WAL; mixed-profile provisioning cannot be detected.
         let reopened =
             Handles::open_writable(cfg.clone(), b"durable-publication", [71; 32]).unwrap();
         let read = Storage::new(reopened.storage.clone()).unwrap();
@@ -593,11 +574,11 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
                 ordinals: 0
             })
             .is_err());
-        assert!(readonly.checkpoint().is_err());
         assert_eq!(
             readonly.diagnostics().unwrap().statements,
             before.statements
         );
+        assert!(readonly.seal().is_err());
     }
 }
 

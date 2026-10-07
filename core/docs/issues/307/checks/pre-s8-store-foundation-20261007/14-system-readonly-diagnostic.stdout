@@ -1,0 +1,8 @@
+# {"timestamp": "2026-10-07T06:36:10.568273+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "/tmp/layerfs-readonly-diagnostic.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "2cad67e962dea13b435816d32442d7e18386b0fb920a5fbde5bd62987851cdf9", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+sealed [('store.sqlite', 8192)]
+readonly_open 0
+PRAGMA journal_mode rc 14 extended 14 message unable to open database file
+SELECT * FROM item rc 14 extended 14 message unable to open database file
+close 0
+
+# exit=0

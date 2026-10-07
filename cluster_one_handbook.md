@@ -57,7 +57,7 @@ The active Core workspace contains six crates:
 | `layerfs-content` | Canonical identity, file construction/editing, filesystem trees, logical reads | Turn bytes/edits/namespace rows into canonical objects; read logical data |
 | `layerfs-storage` | Reuse, physical encoding, delta selection, packing, bounded Save and Reader | Store canonical objects and acquire authenticated canonical bytes |
 | `layerfs-history` | Typed history records and `HistoryCatalog` semantic operations | Inode reservation, genesis, branches, stages, Commits, Layers |
-| `layerfs-persistence` | Shared host-local SQLite provider for storage and history | Create/open the Store and execute provider-owned transactions |
+| `layerfs-persistence` | Shared SQLite provider for storage and history on macOS/Linux | Create/open the Store and execute provider-owned transactions |
 | `layerfs-project` | Native namespace Init orchestration | Import a regular directory and publish its genesis LayerStack |
 | `layerfs-telemetry` | Explicit timing scopes and reports | Observe the same production operations with timing enabled/disabled |
 
@@ -171,7 +171,7 @@ an existing file; use `open_writable` or `open_read_only` for an existing Store.
 | `Storage::new` | `Arc<dyn PackPersistence>` → `StorageResult<Storage>` | Reads and validates persisted policy |
 | `Storage::begin_save` | `&self` → `StorageResult<Save<'_>>` | One producer owner for a Save |
 | `Storage::reader` | `&self` → `StorageResult<Reader<'_>>` | Operation-owned authenticated read caches |
-| `Handles::checkpoint` | `&self` → `Result<Checkpoint, PersistenceError>` | Explicit profile completion/allocation release; may fail |
+| `Handles::seal` | consumes `Handles` → `Result<SealedStore, PersistenceError>` | Sole host provisioning owner; checkpoint once, checked close, no sidecars; retained providers refuse |
 
 The application supplies a stable binding key, nonzero valid catalog incarnation,
 and nonzero secret cursor key through `HistoryCatalogConfig`. Retain authority
@@ -430,7 +430,7 @@ Source: [history requests/outcomes](core/crates/layerfs-history/src/contract/rec
 on a version 1–3 Store Init is a typed `BackendUnavailable` refusal, and there is
 no upgrade operation. The Store's directory must lie outside `source`. The result acknowledges the
 genesis LayerStack, not just file payload storage. The deadline is shared with
-workers; it is not a rollback boundary. Checkpoint is a separate handle lifecycle
+workers; it is not a rollback boundary. Seal is a separate consuming handle lifecycle
 operation, not a substitute for either Save finish.
 
 Source: [Init API](core/crates/layerfs-project/src/import/init.rs).
@@ -627,7 +627,7 @@ The caller decides how to collect stable edits from its own mutable state.
   objects accepted by sink --> required output saved -> Branch refers to candidate
 
   A does not imply B. B does not imply C.
-  checkpoint concerns persistence lifecycle; it does not replace A, B, or C.
+  seal concerns persistence lifecycle; it does not replace A, B, or C.
 ```
 
 | Event | Caller interpretation |
@@ -640,7 +640,7 @@ The caller decides how to collect stable edits from its own mutable state.
 | Storage/history outcome is uncertain | Preserve exact context and refusal; do not automatically resend/delete on a guess |
 | History expected state conflicts | Candidate may be saved without becoming the current Commit |
 | `Committed` / `UpToDate` | Explicit history success; interpret the typed result |
-| Checkpoint fails | Lifecycle completion failed; report it independently of earlier successful transitions |
+| Seal fails | Handoff completion failed; report it independently of earlier successful transitions |
 
 The product performs one attempted operation. No automatic busy retry,
 refresh/reprepare, alternate backend, or error-driven algorithm fallback is
@@ -661,59 +661,49 @@ Source: [Save lifecycle](core/crates/layerfs-storage/src/save/operation.rs),
 
 | Choice | Current behavior |
 | --- | --- |
-| Durable | Default; disk-backed SQLite WAL, synchronous FULL, macOS full synchronization |
-| Disposable | Disk-backed MEMORY journal / synchronous OFF; runtime atomicity without crash durability |
+| Durable | Default; SQLite WAL / FULL, plus macOS full synchronization |
+| Disposable | SQLite WAL / OFF; process-crash survival, no kernel/VM-crash durability |
 | Monolithic | Creation layout schema1; complete pack BLOBs |
 | GroupRows | Creation layout schema2; independently stored complete encoded units |
 | GroupRowsIndexed | Creation layout schema3; group rows with covering mapping index |
 
-Opening supports schema1–3 and their acquisition-table variants4–6. The
-PayloadSegments experiment (schema7/10) is withdrawn by owner direction; active
-providers refuse those retired versions. Historical design/results remain in
-[the withdrawal record](core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md).
-Layout is a creation choice, not an implicit migration request. Profile/authority/policy
-compatibility is validated. Unsupported backends/platforms fail explicitly.
-The active SQLite provider currently requires macOS; portable content/storage
-contracts do not imply this provider is available inside a Linux sandbox.
+Source update after `727476a4d`, 2026-10-07: Persistence now opens on macOS and
+Linux, using system SQLite on macOS and the existing bundled dependency on Linux.
+Both profiles create WAL Stores. Open verifies WAL without setting/converting
+journal mode; old memory-journal Disposable Stores must be regenerated. Profile
+identities are `sqlite-wal-full-v2` and `sqlite-wal-off-v2`. Mixed profile selection
+on a shared WAL file is a provisioning fact and cannot be detected at open.
 
-Durable and Disposable share bounded main-file reservation arithmetic, custody
-checks, preallocation primitive, and cleanup logic. Durable retains its main-file
-handle and WAL checkpoint/synchronization lifecycle; Disposable uses temporary
-allocation handles and has no WAL checkpoint. Custom WAL preallocation was
-experimented with and withdrawn. It is not part of the current implementation.
+Opening supports schemas1–3 and acquisition variants4–6 without migration.
+Retired PayloadSegments schemas7/10 remain refused; the historical
+[withdrawal](core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md) is unchanged.
+All writes take one `BEGIN IMMEDIATE` with busy timeout zero. A contended begin
+returns typed `PersistenceError::Busy`, `StorageError::Busy` or
+`HistoryError::Busy`, before write effects, with no retry or quarantine. Unknown
+outcomes still quarantine the session. Separate WAL reader connections can read
+while another process holds the write lock.
 
-`Handles::checkpoint()` completes the selected lifecycle and releases unused
-allocation; Durable checkpoints WAL. WAL commits already obey the declared
-synchronization profile. Checkpoint is not the moment that pending Save objects
-are accepted, nor the logical Commit API. Do not extend durability claims beyond
-the declared profile. Disposable may lose acknowledged data or suffer corruption
-on crash/power loss.
+The macOS allocation/extent-release owner and public checkpoint API are retired.
+Host `Handles::seal()` consumes sole ownership, checkpoints TRUNCATE once, checks
+connection close, then verifies absence of `-wal`, `-shm` and `-journal`. The
+owner-approved macOS file-control wrapper disables and verifies persistent WAL
+before checkpoint; no sidecar is manually deleted. A retained provider refuses
+before checkpoint. Provisioning excludes new openers through handoff. The result
+records path, profile, SQLite version and closed-file bytes.
 
-Typical database artifact roles:
+Host Init alone uses acquisition tables and bounded incremental reclamation.
+New acquisition Stores select incremental auto-vacuum; existing mode0 Stores
+are never converted. Daemon Store ports expose neither acquisition nor explicit
+checkpoint/reclamation. Shared Stores must be in a named VM volume or on a local
+container filesystem, never a host-share bind mount. Each daemon's overlay is a
+separate MEMORY/OFF database and receives no global-Store profile change.
 
-```text
-  application-selected location/
-      store.sqlite           combined content + metadata + history database
-      store.sqlite-wal       SQLite WAL sidecar while applicable (Durable)
-      store.sqlite-shm       SQLite shared-memory sidecar while applicable
-
-  operation-selected scratch parent/
-      operation-owned ordering scratch, managed by native Init
-```
-
-The base filename is caller-selected. Sidecar existence/size changes with SQLite
-lifecycle; this is not a fixed directory template. There is no required external
-payload-pack folder in the active SQLite composition.
-
-New Stores created with acquisition tables additionally select incremental
-SQLite page reclamation before schema creation. Existing mode0 Stores open
-without conversion; schemas1–6 remain supported. Normal bounded acquisition
-cleanup reclaims up to512 free pages in its own atomic job. The public
-`Handles::reclaim_space` continues residual debt through separate acknowledged
-jobs; it refuses unsupported mode0 and never rebuilds a Store implicitly.
-Pointer-map overhead and all reclamation/checkpoint costs belong in physical
-allocation and complete-operation timing. See the
-[space/scaling implementation and prospective qualification](core/docs/issues/307/SPACE-AND-SCALING-PLAN-20261006.md).
+The [foundation checkpoint](core/docs/issues/307/PRE-S8-F1-F4-20261007.md) owns
+functional evidence and remaining integration work. Durable builds but new Durable
+execution is NOT_RUN — deferred by owner for Disposable-only development. All
+historical timing/storage failures below retain their original mechanisms,
+profiles, identities and verdicts. Removal of allocation is not an optimization
+claim or a pass of the old strict-allocation gate.
 
 ## 9. Attached benchmark results and qualification boundaries
 

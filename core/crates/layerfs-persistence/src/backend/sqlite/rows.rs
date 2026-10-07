@@ -38,7 +38,9 @@ pub(crate) fn record(row: &Row<'_>, count: usize) -> Result<Record, BackendError
 pub(crate) fn error(e: Error) -> BackendError {
     match e {
         Error::SqliteFailure(code, _) => match code.code {
-            ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked => BackendError::Busy,
+            ErrorCode::DatabaseBusy
+            | ErrorCode::DatabaseLocked
+            | ErrorCode::FileLockingProtocolFailed => BackendError::Busy,
             ErrorCode::ReadOnly => BackendError::ReadOnly,
             ErrorCode::DiskFull | ErrorCode::TooBig => BackendError::Capacity,
             ErrorCode::SystemIoFailure | ErrorCode::CannotOpen | ErrorCode::OutOfMemory => {

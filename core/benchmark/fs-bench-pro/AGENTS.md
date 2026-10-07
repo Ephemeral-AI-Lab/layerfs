@@ -1,7 +1,7 @@
 # Core benchmark routing and evidence
 
 > **Status:** Current general guide.
-> Updated 2026-10-05 for current cluster-one contracts and cluster-two design.
+> Updated 2026-10-07 for owner-directed serverless Store placement.
 > Retained receipts and frozen family limits are unchanged.
 
 Read [root instructions](../../../AGENTS.md), [core instructions](../../AGENTS.md),
@@ -24,7 +24,8 @@ registry, driver, frozen contract, source/profile and closure before invoking it
   content/storage/history operations, not a recreated server.
 - Use the [cluster-one handbook](../../../cluster_one_handbook.md) for exact
   APIs, persistence/layout profiles and retained results. The current global
-  provider is host-local macOS SQLite; it is not PostgreSQL/MinIO.
+  provider is SQLite: host Init uses the system library; direct Linux daemon
+  Store access uses the pinned bundled library.
 - [Owner-closure results](../../docs/issues/302/SQLITE-OWNER-CLOSURE-RESULTS-20261005.md)
   and the handbook retain the SQLite campaign's failed/withdrawn/unrun outcomes.
   Reuse unaffected qualified evidence by exact identity. A new campaign needs
@@ -37,11 +38,14 @@ registry, driver, frozen contract, source/profile and closure before invoking it
   selection. Do not re-enable excluded API/server packages merely to make the
   current product resemble an old driver. Baseline evidence keeps its own scope.
 
-Global persistence stays on its supported host. Target cluster-two overlay,
-Workspace/content processing and FUSE run in the Linux daemon; host Storage
-encoding/history are reached through runtime-owned adapters. Follow the selected
-authentic topology and [hosting scope](../../../docs/general/benchmark_rules.md#hosting-scope-for-cluster-one-and-cluster-two);
-do not retarget a frozen old family or copy a global Store into Docker as fallback.
+Host Init seals one Store for one installation into a named VM volume; afterwards
+all Store/Storage/History calls run directly in the Linux daemons and the host is
+control-only. Each daemon's overlay remains a separate local database. A Store
+never lives under the repository bind mount. Follow the selected authentic
+topology and [hosting scope](../../../docs/general/benchmark_rules.md#hosting-scope-for-cluster-one-and-cluster-two);
+old frozen families retain their topology and cannot qualify the new path.
+The removed host-mediated transport is withdrawn from new selections, with
+explicit NOT_RUN dispositions and every historical receipt preserved.
 
 ## Common execution and reporting requirements
 

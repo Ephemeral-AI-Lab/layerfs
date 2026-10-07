@@ -17,7 +17,9 @@ impl Handles {
         policy: StoragePolicy,
         history: &HistoryCatalogConfig,
     ) -> Result<Self, PersistenceError> {
-        if config.backend != BackendSelection::Sqlite || !cfg!(target_os = "macos") {
+        if config.backend != BackendSelection::Sqlite
+            || !cfg!(any(target_os = "macos", target_os = "linux"))
+        {
             return Err(PersistenceError::BackendUnavailable);
         }
         let policy = policy
@@ -67,7 +69,9 @@ impl Handles {
         cursor_key: [u8; 32],
         writable: bool,
     ) -> Result<Self, PersistenceError> {
-        if config.backend != BackendSelection::Sqlite || !cfg!(target_os = "macos") {
+        if config.backend != BackendSelection::Sqlite
+            || !cfg!(any(target_os = "macos", target_os = "linux"))
+        {
             return Err(PersistenceError::BackendUnavailable);
         }
         let directory = config.path.parent().map(Path::to_path_buf);

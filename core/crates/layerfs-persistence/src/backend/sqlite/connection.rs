@@ -3,7 +3,11 @@ use super::{profile, query, rows};
 use crate::backend::records::BackendError;
 use crate::SqlitePersistenceProfile;
 use rusqlite::{limits::Limit, Connection, OpenFlags};
-use std::{cell::RefCell, path::Path, sync::Mutex, time::Instant};
+use std::{
+    cell::RefCell,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 /// The selected SQLite settings and actual runtime capabilities.
 #[derive(Clone, Debug)]
 pub struct ConnectionProfile {
@@ -125,65 +129,6 @@ pub struct SqlWork {
     pub blob_read_ns: u64,
     /// Attempted checked closes of incremental BLOB handles.
     pub blob_close_calls: u64,
-    /// Successful shared bounded main-file physical reservations (not SQL statements).
-    pub preallocation_calls: u64,
-    /// Bytes reserved without changing logical length.
-    pub preallocation_bytes: u64,
-    /// Inclusive reservation/custody/source-close wall.
-    pub preallocation_ns: u64,
-    /// Checked temporary descriptor close wall nested in reservation.
-    pub preallocation_close_ns: u64,
-    /// Explicit checkpoint wall, outside SQL statement spans.
-    pub checkpoint_ns: u64,
-}
-/// Actual allocation descriptor identity observed during completion; not ownership.
-#[derive(Clone, Copy, Debug)]
-pub struct AllocationIdentity {
-    /// Descriptor number at this observation; never a stable handle capability.
-    pub descriptor: i32,
-    /// Filesystem device identity.
-    pub device: u64,
-    /// File inode identity.
-    pub inode: u64,
-    /// Logical bytes observed before release.
-    pub logical_bytes: u64,
-}
-#[derive(Clone, Copy)]
-pub(crate) struct AllocationRelease {
-    pub before: u64,
-    pub after: u64,
-    pub source: Option<AllocationIdentity>,
-    pub transfer_ns: u64,
-    pub scratch_close_ns: u64,
-    pub source_close_ns: u64,
-}
-/// One explicit checkpoint result; pending frames remain visible.
-#[derive(Clone, Copy, Debug)]
-pub struct Checkpoint {
-    /// Profile whose completion work was performed.
-    pub persistence: SqlitePersistenceProfile,
-    /// Whether the selected profile required an actual WAL checkpoint.
-    pub wal_checkpoint_performed: bool,
-    /// SQLite reported an obstructed checkpoint.
-    pub busy: bool,
-    /// WAL frames before checkpoint, -1 when no WAL exists.
-    pub log_frames: i64,
-    /// Frames checkpointed, -1 when no WAL exists.
-    pub checkpointed_frames: i64,
-    /// Time spent performing the checkpoint and allocation release.
-    pub wall_ns: u64,
-    /// Physical main-file allocation before unused-extents release; absent when busy.
-    pub allocation_before_bytes: Option<u64>,
-    /// Physical main-file allocation after unused-extents release; absent when busy.
-    pub allocation_after_bytes: Option<u64>,
-    /// Exact descriptor/file identity used for unused-extents release.
-    pub allocation_source: Option<AllocationIdentity>,
-    /// F_TRANSFEREXTENTS call wall, nested in completion.
-    pub allocation_transfer_ns: u64,
-    /// Scratch descriptor close wall, nested in completion.
-    pub allocation_scratch_close_ns: u64,
-    /// Checked on-demand allocation descriptor close wall, nested in completion.
-    pub allocation_source_close_ns: u64,
 }
 pub(crate) struct State {
     pub(crate) connection: Connection,
@@ -196,8 +141,7 @@ pub(crate) struct Session {
     pub(crate) profile: ConnectionProfile,
     pub(crate) layout: crate::SqlitePackLayout,
     pub(crate) acquisition: crate::SqliteAcquisitionSchema,
-    #[cfg(target_os = "macos")]
-    pub(crate) allocation: Option<super::allocation_owner::AllocationOwner>,
+    pub(crate) path: PathBuf,
 }
 impl Session {
     pub(crate) fn connect(
@@ -208,7 +152,7 @@ impl Session {
         creation_layout: crate::SqlitePackLayout,
         creation_acquisition: crate::SqliteAcquisitionSchema,
     ) -> Result<Self, BackendError> {
-        if !cfg!(target_os = "macos") {
+        if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
         }
         let flags = if writable {
@@ -264,7 +208,7 @@ impl Session {
             acquisition,
             identity: selected.identity(),
             sqlite_version: rusqlite::version().to_owned(),
-            platform: "macos",
+            platform: std::env::consts::OS,
             vfs_selection: "SQLite default; name not directly observed",
             compile_options,
             journal_mode,
@@ -294,18 +238,8 @@ impl Session {
                 .map_err(rows::error)? as usize,
         };
         profile::check(&profile)?;
-        #[cfg(target_os = "macos")]
-        let allocation = if writable {
-            Some(super::allocation_owner::AllocationOwner::open(
-                path,
-                selected == SqlitePersistenceProfile::Disposable,
-            )?)
-        } else {
-            None
-        };
         Ok(Self {
-            #[cfg(target_os = "macos")]
-            allocation,
+            path: path.to_path_buf(),
             state: Mutex::new(State {
                 connection,
                 quarantined: false,
@@ -325,71 +259,5 @@ impl Session {
         let s = self.state.try_lock().map_err(|_| BackendError::Busy)?;
         let w = *s.work.borrow();
         Ok(w)
-    }
-    pub(crate) fn checkpoint(&self) -> Result<Checkpoint, BackendError> {
-        if !self.writable {
-            return Err(BackendError::ReadOnly);
-        }
-        let mut s = self.state.try_lock().map_err(|_| BackendError::Busy)?;
-        if s.quarantined {
-            return Err(BackendError::Unknown);
-        }
-        let start = Instant::now();
-        let result = (|| {
-            let wal_checkpoint_performed =
-                self.profile.persistence == SqlitePersistenceProfile::Durable;
-            let (busy, log_frames, checkpointed_frames) = if wal_checkpoint_performed {
-                let rows = query::run(
-                    &s.connection,
-                    "PRAGMA wal_checkpoint(TRUNCATE)",
-                    vec![],
-                    &s.work,
-                )?;
-                let r = rows.first().ok_or(BackendError::Integrity)?;
-                (r.get::<i64>(0)? != 0, r.get::<i64>(1)?, r.get::<i64>(2)?)
-            } else {
-                (false, -1, -1)
-            };
-            let allocation: Option<AllocationRelease> = if busy {
-                None
-            } else {
-                #[cfg(target_os = "macos")]
-                {
-                    Some(
-                        self.allocation
-                            .as_ref()
-                            .ok_or(BackendError::Integrity)?
-                            .release()?,
-                    )
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    return Err(BackendError::Integrity);
-                }
-            };
-            Ok(Checkpoint {
-                persistence: self.profile.persistence,
-                wal_checkpoint_performed,
-                busy,
-                log_frames,
-                checkpointed_frames,
-                wall_ns: 0,
-                allocation_before_bytes: allocation.map(|p| p.before),
-                allocation_after_bytes: allocation.map(|p| p.after),
-                allocation_source: allocation.and_then(|p| p.source),
-                allocation_transfer_ns: allocation.map_or(0, |p| p.transfer_ns),
-                allocation_scratch_close_ns: allocation.map_or(0, |p| p.scratch_close_ns),
-                allocation_source_close_ns: allocation.map_or(0, |p| p.source_close_ns),
-            })
-        })();
-        let wall_ns = start.elapsed().as_nanos() as u64;
-        s.work.borrow_mut().checkpoint_ns += wall_ns;
-        if result.as_ref().err() == Some(&BackendError::Unknown) {
-            s.quarantined = true;
-        }
-        result.map(|mut report| {
-            report.wall_ns = wall_ns;
-            report
-        })
     }
 }

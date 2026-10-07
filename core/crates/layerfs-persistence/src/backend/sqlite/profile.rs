@@ -9,15 +9,12 @@ use std::cell::RefCell;
 impl SqlitePersistenceProfile {
     pub(crate) fn identity(self) -> &'static str {
         match self {
-            Self::Durable => "sqlite-wal-full-macos-fullfsync-v1",
-            Self::Disposable => "sqlite-memory-off-macos-v1",
+            Self::Durable => "sqlite-wal-full-v2",
+            Self::Disposable => "sqlite-wal-off-v2",
         }
     }
     pub(crate) fn journal(self) -> &'static str {
-        match self {
-            Self::Durable => "wal",
-            Self::Disposable => "memory",
-        }
+        "wal"
     }
     pub(crate) fn synchronous(self) -> i64 {
         match self {
@@ -48,16 +45,11 @@ pub(crate) fn apply(
             .first()
             .ok_or(BackendError::Integrity)?
             .get::<String>(0)?;
-        let compatible = match selected {
-            SqlitePersistenceProfile::Durable => mode == "wal",
-            // MEMORY is connection-local; a closed MEMORY Store reopens DELETE.
-            SqlitePersistenceProfile::Disposable => mode == "delete" || mode == "memory",
-        };
-        if !compatible {
+        if mode != "wal" {
             return Err(BackendError::Integrity);
         }
     }
-    if create || selected == SqlitePersistenceProfile::Disposable {
+    if create {
         let mode = query::run(
             c,
             &format!("PRAGMA journal_mode={}", selected.journal()),

@@ -1,0 +1,32 @@
+# {"timestamp": "2026-10-07T06:26:46.908733+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-persistence", "-p", "layerfs-project", "-p", "layerfs-storage", "-p", "layerfs-sdk", "--all-targets", "--no-run"], "construction_workers": "1", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error[E0507]: cannot move out of an `Arc`
+  --> crates/layerfs-project/examples/cause_namespace.rs:93:18
+   |
+93 |     let sealed = handles.seal()?;
+   |                  ^^^^^^^ ------ value moved due to this method call
+   |                  |
+   |                  move occurs because value has type `Handles`, which does not implement the `Copy` trait
+   |
+note: `layerfs_persistence::store::seal::<impl Handles>::seal` takes ownership of the receiver `self`, which moves value
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence/src/store/seal.rs:26:17
+   |
+26 |     pub fn seal(self) -> Result<SealedStore, PersistenceError> {
+   |                 ^^^^
+
+For more information about this error, try `rustc --explain E0507`.
+error: could not compile `layerfs-project` (example "cause_namespace" test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+
+# exit=101

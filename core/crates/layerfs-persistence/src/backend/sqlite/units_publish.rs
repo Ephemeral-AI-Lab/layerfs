@@ -10,7 +10,6 @@ pub(crate) fn write(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(),
         let length = pack.info.length as i64;
         let digest = pack.info.key.as_bytes().as_slice();
         let control = &pack.body[..header.body_offset];
-        tx.before_pack(pack.body.len())?;
         tx.borrowed(
             "INSERT INTO pack(pack_id,domain,digest,length,control) VALUES(?,?,?,?,?)",
             &[&id, &domain, &digest, &length, &control],

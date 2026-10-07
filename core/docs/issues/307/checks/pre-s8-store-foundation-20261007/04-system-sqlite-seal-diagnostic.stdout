@@ -1,0 +1,13 @@
+# {"timestamp": "2026-10-07T06:28:34.370726+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "/tmp/layerfs-seal-diagnostic.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "b43795141a4cd3154fb20cfd7045a03d87af9becaeb277ca0bc9b29a098a6ea4", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+system_sqlite 3.51.0
+persist_wal_rc 0 value 1
+PRAGMA journal_mode=wal rc 0
+PRAGMA synchronous=OFF rc 0
+CREATE TABLE item(x) rc 0
+INSERT INTO item VALUES(1) rc 0
+PRAGMA wal_checkpoint(TRUNCATE) rc 0
+before_close [('store.sqlite-wal', 0), ('store.sqlite-shm', 32768), ('store.sqlite', 8192)]
+close_rc 0
+after_close [('store.sqlite-wal', 0), ('store.sqlite-shm', 32768), ('store.sqlite', 8192)]
+
+# exit=0

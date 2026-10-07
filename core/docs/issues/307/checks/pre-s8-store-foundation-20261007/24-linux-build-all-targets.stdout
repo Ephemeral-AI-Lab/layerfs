@@ -1,0 +1,40 @@
+# {"timestamp": "2026-10-07T06:42:07.526433+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-foundation-all-targets", "-e", "CARGO_HOME=/work/core/target/cluster2-linux-cargo", "-e", "CARGO_TARGET_DIR=/work/core/target/cluster2-linux", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; python3 -c 'import json,hashlib; m=json.load(open(\"core/docs/issues/307/checks/pre-s8-store-foundation-20261007/23-final-source.json\")); bad=[p for p,h in m[\"files\"].items() if hashlib.sha256(open(p,\"rb\").read()).hexdigest()!=h]; print(\"container source hashes match:\",not bad); assert not bad,bad'; cargo test --manifest-path core/Cargo.toml --locked -p layerfs-persistence -p layerfs-project -p layerfs-storage -p layerfs-sdk -p layerfs-daemon --all-targets --no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "2d00e3612ad302f5b08f08f0a8edef1d03e3a0dd4180ddfef014f8d696369676", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+container source hashes match: True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+error[E0412]: cannot find type `SqlitePersistenceProfile` in this scope
+   --> crates/layerfs-project/tests/complete_root.rs:225:30
+    |
+225 | const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this enum
+    |
+4   + use layerfs_persistence::SqlitePersistenceProfile;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `SqlitePersistenceProfile`
+   --> crates/layerfs-project/tests/complete_root.rs:225:62
+    |
+225 | const DEVELOPMENT_PROFILES: [SqlitePersistenceProfile; 1] = [SqlitePersistenceProfile::Disposable];
+    |                                                              ^^^^^^^^^^^^^^^^^^^^^^^^ use of undeclared type `SqlitePersistenceProfile`
+    |
+help: consider importing this enum
+    |
+4   + use layerfs_persistence::SqlitePersistenceProfile;
+    |
+
+Some errors have detailed explanations: E0412, E0433.
+For more information about an error, try `rustc --explain E0412`.
+error: could not compile `layerfs-project` (test "complete_root") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+
+# exit=101

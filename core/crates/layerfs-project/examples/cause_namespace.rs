@@ -83,18 +83,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (objects, bytes, inventory) = storage.census();
     let saves = storage.records();
     let stages = observer::json();
-    let checkpoint = handles.checkpoint()?;
     eprintln!(
         "CAUSE_CANDIDATE_SQL_NATIVE_VM_UNQUALIFIED {:?} C2 {:?}",
         handles.diagnostics()?,
         storage.inner.diagnostics()
     );
-    let checkpoint_ns = checkpoint.wall_ns;
     let close = Instant::now();
     drop(storage);
-    drop(handles);
-    let close_ns = close.elapsed().as_nanos();
+    let handles = std::sync::Arc::try_unwrap(handles).map_err(|_| "retained diagnostic handle")?;
+    let sealed = handles.seal()?;
+    eprintln!("SEALED_STORE {sealed:?}");
+    let seal_ns = close.elapsed().as_nanos();
+    let close_ns = seal_ns;
     eprintln!("CAUSE_SQL_OBSERVER {}", sql_observer::json());
-    println!("{{\"status\":\"DIAGNOSTIC\",\"route\":\"shared-public-C1-C2-C5-caller\",\"operation_ns\":{},\"bootstrap_ns\":{},\"init_ns\":{},\"checkpoint_ns\":{},\"close_ns\":{},\"root\":\"{}\",\"stack\":\"{}\",\"root_serial\":{},\"canonical_objects\":{},\"canonical_bytes\":{},\"canonical_inventory_sha256\":\"{}\",\"stages\":{{{}}},\"saves\":[{}]}}",started.elapsed().as_nanos(),bootstrap_ns,init_ns,checkpoint_ns,close_ns,digest::hex(result.root.as_bytes()),"41".repeat(16),result.root_serial,objects,bytes,inventory,stages,saves);
+    println!("{{\"status\":\"DIAGNOSTIC\",\"route\":\"shared-public-C1-C2-C5-caller\",\"operation_ns\":{},\"bootstrap_ns\":{},\"init_ns\":{},\"seal_ns\":{},\"close_ns\":{},\"root\":\"{}\",\"stack\":\"{}\",\"root_serial\":{},\"canonical_objects\":{},\"canonical_bytes\":{},\"canonical_inventory_sha256\":\"{}\",\"stages\":{{{}}},\"saves\":[{}]}}",started.elapsed().as_nanos(),bootstrap_ns,init_ns,seal_ns,close_ns,digest::hex(result.root.as_bytes()),"41".repeat(16),result.root_serial,objects,bytes,inventory,stages,saves);
     Ok(())
 }

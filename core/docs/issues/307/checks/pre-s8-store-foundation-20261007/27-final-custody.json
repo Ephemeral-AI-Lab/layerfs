@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-10-07T06:44:13.684656+00:00",
+  "host_sha256": {
+    "core/crates/layerfs-project/tests/complete_root.rs": "1c982f8e363e7f6719f81c909f7bfe560a41c6f27437a5cfc03ceef0e59f64bc"
+  },
+  "linux_reuse": "Receipt09 covers the unchanged compiled Linux provider behavior. Later production additions are macOS-cfg-only, crate lint and transitional SDK formatting. Receipt25 builds all affected targets and both profiles."
+}

@@ -159,10 +159,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (name, work) in observed.units.lock().unwrap().iter() {
         work.print(name);
     }
-    let checkpoint = handles.checkpoint()?;
-    if checkpoint.busy {
-        return Err("checkpoint busy".into());
-    }
     eprintln!("DIAGNOSTIC_ONLY cache=uncontrolled scopes=per-acquisition-unit,complete-Init; instrumentation overhead included; no speed gate or phase-residency claim");
     eprintln!(
         "profile={:?} root={:?} entries={} namespace={:?} saves={:?}",
@@ -172,5 +168,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         result.namespace_work,
         storage.save_work()
     );
+    drop(storage);
+    drop(observed);
+    let sealed = handles.seal()?;
+    eprintln!("SEALED_STORE {sealed:?}");
     Ok(())
 }

@@ -184,10 +184,12 @@ fixtures, examples and tools do not contribute to production LOC.
   attempt; they do not permit replay after failed/unknown publication.
 - Preserve definite-failure atomicity, original errors and exact uncertain
   custody. No resend, rollback/delete or success claim based on an unfenced read.
-- Implemented global persistence opens only on macOS today. Durable is WAL/FULL
-  with declared macOS synchronization; Disposable is MEMORY/OFF without crash
-  survival. Select profiles/layouts before open; do not silently migrate or claim
-  a guarantee from another profile. Postgres remains unavailable.
+- Global Persistence opens on macOS and Linux with both profiles using WAL.
+  Durable uses FULL (and macOS full synchronization); Disposable uses OFF and
+  claims process-crash survival only. Open verifies WAL and never converts an
+  existing Store. Select profile/layout before open; Postgres stays unavailable.
+  Host seal consumes sole ownership, checkpoints, closes and verifies one file.
+  See the [foundation checkpoint](docs/issues/307/PRE-S8-F1-F4-20261007.md).
 - Target (owner direction 2026-10-07): the same Store opened directly by every
   Linux daemon from a shared volume, several writer processes, no host in the
   data path, both profiles, Disposable for development verification. A contended
@@ -297,3 +299,15 @@ them. Run scoped self-tests when changing the check. It is not an aggregate
 pre-push/CI wrapper or a timestamp-capability proof. Current evidence and the
 historically rejected unmodified Git candidate are in
 [the fuser verification record](docs/issues/307/FUSER-OFFICIAL-CANDIDATE-20261006.md).
+
+### Authorized Persistence seal file control
+
+Owner authorization 2026-10-07: "Approve the narrowly audited seal wrapper".
+The system macOS SQLite enables persistent WAL and otherwise leaves empty
+sidecars after checked close. Persistence uses `deny(unsafe_code)` with one
+allowed module, `src/backend/sqlite/file_control.rs`, compiled on macOS only.
+It sets and reads back `SQLITE_FCNTL_PERSIST_WAL` under sole seal ownership.
+No other Persistence module may contain unsafe Rust; the guard and its tests
+enforce the exact path. This does not authorize third-party patches, dependency
+changes, manual sidecar deletion or other FFI. See the
+[decision and diagnostic](docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md).

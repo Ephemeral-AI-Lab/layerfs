@@ -1,0 +1,9 @@
+# {"timestamp": "2026-10-07T06:34:57.368869+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/sqlite_publication-b225e648a740243e", "--exact", "explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/sqlite_publication-b225e648a740243e": "30988f76b626f114dc3478558e0d377c0a16045ddeba332372dd311c806255a1"}, "source_diff_sha256": "2cad67e962dea13b435816d32442d7e18386b0fb920a5fbde5bd62987851cdf9", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s
+
+
+# exit=0

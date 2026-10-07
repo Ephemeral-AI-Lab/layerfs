@@ -12,6 +12,8 @@ use layerfs_content::{ContentError, ObjectId};
 /// Failures produced by the physical storage component.
 #[derive(Debug)]
 pub enum StorageError {
+    /// One persistence attempt met a held write lock before any effect.
+    Busy,
     /// A canonical construction, framing or read check failed.
     Content(ContentError),
     /// The host filesystem refused a physical Store reservation.
@@ -91,6 +93,7 @@ impl StorageError {
 impl fmt::Display for StorageError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Busy => formatter.write_str("Store busy before effect"),
             Self::Content(error) => write!(formatter, "content: {error}"),
             Self::Io(error) => write!(formatter, "physical Store I/O: {error}"),
             Self::ObjectMissing(id) => write!(formatter, "object {id} is not stored"),
@@ -154,6 +157,9 @@ pub type StorageResult<T> = Result<T, StorageError>;
 
 impl From<crate::port::PersistenceError> for StorageError {
     fn from(error: crate::port::PersistenceError) -> Self {
+        if error == crate::port::PersistenceError::Busy {
+            return Self::Busy;
+        }
         let uncertain = error == crate::port::PersistenceError::Uncertain;
         let original = Self::Io(std::io::Error::other(error));
         if uncertain {

@@ -408,3 +408,6 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 - [Explicit root qualification](59-root-qualification.md): context-bound
   topology proof over indexed inode counts and a backed directory queue;
   installed-Store use remains a separate integration checkpoint.
+- [Shared Store foundation](60-shared-store-foundation.md): macOS/Linux WAL
+  profiles, typed one-attempt contention, host seal and the authorized macOS
+  file-control boundary; daemon adapter/control integration remains separate.

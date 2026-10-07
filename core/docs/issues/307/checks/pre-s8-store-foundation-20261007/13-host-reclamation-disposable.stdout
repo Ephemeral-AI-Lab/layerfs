@@ -1,0 +1,18 @@
+# {"timestamp": "2026-10-07T06:35:22.012279+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/space_reclamation-559fb064f644876c", "--exact", "bounded_reclamation_preserves_another_live_operation_and_survives_reopen", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/space_reclamation-559fb064f644876c": "64174a174547cc88fcd7a848c64c8c50d9f09d2c73f3e3a1e2b2a09e45a5e69d"}, "source_diff_sha256": "2cad67e962dea13b435816d32442d7e18386b0fb920a5fbde5bd62987851cdf9", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+
+thread 'bounded_reclamation_preserves_another_live_operation_and_survives_reopen' panicked at crates/layerfs-persistence/tests/space_reclamation.rs:128:10:
+called `Result::unwrap()` on an `Err` value: Uncertain
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test bounded_reclamation_preserves_another_live_operation_and_survives_reopen ... FAILED
+
+failures:
+
+failures:
+    bounded_reclamation_preserves_another_live_operation_and_survives_reopen
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.10s
+
+
+# exit=101

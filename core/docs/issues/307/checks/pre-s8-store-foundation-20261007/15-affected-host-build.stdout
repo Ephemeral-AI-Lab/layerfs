@@ -1,0 +1,17 @@
+# {"timestamp": "2026-10-07T06:36:36.880282+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-persistence", "--test", "space_reclamation", "-p", "layerfs-project", "--test", "init_sqlite", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "2ee62622ac97c2894d87aa91577c13fbbc3242a5d9ca35d92f26ef68b1f528d2", "source_parent": "727476a4d7f26419978f6968644cc6ff7757b4dc", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling libc v0.2.189
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 11.55s
+  Executable tests/space_reclamation.rs (core/target/debug/deps/space_reclamation-dafafa9ef0aa8a4f)
+  Executable tests/init_sqlite.rs (core/target/debug/deps/init_sqlite-5b1b5de3523987ee)
+
+# exit=0

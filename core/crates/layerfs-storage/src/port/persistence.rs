@@ -85,6 +85,8 @@ pub struct Published {
 /// One attempted metadata operation's outcome.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PersistenceError {
+    /// The write lock or session is held; no write effect occurred.
+    Busy,
     /// Selected engine is unavailable; no fallback is attempted.
     BackendUnavailable,
     /// Required persisted state is absent.
