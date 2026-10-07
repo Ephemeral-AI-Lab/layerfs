@@ -74,7 +74,7 @@ No new core component depends on legacy source or revives `layerfs-server`.
 - Add rewritten/new members only when they have real product implementation and
   build coverage. Directory presence and active-cluster-one tests do not qualify
   excluded Workspace/FUSE/daemon/API/bridge/sandbox source.
-- `layerfs-overlay` owns SQLite rows/indexes/payload/scratch/ownership and real
+- `layerfs-overlay` owns SQLite rows/indexes/payload/operation records/ownership and real
   profiling. Workspace owns filesystem semantics and stable composition, without
   SQL, kernel protocol or physical-pack knowledge.
 - Portable content, overlay and semantic Workspace code must build on the owning
@@ -176,7 +176,7 @@ at operation, command and repeated-Workspace-lifetime scales.
 | Slice | Deliverable | Dependencies | Exit evidence |
 | --- | --- | --- | --- |
 | **S0 Contracts and build risks** | Derive R1–R8 algorithms/ownership/service bounds; assign P1–P14, including backed validation/touched/release state and incremental topology. Confirm Linux content/SQLite/transport capabilities and actual Save lifetimes; select concrete payload/pressure and command-identity semantics | Current handbooks/design/source | No withdrawn extent/fold/pin rule used. Adversarial work/custody contracts and real public API/build paths established; unresolved algorithms identified explicitly |
-| **S1 Shared overlay engine** | One daemon database initialized once; schema/version/settings, namespaced metadata/payload/scratch/ownership, prepared SQL, indexed access, real EXPLAIN/profile observations and atomic errors | S0 | Settings read back; binary payload and namespace routing correct; plan/runtime profile for first queries; no per-Workspace DB or custom mutable tree/graph engine |
+| **S1 Shared overlay engine** | One daemon database initialized once; schema/version/settings, namespaced metadata/payload/operation records/ownership, prepared SQL, indexed access, real EXPLAIN/profile observations and atomic errors | S0 | Settings read back; binary payload and namespace routing correct; plan/runtime profile for first queries; no per-Workspace DB or custom mutable tree/graph engine |
 | **S2 Generations and fair service** | Incarnation routing, short shared-owner jobs, active/captured membership and fixed EOF, publication/reply-attempt frontier, install/retire; bounded queue credits and lifecycle progress | S1 | Tiny capture during growing active namespace visits only its domain; no bulk copy; unrelated service progresses; failure retains exact state |
 | **S3 Immutable base access** | Current content APIs for root/child/inode/list/readlink/range; exact immutable cache keys, EOF/attributes, base-overlay merge and retained read roots | S0; usable S1 interfaces | Real content-built roots behave correctly, including symlinks/hard links and retained roots across install; no mount scan/copy or special empty-base branch |
 | **S4 Namespace semantics** | lookup/getattr/create/mkdir/symlink/link/unlink/rmdir/rename/readdir/chmod/utimens; serial ranges, byte-name ordering, parent/reference ownership and bounded cursors | S2, S3 | Atomic ordinary effects, correct aliases/rename/resume and permissions; SQL plans/profiles support visited-work bounds; no resident name/handle cap |
@@ -185,7 +185,7 @@ at operation, command and repeated-Workspace-lifetime scales.
 | **S7 Engine cost gate** | Consolidate per-operation EXPLAIN/profile, request/statement/VM/row/page/byte/copy and queue/debt evidence; select physical layout through declared tradeoffs | S1–S6 | Derived worst-case/amortized/cumulative work demonstrated or rejected. No quadratic mechanism, hidden scan, input-sized resident set or raised cap accepted from a small timing win |
 | **S8 FUSE, daemon and explicit APIs** | Native mount, deferred owned replies/fair dispatch, coherent promoted cached profile, kernel-origin mmap/time updates, cheap individual FORGET, event-driven lifecycle; registry plus mount/exec/commit/status/unmount contracts and ordinary Bash streams | S3, S6, S7; runtime reads may use S9 | Mounted alias/truncate/mmap/capture-frontier tests; blocked requests leave unrelated work runnable. Short/long Exec and multi-call same mount work; actual buffer/thread/teardown costs visible |
 | **S9 Runtime adapters and complete roots** | Embed existing host libraries; bounded authenticated object/policy/serial/Save/history calls; pending-Save visibility, fair demand/finish service and exact disconnect fences. Fix faithful bounded initial import, symlinks/large files, runtime-compatible complete execution state | S0; P1/P2/P5/P12; parallel to S1–S8 | Real Store reads and two interleaved Saves work through actual APIs; no whole-Save connection checkout or guessed outcome. Full root includes ignored/dependency/cache/output data without per-call restoration |
-| **S10 Incremental Commit** | Normalize captured final state; bounded file/namespace construction and operation scratch; Save finish, stage, conditional transition, known install and exact refused/conflicted/uncertain custody | S6, S8, S9; P3/P4/P6/P7/P13/P14 corrected | Published root equals captured state; later active changes remain. Repeated same-mount Commit, same-Branch conflict and phase failures preserve identity/bytes/ownership without whole-base alias walks |
+| **S10 Incremental Commit** | Normalize captured final state; bounded file/namespace construction and operation records; Save finish, stage, conditional transition, known install and exact refused/conflicted/uncertain custody | S6, S8, S9; P3/P4/P6/P7/P13/P14 corrected | Published root equals captured state; later active changes remain. Repeated same-mount Commit, same-Branch conflict and phase failures preserve identity/bytes/ownership without whole-base alias walks |
 | **S11 Integration cleanup** | Remove superseded core Workspace backing, host-construction/duplicate Init routes and retired server integration after replacement coverage. Update SDK/sandbox/bridge wiring and active members | S10 | One authentic core path; no legacy aliases/fallback/parallel implementation; source removals/relocations classified. Root v0.1.6 reference retained for S12 comparisons |
 | **S12 Integrated qualification** | Prospectively selected full-root correctness/resource and seven-family reporting on actual integrated source; fresh/retained Workspaces, short/long Execs, concurrency and sustained cleanup | S11; actual implementation and frozen specifications | Required proof/resource rows pass; every selection retains its actual outcome. EXPLAIN/profile and bounded-work evidence accompany performance claims; historical failures remain unchanged |
 | **S13 Legacy-root retirement** | After cluster-two completion/qualification, remove root `crates/` and obsolete manifest/build/test wiring; retain required shared root config, immutable receipts and reproducible Git/baseline identities | S12; verified migration closure | Core builds/checks and current dependencies are independent of the removed tree. Per-commit legacy/core/combined LOC recorded; no reference deletion described as measured algorithmic speedup |
@@ -194,7 +194,7 @@ Bring-up may use test providers under tests over real content-built roots; that
 does not qualify real Store/runtime or complete execution readiness. The
 cluster-one follow-up lane covers P3/P4/P5/P6/P7/P12/P13/P14 through existing
 public contracts or explicit first-party contract changes, preserving canonical
-compatibility. SQLite-backed mutable scratch does not replace canonical trees.
+compatibility. SQLite-backed mutable operation records does not replace canonical trees.
 
 The first implementation tranche is S0/S1 with the minimal S2/S3 interfaces:
 one initialized indexed/profiled engine, correct generations and one real-root
@@ -244,7 +244,7 @@ production; tests, docs, examples and tools do not.
 
 | Responsibility / placement | Now (counted production LOC) | After (planning LOC) | Basis |
 | --- | ---: | ---: | --- |
-| `layerfs-overlay` | — | 3,000–4,500 | Schema, typed indexed metadata/payload/scratch operations, generation ownership, physical pressure/reclaim and real DB profiling; SQLite supplies the mutable indexing/page engine |
+| `layerfs-overlay` | — | 3,000–4,500 | Schema, typed indexed metadata/payload/operation records operations, generation ownership, physical pressure/reclaim and real DB profiling; SQLite supplies the mutable indexing/page engine |
 | `layerfs-workspace` | 26,835 | 6,000–8,000 | Existing filesystem operations are 4,909 LOC; retain their semantics, reuse public cluster-one construction/read APIs, add stable capture/composition and exact Commit outcomes; no private page/tree/pack engine |
 | `layerfs-fuse` | 1,447 | 1,500–2,200 | Adapter and mount custody plus owned deferred jobs, coherence/send ordering, cached mmap compatibility and request telemetry |
 | `layerfs-daemon` | 2,151 | 1,500–2,500 | Registry/incarnation routing, fair short overlay jobs, upstream service and ordinary Bash process/stream lifecycle; no host construction path |
@@ -304,13 +304,13 @@ core/
     layerfs-telemetry/                        shared product observations
 
     layerfs-overlay/                          only owner of mutable SQL/payload
-      sql/schema.sql                         rows, indexes, scratch, ownership
+      sql/schema.sql                         rows, indexes, operation records, ownership
       src/lib.rs                             declarations/reexports
       src/db.rs, profile.rs, error.rs         engine setup and typed errors
       src/workspace.rs, generation.rs        namespace rows and atomic frontier
-      src/inode.rs, dentry.rs                 typed metadata and name operations
+      src/inode.rs, directory_entry.rs                 typed metadata and name operations
       src/payload/                           bounded byte/validity/read operations
-      src/ownership.rs, scratch.rs            pins, leases and operation scratch
+      src/ownership.rs, operation_record.rs            pins, leases and operation records
       src/scan.rs, reclaim.rs                 keyset walks, debt and physical space
       src/metrics.rs                         SQL/BLOB/transaction runtime profiling
       tests/
@@ -414,7 +414,7 @@ host-selected global Store location/
 
 sandbox daemon state/
   overlay.sqlite                             all local Workspace namespaces
-                                             metadata + physical payload + scratch
+                                             metadata + physical payload + operation records
                                              ownership + automatic reclaim debt
   SQLite-managed sidecars                    only as required by selected profile
 
@@ -468,7 +468,7 @@ measurement profile, cache contract or proof budget is silently changed here.
 | Two Workspaces | Shared writer fairness, namespace isolation and global database failure; logical quota and physical headroom separately; continuous reads plus simultaneous Saves; same-Branch conflict with exact stage disposition |
 | Persistent multi-call Workspace | Sequential/overlapping calls, repeated incremental Commits and later active writes; same-mount caches/identity, bounded orphan/version ownership and reclamation during live activity; no automatic teardown |
 | Duration independent of mode | Short and long-lived Execs in both per-tool-call and per-task orchestration; process/stream/request custody and backpressure remain valid without command classification or default timeout |
-| Capture row lifetimes | Existing G rows retained without bulk copy; only affected G+1 state and operation scratch created; install never deletes active writes |
+| Capture row lifetimes | Existing G rows retained without bulk copy; only affected G+1 state and operation records created; install never deletes active writes |
 | Automatic cleanup while idle | After Commit/install and terminal unmount, issue no further API calls; observe fair batched SQL deletion/debt completion without manual trigger or TTL; retained-owner release gates respected |
 | SQL space reuse | Rows removed, cell/page/freelist behavior correctly accounted; database file need not shrink and shared tables/other Workspaces remain live |
 | Terminal unmount | Detaches/fences, invalidates incarnation and owns automatic cleanup; no separate close/implicit Commit; pre-effect Busy/Uncertain refusal preserves usability, later failure retains exact stopping/native custody |
@@ -490,7 +490,7 @@ Workspace opens do no additional database open/schema setup or base scan. Report
 base binding, logical open and actual FUSE mount separately; no bootstrap time is
 claimed from removing file creation alone. Terminal unmount detaches/fences the namespace
 without an inline full-row delete; background cleanup cannot starve another mount.
-Audit metadata/payload/scratch queries for Workspace prefixes and intended indexes.
+Audit metadata/payload/operation records queries for Workspace prefixes and intended indexes.
 
 Exec has no automatic shell runtime timeout or the old 30 s wire/SDK cap. Test
 explicit cancellation and streamed output separately from storage RPC deadlines.

@@ -89,7 +89,7 @@ impl NamespaceJob {
             None => Ok(JobOutcome::Needs(eval.needs)),
             Some((None, inode)) => Ok(JobOutcome::Unchanged { inode }),
             Some((Some(mut changes), inode)) => {
-                for change in &mut changes.names {
+                for change in &mut changes.directory_entries {
                     let name = layerfs_content::filesystem::PathName::from_bytes(&change.name)?;
                     let Some(parent) = eval.inode(change.parent)? else {
                         return Ok(JobOutcome::Needs(eval.needs));

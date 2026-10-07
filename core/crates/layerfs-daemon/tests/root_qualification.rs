@@ -1,4 +1,4 @@
-//! Content whole-root qualification over the real overlay scratch records:
+//! Content whole-root qualification over the real overlay operation_record records:
 //! every record read and guarded batch is one short original owner job.
 #[path = "../../layerfs-content/tests/support/mod.rs"]
 mod content_support;
@@ -12,7 +12,7 @@ use layerfs_content::filesystem::{
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{ContentError, ObjectId, ObjectRole};
 use layerfs_daemon::{Command, Completion, Owner, OwnerClient, OwnerConfig, Response};
-use layerfs_overlay::{IndexedScope, ProfileConfig};
+use layerfs_overlay::{IndexedOperationRecordScope, ProfileConfig};
 use layerfs_workspace::IndexedEditRecords;
 use std::time::{Duration, Instant};
 
@@ -36,7 +36,7 @@ fn job(
         std::thread::yield_now();
     }
 }
-fn scope(client: &OwnerClient, tag: u8) -> IndexedScope {
+fn scope(client: &OwnerClient, tag: u8) -> IndexedOperationRecordScope {
     let opened = job(
         client,
         None,
@@ -59,12 +59,12 @@ fn scope(client: &OwnerClient, tag: u8) -> IndexedScope {
         Ok(Response::Operation(Some(owner))) => *owner,
         other => panic!("{other:?}"),
     };
-    IndexedScope {
+    IndexedOperationRecordScope {
         owner,
         file_scope: u64::MAX,
     }
 }
-fn release(client: &OwnerClient, scope: IndexedScope) {
+fn release(client: &OwnerClient, scope: IndexedOperationRecordScope) {
     let done = job(
         client,
         Some(scope.owner.route()),
@@ -179,7 +179,7 @@ fn aliased(session: &Session) -> (TreeStore, ObjectId) {
 }
 
 #[test]
-fn a_real_root_qualifies_through_short_original_scratch_jobs() {
+fn a_real_root_qualifies_through_short_original_operation_record_jobs() {
     let path = std::env::temp_dir().join(format!("layerfs-r2-qualify-{}", std::process::id()));
     std::fs::create_dir(&path).unwrap();
     let owner = Owner::start(
@@ -213,7 +213,7 @@ fn a_real_root_qualifies_through_short_original_scratch_jobs() {
     assert_eq!(after.admitted - before.admitted, provider.calls);
     assert_eq!(after.outstanding, before.outstanding);
     println!(
-        "S9_R2_QUALIFY_REAL_SCRATCH inodes={inodes} bindings={bindings} inode_pages={} \
+        "S9_R2_QUALIFY_REAL_OPERATION_RECORD inodes={inodes} bindings={bindings} inode_pages={} \
          directory_pages={} record_reads={} record_batches={} record_changes={} \
          peak_batch_changes={} owner_jobs={} peak_conversion_heap_bytes={} \
          peak_reply_capacity_bytes={} diagnostic_wall_ms={}",

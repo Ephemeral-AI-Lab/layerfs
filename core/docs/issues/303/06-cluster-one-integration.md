@@ -177,7 +177,7 @@ Not available to a daemon:
 - **Root checks** are the bounded ones that exist today (profile, scope, root
   serial, root inode, root listing page, portable metadata), at mount and before
   stage. Whole-root topology qualification is the explicit paid Content pass; it
-  runs in the daemon over overlay scratch records and is never hidden in mount.
+  runs in the daemon over overlay operation records and is never hidden in mount.
 - **Admission of constructed objects.** Objects now come from Content
   constructors in the same process, the path Project Init already uses with no
   re-derivation. The untrusted-wire admission step leaves with the wire.

@@ -1,0 +1,12 @@
+# {"timestamp": "2026-10-07T08:17:44.316064+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/source-bbe134429b700afa", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/source-bbe134429b700afa": "c2244c809681cc3272d27cda5275812d25d7fb0191f5f1410d456a7725c47937"}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+
+running 4 tests
+test ordered_source_directory_entry_windows_visit_only_parent_and_generation_with_runtime_evidence ... ok
+test source_changes_have_finite_plans_and_correlated_runtime_work ... ok
+test source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows ... ok
+test source_retains_selected_base_and_exact_close_custody_without_a_generation_pin ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+
+# exit=0

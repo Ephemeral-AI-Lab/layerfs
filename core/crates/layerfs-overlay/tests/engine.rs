@@ -119,7 +119,7 @@ fn closed_capture_retains_its_existing_rows_until_explicit_known_release() {
 }
 
 #[test]
-fn reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values() {
+fn reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_operation_record_values() {
     let temp = Temp::new();
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     let held = db.open_workspace([104; 32], [9; 32]).unwrap();
@@ -145,10 +145,10 @@ fn reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values() {
     };
     db.acquire(ready, op).unwrap();
     for key in 0..3 {
-        db.put_scratch(
+        db.put_operation_record(
             ready,
             8,
-            &ScratchRecord {
+            &OperationRecord {
                 kind: 0,
                 key,
                 value: vec![7; 65536],
@@ -158,7 +158,7 @@ fn reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values() {
     }
     db.release(ready, op).unwrap();
     db.close(ready).unwrap();
-    let mut scratch_windows = 0;
+    let mut operation_record_windows = 0;
     loop {
         let before = kind(db.diagnostics(), StatementKind::Reclaim);
         let Some(step) = db.reclaim_closed(0).unwrap() else {
@@ -171,7 +171,7 @@ fn reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values() {
         assert!(step.rows <= 64 && step.data_bytes <= 65536);
         if step.data_bytes != 0 {
             assert_eq!(step.rows, 1);
-            scratch_windows += 1;
+            operation_record_windows += 1;
         }
         println!(
             "CLOSE_RECLAIM step={step:?} vm={} returned={} fullscan={} sorts={}",
@@ -181,7 +181,7 @@ fn reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values() {
             after.sorts - before.sorts
         );
     }
-    assert_eq!(scratch_windows, 3);
+    assert_eq!(operation_record_windows, 3);
     assert_eq!(db.cleanup_state(held).unwrap(), CleanupState::Held);
     println!(
         "CLOSE_RECLAIM plans={:?}",
@@ -195,7 +195,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 15);
+    assert_eq!(p.schema_version, 16);
     assert_eq!(p.max_pages, i64::from(u32::MAX - 1));
     assert_eq!(p.explicit_page_quota, None);
     #[cfg(unix)]
@@ -230,7 +230,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
         .publish(
             a,
             &inode(2),
-            Some(&Dentry {
+            Some(&DirectoryEntry {
                 inherited: false,
                 parent: 1,
                 name: b"ignored.bin".to_vec(),
@@ -251,7 +251,10 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     assert!(db.inode(b, 2).unwrap().is_none());
     assert!(db.cell(b, 2, publication.generation, 0).unwrap().is_none());
     assert_eq!(
-        db.dentry(a, 1, b"ignored.bin").unwrap().unwrap().serial,
+        db.directory_entry(a, 1, b"ignored.bin")
+            .unwrap()
+            .unwrap()
+            .serial,
         Some(2)
     );
     let mut bad = inode(2);
@@ -277,7 +280,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
 }
 
 #[test]
-fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
+fn payload_name_operation_record_and_owner_access_keep_indexed_scope() {
     let temp = Temp::new();
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     let a = db.open_workspace([121; 32], [9; 32]).unwrap();
@@ -293,7 +296,7 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
         .publish(
             a,
             &inode(7),
-            Some(&Dentry {
+            Some(&DirectoryEntry {
                 inherited: false,
                 parent: 1,
                 name: name.to_vec(),
@@ -303,10 +306,10 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
         )
         .unwrap();
     db.reply_attempted(p).unwrap();
-    db.put_scratch(
+    db.put_operation_record(
         a,
         7,
-        &ScratchRecord {
+        &OperationRecord {
             kind: 4,
             key: 0,
             value: vec![0, 255, 0, 61],
@@ -315,8 +318,8 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
     .unwrap();
     let plans = [
         db.explain_cell(a, 7, p.generation, 0).unwrap(),
-        db.explain_dentry(a, 1, name).unwrap(),
-        db.explain_scratch(a, 7, 4, None).unwrap(),
+        db.explain_directory_entry(a, 1, name).unwrap(),
+        db.explain_operation_record(a, 7, 4, None).unwrap(),
         db.explain_lease(a, own).unwrap(),
     ];
     for plan in &plans {
@@ -333,7 +336,7 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
                 .publish(
                     b,
                     &inode(serial),
-                    Some(&Dentry {
+                    Some(&DirectoryEntry {
                         inherited: false,
                         parent: 1,
                         name: format!("n{serial:04}").into_bytes(),
@@ -356,9 +359,12 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
         previous = population;
         let before = db.diagnostics();
         assert_eq!(db.cell(a, 7, p.generation, 0).unwrap(), Some(cell(0)));
-        assert_eq!(db.dentry(a, 1, name).unwrap().unwrap().serial, Some(7));
         assert_eq!(
-            db.scratch_page(a, 7, 4, None).unwrap()[0].value,
+            db.directory_entry(a, 1, name).unwrap().unwrap().serial,
+            Some(7)
+        );
+        assert_eq!(
+            db.operation_record_page(a, 7, 4, None).unwrap()[0].value,
             [0, 255, 0, 61]
         );
         assert!(db.lease_exists(a, own).unwrap());
@@ -366,8 +372,8 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
         let after = db.diagnostics();
         for family in [
             StatementKind::Payload,
-            StatementKind::Dentry,
-            StatementKind::Scratch,
+            StatementKind::DirectoryEntry,
+            StatementKind::OperationRecord,
             StatementKind::Lease,
         ] {
             let start = kind(before, family);
@@ -460,7 +466,7 @@ fn fixed_capture_uses_generation_index_while_active_namespace_grows() {
 }
 
 #[test]
-fn backed_owner_and_scratch_pages_have_no_total_record_limit() {
+fn backed_owner_and_operation_record_pages_have_no_total_record_limit() {
     let temp = Temp::new();
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     let a = db.open_workspace([21; 32], [22; 32]).unwrap();
@@ -472,20 +478,20 @@ fn backed_owner_and_scratch_pages_have_no_total_record_limit() {
     };
     db.acquire(a, lease).unwrap();
     assert!(db.acquire(a, lease).is_err());
-    let record = ScratchRecord {
+    let record = OperationRecord {
         kind: 1,
         key: 0,
         value: vec![0, 255, 0],
     };
     assert!(matches!(
-        db.put_scratch(b, 1, &record),
+        db.put_operation_record(b, 1, &record),
         Err(OverlayError::Missing)
     ));
     for key in 0..193 {
-        db.put_scratch(
+        db.put_operation_record(
             a,
             1,
-            &ScratchRecord {
+            &OperationRecord {
                 key,
                 ..record.clone()
             },
@@ -495,7 +501,7 @@ fn backed_owner_and_scratch_pages_have_no_total_record_limit() {
     let mut after = None;
     let mut count = 0;
     loop {
-        let page = db.scratch_page(a, 1, 1, after).unwrap();
+        let page = db.operation_record_page(a, 1, 1, after).unwrap();
         if page.is_empty() {
             break;
         }
@@ -510,7 +516,7 @@ fn backed_owner_and_scratch_pages_have_no_total_record_limit() {
     assert_eq!(count, 193);
     db.release(a, lease).unwrap();
     assert!(matches!(
-        db.scratch_page(a, 1, 1, None),
+        db.operation_record_page(a, 1, 1, None),
         Err(OverlayError::Missing)
     ));
     assert!(matches!(db.release(a, lease), Err(OverlayError::Missing)));
@@ -623,7 +629,7 @@ fn captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     let route = db.open_workspace([90; 32], [91; 32]).unwrap();
     for key in 0..193 {
-        let name = Dentry {
+        let name = DirectoryEntry {
             inherited: false,
             parent: 1,
             name: format!("n{key:04}").into_bytes(),
@@ -634,7 +640,7 @@ fn captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes() {
     }
     let capture = db.capture(route).unwrap();
     for key in 200..1224 {
-        let name = Dentry {
+        let name = DirectoryEntry {
             inherited: false,
             parent: 1,
             name: format!("n{key:04}").into_bytes(),
@@ -643,20 +649,20 @@ fn captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes() {
         let p = db.publish(route, &inode(2), Some(&name), None).unwrap();
         db.reply_attempted(p).unwrap();
     }
-    let plan = db.explain_dentry_capture(capture).unwrap();
-    assert!(plan.iter().any(|p| p.contains("dentry_capture")));
-    let mut after: Option<Dentry> = None;
+    let plan = db.explain_directory_entry_capture(capture).unwrap();
+    assert!(plan.iter().any(|p| p.contains("directory_entry_capture")));
+    let mut after: Option<DirectoryEntry> = None;
     let mut count = 0;
     loop {
         let before = kind(db.diagnostics(), StatementKind::Capture);
         let page = db
-            .captured_dentries(
+            .captured_directory_entries(
                 capture,
                 after.as_ref().map(|d| (d.parent, d.name.as_slice())),
             )
             .unwrap();
         let observed = kind(db.diagnostics(), StatementKind::Capture);
-        println!("dentry plan={plan:?}; start={count}; rows={}; vm_steps={}; fullscan_steps={}; sorts={}", page.len(), observed.vm_steps-before.vm_steps, observed.fullscan_steps-before.fullscan_steps, observed.sorts-before.sorts);
+        println!("directory_entry plan={plan:?}; start={count}; rows={}; vm_steps={}; fullscan_steps={}; sorts={}", page.len(), observed.vm_steps-before.vm_steps, observed.fullscan_steps-before.fullscan_steps, observed.sorts-before.sorts);
         if page.is_empty() {
             break;
         }
@@ -677,7 +683,7 @@ fn real_sqlite_full_aborts_one_mutation_without_losing_previous_publication() {
         &temp.db(),
         ProfileConfig {
             pager_kib: 2048,
-            // Schema v15 itself exceeds the former 32-page fixture. This
+            // Schema v16 itself exceeds the former 32-page fixture. This
             // explicit quota still exercises one-attempt SQLITE_FULL below.
             max_pages: Some(64),
         },

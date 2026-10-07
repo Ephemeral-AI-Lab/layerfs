@@ -148,14 +148,22 @@ fn failed_name_composition_drops_only_whiteouts_over_proven_absent_base_names() 
     b.applied(unlink(1, "temporary"), T2);
     let row = b
         .overlay
-        .dentry(b.route(), 1, b"temporary")
+        .directory_entry(b.route(), 1, b"temporary")
         .unwrap()
         .unwrap();
     assert_eq!((row.serial, row.inherited), (None, true));
     b.overlay.resolve_failed_capture(capture).unwrap();
     drain(&b);
-    assert_eq!(b.overlay.dentry(b.route(), 1, b"temporary").unwrap(), None);
-    assert_eq!(b.overlay.state(b.route()).unwrap().dirty_names, 0);
+    assert_eq!(
+        b.overlay
+            .directory_entry(b.route(), 1, b"temporary")
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        b.overlay.state(b.route()).unwrap().dirty_directory_entries,
+        0
+    );
     assert_eq!(b.lookup(1, "temporary"), None);
     // A base alias still needs its whiteout after a locally recreated name is
     // removed from the upper domain and the captured domain is composed.
@@ -165,7 +173,11 @@ fn failed_name_composition_drops_only_whiteouts_over_proven_absent_base_names() 
     b.applied(unlink(1, "alias"), T2);
     b.overlay.resolve_failed_capture(capture).unwrap();
     drain(&b);
-    let row = b.overlay.dentry(b.route(), 1, b"alias").unwrap().unwrap();
+    let row = b
+        .overlay
+        .directory_entry(b.route(), 1, b"alias")
+        .unwrap()
+        .unwrap();
     assert_eq!((row.serial, row.inherited), (None, true));
     assert_eq!(b.lookup(1, "alias"), None);
     assert_eq!(b.lookup(1, "file").unwrap().namespace_refs, 1);

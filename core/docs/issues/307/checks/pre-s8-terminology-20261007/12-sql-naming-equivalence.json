@@ -1,0 +1,41 @@
+{
+  "source_parent": "a40acd67348103942e482c5cad788263e78bee12",
+  "method": "Apply only table/column/index/trigger naming and schema version 15-to-16 substitutions to parent SQL; require exact byte equality with working tree",
+  "files": [
+    {
+      "file": "core/crates/layerfs-overlay/sql/schema.sql",
+      "old_sha256": "0ba87529dff11d327167b62bbe3f8c2d89814f7ea9e5b729f6fa0f99ee9ebf58",
+      "new_sha256": "62dcb54f67e9ee269879b929cd47046d22bb6c3107c90411f55dc6754e50a3ab",
+      "exact_equal_after_named_substitutions": true
+    },
+    {
+      "file": "core/crates/layerfs-overlay/sql/accounting.sql",
+      "old_sha256": "d6220d6df9879ca1359a635aadeb13727ae65709e047426257184d6d382429be",
+      "new_sha256": "be0ba2ae1bf76d84b4079f09c052013937cfdede42c0d479b7e8cc4fe80aa72d",
+      "exact_equal_after_named_substitutions": true
+    }
+  ],
+  "tables": [
+    "workspace",
+    "inode",
+    "directory_entry",
+    "payload",
+    "shrink",
+    "request",
+    "lease",
+    "base_source",
+    "operation_record",
+    "reclaim",
+    "maintenance",
+    "file_custody",
+    "file_handle",
+    "file_read",
+    "captured_reader",
+    "orphan",
+    "operation_owner",
+    "owned_operation_record",
+    "indexed_operation_record",
+    "lookup_owner",
+    "orphan_wait"
+  ]
+}

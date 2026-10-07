@@ -1,13 +1,13 @@
 //! Fallible indexed edits and exact captured replacement runs over one owner.
 use super::{context, owner::Facts, scan::Scan, state::Shared};
-use crate::{OverlayCapturedRuns, OverlayScratch};
+use crate::{OverlayCapturedRuns, OverlayOperationRecords};
 use layerfs_content::{
     ContentError, ContentResult, Edit, EditRecordApply, EditRecordChange, EditRecordKey,
     EditSequence, FileRun, FileRuns, IndexedEditBacking, IndexedEditSource,
 };
 use std::cell::{Cell, RefCell};
 
-pub(super) struct Input<'s, 'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> {
+pub(super) struct Input<'s, 'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> {
     pub provider: &'a P,
     pub shared: &'s Shared<'a, P>,
     pub facts: Facts,
@@ -17,7 +17,7 @@ pub(super) struct Input<'s, 'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized
     position: Cell<u64>,
     restarted: Cell<bool>,
 }
-impl<'s, 'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> Input<'s, 'a, P> {
+impl<'s, 'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> Input<'s, 'a, P> {
     pub fn new(
         provider: &'a P,
         shared: &'s Shared<'a, P>,
@@ -88,7 +88,7 @@ impl<'s, 'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> Input<'s, 'a, P> 
         Ok(run)
     }
 }
-impl<P: OverlayCapturedRuns + OverlayScratch + ?Sized> EditSequence for Input<'_, '_, P> {
+impl<P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> EditSequence for Input<'_, '_, P> {
     fn base_len(&self) -> u64 {
         self.facts.base_size
     }
@@ -102,7 +102,9 @@ impl<P: OverlayCapturedRuns + OverlayScratch + ?Sized> EditSequence for Input<'_
         self.edit(index)
     }
 }
-impl<P: OverlayCapturedRuns + OverlayScratch + ?Sized> IndexedEditSource for Input<'_, '_, P> {
+impl<P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> IndexedEditSource
+    for Input<'_, '_, P>
+{
     fn replacement_len(&self, index: usize) -> ContentResult<u64> {
         Ok(self.edit(index)?.replacement_len())
     }
@@ -123,11 +125,11 @@ impl<P: OverlayCapturedRuns + OverlayScratch + ?Sized> IndexedEditSource for Inp
         self.run(at, edit.replacement_len() - offset, output)
     }
 }
-pub(super) struct Complete<'s, 'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> {
+pub(super) struct Complete<'s, 'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> {
     pub input: Input<'s, 'a, P>,
     pub position: u64,
 }
-impl<P: OverlayCapturedRuns + OverlayScratch + ?Sized> FileRuns for Complete<'_, '_, P> {
+impl<P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> FileRuns for Complete<'_, '_, P> {
     fn read_run(&mut self, output: &mut [u8]) -> ContentResult<FileRun> {
         context::verify(self.input.shared, self.input.context)?;
         if self.position == self.input.facts.final_size {
@@ -149,8 +151,8 @@ impl<P: OverlayCapturedRuns + OverlayScratch + ?Sized> FileRuns for Complete<'_,
         Ok(run)
     }
 }
-pub(super) struct Backing<'s, 'a, P: OverlayScratch + ?Sized>(pub &'s Shared<'a, P>);
-impl<P: OverlayScratch + ?Sized> IndexedEditBacking for Backing<'_, '_, P> {
+pub(super) struct Backing<'s, 'a, P: OverlayOperationRecords + ?Sized>(pub &'s Shared<'a, P>);
+impl<P: OverlayOperationRecords + ?Sized> IndexedEditBacking for Backing<'_, '_, P> {
     fn contains(&mut self, key: EditRecordKey) -> ContentResult<bool> {
         let mut owner = self.0.borrow_mut();
         owner.ready()?;

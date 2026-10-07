@@ -1,7 +1,7 @@
 //! Workspace read and namespace-job composition through real short owner jobs,
 //! outside provider IO.
 use crate::{Command, OwnerClient, OwnerError, Response};
-use layerfs_overlay::{BaseSource, Cell, Dentry, Inode, LocalRead, NameWindow};
+use layerfs_overlay::{BaseSource, Cell, DirectoryEntry, DirectoryEntryWindow, Inode, LocalRead};
 use layerfs_workspace::{
     JobOutcome, NamespaceJob, OverlayJobs, OverlayRead, WorkspaceError, WorkspaceResult,
 };
@@ -34,47 +34,47 @@ impl OverlayRead for OwnerClient {
             _ => Err(WorkspaceError::Service(Box::new(done))),
         }
     }
-    fn dentry(
+    fn directory_entry(
         &self,
         source: BaseSource,
         parent: u64,
         name: &[u8],
-    ) -> WorkspaceResult<Option<Dentry>> {
+    ) -> WorkspaceResult<Option<DirectoryEntry>> {
         if name.is_empty() || name.len() > 255 {
             return Err(layerfs_overlay::OverlayError::Invalid("source name window").into());
         }
         let done = self.read_job(
             source,
-            Command::SourceDentry {
+            Command::SourceDirectoryEntry {
                 source,
                 parent,
                 name: name.to_vec(),
             },
         )?;
         match done.result() {
-            Ok(Response::Dentry(value)) => Ok(value.clone()),
+            Ok(Response::DirectoryEntry(value)) => Ok(value.clone()),
             _ => Err(WorkspaceError::Service(Box::new(done))),
         }
     }
-    fn names(
+    fn directory_entries(
         &self,
         source: BaseSource,
         parent: u64,
         after: Option<&[u8]>,
-    ) -> WorkspaceResult<NameWindow> {
+    ) -> WorkspaceResult<DirectoryEntryWindow> {
         if after.is_some_and(|key| key.len() > 255) {
             return Err(layerfs_overlay::OverlayError::Invalid("source name cursor").into());
         }
         let done = self.read_job(
             source,
-            Command::SourceNames {
+            Command::SourceDirectoryEntries {
                 source,
                 parent,
                 after: after.map(<[u8]>::to_vec),
             },
         )?;
         match done.result() {
-            Ok(Response::Names(value)) => Ok(value.clone()),
+            Ok(Response::DirectoryEntryWindow(value)) => Ok(value.clone()),
             _ => Err(WorkspaceError::Service(Box::new(done))),
         }
     }

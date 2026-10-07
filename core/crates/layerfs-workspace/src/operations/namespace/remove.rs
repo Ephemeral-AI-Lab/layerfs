@@ -2,10 +2,10 @@
 use crate::eval::{refuse, touched, Eval};
 use crate::{Refusal, Time, WorkspaceResult};
 use layerfs_content::filesystem::PathName;
-use layerfs_overlay::{Binding, Changes, Inode, InodeKind, NameChange};
+use layerfs_overlay::{Binding, Changes, DirectoryEntryChange, Inode, InodeKind};
 
-pub(crate) fn unbind(parent: u64, name: &PathName, inherited: bool) -> NameChange {
-    NameChange {
+pub(crate) fn unbind(parent: u64, name: &PathName, inherited: bool) -> DirectoryEntryChange {
+    DirectoryEntryChange {
         parent,
         name: name.as_bytes().to_vec(),
         binding: Binding::Removed { inherited },
@@ -56,7 +56,7 @@ pub(crate) fn remove(
             dereferenced(&target),
             touched(&directory, now, false, true)?,
         ],
-        names: vec![unbind(parent, name, inherited)],
+        directory_entries: vec![unbind(parent, name, inherited)],
         cell: None,
         write: None,
     }))

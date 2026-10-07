@@ -127,11 +127,14 @@ fn captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold(
     let reader = db.acquire_captured_reader(capture, 1).unwrap();
     assert_eq!(db.retained_captured_reader(route, 1).unwrap(), Some(reader));
     let sealed_rows = db.reader_inodes(reader, 0).unwrap();
-    let sealed_names = db.reader_dentries(reader, None).unwrap();
+    let sealed_names = db.reader_directory_entries(reader, None).unwrap();
     db.install(capture, [115; 32]).unwrap();
     maintain(&db);
     assert_eq!(db.reader_inodes(reader, 0).unwrap(), sealed_rows);
-    assert_eq!(db.reader_dentries(reader, None).unwrap(), sealed_names);
+    assert_eq!(
+        db.reader_directory_entries(reader, None).unwrap(),
+        sealed_names
+    );
     assert_eq!(
         db.read_captured(reader, 9, 0, 32).unwrap().unwrap().data,
         b"sealed"
@@ -158,21 +161,22 @@ fn captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold(
 }
 
 #[test]
-fn operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_scratch() {
+fn operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_operation_record()
+{
     let temp = Temp::new();
     let db = temp.db();
     let route = db.open_workspace([121; 32], [122; 32]).unwrap();
     let first = db.acquire_operation(route, 1).unwrap();
     assert_eq!(db.retained_operation(route, 1).unwrap(), Some(first));
-    let record = ScratchRecord {
+    let record = OperationRecord {
         kind: 4,
         key: 1,
-        value: vec![3; SCRATCH_BYTES],
+        value: vec![3; OPERATION_RECORD_BYTES],
     };
     for key in 0..8 {
-        db.put_owned_scratch(
+        db.put_owned_operation_record(
             first,
-            &ScratchRecord {
+            &OperationRecord {
                 key,
                 ..record.clone()
             },
@@ -184,20 +188,20 @@ fn operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new
     let second = db.acquire_operation(route, 1).unwrap();
     assert_ne!(first, second);
     assert!(db.release_operation(first).is_err());
-    assert!(db.put_owned_scratch(first, &record).is_err());
-    db.put_owned_scratch(second, &record).unwrap();
+    assert!(db.put_owned_operation_record(first, &record).is_err());
+    db.put_owned_operation_record(second, &record).unwrap();
     maintain(&db);
     assert_eq!(
-        db.owned_scratch_page(second, 4, None).unwrap(),
+        db.owned_operation_record_page(second, 4, None).unwrap(),
         vec![record.clone()]
     );
     db.close(route).unwrap();
     assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Held);
     assert_eq!(
-        db.owned_scratch_page(second, 4, None).unwrap(),
+        db.owned_operation_record_page(second, 4, None).unwrap(),
         vec![record.clone()]
     );
-    assert!(db.put_owned_scratch(second, &record).is_err());
+    assert!(db.put_owned_operation_record(second, &record).is_err());
     db.release_operation(second).unwrap();
     maintain(&db);
     for _ in 0..1000 {

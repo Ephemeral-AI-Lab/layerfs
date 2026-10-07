@@ -1,6 +1,6 @@
 //! One first-original-failure owner shared by all short record/read methods.
 use super::owner::CapturedFileWork;
-use crate::{IndexedConstructionRecords, OverlayScratch, WorkspaceError};
+use crate::{IndexedConstructionRecords, OverlayOperationRecords, WorkspaceError};
 use layerfs_content::{
     ContentError, ContentResult, Edit, EditRecordApply, EditRecordChange, EditRecordExpected,
     EditRecordKey, IndexedEditBacking,
@@ -9,14 +9,14 @@ use std::{cell::RefCell, ops::Deref};
 
 pub(super) const CONTEXT: u32 = 0x4346_0000;
 pub(super) const EDITS: u32 = 0x4346_0001;
-pub(super) struct State<'a, P: OverlayScratch + ?Sized> {
+pub(super) struct State<'a, P: OverlayOperationRecords + ?Sized> {
     pub records: IndexedConstructionRecords<'a, P>,
     pub failure: Option<WorkspaceError>,
     pub work: CapturedFileWork,
     pub cache: Option<(usize, Edit)>,
 }
-pub(super) struct Shared<'a, P: OverlayScratch + ?Sized>(RefCell<State<'a, P>>);
-impl<'a, P: OverlayScratch + ?Sized> Shared<'a, P> {
+pub(super) struct Shared<'a, P: OverlayOperationRecords + ?Sized>(RefCell<State<'a, P>>);
+impl<'a, P: OverlayOperationRecords + ?Sized> Shared<'a, P> {
     pub fn new(state: State<'a, P>) -> Self {
         Self(RefCell::new(state))
     }
@@ -24,13 +24,13 @@ impl<'a, P: OverlayScratch + ?Sized> Shared<'a, P> {
         self.0.into_inner()
     }
 }
-impl<'a, P: OverlayScratch + ?Sized> Deref for Shared<'a, P> {
+impl<'a, P: OverlayOperationRecords + ?Sized> Deref for Shared<'a, P> {
     type Target = RefCell<State<'a, P>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<P: OverlayScratch + ?Sized> State<'_, P> {
+impl<P: OverlayOperationRecords + ?Sized> State<'_, P> {
     pub fn ready(&self) -> ContentResult<()> {
         if self.failure.is_some() || self.records.failure().is_some() {
             Err(ContentError::ProviderFailure {
@@ -69,10 +69,10 @@ impl<P: OverlayScratch + ?Sized> State<'_, P> {
         let result = self.records.get(key);
         let value = result.map_err(|error| self.content(error))?;
         if let Some(value) = &value {
-            if value.capacity() > layerfs_overlay::SCRATCH_BYTES {
+            if value.capacity() > layerfs_overlay::OPERATION_RECORD_BYTES {
                 return Err(self.content(ContentError::BoundedCapacityExceeded {
                     what: "captured record returned capacity",
-                    limit: layerfs_overlay::SCRATCH_BYTES as u64,
+                    limit: layerfs_overlay::OPERATION_RECORD_BYTES as u64,
                     actual: value.capacity() as u64,
                 }));
             }

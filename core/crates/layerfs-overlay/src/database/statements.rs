@@ -32,7 +32,7 @@ pub(crate) const LAYER_ACTIVE: &str = "SELECT size,inherited_cutoff,epoch,height
     WHERE ns=?1 AND serial=?2 AND gen=?3";
 pub(crate) const LAYER_LOWER: &str = "SELECT size FROM inode
     WHERE ns=?1 AND serial=?2 AND gen<?3 AND gen>?4 ORDER BY gen DESC LIMIT 1";
-pub(crate) const DENTRY_LOOKUP:&str="SELECT serial,inherited FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4 AND gen>?5 ORDER BY gen DESC LIMIT 1";
+pub(crate) const DIRECTORY_ENTRY_LOOKUP:&str="SELECT serial,inherited FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4 AND gen>?5 ORDER BY gen DESC LIMIT 1";
 pub(crate) const LEASE_LOOKUP: &str =
     "SELECT 1 FROM lease WHERE ns=?1 AND kind=?2 AND owner=?3 AND resource=?4";
 pub(crate) const RETAINED_CAPTURE: &str = "SELECT captured,captured_revision,base_root
@@ -49,13 +49,13 @@ pub(crate) const BASE_SOURCE_INCREMENT: &str =
     "UPDATE workspace SET base_readers=base_readers+1 WHERE ns=?1";
 pub(crate) const BASE_SOURCE_DECREMENT: &str =
     "UPDATE workspace SET base_readers=base_readers-1 WHERE ns=?1";
-pub(crate) const DENTRY_CAPTURE: &str = "SELECT parent,name,serial,inherited
-    FROM dentry INDEXED BY dentry_capture WHERE ns=?1 AND gen=?2
+pub(crate) const DIRECTORY_ENTRY_CAPTURE: &str = "SELECT parent,name,serial,inherited
+    FROM directory_entry INDEXED BY directory_entry_capture WHERE ns=?1 AND gen=?2
     AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 64";
 pub(crate) const SOURCE_NAMES: &str =
-    "SELECT parent,name,serial,inherited FROM dentry INDEXED BY dentry_capture
+    "SELECT parent,name,serial,inherited FROM directory_entry INDEXED BY directory_entry_capture
     WHERE ns=?1 AND gen=?2 AND parent=?3 AND name>?4 ORDER BY name LIMIT 64";
-pub(crate) const SCRATCH_PAGE: &str = "SELECT kind,key,value FROM scratch
+pub(crate) const OPERATION_RECORD_PAGE: &str = "SELECT kind,key,value FROM operation_record
     WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64";
 pub(crate) const INODE_PUT: &str = "INSERT INTO inode
     VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
@@ -63,15 +63,15 @@ pub(crate) const INODE_PUT: &str = "INSERT INTO inode
     mtime_seconds=excluded.mtime_seconds,mtime_nanoseconds=excluded.mtime_nanoseconds,
     nlink=excluded.nlink,size=excluded.size,inherited_cutoff=excluded.inherited_cutoff,
     born=excluded.born,entries=excluded.entries,epoch=excluded.epoch,height=excluded.height";
-pub(crate) const DENTRY_ACTIVE: &str =
-    "SELECT serial,inherited FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
-pub(crate) const DENTRY_PUT: &str = "INSERT INTO dentry VALUES(?1,?2,?3,?4,?5,?6)
+pub(crate) const DIRECTORY_ENTRY_ACTIVE: &str =
+    "SELECT serial,inherited FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
+pub(crate) const DIRECTORY_ENTRY_PUT: &str = "INSERT INTO directory_entry VALUES(?1,?2,?3,?4,?5,?6)
     ON CONFLICT(ns,parent,name,gen) DO UPDATE SET serial=excluded.serial,inherited=excluded.inherited";
-pub(crate) const DENTRY_DROP: &str =
-    "DELETE FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
+pub(crate) const DIRECTORY_ENTRY_DROP: &str =
+    "DELETE FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
 pub(crate) const TICKET_PUT: &str = "INSERT INTO request(ns,revision,gen) VALUES(?1,?2,?3)";
 pub(crate) const FRONTIER_ADVANCE: &str = "UPDATE workspace SET revision=?2,
-    dirty_inodes=dirty_inodes+?3,dirty_names=dirty_names+?4 WHERE ns=?1";
+    dirty_inodes=dirty_inodes+?3,dirty_directory_entries=dirty_directory_entries+?4 WHERE ns=?1";
 
 pub(crate) const ORPHAN_LOOKUP: &str =
     "SELECT base_root,lower_top,lower_floor FROM orphan WHERE ns=?1 AND serial=?2";
@@ -81,29 +81,32 @@ pub(crate) const FILE_REFS: &str =
 
 pub(crate) const OPERATION_CUSTODY: &str = "SELECT 1 FROM operation_owner WHERE ns=?1 AND owner=?2";
 
-pub(crate) const INDEXED_SCRATCH_CONTAINS: &str = "SELECT 1 FROM indexed_scratch
+pub(crate) const INDEXED_OPERATION_RECORD_CONTAINS: &str = "SELECT 1 FROM indexed_operation_record
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key=?5";
-pub(crate) const INDEXED_SCRATCH_GET: &str = "SELECT value FROM indexed_scratch
+pub(crate) const INDEXED_OPERATION_RECORD_GET: &str = "SELECT value FROM indexed_operation_record
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key=?5";
-pub(crate) const INDEXED_SCRATCH_PUT: &str = "INSERT INTO indexed_scratch VALUES(?1,?2,?3,?4,?5,?6)
+pub(crate) const INDEXED_OPERATION_RECORD_PUT: &str =
+    "INSERT INTO indexed_operation_record VALUES(?1,?2,?3,?4,?5,?6)
     ON CONFLICT(ns,operation,file_scope,kind,key) DO UPDATE SET value=excluded.value";
-pub(crate) const INDEXED_SCRATCH_DELETE: &str = "DELETE FROM indexed_scratch
+pub(crate) const INDEXED_OPERATION_RECORD_DELETE: &str = "DELETE FROM indexed_operation_record
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key=?5";
-pub(crate) const INDEXED_SCRATCH_KEYS: &str = "SELECT key FROM indexed_scratch
+pub(crate) const INDEXED_OPERATION_RECORD_KEYS: &str = "SELECT key FROM indexed_operation_record
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key<>?5
     ORDER BY key LIMIT 64";
-pub(crate) const INDEXED_SCRATCH_ALL_KEYS: &str = "SELECT key FROM indexed_scratch
+pub(crate) const INDEXED_OPERATION_RECORD_ALL_KEYS: &str =
+    "SELECT key FROM indexed_operation_record
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4
     ORDER BY key LIMIT 64";
-pub(crate) const INDEXED_SCRATCH_KEYS_AFTER: &str = "SELECT key FROM indexed_scratch
+pub(crate) const INDEXED_OPERATION_RECORD_KEYS_AFTER: &str =
+    "SELECT key FROM indexed_operation_record
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key>?5
     ORDER BY key LIMIT 64";
-pub(crate) const INDEXED_SCRATCH_RECLAIM_OPERATION: &str =
+pub(crate) const INDEXED_OPERATION_RECORD_RECLAIM_OPERATION: &str =
     "SELECT file_scope,kind,key,length(value)
-    FROM indexed_scratch WHERE ns=?1 AND operation=?2 ORDER BY file_scope,kind,key LIMIT 64";
-pub(crate) const INDEXED_SCRATCH_RECLAIM_NAMESPACE: &str =
+    FROM indexed_operation_record WHERE ns=?1 AND operation=?2 ORDER BY file_scope,kind,key LIMIT 64";
+pub(crate) const INDEXED_OPERATION_RECORD_RECLAIM_NAMESPACE: &str =
     "SELECT operation,file_scope,kind,key,length(value)
-    FROM indexed_scratch WHERE ns=?1 ORDER BY operation,file_scope,kind,key LIMIT 64";
+    FROM indexed_operation_record WHERE ns=?1 ORDER BY operation,file_scope,kind,key LIMIT 64";
 
 pub(crate) const GENERATION_HELD: &str = "SELECT 1 FROM lease INDEXED BY lease_resource
             WHERE ns=?1 AND kind IN(1,6) AND resource=?2 LIMIT 1";

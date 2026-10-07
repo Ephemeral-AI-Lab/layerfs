@@ -1,5 +1,9 @@
 # Captured final-state file normalization
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Current general guide. Source implementation after checkpoint
 > `71a3a24b8`; fourteen actual-Owner cases pass on host and Linux in the
 > [captured-file/reducer checkpoint](../issues/307/CAPTURED-FILE-REDUCER-20261007.md).
@@ -59,7 +63,7 @@ the existing owning record adapter checks actual outer and nested capacities
 against its 65,536-byte envelope. Returned raw point Vec capacity also must fit
 that existing envelope before context/edit decoding or exposure to the Content
 backing adapter. The final context is sealed by an exact-byte guard only after
-all records succeed. No complete edit vector, scratch-key scan
+all records succeed. No complete edit vector, operation records-key scan
 or alternate tree algorithm is introduced. Source lookup rechecks the sealed
 context, reads an exact numbered row and retains only one edit cache entry.
 The caller preserves exclusive/stable ownership of these private records during

@@ -1,7 +1,7 @@
 //! Bounded live garbage and generation-selective retirement, metadata first.
 use crate::{
     db::unsigned,
-    maintenance::{Item, SCRATCH, STALE, STEPS},
+    maintenance::{Item, OPERATION_RECORD, STALE, STEPS},
     sql, Overlay, OverlayResult, StatementKind,
 };
 
@@ -55,7 +55,7 @@ impl Overlay {
             2 => {
                 let rows = self.query(
                     StatementKind::Reclaim,
-                    "SELECT parent,name FROM dentry INDEXED BY dentry_capture
+                    "SELECT parent,name FROM directory_entry INDEXED BY directory_entry_capture
                     WHERE ns=?1 AND gen=?2 AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 64",
                     &[&ns, &gen, &item.cursor, &item.name],
                     24 + item.name.len() as u64,
@@ -64,7 +64,7 @@ impl Overlay {
                 for (parent, name) in &rows {
                     self.execute(
                         StatementKind::Reclaim,
-                        sql::DENTRY_DROP,
+                        sql::DIRECTORY_ENTRY_DROP,
                         &[&ns, parent, name, &gen],
                         24 + name.len() as u64,
                     )?;
@@ -117,8 +117,8 @@ impl Overlay {
         Ok((count as u64, bytes, false))
     }
     pub(crate) fn clean_live_item(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
-        if item.kind == SCRATCH {
-            return self.clean_scratch(item);
+        if item.kind == OPERATION_RECORD {
+            return self.clean_operation_record(item);
         }
         let layer = self
             .layers(item.ns, item.resource, item.target, item.target - 1)?
@@ -173,21 +173,22 @@ impl Overlay {
         }
         Ok((count as u64, bytes, count == 0))
     }
-    fn clean_scratch(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
+    fn clean_operation_record(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
         if item.target == 2 {
-            let (count, bytes) = self.delete_indexed_scratch(item.ns, Some(item.resource))?;
+            let (count, bytes) =
+                self.delete_indexed_operation_record(item.ns, Some(item.resource))?;
             if count == 0 {
                 self.finish_item(item)?;
             }
             return Ok((count, bytes, count == 0));
         }
         let table = if item.target == 1 {
-            "owned_scratch"
+            "owned_operation_record"
         } else {
-            "scratch"
+            "operation_record"
         };
         let rows = self.query(
-            StatementKind::Scratch,
+            StatementKind::OperationRecord,
             &format!(
                 "SELECT kind,key,length(value) FROM {table}
             WHERE ns=?1 AND operation=?2 AND (kind,key)>(?3,?4) ORDER BY kind,key LIMIT 64"

@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T08:24:49.716378+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-names-daemon-records", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/indexed_operation_record-d97e71649d1141fb; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/indexed_operation_record-d97e71649d1141fb --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+9fead4b52974106b97cb841dd11f3697ad5d8361b5bb810fba5403442754c997  core/target/cluster2-linux/debug/deps/indexed_operation_record-d97e71649d1141fb
+
+running 2 tests
+test original_atomic_refusal_and_credits_survive_independent_owner_jobs ... ok
+test released_indexed_rows_reclaim_automatically_and_close_preserves_actual_owner ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+# exit=0

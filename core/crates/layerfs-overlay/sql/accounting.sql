@@ -4,12 +4,12 @@ CREATE TABLE accounting (
     wait_refs INTEGER NOT NULL DEFAULT 0 CHECK(wait_refs>=0),
     namespaces INTEGER NOT NULL DEFAULT 0 CHECK(namespaces>=0),
     inode_rows INTEGER NOT NULL DEFAULT 0 CHECK(inode_rows>=0),
-    name_rows INTEGER NOT NULL DEFAULT 0 CHECK(name_rows>=0),
+    directory_entry_rows INTEGER NOT NULL DEFAULT 0 CHECK(directory_entry_rows>=0),
     payload_cells INTEGER NOT NULL DEFAULT 0 CHECK(payload_cells>=0),
     payload_bytes INTEGER NOT NULL DEFAULT 0 CHECK(payload_bytes>=0),
     shrink_rows INTEGER NOT NULL DEFAULT 0 CHECK(shrink_rows>=0),
-    scratch_rows INTEGER NOT NULL DEFAULT 0 CHECK(scratch_rows>=0),
-    scratch_bytes INTEGER NOT NULL DEFAULT 0 CHECK(scratch_bytes>=0),
+    operation_record_rows INTEGER NOT NULL DEFAULT 0 CHECK(operation_record_rows>=0),
+    operation_record_bytes INTEGER NOT NULL DEFAULT 0 CHECK(operation_record_bytes>=0),
     orphan_rows INTEGER NOT NULL DEFAULT 0 CHECK(orphan_rows>=0),
     owner_rows INTEGER NOT NULL DEFAULT 0 CHECK(owner_rows>=0),
     source_rows INTEGER NOT NULL DEFAULT 0 CHECK(source_rows>=0),
@@ -36,13 +36,13 @@ CREATE TRIGGER inode_account_delete AFTER DELETE ON inode BEGIN
     UPDATE accounting SET inode_rows=inode_rows-1 WHERE ns=0;
     UPDATE accounting SET inode_rows=inode_rows-1 WHERE ns=OLD.ns;
 END;
-CREATE TRIGGER dentry_account_insert AFTER INSERT ON dentry BEGIN
-    UPDATE accounting SET name_rows=name_rows+1 WHERE ns=0;
-    UPDATE accounting SET name_rows=name_rows+1 WHERE ns=NEW.ns;
+CREATE TRIGGER directory_entry_account_insert AFTER INSERT ON directory_entry BEGIN
+    UPDATE accounting SET directory_entry_rows=directory_entry_rows+1 WHERE ns=0;
+    UPDATE accounting SET directory_entry_rows=directory_entry_rows+1 WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER dentry_account_delete AFTER DELETE ON dentry BEGIN
-    UPDATE accounting SET name_rows=name_rows-1 WHERE ns=0;
-    UPDATE accounting SET name_rows=name_rows-1 WHERE ns=OLD.ns;
+CREATE TRIGGER directory_entry_account_delete AFTER DELETE ON directory_entry BEGIN
+    UPDATE accounting SET directory_entry_rows=directory_entry_rows-1 WHERE ns=0;
+    UPDATE accounting SET directory_entry_rows=directory_entry_rows-1 WHERE ns=OLD.ns;
 END;
 CREATE TRIGGER payload_account_insert AFTER INSERT ON payload BEGIN
     UPDATE accounting SET payload_cells=payload_cells+1,payload_bytes=payload_bytes+(length(NEW.data)+ifnull(length(NEW.validity),0)) WHERE ns=0;
@@ -60,29 +60,29 @@ CREATE TRIGGER shrink_account_delete AFTER DELETE ON shrink BEGIN
     UPDATE accounting SET shrink_rows=shrink_rows-1 WHERE ns=0;
     UPDATE accounting SET shrink_rows=shrink_rows-1 WHERE ns=OLD.ns;
 END;
-CREATE TRIGGER scratch_account_insert AFTER INSERT ON scratch BEGIN
-    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=0;
-    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=NEW.ns;
+CREATE TRIGGER operation_record_account_insert AFTER INSERT ON operation_record BEGIN
+    UPDATE accounting SET operation_record_rows=operation_record_rows+1,operation_record_bytes=operation_record_bytes+length(NEW.value) WHERE ns=0;
+    UPDATE accounting SET operation_record_rows=operation_record_rows+1,operation_record_bytes=operation_record_bytes+length(NEW.value) WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER scratch_account_delete AFTER DELETE ON scratch BEGIN
-    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=0;
-    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=OLD.ns;
+CREATE TRIGGER operation_record_account_delete AFTER DELETE ON operation_record BEGIN
+    UPDATE accounting SET operation_record_rows=operation_record_rows-1,operation_record_bytes=operation_record_bytes-length(OLD.value) WHERE ns=0;
+    UPDATE accounting SET operation_record_rows=operation_record_rows-1,operation_record_bytes=operation_record_bytes-length(OLD.value) WHERE ns=OLD.ns;
 END;
-CREATE TRIGGER owned_scratch_account_insert AFTER INSERT ON owned_scratch BEGIN
-    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=0;
-    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=NEW.ns;
+CREATE TRIGGER owned_operation_record_account_insert AFTER INSERT ON owned_operation_record BEGIN
+    UPDATE accounting SET operation_record_rows=operation_record_rows+1,operation_record_bytes=operation_record_bytes+length(NEW.value) WHERE ns=0;
+    UPDATE accounting SET operation_record_rows=operation_record_rows+1,operation_record_bytes=operation_record_bytes+length(NEW.value) WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER owned_scratch_account_delete AFTER DELETE ON owned_scratch BEGIN
-    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=0;
-    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=OLD.ns;
+CREATE TRIGGER owned_operation_record_account_delete AFTER DELETE ON owned_operation_record BEGIN
+    UPDATE accounting SET operation_record_rows=operation_record_rows-1,operation_record_bytes=operation_record_bytes-length(OLD.value) WHERE ns=0;
+    UPDATE accounting SET operation_record_rows=operation_record_rows-1,operation_record_bytes=operation_record_bytes-length(OLD.value) WHERE ns=OLD.ns;
 END;
-CREATE TRIGGER indexed_scratch_account_insert AFTER INSERT ON indexed_scratch BEGIN
-    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=0;
-    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=NEW.ns;
+CREATE TRIGGER indexed_operation_record_account_insert AFTER INSERT ON indexed_operation_record BEGIN
+    UPDATE accounting SET operation_record_rows=operation_record_rows+1,operation_record_bytes=operation_record_bytes+length(NEW.value) WHERE ns=0;
+    UPDATE accounting SET operation_record_rows=operation_record_rows+1,operation_record_bytes=operation_record_bytes+length(NEW.value) WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER indexed_scratch_account_delete AFTER DELETE ON indexed_scratch BEGIN
-    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=0;
-    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=OLD.ns;
+CREATE TRIGGER indexed_operation_record_account_delete AFTER DELETE ON indexed_operation_record BEGIN
+    UPDATE accounting SET operation_record_rows=operation_record_rows-1,operation_record_bytes=operation_record_bytes-length(OLD.value) WHERE ns=0;
+    UPDATE accounting SET operation_record_rows=operation_record_rows-1,operation_record_bytes=operation_record_bytes-length(OLD.value) WHERE ns=OLD.ns;
 END;
 CREATE TRIGGER orphan_account_insert AFTER INSERT ON orphan BEGIN
     UPDATE accounting SET orphan_rows=orphan_rows+1 WHERE ns=0;
@@ -176,17 +176,17 @@ CREATE TRIGGER payload_account_update AFTER UPDATE ON payload BEGIN
     UPDATE accounting SET payload_bytes=payload_bytes-(length(OLD.data)+ifnull(length(OLD.validity),0))+(length(NEW.data)+ifnull(length(NEW.validity),0)) WHERE ns=0;
     UPDATE accounting SET payload_bytes=payload_bytes-(length(OLD.data)+ifnull(length(OLD.validity),0))+(length(NEW.data)+ifnull(length(NEW.validity),0)) WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER scratch_account_update AFTER UPDATE ON scratch BEGIN
-    UPDATE accounting SET scratch_bytes=scratch_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=0;
-    UPDATE accounting SET scratch_bytes=scratch_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=NEW.ns;
+CREATE TRIGGER operation_record_account_update AFTER UPDATE ON operation_record BEGIN
+    UPDATE accounting SET operation_record_bytes=operation_record_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=0;
+    UPDATE accounting SET operation_record_bytes=operation_record_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER owned_scratch_account_update AFTER UPDATE ON owned_scratch BEGIN
-    UPDATE accounting SET scratch_bytes=scratch_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=0;
-    UPDATE accounting SET scratch_bytes=scratch_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=NEW.ns;
+CREATE TRIGGER owned_operation_record_account_update AFTER UPDATE ON owned_operation_record BEGIN
+    UPDATE accounting SET operation_record_bytes=operation_record_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=0;
+    UPDATE accounting SET operation_record_bytes=operation_record_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER indexed_scratch_account_update AFTER UPDATE ON indexed_scratch BEGIN
-    UPDATE accounting SET scratch_bytes=scratch_bytes-length(OLD.value)+length(NEW.value) WHERE ns=0;
-    UPDATE accounting SET scratch_bytes=scratch_bytes-length(OLD.value)+length(NEW.value) WHERE ns=NEW.ns;
+CREATE TRIGGER indexed_operation_record_account_update AFTER UPDATE ON indexed_operation_record BEGIN
+    UPDATE accounting SET operation_record_bytes=operation_record_bytes-length(OLD.value)+length(NEW.value) WHERE ns=0;
+    UPDATE accounting SET operation_record_bytes=operation_record_bytes-length(OLD.value)+length(NEW.value) WHERE ns=NEW.ns;
 END;
 CREATE TRIGGER maintenance_account_update AFTER UPDATE ON maintenance BEGIN
     UPDATE accounting SET ready_targets=ready_targets-(OLD.ready)+(NEW.ready) WHERE ns=0;

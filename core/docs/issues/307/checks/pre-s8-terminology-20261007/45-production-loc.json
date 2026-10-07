@@ -1,0 +1,30 @@
+{
+  "method": "tools/production_loc.py c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb; git archive exact first parent/staged tree; production Rust and shipped SQL, comments and inline/test-only modules excluded",
+  "staged_tree_before_receipt": "7890ddb08ef6667414950b6ad2617de81959a8e9",
+  "before": {
+    "ref": "a40acd67348103942e482c5cad788263e78bee12",
+    "combined": 170969,
+    "core": 105552,
+    "reference": 65417,
+    "active": 62387,
+    "excluded_predecessor": 36325,
+    "excluded_integration": 6840
+  },
+  "after": {
+    "ref": "7890ddb08ef6667414950b6ad2617de81959a8e9",
+    "combined": 171109,
+    "core": 105692,
+    "reference": 65417,
+    "active": 62527,
+    "excluded_predecessor": 36325,
+    "excluded_integration": 6840
+  },
+  "delta": {
+    "combined": 140,
+    "core": 140,
+    "reference": 0,
+    "active": 140,
+    "excluded_predecessor": 0,
+    "excluded_integration": 0
+  }
+}

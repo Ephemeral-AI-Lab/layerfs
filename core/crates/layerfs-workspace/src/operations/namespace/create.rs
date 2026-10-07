@@ -3,7 +3,7 @@ use crate::eval::{refuse, touched, Eval};
 use crate::{Refusal, Time, WorkspaceResult};
 use layerfs_content::filesystem::{PathName, SymlinkTarget};
 use layerfs_overlay::{
-    Binding, Cell, Changes, Inode, InodeKind, NameChange, CELL_BYTES, MASK_BYTES,
+    Binding, Cell, Changes, DirectoryEntryChange, Inode, InodeKind, CELL_BYTES, MASK_BYTES,
 };
 
 /// The new inode's kind-specific values, checked before any owner job.
@@ -25,8 +25,8 @@ fn free_name(eval: &mut Eval<'_>, parent: u64, name: &PathName) -> WorkspaceResu
     }
     Ok(Some(directory))
 }
-fn bind(parent: u64, name: &PathName, serial: u64) -> NameChange {
-    NameChange {
+fn bind(parent: u64, name: &PathName, serial: u64) -> DirectoryEntryChange {
+    DirectoryEntryChange {
         parent,
         name: name.as_bytes().to_vec(),
         binding: Binding::Bound {
@@ -89,7 +89,7 @@ pub(crate) fn create(
         open: None,
         detached: None,
         inodes: vec![inode.clone(), touched(&directory, now, true, false)?],
-        names: vec![bind(parent, name, fresh.serial)],
+        directory_entries: vec![bind(parent, name, fresh.serial)],
         cell,
         write: None,
     };
@@ -125,7 +125,7 @@ pub(crate) fn link(
         open: None,
         detached: None,
         inodes: vec![file.clone(), touched(&directory, now, true, false)?],
-        names: vec![bind(parent, name, serial)],
+        directory_entries: vec![bind(parent, name, serial)],
         cell: None,
         write: None,
     };

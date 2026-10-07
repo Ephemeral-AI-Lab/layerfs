@@ -1,5 +1,9 @@
 # Daemon-owned fair overlay service
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Current general guide.
 
 S5 update after `f5558fc22`: `SourceRead` provides one composed local byte
@@ -11,7 +15,7 @@ See [payload streams](31-payload-streams.md) for retained whole-operation profil
 and caller/native credit limitations. These diagnostics do not measure residency.
 
 S6 adds [independent custody jobs](33-independent-custody.md) for opens, read
-windows, sealed readers and processing scratch, with exact retained observations
+windows, sealed readers and processing operation records, with exact retained observations
 and releases. Physical reservation/headroom remains unfinished.
 
 Implemented source: the S2 checkpoint after `d9d8d1b04`, for
@@ -63,7 +67,7 @@ checks the exact capture, advances base/floor, clears that capture and enqueues
 retirement in fixed metadata work. Active rows and pending later replies remain;
 retired rows cannot shadow the new base while awaiting physical deletion. Captured
 inode/name cursors have fixed generation and keyset EOF; name cursors use the
-`dentry_capture` index and `(parent,binary name)` resume keys. The trusted caller
+`directory_entry_capture` index and `(parent,binary name)` resume keys. The trusted caller
 must provide the root actually constructed/saved/published from that capture.
 Reader eligibility, orphan composition and automatic physical deletion remain S6
 work, so this is not integrated Commit or reclamation acceptance.

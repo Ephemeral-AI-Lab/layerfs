@@ -150,7 +150,7 @@ The capture retains:
 - Branch, expected head/base/effective root and actual construction base;
 - allocation scope, filesystem profile and intended Commit base;
 - immutable payload/snapshot ownership and captured namespace membership;
-- operation scratch, Save custody, candidate root and exact stage token when known.
+- operation records, Save custody, candidate root and exact stage token when known.
 
 These identities survive until exact outcome/install/cleanup rules release them.
 A response reports captured generation, `Committed` or `UpToDate`, root/head and
@@ -224,7 +224,7 @@ or a new standalone server. Current persistence remains host-local macOS SQLite.
 
 No transaction or Workspace mutex spans hashing/chunking, output acceptance,
 network wait, Save completion or Bash. Construction requests bounded captured
-data/scratch jobs from the daemon SQL engine and yields between them. Waiters are
+data/operation records jobs from the daemon SQL engine and yields between them. Waiters are
 parked without consuming all FUSE dispatch workers.
 
 One shared overlay database gives one SQLite writer, not parallel writer
@@ -288,7 +288,7 @@ Captured payload must stay stable through every replayed pass. Shrink cleanup,
 last unlink, orphan writes, install and reclamation use explicit ownership/leases.
 Generation labels alone do not freeze shared mutable BLOBs.
 
-### 5.1 Existing captured rows, new active rows and scratch
+### 5.1 Existing captured rows, new active rows and operation records
 
 Capture does not copy the whole overlay into a temporary table. Existing namespace
 and payload ownership at generation G become stable Commit input. The operation
@@ -296,7 +296,7 @@ must retain immutable byte/mask/cutoff state; later changes go to G+1 and cannot
 update captured visible BLOBs. Only affected keys/payload units need new active
 state; there is no copy of every file at capture.
 
-Commit additionally creates operation-keyed scratch rows for replayable edit/run
+Commit additionally creates operation-keyed operation records rows for replayable edit/run
 indexes, ordering and constructed roots. Those rows are construction bookkeeping,
 not another full payload snapshot and not a separate SQLite database/file.
 
@@ -306,7 +306,7 @@ BEFORE CAPTURE             DURING COMMIT                   AFTER KNOWN INSTALL
 existing G rows ----------> captured G, retained stable ---> obsolete if unreferenced
 base R -------------------> same immutable R --------------> history retains R
                             active G+1 created on mutation -> remains live over R'
-                            operation scratch rows --------> reclaim after last use
+                            operation records rows --------> reclaim after last use
                             construct/save R' --------------> cluster one retains R'
 
 capture: retain existing state; no bulk copy or delete
@@ -358,8 +358,8 @@ retry a failed edit constructor with an error-driven whole-file alternative.
 
 The finalized-object sink must not accumulate an entire file, namespace or
 Commit. Queue accounting includes producer-held output, the blocked batch,
-decoder/encoder workspaces, journal/scratch and every live Save's caches.
-Scratch tables are Workspace/operation keyed in the daemon database and accessed
+decoder/encoder workspaces, journal/operation records and every live Save's caches.
+OperationRecord tables are Workspace/operation keyed in the daemon database and accessed
 through bounded jobs. Namespace input needs streamed directory changes and
 backed new-parent membership; merely replacing the caller with a paged cursor
 does not remove cluster one's resident `Vec` and map.
@@ -382,7 +382,7 @@ refusing a workload.
 
 [proposed design]
 
-Each Workspace owns its capture, active state, scratch, Commit slot and Save
+Each Workspace owns its capture, active state, operation records, Commit slot and Save
 capability. They share the daemon database, devices/caches and cluster-one runtime.
 One producer per Commit may run concurrently with another Workspace's producer;
 no helper lane increases a single Commit's construction concurrency.
@@ -397,7 +397,7 @@ Save capability SA       Save capability SB        separate logical custody
       +-- accept A1 -----------+------------------------>| serve SA batch
       |                        +-- base read ----------->| serve demand read
       |                        +-- accept B1 ---------->| serve SB batch
-      +-- scratch window ------+------------------------>| bounded overlay job
+      +-- operation records window ------+------------------------>| bounded overlay job
       +-- accept A2 -----------+------------------------>| serve SA batch
       |                        +-- finish SB ---------->| finish gets service
       +-- finish SA -----------+------------------------>| finish gets service
@@ -525,17 +525,17 @@ are unfinished integration work, not a claimed two-version bound.
 ### 9.1 Automatic SQL row deletion and retention gates
 
 "Logical retirement" makes local state invisible/unreachable to new operations.
-"SQL row deletion" actually removes its inode/name/payload/scratch/ownership rows
+"SQL row deletion" actually removes its inode/name/payload/operation records/ownership rows
 in bounded database transactions. Both refer to rows in overlay.sqlite, not
 separate per-file payload files. These are distinct from shrinking the database.
 
 | State | Release / cleanup rule |
 | --- | --- |
 | Captured G during Commit | Retain exact data/domain; no early deletion |
-| Active G+1 after success | Remains live over installed R'; never deleted as completed Commit scratch |
+| Active G+1 after success | Remains live over installed R'; never deleted as completed Commit operation records |
 | Captured G after known success and successful install | Retire from the live view; enqueue unreachable rows once retained readers/operations release ownership |
-| Operation scratch | Enqueue after its last consumer; retain any records required for exact unfinished/uncertain outcome custody |
-| Definite pre-stage failure/conflict | Preserve uncommitted composed state; only unreachable scratch/duplicates are reclaimable after proper local resolution |
+| Operation records | Enqueue after its last consumer; retain any records required for exact unfinished/uncertain outcome custody |
+| Definite pre-stage failure/conflict | Preserve uncommitted composed state; only unreachable operation records/duplicates are reclaimable after proper local resolution |
 | Unknown stage/transition/required discard or failed local install | Keep exact custody and required local state; no guessed success or blanket deletion |
 | Successful terminal unmount | Fence all owners, close namespace and own removal of all remaining local rows; no separate close/cleanup call |
 

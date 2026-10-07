@@ -1,7 +1,7 @@
 //! Bounded three-way ordered name merge; deletion work advances its resume key.
 use crate::{OverlayRead, SourceView, WorkspaceResult};
 use layerfs_content::ContentError;
-use layerfs_overlay::{Dentry, PAGE_ROWS};
+use layerfs_overlay::{DirectoryEntry, PAGE_ROWS};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ViewListing {
     pub entries: Vec<(Vec<u8>, u64)>,
@@ -23,7 +23,7 @@ impl SourceView {
         if after.is_some_and(|key| key.len() > 255) {
             return Err(ContentError::PathLimitExceeded.into());
         }
-        let local = overlay.names(self.source, parent, after)?;
+        let local = overlay.directory_entries(self.source, parent, after)?;
         if local.source != self.source || local.parent != parent {
             return Err(ContentError::InvalidRecord("source name response").into());
         }
@@ -104,6 +104,10 @@ impl SourceView {
         })
     }
 }
-fn matching<'a>(rows: &'a [Dentry], index: usize, key: &[u8]) -> Option<&'a Dentry> {
+fn matching<'a>(
+    rows: &'a [DirectoryEntry],
+    index: usize,
+    key: &[u8],
+) -> Option<&'a DirectoryEntry> {
     rows.get(index).filter(|row| row.name == key)
 }

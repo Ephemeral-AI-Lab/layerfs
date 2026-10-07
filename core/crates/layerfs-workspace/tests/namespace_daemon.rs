@@ -336,12 +336,12 @@ fn a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture() {
         }
         let gated = blocked.join().unwrap();
         let sealed = service.job(
-            Command::CapturedDentries {
+            Command::CapturedDirectoryEntries {
                 capture,
                 after: None,
             },
             |r| match r {
-                Response::Dentries(rows) => rows
+                Response::DirectoryEntries(rows) => rows
                     .iter()
                     .map(|row| String::from_utf8(row.name.clone()).unwrap())
                     .collect::<Vec<_>>(),

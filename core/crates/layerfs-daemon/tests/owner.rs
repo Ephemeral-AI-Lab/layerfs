@@ -324,7 +324,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 15);
+    assert_eq!(owner.profile().schema_version, 16);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);
@@ -447,7 +447,7 @@ fn stopping_cancels_unattempted_capture_and_fences_future_admission() {
 
 #[test]
 fn lost_internal_completions_keep_exact_backed_custody_and_release_result_credits() {
-    use layerfs_overlay::{Cell, Dentry, OverlayError, CELL_BYTES, MASK_BYTES};
+    use layerfs_overlay::{Cell, DirectoryEntry, OverlayError, CELL_BYTES, MASK_BYTES};
     use std::time::{Duration, Instant};
     let temp = Temp::new();
     let owner = Owner::start(
@@ -466,7 +466,7 @@ fn lost_internal_completions_keep_exact_backed_custody_and_release_result_credit
         Some(route),
         Command::Publish {
             inode: value(2),
-            name: Some(Dentry {
+            name: Some(DirectoryEntry {
                 inherited: false,
                 parent: 1,
                 name: vec![0xff; 255],
@@ -532,7 +532,7 @@ fn lost_internal_completions_keep_exact_backed_custody_and_release_result_credit
     let names = submit(
         &client,
         Some(route),
-        Command::CapturedDentries {
+        Command::CapturedDirectoryEntries {
             capture,
             after: None,
         },
@@ -540,7 +540,7 @@ fn lost_internal_completions_keep_exact_backed_custody_and_release_result_credit
     .wait()
     .unwrap();
     let after = match names.result() {
-        Ok(Response::Dentries(rows)) => {
+        Ok(Response::DirectoryEntries(rows)) => {
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].name, vec![0xff; 255]);
             assert!(client.diagnostics().unwrap().credited_bytes >= rows[0].name.capacity());
@@ -552,16 +552,16 @@ fn lost_internal_completions_keep_exact_backed_custody_and_release_result_credit
     let end = submit(
         &client,
         Some(route),
-        Command::CapturedDentries { capture, after },
+        Command::CapturedDirectoryEntries { capture, after },
     )
     .wait()
     .unwrap();
-    assert!(matches!(end.result(),Ok(Response::Dentries(rows)) if rows.is_empty()));
+    assert!(matches!(end.result(),Ok(Response::DirectoryEntries(rows)) if rows.is_empty()));
     drop(end);
     let invalid = submit(
         &client,
         Some(route),
-        Command::CapturedDentries {
+        Command::CapturedDirectoryEntries {
             capture,
             after: Some((1, vec![1; 256])),
         },

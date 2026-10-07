@@ -1,11 +1,15 @@
 # Name inheritance and non-file lookup custody
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Implemented S6 checkpoint after `cae3d43ed`; physical reservation,
 > cleanup headroom and device/resource exits remain unfinished. Native request,
 > FORGET/cache/invalidation adaptation remains S8.
 
 Schema v12 adds [minted lookup owners](../../crates/layerfs-overlay/src/lifetime/lookup.rs)
-and one lower-binding boolean per dentry. Lookup tokens bind exact nonrecycled
+and one lower-binding boolean per directory entry. Lookup tokens bind exact nonrecycled
 engine/namespace/owner/serial identities; request-key observation returns original
 retained custody after a lost reply and never authorizes acquisition replay.
 Root zero reference count is canonical root metadata. Only a semantically removed
@@ -28,7 +32,7 @@ retained-root emitter as live/request reads. They do not substitute a current ba
 or release the capture's external/history obligations. Unknown outcomes retain
 original custody under the existing caller/runtime contracts.
 
-Each dentry's `inherited` bit describes the immediately lower view. On first
+Each directory entry's `inherited` bit describes the immediately lower view. On first
 mutation an existing lower local binding decides; otherwise an authenticated base
 fact decides. Rewrites retain the active row's original bit. [Workspace jobs](../../crates/layerfs-workspace/src/mutation/job.rs)
 obtain a missing immutable fact outside SQL and revalidate mutable parent/name

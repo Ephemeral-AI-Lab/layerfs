@@ -1,5 +1,9 @@
 # Exact terminal ownership and bounded automatic cleanup
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Current general guide; initial S6 slice, not complete lifetime/pressure qualification.
 
 The #307 checkpoint after `c6df039e6` adds overlay logical close and daemon-owned
@@ -25,11 +29,11 @@ query. The ready key uses reserved i64 maximum, which capture cannot allocate
 because it must first allocate the next active generation.
 
 [Reclaim](../../crates/layerfs-overlay/src/maintenance/reclaim.rs) rotates ready namespaces by
-keyset, then deletes fixed windows from payload, names, inodes, scratch and old
+keyset, then deletes fixed windows from payload, names, inodes, operation records and old
 retirement rows. It holds at most 64 selected metadata keys. Payload selects at
-most 14 fixed cells (64,512 declared BLOB bytes); scratch selects length metadata
+most 14 fixed cells (64,512 declared BLOB bytes); operation records selects length metadata
 and deletes at most 65,536 BLOB bytes per step. Names are bounded by format width
-and the 64-row window. Scratch values/payload are not copied to plan deletion.
+and the 64-row window. OperationRecord values/payload are not copied to plan deletion.
 Index/journal/page work costs real I/O and is not proven bounded resident memory
 by declared-byte counts. Final foreign-key-checked deletion removes ready/workspace
 rows after child tables are empty. Freelist space is reusable; the file does not
@@ -62,7 +66,7 @@ admission, headroom and aggregate pager/journal/socket/process residency remain
 required resource criteria; this slice does not solve them.
 
 Public proofs cover exact owners/replies, capture retention, a 1,024-row held
-namespace beside ready work, 65,536-byte scratch windows, actual plans/counters,
+namespace beside ready work, 65,536-byte operation records windows, actual plans/counters,
 unrelated live progress and idle completion without a reclaim/status job. Native
 FUSE/unmount owner drain is unimplemented; these proofs do not establish kernel
 reference or full teardown qualification.

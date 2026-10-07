@@ -317,7 +317,7 @@ fn publish_name(
         .publish(
             route,
             inode,
-            Some(&layerfs_overlay::Dentry {
+            Some(&layerfs_overlay::DirectoryEntry {
                 inherited: false,
                 parent: 1,
                 name: key.to_vec(),

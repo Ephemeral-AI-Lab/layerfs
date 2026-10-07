@@ -17,7 +17,9 @@ pub(crate) use overlay::owner;
 pub(crate) use overlay::queue;
 
 pub use commands::{Command, Response, ServiceClass};
-pub use overlay::indexed_scratch::{IndexedScratchJob, IndexedScratchReply};
+pub use overlay::indexed_operation_record::{
+    IndexedOperationRecordJob, IndexedOperationRecordReply,
+};
 pub use owner::{Owner, OwnerClient, OwnerConfig, OwnerError};
 pub use queue::OwnerWork;
 pub use service::completion::{Completion, Pending};

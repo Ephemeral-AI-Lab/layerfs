@@ -1,0 +1,32 @@
+{
+  "related_directory_entry_files": [
+    "core/crates/layerfs-overlay/sql/accounting.sql",
+    "core/crates/layerfs-overlay/sql/schema.sql",
+    "core/crates/layerfs-workspace/src/ports/overlay.rs",
+    "core/crates/layerfs-overlay/src/lib.rs",
+    "core/crates/layerfs-daemon/src/overlay/commands.rs",
+    "core/crates/layerfs-workspace/src/operations/namespace/create.rs",
+    "core/crates/layerfs-daemon/src/overlay/read_port.rs",
+    "core/crates/layerfs-overlay/src/namespace/compound.rs",
+    "core/crates/layerfs-workspace/src/mutation/facts.rs",
+    "core/crates/layerfs-workspace/src/operations/namespace/remove.rs",
+    "core/crates/layerfs-overlay/src/namespace/names.rs",
+    "core/crates/layerfs-workspace/src/operations/namespace/rename.rs",
+    "core/crates/layerfs-overlay/src/contract/types.rs",
+    "core/crates/layerfs-workspace/src/mutation/job.rs",
+    "core/crates/layerfs-overlay/src/database/accounting.rs",
+    "core/crates/layerfs-overlay/src/database/statements.rs",
+    "core/crates/layerfs-overlay/tests/compound.rs",
+    "core/crates/layerfs-overlay/tests/source.rs",
+    "core/crates/layerfs-overlay/src/lifetime/composition.rs",
+    "core/crates/layerfs-daemon/examples/e2_writes/ports.rs",
+    "core/crates/layerfs-overlay/src/lifetime/workspace.rs",
+    "core/crates/layerfs-daemon/examples/e2_writes/records.rs",
+    "core/crates/layerfs-workspace/tests/nonfile.rs",
+    "core/crates/layerfs-overlay/src/lifetime/generation.rs",
+    "core/crates/layerfs-workspace/tests/namespace_view.rs",
+    "core/crates/layerfs-workspace/tests/namespace.rs",
+    "core/crates/layerfs-workspace/tests/harness/mod.rs"
+  ],
+  "meaning": "Windows, changes and counts hold name-to-inode bindings, not bare component strings. Preserve PathName, the name column, and test helpers that return names only."
+}

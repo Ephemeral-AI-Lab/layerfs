@@ -8,7 +8,9 @@ use super::{
 use layerfs_daemon::{
     Command, Completion, OwnerClient, OwnerError, Pending, Response, ServiceClass,
 };
-use layerfs_overlay::{BaseSource, Cell, Dentry, Inode, LocalRead, NameWindow, Publication, Route};
+use layerfs_overlay::{
+    BaseSource, Cell, DirectoryEntry, DirectoryEntryWindow, Inode, LocalRead, Publication, Route,
+};
 use layerfs_workspace::{
     CanonicalClient, ClientWork, JobOutcome, NamespaceJob, OverlayJobs, OverlayRead,
     WorkspaceError, WorkspaceResult,
@@ -390,47 +392,47 @@ impl OverlayRead for Observed<'_> {
             _ => Err(self.shape(done)),
         }
     }
-    fn dentry(
+    fn directory_entry(
         &self,
         source: BaseSource,
         parent: u64,
         name: &[u8],
-    ) -> WorkspaceResult<Option<Dentry>> {
+    ) -> WorkspaceResult<Option<DirectoryEntry>> {
         let done = self.command(
             source.route(),
-            Command::SourceDentry {
+            Command::SourceDirectoryEntry {
                 source,
                 parent,
                 name: name.to_vec(),
             },
-            "SourceDentry",
+            "SourceDirectoryEntry",
             ServiceClass::Read,
             Some(source),
         )?;
         match done.result() {
-            Ok(Response::Dentry(value)) => Ok(value.clone()),
+            Ok(Response::DirectoryEntry(value)) => Ok(value.clone()),
             _ => Err(self.shape(done)),
         }
     }
-    fn names(
+    fn directory_entries(
         &self,
         source: BaseSource,
         parent: u64,
         after: Option<&[u8]>,
-    ) -> WorkspaceResult<NameWindow> {
+    ) -> WorkspaceResult<DirectoryEntryWindow> {
         let done = self.command(
             source.route(),
-            Command::SourceNames {
+            Command::SourceDirectoryEntries {
                 source,
                 parent,
                 after: after.map(<[u8]>::to_vec),
             },
-            "SourceNames",
+            "SourceDirectoryEntries",
             ServiceClass::Read,
             Some(source),
         )?;
         match done.result() {
-            Ok(Response::Names(value)) => Ok(value.clone()),
+            Ok(Response::DirectoryEntryWindow(value)) => Ok(value.clone()),
             _ => Err(self.shape(done)),
         }
     }

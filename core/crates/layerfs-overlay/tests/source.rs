@@ -169,7 +169,7 @@ fn source_changes_have_finite_plans_and_correlated_runtime_work() {
 }
 
 #[test]
-fn ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evidence() {
+fn ordered_source_directory_entry_windows_visit_only_parent_and_generation_with_runtime_evidence() {
     let temp = Temp::new();
     let db = Overlay::create(&temp.0.join("db"), ProfileConfig::default()).unwrap();
     let route = db.open_workspace([31; 32], [32; 32]).unwrap();
@@ -179,7 +179,7 @@ fn ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evi
             .publish(
                 route,
                 &inode(),
-                Some(&Dentry {
+                Some(&DirectoryEntry {
                     inherited: false,
                     parent: 1,
                     name: format!("n{n:04}").into_bytes(),
@@ -200,7 +200,7 @@ fn ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evi
                 .publish(
                     other,
                     &inode(),
-                    Some(&Dentry {
+                    Some(&DirectoryEntry {
                         inherited: false,
                         parent: 1,
                         name: format!("n{n:04}").into_bytes(),
@@ -213,23 +213,25 @@ fn ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evi
         }
         previous = count;
         let plan = db
-            .explain_source_names(source, 1, capture.generation, Some(b"n0063"))
+            .explain_source_directory_entries(source, 1, capture.generation, Some(b"n0063"))
             .unwrap();
         assert!(
             plan.iter().all(|p| p.contains("SEARCH")
-                && p.contains("dentry_capture")
+                && p.contains("directory_entry_capture")
                 && !p.contains("TEMP B-TREE")),
             "{plan:?}"
         );
         let before = db.diagnostics();
-        let window = db.source_name_window(source, 1, Some(b"n0063")).unwrap();
+        let window = db
+            .source_directory_entry_window(source, 1, Some(b"n0063"))
+            .unwrap();
         let after = db.diagnostics();
         assert!(window.active.is_empty());
         assert_eq!(window.captured.len(), 64);
         assert_eq!(window.captured[0].name, b"n0064");
         assert_eq!(window.captured[63].name, b"n0127");
-        let a = before.statements[StatementKind::Dentry as usize];
-        let b = after.statements[StatementKind::Dentry as usize];
+        let a = before.statements[StatementKind::DirectoryEntry as usize];
+        let b = after.statements[StatementKind::DirectoryEntry as usize];
         let steps = b.vm_steps - a.vm_steps;
         let total_vm: u64 = after
             .statements

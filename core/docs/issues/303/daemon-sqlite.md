@@ -21,7 +21,7 @@ the implemented libraries; SQLite overlay transactions do not replace their APIs
 One local `overlay.sqlite` belongs to the daemon and is initialized before the
 daemon reports readiness. Database creation, schema identity, selected PRAGMAs,
 statement preparation and owner/scheduler startup are paid once. There is no
-per-Workspace database, connection initialization or scratch database file.
+per-Workspace database, connection initialization or operation records database file.
 
 The independently prepared canonical/history base must already exist before a
 tool call mounts it. The base includes `.git` and its index, ignored files,
@@ -99,7 +99,7 @@ Execs / FUSE workers / Commit constructors / lifecycle / maintenance producers
                    one writer + one shared pager
                                   |
                         overlay.sqlite
-              metadata + payload + scratch + ownership + reclaim
+              metadata + payload + operation records + ownership + reclaim
 ```
 
 SQLite still has one writer. Parallel Execs and constructors do not create
@@ -127,7 +127,7 @@ not an implementation or throughput result.
 
 `ns` is a daemon-local namespace identifier. Its routing record binds it to an
 external Workspace identity, incarnation and authority. Do not reuse `ns` while
-stale jobs, streams, scratch or reclaim rows can still refer to it. Generation,
+stale jobs, streams, operation records or reclaim rows can still refer to it. Generation,
 inode serial, stream and operation identifiers are separate typed values; a
 timestamp is neither a generation allocator nor an ownership token.
 
@@ -135,10 +135,10 @@ timestamp is neither a generation allocator nor an ownership token.
 | --- | --- | --- |
 | `workspace` | `ns`, incarnation, lifecycle, active/captured/folded identifiers; base binding and authority context | `ns` primary; incarnation routing unique |
 | `inode` | `ns`, serial, generation, kind, mode, mtime, nlink, size, stream, inherited cutoff | `(ns, serial, gen)` primary; `(ns, gen, serial)` capture index |
-| `dentry` | `ns`, parent serial, binary name, generation, inode binding or whiteout, lower-binding fact | `(ns, parent, name, gen)` primary; `(ns, gen, parent, name)` capture index |
+| `directory_entry` | `ns`, parent serial, binary name, generation, inode binding or whiteout, lower-binding fact | `(ns, parent, name, gen)` primary; `(ns, gen, parent, name)` capture index |
 | `payload` | global SQLite rowid, `ns`, stream, offset, actual BLOB bytes and validity representation | rowid primary for incremental BLOB I/O; unique `(ns, stream, offset)` |
 | `stream` | `ns`, stream, lifetime/owners, cutoff/visibility required by chosen representation | `(ns, stream)`; explicit owner-reference keys |
-| `commit_scratch` | `ns`, operation, record kind, edit/run index or inode serial, constructed root / ordering rows | `(ns, operation, kind, key)`; typed record agreement required |
+| `operation_record` | `ns`, operation, record kind, edit/run index or inode serial, constructed root / ordering rows | `(ns, operation, kind, key)`; typed record agreement required |
 | `orphan` | `ns`, inode serial, open references, current content ownership and inheritance | `(ns, serial)`; excludes namespace-generation pin chains |
 | `reclaim` | `ns`, monotonic queue key, owned target, deletion cursor and conservative charge | `(ns, queue_key)`; generation-selective retirement index |
 
@@ -164,7 +164,7 @@ overlay.sqlite
      |                                  BLOB data + validity
      +-- name(ns, parent, name, gen)
      |       capture: (ns, gen, parent, name)
-     +-- scratch(ns, operation, index/serial) -> constructed roots/edit runs
+     +-- operation_record(ns, operation, index/serial) -> constructed roots/edit runs
      +-- orphan(ns, serial) -> independent content custody
      +-- reclaim(ns, queue_key) -> bounded retirement/deletion cursor
 ```
@@ -179,11 +179,11 @@ unbounded temp sorts.
 
 Capture retains existing G rows/stream ownership rather than bulk INSERT/SELECT
 copying the overlay. Later mutations create active G+1 state only for affected
-keys/units. Operation scratch is new metadata in the same database; it is not a
+keys/units. Operation records is new metadata in the same database; it is not a
 whole-file payload copy. Captured bytes/masks remain immutable, even if active
 state shares lower content. Install preserves active rows over equivalent new
-base, then retires only unreachable captured/scratch state. See [Commit row
-lifetimes](workspace-api/commit.md#51-existing-captured-rows-new-active-rows-and-scratch).
+base, then retires only unreachable captured/operation records state. See [Commit row
+lifetimes](workspace-api/commit.md#51-existing-captured-rows-new-active-rows-and-operation-records).
 
 Mutable mtime is current inode metadata, updated in the mutation transaction.
 There is no timestamped event/history row per WRITE. Cluster-one history is
@@ -267,7 +267,7 @@ CAPTURE                               CLEANUP / RECLAIM
   serialize after accepted mutations    retain capture/orphan/operation ownership
   fix generation + cursor domain        one page/work-bounded owner job
   construct outside owner               save cursor -> yield fairly
-  scratch uses (ns, operation, ...)      next job only when runnable/admitted
+  operation_record uses (ns, operation, ...)      next job only when runnable/admitted
 ```
 
 The owner never waits for network, construction, Exec, or kernel notification
@@ -280,12 +280,12 @@ the current view before applying the one attempted write; this is not a retry of
 an operation with uncertain persistence outcome.
 
 Commit constructors use fixed pages over captured membership and operation-keyed
-scratch in the same database. Construction releases the owner before chunking,
-hashing or sending objects. Input replay uses indexed scratch run lookup rather
+operation records in the same database. Construction releases the owner before chunking,
+hashing or sending objects. Input replay uses indexed operation records run lookup rather
 than a resident vector growing with edit count. This does not remove cluster-one
 source bounds by itself.
 
-Fair admission covers mutation, read, capture, scratch and maintenance across
+Fair admission covers mutation, read, capture, operation records and maintenance across
 Workspaces. Busy-inode/resource waiters are parked without occupying all FUSE
 dispatch workers. Bound queued request bytes and runnable windows, yield between
 service units, and guarantee progress for every class. Strict read priority can
@@ -309,7 +309,7 @@ bounds are real resources. Configured windows/session concurrency are explicit
 admission budgets, not excuses to truncate the data model or silently drop output.
 
 `max_page_count` is global to the daemon database. Logical per-Workspace charges
-must include metadata/indexes, payload, scratch, captures, orphan state and debt.
+must include metadata/indexes, payload, operation records, captures, orphan state and debt.
 Reserve aggregate physical headroom for accepted operations and their lifetime
 transitions. Reclaim charges use conservative accounting and actual allocation/
 freelist observations: a stream length does not reveal pages exclusively freed
@@ -350,7 +350,7 @@ scans and payload deletion must remain work-bounded, with no namespace-sized DEL
 on the mutation/terminal reply path. Account debt and guarantee service share.
 
 At successful terminal unmount, activity/custody is fenced and the namespace is
-closed, then all remaining local inode/dentry/payload/stream/scratch/orphan rows are
+closed, then all remaining local inode/directory entry/payload/stream/operation records/orphan rows are
 owned by automatic cleanup. Keep minimal terminal/reclaim state until that work
 finishes; do not reuse its namespace while stale rows/jobs exist. Other Workspaces
 and the daemon connection/schema stay alive.

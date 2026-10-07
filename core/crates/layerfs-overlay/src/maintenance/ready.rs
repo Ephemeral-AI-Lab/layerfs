@@ -9,7 +9,7 @@ pub(crate) const SERIAL_RETIRE: i64 = 7;
 pub(crate) const RETIRE: i64 = 3;
 pub(crate) const STALE: i64 = 4;
 pub(crate) const STEPS: i64 = 5;
-pub(crate) const SCRATCH: i64 = 6;
+pub(crate) const OPERATION_RECORD: i64 = 6;
 const READY: &str = "SELECT ns,kind,resource,target,phase,cursor,aux,name FROM maintenance
     INDEXED BY maintenance_ready WHERE ready=1 AND (ns,kind,resource,target)>(?1,?2,?3,?4)
     ORDER BY ns,kind,resource,target LIMIT 1";
@@ -185,7 +185,7 @@ impl Overlay {
                     WAKE_ORPHAN => self.wake_orphan_step(&item)?,
                     WAKE_GENERATION => self.wake_generation_step(&item)?,
                     SERIAL_RETIRE => self.retire_serial(&item)?,
-                    STALE | STEPS | SCRATCH => self.clean_live_item(&item)?,
+                    STALE | STEPS | OPERATION_RECORD => self.clean_live_item(&item)?,
                     _ => return Err(OverlayError::Invalid("maintenance kind")),
                 }
             };

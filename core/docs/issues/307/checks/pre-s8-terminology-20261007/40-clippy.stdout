@@ -1,0 +1,18 @@
+# {"timestamp": "2026-10-07T08:25:27.175137+00:00", "command": ["cargo", "+1.85.1", "clippy", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-content", "-p", "layerfs-overlay", "-p", "layerfs-workspace", "-p", "layerfs-daemon", "--all-targets", "--", "-D", "warnings"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.59s
+
+# exit=0

@@ -1,5 +1,9 @@
 # Explicit whole-root topology qualification
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Current general guide.
 > Source addition after `21ff451fa`, 2026-10-07; implementation description,
 > not release or installed-Store qualification.
@@ -41,5 +45,5 @@ responsible for those checks.
 
 The [F0 checkpoint](../issues/307/PRE-S8-F0-20261007.md) links the retained
 host and Linux evidence, including malformed roots and the real daemon overlay
-scratch adapter. Its canonical object provider is a fixture; an installed
+operation records adapter. Its canonical object provider is a fixture; an installed
 Store running the same pass through daemon ports remains F15.

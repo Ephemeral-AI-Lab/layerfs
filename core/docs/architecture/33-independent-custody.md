@@ -1,5 +1,9 @@
 # Independent file and processing custody
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Implemented S6 checkpoint after `1775fdf98`; S6 remains in progress.
 > Physical admission/headroom and exact whiteout simplification are not delivered
 > by this checkpoint. Native reference/output wiring remains S8.
@@ -56,10 +60,10 @@ root to Workspace, which rebinds immutable demand outside SQL. Neither current
 installed floor nor a newer root is substituted into sealed input.
 
 [Processing custody](../../crates/layerfs-overlay/src/lifetime/operation.rs)
-uses nonrecycled engine IDs and independent backed `owned_scratch`. Exact release
-transfers scratch into bounded maintenance; old cleanup cannot address a newer
+uses nonrecycled engine IDs and independent backed `owned_operation_record`. Exact release
+transfers operation records into bounded maintenance; old cleanup cannot address a newer
 operation. Existing processing reads remain valid after logical close, while new
-scratch mutation refuses. The trusted legacy operation/scratch primitives retain
+operation records mutation refuses. The trusted legacy operation-owner and record primitives retain
 their caller-ID contract and separate table. No Bash/process exit implies release.
 
 [Typed daemon jobs](../../crates/layerfs-daemon/src/overlay/commands.rs) expose

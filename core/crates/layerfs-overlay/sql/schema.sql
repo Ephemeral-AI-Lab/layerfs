@@ -1,4 +1,4 @@
--- Disposable overlay schema v15. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v16. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -10,7 +10,7 @@ CREATE TABLE workspace (
     revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),
     lifecycle INTEGER NOT NULL DEFAULT 0 CHECK(lifecycle IN (0,1)),
     dirty_inodes INTEGER NOT NULL DEFAULT 0 CHECK(dirty_inodes>=0),
-    dirty_names INTEGER NOT NULL DEFAULT 0 CHECK(dirty_names>=0),
+    dirty_directory_entries INTEGER NOT NULL DEFAULT 0 CHECK(dirty_directory_entries>=0),
     base_readers INTEGER NOT NULL DEFAULT 0 CHECK(base_readers>=0),
     consolidating INTEGER CHECK(consolidating>0),
     next_owner INTEGER NOT NULL DEFAULT 1 CHECK(next_owner>0),
@@ -35,7 +35,7 @@ CREATE TABLE inode (
     PRIMARY KEY(ns,serial,gen)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX inode_capture ON inode(ns,gen,serial);
-CREATE TABLE dentry (
+CREATE TABLE directory_entry (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     parent INTEGER NOT NULL CHECK(parent>0),
     name BLOB NOT NULL CHECK(length(name)>0 AND length(name)<=255),
@@ -44,7 +44,7 @@ CREATE TABLE dentry (
     inherited INTEGER NOT NULL CHECK(inherited IN(0,1)),
     PRIMARY KEY(ns,parent,name,gen)
 ) STRICT, WITHOUT ROWID;
-CREATE INDEX dentry_capture ON dentry(ns,gen,parent,name);
+CREATE INDEX directory_entry_capture ON directory_entry(ns,gen,parent,name);
 CREATE TABLE payload (
     rowid INTEGER PRIMARY KEY,
     ns INTEGER NOT NULL REFERENCES workspace(ns),
@@ -88,7 +88,7 @@ CREATE TABLE base_source (
     base_root BLOB NOT NULL CHECK(length(base_root)=32),
     PRIMARY KEY(ns,kind,owner)
 ) STRICT, WITHOUT ROWID;
-CREATE TABLE scratch (
+CREATE TABLE operation_record (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     operation INTEGER NOT NULL CHECK(operation>0),
     kind INTEGER NOT NULL CHECK(kind>=0),
@@ -170,7 +170,7 @@ CREATE TABLE operation_owner (
     owner INTEGER NOT NULL CHECK(owner>0),
     PRIMARY KEY(ns,owner), UNIQUE(ns,request)
 ) STRICT, WITHOUT ROWID;
-CREATE TABLE owned_scratch (
+CREATE TABLE owned_operation_record (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     operation INTEGER NOT NULL CHECK(operation>0),
     kind INTEGER NOT NULL CHECK(kind>=0),
@@ -178,7 +178,7 @@ CREATE TABLE owned_scratch (
     value BLOB NOT NULL CHECK(length(value)<=65536),
     PRIMARY KEY(ns,operation,kind,key)
 ) STRICT, WITHOUT ROWID;
-CREATE TABLE indexed_scratch (
+CREATE TABLE indexed_operation_record (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     operation INTEGER NOT NULL CHECK(operation>0),
     file_scope BLOB NOT NULL CHECK(length(file_scope)=8),
@@ -200,4 +200,4 @@ CREATE TABLE orphan_wait (
     serial INTEGER NOT NULL CHECK(serial>0),
     PRIMARY KEY(ns,gen,serial)
 ) STRICT, WITHOUT ROWID;
-PRAGMA user_version=15;
+PRAGMA user_version=16;

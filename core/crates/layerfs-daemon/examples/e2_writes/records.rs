@@ -146,12 +146,12 @@ pub fn resources(out: &mut Json, value: &Resources) -> io::Result<()> {
     for (index, (name, value)) in [
         ("namespaces", c.namespaces),
         ("inode_rows", c.inode_rows),
-        ("name_rows", c.name_rows),
+        ("directory_entry_rows", c.directory_entry_rows),
         ("payload_cells", c.payload_cells),
         ("payload_bytes", c.payload_bytes),
         ("shrink_rows", c.shrink_rows),
-        ("scratch_rows", c.scratch_rows),
-        ("scratch_bytes", c.scratch_bytes),
+        ("operation_record_rows", c.operation_record_rows),
+        ("operation_record_bytes", c.operation_record_bytes),
         ("orphan_rows", c.orphan_rows),
         ("owner_rows", c.owner_rows),
         ("source_rows", c.source_rows),
@@ -196,19 +196,19 @@ fn response(out: &mut Json, value: &Response) -> io::Result<&'static str> {
             optional_inode(out, value)?;
             Ok("Inode")
         }
-        Response::Dentry(value) => {
+        Response::DirectoryEntry(value) => {
             out.raw("{\"present\":")?;
             out.raw(if value.is_some() { "true" } else { "false" })?;
             out.raw("}")?;
-            Ok("Dentry")
+            Ok("DirectoryEntry")
         }
-        Response::Names(value) => {
+        Response::DirectoryEntryWindow(value) => {
             out.raw("{")?;
             out.field("active_rows", value.active.len())?;
             out.raw(",")?;
             out.field("captured_rows", value.captured.len())?;
             out.raw("}")?;
-            Ok("Names")
+            Ok("DirectoryEntryWindow")
         }
         Response::Read(value) => {
             out.raw("{\"present\":")?;

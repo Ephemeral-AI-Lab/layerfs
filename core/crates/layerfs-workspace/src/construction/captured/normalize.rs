@@ -5,7 +5,7 @@ use super::{
     scan::Scan,
     state::{change, encode, key, Shared, CONTEXT, EDITS},
 };
-use crate::{OverlayCapturedRuns, OverlayScratch};
+use crate::{OverlayCapturedRuns, OverlayOperationRecords};
 use layerfs_content::{ContentError, ContentResult, Edit, EditRecordChange, EditRecordExpected};
 
 const BATCH: usize = 64;
@@ -14,14 +14,17 @@ struct Writer {
     count: usize,
 }
 impl Writer {
-    fn flush<P: OverlayScratch + ?Sized>(&mut self, shared: &Shared<'_, P>) -> ContentResult<()> {
+    fn flush<P: OverlayOperationRecords + ?Sized>(
+        &mut self,
+        shared: &Shared<'_, P>,
+    ) -> ContentResult<()> {
         if !self.changes.is_empty() {
             let changes = std::mem::replace(&mut self.changes, Vec::with_capacity(BATCH));
             shared.borrow_mut().apply(changes)?;
         }
         Ok(())
     }
-    fn push<P: OverlayScratch + ?Sized>(
+    fn push<P: OverlayOperationRecords + ?Sized>(
         &mut self,
         shared: &Shared<'_, P>,
         edit: Edit,
@@ -38,7 +41,7 @@ impl Writer {
         Ok(())
     }
 }
-pub(super) fn prepare<P: OverlayCapturedRuns + OverlayScratch + ?Sized>(
+pub(super) fn prepare<P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized>(
     provider: &P,
     shared: &Shared<'_, P>,
     facts: Facts,

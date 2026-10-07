@@ -3,27 +3,31 @@ mod payload_support;
 use layerfs_overlay::*;
 use payload_support::Temp;
 
-fn key(kind: u32, number: u64) -> IndexedKey {
+fn key(kind: u32, number: u64) -> IndexedOperationRecordKey {
     let mut key = [0; 32];
     key[24..].copy_from_slice(&number.to_be_bytes());
-    IndexedKey { kind, key }
+    IndexedOperationRecordKey { kind, key }
 }
-fn put(key: IndexedKey, value: Vec<u8>) -> IndexedChange {
-    IndexedChange {
+fn put(key: IndexedOperationRecordKey, value: Vec<u8>) -> IndexedOperationRecordChange {
+    IndexedOperationRecordChange {
         key,
-        expected: ExpectedValue::Missing,
+        expected: OperationRecordExpectedValue::Missing,
         value: Some(value),
     }
 }
-fn apply(db: &Overlay, scope: IndexedScope, changes: &[IndexedChange]) {
+fn apply(
+    db: &Overlay,
+    scope: IndexedOperationRecordScope,
+    changes: &[IndexedOperationRecordChange],
+) {
     assert_eq!(
-        db.indexed_scratch_apply(scope, changes).unwrap(),
-        IndexedApply::Applied
+        db.indexed_operation_record_apply(scope, changes).unwrap(),
+        IndexedOperationRecordApply::Applied
     );
 }
-fn scope(db: &Overlay, tag: u8) -> IndexedScope {
+fn scope(db: &Overlay, tag: u8) -> IndexedOperationRecordScope {
     let route = db.open_workspace([tag; 32], [tag + 1; 32]).unwrap();
-    IndexedScope {
+    IndexedOperationRecordScope {
         owner: db.acquire_operation(route, 1).unwrap(),
         file_scope: u64::MAX,
     }
@@ -39,16 +43,16 @@ fn sealed_pass_preserves_all_records_across_windows_and_exact_prefixes() {
         let rows: Vec<_> = (start..end).map(|n| put(key(9, n), vec![])).collect();
         apply(&db, scope, &rows);
     }
-    let max = IndexedKey {
+    let max = IndexedOperationRecordKey {
         kind: 9,
         key: [255; 32],
     };
     apply(&db, scope, &[put(max, vec![77; 8192])]);
-    let other_file = IndexedScope {
+    let other_file = IndexedOperationRecordScope {
         file_scope: 0,
         ..scope
     };
-    let other_owner = IndexedScope {
+    let other_owner = IndexedOperationRecordScope {
         owner: db.acquire_operation(scope.owner.route(), 2).unwrap(),
         ..scope
     };
@@ -57,10 +61,10 @@ fn sealed_pass_preserves_all_records_across_windows_and_exact_prefixes() {
     apply(&db, scope, &[put(key(10, 0), vec![3])]);
     let counts = db.resources(None).unwrap().counts;
     let plans = db
-        .explain_indexed_scratch(scope, key(9, 63), key(9, 63).key)
+        .explain_indexed_operation_record(scope, key(9, 63), key(9, 63).key)
         .unwrap();
     assert!(plans.iter().any(|p| p.starts_with("keys-after:")
-        && p.contains("SEARCH indexed_scratch USING PRIMARY KEY")
+        && p.contains("SEARCH indexed_operation_record USING PRIMARY KEY")
         && p.contains("key>?")));
     assert!(plans.iter().any(|p| p.starts_with("keys-after-vm:")));
     assert!(!plans.iter().any(|p| p.contains("USE TEMP B-TREE")));
@@ -69,8 +73,11 @@ fn sealed_pass_preserves_all_records_across_windows_and_exact_prefixes() {
     let mut work = Vec::new();
     for expected in [64, 64, 3, 0] {
         let before = db.diagnostics();
-        let keys = db.indexed_scratch_keys_after(scope, 9, after).unwrap();
-        let sql = db.diagnostics().since(&before).statements[StatementKind::Scratch as usize];
+        let keys = db
+            .indexed_operation_record_keys_after(scope, 9, after)
+            .unwrap();
+        let sql =
+            db.diagnostics().since(&before).statements[StatementKind::OperationRecord as usize];
         assert_eq!(keys.len(), expected);
         assert!(keys.capacity() <= PAGE_ROWS);
         assert_eq!((sql.attempts, sql.executions), (1, 1));
@@ -103,11 +110,12 @@ fn sealed_pass_preserves_all_records_across_windows_and_exact_prefixes() {
         "enumeration changes no record"
     );
     assert_eq!(
-        db.indexed_scratch_get(scope, max).unwrap(),
+        db.indexed_operation_record_get(scope, max).unwrap(),
         Some(vec![77; 8192])
     );
     assert_eq!(
-        db.indexed_scratch_keys_after(scope, 9, None).unwrap()[0],
+        db.indexed_operation_record_keys_after(scope, 9, None)
+            .unwrap()[0],
         [0; 32]
     );
     println!("INDEXED_CURSOR_WORK windows={work:?} plans={plans:?}");
@@ -124,11 +132,11 @@ fn full_binary_exclusive_boundary_and_restart_handle_lower_insertions() {
     let low = key(7, 9);
     let mut leading = [0; 32];
     leading[0] = 1;
-    let high = IndexedKey {
+    let high = IndexedOperationRecordKey {
         kind: 7,
         key: leading,
     };
-    let max = IndexedKey {
+    let max = IndexedOperationRecordKey {
         kind: 7,
         key: [255; 32],
     };
@@ -143,17 +151,17 @@ fn full_binary_exclusive_boundary_and_restart_handle_lower_insertions() {
         ],
     );
     assert_eq!(
-        db.indexed_scratch_keys_after(scope, 7, Some(low.key))
+        db.indexed_operation_record_keys_after(scope, 7, Some(low.key))
             .unwrap(),
         vec![high.key, max.key]
     );
     assert!(db
-        .indexed_scratch_keys_after(scope, 7, Some(max.key))
+        .indexed_operation_record_keys_after(scope, 7, Some(max.key))
         .unwrap()
         .is_empty());
     let absent_boundary = key(7, 4);
     assert_eq!(
-        db.indexed_scratch_keys_after(scope, 7, Some(absent_boundary.key))
+        db.indexed_operation_record_keys_after(scope, 7, Some(absent_boundary.key))
             .unwrap(),
         vec![low.key, high.key, max.key]
     );
@@ -162,21 +170,23 @@ fn full_binary_exclusive_boundary_and_restart_handle_lower_insertions() {
     // A pass sealed before insertion cannot claim this new lower member. The
     // owner's next phase restarts from None rather than skipping it forever.
     assert_eq!(
-        db.indexed_scratch_keys_after(scope, 7, Some(low.key))
+        db.indexed_operation_record_keys_after(scope, 7, Some(low.key))
             .unwrap(),
         vec![high.key, max.key]
     );
     assert_eq!(
-        db.indexed_scratch_keys_after(scope, 7, None).unwrap(),
+        db.indexed_operation_record_keys_after(scope, 7, None)
+            .unwrap(),
         vec![zero.key, inserted.key, low.key, high.key, max.key]
     );
     assert_eq!(
-        db.indexed_scratch_first_keys(scope, 7, zero.key).unwrap()[0],
+        db.indexed_operation_record_first_keys(scope, 7, zero.key)
+            .unwrap()[0],
         inserted.key
     );
     db.release_operation(scope.owner).unwrap();
     assert!(matches!(
-        db.indexed_scratch_keys_after(scope, 7, None),
+        db.indexed_operation_record_keys_after(scope, 7, None),
         Err(OverlayError::Stale)
     ));
 }

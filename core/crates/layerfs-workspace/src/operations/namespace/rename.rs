@@ -4,7 +4,7 @@ use crate::remove::{dereferenced, unbind};
 use crate::{Refusal, Time, WorkspaceResult};
 use layerfs_content::filesystem::limits::MAXIMUM_PATH_COMPONENTS;
 use layerfs_content::filesystem::PathName;
-use layerfs_overlay::{Binding, Changes, Inode, InodeKind, NameChange};
+use layerfs_overlay::{Binding, Changes, DirectoryEntryChange, Inode, InodeKind};
 
 pub(crate) struct Move<'a> {
     pub parent: u64,
@@ -121,9 +121,9 @@ pub(crate) fn rename(
         open: None,
         detached: None,
         inodes,
-        names: vec![
+        directory_entries: vec![
             unbind(action.parent, action.name, inherited),
-            NameChange {
+            DirectoryEntryChange {
                 parent: action.new_parent,
                 name: action.new_name.as_bytes().to_vec(),
                 binding: Binding::Bound {

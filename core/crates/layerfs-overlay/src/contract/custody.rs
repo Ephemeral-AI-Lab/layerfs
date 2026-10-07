@@ -69,7 +69,7 @@ impl CapturedReader {
 }
 
 /// One nonrecycled operation owner, independent of command/process lifetime.
-/// Its backed scratch remains in cleanup custody after exact release.
+/// Its backed operation_record remains in cleanup custody after exact release.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OperationOwner {
     pub(crate) route: Route,

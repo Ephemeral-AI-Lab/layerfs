@@ -115,11 +115,11 @@ impl Overlay {
         )
         .map(|mut rows| rows.pop())
     }
-    pub fn reader_dentries(
+    pub fn reader_directory_entries(
         &self,
         reader: CapturedReader,
         after: Option<(u64, &[u8])>,
-    ) -> OverlayResult<Vec<crate::Dentry>> {
+    ) -> OverlayResult<Vec<crate::DirectoryEntry>> {
         self.check_captured_reader(reader)?;
         let (parent, name) = after.unwrap_or((0, &[]));
         if name.len() > 255 {
@@ -127,7 +127,7 @@ impl Overlay {
         }
         self.query(
             StatementKind::Capture,
-            crate::sql::DENTRY_CAPTURE,
+            crate::sql::DIRECTORY_ENTRY_CAPTURE,
             &[
                 &reader.capture.route.ns,
                 &reader.capture.generation.0,
@@ -136,7 +136,7 @@ impl Overlay {
             ],
             24 + name.len() as u64,
             |r| {
-                Ok(crate::Dentry {
+                Ok(crate::DirectoryEntry {
                     parent: unsigned(r, 0)?,
                     name: r.get(1)?,
                     serial: r

@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     BaseView, ConstructionBackingCustody, IndexedConstructionRecords, OverlayCapturedRuns,
-    OverlayScratch, Workspace, WorkspaceError,
+    OverlayOperationRecords, Workspace, WorkspaceError,
 };
 use layerfs_content::{
     apply_indexed_edits_view_backed, construct_runs,
@@ -14,7 +14,7 @@ use layerfs_content::{
     ConstructedFile, ConstructionCapacities, ConstructionPolicy, ContentError, ContentResult,
     FileView, FinalizedConsumer, IndexedEditRequest, ObjectId,
 };
-use layerfs_overlay::{CapturedReader, IndexedScope, InodeKind, OverlayError};
+use layerfs_overlay::{CapturedReader, IndexedOperationRecordScope, InodeKind, OverlayError};
 use layerfs_telemetry::timer::TimingScope;
 use std::fmt;
 
@@ -72,7 +72,7 @@ impl fmt::Debug for CapturedFileCustody {
 #[derive(Clone, Copy)]
 pub(super) struct Facts {
     pub reader: CapturedReader,
-    pub records_scope: IndexedScope,
+    pub records_scope: IndexedOperationRecordScope,
     pub serial: u64,
     pub scope: InodeScope,
     pub profile: ObjectId,
@@ -82,7 +82,7 @@ pub(super) struct Facts {
 }
 /// One sealed final-state plan over exact captured input and indexed records.
 /// Consuming construct prevents recovery of a failed attempt as another plan.
-pub struct CapturedFileEdits<'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> {
+pub struct CapturedFileEdits<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> {
     provider: &'a P,
     shared: Shared<'a, P>,
     base: Option<BaseView>,
@@ -93,7 +93,7 @@ pub struct CapturedFileEdits<'a, P: OverlayCapturedRuns + OverlayScratch + ?Size
     count: usize,
     context: Vec<u8>,
 }
-impl<'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> CapturedFileEdits<'a, P> {
+impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFileEdits<'a, P> {
     /// Derives every root/kind/length from this Workspace's operation provider,
     /// exact retained reader and captured point; callers select only the serial
     /// and actual record owner/scope. Failed preparation returns original custody.
@@ -105,7 +105,7 @@ impl<'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> CapturedFileEdits<'a,
         provider: &'a P,
         reader: CapturedReader,
         serial: u64,
-        records_scope: IndexedScope,
+        records_scope: IndexedOperationRecordScope,
     ) -> Result<Self, CapturedFileCustody> {
         let mut owner = Self {
             provider,
@@ -142,7 +142,7 @@ impl<'a, P: OverlayCapturedRuns + OverlayScratch + ?Sized> CapturedFileEdits<'a,
     fn bind(
         &mut self,
         workspace: &Workspace,
-        records_scope: IndexedScope,
+        records_scope: IndexedOperationRecordScope,
     ) -> Result<Facts, WorkspaceError> {
         if workspace.route() != self.reader.capture().route()
             || records_scope.owner.route() != workspace.route()

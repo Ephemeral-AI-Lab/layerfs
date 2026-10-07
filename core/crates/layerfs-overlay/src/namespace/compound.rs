@@ -3,7 +3,8 @@ use crate::{
     db::integer,
     inode::{check, check_name, optional_serial},
     sql, BaseSource, Binding, Changes, Generation, Inode, NameLayers, Overlay, OverlayError,
-    OverlayResult, Publication, StatementKind, WorkspaceState, COMPOUND_INODES, COMPOUND_NAMES,
+    OverlayResult, Publication, StatementKind, WorkspaceState, COMPOUND_DIRECTORY_ENTRIES,
+    COMPOUND_INODES,
 };
 
 /// Consistent local rows for one owner job over an exact owned base source.
@@ -31,8 +32,8 @@ impl Overlay {
     /// and leaves no ticket. Exactly one reply-attempt ticket covers the job.
     pub fn apply(&self, source: BaseSource, changes: &Changes) -> OverlayResult<Publication> {
         if changes.inodes.len() > COMPOUND_INODES
-            || changes.names.len() > COMPOUND_NAMES
-            || (changes.inodes.is_empty() && changes.names.is_empty())
+            || changes.directory_entries.len() > COMPOUND_DIRECTORY_ENTRIES
+            || (changes.inodes.is_empty() && changes.directory_entries.is_empty())
         {
             return Err(OverlayError::Invalid("compound window"));
         }
@@ -53,8 +54,8 @@ impl Overlay {
                 return Err(OverlayError::Invalid("duplicate compound inode"));
             }
         }
-        let mut keys = Vec::with_capacity(changes.names.len());
-        for (index, change) in changes.names.iter().enumerate() {
+        let mut keys = Vec::with_capacity(changes.directory_entries.len());
+        for (index, change) in changes.directory_entries.iter().enumerate() {
             let parent = check_name(change.parent, &change.name)?;
             let target = match change.binding {
                 Binding::Bound { serial: 0, .. } => {
@@ -63,7 +64,7 @@ impl Overlay {
                 Binding::Bound { serial, .. } => Some(integer(serial)?),
                 Binding::Removed { .. } => None,
             };
-            if changes.names[..index]
+            if changes.directory_entries[..index]
                 .iter()
                 .any(|other| other.parent == change.parent && other.name == change.name)
             {
@@ -101,7 +102,7 @@ impl Overlay {
                 if file.route() != route
                     || changes.inodes.len() != 1
                     || changes.inodes[0].serial != file.serial()
-                    || !changes.names.is_empty()
+                    || !changes.directory_entries.is_empty()
                 {
                     return Err(OverlayError::Invalid("descriptor mutation domain"));
                 }
@@ -122,8 +123,8 @@ impl Overlay {
                     .map(|(_, layer)| layer)
                     .ok_or(OverlayError::Invalid("compound payload owner"))
             };
-            let mut names = 0_i64;
-            for (change, (parent, target)) in changes.names.iter().zip(&keys) {
+            let mut directory_entries = 0_i64;
+            for (change, (parent, target)) in changes.directory_entries.iter().zip(&keys) {
                 let inherited = match change.binding {
                     Binding::Bound { inherited, .. } | Binding::Removed { inherited } => inherited,
                 };
@@ -131,7 +132,7 @@ impl Overlay {
                     self.name_inheritance(&state, route.ns, *parent, &change.name, inherited)?;
                 let whiteout = target.is_some() || cutoff;
                 if whiteout {
-                    names += i64::from(self.put_name(
+                    directory_entries += i64::from(self.put_directory_entry(
                         route,
                         &state,
                         *parent,
@@ -141,9 +142,9 @@ impl Overlay {
                     )?);
                 } else {
                     // Nothing below binds this name: no row is the final state.
-                    names -= self.execute(
-                        StatementKind::Dentry,
-                        sql::DENTRY_DROP,
+                    directory_entries -= self.execute(
+                        StatementKind::DirectoryEntry,
+                        sql::DIRECTORY_ENTRY_DROP,
                         &[&route.ns, parent, &change.name, &state.active.0],
                         24 + change.name.len() as u64,
                     )? as i64;
@@ -166,7 +167,7 @@ impl Overlay {
                     self.detach_orphan(route, &state, inode)?;
                 }
             }
-            self.settle(route, &state, inodes, names)
+            self.settle(route, &state, inodes, directory_entries)
         })
     }
     fn lower_name(
@@ -178,8 +179,8 @@ impl Overlay {
     ) -> OverlayResult<Option<Option<u64>>> {
         Ok(self
             .query(
-                StatementKind::Dentry,
-                sql::DENTRY_LOOKUP,
+                StatementKind::DirectoryEntry,
+                sql::DIRECTORY_ENTRY_LOOKUP,
                 &[&ns, &parent, &name, &(state.active.0 - 1), &state.installed],
                 32 + name.len() as u64,
                 |row| optional_serial(row.get(0)?, 0),
@@ -197,7 +198,7 @@ impl Overlay {
         for (label, statement, params) in [
             (
                 "lower-name",
-                sql::DENTRY_LOOKUP,
+                sql::DIRECTORY_ENTRY_LOOKUP,
                 vec![
                     &ns as &dyn rusqlite::ToSql,
                     &1_i64,
@@ -208,12 +209,12 @@ impl Overlay {
             ),
             (
                 "active-name",
-                sql::DENTRY_ACTIVE,
+                sql::DIRECTORY_ENTRY_ACTIVE,
                 vec![&ns, &1_i64, &name, &state.active.0],
             ),
             (
                 "drop-name",
-                sql::DENTRY_DROP,
+                sql::DIRECTORY_ENTRY_DROP,
                 vec![&ns, &1_i64, &name, &state.active.0],
             ),
             (
@@ -233,7 +234,7 @@ impl Overlay {
         let programs: [(&str, &str, Vec<&dyn rusqlite::ToSql>); 2] = [
             (
                 "put-name",
-                sql::DENTRY_PUT,
+                sql::DIRECTORY_ENTRY_PUT,
                 vec![&ns, &1_i64, &name, &state.active.0, &none, &false],
             ),
             (
@@ -312,8 +313,8 @@ impl SourceRows<'_> {
         let active = self
             .db
             .query(
-                StatementKind::Dentry,
-                sql::DENTRY_ACTIVE,
+                StatementKind::DirectoryEntry,
+                sql::DIRECTORY_ENTRY_ACTIVE,
                 &[&ns, &key, &name, &self.state.active.0],
                 24 + name.len() as u64,
                 |row| Ok((optional_serial(row.get(0)?, 0)?, row.get::<_, bool>(1)?)),

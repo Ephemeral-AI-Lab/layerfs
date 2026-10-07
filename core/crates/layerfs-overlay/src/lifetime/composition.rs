@@ -61,7 +61,7 @@ impl Overlay {
             let row = self
                 .query(
                     StatementKind::Reclaim,
-                    "SELECT parent,name,serial,inherited FROM dentry INDEXED BY dentry_capture
+                    "SELECT parent,name,serial,inherited FROM directory_entry INDEXED BY directory_entry_capture
                 WHERE ns=?1 AND gen=?2 AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 1",
                     &[&item.ns, &item.target, &item.cursor, &item.name],
                     24 + item.name.len() as u64,
@@ -78,8 +78,8 @@ impl Overlay {
             if let Some((parent, name, serial, inherited)) = row {
                 let active = self
                     .query(
-                        StatementKind::Dentry,
-                        sql::DENTRY_ACTIVE,
+                        StatementKind::DirectoryEntry,
+                        sql::DIRECTORY_ENTRY_ACTIVE,
                         &[&item.ns, &parent, &name, &state.active.0],
                         24 + name.len() as u64,
                         |r| r.get::<_, Option<i64>>(0),
@@ -88,8 +88,8 @@ impl Overlay {
                 let final_serial = active.unwrap_or(serial);
                 let delta = if final_serial.is_some() || inherited {
                     self.execute(
-                        StatementKind::Dentry,
-                        sql::DENTRY_PUT,
+                        StatementKind::DirectoryEntry,
+                        sql::DIRECTORY_ENTRY_PUT,
                         &[
                             &item.ns,
                             &parent,
@@ -103,8 +103,8 @@ impl Overlay {
                     i64::from(active.is_none())
                 } else if active.is_some() {
                     self.execute(
-                        StatementKind::Dentry,
-                        sql::DENTRY_DROP,
+                        StatementKind::DirectoryEntry,
+                        sql::DIRECTORY_ENTRY_DROP,
                         &[&item.ns, &parent, &name, &state.active.0],
                         24 + name.len() as u64,
                     )?;
@@ -115,14 +115,14 @@ impl Overlay {
                 if delta != 0 {
                     self.execute(
                         StatementKind::Workspace,
-                        "UPDATE workspace SET dirty_names=dirty_names+?2 WHERE ns=?1",
+                        "UPDATE workspace SET dirty_directory_entries=dirty_directory_entries+?2 WHERE ns=?1",
                         &[&item.ns, &delta],
                         16,
                     )?;
                 }
                 self.execute(
                     StatementKind::Reclaim,
-                    sql::DENTRY_DROP,
+                    sql::DIRECTORY_ENTRY_DROP,
                     &[&item.ns, &parent, &name, &item.target],
                     24 + name.len() as u64,
                 )?;

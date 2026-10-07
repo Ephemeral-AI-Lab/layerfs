@@ -69,7 +69,7 @@ initializes the shared database. Workspace open inserts bounded logical state
 and binds the already prepared complete root, including `.git`, ignored
 dependencies/caches/output and symlinks. Necessary authenticated root metadata
 can require I/O; open neither reconstructs nor reinstalls that tree. Namespace
-rows describe changes; ownership, scratch and reclamation rows are runtime state.
+rows describe changes; ownership, operation records and reclamation rows are runtime state.
 
 ## 2. Database placement and profile
 
@@ -135,8 +135,8 @@ state/index design before the byte/lifetime slices.
 Prefix every key with a daemon-local Workspace namespace `ws`. Retain
 lookup-leading keys `(ws, ino, gen)` and `(ws, parent, name, gen)`, and add
 capture-selective indexes `(ws, gen, ino)` and `(ws, gen, parent, name)`.
-Payload cells use `(ws, stream, cell_offset)` and owner/scratch/reclaim tables
-also constrain `ws` (scratch additionally identifies the operation). A cursor fixes
+Payload cells use `(ws, stream, cell_offset)` and owner/operation records/reclaim tables
+also constrain `ws` (operation records additionally identifies the operation). A cursor fixes
 its generation/domain at capture, orders by the required inode/name key and
 terminates independently of subsequent active writes. Retirement must also use
 an explicit generation/key range rather than scan an expanding active tail.
@@ -245,7 +245,7 @@ include validity metadata, any boundary normalization and all copies.
 
 [proposed design]
 
-**Lookup `(parent, name)`.** If the overlay holds no `dentry` row at all (a
+**Lookup `(parent, name)`.** If the overlay holds no `directory_entry` row at all (a
 counter in `Workspace.core`), no SQL runs. Otherwise one descending seek on
 `(parent, name)`. A row with `ino IS NULL` is a miss. No visible row: ask the
 base, unless `parent` was created in the overlay and is not yet committed
@@ -256,7 +256,7 @@ miss without leaving the daemon.
 base attributes (§7).
 
 **Enumeration.** A merge of two name-ordered keyset sequences: the overlay's
-`dentry` rows for the directory and the base listing page
+`directory_entry` rows for the directory and the base listing page
 (`FilesystemRead::list_inode(serial, after, max_entries, max_bytes)`). A
 whiteout drops a base name. The cursor is the last name returned. Memory is one
 page of each sequence; a directory of any size is listed with bounded memory.
@@ -267,12 +267,12 @@ counting, including index work and scheduler admission.
 
 | Operation | Rows written |
 | --- | --- |
-| create, mkdir, symlink | `dentry` insert (with `below` from the existence check the operation already made); `inode` insert with a serial from the in-memory range and `born = active`; parent `inode` upsert for its mtime |
-| unlink | If `below = 0` and the row is in the active generation: delete the `dentry` row. Otherwise upsert a whiteout. Target `inode` upsert with `nlink - 1`; parent upsert |
+| create, mkdir, symlink | `directory_entry` insert (with `below` from the existence check the operation already made); `inode` insert with a serial from the in-memory range and `born = active`; parent `inode` upsert for its mtime |
+| unlink | If `below = 0` and the row is in the active generation: delete the `directory_entry` row. Otherwise upsert a whiteout. Target `inode` upsert with `nlink - 1`; parent upsert |
 | A file that loses its last name and is not open | If `born = active` and it has no captured row: delete the `inode` row. Otherwise keep the row with `nlink = 0`, `stream = NULL`, `lower_len = 0`. In both cases its stream goes to `reclaim` |
 | rmdir | As unlink, after the emptiness check below |
 | rename | Source: delete or whiteout as unlink. Destination: upsert pointing at the **same serial**. A replaced destination loses a link as in unlink. Both parents upserted. No descendant row is created: a moved directory's children are still found by its serial, in the overlay and in the base |
-| link | `dentry` insert; target `inode` upsert with `nlink + 1`; parent upsert |
+| link | `directory_entry` insert; target `inode` upsert with `nlink + 1`; parent upsert |
 | chmod, utimens | `inode` upsert |
 
 A file created and removed inside one generation leaves no row. A removed and
@@ -342,7 +342,7 @@ locally and the daemon caches the answer under those two immutable identities.
 | --- | --- | --- | --- | --- |
 | `BaseCache` | daemon, shared by all Workspaces | `ObjectId` | Authenticated canonical bytes | Nothing, ever. Objects are immutable; eviction is by byte budget |
 | Attribute cache | daemon, shared | `(content_root, metadata_root)` | `(length, mode, mtime)` | Nothing; both keys are immutable |
-| SQLite page cache | daemon overlay owner | page number | All Workspace overlay/scratch pages | One shared allowance with eviction; no isolation of hot pages between Workspaces |
+| SQLite page cache | daemon overlay owner | page number | All Workspace overlay/operation records pages | One shared allowance with eviction; no isolation of hot pages between Workspaces |
 | Append hint | `Workspace.core`, per recently written inode, bounded | `ino` | The stream's end offset, so a sequential append skips the two overlap queries | Maintained in the mutating critical section; dropped on eviction |
 | Kernel dentry, attribute and page caches | kernel, per mount | — | — | [05 §4](05-fuse-assessment.md#4-coherence-a-lifetime-is-not-a-design) |
 
@@ -413,10 +413,10 @@ page size in a loop that continues (`backing/active/extents.rs:393-422`).
 | Dimension | Required accounting / current limitation |
 | --- | --- |
 | Request memory | Request buffers, payload/validity work, dirty pages, MEMORY journal and reply copies; cache_size alone is not a transaction or process ceiling |
-| Construction | Fixed processing windows plus explicit scratch; deferred nodes, directory changes and new-parent map require cluster-one changes |
+| Construction | Fixed processing windows plus explicit operation records; deferred nodes, directory changes and new-parent map require cluster-one changes |
 | Sessions/queues | Host-enforced byte/count limits before allocation; aggregate every live Save's indexes/caches and blocked messages |
 | Versions | Captured domain plus bounded active/failure composition and independent orphan state; repeated pins are forbidden |
-| Scratch and disk | Overlay, Commit scratch, unreclaimed data, captured/orphan data and shared physical-disk reservation all count |
+| OperationRecord and disk | Overlay, Commit operation records, unreclaimed data, captured/orphan data and shared physical-disk reservation all count |
 | Caches | Base/attributes, pager, kernel inode/dentry/FUSE pages, overlay file pages and host caches have separate owners and lifetimes |
 
 Name/kind/portable-metadata constraints, serial space, canonical object limits,
@@ -431,7 +431,7 @@ Workspace file constant is removed by the owner's no-artificial-cap requirement.
 
 `max_page_count` limits the shared daemon database's page allocations; it neither
 enforces per-Workspace quotas nor reserves shared
-physical disk nor predicts every allocation from payload length. Account scratch,
+physical disk nor predicts every allocation from payload length. Account operation records,
 pins/capture, metadata/index splits and conservative admission headroom. Derive
 reclaim progress from actual allocation/freelist observations. Inline rows and
 indexes share pages; queuing a stream does not reveal exact garbage pages.
@@ -460,7 +460,7 @@ See [SQLite cache_size](https://sqlite.org/pragma.html#pragma_cache_size).
 [owner decision; proposed implementation]
 
 Workspace ownership is logical, enforced by namespace/incarnation routing and
-Workspace-prefixed indexed queries. Metadata, payload, scratch and reclaim state
+Workspace-prefixed indexed queries. Metadata, payload, operation records and reclaim state
 live in the same daemon database. No per-Workspace connection/file/schema exists.
 SQLite writer/pager, physical disk and database failure are shared. Logical
 admission can refuse one Workspace without failing another, but database corruption
@@ -474,7 +474,7 @@ No claim of zero or measured bootstrap latency is made.
 Terminal unmount first fences requests/captures and makes the namespace unreachable, then
 reclaims its rows in bounded fair background jobs. Do not reuse its namespace key
 while stale jobs/rows exist. File allocation can retain its high-water value for
-later reuse; terminal Workspace unmount does not unlink the shared database. Scratch and
+later reuse; terminal Workspace unmount does not unlink the shared database. OperationRecord and
 orphan state participate in the same ownership and reclaim accounting.
 
 ### Indexed access and complexity

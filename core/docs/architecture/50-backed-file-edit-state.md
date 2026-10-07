@@ -1,5 +1,9 @@
 # Backed file-edit state
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > Status: source implementation following foundation commit `889836c44`;
 > component checks are recorded in the [joint checkpoint](../issues/307/K1-BACKED-STREAM-SUPERVISOR-20261007.md).
 > This describes the file editor and its neutral
@@ -97,7 +101,7 @@ before reusing the acknowledgement. Accepted emission identity alone cannot
 validate a changed interior child boundary. This pays an extra 19 retained bytes
 and their actual read/write/copy work per resolution; it needs no Stored fallback.
 
-Workspace binds one OperationOwner/file scope to its OverlayScratch service and
+Workspace binds one OperationOwner/file scope to its OverlayOperationRecords service and
 retains the first original Completion/unattempted command or Workspace error.
 NotApplied is a terminal deciding result, with its original Completion retained;
 Content receives the bounded typed body once. Later requests submit no job.

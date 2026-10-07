@@ -1,5 +1,5 @@
 //! Exact bounded raw-record deletion after the last operation owner releases.
-use crate::{db::unsigned, sql, Overlay, OverlayResult, StatementKind, SCRATCH_BYTES};
+use crate::{db::unsigned, sql, Overlay, OverlayResult, StatementKind, OPERATION_RECORD_BYTES};
 
 struct Record {
     operation: i64,
@@ -10,7 +10,7 @@ struct Record {
 }
 
 impl Overlay {
-    pub(crate) fn delete_indexed_scratch(
+    pub(crate) fn delete_indexed_operation_record(
         &self,
         ns: i64,
         operation: Option<i64>,
@@ -32,7 +32,7 @@ impl Overlay {
         let records = if let Some(operation) = operation {
             self.query(
                 StatementKind::Reclaim,
-                sql::INDEXED_SCRATCH_RECLAIM_OPERATION,
+                sql::INDEXED_OPERATION_RECORD_RECLAIM_OPERATION,
                 &[&ns, &operation],
                 16,
                 decode,
@@ -40,7 +40,7 @@ impl Overlay {
         } else {
             self.query(
                 StatementKind::Reclaim,
-                sql::INDEXED_SCRATCH_RECLAIM_NAMESPACE,
+                sql::INDEXED_OPERATION_RECORD_RECLAIM_NAMESPACE,
                 &[&ns],
                 8,
                 decode,
@@ -48,12 +48,12 @@ impl Overlay {
         };
         let (mut count, mut bytes) = (0, 0);
         for record in records {
-            if bytes + record.bytes > SCRATCH_BYTES as u64 {
+            if bytes + record.bytes > OPERATION_RECORD_BYTES as u64 {
                 break;
             }
             self.execute(
                 StatementKind::Reclaim,
-                sql::INDEXED_SCRATCH_DELETE,
+                sql::INDEXED_OPERATION_RECORD_DELETE,
                 &[
                     &ns,
                     &record.operation,

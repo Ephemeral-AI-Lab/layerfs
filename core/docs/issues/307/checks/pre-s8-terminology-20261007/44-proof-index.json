@@ -1,0 +1,270 @@
+{
+  "eligible_body_counts": {
+    "host": 68,
+    "linux": 68
+  },
+  "original_outcomes": [
+    {
+      "receipt": "07-host-engine.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/engine-b4fac0808988bc6c": "d2404dbaf486bfaa919f9d72ef4764eb1f9adb1c3c858b9753805ca15d05a1e5"
+      },
+      "passed": 12,
+      "status": "PASS",
+      "sha256": "3efd754aa956d4dbae92dede6eefb418323cf300b6501abe44d38b2b175b9d8d"
+    },
+    {
+      "receipt": "08-host-compound.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/compound-f27037c54631a7cf": "83c71fccf24fbabf225d12bc1b8ccb591fbe04d261930b00cff76e4758bea9ca"
+      },
+      "passed": 3,
+      "status": "PASS",
+      "sha256": "75c1e74d46b07bd0b972b738f9a20189d43563752f62d2e518caeedf7aad56f0"
+    },
+    {
+      "receipt": "09-host-records.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/indexed_operation_record-726459102335d352": "ebeb44afeee8496fc7d6ed74b7aff9746a5ff6c63fec6a3c117d2eda84ffb868"
+      },
+      "passed": 6,
+      "status": "PASS",
+      "sha256": "7eb5ff4428b2fb6f606edd4acfa7e1285b7b39853b7102a03ae7faeaaefdacf4"
+    },
+    {
+      "receipt": "11-host-record-cursor.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/indexed_operation_record_cursor-176a82882423d724": "1c879733a95f87ecc4b825437a679e3440cf12d742557a8b6cb5ad9dd1811095"
+      },
+      "passed": 2,
+      "status": "PASS",
+      "sha256": "d13cb409432044d695b11c83b774b754c5d25abec50c189d802239507ceeaa10"
+    },
+    {
+      "receipt": "13-host-source.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/source-bbe134429b700afa": "c2244c809681cc3272d27cda5275812d25d7fb0191f5f1410d456a7725c47937"
+      },
+      "passed": 4,
+      "status": "PASS",
+      "sha256": "af620db24835f052021d0754cbb63b78697d88fc540c815130f696bf81402e2e"
+    },
+    {
+      "receipt": "14-host-owner.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/owner-52b116d13a0bd35b": "9514af4ce7cb326818d8b49ae747c9480ca1e6b40faff3363ebb633c4bb9702f"
+      },
+      "passed": 9,
+      "status": "PASS",
+      "sha256": "a5c7fb711cacef50af5bf1d8c47c74044165ac9f231ce3704d25210755d7ab9b"
+    },
+    {
+      "receipt": "15-host-daemon-records.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/indexed_operation_record-53bf8112832d28e7": "f92a10c1342d1d9f9eeed1072ad80818b8f62c25f2d9525c7cf90a6c4f9670ea"
+      },
+      "passed": 2,
+      "status": "PASS",
+      "sha256": "5619122f7b36ccb8ea6e0ffd37cf4b4fef405c5975141d33216f7df0bf020182"
+    },
+    {
+      "receipt": "16-host-root-qualification.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/root_qualification-4df2dde97be4e06f": "2313f825d041489d13d092cd704f9a352fca521b4314b61774252e8573922ce5"
+      },
+      "passed": 1,
+      "status": "PASS",
+      "sha256": "39f0f345d68372f66c1cf69814e818b4e37f055277f5ce98a47d1e55e5429124"
+    },
+    {
+      "receipt": "17-host-namespace-daemon.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/namespace_daemon-a383a0324fbc2d65": "6ad566cba332a8b21fcdf437c4fb2fd157b576eb27af64a91c19d91a9f9e514d"
+      },
+      "passed": 8,
+      "status": "INELIGIBLE \u2014 overlapped invocation",
+      "sha256": "ae1d77489ae18f608f540cb48d89fcc10c884a534f254abf48877bf185ee2710"
+    },
+    {
+      "receipt": "18-host-captured-edits.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/captured_file_edits-1727215bff278226": "7072872f09a8ddeb403d1a96559529f9b94a6cb6c6902f834ddac20f4bbf1079"
+      },
+      "passed": 14,
+      "status": "INELIGIBLE \u2014 overlapped invocation",
+      "sha256": "9b3d3f3721e6c6d63a1de1a84608fd23240ddc6709b67aa046df465f74bab9cf"
+    },
+    {
+      "receipt": "20-host-namespace-daemon-serialized.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/namespace_daemon-a383a0324fbc2d65": "6ad566cba332a8b21fcdf437c4fb2fd157b576eb27af64a91c19d91a9f9e514d"
+      },
+      "passed": 8,
+      "status": "PASS",
+      "sha256": "4654af60c6a6b27c8b7bd106ee05ad971b3a9751cd5fe150a55e32226345d507"
+    },
+    {
+      "receipt": "21-host-captured-edits-serialized.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/captured_file_edits-1727215bff278226": "7072872f09a8ddeb403d1a96559529f9b94a6cb6c6902f834ddac20f4bbf1079"
+      },
+      "passed": 14,
+      "status": "PASS",
+      "sha256": "34bdc3a1a56818808e11ed91971ca02ace492b6f63dc08cf90d9b411d1cb26a4"
+    },
+    {
+      "receipt": "22-host-construction-cursor.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/construction_cursor-b818a79c37d41f94": "40c0e0b80103443a28547e723855bb9107cf3a07114bba7211bda3b8064473fc"
+      },
+      "passed": 3,
+      "status": "PASS",
+      "sha256": "2815b3762535ecd7ac5ce774f0805545541801703dccc0489352a4badad45072"
+    },
+    {
+      "receipt": "23-host-edit-backing.stdout",
+      "platform": "host",
+      "binaries": {
+        "core/target/debug/deps/edit_backing-c8f9600ad6b779c0": "85b5a365c57d904b0b2a9d9c96f4ff01c9a9d0c31aadbd3b676fbc7844a53223"
+      },
+      "passed": 4,
+      "status": "PASS",
+      "sha256": "545e3b5cd6bd9e7785ad53ea5eeec852f10bf46647798941adb54b975d31b3a2"
+    },
+    {
+      "receipt": "28-linux-engine.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/engine-2fa85df857faac64": "6f7c5cd9afc4222c9072d19e4039b5e0439540adf5e69127c231f2ea9312d743"
+      },
+      "passed": 12,
+      "status": "PASS",
+      "sha256": "d581ba6ae11429eb34a96b7501ffda0ca83dc89949974319362cb420714ccdc0"
+    },
+    {
+      "receipt": "29-linux-compound.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/compound-a00d0f6b629b0b25": "c2231d4f3115c248eee67c08346907d25515808afad589fcbb6cbbb4d4c3ee3c"
+      },
+      "passed": 3,
+      "status": "PASS",
+      "sha256": "b5f2b7a7301f90b8a30f6da55ce540414da684ecccc378ce5f240847e7f06c16"
+    },
+    {
+      "receipt": "30-linux-records.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/indexed_operation_record-d04bb5e39ff5a300": "ba371611d5f64d0b827f0a0f919b5efa85523a5f0e1f3672bdbfbd041b0a1287"
+      },
+      "passed": 6,
+      "status": "PASS",
+      "sha256": "ba033a1e31f6b68772ef6f143622245d4b4a83a449d0e5b7ac427e45b0dafffc"
+    },
+    {
+      "receipt": "31-linux-record-cursor.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/indexed_operation_record_cursor-c1add79bb62eee5e": "73af95ecc501fe8e9482f9228807bacc1716f0d77f1c089ff0d300e6186adee0"
+      },
+      "passed": 2,
+      "status": "PASS",
+      "sha256": "68ce8baf4bd95a333137cd1658f0d26213ef64f78225046682b3113a535aca81"
+    },
+    {
+      "receipt": "32-linux-source.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/source-e0890071018a2f0d": "97b98235bf93924d29e5cdbb7c58c7f781989592b76fda7c64921cbc0109cd90"
+      },
+      "passed": 4,
+      "status": "PASS",
+      "sha256": "99bb18fcb1dd3eb27c12f4c2469a845a65a75568b795696009b6991f53480fc6"
+    },
+    {
+      "receipt": "33-linux-owner.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/owner-00e2738abbdf74df": "c3852b525e746eadad036f0f152a8037b9e9747f7c92457fa6765a3338ee2d56"
+      },
+      "passed": 9,
+      "status": "PASS",
+      "sha256": "78d9838ba3d9516ab4f0bc8ecde891ee7e07480009835ed54c39e292e44581a1"
+    },
+    {
+      "receipt": "34-linux-daemon-records.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/indexed_operation_record-d97e71649d1141fb": "9fead4b52974106b97cb841dd11f3697ad5d8361b5bb810fba5403442754c997"
+      },
+      "passed": 2,
+      "status": "PASS",
+      "sha256": "0e4c751b28ba9885930a9091f93eed326c5786eadf10f4dd803a0b97815d788e"
+    },
+    {
+      "receipt": "35-linux-root-qualification.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/root_qualification-1983c82a7478eba2": "391bf8de9debdcbbe44db138dc40e7800c5e1f3d7b51192ab0e1e2bff489ffc2"
+      },
+      "passed": 1,
+      "status": "PASS",
+      "sha256": "412679fadf57dfb0ac287102b5e50086b68f6c28d57893e2a7adc146900f2def"
+    },
+    {
+      "receipt": "36-linux-namespace-daemon.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/namespace_daemon-70451fe8637ffc96": "323cdf085b35f1bb1b2069df5d5a6d8009071e4f5fa6b521309a1147fa6d3321"
+      },
+      "passed": 8,
+      "status": "PASS",
+      "sha256": "926ea5878c3d31abf543297e429fd759d104b47b932b90fcf2d70215536f9188"
+    },
+    {
+      "receipt": "37-linux-captured-edits.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/captured_file_edits-6dd3cec93c87ddc6": "33916acfd5064637c5ecc40eea8f64046573ec4552b28485f13bb12040f89440"
+      },
+      "passed": 14,
+      "status": "PASS",
+      "sha256": "99210432733c50a587ee370176a6753bd99ab97fd4621b19c2c95a3c3ca679a9"
+    },
+    {
+      "receipt": "38-linux-construction-cursor.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/construction_cursor-b0e41aa3f0faed9b": "14879b3c68b622a1c56317908cdad08da8c1d670f9f1641c65f6552b792c4c26"
+      },
+      "passed": 3,
+      "status": "PASS",
+      "sha256": "5cde25028ec9921ed2675a3e63207ac147c7f30bd65e52e791459a993c256222"
+    },
+    {
+      "receipt": "39-linux-edit-backing.stdout",
+      "platform": "linux",
+      "binaries": {
+        "core/target/cluster2-linux/debug/deps/edit_backing-8552214ab09a28b1": "91f2ec364f7102f9ca68355dcbda6be7d974a03c7ed62111d5c7a015cb9453f7"
+      },
+      "passed": 4,
+      "status": "PASS",
+      "sha256": "9780f5ae44d18c6ecc274b3b63a6f7400b04466ead0288e4937b7dae11e81000"
+    }
+  ],
+  "cache": "Functional/EXPLAIN-count checks; no OS-cold performance claim",
+  "profile": "overlay schema16 MEMORY/OFF/EXCLUSIVE; no Durable Store execution"
+}

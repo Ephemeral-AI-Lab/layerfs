@@ -1,0 +1,57 @@
+{
+  "renames": [
+    [
+      "core/crates/layerfs-daemon/src/overlay/indexed_scratch.rs",
+      "core/crates/layerfs-daemon/src/overlay/indexed_operation_record.rs"
+    ],
+    [
+      "core/crates/layerfs-daemon/src/overlay/scratch_port.rs",
+      "core/crates/layerfs-daemon/src/overlay/operation_record_port.rs"
+    ],
+    [
+      "core/crates/layerfs-daemon/tests/indexed_scratch.rs",
+      "core/crates/layerfs-daemon/tests/indexed_operation_record.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/examples/indexed_scratch_profile.rs",
+      "core/crates/layerfs-overlay/examples/indexed_operation_record_profile.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/src/contract/indexed_scratch.rs",
+      "core/crates/layerfs-overlay/src/contract/indexed_operation_record.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/src/diagnostics/indexed_scratch_plan.rs",
+      "core/crates/layerfs-overlay/src/diagnostics/indexed_operation_record_plan.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/src/lifetime/indexed_scratch.rs",
+      "core/crates/layerfs-overlay/src/lifetime/indexed_operation_record.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/src/lifetime/scratch.rs",
+      "core/crates/layerfs-overlay/src/lifetime/operation_record.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/src/maintenance/indexed_scratch.rs",
+      "core/crates/layerfs-overlay/src/maintenance/indexed_operation_record.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/src/namespace/names.rs",
+      "core/crates/layerfs-overlay/src/namespace/directory_entry.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/tests/indexed_scratch.rs",
+      "core/crates/layerfs-overlay/tests/indexed_operation_record.rs"
+    ],
+    [
+      "core/crates/layerfs-overlay/tests/indexed_scratch_cursor.rs",
+      "core/crates/layerfs-overlay/tests/indexed_operation_record_cursor.rs"
+    ],
+    [
+      "core/crates/layerfs-workspace/src/ports/scratch.rs",
+      "core/crates/layerfs-workspace/src/ports/operation_record.rs"
+    ]
+  ],
+  "method": "Semantic file inventory followed by explicit identifier/name mapping; no old receipt edits."
+}

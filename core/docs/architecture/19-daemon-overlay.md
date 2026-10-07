@@ -1,5 +1,9 @@
 # Daemon overlay: initial indexed engine
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Current general guide.
 
 Implemented source: the S0/S1 checkpoint introducing `layerfs-overlay` on local
@@ -9,7 +13,7 @@ the [design](../issues/303/README.md) and
 [progress](../issues/307/PROGRESS.md) retain the broader target and unfinished gates.
 
 The active [crate](../../crates/layerfs-overlay/src/lib.rs) owns one SQLite
-connection and SQL/payload/scratch/custody. It creates fresh disposable state
+connection and SQL/payload/operation records/custody. It creates fresh disposable state
 once; `open_workspace` inserts only a root/incarnation/routing row, without
 another connection, schema or immutable-root walk/materialization. Root authority
 and filesystem semantic checks remain the Workspace/runtime caller's obligation.
@@ -23,14 +27,14 @@ retains system SQLite; Linux alone enables the existing driver's bundled feature
 Global Store persistence is unchanged. Disposable state has no sync/checkpoint,
 crash-survival or restart-recovery claim.
 
-The original schema had eight application tables. Current schema v11 adds
+The original schema had eight application tables. Schema v11 added
 [bounded live composition](32-live-composition.md) and
 [independent file/processing custody](33-independent-custody.md), alongside
 SQLite's AUTOINCREMENT allocator. Namespace IDs are not reused.
 Every job constrains namespace and checks incarnation against its routing row.
 Inode/name keys support both current lookup and generation-selective capture;
 cell keys include serial, generation and aligned offset. Metadata queries exclude
-payload. Names, data and validity are BLOBs. Scratch/owners are independently keyed
+payload. Names, data and validity are BLOBs. OperationRecord/owners are independently keyed
 backed state, without resident membership collections.
 
 The following S3 checkpoint advances the disposable schema to version 2: portable
@@ -74,7 +78,7 @@ Point access costs O(log N) B-tree work. A capture page returns K<=64 rows with
 O(log N+K) index visits plus noncovering fetches, which can add O(K log N).
 Fixed-cell replacement binds 4608 data/mask bytes plus keys per call and incurs
 SQL/index/page/journal work independent of older fragment count. First-touch and
-tiny-file amplification require S5/S7 qualification. Scratch paging holds at most
+tiny-file amplification require S5/S7 qualification. OperationRecord paging holds at most
 64 records of at most 65536 bytes; total records continue through windows. Capture
 has fixed metadata SQL work, but daemon queue/reply drain is not a constant wall
 claim. No speed/cache/residency claim follows from these count diagnostics.
@@ -99,7 +103,7 @@ The closure slice after `14c8a7be4` removes the arbitrary default4GiB quota.
 `ProfileConfig.max_pages=None` selects/readbacks SQLite’s format ceiling; an
 explicit physical quota is separately recorded. Actual device headroom/pressure
 remains S6 work, and this setting supplies no large-capacity qualification.
-Operational plan diagnostics now cover exact cell/name/scratch/lease accesses
+Operational plan diagnostics now cover exact cell/name/operation records/lease accesses
 through shared production query templates. [S1 exit audit](../issues/307/S1-EXIT-AUDIT.md)
 maps every criterion to source and scoped proof. S2/S4/S5/S6/S7 remain distinct exits.
 

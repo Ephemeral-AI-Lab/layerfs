@@ -30,8 +30,10 @@ pub(crate) use maintenance::reclaim;
 pub use close::CleanupState;
 pub use compound::SourceRows;
 pub use contract::custody::{CapturedReader, FileRead, LookupOwner, OpenFile, OperationOwner};
-pub use contract::indexed_scratch::{
-    indexed_changes_bytes, ExpectedValue, IndexedApply, IndexedChange, IndexedKey, IndexedScope,
+pub use contract::indexed_operation_record::{
+    indexed_operation_record_changes_bytes, IndexedOperationRecordApply,
+    IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
+    OperationRecordExpectedValue,
 };
 pub use database::accounting::{Resources, StoredCounts};
 pub use database::allocation::{
@@ -49,8 +51,9 @@ pub use payload::captured_types::{
 pub use profile::{DatabaseProfile, ProfileConfig};
 pub use reclaim::ReclaimStep;
 pub use types::{
-    BaseSource, Binding, Capture, Cell, Changes, Dentry, Generation, Inode, InodeKind, Lease,
-    LeaseKind, LocalRead, NameChange, NameLayers, NameWindow, PayloadWrite, Publication, Route,
-    ScratchRecord, WorkspaceState, CELL_BYTES, COMPOUND_INODES, COMPOUND_NAMES, MASK_BYTES,
-    PAGE_ROWS, READ_WINDOW, SCRATCH_BYTES, WRITE_WINDOW,
+    BaseSource, Binding, Capture, Cell, Changes, DirectoryEntry, DirectoryEntryChange,
+    DirectoryEntryWindow, Generation, Inode, InodeKind, Lease, LeaseKind, LocalRead, NameLayers,
+    OperationRecord, PayloadWrite, Publication, Route, WorkspaceState, CELL_BYTES,
+    COMPOUND_DIRECTORY_ENTRIES, COMPOUND_INODES, MASK_BYTES, OPERATION_RECORD_BYTES, PAGE_ROWS,
+    READ_WINDOW, WRITE_WINDOW,
 };

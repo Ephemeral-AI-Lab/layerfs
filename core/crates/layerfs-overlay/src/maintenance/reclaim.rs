@@ -8,7 +8,7 @@ const BYTES: u64 = 65536;
 const READY:&str="SELECT ns,cursor FROM reclaim INDEXED BY reclaim_ready WHERE queue_key=?1 AND ns>?2 ORDER BY ns LIMIT 1";
 const PAYLOAD:&str="SELECT rowid,length(data)+ifnull(length(validity),0) FROM payload INDEXED BY payload_namespace_row WHERE ns=?1 ORDER BY rowid LIMIT 14";
 
-/// One short physical cleanup step. Bytes count payload, names and raw scratch
+/// One short physical cleanup step. Bytes count payload, names and raw operation_record
 /// values, not structured identity keys or pages. SQL work records delivered
 /// key/value bytes separately; shared allocation remains a distinct observation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -52,15 +52,15 @@ impl Overlay {
                 0 => self.delete_payload(ns)?,
                 1 => self.delete_names(ns)?,
                 2 => self.delete_inodes(ns)?,
-                3 => self.delete_scratch(ns, "scratch")?,
+                3 => self.delete_operation_record(ns, "operation_record")?,
                 4 => self.delete_old_reclaim(ns)?,
                 5 => self.delete_steps(ns)?,
                 6 => self.delete_maintenance(ns)?,
                 7 => self.delete_orphan_metadata(ns, "orphan")?,
                 8 => self.delete_orphan_metadata(ns, "file_custody")?,
-                9 => self.delete_scratch(ns, "owned_scratch")?,
+                9 => self.delete_operation_record(ns, "owned_operation_record")?,
                 10 => self.delete_wait(ns)?,
-                11 => self.delete_indexed_scratch(ns, None)?,
+                11 => self.delete_indexed_operation_record(ns, None)?,
                 _ => {
                     self.execute(
                         StatementKind::Reclaim,
@@ -196,7 +196,7 @@ impl Overlay {
     fn delete_names(&self, ns: i64) -> OverlayResult<(u64, u64)> {
         let rows = self.query(
             StatementKind::Reclaim,
-            "SELECT parent,name,gen FROM dentry WHERE ns=?1 ORDER BY parent,name,gen LIMIT 64",
+            "SELECT parent,name,gen FROM directory_entry WHERE ns=?1 ORDER BY parent,name,gen LIMIT 64",
             &[&ns],
             8,
             |r| {
@@ -211,7 +211,7 @@ impl Overlay {
         for (parent, name, gen) in &rows {
             self.execute(
                 StatementKind::Reclaim,
-                "DELETE FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4",
+                "DELETE FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4",
                 &[&ns, parent, name, gen],
                 24 + name.len() as u64,
             )?;
@@ -237,7 +237,7 @@ impl Overlay {
         }
         Ok((rows.len() as u64, 0))
     }
-    fn delete_scratch(&self, ns: i64, table: &str) -> OverlayResult<(u64, u64)> {
+    fn delete_operation_record(&self, ns: i64, table: &str) -> OverlayResult<(u64, u64)> {
         let rows=self.query(StatementKind::Reclaim,&format!("SELECT operation,kind,key,length(value) FROM {table} WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64"),&[&ns],8,|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,unsigned(r,3)?)))?;
         let mut count = 0;
         let mut bytes = 0;

@@ -48,7 +48,8 @@ pub use list::ViewListing;
 pub use operation::{Operation, Outcome, Position, Refusal, Time, WriteData};
 pub use port::{FileLengths, OverlayCapturedRuns, OverlayFileRead, OverlayJobs, OverlayRead};
 pub use port::{
-    OverlayScratch, ScratchApply, ScratchCopies, ScratchInputRefusal, ScratchRefusal, ScratchReply,
+    OperationRecordApply, OperationRecordCopies, OperationRecordInputRefusal,
+    OperationRecordRefusal, OperationRecordReply, OverlayOperationRecords,
 };
 pub use serials::{InodeSerials, SERIAL_REFILL};
 pub use view::{SourceView, ViewStat};

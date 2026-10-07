@@ -1,0 +1,14 @@
+# {"timestamp": "2026-10-07T08:16:07.270843+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/indexed_operation_record-726459102335d352", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/indexed_operation_record-726459102335d352": "ebeb44afeee8496fc7d6ed74b7aff9746a5ff6c63fec6a3c117d2eda84ffb868"}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+
+running 6 tests
+test complete_keys_and_full_file_scopes_never_alias_other_custody ... ok
+test exact_plans_correlate_with_bounded_executed_point_and_window_work ... ok
+test first_detached_window_finds_children_inserted_below_consumed_candidates ... ok
+test guarded_batches_are_atomic_capacity_bounded_and_allow_a_128_child_node_shape ... ok
+test optional_exclusion_keeps_zero_identity_and_finds_new_lower_keys ... ok
+test state_exceeding_eight_mib_reclaims_in_windows_without_reusing_a_released_owner ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+# exit=0

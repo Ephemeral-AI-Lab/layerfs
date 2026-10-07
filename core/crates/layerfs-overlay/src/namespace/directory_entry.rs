@@ -1,10 +1,11 @@
 //! Bounded current namespace inputs over an exact unchanged base source.
 use crate::{
     db::{integer, unsigned},
-    sql, BaseSource, Dentry, Generation, Overlay, OverlayError, OverlayResult, StatementKind,
+    sql, BaseSource, DirectoryEntry, Generation, Overlay, OverlayError, OverlayResult,
+    StatementKind,
 };
-fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Dentry> {
-    Ok(Dentry {
+fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<DirectoryEntry> {
+    Ok(DirectoryEntry {
         inherited: row.get(3)?,
         parent: unsigned(row, 0)?,
         name: row.get(1)?,
@@ -15,21 +16,21 @@ fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Dentry> {
     })
 }
 impl Overlay {
-    pub fn source_name_window(
+    pub fn source_directory_entry_window(
         &self,
         source: BaseSource,
         parent: u64,
         after: Option<&[u8]>,
-    ) -> OverlayResult<crate::NameWindow> {
+    ) -> OverlayResult<crate::DirectoryEntryWindow> {
         let state = self.source_state(source)?;
         let parent_inode = self.inode_at(source.route, parent, state.active, state.installed)?;
-        let active = self.source_names(source, parent, state.active, after)?;
+        let active = self.source_directory_entries(source, parent, state.active, after)?;
         let captured = if let Some(generation) = state.captured.or(state.consolidating) {
-            self.source_names(source, parent, generation, after)?
+            self.source_directory_entries(source, parent, generation, after)?
         } else {
             Vec::new()
         };
-        Ok(crate::NameWindow {
+        Ok(crate::DirectoryEntryWindow {
             source,
             parent,
             parent_inode,
@@ -44,19 +45,19 @@ impl Overlay {
         let state = self.source_state(source)?;
         Ok((state.active, state.captured.or(state.consolidating)))
     }
-    pub fn source_dentry(
+    pub fn source_directory_entry(
         &self,
         source: BaseSource,
         parent: u64,
         name: &[u8],
-    ) -> OverlayResult<Option<Dentry>> {
+    ) -> OverlayResult<Option<DirectoryEntry>> {
         if name.is_empty() || name.len() > 255 {
             return Err(OverlayError::Invalid("source name"));
         }
         let state = self.source_state(source)?;
         self.query(
-            StatementKind::Dentry,
-            sql::DENTRY_LOOKUP,
+            StatementKind::DirectoryEntry,
+            sql::DIRECTORY_ENTRY_LOOKUP,
             &[
                 &source.route.ns,
                 &integer(parent)?,
@@ -66,7 +67,7 @@ impl Overlay {
             ],
             32 + name.len() as u64,
             |row| {
-                Ok(Dentry {
+                Ok(DirectoryEntry {
                     inherited: row.get(1)?,
                     parent,
                     name: name.to_vec(),
@@ -82,13 +83,13 @@ impl Overlay {
         )
         .map(|mut rows| rows.pop())
     }
-    pub fn source_names(
+    pub fn source_directory_entries(
         &self,
         source: BaseSource,
         parent: u64,
         generation: Generation,
         after: Option<&[u8]>,
-    ) -> OverlayResult<Vec<Dentry>> {
+    ) -> OverlayResult<Vec<DirectoryEntry>> {
         let state = self.source_state(source)?;
         if generation != state.active && Some(generation) != state.captured.or(state.consolidating)
         {
@@ -99,14 +100,14 @@ impl Overlay {
             return Err(OverlayError::Invalid("source name cursor"));
         }
         self.query(
-            StatementKind::Dentry,
+            StatementKind::DirectoryEntry,
             sql::SOURCE_NAMES,
             &[&source.route.ns, &generation.0, &integer(parent)?, &after],
             24 + after.len() as u64,
             decode,
         )
     }
-    pub fn explain_source_names(
+    pub fn explain_source_directory_entries(
         &self,
         source: BaseSource,
         parent: u64,

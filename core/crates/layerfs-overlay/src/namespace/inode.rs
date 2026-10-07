@@ -2,7 +2,7 @@
 use crate::layers::Layer;
 use crate::{
     db::{integer, unsigned},
-    sql, Cell, Dentry, Generation, Inode, InodeKind, Overlay, OverlayError, OverlayResult,
+    sql, Cell, DirectoryEntry, Generation, Inode, InodeKind, Overlay, OverlayError, OverlayResult,
     Publication, Route, StatementKind, WorkspaceState,
 };
 
@@ -59,7 +59,7 @@ pub(crate) fn check(inode: &Inode) -> OverlayResult<()> {
 }
 pub(crate) fn check_name(parent: u64, name: &[u8]) -> OverlayResult<i64> {
     if name.is_empty() || name.len() > 255 || parent == 0 {
-        return Err(OverlayError::Invalid("dentry window"));
+        return Err(OverlayError::Invalid("directory_entry window"));
     }
     integer(parent)
 }
@@ -193,8 +193,8 @@ impl Overlay {
     ) -> OverlayResult<(bool, bool)> {
         let active = self
             .query(
-                StatementKind::Dentry,
-                sql::DENTRY_ACTIVE,
+                StatementKind::DirectoryEntry,
+                sql::DIRECTORY_ENTRY_ACTIVE,
                 &[&ns, &parent, &name, &state.active.0],
                 24 + name.len() as u64,
                 |r| r.get::<_, bool>(1),
@@ -205,8 +205,8 @@ impl Overlay {
         }
         let lower = self
             .query(
-                StatementKind::Dentry,
-                sql::DENTRY_LOOKUP,
+                StatementKind::DirectoryEntry,
+                sql::DIRECTORY_ENTRY_LOOKUP,
                 &[&ns, &parent, &name, &(state.active.0 - 1), &state.installed],
                 32 + name.len() as u64,
                 |r| r.get::<_, Option<i64>>(0),
@@ -214,7 +214,7 @@ impl Overlay {
             .pop();
         Ok((true, lower.map_or(base, |serial| serial.is_some())))
     }
-    pub(crate) fn put_name(
+    pub(crate) fn put_directory_entry(
         &self,
         route: Route,
         state: &WorkspaceState,
@@ -225,8 +225,8 @@ impl Overlay {
     ) -> OverlayResult<bool> {
         let (added, inherited) = self.name_inheritance(state, route.ns, parent, name, base)?;
         self.execute(
-            StatementKind::Dentry,
-            sql::DENTRY_PUT,
+            StatementKind::DirectoryEntry,
+            sql::DIRECTORY_ENTRY_PUT,
             &[
                 &route.ns,
                 &parent,
@@ -245,7 +245,7 @@ impl Overlay {
         route: Route,
         state: &WorkspaceState,
         inodes: i64,
-        names: i64,
+        directory_entries: i64,
     ) -> OverlayResult<Publication> {
         let revision = state
             .revision
@@ -260,7 +260,7 @@ impl Overlay {
         self.execute(
             StatementKind::Workspace,
             sql::FRONTIER_ADVANCE,
-            &[&route.ns, &revision, &inodes, &names],
+            &[&route.ns, &revision, &inodes, &directory_entries],
             32,
         )?;
         Ok(Publication {
@@ -276,7 +276,7 @@ impl Overlay {
         &self,
         route: Route,
         inode: &Inode,
-        name: Option<&Dentry>,
+        name: Option<&DirectoryEntry>,
         cell: Option<&Cell>,
     ) -> OverlayResult<Publication> {
         check(inode)?;
@@ -297,9 +297,9 @@ impl Overlay {
         self.atomic(|| {
             let state = self.live(route)?;
             let (added, layer) = self.put_inode(route, &state, inode)?;
-            let mut names = 0;
+            let mut directory_entries = 0;
             if let (Some(name), Some((parent, target))) = (name, key) {
-                names = i64::from(self.put_name(
+                directory_entries = i64::from(self.put_directory_entry(
                     route,
                     &state,
                     parent,
@@ -314,21 +314,26 @@ impl Overlay {
             if inode.kind == InodeKind::File {
                 self.detach_orphan(route, &state, inode)?;
             }
-            self.settle(route, &state, i64::from(added), names)
+            self.settle(route, &state, i64::from(added), directory_entries)
         })
     }
     /// Final local name row, with a whiteout distinguishable from no overlay row.
-    pub fn dentry(&self, route: Route, parent: u64, name: &[u8]) -> OverlayResult<Option<Dentry>> {
+    pub fn directory_entry(
+        &self,
+        route: Route,
+        parent: u64,
+        name: &[u8],
+    ) -> OverlayResult<Option<DirectoryEntry>> {
         let state = self.live(route)?;
         let parent = integer(parent)?;
         Ok(self
             .query(
-                StatementKind::Dentry,
-                sql::DENTRY_LOOKUP,
+                StatementKind::DirectoryEntry,
+                sql::DIRECTORY_ENTRY_LOOKUP,
                 &[&route.ns, &parent, &name, &state.active.0, &state.installed],
                 24 + name.len() as u64,
                 |r| {
-                    Ok(Dentry {
+                    Ok(DirectoryEntry {
                         inherited: r.get(1)?,
                         parent: parent as u64,
                         name: name.to_vec(),

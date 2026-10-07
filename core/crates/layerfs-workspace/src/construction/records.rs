@@ -1,10 +1,16 @@
 //! Content-owned meanings over explicit local operation/file custody.
-use crate::{OverlayScratch, ScratchApply, ScratchCopies, ScratchReply, WorkspaceError};
+use crate::{
+    OperationRecordApply, OperationRecordCopies, OperationRecordReply, OverlayOperationRecords,
+    WorkspaceError,
+};
 use layerfs_content::{
     ContentError, ContentResult, EditRecordApply, EditRecordChange, EditRecordExpected,
     EditRecordKey, IndexedEditBacking,
 };
-use layerfs_overlay::{ExpectedValue, IndexedChange, IndexedKey, IndexedScope, SCRATCH_BYTES};
+use layerfs_overlay::{
+    IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
+    OperationRecordExpectedValue, OPERATION_RECORD_BYTES,
+};
 use std::fmt;
 
 /// Source-scoped conversion/service-copy observations, not whole-operation
@@ -52,20 +58,20 @@ impl std::error::Error for EditInputRefusal {}
 /// value releases no engine operation owner; the caller performs real fences.
 #[derive(Debug)]
 pub struct EditBackingCustody {
-    pub scope: IndexedScope,
+    pub scope: IndexedOperationRecordScope,
     pub failure: Option<WorkspaceError>,
     pub work: EditBackingWork,
 }
 /// One explicit operation/file adapter. It acquires no owner or database and
 /// never releases either on Drop. A first refusal permanently ends its requests.
-pub struct IndexedEditRecords<'a, P: OverlayScratch + ?Sized> {
+pub struct IndexedEditRecords<'a, P: OverlayOperationRecords + ?Sized> {
     provider: &'a P,
-    scope: IndexedScope,
+    scope: IndexedOperationRecordScope,
     failure: Option<WorkspaceError>,
     work: EditBackingWork,
 }
-impl<'a, P: OverlayScratch + ?Sized> IndexedEditRecords<'a, P> {
-    pub fn new(provider: &'a P, scope: IndexedScope) -> Self {
+impl<'a, P: OverlayOperationRecords + ?Sized> IndexedEditRecords<'a, P> {
+    pub fn new(provider: &'a P, scope: IndexedOperationRecordScope) -> Self {
         Self {
             provider,
             scope,
@@ -73,7 +79,7 @@ impl<'a, P: OverlayScratch + ?Sized> IndexedEditRecords<'a, P> {
             work: EditBackingWork::default(),
         }
     }
-    pub const fn scope(&self) -> IndexedScope {
+    pub const fn scope(&self) -> IndexedOperationRecordScope {
         self.scope
     }
     pub fn failure(&self) -> Option<&WorkspaceError> {
@@ -99,10 +105,13 @@ impl<'a, P: OverlayScratch + ?Sized> IndexedEditRecords<'a, P> {
             Ok(())
         }
     }
-    fn observe<T>(&mut self, result: Result<ScratchReply<T>, WorkspaceError>) -> ContentResult<T> {
+    fn observe<T>(
+        &mut self,
+        result: Result<OperationRecordReply<T>, WorkspaceError>,
+    ) -> ContentResult<T> {
         add(&mut self.work.calls, 1, &mut self.work.saturated);
         match result {
-            Ok(ScratchReply { value, copies }) => {
+            Ok(OperationRecordReply { value, copies }) => {
                 self.copies(copies);
                 Ok(value)
             }
@@ -114,7 +123,7 @@ impl<'a, P: OverlayScratch + ?Sized> IndexedEditRecords<'a, P> {
             }
         }
     }
-    fn copies(&mut self, copies: ScratchCopies) {
+    fn copies(&mut self, copies: OperationRecordCopies) {
         add(
             &mut self.work.copied_reply_bytes,
             copies.bytes,
@@ -131,8 +140,8 @@ impl<'a, P: OverlayScratch + ?Sized> IndexedEditRecords<'a, P> {
             .max(copies.retained_bytes);
     }
 }
-fn key(key: EditRecordKey) -> IndexedKey {
-    IndexedKey {
+fn key(key: EditRecordKey) -> IndexedOperationRecordKey {
+    IndexedOperationRecordKey {
         kind: key.kind,
         key: key.key,
     }
@@ -151,20 +160,23 @@ fn retained(changes: &Vec<EditRecordChange>) -> Option<usize> {
     }
     Some(bytes)
 }
-impl<P: OverlayScratch + ?Sized> IndexedEditBacking for IndexedEditRecords<'_, P> {
+impl<P: OverlayOperationRecords + ?Sized> IndexedEditBacking for IndexedEditRecords<'_, P> {
     fn contains(&mut self, record: EditRecordKey) -> ContentResult<bool> {
         self.ready()?;
-        self.observe(self.provider.scratch_contains(self.scope, key(record)))
+        self.observe(
+            self.provider
+                .operation_record_contains(self.scope, key(record)),
+        )
     }
     fn get(&mut self, record: EditRecordKey) -> ContentResult<Option<Vec<u8>>> {
         self.ready()?;
-        self.observe(self.provider.scratch_get(self.scope, key(record)))
+        self.observe(self.provider.operation_record_get(self.scope, key(record)))
     }
     fn apply(&mut self, changes: Vec<EditRecordChange>) -> ContentResult<EditRecordApply> {
         self.ready()?;
         let input = retained(&changes);
         let input_bytes = match input {
-            Some(bytes) if bytes <= SCRATCH_BYTES => bytes,
+            Some(bytes) if bytes <= OPERATION_RECORD_BYTES => bytes,
             _ => {
                 self.failure = Some(WorkspaceError::Service(Box::new(EditInputRefusal {
                     retained_bytes: input,
@@ -178,7 +190,7 @@ impl<P: OverlayScratch + ?Sized> IndexedEditBacking for IndexedEditRecords<'_, P
         // The raw byte buffers move. The conversion temporarily retains both
         // bounded descriptor allocations; charge that overlap explicitly.
         let mut converted = Vec::with_capacity(changes.len());
-        let capacity = converted.capacity() * std::mem::size_of::<IndexedChange>();
+        let capacity = converted.capacity() * std::mem::size_of::<IndexedOperationRecordChange>();
         self.work.peak_conversion_heap_bytes = self
             .work
             .peak_conversion_heap_bytes
@@ -194,19 +206,21 @@ impl<P: OverlayScratch + ?Sized> IndexedEditBacking for IndexedEditRecords<'_, P
             &mut self.work.saturated,
         );
         for change in changes {
-            converted.push(IndexedChange {
+            converted.push(IndexedOperationRecordChange {
                 key: key(change.key),
                 expected: match change.expected {
-                    EditRecordExpected::Missing => ExpectedValue::Missing,
-                    EditRecordExpected::ExactBytes(bytes) => ExpectedValue::ExactBytes(bytes),
+                    EditRecordExpected::Missing => OperationRecordExpectedValue::Missing,
+                    EditRecordExpected::ExactBytes(bytes) => {
+                        OperationRecordExpectedValue::ExactBytes(bytes)
+                    }
                 },
                 value: change.value,
             });
         }
-        let outcome = self.observe(self.provider.scratch_apply(self.scope, converted))?;
+        let outcome = self.observe(self.provider.operation_record_apply(self.scope, converted))?;
         match outcome {
-            ScratchApply::Applied => Ok(EditRecordApply::Applied),
-            ScratchApply::NotApplied {
+            OperationRecordApply::Applied => Ok(EditRecordApply::Applied),
+            OperationRecordApply::NotApplied {
                 index,
                 key,
                 actual,
@@ -230,10 +244,16 @@ impl<P: OverlayScratch + ?Sized> IndexedEditBacking for IndexedEditRecords<'_, P
         excluded: Option<[u8; 32]>,
     ) -> ContentResult<Vec<[u8; 32]>> {
         self.ready()?;
-        self.observe(self.provider.scratch_keys(self.scope, kind, excluded))
+        self.observe(
+            self.provider
+                .operation_record_keys(self.scope, kind, excluded),
+        )
     }
     fn keys_after(&mut self, kind: u32, after: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
         self.ready()?;
-        self.observe(self.provider.scratch_keys_after(self.scope, kind, after))
+        self.observe(
+            self.provider
+                .operation_record_keys_after(self.scope, kind, after),
+        )
     }
 }

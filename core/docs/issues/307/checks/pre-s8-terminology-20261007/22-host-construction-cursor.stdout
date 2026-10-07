@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T08:20:47.800137+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/construction_cursor-b818a79c37d41f94", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/construction_cursor-b818a79c37d41f94": "40c0e0b80103443a28547e723855bb9107cf3a07114bba7211bda3b8064473fc"}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+
+running 3 tests
+test attempted_and_unattempted_range_failures_keep_original_custody_without_resend ... ok
+test real_owner_preserves_sealed_keys_and_observes_bounded_reply_copies ... ok
+test unavailable_capability_retains_typed_original_without_provider_substitution ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+# exit=0

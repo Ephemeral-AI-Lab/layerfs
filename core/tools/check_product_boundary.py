@@ -151,6 +151,7 @@ def violations(path, source):
     if len(lines) > limit:
         kind = "entry file" if entry else "production file"
         found.append((limit + 1, f"{kind} has {len(lines)} physical lines; maximum is {limit}"))
+    found.extend(overlay_terminology_violations(path, source))
     if path.suffix != ".rs":
         return found
     for match in ATTR.finditer(source):
@@ -174,6 +175,25 @@ def violations(path, source):
             found.append((source.count("\n", 0, match.start()) + 1, "engine access under encoding/ or pack/; use source seam"))
     found.extend(unsafe_violations(path, source))
     found.extend(component_violations(path, source))
+    return found
+
+
+def overlay_terminology_violations(path, source):
+    """Guard the renamed SQL/API concepts; generic temporary buffers remain valid."""
+    if crate_name(path) not in {"layerfs-overlay", "layerfs-workspace", "layerfs-daemon"}:
+        return []
+    retired = (r"\b(?:Dentry|Dentries|DENTRY\w*|dentry\w*|ScratchRecord|SCRATCH_BYTES|"
+               r"OverlayScratch|IndexedScratch\w*|indexed_scratch\w*|owned_scratch\w*|"
+               r"scratch_(?:rows|bytes|page|contains|get|apply|keys\w*)|put_scratch|"
+               r"IndexedScope|IndexedKey|IndexedChange|IndexedApply|ExpectedValue)\b|"
+               r"\b(?:StatementKind|ServiceClass)::Scratch\b|"
+               r"\b(?:TABLE|FROM|INTO|UPDATE|ON)\s+scratch\b|"
+               r"\bpub\s+(?:struct|enum|trait)\s+Scratch\w*\b")
+    found = [(source.count("\n", 0, match.start()) + 1,
+              "retired overlay concept name; use directory_entry or operation_record terminology")
+             for match in re.finditer(retired, source)]
+    if "scratch" in path.name or "dentry" in path.name:
+        found.append((1, "retired overlay concept filename"))
     return found
 
 

@@ -5,12 +5,12 @@ pub struct StoredCounts {
     pub wait_refs: u64,
     pub namespaces: u64,
     pub inode_rows: u64,
-    pub name_rows: u64,
+    pub directory_entry_rows: u64,
     pub payload_cells: u64,
     pub payload_bytes: u64,
     pub shrink_rows: u64,
-    pub scratch_rows: u64,
-    pub scratch_bytes: u64,
+    pub operation_record_rows: u64,
+    pub operation_record_bytes: u64,
     pub orphan_rows: u64,
     pub owner_rows: u64,
     pub source_rows: u64,
@@ -41,17 +41,17 @@ impl Overlay {
             0
         };
         let counts=self.query(StatementKind::Startup,
-            "SELECT namespaces,inode_rows,name_rows,payload_cells,payload_bytes,shrink_rows,scratch_rows,scratch_bytes,orphan_rows,owner_rows,source_rows,owner_details,reply_tickets,retire_targets,maintenance_targets,ready_targets,wait_refs FROM accounting WHERE ns=?1",&[&ns],8,
+            "SELECT namespaces,inode_rows,directory_entry_rows,payload_cells,payload_bytes,shrink_rows,operation_record_rows,operation_record_bytes,orphan_rows,owner_rows,source_rows,owner_details,reply_tickets,retire_targets,maintenance_targets,ready_targets,wait_refs FROM accounting WHERE ns=?1",&[&ns],8,
             |r|Ok(StoredCounts {
                 wait_refs:unsigned(r,16)?,
                 namespaces:unsigned(r,0)?,
                 inode_rows:unsigned(r,1)?,
-                name_rows:unsigned(r,2)?,
+                directory_entry_rows:unsigned(r,2)?,
                 payload_cells:unsigned(r,3)?,
                 payload_bytes:unsigned(r,4)?,
                 shrink_rows:unsigned(r,5)?,
-                scratch_rows:unsigned(r,6)?,
-                scratch_bytes:unsigned(r,7)?,
+                operation_record_rows:unsigned(r,6)?,
+                operation_record_bytes:unsigned(r,7)?,
                 orphan_rows:unsigned(r,8)?,
                 owner_rows:unsigned(r,9)?,
                 source_rows:unsigned(r,10)?,
@@ -65,10 +65,10 @@ impl Overlay {
         let metadata = counts
             .namespaces
             .saturating_add(counts.inode_rows)
-            .saturating_add(counts.name_rows)
+            .saturating_add(counts.directory_entry_rows)
             .saturating_add(counts.payload_cells)
             .saturating_add(counts.shrink_rows)
-            .saturating_add(counts.scratch_rows)
+            .saturating_add(counts.operation_record_rows)
             .saturating_add(counts.orphan_rows)
             .saturating_add(counts.owner_rows)
             .saturating_add(counts.source_rows)
@@ -82,7 +82,7 @@ impl Overlay {
         } else {
             counts
                 .payload_bytes
-                .saturating_add(counts.scratch_bytes)
+                .saturating_add(counts.operation_record_bytes)
                 .saturating_add(metadata.saturating_mul(1024))
         };
         Ok(Resources {

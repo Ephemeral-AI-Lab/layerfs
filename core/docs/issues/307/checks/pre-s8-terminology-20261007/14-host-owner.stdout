@@ -1,0 +1,17 @@
+# {"timestamp": "2026-10-07T08:18:12.402565+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/owner-52b116d13a0bd35b", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/owner-52b116d13a0bd35b": "9514af4ce7cb326818d8b49ae747c9480ca1e6b40faff3363ebb633c4bb9702f"}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+
+running 9 tests
+test failed_capture_waits_for_readers_while_later_writes_and_idle_composition_progress ... ok
+test idle_cleanup_runs_without_an_explicit_reclaim_or_status_job ... ok
+test known_install_fences_later_sources_while_existing_reads_mutations_and_other_work_progress ... ok
+test last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work ... ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+# exit=0

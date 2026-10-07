@@ -3,7 +3,7 @@ use super::{
     owner::Facts,
     state::{decode, key, Shared, CONTEXT, EDITS},
 };
-use crate::OverlayScratch;
+use crate::OverlayOperationRecords;
 use layerfs_content::{ContentError, ContentResult, Edit};
 
 pub(super) fn encode(facts: Facts, count: usize, sealed: bool) -> ContentResult<Vec<u8>> {
@@ -30,7 +30,7 @@ pub(super) fn encode(facts: Facts, count: usize, sealed: bool) -> ContentResult<
     value.extend_from_slice(&facts.file_root.map_or([0; 32], |root| root.to_bytes()));
     Ok(value)
 }
-pub(super) fn verify<P: OverlayScratch + ?Sized>(
+pub(super) fn verify<P: OverlayOperationRecords + ?Sized>(
     shared: &Shared<'_, P>,
     expected: &[u8],
 ) -> ContentResult<()> {
@@ -41,7 +41,7 @@ pub(super) fn verify<P: OverlayScratch + ?Sized>(
     }
     Ok(())
 }
-pub(super) fn edit<P: OverlayScratch + ?Sized>(
+pub(super) fn edit<P: OverlayOperationRecords + ?Sized>(
     shared: &Shared<'_, P>,
     expected: &[u8],
     facts: Facts,

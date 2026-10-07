@@ -1,14 +1,17 @@
 //! Exact strategy/program diagnostics; execution and residency remain separate.
-use crate::{db::integer, sql, IndexedKey, IndexedScope, Overlay, OverlayResult, StatementKind};
+use crate::{
+    db::integer, sql, IndexedOperationRecordKey, IndexedOperationRecordScope, Overlay,
+    OverlayResult, StatementKind,
+};
 
 impl Overlay {
     /// Plans for complete-key points, the one-root exclusion and both cleanup
     /// prefixes, plus the UPSERT VM including accounting trigger programs.
     /// Human-readable output is an operator diagnostic, not a parsed contract.
-    pub fn explain_indexed_scratch(
+    pub fn explain_indexed_operation_record(
         &self,
-        scope: IndexedScope,
-        key: IndexedKey,
+        scope: IndexedOperationRecordScope,
+        key: IndexedOperationRecordKey,
         excluded_root: [u8; 32],
     ) -> OverlayResult<Vec<String>> {
         self.check_operation(scope.owner)?;
@@ -36,29 +39,49 @@ impl Overlay {
         for (label, statement, params, bytes) in [
             (
                 "contains",
-                sql::INDEXED_SCRATCH_CONTAINS,
+                sql::INDEXED_OPERATION_RECORD_CONTAINS,
                 point.as_slice(),
                 64,
             ),
-            ("get", sql::INDEXED_SCRATCH_GET, point.as_slice(), 64),
-            ("delete", sql::INDEXED_SCRATCH_DELETE, point.as_slice(), 64),
-            ("keys", sql::INDEXED_SCRATCH_KEYS, keys.as_slice(), 64),
-            ("all-keys", sql::INDEXED_SCRATCH_ALL_KEYS, &keys[..4], 32),
+            (
+                "get",
+                sql::INDEXED_OPERATION_RECORD_GET,
+                point.as_slice(),
+                64,
+            ),
+            (
+                "delete",
+                sql::INDEXED_OPERATION_RECORD_DELETE,
+                point.as_slice(),
+                64,
+            ),
+            (
+                "keys",
+                sql::INDEXED_OPERATION_RECORD_KEYS,
+                keys.as_slice(),
+                64,
+            ),
+            (
+                "all-keys",
+                sql::INDEXED_OPERATION_RECORD_ALL_KEYS,
+                &keys[..4],
+                32,
+            ),
             (
                 "keys-after",
-                sql::INDEXED_SCRATCH_KEYS_AFTER,
+                sql::INDEXED_OPERATION_RECORD_KEYS_AFTER,
                 keys.as_slice(),
                 64,
             ),
             (
                 "operation-cleanup",
-                sql::INDEXED_SCRATCH_RECLAIM_OPERATION,
+                sql::INDEXED_OPERATION_RECORD_RECLAIM_OPERATION,
                 operation_params.as_slice(),
                 16,
             ),
             (
                 "namespace-cleanup",
-                sql::INDEXED_SCRATCH_RECLAIM_NAMESPACE,
+                sql::INDEXED_OPERATION_RECORD_RECLAIM_NAMESPACE,
                 namespace_params.as_slice(),
                 8,
             ),
@@ -75,18 +98,33 @@ impl Overlay {
         let put: [&dyn rusqlite::ToSql; 6] =
             [point[0], point[1], point[2], point[3], point[4], &empty];
         for (label, statement, params, bytes) in [
-            ("put-vm", sql::INDEXED_SCRATCH_PUT, put.as_slice(), 64),
-            ("keys-vm", sql::INDEXED_SCRATCH_KEYS, keys.as_slice(), 64),
-            ("all-keys-vm", sql::INDEXED_SCRATCH_ALL_KEYS, &keys[..4], 32),
+            (
+                "put-vm",
+                sql::INDEXED_OPERATION_RECORD_PUT,
+                put.as_slice(),
+                64,
+            ),
+            (
+                "keys-vm",
+                sql::INDEXED_OPERATION_RECORD_KEYS,
+                keys.as_slice(),
+                64,
+            ),
+            (
+                "all-keys-vm",
+                sql::INDEXED_OPERATION_RECORD_ALL_KEYS,
+                &keys[..4],
+                32,
+            ),
             (
                 "keys-after-vm",
-                sql::INDEXED_SCRATCH_KEYS_AFTER,
+                sql::INDEXED_OPERATION_RECORD_KEYS_AFTER,
                 keys.as_slice(),
                 64,
             ),
             (
                 "delete-vm",
-                sql::INDEXED_SCRATCH_DELETE,
+                sql::INDEXED_OPERATION_RECORD_DELETE,
                 point.as_slice(),
                 64,
             ),

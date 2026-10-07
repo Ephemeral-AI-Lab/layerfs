@@ -1,0 +1,28 @@
+# {"timestamp": "2026-10-07T08:11:35.466347+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-overlay", "-p", "layerfs-workspace", "-p", "layerfs-daemon", "--all-targets", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "aa292505913d2b5890ea8a240001da856aa6ff2c8d517afbb6a43c391ad9381b", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+error[E0782]: expected a type, found a trait
+  --> crates/layerfs-workspace/tests/harness/mod.rs:81:9
+   |
+81 |         OverlayRead::names(&self.0.overlay, source, parent, after)
+   |         ^^^^^^^^^^^
+   |
+help: you can add the `dyn` keyword if you want a trait object
+   |
+81 |         <dyn OverlayRead>::names(&self.0.overlay, source, parent, after)
+   |         ++++            +
+
+For more information about this error, try `rustc --explain E0782`.
+error: could not compile `layerfs-workspace` (test "nonfile") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-workspace` (test "operation_scope") due to 1 previous error
+error: could not compile `layerfs-workspace` (test "namespace_view") due to 1 previous error
+error: could not compile `layerfs-workspace` (test "namespace_daemon") due to 1 previous error
+
+# exit=101

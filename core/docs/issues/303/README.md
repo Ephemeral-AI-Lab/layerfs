@@ -237,7 +237,7 @@ permanent exceptions to the no-cap and bounded-memory requirements.
 
 Capture keeps existing changed rows as stable input; it does not create a full
 snapshot copy. New active rows appear only for later mutations, while operation
-scratch stores construction metadata. Known history success plus safe install/
+operation records stores construction metadata. Known history success plus safe install/
 last-owner release makes obsolete local rows reclaimable. Cleanup automatically
 runs bounded SQL deletes even between tool calls; no next operation/manual call
 or intentional TTL is needed. Terminal unmount retires all remaining owned local

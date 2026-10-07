@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T08:14:44.898443+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/compound-f27037c54631a7cf", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/compound-f27037c54631a7cf": "83c71fccf24fbabf225d12bc1b8ccb591fbe04d261930b00cff76e4758bea9ca"}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+
+# exit=0

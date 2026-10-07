@@ -1,8 +1,8 @@
 //! Typed bounded SQL jobs. No closure can hold the owner across network/Exec work.
 use layerfs_overlay::{
-    BaseSource, Capture, CapturedReader, Cell, Dentry, FileRead, Inode, Lease, LookupOwner,
-    NameWindow, OpenFile, OperationOwner, Overlay, OverlayResult, Publication, Route,
-    ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
+    BaseSource, Capture, CapturedReader, Cell, DirectoryEntry, DirectoryEntryWindow, FileRead,
+    Inode, Lease, LookupOwner, OpenFile, OperationOwner, OperationRecord, Overlay, OverlayResult,
+    Publication, Route, WorkspaceState, CELL_BYTES, MASK_BYTES, OPERATION_RECORD_BYTES, PAGE_ROWS,
 };
 
 /// Declared reply bytes of a command without a larger owned reply window.
@@ -15,13 +15,13 @@ pub enum ServiceClass {
     Mutation,
     Capture,
     Lifecycle,
-    Scratch,
+    OperationRecord,
     Source,
 }
 /// One fixed SQL window, never a whole Exec or content-construction operation.
 #[derive(Debug)]
 pub enum Command {
-    IndexedScratch(Box<crate::IndexedScratchJob>),
+    IndexedOperationRecord(Box<crate::IndexedOperationRecordJob>),
     Open {
         incarnation: [u8; 32],
         base_root: [u8; 32],
@@ -72,11 +72,11 @@ pub enum Command {
         request: u64,
     },
     ReleaseOperation(OperationOwner),
-    PutOwnedScratch {
+    PutOwnedOperationRecord {
         owner: OperationOwner,
-        record: ScratchRecord,
+        record: OperationRecord,
     },
-    OwnedScratchPage {
+    OwnedOperationRecordPage {
         owner: OperationOwner,
         kind: u32,
         after: Option<u64>,
@@ -104,7 +104,7 @@ pub enum Command {
         reader: CapturedReader,
         serial: u64,
     },
-    ReaderDentries {
+    ReaderDirectoryEntries {
         reader: CapturedReader,
         after: Option<(u64, Vec<u8>)>,
     },
@@ -135,12 +135,12 @@ pub enum Command {
         source: BaseSource,
         serial: u64,
     },
-    SourceDentry {
+    SourceDirectoryEntry {
         source: BaseSource,
         parent: u64,
         name: Vec<u8>,
     },
-    SourceNames {
+    SourceDirectoryEntries {
         source: BaseSource,
         parent: u64,
         after: Option<Vec<u8>>,
@@ -171,7 +171,7 @@ pub enum Command {
     Inode(u64),
     Publish {
         inode: Inode,
-        name: Option<Dentry>,
+        name: Option<DirectoryEntry>,
         cell: Option<Cell>,
     },
     ReplyAttempted(Publication),
@@ -187,7 +187,7 @@ pub enum Command {
         capture: Capture,
         after: u64,
     },
-    CapturedDentries {
+    CapturedDirectoryEntries {
         capture: Capture,
         after: Option<(u64, Vec<u8>)>,
     },
@@ -198,11 +198,11 @@ pub enum Command {
     },
     Acquire(Lease),
     Release(Lease),
-    PutScratch {
+    PutOperationRecord {
         operation: u64,
-        record: ScratchRecord,
+        record: OperationRecord,
     },
-    ScratchPage {
+    OperationRecordPage {
         operation: u64,
         kind: u32,
         after: Option<u64>,
@@ -211,7 +211,7 @@ pub enum Command {
 #[derive(Debug)]
 pub enum Response {
     CapturedRun(Box<layerfs_overlay::CapturedRunReply>),
-    IndexedScratch(crate::IndexedScratchReply),
+    IndexedOperationRecord(crate::IndexedOperationRecordReply),
     Lookup(Option<LookupOwner>),
     Operation(Option<OperationOwner>),
     File(Option<OpenFile>),
@@ -231,13 +231,13 @@ pub enum Response {
     RetainedCapture(Option<Capture>),
     Publications(Vec<Publication>),
     Inodes(Vec<Inode>),
-    Dentries(Vec<Dentry>),
+    DirectoryEntries(Vec<DirectoryEntry>),
     Cell(Option<Cell>),
     BaseSource(BaseSource),
-    Dentry(Option<Dentry>),
-    Names(NameWindow),
+    DirectoryEntry(Option<DirectoryEntry>),
+    DirectoryEntryWindow(DirectoryEntryWindow),
     RetainedBaseSource(Option<BaseSource>),
-    Scratch(Vec<ScratchRecord>),
+    OperationRecord(Vec<OperationRecord>),
     Namespace(layerfs_workspace::JobOutcome),
     Read(Option<layerfs_overlay::LocalRead>),
     Done,
@@ -245,7 +245,7 @@ pub enum Response {
 impl Command {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
-            Self::IndexedScratch(_) => ServiceClass::Scratch,
+            Self::IndexedOperationRecord(_) => ServiceClass::OperationRecord,
             Self::AcquireLookup { .. }
             | Self::RetainedLookup { .. }
             | Self::ReleaseLookup(_)
@@ -253,13 +253,15 @@ impl Command {
             Self::AcquireOperation { .. }
             | Self::RetainedOperation { .. }
             | Self::ReleaseOperation(_) => ServiceClass::Lifecycle,
-            Self::PutOwnedScratch { .. } | Self::OwnedScratchPage { .. } => ServiceClass::Scratch,
+            Self::PutOwnedOperationRecord { .. } | Self::OwnedOperationRecordPage { .. } => {
+                ServiceClass::OperationRecord
+            }
             Self::FileRead { .. }
             | Self::CapturedRead { .. }
             | Self::CapturedRun(_)
             | Self::ReaderInodes { .. }
             | Self::ReaderInode { .. }
-            | Self::ReaderDentries { .. } => ServiceClass::Read,
+            | Self::ReaderDirectoryEntries { .. } => ServiceClass::Read,
             Self::OpenFile { .. }
             | Self::RetainedFile { .. }
             | Self::CloseFile(_)
@@ -290,8 +292,8 @@ impl Command {
             | Self::LifetimePlans
             | Self::Resources { .. } => ServiceClass::Read,
             Self::SourceInode { .. }
-            | Self::SourceDentry { .. }
-            | Self::SourceNames { .. }
+            | Self::SourceDirectoryEntry { .. }
+            | Self::SourceDirectoryEntries { .. }
             | Self::SourceCell { .. }
             | Self::SourceRead { .. } => ServiceClass::Read,
             Self::AcquireBaseSource { .. } => ServiceClass::Source,
@@ -300,8 +302,10 @@ impl Command {
             | Self::Install { .. }
             | Self::InstallPrepared { .. }
             | Self::CapturedInodes { .. }
-            | Self::CapturedDentries { .. } => ServiceClass::Capture,
-            Self::PutScratch { .. } | Self::ScratchPage { .. } => ServiceClass::Scratch,
+            | Self::CapturedDirectoryEntries { .. } => ServiceClass::Capture,
+            Self::PutOperationRecord { .. } | Self::OperationRecordPage { .. } => {
+                ServiceClass::OperationRecord
+            }
         }
     }
     /// Per-slot charge of a Lifecycle job with no owned input and the default
@@ -311,7 +315,7 @@ impl Command {
     }
     pub(crate) fn charge(&self) -> Option<usize> {
         let (input, reply) = match self {
-            Self::IndexedScratch(job) => (job.charge()?, 0),
+            Self::IndexedOperationRecord(job) => (job.charge()?, 0),
             Self::Resources { .. } => (0, std::mem::size_of::<layerfs_overlay::Resources>()),
             Self::DatabaseWork => (0, std::mem::size_of::<layerfs_overlay::DatabaseWork>()),
             Self::PayloadPlans(_) | Self::LifetimePlans => (0, 8192),
@@ -324,18 +328,18 @@ impl Command {
                     },
                 128,
             ),
-            Self::PutScratch { record, .. } | Self::PutOwnedScratch { record, .. } => {
-                (record.value.capacity(), 0)
-            }
-            Self::ScratchPage { .. } | Self::OwnedScratchPage { .. } => {
-                (0, PAGE_ROWS * (SCRATCH_BYTES + 64))
+            Self::PutOperationRecord { record, .. }
+            | Self::PutOwnedOperationRecord { record, .. } => (record.value.capacity(), 0),
+            Self::OperationRecordPage { .. } | Self::OwnedOperationRecordPage { .. } => {
+                (0, PAGE_ROWS * (OPERATION_RECORD_BYTES + 64))
             }
             Self::CapturedInodes { .. } | Self::ReaderInodes { .. } => {
                 (0, PAGE_ROWS * std::mem::size_of::<Inode>())
             }
-            Self::CapturedDentries { after, .. } | Self::ReaderDentries { after, .. } => (
+            Self::CapturedDirectoryEntries { after, .. }
+            | Self::ReaderDirectoryEntries { after, .. } => (
                 after.as_ref().map_or(0, |(_, name)| name.capacity()),
-                PAGE_ROWS * (std::mem::size_of::<Dentry>() + 255),
+                PAGE_ROWS * (std::mem::size_of::<DirectoryEntry>() + 255),
             ),
             Self::PendingPublications { .. } => (0, PAGE_ROWS * std::mem::size_of::<Publication>()),
             Self::CapturedCell { .. } | Self::SourceCell { .. } => {
@@ -364,13 +368,13 @@ impl Command {
                 std::mem::size_of::<layerfs_workspace::NamespaceJob>() + job.charge(),
                 PAGE_ROWS * (std::mem::size_of::<layerfs_workspace::Need>() + 255),
             ),
-            Self::SourceDentry { name, .. } => {
-                (name.capacity(), std::mem::size_of::<Dentry>() + 255)
+            Self::SourceDirectoryEntry { name, .. } => {
+                (name.capacity(), std::mem::size_of::<DirectoryEntry>() + 255)
             }
-            Self::SourceNames { after, .. } => (
+            Self::SourceDirectoryEntries { after, .. } => (
                 after.as_ref().map_or(0, Vec::capacity),
-                2 * PAGE_ROWS * (std::mem::size_of::<Dentry>() + 255)
-                    + std::mem::size_of::<NameWindow>(),
+                2 * PAGE_ROWS * (std::mem::size_of::<DirectoryEntry>() + 255)
+                    + std::mem::size_of::<DirectoryEntryWindow>(),
             ),
             _ => (0, DEFAULT_REPLY),
         };
@@ -429,8 +433,12 @@ impl Command {
         }
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
-            Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => unreachable!(),
-            Self::IndexedScratch(job) => job.perform(db, route).map(Response::IndexedScratch),
+            Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => {
+                unreachable!()
+            }
+            Self::IndexedOperationRecord(job) => {
+                job.perform(db, route).map(Response::IndexedOperationRecord)
+            }
             Self::Resources { global } => {
                 db.state(route)?;
                 db.resources(if global { None } else { Some(route) })
@@ -442,12 +450,12 @@ impl Command {
                 }
                 db.reader_inodes(reader, after).map(Response::Inodes)
             }
-            Self::ReaderDentries { reader, after } => {
+            Self::ReaderDirectoryEntries { reader, after } => {
                 if reader.capture().route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
-                db.reader_dentries(reader, after.as_ref().map(|(p, n)| (*p, n.as_slice())))
-                    .map(Response::Dentries)
+                db.reader_directory_entries(reader, after.as_ref().map(|(p, n)| (*p, n.as_slice())))
+                    .map(Response::DirectoryEntries)
             }
             Self::AcquireLookup {
                 source,
@@ -493,18 +501,19 @@ impl Command {
                 }
                 db.release_operation(owner).map(|_| Response::Done)
             }
-            Self::PutOwnedScratch { owner, record } => {
+            Self::PutOwnedOperationRecord { owner, record } => {
                 if owner.route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
-                db.put_owned_scratch(owner, &record).map(|_| Response::Done)
+                db.put_owned_operation_record(owner, &record)
+                    .map(|_| Response::Done)
             }
-            Self::OwnedScratchPage { owner, kind, after } => {
+            Self::OwnedOperationRecordPage { owner, kind, after } => {
                 if owner.route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
-                db.owned_scratch_page(owner, kind, after)
-                    .map(Response::Scratch)
+                db.owned_operation_record_page(owner, kind, after)
+                    .map(Response::OperationRecord)
             }
             Self::RetainedFile { request } => db.retained_file(route, request).map(Response::File),
             Self::RetainedFileRead { request } => db
@@ -655,7 +664,7 @@ impl Command {
                 }
                 db.source_inode(source, serial).map(Response::Inode)
             }
-            Self::SourceDentry {
+            Self::SourceDirectoryEntry {
                 source,
                 parent,
                 name,
@@ -663,10 +672,10 @@ impl Command {
                 if source.route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
-                db.source_dentry(source, parent, &name)
-                    .map(Response::Dentry)
+                db.source_directory_entry(source, parent, &name)
+                    .map(Response::DirectoryEntry)
             }
-            Self::SourceNames {
+            Self::SourceDirectoryEntries {
                 source,
                 parent,
                 after,
@@ -674,8 +683,8 @@ impl Command {
                 if source.route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
-                db.source_name_window(source, parent, after.as_deref())
-                    .map(Response::Names)
+                db.source_directory_entry_window(source, parent, after.as_deref())
+                    .map(Response::DirectoryEntryWindow)
             }
             Self::CleanupState => db.cleanup_state(route).map(Response::CleanupState),
             Self::Close => db.close(route).map(|_| Response::Done),
@@ -714,17 +723,17 @@ impl Command {
                 }
                 db.captured_inodes(capture, after).map(Response::Inodes)
             }
-            Self::CapturedDentries { capture, after } => {
+            Self::CapturedDirectoryEntries { capture, after } => {
                 if capture.route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
-                db.captured_dentries(
+                db.captured_directory_entries(
                     capture,
                     after
                         .as_ref()
                         .map(|(parent, name)| (*parent, name.as_slice())),
                 )
-                .map(Response::Dentries)
+                .map(Response::DirectoryEntries)
             }
             Self::CapturedCell {
                 capture,
@@ -739,16 +748,16 @@ impl Command {
             }
             Self::Acquire(lease) => db.acquire(route, lease).map(|_| Response::Done),
             Self::Release(lease) => db.release(route, lease).map(|_| Response::Done),
-            Self::PutScratch { operation, record } => db
-                .put_scratch(route, operation, &record)
+            Self::PutOperationRecord { operation, record } => db
+                .put_operation_record(route, operation, &record)
                 .map(|_| Response::Done),
-            Self::ScratchPage {
+            Self::OperationRecordPage {
                 operation,
                 kind,
                 after,
             } => db
-                .scratch_page(route, operation, kind, after)
-                .map(Response::Scratch),
+                .operation_record_page(route, operation, kind, after)
+                .map(Response::OperationRecord),
         }
     }
 }

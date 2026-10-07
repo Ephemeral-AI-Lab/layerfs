@@ -1,0 +1,33 @@
+{
+  "current_documents": [
+    "core/docs/architecture/19-daemon-overlay.md",
+    "core/docs/architecture/21-daemon-owner.md",
+    "core/docs/architecture/25-terminal-reclaim.md",
+    "core/docs/architecture/32-live-composition.md",
+    "core/docs/architecture/33-independent-custody.md",
+    "core/docs/architecture/34-name-and-lookup-custody.md",
+    "core/docs/architecture/35-shared-physical-capacity.md",
+    "core/docs/architecture/49-indexed-operation-scratch.md",
+    "core/docs/architecture/50-backed-file-edit-state.md",
+    "core/docs/architecture/52-workspace-edit-backing-port.md",
+    "core/docs/architecture/53-backed-filesystem-serial-state.md",
+    "core/docs/architecture/56-captured-file-normalization.md",
+    "core/docs/architecture/59-root-qualification.md",
+    "core/docs/issues/303/README.md",
+    "core/docs/issues/303/01-architecture.md",
+    "core/docs/issues/303/02-base-overlay.md",
+    "core/docs/issues/303/03-mutation-hot-path.md",
+    "core/docs/issues/303/04-concurrency-commit.md",
+    "core/docs/issues/303/06-cluster-one-integration.md",
+    "core/docs/issues/303/07-implementation-validation.md",
+    "core/docs/issues/303/daemon-sqlite.md",
+    "core/docs/issues/303/workspace-api/commit.md",
+    "core/docs/issues/303/workspace-api/status.md",
+    "core/docs/issues/303/workspace-api/unmount.md",
+    "AGENTS.md",
+    "core/AGENTS.md"
+  ],
+  "historical_link_stub": "core/docs/architecture/49-indexed-operation-scratch.md",
+  "moved_description": "core/docs/architecture/49-indexed-operation-records.md",
+  "preserved": "Historical receipt targets, source pins, kernel/VFS dentry terminology, generic C1 heap scratch and native crypto/frame buffers."
+}

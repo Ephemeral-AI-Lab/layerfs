@@ -6,6 +6,19 @@ from check_product_boundary import production_files, unsafe_violations, violatio
 
 
 class ProductBoundaryTests(unittest.TestCase):
+    def test_overlay_terminology_distinguishes_records_from_temporary_buffers(self):
+        path = Path("core/crates/layerfs-overlay/src/contract/types.rs")
+        for source in ["pub struct Dentry {}", "pub struct ScratchRecord {}",
+                       "pub struct IndexedScope {}", "fn f() { StatementKind::Scratch; }"]:
+            self.assertTrue(violations(path, source))
+        self.assertFalse(violations(path, "pub struct DirectoryEntry {}\npub struct OperationRecord {}"))
+        self.assertFalse(violations(path, "fn encode() { let scratch = Vec::new(); } // temporary buffer"))
+        sql = Path("core/crates/layerfs-overlay/sql/schema.sql")
+        self.assertTrue(violations(sql, "CREATE TABLE scratch (value BLOB);"))
+        self.assertFalse(violations(sql, "CREATE TABLE operation_record (value BLOB);"))
+        bridge = Path("core/crates/layerfs-bridge/src/native/channel.rs")
+        self.assertFalse(violations(bridge, "pub struct ScratchBuffer;"))
+
     def test_daemon_store_is_provider_independent(self):
         path = Path("core/crates/layerfs-daemon/src/store/open.rs")
         for source in ["use layerfs_storage::Storage;", "use layerfs_history::HistoryCatalog;"]:

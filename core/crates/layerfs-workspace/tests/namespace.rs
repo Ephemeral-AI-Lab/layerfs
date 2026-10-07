@@ -48,7 +48,11 @@ fn create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically
     assert_eq!(root.metadata.mode, 0o1777);
     let state = b.overlay.state(b.route()).unwrap();
     assert_eq!(
-        (state.revision, state.dirty_inodes, state.dirty_names),
+        (
+            state.revision,
+            state.dirty_inodes,
+            state.dirty_directory_entries
+        ),
         (1, 2, 1)
     );
     let mut expected: Vec<String> = BASE_NAMES.iter().map(|n| n.to_string()).collect();
@@ -220,17 +224,25 @@ fn unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact() {
 
     // Created and removed inside one generation: no name row remains, and a
     // new directory's count returns to empty so it can be removed.
-    let names = b.overlay.state(b.route()).unwrap().dirty_names;
-    let dir = b.applied(mkdir(1, "scratch"), T1).unwrap();
+    let names = b.overlay.state(b.route()).unwrap().dirty_directory_entries;
+    let dir = b.applied(mkdir(1, "operation_record"), T1).unwrap();
     b.applied(create(dir.serial, "a"), T1);
     b.applied(create(dir.serial, "b"), T1);
-    assert_eq!(b.refused(rmdir(1, "scratch")), Refusal::NotEmpty);
+    assert_eq!(b.refused(rmdir(1, "operation_record")), Refusal::NotEmpty);
     b.applied(unlink(dir.serial, "a"), T1);
     b.applied(unlink(dir.serial, "b"), T1);
-    b.applied(rmdir(1, "scratch"), T1);
-    assert_eq!(b.overlay.state(b.route()).unwrap().dirty_names, names);
-    assert_eq!(b.overlay.dentry(b.route(), 1, b"scratch").unwrap(), None);
-    assert_eq!(b.lookup(1, "scratch"), None);
+    b.applied(rmdir(1, "operation_record"), T1);
+    assert_eq!(
+        b.overlay.state(b.route()).unwrap().dirty_directory_entries,
+        names
+    );
+    assert_eq!(
+        b.overlay
+            .directory_entry(b.route(), 1, b"operation_record")
+            .unwrap(),
+        None
+    );
+    assert_eq!(b.lookup(1, "operation_record"), None);
     // A removed name can be created again and is a different inode.
     let again = b.applied(mkdir(1, ".git"), T1).unwrap();
     assert_ne!(again.serial, 4);
@@ -301,7 +313,10 @@ fn rename_moves_replaces_and_refuses_cycles_without_descendant_rows() {
     let after = b.overlay.state(b.route()).unwrap();
     // The rows written are the names, the parent and the replaced inode only.
     assert_eq!(after.dirty_inodes, rows.dirty_inodes);
-    assert_eq!(after.dirty_names, rows.dirty_names + 1);
+    assert_eq!(
+        after.dirty_directory_entries,
+        rows.dirty_directory_entries + 1
+    );
 
     // A file crosses directories without ancestry evidence.
     b.applied(rename((4, "index"), (5, "index2"), true, None), T2);

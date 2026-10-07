@@ -64,21 +64,21 @@ impl OverlayRead for Port<'_> {
     ) -> WorkspaceResult<Option<layerfs_overlay::Inode>> {
         OverlayRead::inode(&self.0.overlay, source, serial)
     }
-    fn dentry(
+    fn directory_entry(
         &self,
         source: layerfs_overlay::BaseSource,
         parent: u64,
         name: &[u8],
-    ) -> WorkspaceResult<Option<layerfs_overlay::Dentry>> {
-        OverlayRead::dentry(&self.0.overlay, source, parent, name)
+    ) -> WorkspaceResult<Option<layerfs_overlay::DirectoryEntry>> {
+        OverlayRead::directory_entry(&self.0.overlay, source, parent, name)
     }
-    fn names(
+    fn directory_entries(
         &self,
         source: layerfs_overlay::BaseSource,
         parent: u64,
         after: Option<&[u8]>,
-    ) -> WorkspaceResult<layerfs_overlay::NameWindow> {
-        OverlayRead::names(&self.0.overlay, source, parent, after)
+    ) -> WorkspaceResult<layerfs_overlay::DirectoryEntryWindow> {
+        OverlayRead::directory_entries(&self.0.overlay, source, parent, after)
     }
     fn read(
         &self,

@@ -1,0 +1,155 @@
+# {"timestamp": "2026-10-07T08:10:31.582399+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-overlay", "-p", "layerfs-workspace", "-p", "layerfs-daemon", "--all-targets", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "b68d50190477294dbd9d22df9631b99334be0aeaabbda1264f21185b53f231b8", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0428]: the name `DirectoryEntries` is defined multiple times
+   --> crates/layerfs-daemon/src/overlay/commands.rs:238:5
+    |
+234 |     DirectoryEntries(Vec<DirectoryEntry>),
+    |     ------------------------------------- previous definition of the type `DirectoryEntries` here
+...
+238 |     DirectoryEntries(DirectoryEntryWindow),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `DirectoryEntries` redefined here
+    |
+    = note: `DirectoryEntries` must be defined only once in the type namespace of this enum
+
+error[E0599]: no variant or associated item named `DirectoryEntriespace` found for enum `commands::Command` in the current scope
+   --> crates/layerfs-daemon/src/overlay/commands.rs:300:42
+    |
+23  | pub enum Command {
+    | ---------------- variant or associated item `DirectoryEntriespace` not found for this enum
+...
+300 |             Self::Publish { .. } | Self::DirectoryEntriespace(_) => ServiceClass::Mutation,
+    |                                          ^^^^^^^^^^^^^^^^^^^^ variant or associated item not found in `Command`
+
+error[E0599]: no variant or associated item named `DirectoryEntriespace` found for enum `commands::Command` in the current scope
+   --> crates/layerfs-daemon/src/overlay/commands.rs:367:19
+    |
+23  | pub enum Command {
+    | ---------------- variant or associated item `DirectoryEntriespace` not found for this enum
+...
+367 |             Self::DirectoryEntriespace(job) => (
+    |                   ^^^^^^^^^^^^^^^^^^^^ variant or associated item not found in `Command`
+
+error[E0599]: no variant or associated item named `DirectoryEntriespace` found for enum `commands::Command` in the current scope
+   --> crates/layerfs-daemon/src/overlay/commands.rs:395:22
+    |
+23  | pub enum Command {
+    | ---------------- variant or associated item `DirectoryEntriespace` not found for this enum
+...
+395 |         if let Self::DirectoryEntriespace(job) = self {
+    |                      ^^^^^^^^^^^^^^^^^^^^ variant or associated item not found in `Command`
+
+error[E0599]: no variant or associated item named `DirectoryEntriespace` found for enum `commands::Response` in the current scope
+   --> crates/layerfs-daemon/src/overlay/commands.rs:403:32
+    |
+212 | pub enum Response {
+    | ----------------- variant or associated item `DirectoryEntriespace` not found for this enum
+...
+403 |                 .map(Response::DirectoryEntriespace)
+    |                                ^^^^^^^^^^^^^^^^^^^^ variant or associated item not found in `Response`
+    |
+help: there is a variant with a similar name
+    |
+403 |                 .map(Response::DirectoryEntries(/* Vec<layerfs_overlay::DirectoryEntry> */))
+    |                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0599]: no variant or associated item named `DirectoryEntriespace` found for enum `commands::Command` in the current scope
+   --> crates/layerfs-daemon/src/overlay/commands.rs:436:70
+    |
+23  | pub enum Command {
+    | ---------------- variant or associated item `DirectoryEntriespace` not found for this enum
+...
+436 |             Self::Open { .. } | Self::InstallPrepared { .. } | Self::DirectoryEntriespace(_) => {
+    |                                                                      ^^^^^^^^^^^^^^^^^^^^ variant or associated item not found in `Command`
+
+error[E0631]: type mismatch in function arguments
+   --> crates/layerfs-daemon/src/overlay/commands.rs:687:26
+    |
+234 |     DirectoryEntries(Vec<DirectoryEntry>),
+    |     ---------------- found signature defined here
+...
+687 |                     .map(Response::DirectoryEntries)
+    |                      --- ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected due to this
+    |                      |
+    |                      required by a bound introduced by this call
+    |
+    = note: expected function signature `fn(DirectoryEntryWindow) -> _`
+               found function signature `fn(Vec<layerfs_overlay::DirectoryEntry>) -> _`
+note: required by a bound in `std::result::Result::<T, E>::map`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:771:5
+help: consider wrapping the function in a closure
+    |
+687 |                     .map(|arg0: DirectoryEntryWindow| Response::DirectoryEntries(/* Vec<layerfs_overlay::DirectoryEntry> */))
+    |                          ++++++++++++++++++++++++++++                           ++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0308]: mismatched types
+  --> crates/layerfs-daemon/src/overlay/read_port.rs:77:57
+   |
+77 |             Ok(Response::DirectoryEntries(value)) => Ok(value.clone()),
+   |                                                      -- ^^^^^^^^^^^^^ expected `DirectoryEntryWindow`, found `Vec<DirectoryEntry>`
+   |                                                      |
+   |                                                      arguments to this enum variant are incorrect
+   |
+   = note: expected struct `DirectoryEntryWindow`
+              found struct `Vec<layerfs_overlay::DirectoryEntry>`
+help: the type constructed contains `Vec<layerfs_overlay::DirectoryEntry>` due to the type of the argument passed
+  --> crates/layerfs-daemon/src/overlay/read_port.rs:77:54
+   |
+77 |             Ok(Response::DirectoryEntries(value)) => Ok(value.clone()),
+   |                                                      ^^^-------------^
+   |                                                         |
+   |                                                         this argument influences the type of `Ok`
+note: tuple variant defined here
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:532:5
+
+error[E0599]: no variant or associated item named `DirectoryEntriespace` found for enum `commands::Response` in the current scope
+   --> crates/layerfs-daemon/src/overlay/read_port.rs:133:26
+    |
+133 |             Ok(Response::DirectoryEntriespace(outcome)) => Ok(outcome.clone()),
+    |                          ^^^^^^^^^^^^^^^^^^^^ variant or associated item not found in `Response`
+    |
+   ::: crates/layerfs-daemon/src/overlay/commands.rs:212:1
+    |
+212 | pub enum Response {
+    | ----------------- variant or associated item `DirectoryEntriespace` not found for this enum
+    |
+help: there is a variant with a similar name
+    |
+133 |             Ok(Response::DirectoryEntries(outcome)) => Ok(outcome.clone()),
+    |                          ~~~~~~~~~~~~~~~~
+
+error[E0004]: non-exhaustive patterns: `&commands::Response::DirectoryEntries(_)` not covered
+   --> crates/layerfs-daemon/src/overlay/commands.rs:211:10
+    |
+211 | #[derive(Debug)]
+    |          ^^^^^ pattern `&commands::Response::DirectoryEntries(_)` not covered
+    |
+note: `commands::Response` defined here
+   --> crates/layerfs-daemon/src/overlay/commands.rs:212:10
+    |
+212 | pub enum Response {
+    |          ^^^^^^^^
+...
+238 |     DirectoryEntries(DirectoryEntryWindow),
+    |     ---------------- not covered
+    = note: the matched value is of type `&commands::Response`
+    = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+Some errors have detailed explanations: E0004, E0308, E0428, E0599, E0631.
+For more information about an error, try `rustc --explain E0004`.
+error: could not compile `layerfs-daemon` (lib) due to 10 previous errors
+warning: build failed, waiting for other jobs to finish...
+
+# exit=101

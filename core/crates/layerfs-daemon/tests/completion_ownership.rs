@@ -4,8 +4,8 @@ use layerfs_daemon::{
     Command, Completion, Owner, OwnerClient, OwnerConfig, OwnerError, OwnerWork, Pending, Response,
 };
 use layerfs_overlay::{
-    AllocationWork, DatabaseWork, Inode, InodeKind, Lease, LeaseKind, PayloadWork, ProfileConfig,
-    Publication, Route, ScratchRecord, StatementKind,
+    AllocationWork, DatabaseWork, Inode, InodeKind, Lease, LeaseKind, OperationRecord, PayloadWork,
+    ProfileConfig, Publication, Route, StatementKind,
 };
 use std::{
     path::PathBuf,
@@ -549,9 +549,9 @@ fn every_configured_lifecycle_slot_is_admitted_while_ordinary_credit_is_saturate
         let route = routes[turn % routes.len()];
         match client.try_submit(
             Some(route),
-            Command::PutScratch {
+            Command::PutOperationRecord {
                 operation: 1,
-                record: ScratchRecord {
+                record: OperationRecord {
                     kind: 1,
                     key: turn as u64,
                     value: Vec::with_capacity(capacity),

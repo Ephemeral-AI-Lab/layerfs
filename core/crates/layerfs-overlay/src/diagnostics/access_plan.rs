@@ -47,7 +47,7 @@ impl Overlay {
         )
     }
     /// Plan for the actual active name seek, including installed-floor exclusion.
-    pub fn explain_dentry(
+    pub fn explain_directory_entry(
         &self,
         route: Route,
         parent: u64,
@@ -56,7 +56,7 @@ impl Overlay {
         let state = self.live(route)?;
         self.query(
             StatementKind::Explain,
-            &format!("EXPLAIN QUERY PLAN {}", sql::DENTRY_LOOKUP),
+            &format!("EXPLAIN QUERY PLAN {}", sql::DIRECTORY_ENTRY_LOOKUP),
             &[
                 &route.ns,
                 &integer(parent)?,
@@ -85,8 +85,8 @@ impl Overlay {
             |row| row.get(3),
         )
     }
-    /// Plan for the real operation-owned scratch keyset window.
-    pub fn explain_scratch(
+    /// Plan for the real operation-owned operation record keyset window.
+    pub fn explain_operation_record(
         &self,
         route: Route,
         operation: u64,
@@ -96,7 +96,7 @@ impl Overlay {
         self.operation(route, operation)?;
         self.query(
             StatementKind::Explain,
-            &format!("EXPLAIN QUERY PLAN {}", sql::SCRATCH_PAGE),
+            &format!("EXPLAIN QUERY PLAN {}", sql::OPERATION_RECORD_PAGE),
             &[
                 &route.ns,
                 &integer(operation)?,

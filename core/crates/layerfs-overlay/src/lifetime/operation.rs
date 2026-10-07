@@ -1,8 +1,8 @@
-//! Engine-minted operation ownership and independent bounded scratch custody.
+//! Engine-minted operation ownership and independent bounded operation_record custody.
 use crate::{
     db::{integer, unsigned},
-    OperationOwner, Overlay, OverlayError, OverlayResult, Route, ScratchRecord, StatementKind,
-    SCRATCH_BYTES,
+    OperationOwner, OperationRecord, Overlay, OverlayError, OverlayResult, Route, StatementKind,
+    OPERATION_RECORD_BYTES,
 };
 impl Overlay {
     /// One acquisition attempt. Query retained custody by request after a lost reply.
@@ -66,21 +66,21 @@ impl Overlay {
         Ok(())
     }
     /// Existing processing custody remains readable after logical close; new
-    /// scratch mutation refuses. No process exit or Drop implies release.
-    pub fn put_owned_scratch(
+    /// operation_record mutation refuses. No process exit or Drop implies release.
+    pub fn put_owned_operation_record(
         &self,
         owner: OperationOwner,
-        record: &ScratchRecord,
+        record: &OperationRecord,
     ) -> OverlayResult<()> {
-        if record.value.len() > SCRATCH_BYTES {
-            return Err(OverlayError::Invalid("scratch window"));
+        if record.value.len() > OPERATION_RECORD_BYTES {
+            return Err(OverlayError::Invalid("operation_record window"));
         }
         self.atomic(|| {
             self.live(owner.route)?;
             self.check_operation(owner)?;
             self.execute(
-                StatementKind::Scratch,
-                "INSERT INTO owned_scratch VALUES(?1,?2,?3,?4,?5)
+                StatementKind::OperationRecord,
+                "INSERT INTO owned_operation_record VALUES(?1,?2,?3,?4,?5)
                 ON CONFLICT(ns,operation,kind,key) DO UPDATE SET value=excluded.value",
                 &[
                     &owner.route.ns,
@@ -94,16 +94,16 @@ impl Overlay {
             Ok(())
         })
     }
-    pub fn owned_scratch_page(
+    pub fn owned_operation_record_page(
         &self,
         owner: OperationOwner,
         kind: u32,
         after: Option<u64>,
-    ) -> OverlayResult<Vec<ScratchRecord>> {
+    ) -> OverlayResult<Vec<OperationRecord>> {
         self.check_operation(owner)?;
         self.query(
-            StatementKind::Scratch,
-            "SELECT kind,key,value FROM owned_scratch
+            StatementKind::OperationRecord,
+            "SELECT kind,key,value FROM owned_operation_record
             WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64",
             &[
                 &owner.route.ns,
@@ -113,7 +113,7 @@ impl Overlay {
             ],
             32,
             |r| {
-                Ok(ScratchRecord {
+                Ok(OperationRecord {
                     kind: r.get(0)?,
                     key: unsigned(r, 1)?,
                     value: r.get(2)?,
@@ -121,7 +121,7 @@ impl Overlay {
             },
         )
     }
-    /// Exact last-consumer fence. Cleanup owns scratch independently afterwards.
+    /// Exact last-consumer fence. Cleanup owns operation_record independently afterwards.
     pub fn release_operation(&self, owner: OperationOwner) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
             self.check_operation(owner)?;
@@ -139,13 +139,13 @@ impl Overlay {
             )?;
             self.enqueue(
                 owner.route.ns,
-                crate::maintenance::SCRATCH,
+                crate::maintenance::OPERATION_RECORD,
                 integer(owner.owner)?,
                 1,
             )?;
             self.enqueue(
                 owner.route.ns,
-                crate::maintenance::SCRATCH,
+                crate::maintenance::OPERATION_RECORD,
                 integer(owner.owner)?,
                 2,
             )?;

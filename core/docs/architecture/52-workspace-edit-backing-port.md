@@ -1,5 +1,9 @@
 # Workspace edit-record adapter
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > Status: source implementation following local checkpoint
 > `889836c446507c726a53f0ccf1e4418bd4d0946f`; component checks are recorded in the
 > [joint checkpoint](../issues/307/K1-BACKED-STREAM-SUPERVISOR-20261007.md).
@@ -9,7 +13,7 @@
 Content defines `IndexedEditBacking` and owns every raw record meaning, codec,
 reference count, detached/resolved key and emission acknowledgement. Workspace's
 `IndexedEditRecords` binds an explicit engine-minted OperationOwner and full
-unsigned file scope to an existing `OverlayScratch` provider. It acquires no
+unsigned file scope to an existing `OverlayOperationRecords` provider. It acquires no
 owner, performs no root acquisition, opens no database and releases no operation
 on Drop. Captured file/reader/root ownership and actual Save/transport fences
 remain with the caller. The caller transfers `EditBackingCustody` explicitly and
@@ -17,7 +21,7 @@ releases the engine owner only after those obligations are known complete.
 
 The neutral service boundary belongs in Workspace because Workspace cannot
 import Daemon. Direct Overlay and Daemon OwnerClient implement it. Daemon submits
-one identical typed Scratch command per method, preserves the original
+one identical typed OperationRecord command per method, preserves the original
 unattempted command/cause or attempted Completion, and uses the existing fair
 owner/credit class. No provider or Content I/O runs under the SQL owner.
 
@@ -54,7 +58,7 @@ also charges the actual converted outer spare capacity and bounded deciding
 reply. The direct owned service port checks its outer capacity too; the underlying
 borrowed Overlay API keeps its separate caller-owned input scope.
 
-The `OverlayScratch` result carries source-scoped service-return copy data.
+The `OverlayOperationRecords` result carries source-scoped service-return copy data.
 OwnerClient clones get/key/NotApplied windows while the original completion is
 owned; the original deciding Completion remains held on refusal. Direct Overlay
 moves successful SQL values, but clones a deciding value to retain its original
@@ -79,9 +83,9 @@ real-record integration uses public Content construction/edit/read APIs plus a
 real Daemon Overlay provider; its byte oracle independently applies the edits.
 Source/consumer objects in that proof are an external memory fixture, so it is
 no authenticated runtime, Commit or phase-cache performance qualification.
-Scratch persists after adapter Drop and becomes automatically reclaimable only
+OperationRecord persists after adapter Drop and becomes automatically reclaimable only
 after explicit last-owner release. Existing schema15/accounting/cleanup scope
-remains the [indexed operation provider](49-indexed-operation-scratch.md).
+remains the [indexed operation provider](49-indexed-operation-records.md).
 
 `IndexedConstructionRecords`, `ConstructionBackingCustody` and
 `ConstructionBackingWork` are neutral aliases of the same adapter and custody
@@ -92,7 +96,7 @@ custody through existing fair Daemon Read jobs; it still requires the owning
 normalizer to retain the first failure and fence all owners before release.
 
 The additive non-destructive `keys_after` forwards to one exact scoped
-`scratch_keys_after` job. It uses the same ready/observe boundary and source-scoped
+`operation_record_keys_after` job. It uses the same ready/observe boundary and source-scoped
 copy counters; an unavailable old-provider capability is retained as its original
 typed Workspace error, with no first-key or point-query substitute. A sealed pass
 retains all rows. Later membership changes require a new phase starting at None,

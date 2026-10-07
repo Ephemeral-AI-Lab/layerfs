@@ -44,7 +44,7 @@ nor qualification. Preserve source pins, limits, failures and open prerequisites
   root without a whole-tree scan/copy/materialization, dependency restoration or
   new database. Demand-loaded metadata/content still pay real I/O.
 - One local overlay SQLite database belongs to each daemon and is initialized
-  before readiness. Workspace metadata, physical payload, scratch and custody
+  before readiness. Workspace metadata, physical payload, operation records and custody
   are namespaced within it. One SQLite writer does not serialize whole Execs or
   Commits; use short atomic jobs and bounded fair service.
 - Commit captures the shared locally published Workspace frontier, potentially

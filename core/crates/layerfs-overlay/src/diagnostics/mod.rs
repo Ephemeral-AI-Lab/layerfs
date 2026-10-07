@@ -5,7 +5,7 @@ pub(crate) mod source_plan;
 pub(crate) mod startup;
 
 mod captured_runs;
-mod indexed_scratch_plan;
+mod indexed_operation_record_plan;
 mod lifetime_plan;
 
 pub(crate) mod payload;

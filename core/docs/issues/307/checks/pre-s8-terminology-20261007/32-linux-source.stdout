@@ -1,0 +1,13 @@
+# {"timestamp": "2026-10-07T08:24:35.010818+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-names-source", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/source-e0890071018a2f0d; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/source-e0890071018a2f0d --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "2d25955525a09ae4db1e83b3f6e5f6cd37fb77b66691db305a12332e72efcc12", "source_parent": "a40acd67348103942e482c5cad788263e78bee12", "wall_stop": "specified in command; build is not test execution"}
+97b98235bf93924d29e5cdbb7c58c7f781989592b76fda7c64921cbc0109cd90  core/target/cluster2-linux/debug/deps/source-e0890071018a2f0d
+
+running 4 tests
+test ordered_source_directory_entry_windows_visit_only_parent_and_generation_with_runtime_evidence ... ok
+test source_changes_have_finite_plans_and_correlated_runtime_work ... ok
+test source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows ... ok
+test source_retains_selected_base_and_exact_close_custody_without_a_generation_pin ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+# exit=0

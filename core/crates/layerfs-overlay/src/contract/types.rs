@@ -6,8 +6,8 @@ pub const CELL_BYTES: usize = 4096;
 pub const MASK_BYTES: usize = CELL_BYTES / 8;
 /// Maximum rows in one owner service window, not a total namespace limit.
 pub const PAGE_ROWS: usize = 64;
-/// Maximum bytes in one scratch record, not a total operation limit.
-pub const SCRATCH_BYTES: usize = 65_536;
+/// Maximum bytes in one operation_record record, not a total operation limit.
+pub const OPERATION_RECORD_BYTES: usize = 65_536;
 /// Largest byte window of one write job; larger requests arrive as several.
 pub const WRITE_WINDOW: usize = 128 * 1024;
 /// Largest byte window of one local read plan.
@@ -15,7 +15,7 @@ pub const READ_WINDOW: usize = 128 * 1024;
 /// Maximum changed inodes in one compound namespace job, not a namespace limit.
 pub const COMPOUND_INODES: usize = 4;
 /// Maximum changed name bindings in one compound namespace job.
-pub const COMPOUND_NAMES: usize = 2;
+pub const COMPOUND_DIRECTORY_ENTRIES: usize = 2;
 
 /// Incarnation-qualified routing capability issued by this daemon engine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -71,7 +71,7 @@ pub struct Inode {
 }
 /// One final name binding; None is a whiteout, names remain binary in SQL.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Dentry {
+pub struct DirectoryEntry {
     /// Whether the immediately lower view binds this name.
     pub inherited: bool,
     pub parent: u64,
@@ -93,7 +93,7 @@ pub enum Binding {
 }
 /// One changed name key of a compound job.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NameChange {
+pub struct DirectoryEntryChange {
     pub parent: u64,
     pub name: Vec<u8>,
     pub binding: Binding,
@@ -107,7 +107,7 @@ pub struct Changes {
     /// Exact descriptor authority for mutations of independently owned orphans.
     pub open: Option<crate::OpenFile>,
     pub inodes: Vec<Inode>,
-    pub names: Vec<NameChange>,
+    pub directory_entries: Vec<DirectoryEntryChange>,
     /// One payload cell of a changed inode, published in the same transaction.
     pub cell: Option<(u64, Cell)>,
     /// One byte window written into a changed regular file, same transaction.
@@ -195,7 +195,7 @@ pub struct WorkspaceState {
     pub revision: i64,
     pub base_root: [u8; 32],
     pub dirty_inodes: u64,
-    pub dirty_names: u64,
+    pub dirty_directory_entries: u64,
     pub closed: bool,
     /// Maintained exact pending base-source windows, not a namespace scan.
     pub base_readers: u64,
@@ -216,12 +216,12 @@ pub struct BaseSource {
 /// Two bounded ordered local name inputs from one owner job. A capture can
 /// change membership between jobs, never within this returned window.
 #[derive(Clone, Debug)]
-pub struct NameWindow {
+pub struct DirectoryEntryWindow {
     pub source: BaseSource,
     pub parent: u64,
     pub parent_inode: Option<Inode>,
-    pub active: Vec<Dentry>,
-    pub captured: Vec<Dentry>,
+    pub active: Vec<DirectoryEntry>,
+    pub captured: Vec<DirectoryEntry>,
 }
 impl BaseSource {
     pub const fn route(self) -> Route {
@@ -262,7 +262,7 @@ pub struct Lease {
 }
 /// One operation-keyed construction record.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ScratchRecord {
+pub struct OperationRecord {
     pub kind: u32,
     pub key: u64,
     pub value: Vec<u8>,

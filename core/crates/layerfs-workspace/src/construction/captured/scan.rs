@@ -1,6 +1,6 @@
 //! One preserved forward metadata cursor and one pending bounded window/gap.
 use super::state::Shared;
-use crate::{OverlayCapturedRuns, OverlayScratch};
+use crate::{OverlayCapturedRuns, OverlayOperationRecords};
 use layerfs_content::{ContentError, ContentResult, FileRun};
 use layerfs_overlay::{
     CapturedGap, CapturedReader, CapturedRunCursor, CapturedRunStep, InodeKind, LocalRead,
@@ -53,7 +53,7 @@ impl Scan {
             Pending::Window(read) => Some((read.offset, read.offset + read.data.len() as u64)),
         }
     }
-    fn ensure<P: OverlayCapturedRuns + OverlayScratch + ?Sized>(
+    fn ensure<P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized>(
         &mut self,
         provider: &P,
         shared: &Shared<'_, P>,
@@ -165,7 +165,7 @@ impl Scan {
             }
         }
     }
-    pub fn span<P: OverlayCapturedRuns + OverlayScratch + ?Sized>(
+    pub fn span<P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized>(
         &mut self,
         provider: &P,
         shared: &Shared<'_, P>,
@@ -205,7 +205,7 @@ impl Scan {
             }
         }
     }
-    pub fn read<P: OverlayCapturedRuns + OverlayScratch + ?Sized>(
+    pub fn read<P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized>(
         &mut self,
         provider: &P,
         shared: &Shared<'_, P>,

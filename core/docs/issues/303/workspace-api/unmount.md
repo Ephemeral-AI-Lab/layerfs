@@ -17,7 +17,7 @@ contracts. There is no required separate `workspace_api.close`.
 
 Successful `workspace_api.unmount` detaches the mount, closes logical Workspace
 ownership, invalidates its live incarnation/capabilities and automatically owns
-cleanup of its metadata, physical payload, scratch, orphan and reclamation state.
+cleanup of its metadata, physical payload, operation records, orphan and reclamation state.
 It discards local uncommitted changes. It never implicitly publishes a Commit.
 
 This is explicit final teardown in both per-tool-call and per-task modes.
@@ -57,7 +57,7 @@ shrunk. The daemon database and other mounted Workspaces remain live.
 ### 1.1 Logical retirement versus SQL deletion
 
 Successful unmount immediately closes logical ownership after its activity/native
-fences. Inode/dentry/payload rows need not all be deleted before return. The daemon
+fences. Inode/directory entry/payload rows need not all be deleted before return. The daemon
 enqueues their cleanup and continues servicing it even when no further tool calls
 arrive; it is not triggered only by another mutation or a manual API. No intentional
 TTL retains unreachable rows, and no unmeasured cleanup-time promise is made.
@@ -154,7 +154,7 @@ for another Workspace through a synchronous row deletion or maintenance lock.
  result <------ exact terminal success
                                                               |
                                                      fair background cleanup
-                                                     metadata / payload / scratch
+                                                     metadata / payload / operation records
                                                      orphan leases / retired state
                                                               |
                                                      debt converges to reclaimed
@@ -245,7 +245,7 @@ lifecycle envelope cannot silently kill commands.
  no row count / payload bytes hidden merely because cleanup is background
 ```
 
-Let N be retained metadata rows and B local payload/scratch bytes. Physical
+Let N be retained metadata rows and B local payload/operation records bytes. Physical
 cleanup necessarily processes attributable retained state; total work can grow
 with N/B. Required foreground terminal work is lifecycle/native fencing and a
 bounded logical ownership transition, not a scan/deletion of all N rows and B
@@ -273,7 +273,7 @@ no guessed deletion path in these APIs.
 | --- | --- | --- |
 | U1 | Full tree after one command and exact Commit | Native detach + logical close; no separate close; next mount sees history |
 | U2 | Many tiny dirty files/wide directories | Foreground unmount does not scan/delete all rows; actual cleanup debt tracked |
-| U3 | Big files, many edits, large scratch and old captured state | Payload/scratch ownership fenced; physical reclamation windowed |
+| U3 | Big files, many edits, large operation records and old captured state | Payload/operation records ownership fenced; physical reclamation windowed |
 | U4 | Continuous logger/open-unlinked descriptor | Normal Busy leaves content live; force releases/fences before reclaim |
 | U5 | Unmount races Exec/create/Commit | Exact admission winner and no late stale mutation into another namespace |
 | U6 | Simultaneous Workspaces; one unmounts large state while others Commit/write | Fair SQL/runtime/dispatch progress; no global teardown lock |

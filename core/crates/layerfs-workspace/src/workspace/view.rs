@@ -120,7 +120,7 @@ impl SourceView {
     ) -> WorkspaceResult<ViewStat> {
         let local = overlay.inode(self.source, parent)?;
         let inherits = self.inherits(parent, local.as_ref())?;
-        if let Some(local) = overlay.dentry(self.source, parent, name.as_bytes())? {
+        if let Some(local) = overlay.directory_entry(self.source, parent, name.as_bytes())? {
             return self.stat(overlay, local.serial.ok_or(ContentError::PathNotFound)?);
         }
         if !inherits {
@@ -131,7 +131,7 @@ impl SourceView {
             Err(ContentError::PathNotFound) => None,
             Err(error) => return Err(error.into()),
         };
-        let serial = match overlay.dentry(self.source, parent, name.as_bytes())? {
+        let serial = match overlay.directory_entry(self.source, parent, name.as_bytes())? {
             Some(local) => local.serial,
             None => inherited,
         }

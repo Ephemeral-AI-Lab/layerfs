@@ -7,7 +7,9 @@ use layerfs_content::{
 use layerfs_daemon::{
     Command, Completion, Owner, OwnerClient, OwnerConfig, OwnerError, Pending, Response,
 };
-use layerfs_overlay::{IndexedApply, IndexedScope, ProfileConfig, Route};
+use layerfs_overlay::{
+    IndexedOperationRecordApply, IndexedOperationRecordScope, ProfileConfig, Route,
+};
 use layerfs_workspace::{EditInputRefusal, IndexedEditRecords, WorkspaceError};
 use std::{
     error::Error,
@@ -51,7 +53,7 @@ fn job(client: &OwnerClient, route: Option<Route>, command: Command) -> Completi
             .unwrap_or_else(|(cause, command)| panic!("{cause:?}: {command:?}")),
     )
 }
-fn scope(client: &OwnerClient, tag: u8, file_scope: u64) -> IndexedScope {
+fn scope(client: &OwnerClient, tag: u8, file_scope: u64) -> IndexedOperationRecordScope {
     let opened = job(
         client,
         None,
@@ -74,7 +76,7 @@ fn scope(client: &OwnerClient, tag: u8, file_scope: u64) -> IndexedScope {
         Ok(Response::Operation(Some(owner))) => *owner,
         v => panic!("{v:?}"),
     };
-    IndexedScope { owner, file_scope }
+    IndexedOperationRecordScope { owner, file_scope }
 }
 fn key(kind: u32, n: u64) -> EditRecordKey {
     let mut key = [0; 32];
@@ -88,7 +90,7 @@ fn put(key: EditRecordKey, value: Vec<u8>) -> EditRecordChange {
         value: Some(value),
     }
 }
-fn release(client: &OwnerClient, scope: IndexedScope) {
+fn release(client: &OwnerClient, scope: IndexedOperationRecordScope) {
     let done = job(
         client,
         Some(scope.owner.route()),
@@ -140,8 +142,10 @@ fn terminal_refusal_keeps_original_completion_and_other_scope_progresses() {
         .expect("original attempted Completion retained");
     assert!(matches!(
         done.result(),
-        Ok(Response::IndexedScratch(
-            layerfs_daemon::IndexedScratchReply::Applied(IndexedApply::NotApplied { index: 0, .. })
+        Ok(Response::IndexedOperationRecord(
+            layerfs_daemon::IndexedOperationRecordReply::Applied(
+                IndexedOperationRecordApply::NotApplied { index: 0, .. }
+            )
         ))
     ));
     assert!(done.work().sql.total().vm_steps > 0);
@@ -320,7 +324,7 @@ fn canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup()
     match before.result() {
         Ok(Response::Resources(work)) => {
             assert_eq!(work.counts.owner_rows, 1);
-            assert!(work.counts.scratch_rows > 0);
+            assert!(work.counts.operation_record_rows > 0);
         }
         v => panic!("{v:?}"),
     }
@@ -337,7 +341,7 @@ fn canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup()
             Ok(Response::Resources(work)) => work,
             _ => panic!("{done:?}"),
         };
-        if work.counts.scratch_rows == 0 {
+        if work.counts.operation_record_rows == 0 {
             assert_eq!(work.counts.owner_rows, 0);
             break;
         }
@@ -354,12 +358,17 @@ fn canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup()
 
 #[test]
 fn direct_overlay_port_keeps_deciding_and_unadmitted_inputs_without_owner_release() {
-    use layerfs_overlay::{ExpectedValue, IndexedChange, IndexedKey, Overlay};
-    use layerfs_workspace::{OverlayScratch, ScratchInputRefusal, ScratchRefusal};
+    use layerfs_overlay::{
+        IndexedOperationRecordChange, IndexedOperationRecordKey, OperationRecordExpectedValue,
+        Overlay,
+    };
+    use layerfs_workspace::{
+        OperationRecordInputRefusal, OperationRecordRefusal, OverlayOperationRecords,
+    };
     let temp = Temp::new();
     let db = Overlay::create(&temp.0.join("db"), ProfileConfig::default()).unwrap();
     let route = db.open_workspace([41; 32], [3; 32]).unwrap();
-    let scope = IndexedScope {
+    let scope = IndexedOperationRecordScope {
         owner: db.acquire_operation(route, 1).unwrap(),
         file_scope: u64::MAX,
     };
@@ -386,35 +395,37 @@ fn direct_overlay_port_keeps_deciding_and_unadmitted_inputs_without_owner_releas
         .unwrap()
         .source()
         .unwrap()
-        .downcast_ref::<ScratchRefusal>()
+        .downcast_ref::<OperationRecordRefusal>()
         .unwrap();
     assert!(
-        matches!(&original.0,IndexedApply::NotApplied { actual:Some(value),.. } if value==&vec![6;4096])
+        matches!(&original.0,IndexedOperationRecordApply::NotApplied { actual:Some(value),.. } if value==&vec![6;4096])
     );
     assert_eq!(adapter.work().copied_reply_bytes, 4096);
     let calls = adapter.work().calls;
     assert!(adapter.get(key(1, 0)).is_err());
     assert_eq!(adapter.work().calls, calls);
     drop(adapter.into_custody());
-    let raw_key = IndexedKey {
+    let raw_key = IndexedOperationRecordKey {
         kind: 1,
         key: key(1, 1).key,
     };
     let mut excess = Vec::with_capacity(2048);
-    excess.push(IndexedChange {
+    excess.push(IndexedOperationRecordChange {
         key: raw_key,
-        expected: ExpectedValue::Missing,
+        expected: OperationRecordExpectedValue::Missing,
         value: Some(vec![9]),
     });
-    let error = db.scratch_apply(scope, excess).unwrap_err();
+    let error = db.operation_record_apply(scope, excess).unwrap_err();
     let original = error
         .source()
         .unwrap()
-        .downcast_ref::<ScratchInputRefusal>()
+        .downcast_ref::<OperationRecordInputRefusal>()
         .unwrap();
     assert_eq!(original.changes.capacity(), 2048);
     assert_eq!(original.changes[0].value, Some(vec![9]));
-    assert!(!db.indexed_scratch_contains(scope, raw_key).unwrap());
+    assert!(!db
+        .indexed_operation_record_contains(scope, raw_key)
+        .unwrap());
     assert_eq!(db.resources(Some(route)).unwrap().counts.owner_rows, 1);
     db.release_operation(scope.owner).unwrap();
     assert_eq!(db.resources(Some(route)).unwrap().counts.owner_rows, 0);

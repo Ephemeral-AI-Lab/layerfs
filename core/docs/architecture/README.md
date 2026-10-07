@@ -377,7 +377,7 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 - [Immutable payload segments](45-immutable-payload-segments.md): withdrawn schema7/10
   experiment retained as historical source/design evidence; active provider schemas1–6.
 
-- [Indexed operation scratch](49-indexed-operation-scratch.md): bounded neutral
+- [Indexed operation records](49-indexed-operation-records.md): bounded neutral
   records, guarded atomic changes, credited Daemon jobs and last-owner cleanup
   in the existing local database. Its optional no-exclusion key window preserves
   every key identity.

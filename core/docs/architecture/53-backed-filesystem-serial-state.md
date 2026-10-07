@@ -1,5 +1,9 @@
 # Backed filesystem serial state
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > Status: additive source following checkpoint `dcdf527584675849e7839ca4118d71ac9aa4b193`.
 > The preceding ten serial-state public cases and affected host/Linux checks pass
 > in the [component checkpoint](../issues/307/SPARSE-SERIAL-PROGRESS-20261007.md).
@@ -26,7 +30,7 @@ mutable `IndexedConstructionBacking`, optional existing `OrderingBacking`, and
 coarse phases for its timed form. `IndexedConstructionBacking` and the
 `ConstructionRecord*` names are aliases of the existing edit record protocol,
 not another trait or wrapper. Workspace's `IndexedConstructionRecords` is the
-same owning adapter over `OverlayScratch`; OwnerClient supplies the existing
+same owning adapter over `OverlayOperationRecords`; OwnerClient supplies the existing
 credited short jobs in the daemon's existing database.
 
 The caller binds that adapter to an actual OperationOwner and a distinct opaque
@@ -78,11 +82,11 @@ The existing parent prepass keeps its meaning: a declared-new parent is dropped
 when no stated binding holds it. This is not a root-reachability certificate.
 Backed dropped lookups use the real sealed header/fresh point facts to determine
 which parent record must exist, then read that exact record. Its scalar count
-tracks transitions; it does not scan/count an entire scratch table.
+tracks transitions; it does not scan/count an entire operation records table.
 
 [state/roots.rs](../../crates/layerfs-content/src/filesystem/state/roots.rs)
 consumes the sealed parent headers to obtain rebuilt roots, one bounded batch at
-a time. It needs no scratch-key scan, resident root map or alternate ordering
+a time. It needs no operation records-key scan, resident root map or alternate ordering
 algorithm in the backed route. The resident route keeps its existing sorted map.
 All directory binding effects still precede value insertion. The final retained
 parent/base batch remains for the existing bounded read reuse.

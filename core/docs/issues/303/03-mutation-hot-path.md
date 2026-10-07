@@ -144,7 +144,7 @@ retired rows, discarded ranges and dead streams. Its lifetime is protected by
 capture/orphan/operation ownership, not merely a row generation label.
 
 Use per-Workspace reclaim debt with conservative reserved admission headroom.
-Physical page use includes data, indexes, scratch, captured/orphan retention and
+Physical page use includes data, indexes, operation records, captured/orphan retention and
 allocation needed to complete/reclaim state. Measure actual allocated/free-page
 deltas; a stream's byte length does not reveal exact releasable pages because
 inline rows and indexes share pages. The exact reservation algorithm is a required
@@ -152,7 +152,7 @@ S0 contract, not supplied by `max_page_count` alone.
 
 Maintenance performs page/work-bounded steps and fairly yields between them.
 The shared overlay owner fairly interleaves per-Workspace reclaim/mutation/read/
-capture/scratch jobs; it never runs a whole Workspace cleanup as one job. It must make progress under the declared sustained write rate;
+capture/operation records jobs; it never runs a whole Workspace cleanup as one job. It must make progress under the declared sustained write rate;
 if incoming discard debt exceeds service capacity, report pressure explicitly.
 One truncated file/retired generation can create a large debt burst, so a
 high-water threshold by itself is not a fixed garbage bound.
@@ -166,7 +166,7 @@ after reclaiming. Post-COMMIT maintenance cannot change the accepted write resul
 
 The daemon database's `max_page_count` is global, not a per-Workspace quota, and
 does not reserve VM physical disk. Track logical per-Workspace admission and add
-aggregate reservation/headroom and scratch accounting so one Workspace cannot
+aggregate reservation/headroom and operation records accounting so one Workspace cannot
 exhaust others' guaranteed allocations. Device failure/exhaustion remains a
 shared failure boundary, reported honestly. Freed pages can be reused; NONE
 vacuum keeps shared database high-water allocation until daemon teardown.

@@ -1,8 +1,8 @@
-//! Backed operation scratch and exact owner references, all namespace-qualified.
+//! Backed operation records and exact owner references, all namespace-qualified.
 use crate::{
     db::{integer, unsigned},
-    sql, Lease, LeaseKind, Overlay, OverlayError, OverlayResult, Route, ScratchRecord,
-    StatementKind, SCRATCH_BYTES,
+    sql, Lease, LeaseKind, OperationRecord, Overlay, OverlayError, OverlayResult, Route,
+    StatementKind, OPERATION_RECORD_BYTES,
 };
 
 impl Overlay {
@@ -75,7 +75,7 @@ impl Overlay {
             if lease.kind == LeaseKind::Operation && lease.resource == 0 {
                 self.enqueue(
                     route.ns,
-                    crate::maintenance::SCRATCH,
+                    crate::maintenance::OPERATION_RECORD,
                     integer(lease.owner)?,
                     -2,
                 )?;
@@ -99,21 +99,21 @@ impl Overlay {
         }
         Ok(())
     }
-    /// Stores one bounded scratch record under an existing operation owner.
-    pub fn put_scratch(
+    /// Stores one bounded operation_record record under an existing operation owner.
+    pub fn put_operation_record(
         &self,
         route: Route,
         operation: u64,
-        record: &ScratchRecord,
+        record: &OperationRecord,
     ) -> OverlayResult<()> {
-        if record.value.len() > SCRATCH_BYTES {
-            return Err(OverlayError::Invalid("scratch window"));
+        if record.value.len() > OPERATION_RECORD_BYTES {
+            return Err(OverlayError::Invalid("operation_record window"));
         }
         self.atomic(|| {
             self.operation(route, operation)?;
             self.execute(
-                StatementKind::Scratch,
-                "INSERT INTO scratch VALUES(?1,?2,?3,?4,?5)
+                StatementKind::OperationRecord,
+                "INSERT INTO operation_record VALUES(?1,?2,?3,?4,?5)
                  ON CONFLICT(ns,operation,kind,key) DO UPDATE SET value=excluded.value",
                 &[
                     &route.ns,
@@ -128,17 +128,17 @@ impl Overlay {
         })
     }
     /// Fixed keyset window; caller continues after its last returned key.
-    pub fn scratch_page(
+    pub fn operation_record_page(
         &self,
         route: Route,
         operation: u64,
         kind: u32,
         after: Option<u64>,
-    ) -> OverlayResult<Vec<ScratchRecord>> {
+    ) -> OverlayResult<Vec<OperationRecord>> {
         self.operation(route, operation)?;
         self.query(
-            StatementKind::Scratch,
-            sql::SCRATCH_PAGE,
+            StatementKind::OperationRecord,
+            sql::OPERATION_RECORD_PAGE,
             &[
                 &route.ns,
                 &integer(operation)?,
@@ -147,7 +147,7 @@ impl Overlay {
             ],
             32,
             |r| {
-                Ok(ScratchRecord {
+                Ok(OperationRecord {
                     kind: r.get(0)?,
                     key: unsigned(r, 1)?,
                     value: r.get(2)?,

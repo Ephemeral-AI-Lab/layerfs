@@ -7,11 +7,13 @@ use layerfs_content::{
     FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
 };
 use layerfs_daemon::{Command, Completion, Owner, OwnerClient, OwnerConfig, Response};
-use layerfs_overlay::{CapturedReader, IndexedScope, OperationOwner, ProfileConfig, Route};
+use layerfs_overlay::{
+    CapturedReader, IndexedOperationRecordScope, OperationOwner, ProfileConfig, Route,
+};
 use layerfs_telemetry::timer::Timing;
 use layerfs_workspace::{
     BaseView, CanonicalClient, CapturedFileAttempt, CapturedFileCustody, CapturedFileEdits,
-    InodeSerials, Operation, Outcome, OverlayCapturedRuns, OverlayScratch, Position, Time,
+    InodeSerials, Operation, Outcome, OverlayCapturedRuns, OverlayOperationRecords, Position, Time,
     Workspace, WorkspaceError, WorkspaceResult,
 };
 use std::{
@@ -168,7 +170,7 @@ impl Case {
             size: Some(size),
         });
     }
-    fn captured(&self, file_scope: u64) -> (CapturedReader, IndexedScope) {
+    fn captured(&self, file_scope: u64) -> (CapturedReader, IndexedOperationRecordScope) {
         let captured = self.job(Command::Capture);
         let capture = match captured.result() {
             Ok(Response::Captured(capture)) => *capture,
@@ -192,12 +194,12 @@ impl Case {
             other => panic!("{other:?}"),
         };
         drop(acquired);
-        (reader, IndexedScope { owner, file_scope })
+        (reader, IndexedOperationRecordScope { owner, file_scope })
     }
     fn construct(
         &self,
         reader: CapturedReader,
-        scope: IndexedScope,
+        scope: IndexedOperationRecordScope,
         serial: u64,
     ) -> CapturedFileAttempt {
         let prepared =
@@ -401,7 +403,7 @@ fn length_growth_and_true_new_file_do_not_use_a_fabricated_base() {
     // Both final files already belong to this one captured frontier. Distinct
     // file scopes share the actual operation/reader until both constructions
     // finish; releasing a reader does not install or resolve its Capture.
-    let fresh_scope = IndexedScope {
+    let fresh_scope = IndexedOperationRecordScope {
         file_scope: 83,
         ..scope
     };
@@ -484,7 +486,7 @@ fn many_edits_use_numbered_records_after_install_and_reads_survive_close() {
     loop {
         let keys = case
             .client
-            .scratch_keys_after(scope, EDITS, after)
+            .operation_record_keys_after(scope, EDITS, after)
             .unwrap()
             .value;
         if keys.is_empty() {
@@ -493,9 +495,9 @@ fn many_edits_use_numbered_records_after_install_and_reads_survive_close() {
         for key in &keys {
             let row = case
                 .client
-                .scratch_get(
+                .operation_record_get(
                     scope,
-                    layerfs_overlay::IndexedKey {
+                    layerfs_overlay::IndexedOperationRecordKey {
                         kind: EDITS,
                         key: *key,
                     },
@@ -719,9 +721,9 @@ fn accepted_children_remain_with_consumer_when_final_file_root_is_refused() {
     ));
     let context = case
         .client
-        .scratch_get(
+        .operation_record_get(
             scope,
-            layerfs_overlay::IndexedKey {
+            layerfs_overlay::IndexedOperationRecordKey {
                 kind: CONTEXT,
                 key: [0; 32],
             },
@@ -822,23 +824,23 @@ impl OverlayCapturedRuns for InheritedPort<'_> {
         Ok(original)
     }
 }
-impl OverlayScratch for InheritedPort<'_> {
-    fn scratch_contains(
+impl OverlayOperationRecords for InheritedPort<'_> {
+    fn operation_record_contains(
         &self,
-        scope: IndexedScope,
-        key: layerfs_overlay::IndexedKey,
-    ) -> WorkspaceResult<layerfs_workspace::ScratchReply<bool>> {
-        self.client.scratch_contains(scope, key)
+        scope: IndexedOperationRecordScope,
+        key: layerfs_overlay::IndexedOperationRecordKey,
+    ) -> WorkspaceResult<layerfs_workspace::OperationRecordReply<bool>> {
+        self.client.operation_record_contains(scope, key)
     }
-    fn scratch_get(
+    fn operation_record_get(
         &self,
-        scope: IndexedScope,
-        key: layerfs_overlay::IndexedKey,
-    ) -> WorkspaceResult<layerfs_workspace::ScratchReply<Option<Vec<u8>>>> {
-        let mut original = self.client.scratch_get(scope, key)?;
+        scope: IndexedOperationRecordScope,
+        key: layerfs_overlay::IndexedOperationRecordKey,
+    ) -> WorkspaceResult<layerfs_workspace::OperationRecordReply<Option<Vec<u8>>>> {
+        let mut original = self.client.operation_record_get(scope, key)?;
         if self.record_oversized {
             if let Some(value) = original.value.take() {
-                let mut oversized = Vec::with_capacity(layerfs_overlay::SCRATCH_BYTES + 1);
+                let mut oversized = Vec::with_capacity(layerfs_overlay::OPERATION_RECORD_BYTES + 1);
                 oversized.extend_from_slice(&value);
                 original.copies.bytes += value.len() as u64;
                 original.copies.allocations += 1;
@@ -848,28 +850,30 @@ impl OverlayScratch for InheritedPort<'_> {
         }
         Ok(original)
     }
-    fn scratch_apply(
+    fn operation_record_apply(
         &self,
-        scope: IndexedScope,
-        changes: Vec<layerfs_overlay::IndexedChange>,
-    ) -> WorkspaceResult<layerfs_workspace::ScratchReply<layerfs_workspace::ScratchApply>> {
-        self.client.scratch_apply(scope, changes)
+        scope: IndexedOperationRecordScope,
+        changes: Vec<layerfs_overlay::IndexedOperationRecordChange>,
+    ) -> WorkspaceResult<
+        layerfs_workspace::OperationRecordReply<layerfs_workspace::OperationRecordApply>,
+    > {
+        self.client.operation_record_apply(scope, changes)
     }
-    fn scratch_keys(
+    fn operation_record_keys(
         &self,
-        scope: IndexedScope,
+        scope: IndexedOperationRecordScope,
         kind: u32,
         excluded: Option<[u8; 32]>,
-    ) -> WorkspaceResult<layerfs_workspace::ScratchReply<Vec<[u8; 32]>>> {
-        self.client.scratch_keys(scope, kind, excluded)
+    ) -> WorkspaceResult<layerfs_workspace::OperationRecordReply<Vec<[u8; 32]>>> {
+        self.client.operation_record_keys(scope, kind, excluded)
     }
-    fn scratch_keys_after(
+    fn operation_record_keys_after(
         &self,
-        scope: IndexedScope,
+        scope: IndexedOperationRecordScope,
         kind: u32,
         after: Option<[u8; 32]>,
-    ) -> WorkspaceResult<layerfs_workspace::ScratchReply<Vec<[u8; 32]>>> {
-        self.client.scratch_keys_after(scope, kind, after)
+    ) -> WorkspaceResult<layerfs_workspace::OperationRecordReply<Vec<[u8; 32]>>> {
+        self.client.operation_record_keys_after(scope, kind, after)
     }
 }
 #[test]
@@ -949,26 +953,33 @@ fn changed_context_or_missing_edit_is_terminal_before_consumer_acceptance() {
         let (reader, scope) = case.captured(93);
         let prepared =
             CapturedFileEdits::prepare(&case.workspace, &case.client, reader, 8, scope).unwrap();
-        let key = layerfs_overlay::IndexedKey {
+        let key = layerfs_overlay::IndexedOperationRecordKey {
             kind: if context_changed { CONTEXT } else { EDITS },
             key: [0; 32],
         };
-        let expected = case.client.scratch_get(scope, key).unwrap().value.unwrap();
+        let expected = case
+            .client
+            .operation_record_get(scope, key)
+            .unwrap()
+            .value
+            .unwrap();
         let mut changed = expected.clone();
         changed[2] ^= 1;
         assert!(matches!(
             case.client
-                .scratch_apply(
+                .operation_record_apply(
                     scope,
-                    vec![layerfs_overlay::IndexedChange {
+                    vec![layerfs_overlay::IndexedOperationRecordChange {
                         key,
-                        expected: layerfs_overlay::ExpectedValue::ExactBytes(expected),
+                        expected: layerfs_overlay::OperationRecordExpectedValue::ExactBytes(
+                            expected
+                        ),
                         value: context_changed.then_some(changed),
                     }]
                 )
                 .unwrap()
                 .value,
-            layerfs_workspace::ScratchApply::Applied
+            layerfs_workspace::OperationRecordApply::Applied
         ));
         let policy = ConstructionPolicy::frozen_default();
         let mut consumer = RejectFinal {

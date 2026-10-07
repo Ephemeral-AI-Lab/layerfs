@@ -1,5 +1,9 @@
 # Live composition and garbage maintenance
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Current general guide. Initial S6 composition slice after S5
 > `a0dc7da9b`; S6 remains IN PROGRESS, not acceptance or release qualification.
 
@@ -24,7 +28,7 @@ their exact release makes it ready without an owner sweep.
 or 64 small metadata/step records per turn. Retired domains use generation indexes
 and keyset cursors. Stale-cell work starts at the shrink boundary, and rechecks
 the current epoch/staircase before deleting. Rewrites after regrow survive.
-Abandoned steps seek `depth > height`; released operation scratch uses its own
+Abandoned steps seek `depth > height`; released operation records uses its own
 keyset/byte window. These jobs do not shrink the shared SQLite file. Page/freelist
 observations remain physical shared allocation, distinct from declared data bytes.
 

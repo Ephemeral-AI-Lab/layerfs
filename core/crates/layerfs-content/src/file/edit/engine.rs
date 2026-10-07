@@ -26,10 +26,9 @@ pub(super) struct Engine<'a> {
 }
 pub(super) fn key(id: EditRef, offset: u32) -> ContentResult<EditRecordKey> {
     Ok(EditRecordKey {
-        kind: id
-            .draft_kind()
-            .ok_or(ContentError::InvalidRecord("stored scratch reference"))?
-            + offset,
+        kind: id.draft_kind().ok_or(ContentError::InvalidRecord(
+            "stored operation record reference",
+        ))? + offset,
         key: id.key(),
     })
 }

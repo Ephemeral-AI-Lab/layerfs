@@ -67,7 +67,7 @@ Known install advances W's base without remounting or discarding later changes.
                    |                               +---------------+------------+
  current provider: host-local SQLite                                |
  immutable content / mutable history                   overlay.sqlite (one per daemon)
-                                                       WS metadata/payload/scratch
+                                                       WS metadata/payload/operation records
 ```
 
 `layerfs-server` is retired from the target. No dependency on or revival of that
@@ -116,7 +116,7 @@ changes. No cap increase or whole-file error fallback substitutes for those chan
              | W1 queues            | W2 queues            | W3 queues
              +----------------------+----------------------+
                                     v
-                 fair bounded read/write/capture/scratch/reclaim jobs
+                 fair bounded read/write/capture/operation records/reclaim jobs
                                     |
                       overlay owner / shared pager
                                     |

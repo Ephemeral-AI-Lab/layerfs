@@ -106,7 +106,10 @@ fn name_and_inode_counts_have_no_cap_and_every_window_stays_bounded() {
     b.applied(rmdir(1, "wide"), T2);
     assert_eq!(b.lookup(1, "wide"), None);
     // Removed inside their creating generation: no name row is left behind.
-    assert_eq!(b.overlay.state(b.route()).unwrap().dirty_names, 0);
+    assert_eq!(
+        b.overlay.state(b.route()).unwrap().dirty_directory_entries,
+        0
+    );
 }
 
 #[test]
@@ -127,7 +130,7 @@ fn known_install_folds_a_capture_and_keeps_later_namespace_changes() {
     b.applied(create(1, "alias"), T2);
     let sealed: Vec<_> = b
         .overlay
-        .captured_dentries(capture, None)
+        .captured_directory_entries(capture, None)
         .unwrap()
         .into_iter()
         .map(|row| (row.parent, row.name, row.serial))

@@ -4,13 +4,15 @@ use layerfs_content::{
     ConstructionRecordKey, ContentError, ContentResult, IndexedConstructionBacking,
 };
 use layerfs_daemon::{
-    Command, Completion, IndexedScratchJob, Owner, OwnerClient, OwnerConfig, OwnerError, Pending,
-    Response,
+    Command, Completion, IndexedOperationRecordJob, Owner, OwnerClient, OwnerConfig, OwnerError,
+    Pending, Response,
 };
-use layerfs_overlay::{IndexedKey, IndexedScope, OverlayError, ProfileConfig, Route};
+use layerfs_overlay::{
+    IndexedOperationRecordKey, IndexedOperationRecordScope, OverlayError, ProfileConfig, Route,
+};
 use layerfs_workspace::{
-    IndexedConstructionRecords, OverlayScratch, ScratchApply, ScratchReply, WorkspaceError,
-    WorkspaceResult,
+    IndexedConstructionRecords, OperationRecordApply, OperationRecordReply,
+    OverlayOperationRecords, WorkspaceError, WorkspaceResult,
 };
 use std::{
     path::PathBuf,
@@ -53,7 +55,7 @@ fn job(client: &OwnerClient, route: Option<Route>, command: Command) -> Completi
             .unwrap_or_else(|(cause, command)| panic!("{cause:?}: {command:?}")),
     )
 }
-fn scope(client: &OwnerClient, tag: u8) -> IndexedScope {
+fn scope(client: &OwnerClient, tag: u8) -> IndexedOperationRecordScope {
     let opened = job(
         client,
         None,
@@ -76,7 +78,7 @@ fn scope(client: &OwnerClient, tag: u8) -> IndexedScope {
         Ok(Response::Operation(Some(owner))) => *owner,
         v => panic!("{v:?}"),
     };
-    IndexedScope {
+    IndexedOperationRecordScope {
         owner,
         file_scope: u64::MAX,
     }
@@ -93,7 +95,7 @@ fn put(number: u64) -> ConstructionRecordChange {
         value: Some(vec![number as u8]),
     }
 }
-fn release(client: &OwnerClient, scope: IndexedScope) {
+fn release(client: &OwnerClient, scope: IndexedOperationRecordScope) {
     assert!(job(
         client,
         Some(scope.owner.route()),
@@ -213,8 +215,8 @@ fn attempted_and_unattempted_range_failures_keep_original_custody_without_resend
     match stopped.failure().unwrap() {
         WorkspaceError::Service(error) => match error.downcast_ref::<OwnerError>().unwrap() {
             OwnerError::Unattempted { command, .. } => match command.as_ref() {
-                Command::IndexedScratch(job) => match job.as_ref() {
-                    IndexedScratchJob::KeysAfter { scope, kind, after } => {
+                Command::IndexedOperationRecord(job) => match job.as_ref() {
+                    IndexedOperationRecordJob::KeysAfter { scope, kind, after } => {
                         assert_eq!((*scope, *kind, *after), (healthy, 27, Some(boundary)))
                     }
                     v => panic!("{v:?}"),
@@ -247,34 +249,34 @@ impl IndexedConstructionBacking for OlderProvider {
         panic!("no destructive traversal substitute")
     }
 }
-impl OverlayScratch for OlderProvider {
-    fn scratch_contains(
+impl OverlayOperationRecords for OlderProvider {
+    fn operation_record_contains(
         &self,
-        _: IndexedScope,
-        _: IndexedKey,
-    ) -> WorkspaceResult<ScratchReply<bool>> {
+        _: IndexedOperationRecordScope,
+        _: IndexedOperationRecordKey,
+    ) -> WorkspaceResult<OperationRecordReply<bool>> {
         panic!("no membership substitute")
     }
-    fn scratch_get(
+    fn operation_record_get(
         &self,
-        _: IndexedScope,
-        _: IndexedKey,
-    ) -> WorkspaceResult<ScratchReply<Option<Vec<u8>>>> {
+        _: IndexedOperationRecordScope,
+        _: IndexedOperationRecordKey,
+    ) -> WorkspaceResult<OperationRecordReply<Option<Vec<u8>>>> {
         panic!("no point substitute")
     }
-    fn scratch_apply(
+    fn operation_record_apply(
         &self,
-        _: IndexedScope,
-        _: Vec<layerfs_overlay::IndexedChange>,
-    ) -> WorkspaceResult<ScratchReply<ScratchApply>> {
+        _: IndexedOperationRecordScope,
+        _: Vec<layerfs_overlay::IndexedOperationRecordChange>,
+    ) -> WorkspaceResult<OperationRecordReply<OperationRecordApply>> {
         panic!("no mutation substitute")
     }
-    fn scratch_keys(
+    fn operation_record_keys(
         &self,
-        _: IndexedScope,
+        _: IndexedOperationRecordScope,
         _: u32,
         _: Option<[u8; 32]>,
-    ) -> WorkspaceResult<ScratchReply<Vec<[u8; 32]>>> {
+    ) -> WorkspaceResult<OperationRecordReply<Vec<[u8; 32]>>> {
         panic!("no destructive traversal substitute")
     }
 }

@@ -63,11 +63,11 @@ impl Overlay {
     }
     /// Final captured name bindings, indexed by their sealed generation. The
     /// resume key is (parent,binary name); no OFFSET or active-domain filtering.
-    pub fn captured_dentries(
+    pub fn captured_directory_entries(
         &self,
         capture: Capture,
         after: Option<(u64, &[u8])>,
-    ) -> OverlayResult<Vec<crate::Dentry>> {
+    ) -> OverlayResult<Vec<crate::DirectoryEntry>> {
         self.checked_capture(capture)?;
         let (parent, name) = after.unwrap_or((0, &[]));
         if name.len() > 255 {
@@ -75,7 +75,7 @@ impl Overlay {
         }
         self.query(
             StatementKind::Capture,
-            sql::DENTRY_CAPTURE,
+            sql::DIRECTORY_ENTRY_CAPTURE,
             &[
                 &capture.route.ns,
                 &capture.generation.0,
@@ -84,7 +84,7 @@ impl Overlay {
             ],
             24 + name.len() as u64,
             |row| {
-                Ok(crate::Dentry {
+                Ok(crate::DirectoryEntry {
                     inherited: row.get(3)?,
                     parent: crate::db::unsigned(row, 0)?,
                     name: row.get(1)?,
@@ -100,11 +100,11 @@ impl Overlay {
         )
     }
     /// Plan for the exact generation-selective name cursor.
-    pub fn explain_dentry_capture(&self, capture: Capture) -> OverlayResult<Vec<String>> {
+    pub fn explain_directory_entry_capture(&self, capture: Capture) -> OverlayResult<Vec<String>> {
         self.checked_capture(capture)?;
         self.query(
             StatementKind::Explain,
-            &format!("EXPLAIN QUERY PLAN {}", sql::DENTRY_CAPTURE),
+            &format!("EXPLAIN QUERY PLAN {}", sql::DIRECTORY_ENTRY_CAPTURE),
             &[
                 &capture.route.ns,
                 &capture.generation.0,
@@ -170,7 +170,7 @@ impl Overlay {
             }
             let next=state.active.0.checked_add(1).ok_or(OverlayError::Invalid("generation exhausted"))?;
             self.execute(StatementKind::Capture,
-                "UPDATE workspace SET captured=active,captured_revision=revision,active=?2,dirty_inodes=0,dirty_names=0 WHERE ns=?1",
+                "UPDATE workspace SET captured=active,captured_revision=revision,active=?2,dirty_inodes=0,dirty_directory_entries=0 WHERE ns=?1",
                 &[&route.ns,&next],16)?;
             Ok(Capture {route,generation:state.active,revision:state.revision,base_root:state.base_root})
         })

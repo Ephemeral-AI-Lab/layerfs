@@ -99,7 +99,7 @@ admission also prevents aggressive polling from starving mutations or history.
 | Mutation | Acknowledged revision, active generation, maintained dirty-inode/name counters | Post-commit mutation/capture bookkeeping |
 | Commit | Idle/running/uncertain/local-failure; phase, captured generation and known root/head/token | Commit custody owner |
 | Queues | Admitted/queued bytes/jobs by bounded class, queue/service observations | Scheduler counters with explicit scope/epoch |
-| Local storage | Logical charged data/scratch/retention/reserve/debt; global allocation observations separately | Admission/reclamation counters; not inferred freed pages |
+| Local storage | Logical charged data/operation records/retention/reserve/debt; global allocation observations separately | Admission/reclamation counters; not inferred freed pages |
 | Caches | Workspace-attributable counters when available; shared pager/base/kernel domains labelled shared | Cache/resource owners, explicit sampling scope |
 | Projection | Fixed callback-class counters and upstream call counts | Product counters; never admission gates |
 

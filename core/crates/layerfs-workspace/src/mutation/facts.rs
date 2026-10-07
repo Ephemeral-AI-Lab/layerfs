@@ -20,7 +20,7 @@ pub enum Need {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BaseFacts {
     inodes: Vec<(u64, Option<Inode>)>,
-    names: Vec<(u64, PathName, Option<u64>)>,
+    directory_entries: Vec<(u64, PathName, Option<u64>)>,
 }
 impl BaseFacts {
     pub(crate) fn inode(&self, serial: u64) -> Option<&Option<Inode>> {
@@ -30,7 +30,7 @@ impl BaseFacts {
             .map(|(_, value)| value)
     }
     pub(crate) fn name(&self, parent: u64, name: &PathName) -> Option<Option<u64>> {
-        self.names
+        self.directory_entries
             .iter()
             .find(|(key, bound, _)| *key == parent && bound == name)
             .map(|(_, _, value)| *value)
@@ -38,12 +38,13 @@ impl BaseFacts {
     /// Heap bytes retained by this job input, for owner admission accounting.
     pub fn charge(&self) -> usize {
         self.inodes.capacity() * std::mem::size_of::<(u64, Option<Inode>)>()
-            + self.names.capacity() * (std::mem::size_of::<(u64, PathName, Option<u64>)>() + 255)
+            + self.directory_entries.capacity()
+                * (std::mem::size_of::<(u64, PathName, Option<u64>)>() + 255)
     }
     fn make_room(&mut self) {
-        if self.inodes.len() + self.names.len() >= FACT_WINDOW {
+        if self.inodes.len() + self.directory_entries.len() >= FACT_WINDOW {
             self.inodes.clear();
-            self.names.clear();
+            self.directory_entries.clear();
         }
     }
 }
@@ -110,7 +111,7 @@ impl SourceView {
                             .position(|step| *step == name)
                             .map(|at| &path[at + 1..])
                     });
-                    facts.names.push((parent, name, child));
+                    facts.directory_entries.push((parent, name, child));
                     let Some(mut current) = child else {
                         continue;
                     };
@@ -123,7 +124,7 @@ impl SourceView {
                         }
                         facts.make_room();
                         let next = self.base_child(current, step)?;
-                        facts.names.push((current, step.clone(), next));
+                        facts.directory_entries.push((current, step.clone(), next));
                         match next {
                             Some(next) => current = next,
                             None => break,

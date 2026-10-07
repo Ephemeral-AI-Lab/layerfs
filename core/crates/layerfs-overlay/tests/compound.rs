@@ -49,8 +49,8 @@ fn directory(serial: u64, entries: u64) -> Inode {
         ..file(serial, 0)
     }
 }
-fn bound(parent: u64, name: &[u8], serial: u64) -> NameChange {
-    NameChange {
+fn bound(parent: u64, name: &[u8], serial: u64) -> DirectoryEntryChange {
+    DirectoryEntryChange {
         parent,
         name: name.to_vec(),
         binding: Binding::Bound {
@@ -59,18 +59,18 @@ fn bound(parent: u64, name: &[u8], serial: u64) -> NameChange {
         },
     }
 }
-fn removed(parent: u64, name: &[u8], inherited: bool) -> NameChange {
-    NameChange {
+fn removed(parent: u64, name: &[u8], inherited: bool) -> DirectoryEntryChange {
+    DirectoryEntryChange {
         parent,
         name: name.to_vec(),
         binding: Binding::Removed { inherited },
     }
 }
-fn names(names: Vec<NameChange>) -> Changes {
+fn directory_entries(directory_entries: Vec<DirectoryEntryChange>) -> Changes {
     Changes {
         open: None,
         detached: None,
-        names,
+        directory_entries,
         ..Changes::default()
     }
 }
@@ -98,14 +98,18 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         open: None,
         detached: None,
         inodes: vec![directory(10, 1), file(20, active)],
-        names: vec![bound(10, b"bin\xff\0name", 20)],
+        directory_entries: vec![bound(10, b"bin\xff\0name", 20)],
         cell: Some((20, cell.clone())),
         write: None,
     };
     let publication = db.apply(source, &changes).unwrap();
     let state = db.state(route).unwrap();
     assert_eq!(
-        (state.revision, state.dirty_inodes, state.dirty_names),
+        (
+            state.revision,
+            state.dirty_inodes,
+            state.dirty_directory_entries
+        ),
         (1, 2, 1)
     );
     assert_eq!(
@@ -134,7 +138,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         open: None,
         detached: None,
         inodes: vec![file(30, active), file(31, active + 1)],
-        names: vec![bound(10, b"later", 30)],
+        directory_entries: vec![bound(10, b"later", 30)],
         cell: None,
         write: None,
     };
@@ -170,16 +174,16 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
             inodes: vec![file(40, 0), file(40, 0)],
             ..Changes::default()
         },
-        names(vec![
+        directory_entries(vec![
             bound(10, b"a", 40),
             bound(10, b"b", 40),
             bound(10, b"c", 40),
         ]),
-        names(vec![bound(10, b"a", 40), removed(10, b"a", false)]),
-        names(vec![bound(10, b"a", 0)]),
-        names(vec![bound(0, b"a", 40)]),
-        names(vec![bound(10, b"", 40)]),
-        names(vec![bound(10, &[b'n'; 256], 40)]),
+        directory_entries(vec![bound(10, b"a", 40), removed(10, b"a", false)]),
+        directory_entries(vec![bound(10, b"a", 0)]),
+        directory_entries(vec![bound(0, b"a", 40)]),
+        directory_entries(vec![bound(10, b"", 40)]),
+        directory_entries(vec![bound(10, &[b'n'; 256], 40)]),
         Changes {
             open: None,
             detached: None,
@@ -219,13 +223,13 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     settle(&db, publication);
     db.close(route).unwrap();
     assert!(matches!(
-        db.apply(source, &names(vec![bound(10, b"closed", 20)])),
+        db.apply(source, &directory_entries(vec![bound(10, b"closed", 20)])),
         Err(OverlayError::Closed)
     ));
     assert_eq!(db.source_inode(source, 20).unwrap(), Some(file(20, active)));
     db.release_base_source(source).unwrap();
     assert!(matches!(
-        db.apply(source, &names(vec![bound(10, b"stale", 20)])),
+        db.apply(source, &directory_entries(vec![bound(10, b"stale", 20)])),
         Err(OverlayError::Stale)
     ));
     assert!(matches!(db.source_rows(source), Err(OverlayError::Stale)));
@@ -238,11 +242,16 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
     let route = db.open_workspace([3; 32], [4; 32]).unwrap();
     let source = db.acquire_base_source(route, 1).unwrap();
     let layers = |name: &[u8]| db.source_rows(source).unwrap().name(1, name).unwrap();
-    let apply = |change: NameChange| settle(&db, db.apply(source, &names(vec![change])).unwrap());
+    let apply = |change: DirectoryEntryChange| {
+        settle(
+            &db,
+            db.apply(source, &directory_entries(vec![change])).unwrap(),
+        )
+    };
 
     // Created and removed inside one generation, with nothing below: no row.
     apply(bound(1, b"temporary", 20));
-    assert_eq!(db.state(route).unwrap().dirty_names, 1);
+    assert_eq!(db.state(route).unwrap().dirty_directory_entries, 1);
     apply(removed(1, b"temporary", false));
     assert_eq!(
         layers(b"temporary"),
@@ -252,22 +261,22 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
             lower: None
         }
     );
-    assert_eq!(db.state(route).unwrap().dirty_names, 0);
+    assert_eq!(db.state(route).unwrap().dirty_directory_entries, 0);
     // Removing an absent local name over nothing is also row-free.
     apply(removed(1, b"temporary", false));
-    assert_eq!(db.state(route).unwrap().dirty_names, 0);
+    assert_eq!(db.state(route).unwrap().dirty_directory_entries, 0);
 
     // An inherited base binding needs a whiteout, replaced in place afterwards.
     apply(removed(1, b"inherited", true));
     apply(removed(1, b"inherited", true));
     assert_eq!(layers(b"inherited").active, Some(None));
-    assert_eq!(db.state(route).unwrap().dirty_names, 1);
+    assert_eq!(db.state(route).unwrap().dirty_directory_entries, 1);
     apply(bound(1, b"captured", 21));
-    assert_eq!(db.state(route).unwrap().dirty_names, 2);
+    assert_eq!(db.state(route).unwrap().dirty_directory_entries, 2);
 
     // Sealed rows are never rewritten; the next generation shadows them.
     let capture = db.capture(route).unwrap();
-    assert_eq!(db.state(route).unwrap().dirty_names, 0);
+    assert_eq!(db.state(route).unwrap().dirty_directory_entries, 0);
     apply(removed(1, b"captured", false));
     assert_eq!(
         layers(b"captured"),
@@ -297,9 +306,9 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
             lower: Some(None)
         }
     );
-    assert_eq!(db.state(route).unwrap().dirty_names, 1);
+    assert_eq!(db.state(route).unwrap().dirty_directory_entries, 1);
     let sealed: Vec<_> = db
-        .captured_dentries(capture, None)
+        .captured_directory_entries(capture, None)
         .unwrap()
         .into_iter()
         .map(|row| (row.name, row.serial))
@@ -331,8 +340,11 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
     );
     settle(
         &db,
-        db.apply(source, &names(vec![removed(1, b"captured", false)]))
-            .unwrap(),
+        db.apply(
+            source,
+            &directory_entries(vec![removed(1, b"captured", false)]),
+        )
+        .unwrap(),
     );
     assert_eq!(
         db.source_rows(source)
@@ -391,7 +403,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                     .publish(
                         target,
                         &file(serial, 0),
-                        Some(&Dentry {
+                        Some(&DirectoryEntry {
                             inherited: false,
                             parent: 1,
                             name: format!("sibling-{filled:05}").into_bytes(),
@@ -405,7 +417,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
             filled += 1;
         }
         // One complete replacing-rename-shaped job: its consistent reads and
-        // the single atomic publication of three inodes and two names.
+        // the single atomic publication of three inodes and two directory_entries.
         let from = format!("from-{count}").into_bytes();
         let to = format!("to-{count}").into_bytes();
         settle(
@@ -416,7 +428,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                     open: None,
                     detached: None,
                     inodes: vec![file(count, 0), file(count + 1, 0)],
-                    names: vec![bound(1, &from, count), bound(1, &to, count + 1)],
+                    directory_entries: vec![bound(1, &from, count), bound(1, &to, count + 1)],
                     cell: None,
                     write: None,
                 },
@@ -444,7 +456,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                             ..file(count + 1, 0)
                         },
                     ],
-                    names: vec![removed(1, &from, false), bound(1, &to, count)],
+                    directory_entries: vec![removed(1, &from, false), bound(1, &to, count)],
                     cell: None,
                     write: None,
                 },

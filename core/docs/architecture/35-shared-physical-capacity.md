@@ -1,5 +1,9 @@
 # Shared physical capacity and resource snapshots
 
+Terminology update2026-10-07: the current API/SQL names below use overlay
+schema16. Earlier algorithm and proof pins retain their original scope; see
+[the naming checkpoint](../issues/307/PRE-S8-TERMINOLOGY-20261007.md).
+
 > **Status:** Current implementation guide, S6 completion slice after `be651a048`.
 > Qualification and retained outcomes are in the [S6 audit](../issues/307/S6-EXIT-AUDIT.md).
 
@@ -52,13 +56,13 @@ triggers, at most 43 added pages per tree mutation and 100 bounded overflow page
 123699200 bytes, below one 134217728-byte window. It is pinned to actual SQLite
 3.51.0 and 3.53.2 source/build profiles; another version is explicitly unqualified.
 This includes simultaneous shrink boundaries, independent orphan metadata,
-processing scratch, bounded source wake and cursor work. It is a conservative
+processing operation records, bounded source wake and cursor work. It is a conservative
 format/source bound, not measured page amplification or process residency.
 
 [Accounting SQL](../../crates/layerfs-overlay/sql/accounting.sql) maintains one
 namespace row and namespace0 aggregate in the same transaction as product state.
 Insert/delete/count/byte triggers use two primary-key updates. They include
-namespace/inode/name/payload/mask/shrink/scratch/orphan rows, sources, leases,
+namespace/inode/name/payload/mask/shrink/operation records/orphan rows, sources, leases,
 file/lookup/captured/operation and reference detail rows, reply tickets, source
 waits and ready/retirement/maintenance targets. Resource observations do not sweep
 or COUNT the live namespace. [Resources](../../crates/layerfs-overlay/src/database/accounting.rs)

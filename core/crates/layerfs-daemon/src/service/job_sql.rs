@@ -6,7 +6,7 @@ use std::mem::size_of;
 pub(crate) const FAMILIES: usize = size_of::<DatabaseWork>() / size_of::<StatementWork>();
 /// Distinct families one Lifecycle job can execute in maintained source: the
 /// pre-BEGIN freelist read, BEGIN, COMMIT or ROLLBACK (never both), and at most
-/// four of the Workspace/Lease/Reclaim/Capture/Inode/Frontier/Scratch domains.
+/// four of the Workspace/Lease/Reclaim/Capture/Inode/Frontier/OperationRecord domains.
 /// Lifecycle jobs never park, so no readiness family is added. This bounds the
 /// admitted receipt charge only: a further actual family is retained and
 /// charged when observed, never dropped.

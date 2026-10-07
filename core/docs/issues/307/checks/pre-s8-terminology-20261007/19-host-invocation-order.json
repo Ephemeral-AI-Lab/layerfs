@@ -1,0 +1,16 @@
+{
+  "status": "INELIGIBLE for required one-at-a-time invocation discipline",
+  "cause": "The second test command was launched before the first exec session had been confirmed complete. Preserve both original outcomes; do not claim serialized host qualification from them. Linux proof will be explicitly serialized.",
+  "observations": [
+    {
+      "receipt": "17-host-namespace-daemon.stdout",
+      "start_timestamp": "2026-10-07T08:19:25.109511+00:00",
+      "last_write_timestamp": "2026-10-07T08:19:28.748232+00:00"
+    },
+    {
+      "receipt": "18-host-captured-edits.stdout",
+      "start_timestamp": "2026-10-07T08:19:26.259329+00:00",
+      "last_write_timestamp": "2026-10-07T08:19:28.049011+00:00"
+    }
+  ]
+}
