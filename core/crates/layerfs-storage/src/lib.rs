@@ -25,6 +25,7 @@ pub use store::source;
 
 pub use error::{StorageError, StorageResult};
 pub use policy::{StorageCapacities, StoragePolicy};
+pub use store::reservations::ReservationBlocks;
 
 pub use read::{Diagnostics, Reader};
 pub use save::{Save, SaveSink, WriteOutcome};

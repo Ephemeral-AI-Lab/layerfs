@@ -7,7 +7,7 @@ use crate::{
     },
     error::{StorageError, StorageResult},
     pack::layout::PackLane,
-    policy::{METADATA_INDEX_VALUES, ORDINAL_BLOCK_LEAVES, ORDINAL_RESERVE_AFTER},
+    policy::METADATA_INDEX_VALUES,
     source::Source,
 };
 use layerfs_content::{
@@ -66,12 +66,7 @@ impl State<'_> {
         if fresh_count > 0
             && fresh_count as u64 > self.ordinal_end.saturating_sub(self.next_ordinal)
         {
-            let block = if self.ordinal_reservations < ORDINAL_RESERVE_AFTER {
-                fresh_count
-            } else {
-                fresh_count.saturating_mul(ORDINAL_BLOCK_LEAVES)
-            };
-            self.reserve_ordinals(block, 1)?;
+            self.reserve_ordinals(fresh_count.max(self.storage.reservations.ordinals))?;
         }
         let mut memo = BTreeMap::<[u8; INODE_VALUE_BYTES], u32>::new();
         let mut fresh = Vec::new();

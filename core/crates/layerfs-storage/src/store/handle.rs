@@ -10,10 +10,7 @@ use crate::{
     port::PackPersistence,
     read::{Diagnostics, Fetch, Reader},
 };
-use std::{
-    cell::{Cell, RefCell},
-    sync::Arc,
-};
+use std::{cell::RefCell, sync::Arc};
 
 /// C2's immutable-body path, independent of engines and history.
 pub struct Storage {
@@ -23,11 +20,19 @@ pub struct Storage {
     capacities: StorageCapacities,
     pub(crate) candidates: RefCell<Candidates>,
     pub(crate) pool_index: RefCell<PoolIndex>,
-    pub(crate) pack_ids: Cell<(i64, i64)>,
+    pub(crate) reservations: crate::ReservationBlocks,
 }
 impl Storage {
     /// Opens one handle with an acknowledged persisted policy. No service bootstrap.
     pub fn new(metadata: Arc<dyn PackPersistence>) -> StorageResult<Self> {
+        Self::with_reservations(metadata, crate::ReservationBlocks::default())
+    }
+    /// Opens one producer handle with explicitly selected allocation windows.
+    pub fn with_reservations(
+        metadata: Arc<dyn PackPersistence>,
+        reservations: crate::ReservationBlocks,
+    ) -> StorageResult<Self> {
+        let reservations = reservations.validate()?;
         let source = Fetch::new(metadata);
         source.note(|c| c.policy += 1);
         let policy = source.metadata.policy()?.validated()?;
@@ -39,7 +44,7 @@ impl Storage {
             capacities,
             candidates: RefCell::new(Candidates::new()?),
             pool_index: RefCell::new(PoolIndex::new()),
-            pack_ids: Cell::new((0, 0)),
+            reservations,
         })
     }
     /// Persisted, validated storage policy.

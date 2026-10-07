@@ -35,6 +35,10 @@ pub struct Diagnostics {
     pub signatures: u64,
     /// Reservation calls.
     pub reserve: u64,
+    /// Initial combined reservation attempts, exactly one per begun Save.
+    pub initial_reservations: u64,
+    /// Additional new block attempts; none is a retry of a failed reservation.
+    pub reservation_refills: u64,
     /// Atomic registration calls.
     pub publish: u64,
     /// Payload reads.

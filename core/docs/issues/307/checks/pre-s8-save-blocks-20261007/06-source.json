@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-10-07T08:01:35.434654+00:00",
+  "files": {
+    "core/crates/layerfs-daemon/src/bootstrap.rs": "ece449ab57d0b1320707c58ca3c5d85fbd7eb82374dd5d3739f798898a02983b",
+    "core/crates/layerfs-daemon/src/store/open.rs": "7b28cfbec9e70d258e2104ba9dc00d192894305dd7ad712b30f14ed273dac588",
+    "core/crates/layerfs-daemon/tests/installed_store.rs": "26a8b868d3305eae08cc63fdafff38171e1ab155cf847b8174f1e41136f82d2e",
+    "core/crates/layerfs-persistence/tests/sqlite_ordinal_lookahead.rs": "9dec8876701f6fe1b367817b6a0f497c81eb8f3f849fc5c90bb09613e974c78d",
+    "core/crates/layerfs-persistence/tests/sqlite_transaction_units.rs": "a1d33be6f523cddcbab2ddc720620141f1aa5d07972b6d3dab2bbcc7195d2da8",
+    "core/crates/layerfs-storage/src/lib.rs": "1e196b012f79ca5bad6b694d482fe628a533234e61c3326593551c9dbb2b5173",
+    "core/crates/layerfs-storage/src/read/counters.rs": "cd678beddce74a17a655f1f4056f1f0924a5ecfb27e84abe04f1b4acf0126b3e",
+    "core/crates/layerfs-storage/src/save/operation.rs": "127d94c88c0f2120dee4906f05d454b5723011d822e1fb8495f3f7ff35cb6b5c",
+    "core/crates/layerfs-storage/src/save/pooled.rs": "05ef2a6e8486d70043c76bc5382a88fc22d6b4d2342512c4525d0db530f1c857",
+    "core/crates/layerfs-storage/src/save/provider.rs": "f145f0da8772d04b3db295fad090522819165d22f3b6cbc1dff2cbd54dafa9ae",
+    "core/crates/layerfs-storage/src/save/reservation.rs": "3ab361bd1a437c909e2d6fa99ee919d424fcf2bf4a83423c1ff45e3e881cb682",
+    "core/crates/layerfs-storage/src/save/state.rs": "d9c8605ba35b4d765c8eecdab61ff91d675ca87748da1db402b2c60de946d59e",
+    "core/crates/layerfs-storage/src/save/wave.rs": "fb297e5dc7de127a9ff5d2abb78fc4e431e6e2eba46fea7938acbfde5574790e",
+    "core/crates/layerfs-storage/src/store/handle.rs": "b41decb6992fcedef905f7229fa0773f42008e2bee000ec8eff82313756c3c88",
+    "core/crates/layerfs-storage/src/store/mod.rs": "c50fda9141342c57c5860fcff4555af50152f593d7cee496b1f5240939eb8664",
+    "core/crates/layerfs-storage/src/store/policy.rs": "3f56ed6ad30f14bed0857b4622581cebf0441de7643c718d4998d0a9acf58c8f",
+    "core/crates/layerfs-storage/src/store/reservations.rs": "11183ccd536c6a1ca4f53e3d74dd77464bbcd0e598378de713520c7c6357483d"
+  },
+  "refresh": "byte-identical copy then rename"
+}

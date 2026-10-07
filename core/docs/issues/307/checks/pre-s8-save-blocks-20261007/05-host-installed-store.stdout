@@ -1,0 +1,15 @@
+# {"timestamp": "2026-10-07T08:01:34.273484+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/installed_store-81308f0545c84974", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/installed_store-81308f0545c84974": "a506c282469e8bfbda82603e851478377599723c9fcdc4c0d2844f936c3cd43e"}, "source_diff_sha256": "cfe97d1110ec3b25529185d968364a455e8f3df66d87913fc39e3ea2bd7b066b", "source_parent": "656575d7acd2e60a11bc31493a3e56d43815c872", "wall_stop": "specified in command; build is not test execution"}
+
+running 3 tests
+test bounded_bind_batches_lengths_cache_and_original_failure ... DIRECT_STORE count=1 cold_bind_batches=10 warm_bind_batches=0 fixed_read_handles=2 adapter=StoreWork { object_batches: 20, object_ids: 22, length_batches: 4, length_ids: 5, serial_reservations: 0 } cache=ClientWork { cache_hits: 69, cache_misses: 18, upstream_batches: 18, authenticated_bytes: 1616, evictions: 0, charged_cache_bytes: 6224, cached_objects: 18 }
+DIRECT_STORE count=1024 cold_bind_batches=11 warm_bind_batches=0 fixed_read_handles=2 adapter=StoreWork { object_batches: 29, object_ids: 31, length_batches: 4, length_ids: 5, serial_reservations: 0 } cache=ClientWork { cache_hits: 84, cache_misses: 27, upstream_batches: 27, authenticated_bytes: 22461, evictions: 0, charged_cache_bytes: 29373, cached_objects: 27 }
+ok
+test direct_reads_finish_under_another_process_writer_and_busy_stays_typed ... DIRECT_STORE_WRITER reads_during_hold=2 busy=History::Busy next_explicit_reservation_gap=0 child=released-and-joined
+ok
+test four_workspaces_read_concurrently_and_consume_disjoint_scope_ranges ... DIRECT_STORE_MULTI workspaces=4 callers=4 distinct_serials=32 reservations=4 overlay_databases=1 read_handles=3 work=StoreWork { object_batches: 176, object_ids: 176, length_batches: 32, length_ids: 32, serial_reservations: 4 }
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+
+# exit=0

@@ -355,6 +355,13 @@ whole-file reconstruction would choose. Small whole-file results may require
 assembling the whole resulting value; representation transitions can require
 reading more input. Advisory reuse is not permission to skip validation.
 
+Save begins with one combined pack/value id reservation. Startup
+`ReservationBlocks` selects allocation windows (default4096 packs/16384 values).
+Large operations make explicitly counted new block reservations; a refused or
+unknown attempt is never replayed. These windows impose no total Save cap.
+Each producer owns separate Storage/Save state; no unused pack tail is shared
+across Saves. See [allocation semantics](core/docs/architecture/63-save-reservation-blocks.md).
+
 ### 4.3 Saved candidate to logical Commit
 
 ```text

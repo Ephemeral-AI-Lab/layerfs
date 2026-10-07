@@ -1,0 +1,3 @@
+# {"timestamp": "2026-10-07T08:03:57.811654+00:00", "command": ["cargo", "+1.85.1", "fmt", "--manifest-path", "core/Cargo.toml", "--all", "--", "--check"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "cfe97d1110ec3b25529185d968364a455e8f3df66d87913fc39e3ea2bd7b066b", "source_parent": "656575d7acd2e60a11bc31493a3e56d43815c872", "wall_stop": "specified in command; build is not test execution"}
+
+# exit=0

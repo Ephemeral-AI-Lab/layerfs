@@ -6,7 +6,8 @@ use layerfs_persistence::{Handles, PersistenceConfig};
 use layerfs_storage::{Storage, StoragePolicy};
 fn create(path: &std::path::Path) -> Handles {
     Handles::create(
-        PersistenceConfig::sqlite(path),
+        PersistenceConfig::sqlite(path)
+            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"transaction-units".to_vec(),
@@ -67,7 +68,7 @@ fn canonical_and_shared_physical_bytes_are_bounded_independently() {
     );
 }
 #[test]
-fn unused_pack_ids_transfer_across_saves_without_recycling_used_ids() {
+fn each_save_owns_a_new_combined_range_without_recycling_used_ids() {
     let t = support::Temp::new("reservation-tail");
     let h = create(&t.join("db"));
     let storage = Storage::new(h.storage.clone()).unwrap();
@@ -79,7 +80,7 @@ fn unused_pack_ids_transfer_across_saves_without_recycling_used_ids() {
         save.finish().unwrap();
         expected.push(o);
     }
-    assert_eq!(storage.diagnostics().reserve, 1);
+    assert_eq!(storage.diagnostics().reserve, 3);
     let sql = rusqlite::Connection::open(t.join("db")).unwrap();
     let (rows, distinct): (i64, i64) = sql
         .query_row(
@@ -288,7 +289,14 @@ fn a_small_acknowledged_pack_tail_serves_a_larger_following_wave() {
 fn allocation_replenishes_before_pressure_seals_when_the_tail_is_consumed() {
     let t = support::Temp::new("pack-tail-replenish");
     let h = create(&t.join("db"));
-    let storage = Storage::new(h.storage.clone()).unwrap();
+    let storage = Storage::with_reservations(
+        h.storage.clone(),
+        layerfs_storage::ReservationBlocks {
+            packs: 192,
+            ordinals: 16384,
+        },
+    )
+    .unwrap();
     let objects = (1..=1024)
         .map(|seed| object(seed, 46000))
         .collect::<Vec<_>>();
@@ -376,7 +384,7 @@ fn queued_chunk_groups_use_the_acknowledged_pack_tail() {
     let t = support::Temp::new("queued-group-reservation-tail");
     let h = create(&t.join("db"));
     let storage = Storage::new(h.storage.clone()).unwrap();
-    // One small initial Save acknowledges seven IDs and consumes only one.
+    // Each Save owns its own block; queued groups still share complete packs.
     let initial = object(9000, 16);
     let save = storage.begin_save().unwrap();
     save.accept(initial).unwrap();
@@ -404,8 +412,9 @@ fn queued_chunk_groups_use_the_acknowledged_pack_tail() {
         chunks.len()
     );
     assert_eq!(
-        after, before,
-        "six acknowledged IDs cover the queued native pack; groups are not packs"
+        after,
+        before + 1,
+        "one new combined block covers this Save; groups are not packs"
     );
     let ids = chunks.iter().map(FinalizedObject::id).collect::<Vec<_>>();
     assert_eq!(

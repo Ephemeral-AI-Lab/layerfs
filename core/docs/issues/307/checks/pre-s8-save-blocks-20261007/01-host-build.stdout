@@ -1,0 +1,29 @@
+# {"timestamp": "2026-10-07T07:59:54.316810+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-persistence", "--test", "sqlite_ordinal_lookahead", "--test", "sqlite_transaction_units", "-p", "layerfs-daemon", "--test", "installed_store", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "5ceab121d18299de32d1455d8a5245abeee8ee321db270e9bf6a868af2deb3fd", "source_parent": "656575d7acd2e60a11bc31493a3e56d43815c872", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+  --> crates/layerfs-storage/src/save/provider.rs:34:19
+   |
+34 |             state.reserve_packs(required, crate::policy::BATCH_OBJECT_LIMIT + 5)?;
+   |                   ^^^^^^^^^^^^^           ------------------------------------- unexpected argument #2 of type `usize`
+   |
+note: method defined here
+  --> crates/layerfs-storage/src/save/wave.rs:11:19
+   |
+11 |     pub(super) fn reserve_packs(&mut self, required: usize) -> StorageResult<()> {
+   |                   ^^^^^^^^^^^^^            ---------------
+help: remove the extra argument
+   |
+34 -             state.reserve_packs(required, crate::policy::BATCH_OBJECT_LIMIT + 5)?;
+34 +             state.reserve_packs(required)?;
+   |
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `layerfs-storage` (lib) due to 1 previous error
+
+# exit=101

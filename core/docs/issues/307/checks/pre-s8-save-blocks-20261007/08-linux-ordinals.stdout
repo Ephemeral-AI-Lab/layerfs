@@ -1,0 +1,15 @@
+# {"timestamp": "2026-10-07T08:02:32.956935+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-save-blocks-ordinals", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/sqlite_ordinal_lookahead-0d9822c5b1a720f7; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/sqlite_ordinal_lookahead-0d9822c5b1a720f7 --test-threads=1 --nocapture"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "cfe97d1110ec3b25529185d968364a455e8f3df66d87913fc39e3ea2bd7b066b", "source_parent": "656575d7acd2e60a11bc31493a3e56d43815c872", "wall_stop": "specified in command; build is not test execution"}
+8d4faa0e0b6d35caf0f324321fe0fa83247f31bb6556e50c7d645d7d8516b5c4  core/target/cluster2-linux/debug/deps/sqlite_ordinal_lookahead-0d9822c5b1a720f7
+
+running 4 tests
+test a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan ... ok
+test fresh_leaves_share_one_combined_reservation_and_deduplicate_values ... ok
+test initial_combined_reservation_is_busy_before_effect ... SAVE_BLOCK_BUSY initial_attempts=2 busy_effect=0 later_explicit_save=complete first_pack=1 first_ordinal=1 child=released-and-joined
+ok
+test small_configured_blocks_refill_without_limiting_the_save ... SAVE_BLOCK_REFILLS initial=1 refill=6 ordinal=5 publication=1 write_transactions=8 saved_values=10 reconstructed_leaves=5
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+# exit=0

@@ -3,19 +3,22 @@ use super::{source::WaveSource, state::State};
 use crate::{
     encoding::delta::read::{BodyCaches, Resolver},
     error::{StorageError, StorageResult},
-    port::Reserve,
     source::Source,
 };
 use layerfs_content::{FinalizedObject, ObjectId};
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
-    pub(super) fn reserve_packs(&mut self, required: usize, count: usize) -> StorageResult<()> {
+    pub(super) fn reserve_packs(&mut self, required: usize) -> StorageResult<()> {
         if required as i64 <= self.pack_end.saturating_sub(self.next_pack) {
             return Ok(());
         }
         let _work = self.storage.work.span(super::Stage::PackReserve);
-        self.storage.source.note(|c| c.reserve += 1);
-        let reserved = self.storage.source.metadata.reserve(Reserve {
+        self.storage.source.note(|c| {
+            c.reserve += 1;
+            c.reservation_refills += 1;
+        });
+        let count = required.max(self.storage.reservations.packs);
+        let reserved = self.storage.source.metadata.reserve(crate::port::Reserve {
             packs: count,
             ordinals: 0,
         })?;
@@ -54,11 +57,9 @@ impl State<'_> {
         // a wave-wide physical prewalk can exceed retention and evict them
         // before admission, or acquire candidates selection never needs.
         drop(membership);
-        self.plan_initial_ordinals(&objects)?;
         let admission = self.storage.work.span(super::Stage::Admission);
         // Keep the allocation block, but check the operation that can consume
         // IDs rather than replacing a tail for an entire hypothetical wave.
-        let block = objects.len() * 2 + 5;
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         for (index, object) in objects.iter().enumerate() {
             if let Some(prior) = prepared.get(&object.id()).copied() {
@@ -73,7 +74,7 @@ impl State<'_> {
             prepared.insert(object.id(), index);
             if self.packer.pending(object.id()) {
                 let required = self.packer.finish_pack_bound();
-                self.reserve_packs(required, block.max(required))?;
+                self.reserve_packs(required)?;
                 self.packer.seal_pending(
                     &[object.id()],
                     &mut self.compression,
@@ -101,7 +102,7 @@ impl State<'_> {
                     * layerfs_content::inode_leaf::MAXIMUM_LEAF_ROWS
                         .div_ceil(crate::policy::VALUES_PER_GROUP);
                 let required = self.packer.finish_pack_bound() + 1 + pooled;
-                self.reserve_packs(required, block.max(required))?;
+                self.reserve_packs(required)?;
                 self.offer(object)?;
             }
         }

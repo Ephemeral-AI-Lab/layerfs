@@ -1,0 +1,14 @@
+# {"timestamp": "2026-10-07T08:00:50.006821+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/sqlite_ordinal_lookahead-ff5920142df0e8a9", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/sqlite_ordinal_lookahead-ff5920142df0e8a9": "9cabdf163a1e732876f85bb970b3f3cdad01e54ba97e638e4b1e1a81b90c8e48"}, "source_diff_sha256": "cfe97d1110ec3b25529185d968364a455e8f3df66d87913fc39e3ea2bd7b066b", "source_parent": "656575d7acd2e60a11bc31493a3e56d43815c872", "wall_stop": "specified in command; build is not test execution"}
+
+running 4 tests
+test a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan ... ok
+test fresh_leaves_share_one_combined_reservation_and_deduplicate_values ... ok
+test initial_combined_reservation_is_busy_before_effect ... SAVE_BLOCK_BUSY initial_attempts=2 busy_effect=0 later_explicit_save=complete first_pack=1 first_ordinal=1 child=released-and-joined
+ok
+test small_configured_blocks_refill_without_limiting_the_save ... SAVE_BLOCK_REFILLS initial=1 refill=6 ordinal=5 publication=1 write_transactions=8 saved_values=10 reconstructed_leaves=5
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+# exit=0

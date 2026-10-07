@@ -55,7 +55,6 @@ pub(super) struct State<'a> {
     pub(super) pool_stats: crate::save::PoolCounters,
     pub(super) next_ordinal: u64,
     pub(super) ordinal_end: u64,
-    pub(super) ordinal_reservations: usize,
     pub(super) window_change: Option<u32>,
     pub(super) finishing: bool,
     pub(super) depths: DepthCache,
@@ -76,7 +75,7 @@ impl<'a> State<'a> {
         if candidates.needs_load() {
             candidates.reload(&storage.source)?;
         }
-        Ok(Self {
+        let mut state = Self {
             storage,
             pending: PendingBatch::new(storage.capacities()),
             candidates,
@@ -95,7 +94,6 @@ impl<'a> State<'a> {
             pool_stats: crate::save::PoolCounters::default(),
             next_ordinal: 0,
             ordinal_end: 0,
-            ordinal_reservations: 0,
             window_change: None,
             finishing: false,
             depths: DepthCache::new(),
@@ -104,16 +102,10 @@ impl<'a> State<'a> {
             delta: DeltaCounters::default(),
             profile: SaveProfile::default(),
             outcome: WriteOutcome::default(),
-            next_pack: storage.pack_ids.get().0,
-            pack_end: storage.pack_ids.get().1,
-        })
-    }
-}
-
-impl Drop for State<'_> {
-    fn drop(&mut self) {
-        // Only the acknowledged unused tail transfers. Consumed IDs are never
-        // recycled, even if a later publication/operation failed.
-        self.storage.pack_ids.set((self.next_pack, self.pack_end));
+            next_pack: 0,
+            pack_end: 0,
+        };
+        state.reserve_initial()?;
+        Ok(state)
     }
 }

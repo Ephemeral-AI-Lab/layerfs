@@ -39,7 +39,8 @@ allocator, are consumed once and never recycled. Simultaneous writes may return
 typed Busy; the adapter never makes a second attempt. Base reads use the fixed
 read set while another process owns the writer.
 
-Every producer obtains its own Storage state through Store::producer. Only the
+Every producer obtains its own Storage state through Store::producer, using
+the startup ReservationBlocks passed through concrete bootstrap. Only the
 opened provider is shared. No mutable Save is global, no ownership spans a
 whole Commit, and Init acquisition/cleanup is unavailable through these ports.
 The combined publication and local install obligations remain F8.

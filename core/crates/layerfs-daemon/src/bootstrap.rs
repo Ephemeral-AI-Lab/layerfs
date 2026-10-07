@@ -1,7 +1,7 @@
 //! Concrete Store composition, outside the provider-independent adapter.
 use crate::store::Store;
 use layerfs_persistence::{Handles, PersistenceConfig};
-use layerfs_storage::{Storage, StorageError, StorageResult};
+use layerfs_storage::{ReservationBlocks, Storage, StorageError, StorageResult};
 use std::sync::Arc;
 
 /// Opens one writer first and a fixed number of independent read-only sessions.
@@ -13,10 +13,12 @@ pub fn open_store(
     cursor_key: [u8; 32],
     read_handles: usize,
     cache_bytes: usize,
+    reservations: ReservationBlocks,
 ) -> StorageResult<Arc<Store>> {
     if read_handles == 0 {
         return Err(StorageError::Integrity("empty Store read set"));
     }
+    reservations.validate()?;
     let writer = Handles::open_writable(config.clone(), binding, cursor_key)?;
     let mut readers = Vec::with_capacity(read_handles);
     for _ in 0..read_handles {
@@ -28,5 +30,6 @@ pub fn open_store(
         Arc::new(writer.history),
         readers,
         cache_bytes,
+        reservations,
     )?))
 }

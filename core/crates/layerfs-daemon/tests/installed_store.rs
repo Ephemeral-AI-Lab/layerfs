@@ -88,6 +88,7 @@ fn bounded_bind_batches_lengths_cache_and_original_failure() {
             support::CURSOR,
             2,
             2 * 1024 * 1024,
+            layerfs_storage::ReservationBlocks::default(),
         )
         .unwrap();
         let owner = Owner::start(
@@ -235,6 +236,7 @@ fn four_workspaces_read_concurrently_and_consume_disjoint_scope_ranges() {
         support::CURSOR,
         3,
         2 * 1024 * 1024,
+        layerfs_storage::ReservationBlocks::default(),
     )
     .unwrap();
     let owner = Owner::start(
@@ -318,6 +320,7 @@ fn direct_reads_finish_under_another_process_writer_and_busy_stays_typed() {
         support::CURSOR,
         2,
         1024 * 1024,
+        layerfs_storage::ReservationBlocks::default(),
     )
     .unwrap();
     let owner = Owner::start(

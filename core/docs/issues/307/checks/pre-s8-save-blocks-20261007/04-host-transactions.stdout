@@ -1,0 +1,21 @@
+# {"timestamp": "2026-10-07T08:00:55.401326+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/sqlite_transaction_units-71669debf93a9535", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/sqlite_transaction_units-71669debf93a9535": "e7d19d835f7465224010fbcf4e2294272de7c5bc36023ed983c2514f5abfc8bb"}, "source_diff_sha256": "cfe97d1110ec3b25529185d968364a455e8f3df66d87913fc39e3ea2bd7b066b", "source_parent": "656575d7acd2e60a11bc31493a3e56d43815c872", "wall_stop": "specified in command; build is not test execution"}
+
+running 10 tests
+test a_small_acknowledged_pack_tail_serves_a_larger_following_wave ... DIAGNOSTIC pack reservations=1 body inserts=21
+ok
+test allocation_replenishes_before_pressure_seals_when_the_tail_is_consumed ... ok
+test canonical_and_shared_physical_bytes_are_bounded_independently ... ok
+test dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail ... ok
+test each_save_owns_a_new_combined_range_without_recycling_used_ids ... ok
+test partial_pack_queue_survives_wave_boundary_within_existing_budget ... DIAGNOSTIC sealed packs=4 publications=3
+ok
+test queued_chunk_groups_use_the_acknowledged_pack_tail ... QUEUED_PACK_RESERVATION before=1 after=2 chunks=128
+ok
+test reader_reuses_authenticated_pack_within_one_operation ... ok
+test same_save_read_and_dependency_force_closure_of_carried_queue ... ok
+test successful_save_history_retains_selection_and_group_work_from_final_drain ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+
+
+# exit=0

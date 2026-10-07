@@ -64,7 +64,7 @@ impl<'a> Save<'a> {
         state.finishing = true;
         if state.packer.unfinished() {
             let required = state.packer.finish_pack_bound();
-            state.reserve_packs(required, required)?;
+            state.reserve_packs(required)?;
         }
         for lane in PackLane::ALL {
             let State {

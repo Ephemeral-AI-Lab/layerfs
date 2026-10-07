@@ -1,6 +1,8 @@
 //! Opened provider ownership and fixed read capacity.
 use layerfs_history::HistoryCatalog;
-use layerfs_storage::{port::PackPersistence, Storage, StorageError, StoragePolicy, StorageResult};
+use layerfs_storage::{
+    port::PackPersistence, ReservationBlocks, Storage, StorageError, StoragePolicy, StorageResult,
+};
 use layerfs_workspace::{CanonicalCache, ClientWork};
 use std::sync::{
     atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -33,6 +35,7 @@ pub struct Store {
     readers: Vec<Mutex<Storage>>,
     next: AtomicUsize,
     policy: StoragePolicy,
+    reservations: ReservationBlocks,
     pub(super) cache: Arc<CanonicalCache>,
     pub(super) counts: Counts,
 }
@@ -43,7 +46,9 @@ impl Store {
         history: Arc<dyn HistoryCatalog>,
         readers: Vec<Storage>,
         cache_bytes: usize,
+        reservations: ReservationBlocks,
     ) -> StorageResult<Self> {
+        let reservations = reservations.validate()?;
         let policy = writer.policy()?.validated()?;
         if readers.is_empty() || readers.iter().any(|read| read.policy() != policy) {
             return Err(StorageError::Integrity("Store read set or policy"));
@@ -54,6 +59,7 @@ impl Store {
             readers: readers.into_iter().map(Mutex::new).collect(),
             next: AtomicUsize::new(0),
             policy,
+            reservations,
             cache: Arc::new(CanonicalCache::new(cache_bytes)),
             counts: Counts::default(),
         })
@@ -61,7 +67,7 @@ impl Store {
     /// Independent mutable producer state over the same opened write provider.
     /// No shared Save or whole-Commit ownership is acquired here.
     pub fn producer(&self) -> StorageResult<Storage> {
-        Storage::new(self.writer.clone())
+        Storage::with_reservations(self.writer.clone(), self.reservations)
     }
     pub const fn policy(&self) -> StoragePolicy {
         self.policy
