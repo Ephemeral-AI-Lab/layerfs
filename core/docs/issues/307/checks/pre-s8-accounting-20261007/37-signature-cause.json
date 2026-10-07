@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-10-07T13:22:24.893808+00:00",
+  "source_commit": "a2189c2501219a7d624777eaf2c600225386d374",
+  "source_file": "core/crates/layerfs-persistence/src/backend/sqlite/metadata_signatures.rs",
+  "source_sha256": "4fda11470420e16e3fa2d787f52f63f30bd15950141bf1b15be961457dc6465c",
+  "sql": "SELECT slot,stamp,object_id,signature FROM content_signature ORDER BY stamp LIMIT 8193",
+  "sql_sha256": "4e08d3116e7368cc9f51577f2bd70fc9b611a169a36b2284fc4d3fc4f56fc4bb",
+  "command": [
+    "/usr/bin/sqlite3",
+    "-readonly",
+    "/tmp/layerfs-pre-s8-signature-cause-20261007/store.sqlite"
+  ],
+  "stdin": [
+    ".timeout 0",
+    "PRAGMA synchronous=OFF;",
+    "SELECT sqlite_version();",
+    "SELECT sql FROM sqlite_schema WHERE name='content_signature';",
+    "SELECT count(*),min(slot),max(slot) FROM content_signature;",
+    ".eqp full",
+    ".stats stmt",
+    "SELECT slot,stamp,object_id,signature FROM content_signature ORDER BY stamp LIMIT 8193;"
+  ],
+  "binary_sha256": "34de4799cc615e043abe3ce9163d952f465fbec718f65d8882ded1cc438f93d1",
+  "prepared_sha256": "39d0bd5c614dc3b7d4ed2ec7477b2ff909e5030c817bb9ade1afe91c0e86c08e",
+  "cache": "natural diagnostic; no cold claim",
+  "setup": "explicit131072-byte copy; fresh native /tmp",
+  "profile": "read-only query diagnostic; WAL verified by inherited sealed file, synchronous OFF, busy_timeout0",
+  "wall_stop_s": 100,
+  "complete_statement_command_ns": 43973000,
+  "exit": 1,
+  "raw": "36-signature-cause-raw.txt",
+  "artifact_directory": "/tmp/layerfs-pre-s8-signature-cause-20261007"
+}

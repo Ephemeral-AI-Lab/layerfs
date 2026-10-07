@@ -1,0 +1,14 @@
+# {"timestamp": "2026-10-07T13:20:54.274717+00:00", "command": ["python3", "-B", "core/benchmark/fs-bench-pro/runner.py", "register", "--family", "cluster-two-evidence", "--manifest", "core/docs/issues/307/checks/pre-s8-accounting-20261007/27-host-store-commit-registration.json"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "a2189c2501219a7d624777eaf2c600225386d374", "wall_stop": "specified in command; build is not test execution"}
+{
+  "case": "store-commit",
+  "errors": [],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "qualification": "NOT_EVALUATED",
+  "registration_only": true,
+  "schema": "pre-s8-accounting-registration-result-v1",
+  "status": "PASS"
+}
+
+# complete_command_ns=313827958
+
+# exit=0

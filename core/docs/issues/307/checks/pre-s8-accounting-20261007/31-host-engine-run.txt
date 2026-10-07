@@ -1,0 +1,40 @@
+# {"timestamp": "2026-10-07T13:20:41.386667+00:00", "command": ["python3", "-B", "-c", "import fcntl,subprocess,sys; from pathlib import Path; p=Path(\"benchmark-results/fs-bench-pro/.run.lock\"); p.parent.mkdir(parents=True,exist_ok=True); f=p.open(\"a+b\"); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB); sys.exit(subprocess.run(sys.argv[1:]).returncode)", "perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "core/benchmark/fs-bench-pro/diagnostics/pre_s8_resources.py", "--binary", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/engine_finite", "--out", "core/docs/issues/307/checks/pre-s8-accounting-20261007/32-host-engine", "--database", "/tmp/layerfs-pre-s8-accounting-host-engine-20261007", "--case", "engine-finite", "--registration", "core/docs/issues/307/checks/pre-s8-accounting-20261007/26-host-engine-finite-registration.json"], "construction_workers": "1", "binaries": {"/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/engine_finite": "fc6d0bebfad3bb2ec6a4a6fe67ced4614ace04084f9d71df855c6ed18582dae8"}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "a2189c2501219a7d624777eaf2c600225386d374", "wall_stop": "specified in command; build is not test execution"}
+{
+  "admission_eligible": false,
+  "artifact_directory": "/private/tmp/layerfs-pre-s8-accounting-host-engine-20261007",
+  "attempt_count": 1,
+  "case": "engine-finite",
+  "child_exit": 0,
+  "child_joined": true,
+  "child_pid": 30176,
+  "collector_wall_ns": 3475745875,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "e43d68aa4e301b0b27ac0202a88540fd0050ab5006a35d0e28e30792341b90ca",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": null,
+  "phases": [
+    "startup",
+    "setup",
+    "arrivals",
+    "release",
+    "idle",
+    "stop",
+    "finished"
+  ],
+  "resource_records": 56,
+  "resources_sha256": "50041d2cfe58a092b9c03dc53602f17b6c32c975abac92ce9e69f6b979046dea",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "RECORDED"
+}
+
+# complete_command_ns=3623864958
+
+# exit=0

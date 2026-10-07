@@ -1,0 +1,5 @@
+Parse error near line 2: unable to open database file (14)
+Parse error near line 3: unable to open database file (14)
+Parse error near line 4: unable to open database file (14)
+Parse error near line 5: unable to open database file (14)
+Parse error near line 8: unable to open database file (14)

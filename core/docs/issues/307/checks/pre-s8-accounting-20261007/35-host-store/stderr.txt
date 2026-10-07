@@ -1,0 +1,6 @@
+
+thread 'main' panicked at crates/layerfs-daemon/examples/store_accounting.rs:122:9:
+assertion `left == right` failed
+  left: 8191
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

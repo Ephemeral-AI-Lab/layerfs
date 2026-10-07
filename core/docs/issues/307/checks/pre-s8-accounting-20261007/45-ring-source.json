@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-10-07T13:25:10.069729+00:00",
+  "source_parent": "a2189c2501219a7d624777eaf2c600225386d374",
+  "files": {
+    "core/crates/layerfs-daemon/examples/store_accounting.rs": "8546fd8026dd595f114e555403c30dc122a6027f43636bf235882764a7d5dc28"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "admission_eligible": false,
+  "artifact_directory": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-30257-Wide-clone",
+  "attempt_count": 1,
+  "case": "store-commit",
+  "child_exit": 101,
+  "child_joined": true,
+  "child_pid": 30257,
+  "collector_wall_ns": 2319485125,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "8607e5da8d52609be792cd5d1e14967f6229ce8ba1bb89dbd50c58a446ce1be8",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": {
+    "message": "original child exit=101",
+    "type": "RuntimeError"
+  },
+  "phases": [
+    "clone",
+    "startup",
+    "bind",
+    "write",
+    "commit"
+  ],
+  "resource_records": 158,
+  "resources_sha256": "8bb8b1edf22c939a9995ac4506e5cdb5655b1b9dee7a5ce1e27af6af3c6fe80d",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "FAILED"
+}

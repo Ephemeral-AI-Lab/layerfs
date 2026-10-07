@@ -119,7 +119,11 @@ fn main() {
         assert_eq!(writes, result.storage.reserve + result.storage.publish + 1);
         assert_eq!(result.storage.initial_reservations, 1);
         assert_eq!(result.storage.reservation_refills, 0);
-        assert_eq!(scans, 0);
+        // The prepared Store has a saturated, schema-bounded signature ring.
+        // Its one load scans8192 slots; no namespace-dependent scan is allowed.
+        // Paired EXPLAIN/runtime cause: F14 receipts41/42.
+        assert_eq!(result.storage.signatures, u64::from(changed));
+        assert_eq!(scans, result.storage.signatures * 8191);
         println!("STORE_WHOLE_COMMIT outcome={kind} owner_jobs=2 writes={} initial={} refills={} publication={} history=1 namespace_files=100000",result.storage.reserve+result.storage.publish+1,result.storage.initial_reservations,result.storage.reservation_refills,result.storage.publish);
         drop(result);
         assert_eq!(owner.client().diagnostics().unwrap().outstanding, 0);

@@ -1,0 +1,570 @@
+# {"timestamp": "2026-10-07T13:24:41.868318+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-c", "import json,sys;from pathlib import Path;sys.path.insert(0,\"core/benchmark/fs-bench-pro\");from shared import evidence_engine as e;from shared.pre_s8_phase_report import phase_report;p=Path(\"core/docs/issues/307/checks/pre-s8-accounting-20261007\");print(json.dumps({n:{\"counts\":e.validate(p/n/\"jobs.jsonl\"),\"resources\":phase_report(p/n/\"resources.jsonl\")} for n in (\"32-host-engine\",\"40-linux-engine\")},indent=2))"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "8c80293f13522a33a22f4569b42cdd500298ebea0b52bd95f12e1acbfc1e1cc0", "source_parent": "a2189c2501219a7d624777eaf2c600225386d374", "wall_stop": "specified in command; build is not test execution"}
+{
+  "32-host-engine": {
+    "counts": {
+      "schema": "cluster-two-engine-validation-v1",
+      "functional_count_status": "PASS",
+      "jobs": 1060,
+      "phases": {
+        "setup": 20,
+        "wave": 768,
+        "dependency": 256,
+        "release": 12,
+        "verify_close": 4
+      },
+      "classes": [
+        128,
+        132,
+        132,
+        412,
+        128,
+        128
+      ],
+      "wave_counts": [
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ]
+      ],
+      "closed_namespaces": 4,
+      "foreground_statements": 5500,
+      "maintenance_statements": 716,
+      "numeric_acceptance": "OWNER_DEFERRED",
+      "continuous_phase_peak": "NOT_CLAIMED",
+      "limitations": [
+        "statement families are actual work, not per-fingerprint/visited-page attribution",
+        "SQL/service spans overlap; queue wait includes readiness parking",
+        "payload counters exclude internal SQLite/driver/kernel copies",
+        "this stream alone supplies no physical I/O or phase-residency evidence"
+      ]
+    },
+    "resources": {
+      "schema": "pre-s8-phase-report-v1",
+      "admission_eligible": false,
+      "scope": "sampled diagnostic observations; no exact or continuous peak",
+      "records": 56,
+      "phases": {
+        "startup": {
+          "samples": 3,
+          "interior_samples": 1,
+          "rss_baseline_bytes": 2097152,
+          "rss_final_bytes": 5128192,
+          "rss_observed_max_bytes": 5128192,
+          "first_sample_ns": 653800454083041,
+          "last_sample_ns": 653800470574791,
+          "maximum_sample_gap_ns": 10631000,
+          "cgroup_observed_max_bytes": null,
+          "cgroup_categories_observed_max_bytes": {},
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 196608,
+              "allocated_observed_max_bytes": 268435456
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "setup": {
+          "samples": 3,
+          "interior_samples": 1,
+          "rss_baseline_bytes": 5128192,
+          "rss_final_bytes": 5963776,
+          "rss_observed_max_bytes": 5963776,
+          "first_sample_ns": 653800474590750,
+          "last_sample_ns": 653800490776750,
+          "maximum_sample_gap_ns": 9701333,
+          "cgroup_observed_max_bytes": null,
+          "cgroup_categories_observed_max_bytes": {},
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 196608,
+              "allocated_observed_max_bytes": 268632064
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "arrivals": {
+          "samples": 42,
+          "interior_samples": 40,
+          "rss_baseline_bytes": 5963776,
+          "rss_final_bytes": 6176768,
+          "rss_observed_max_bytes": 6176768,
+          "first_sample_ns": 653800496359333,
+          "last_sample_ns": 653800878056041,
+          "maximum_sample_gap_ns": 10433917,
+          "cgroup_observed_max_bytes": null,
+          "cgroup_categories_observed_max_bytes": {},
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "release": {
+          "samples": 3,
+          "interior_samples": 1,
+          "rss_baseline_bytes": 6176768,
+          "rss_final_bytes": 6569984,
+          "rss_observed_max_bytes": 6569984,
+          "first_sample_ns": 653800881295166,
+          "last_sample_ns": 653800893911291,
+          "maximum_sample_gap_ns": 9215709,
+          "cgroup_observed_max_bytes": null,
+          "cgroup_categories_observed_max_bytes": {},
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "idle": {
+          "samples": 2,
+          "interior_samples": 0,
+          "rss_baseline_bytes": 6569984,
+          "rss_final_bytes": 6586368,
+          "rss_observed_max_bytes": 6586368,
+          "first_sample_ns": 653800896970000,
+          "last_sample_ns": 653800902639750,
+          "maximum_sample_gap_ns": 5669750,
+          "cgroup_observed_max_bytes": null,
+          "cgroup_categories_observed_max_bytes": {},
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "stop": {
+          "samples": 2,
+          "interior_samples": 0,
+          "rss_baseline_bytes": 6586368,
+          "rss_final_bytes": 6258688,
+          "rss_observed_max_bytes": 6586368,
+          "first_sample_ns": 653800905864541,
+          "last_sample_ns": 653800909799041,
+          "maximum_sample_gap_ns": 3934500,
+          "cgroup_observed_max_bytes": null,
+          "cgroup_categories_observed_max_bytes": {},
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "finished": {
+          "samples": 1,
+          "interior_samples": 0,
+          "rss_baseline_bytes": 6258688,
+          "rss_final_bytes": null,
+          "rss_observed_max_bytes": 6258688,
+          "first_sample_ns": 653800913017208,
+          "last_sample_ns": 653800913017208,
+          "maximum_sample_gap_ns": 0,
+          "cgroup_observed_max_bytes": null,
+          "cgroup_categories_observed_max_bytes": {},
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "END_MARKER_ONLY",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        }
+      },
+      "unavailable": [
+        "exclusive macOS file-cache/kernel/physical-I/O attribution",
+        "internal SQLite copy/pager-page attribution",
+        "continuous phase maxima",
+        "cross-size RSS acceptance"
+      ],
+      "category_rule": "overlapping process/cgroup fields must not be summed"
+    }
+  },
+  "40-linux-engine": {
+    "counts": {
+      "schema": "cluster-two-engine-validation-v1",
+      "functional_count_status": "PASS",
+      "jobs": 1060,
+      "phases": {
+        "setup": 20,
+        "wave": 768,
+        "dependency": 256,
+        "release": 12,
+        "verify_close": 4
+      },
+      "classes": [
+        128,
+        132,
+        132,
+        412,
+        128,
+        128
+      ],
+      "wave_counts": [
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ]
+      ],
+      "closed_namespaces": 4,
+      "foreground_statements": 5500,
+      "maintenance_statements": 718,
+      "numeric_acceptance": "OWNER_DEFERRED",
+      "continuous_phase_peak": "NOT_CLAIMED",
+      "limitations": [
+        "statement families are actual work, not per-fingerprint/visited-page attribution",
+        "SQL/service spans overlap; queue wait includes readiness parking",
+        "payload counters exclude internal SQLite/driver/kernel copies",
+        "this stream alone supplies no physical I/O or phase-residency evidence"
+      ]
+    },
+    "resources": {
+      "schema": "pre-s8-phase-report-v1",
+      "admission_eligible": false,
+      "scope": "sampled diagnostic observations; no exact or continuous peak",
+      "records": 94,
+      "phases": {
+        "startup": {
+          "samples": 3,
+          "interior_samples": 1,
+          "rss_baseline_bytes": 2871296,
+          "rss_final_bytes": 5775360,
+          "rss_observed_max_bytes": 5775360,
+          "first_sample_ns": 498058784402632,
+          "last_sample_ns": 498058793354423,
+          "maximum_sample_gap_ns": 6688416,
+          "cgroup_observed_max_bytes": 20291584,
+          "cgroup_categories_observed_max_bytes": {
+            "anon": 9306112,
+            "file": 9322496,
+            "file_dirty": 184320,
+            "file_writeback": 0,
+            "kernel": 1183744,
+            "kernel_stack": 81920,
+            "pagetables": 192512,
+            "shmem": 0,
+            "slab": 829056,
+            "sock": 0
+          },
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 196608,
+              "allocated_observed_max_bytes": 268435456
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "setup": {
+          "samples": 3,
+          "interior_samples": 1,
+          "rss_baseline_bytes": 5775360,
+          "rss_final_bytes": 6164480,
+          "rss_observed_max_bytes": 6164480,
+          "first_sample_ns": 498058793750132,
+          "last_sample_ns": 498058805921590,
+          "maximum_sample_gap_ns": 6280541,
+          "cgroup_observed_max_bytes": 20553728,
+          "cgroup_categories_observed_max_bytes": {
+            "anon": 9576448,
+            "file": 9510912,
+            "file_dirty": 196608,
+            "file_writeback": 0,
+            "kernel": 1183744,
+            "kernel_stack": 81920,
+            "pagetables": 192512,
+            "shmem": 0,
+            "slab": 833264,
+            "sock": 0
+          },
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 196608,
+              "allocated_observed_max_bytes": 268632064
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "arrivals": {
+          "samples": 80,
+          "interior_samples": 78,
+          "rss_baseline_bytes": 6164480,
+          "rss_final_bytes": 6328320,
+          "rss_observed_max_bytes": 6328320,
+          "first_sample_ns": 498058806329465,
+          "last_sample_ns": 498059276941423,
+          "maximum_sample_gap_ns": 6097375,
+          "cgroup_observed_max_bytes": 26550272,
+          "cgroup_categories_observed_max_bytes": {
+            "anon": 9740288,
+            "file": 15474688,
+            "file_dirty": 217088,
+            "file_writeback": 0,
+            "kernel": 1196032,
+            "kernel_stack": 81920,
+            "pagetables": 192512,
+            "shmem": 0,
+            "slab": 839744,
+            "sock": 0
+          },
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "release": {
+          "samples": 3,
+          "interior_samples": 1,
+          "rss_baseline_bytes": 6328320,
+          "rss_final_bytes": 6451200,
+          "rss_observed_max_bytes": 6451200,
+          "first_sample_ns": 498059277292215,
+          "last_sample_ns": 498059286764548,
+          "maximum_sample_gap_ns": 5756667,
+          "cgroup_observed_max_bytes": 26812416,
+          "cgroup_categories_observed_max_bytes": {
+            "anon": 9854976,
+            "file": 15552512,
+            "file_dirty": 217088,
+            "file_writeback": 0,
+            "kernel": 1196032,
+            "kernel_stack": 81920,
+            "pagetables": 192512,
+            "shmem": 0,
+            "slab": 839744,
+            "sock": 0
+          },
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "BASELINE_INTERIOR_FINAL_OBSERVED",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "idle": {
+          "samples": 2,
+          "interior_samples": 0,
+          "rss_baseline_bytes": 6451200,
+          "rss_final_bytes": 6451200,
+          "rss_observed_max_bytes": 6451200,
+          "first_sample_ns": 498059287280882,
+          "last_sample_ns": 498059290710340,
+          "maximum_sample_gap_ns": 3429458,
+          "cgroup_observed_max_bytes": 27070464,
+          "cgroup_categories_observed_max_bytes": {
+            "anon": 9854976,
+            "file": 15585280,
+            "file_dirty": 217088,
+            "file_writeback": 0,
+            "kernel": 1196032,
+            "kernel_stack": 81920,
+            "pagetables": 192512,
+            "shmem": 0,
+            "slab": 839744,
+            "sock": 0
+          },
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "stop": {
+          "samples": 2,
+          "interior_samples": 0,
+          "rss_baseline_bytes": 6451200,
+          "rss_final_bytes": 6516736,
+          "rss_observed_max_bytes": 6516736,
+          "first_sample_ns": 498059291105465,
+          "last_sample_ns": 498059291980090,
+          "maximum_sample_gap_ns": 874625,
+          "cgroup_observed_max_bytes": 27070464,
+          "cgroup_categories_observed_max_bytes": {
+            "anon": 9854976,
+            "file": 15626240,
+            "file_dirty": 217088,
+            "file_writeback": 0,
+            "kernel": 1196032,
+            "kernel_stack": 81920,
+            "pagetables": 192512,
+            "shmem": 0,
+            "slab": 839744,
+            "sock": 0
+          },
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "INCOMPLETE_INTERIOR_OR_BOUNDARY",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        },
+        "finished": {
+          "samples": 1,
+          "interior_samples": 0,
+          "rss_baseline_bytes": 6516736,
+          "rss_final_bytes": null,
+          "rss_observed_max_bytes": 6516736,
+          "first_sample_ns": 498059292329048,
+          "last_sample_ns": 498059292329048,
+          "maximum_sample_gap_ns": 0,
+          "cgroup_observed_max_bytes": 27070464,
+          "cgroup_categories_observed_max_bytes": {
+            "anon": 9854976,
+            "file": 15630336,
+            "file_dirty": 217088,
+            "file_writeback": 0,
+            "kernel": 1196032,
+            "kernel_stack": 65536,
+            "pagetables": 192512,
+            "shmem": 0,
+            "slab": 839744,
+            "sock": 0
+          },
+          "artifacts": {
+            "overlay.sqlite": {
+              "logical_observed_max_bytes": 217088,
+              "allocated_observed_max_bytes": 268652544
+            }
+          },
+          "phase_peak_bytes": null,
+          "phase_peak_status": "UNAVAILABLE_CONTINUOUS_COVERAGE_AND_CLOCK_ATTESTATION",
+          "scope": "external-acknowledged-phase-window",
+          "coverage": "END_MARKER_ONLY",
+          "numeric_acceptance": "OWNER_DEFERRED"
+        }
+      },
+      "unavailable": [
+        "exclusive macOS file-cache/kernel/physical-I/O attribution",
+        "internal SQLite copy/pager-page attribution",
+        "continuous phase maxima",
+        "cross-size RSS acceptance"
+      ],
+      "category_rule": "overlapping process/cgroup fields must not be summed"
+    }
+  }
+}
+
+# complete_command_ns=507220916
+
+# exit=0

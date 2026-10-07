@@ -1,0 +1,41 @@
+# {"timestamp": "2026-10-07T13:20:54.701212+00:00", "command": ["python3", "-B", "-c", "import fcntl,subprocess,sys; from pathlib import Path; p=Path(\"benchmark-results/fs-bench-pro/.run.lock\"); f=p.open(\"a+b\"); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB); sys.exit(subprocess.run(sys.argv[1:]).returncode)", "perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "core/benchmark/fs-bench-pro/diagnostics/pre_s8_resources.py", "--binary", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/store_accounting", "--out", "core/docs/issues/307/checks/pre-s8-accounting-20261007/35-host-store", "--database", "/tmp/layerfs-pre-s8-accounting-host-store-20261007", "--case", "store-commit", "--registration", "core/docs/issues/307/checks/pre-s8-accounting-20261007/27-host-store-commit-registration.json", "--prepared", "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide"], "construction_workers": "1", "binaries": {"/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/store_accounting": "61f3470af11f1ab42e95e949467016a5c1593c92f4d8c4dd523e1948ae510260"}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "a2189c2501219a7d624777eaf2c600225386d374", "wall_stop": "specified in command; build is not test execution"}
+{
+  "admission_eligible": false,
+  "artifact_directory": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-30257-Wide-clone",
+  "attempt_count": 1,
+  "case": "store-commit",
+  "child_exit": 101,
+  "child_joined": true,
+  "child_pid": 30257,
+  "collector_wall_ns": 2319485125,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "8607e5da8d52609be792cd5d1e14967f6229ce8ba1bb89dbd50c58a446ce1be8",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": {
+    "message": "original child exit=101",
+    "type": "RuntimeError"
+  },
+  "phases": [
+    "clone",
+    "startup",
+    "bind",
+    "write",
+    "commit"
+  ],
+  "resource_records": 158,
+  "resources_sha256": "8bb8b1edf22c939a9995ac4506e5cdb5655b1b9dee7a5ce1e27af6af3c6fe80d",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "FAILED"
+}
+
+# complete_command_ns=2432375167
+
+# exit=1

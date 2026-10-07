@@ -1,0 +1,35 @@
+{
+  "admission_eligible": false,
+  "artifact_directory": "/tmp/layerfs-pre-s8-accounting-linux-engine",
+  "attempt_count": 1,
+  "case": "engine-finite",
+  "child_exit": 0,
+  "child_joined": true,
+  "child_pid": 9,
+  "collector_wall_ns": 836660250,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "fa3f01a4aba2313fc1e48156747c334e7257cebdd7d069a625422b2d6c42b32b",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": null,
+  "phases": [
+    "startup",
+    "setup",
+    "arrivals",
+    "release",
+    "idle",
+    "stop",
+    "finished"
+  ],
+  "resource_records": 94,
+  "resources_sha256": "9723f01a58ab42e43043d826634f47328c47d793eef5b4e5bf5cb8fc4a7e88c4",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "RECORDED"
+}

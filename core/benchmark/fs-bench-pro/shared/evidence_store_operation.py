@@ -1,6 +1,6 @@
 """Whole Store-half Commit accounting, without timing or physical-I/O promotion."""
 from .evidence_engine import rows
-from .evidence_jobs import (ALLOCATION, PAYLOAD, STATEMENT, counter_map, database,
+from .evidence_jobs import (ALLOCATION, PAYLOAD, SHA, STATEMENT, counter_map, database,
                             integer, require)
 
 SQL = ("statements", "vm_steps", "fullscan_steps", "sorts", "autoindex_rows", "reprepares",
@@ -8,6 +8,16 @@ SQL = ("statements", "vm_steps", "fullscan_steps", "sorts", "autoindex_rows", "r
        "write_commits", "commits", "read_snapshots", "rollbacks", "transaction_ns", "read_snapshot_ns",
        "sealed_inserts", "sealed_body_bytes", "blob_open_calls", "blob_reopen_calls", "blob_read_calls",
        "blob_requested_bytes", "blob_read_bytes", "blob_read_ns", "blob_close_calls")
+STORAGE = ("policy", "locate", "read_packs", "read_pack_selections", "whole_selected",
+           "whole_due_density", "whole_due_singleton", "whole_due_small", "whole_due_reuse",
+           "range_selected", "range_scan_bytes", "range_acquired_bytes", "range_materialized_bytes",
+           "value_groups", "signatures", "reserve", "initial_reservations", "reservation_refills",
+           "publish", "payload_reads", "payload_read_bytes", "pack_read_bytes", "pack_write_bytes",
+           "pooled_packs", "pooled_groups", "reserved_directory_bytes", "ordinal_reservations",
+           "locator_hits", "locator_misses", "locator_evictions", "locator_eviction_probes",
+           "locator_second_chances", "locator_bookkeeping_live_peak_bytes", "pack_hits",
+           "pack_misses", "pack_evictions", "pack_evicted_bytes", "directory_validations",
+           "directory_unshared_walks", "directory_entry_bounds", "prefetch_group_decodes", "forced_seals")
 
 
 def sql(value):
@@ -22,11 +32,17 @@ def sql(value):
 
 def validate(path):
     results = []
+    original = None
     for index, row in enumerate(rows(path)):
         require(index < 2 and row.get("schema") == "cluster-two-store-accounting-v1" and row.get("mode") == "diagnostic", "Store operation schema/order")
         require(row.get("attempt_count") == 1 and type(row.get("attempt_count")) is int, "one original Store attempt")
         require(row.get("namespace_files") == 100000, "whole prepared namespace selection")
         require(row.get("outcome") == ("Committed", "UpToDate")[index], "known original Store outcome")
+        require(all(isinstance(row.get(k), str) and SHA.fullmatch(row[k]) for k in ("root", "head")),
+                "known root/head identities")
+        identity = row["root"], row["head"]
+        require(original is None or original == identity, "UpToDate changed the published root/head")
+        original = identity
         for name in ("engine_capture", "engine_install", "engine_whole_commit"):
             database(row[name])
         for family in range(14):
@@ -39,18 +55,21 @@ def validate(path):
         require(len(row["store_readers"]) == 4, "fixed reader inventory")
         for reader in row["store_readers"]:
             sql(reader)
-        storage = row["storage"]
-        require(all(integer(value) for value in storage.values()), "Storage counter types")
+        storage = counter_map(row["storage"], STORAGE, "Storage counters")
         require(storage["initial_reservations"] == 1 and storage["reservation_refills"] == 0 and
                 storage["reserve"] == 1, "one initial reservation in this small Save")
         require(row["store_writer"]["write_commits"] == storage["reserve"] + storage["publish"] + 1,
                 "Save batches plus one history transaction")
-        require(row["store_writer"]["fullscan_steps"] == 0, "incremental Store scan")
+        require(storage["signatures"] == (1 if index == 0 else 0), "fixed signature-ring load count")
+        require(row["store_writer"]["fullscan_steps"] == storage["signatures"] * 8191,
+                "unexplained scan outside the saturated8192-slot signature ring")
         require(all(reader["write_transactions"] == 0 for reader in row["store_readers"]), "read handle write")
         results.append({"outcome": row["outcome"], "write_transactions": row["store_writer"]["write_commits"],
                         "statements": row["store_writer"]["statements"] + sum(r["statements"] for r in row["store_readers"]),
                         "engine_statements": row["engine_whole_commit"]["total"]["attempts"],
-                        "pack_write_bytes": storage["pack_write_bytes"]})
+                        "pack_write_bytes": storage["pack_write_bytes"],
+                        "bounded_signature_scan_steps": row["store_writer"]["fullscan_steps"],
+                        "unexplained_scan_steps": 0})
     require(len(results) == 2, "incomplete original Store operation inventory")
     return {"schema": "pre-s8-store-operation-validation-v1", "functional_count_status": "PASS",
             "operations": results, "numeric_acceptance": "OWNER_DEFERRED",

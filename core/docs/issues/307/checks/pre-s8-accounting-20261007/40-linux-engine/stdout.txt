@@ -1,0 +1,12 @@
+ENGINE_PHASE startup pid=9
+ENGINE_PHASE setup pid=9
+ENGINE_PHASE arrivals pid=9
+ENGINE_PHASE release pid=9
+ENGINE_PHASE idle pid=9
+ENGINE_CLOSE workspace=0 original=Ok(CleanupState(Gone))
+ENGINE_CLOSE workspace=1 original=Ok(CleanupState(Gone))
+ENGINE_CLOSE workspace=2 original=Ok(CleanupState(Gone))
+ENGINE_CLOSE workspace=3 original=Ok(CleanupState(Gone))
+ENGINE_FINITE jobs=1060 wave_counts=[[32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32], [32, 32, 32, 32, 32, 32]] peak_queued=24 peak_credit=92320 maintenance_rows=144 record_cleanup_bytes=16384 closed_namespaces=4 physical_cleanup=gone
+ENGINE_PHASE stop pid=9
+ENGINE_PHASE finished pid=9
