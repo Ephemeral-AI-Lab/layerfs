@@ -126,6 +126,51 @@ weaken the boundary guard, give Project an engine dependency or reintroduce a
 second acquisition algorithm.
 See the [S7/S9 remaining plan](docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
 
+### Shared construction and completion boundaries
+
+Source checked at `4156e9070`, guidance updated 2026-10-08. Namespace Init and
+daemon construction share Content, Storage and Persistence through their public
+ports. Their input adapters and publication lifecycles have distinct owners:
+
+| Input/operation | Existing route |
+| --- | --- |
+| Native Init file | Project import calls Content `construct_stream`; bounded output batches feed `Save::accept` |
+| New captured file | Workspace `CapturedFileEdits` calls Content `construct_runs` over data/zero windows |
+| Existing captured file | The same adapter calls `apply_indexed_edits_view_backed` over an authenticated retained `FileView` and normalized final edits |
+| Initial namespace | Project streams acquired bindings/inodes through Content directory/table builders |
+| Object output | Content emits `FinalizedObject`; Storage `SaveSink` implements `FinalizedConsumer` by forwarding to `Save::accept` |
+
+Use the actual Store-derived construction policy and bounded capacities on
+both routes. Fresh construction and incremental edits use appropriate public
+entrypoints and common canonical formats; do not assume an incremental file root
+must equal a fresh full reconstruction, since retained chunk boundaries can differ.
+Overlay owns mutable payload, metadata, operation records and construction scratch
+under Workspace prefixes. Content owns canonical algorithms; Storage owns
+deduplication, encoding and packs; Persistence owns global Store writes. Keep
+SQLite types and paths out of Content and the daemon's provider-independent
+`store/` adapter. Do not materialize a native tree or invoke Project Init to
+implement a Workspace Commit. Native Init acquisition backing remains a separate
+host provisioning facility.
+
+Current source has captured-file normalization and the Store half of Commit.
+`BoundWorkspace::commit` captures once, begins a Save, invokes a caller-supplied
+Content constructor, finishes the Save, publishes through History and installs
+the known root locally. Full captured namespace assembly, including names,
+links, metadata and changed file roots, remains S10 integration work. S8 FUSE/Exec
+and direct-Content Store-half proofs do not establish that integration.
+See [captured-file construction](crates/layerfs-workspace/src/construction/captured/owner.rs),
+[the shared Save sink](crates/layerfs-storage/src/save/operation.rs) and
+[Store Commit composition](docs/architecture/65-store-commit-composition.md).
+
+Keep completion boundaries explicit: `Save::finish()` completes object storage;
+Init then initializes history, while Commit calls `stage_and_commit` before
+local base installation. SDK Init subsequently calls `Handles::seal()` to
+checkpoint, close and hand off one Store file. The macOS allocation correction
+runs only at this sole-owner Store seal; it is not a Content/pack format change
+or live-daemon maintenance. Linux daemons keep their shared Store open. The
+[seal proof](docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md) retains its exact
+platform and benchmark scope; it does not qualify daemon allocation or S10.
+
 ## Optimization and performance debugging
 
 Before changing a performance-sensitive path or diagnosing a performance finding,

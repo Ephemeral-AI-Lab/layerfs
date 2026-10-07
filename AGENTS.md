@@ -67,6 +67,19 @@ separate MEMORY/OFF/EXCLUSIVE database.
   including several calls' changes. Retain stable existing input without a bulk
   overlay copy. Construct/save/publish it; known install advances the base while
   preserving later active mutations and the effective live view.
+- Namespace Init and captured Workspace construction reuse the same Content,
+  Storage and Persistence libraries. Project adapts native files and metadata;
+  Workspace adapts the captured immutable base plus Overlay changes. Keep
+  canonical construction in Content, object encoding/packing in Storage and
+  database writes in Persistence. Reuse these ports when completing daemon
+  construction; do not add a second encoder or route it through host Init. See
+  [shared construction boundaries](core/AGENTS.md#shared-construction-and-completion-boundaries)
+  for implemented entrypoints and the remaining S10 namespace integration.
+- `Save::finish()` completes saved objects while the Store remains open;
+  History publication follows. `Handles::seal()` consumes the sole Store
+  session for host/offline handoff, checkpoints and closes it. Its macOS unused
+  extent cleanup belongs to that lifecycle. A live daemon keeps the shared
+  Store open across Saves and Commits; it does not seal it per file or Commit.
 - A lost reply does not remove an already published mutation. Bash exit is not
   proof that descendants, descriptors, dirty mappings or requests are finished.
   UpToDate need not create a new Commit; invocation auditing is separate.

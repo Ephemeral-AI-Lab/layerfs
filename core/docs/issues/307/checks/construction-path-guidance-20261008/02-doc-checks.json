@@ -1,0 +1,407 @@
+{
+  "timestamp": "2026-10-07T16:24:51.290414+00:00",
+  "source_parent": "19806d692c1b1a4d7ebbca3d062b2ff48b64be89",
+  "status": "PASS",
+  "local_links_checked": 64,
+  "anchors_checked": 10,
+  "records": [
+    {
+      "source": "AGENTS.md",
+      "target": "core/AGENTS.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "cluster_one_handbook.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "cas_cdc_deltaencoding_handbook.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/docs/issues/303/README.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/Cargo.toml",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/AGENTS.md#shared-construction-and-completion-boundaries",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/docs/issues/303/06-cluster-one-integration.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/docs/issues/303/README.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/docs/issues/303/daemon-sqlite.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/docs/issues/303/fuse.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/docs/issues/303/06-cluster-one-integration.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/docs/issues/303/fuse-optimization-investigation.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/documentation-policy.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/release-policy.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/agent-measurement-policy.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/benchmark_rules.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "benchmark_agent_report.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/benchmark/fs-bench-pro/AGENTS.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "benchmark/AGENTS.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "benchmark/fs-bench-pro/QUICKSTART.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/agent-measurement-policy.md#1-a-warm-cache-must-never-credit-a-measured-phase",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/agent-measurement-policy.md#2-reuse-setup---setup-clone-never-reuse-measurement",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/agent-measurement-policy.md#3-running-a-measurement",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/AGENTS.md#fuser-provenance-and-authorized-patch-checks",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "core/AGENTS.md#checks-and-completion",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": ".cargo/config.toml",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "AGENTS.md",
+      "target": "docs/general/agent-measurement-policy.md#5-why-these-rules-exist-worked-example",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../AGENTS.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "Cargo.toml",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/S6-EXIT-AUDIT.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/61-direct-store-adapter.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F12-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/S7-COMPLETION-OWNERSHIP-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/65-store-commit-composition.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F14-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F5-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/68-native-workspace-control.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../cluster_one_handbook.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../cas_cdc_deltaencoding_handbook.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/303/README.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/303/06-cluster-one-integration.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/64-overlay-terminology.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/BRANCH-OVERWRITE-DECISION-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/44-acquisition-backing.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/43-backed-initial-acquisition.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "crates/layerfs-workspace/src/construction/captured/owner.rs",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "crates/layerfs-storage/src/save/operation.rs",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/65-store-commit-composition.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../docs/general/optimization-guide.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../AGENTS.md#production-loc-comparison-for-every-commit",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../AGENTS.md#active-persistence-profile--owner-direction-2026-10-07",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/architecture/60-shared-store-foundation.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F1-F4-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/303/06-cluster-one-integration.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../AGENTS.md#4-code-build-and-docs",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../.cargo/config.toml",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "../docs/general/agent-measurement-policy.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "benchmark/fs-bench-pro/AGENTS.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/FUSER-OFFICIAL-CANDIDATE-20261006.md",
+      "exists": true,
+      "anchor_ok": true
+    },
+    {
+      "source": "core/AGENTS.md",
+      "target": "docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md",
+      "exists": true,
+      "anchor_ok": true
+    }
+  ],
+  "failures": [],
+  "status_banners": "PASS",
+  "whitespace": "PASS",
+  "modified_tracked_files": [
+    "AGENTS.md",
+    "core/AGENTS.md"
+  ],
+  "protected_notes_sha256": {
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  },
+  "runtime_checks": "NOT_RUN \u2014 documentation only; product, harness and manifests unchanged",
+  "scope_review": "Source routes reused from Project native import, Workspace captured-file adapter, Storage SaveSink, daemon Store Commit and SDK seal; complete namespace integration remains S10."
+}
