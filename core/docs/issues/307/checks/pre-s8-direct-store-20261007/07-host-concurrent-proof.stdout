@@ -1,0 +1,10 @@
+# {"timestamp": "2026-10-07T07:45:53.854620+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/installed_store-81308f0545c84974", "--exact", "four_workspaces_read_concurrently_and_consume_disjoint_scope_ranges", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/installed_store-81308f0545c84974": "1e15c4af3466c8cd7726feeec5e936e903e34079be818bbf3e7a8ae81701e0ff"}, "source_diff_sha256": "9e2c1bf05db246bc7f6feba926c046523df62ce3db7182c75fbd1bd5374ffb0b", "source_parent": "4e8247af5ec8debd234a004623c7755014a58102", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+DIRECT_STORE_MULTI workspaces=4 callers=4 distinct_serials=32 reservations=4 overlay_databases=1 read_handles=3 work=StoreWork { object_batches: 177, object_ids: 177, length_batches: 32, length_ids: 32, serial_reservations: 4 }
+test four_workspaces_read_concurrently_and_consume_disjoint_scope_ranges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.05s
+
+
+# exit=0

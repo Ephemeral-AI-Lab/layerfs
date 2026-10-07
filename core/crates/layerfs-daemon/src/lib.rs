@@ -5,8 +5,10 @@
 //! ports. Native FUSE and process/control remain separate integration slices.
 #![forbid(unsafe_code)]
 
+pub mod bootstrap;
 mod overlay;
 mod service;
+pub mod store;
 /// Authenticated provisioned host binding and fresh operation consumers.
 pub mod upstream;
 pub(crate) use overlay::commands;

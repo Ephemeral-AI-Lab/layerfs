@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-10-07T07:45:47.464504+00:00",
+  "parent": "4e8247af5ec8debd234a004623c7755014a58102",
+  "files": {
+    "core/crates/layerfs-daemon/src/store/operation.rs": "6136794bb755218f57897a37ec9aff358991fd1c7719bb78bce587ee439955dc",
+    "core/crates/layerfs-daemon/src/store/types.rs": "e5456b5f35b7b47c232002362743cdee4db2bacda4df5f1163a1bff50f258e8e",
+    "core/crates/layerfs-daemon/src/store/ports.rs": "cef3f5ce71158add495632068f2e53fff8ae7690d236bbb0420607a2dda48130",
+    "core/crates/layerfs-daemon/src/store/mod.rs": "67a42717ab802af4def5c5ac86abda2a291fec281faea420dbb9a0ea57a363f8",
+    "core/crates/layerfs-daemon/src/store/open.rs": "aab33069d70f602252c6aac4e7b5d93762416bdec844a3576d2fd46009b204f6",
+    "core/crates/layerfs-daemon/src/store/bind.rs": "e3f28b5a7d258d4ef310064f56b3e99152b025c916755d9269e951b34c04b19e",
+    "core/crates/layerfs-daemon/src/bootstrap.rs": "7ecfcf2742c56504d185de1e62459d7da91f3575e0b50f0e861a5f8bb85a1ccd",
+    "core/crates/layerfs-daemon/src/lib.rs": "a124120a6926a1088d5f20181d1f03eead2545cc9b9649db66a1461c71a971d4",
+    "core/crates/layerfs-daemon/Cargo.toml": "29e7ceb97098c2e30e00472ed918f888b30f5d414376f792daf4efcaaf377f4a",
+    "core/crates/layerfs-daemon/tests/installed_store.rs": "5a4c30306702671ba88d41197fa7ca0cfc25e6d2211f25e6c3357adbb15f282b",
+    "core/crates/layerfs-daemon/tests/support/installed_store.rs": "d3bc9d9ae6b09f421babfb79583ac43ad986203179d6b44b00d71fd63548f9c0",
+    "core/crates/layerfs-daemon/tests/support/held_writer.rs": "2c48d8dfe072d874881964a2fbae4d86784e3298fa0aa71a0b115f51f3bd4777",
+    "core/Cargo.lock": "06392f24ff430d8e772025ea1e9fb133f20398f1ed66d14b90ed9f5592e29874",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+  },
+  "failed_fixture_artifacts": [
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-installed-97849-concurrent"
+  ],
+  "refresh": "byte-identical copy then rename"
+}

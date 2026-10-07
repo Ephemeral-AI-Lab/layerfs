@@ -14,7 +14,7 @@ layerfs-bridge = { path = "../layerfs-bridge" }
 layerfs-content = { path = "../layerfs-content" }
 layerfs-storage = { path = "../layerfs-storage" }
 layerfs-history = { path = "../layerfs-history" }
-# Host-provisioned completion profile type only; Daemon opens no global provider.
+# Concrete Store opening stays in application bootstrap, outside store/.
 layerfs-persistence = { path = "../layerfs-persistence" }
 
 [dev-dependencies]

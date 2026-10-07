@@ -6,6 +6,16 @@ from check_product_boundary import production_files, unsafe_violations, violatio
 
 
 class ProductBoundaryTests(unittest.TestCase):
+    def test_daemon_store_is_provider_independent(self):
+        path = Path("core/crates/layerfs-daemon/src/store/open.rs")
+        for source in ["use layerfs_storage::Storage;", "use layerfs_history::HistoryCatalog;"]:
+            self.assertFalse(violations(path, source))
+        for source in ["use layerfs_persistence::Handles;", "use layerfs_sdk::RemoteObjects;",
+                       "use rusqlite::Connection;", "use std::path::{Path, PathBuf};"]:
+            self.assertTrue(violations(path, source))
+        bootstrap = Path("core/crates/layerfs-daemon/src/bootstrap.rs")
+        self.assertFalse(violations(bootstrap, "use layerfs_persistence::Handles;"))
+
     def test_persistence_seal_ffi_is_limited_to_the_authorized_module(self):
         base = Path("core/crates/layerfs-persistence/src")
         ffi = "fn seal() { unsafe { file_control(); } }"

@@ -49,9 +49,8 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-project": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-telemetry"},
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
-    # Upstream composes public authenticated consumers and owning types. The
-    # Persistence edge carries only host-provisioned completion-profile facts;
-    # no global provider/SQL implementation moves into Daemon.
+    # Concrete Store open/install belongs to application composition. The
+    # provider-independent daemon store/ subtree has a narrower source boundary.
     "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-sdk", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence"},
     "layerfs-sdk": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry", "layerfs-bridge", "layerfs-workspace"},
     "layerfs-bridge": set(),
@@ -97,6 +96,11 @@ def component_violations(path, source):
     if name not in ALLOWED_DEPENDENCIES:
         return []
     found = []
+    if name == "layerfs-daemon" and "/src/store/" in path.as_posix():
+        concrete = r"\b(?:layerfs_persistence|layerfs_sdk|layerfs_bridge|rusqlite|sqlite)\s*::|\b(?:Path|PathBuf)\b"
+        for match in re.finditer(concrete, source):
+            found.append((source.count("\n", 0, match.start()) + 1,
+                          "concrete provider/transport/path in daemon store/; use opened Storage/History ports"))
     if name in DOMAIN_CRATES:
         for dependency in ENGINES_AND_CLUSTER2:
             spelling = dependency.replace("-", "[-_]")

@@ -24,9 +24,13 @@ product mental model or campaign-specific benchmark procedures.
   indexed automatic reclamation; native/runtime/integrated exits remain
   unfinished. See [S6 audit](docs/issues/307/S6-EXIT-AUDIT.md). Its temporarily relocated `layerfs-workspace-legacy` source remains
   excluded.
-  Daemon now exposes the fair SQL owner library and an authority-bound SDK
-  upstream with operation-owned Workspace providers and one shared immutable
-  cache. Its completions carry exact per-job statement-family receipts under
+  Daemon exposes the fair SQL owner and a direct global Store adapter with a
+  fixed read set, one immutable cache shared across Workspaces, bounded root
+  binding and operation-owned exact failures. Concrete opening stays outside
+  the provider-independent adapter; see the
+  [direct Store boundary](docs/architecture/61-direct-store-adapter.md).
+  The prior SDK upstream remains pending explicit transport retirement.
+  Completions carry exact per-job statement-family receipts under
   explicit stage charging and a fixed lane table; see the
   [completion checkpoint](docs/issues/307/S7-COMPLETION-OWNERSHIP-20261007.md). Overlay/Daemon also expose bounded indexed operation-scratch records
   in the same database, with guarded atomic changes and automatic last-owner
