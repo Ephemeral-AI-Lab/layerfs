@@ -1,0 +1,77 @@
+{
+  "timestamp_utc": "2026-10-07T18:55:28.330048+00:00",
+  "status": "PASS",
+  "parent": "752fc39ac7ae906d3e1e4ae50011c6d4d882cb50",
+  "method": "Exact committed active-member source/SQL/manifest origin coverage and unique destinations; native replacement package exclusions; proposed module-entry presence; forbidden retired/daemon Exec paths; no product scaffolding; Markdown links/anchors/status/whitespace; retained current guides/protected notes and staged/tracked scope",
+  "current_product_origins": 528,
+  "destination_files": 636,
+  "members_after": 13,
+  "classification": {
+    "E": 523,
+    "M": 5,
+    "P": 108
+  },
+  "missing_origins": [],
+  "foreign_origins": [],
+  "forbidden_paths": [],
+  "missing_modules": [],
+  "unexpected_existing_planned_paths": [],
+  "documents": [
+    {
+      "path": "core/docs/issues/307/FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md",
+      "sha256": "6a4facdccdf0fa59c0b83bc7b52339e95a2740533aa54da94c7651f4683d3226",
+      "lines": 947,
+      "local_links": 5,
+      "unresolved": [],
+      "status_banners": [
+        "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract."
+      ],
+      "trailing_whitespace": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/final-cluster-two-layout-20261008/01-plan.md",
+      "sha256": "e86bc2c1e5895d4abed4f81dd110f85b75e26dd4c6dc4d786d6e78f6d2204e6e",
+      "lines": 23,
+      "local_links": 0,
+      "unresolved": [],
+      "status_banners": [
+        "> **Status:** Dated planning checkpoint; not release evidence or a product contract."
+      ],
+      "trailing_whitespace": []
+    }
+  ],
+  "preserved_files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "64c4d07180035760fd19611abe752f39b317331badcb163f7572180838eedbf2",
+      "unchanged": true
+    },
+    {
+      "path": "core/AGENTS.md",
+      "sha256": "b4f871f1f0ea293a28e49695c8cc0c9ee0e38b26179386856a3cbc5c8abc56bf",
+      "unchanged": true
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "sha256": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+      "unchanged": true
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+      "unchanged": true
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+      "unchanged": true
+    }
+  ],
+  "tracked_changes_preserved": [
+    "AGENTS.md",
+    "core/AGENTS.md"
+  ],
+  "errors": [],
+  "runtime_checks": "NOT_RUN - documentation-only proposal; no production source/manifest/schema/dependency changes",
+  "durable": "NOT_RUN - disabled by owner until explicit reauthorization"
+}

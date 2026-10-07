@@ -1,0 +1,3775 @@
+{
+  "status": "PROPOSAL - not implemented source or runtime evidence",
+  "source_parent": "752fc39ac7ae906d3e1e4ae50011c6d4d882cb50",
+  "members_now": [
+    "crates/layerfs-content",
+    "crates/layerfs-storage",
+    "crates/layerfs-persistence",
+    "crates/layerfs-project",
+    "crates/layerfs-history",
+    "crates/layerfs-telemetry",
+    "crates/layerfs-overlay",
+    "crates/layerfs-workspace",
+    "crates/layerfs-daemon",
+    "crates/layerfs-api/sdk",
+    "crates/layerfs-bridge"
+  ],
+  "members_after": [
+    "core/crates/layerfs-content",
+    "core/crates/layerfs-storage",
+    "core/crates/layerfs-persistence",
+    "core/crates/layerfs-project",
+    "core/crates/layerfs-history",
+    "core/crates/layerfs-telemetry",
+    "core/crates/layerfs-overlay",
+    "core/crates/layerfs-workspace",
+    "core/crates/layerfs-daemon",
+    "core/crates/layerfs-api/sdk",
+    "core/crates/layerfs-bridge",
+    "core/crates/layerfs-fuse",
+    "core/crates/layerfs-sandbox"
+  ],
+  "owner_direction": "2026-10-08: Project/Workspace/Sandbox SDK shape; ordinary execution owned by caller/sandbox runtime; no filesystem-daemon Exec supervisor/launcher/cgroups/registration/stream protocol",
+  "legend": {
+    "E": "Current tracked path retained as an owning home; implementation may change",
+    "M": "Current source proposed for relocation, with origin recorded",
+    "P": "Proposed destination; create only when real implementation needs it"
+  },
+  "product_files": {
+    "core/crates/layerfs-api/sdk/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-api/sdk/Cargo.toml",
+      "owner": "core/crates/layerfs-api/sdk/Cargo.toml",
+      "origin_blob": "af06dee87c733caefad6a2e911262b4cf1dad40a"
+    },
+    "core/crates/layerfs-api/sdk/src/control/connection.rs": {
+      "status": "M",
+      "origin": "core/crates/layerfs-api/sdk/src/control.rs",
+      "responsibility": "Preserve the existing one-attempt operation beneath the corresponding SDK API",
+      "origin_blob": "55de4207d3b99c94a286a34417a2b7faebc16a62"
+    },
+    "core/crates/layerfs-api/sdk/src/control/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Shared authenticated filesystem control connection; no Exec stream protocol"
+    },
+    "core/crates/layerfs-api/sdk/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-api/sdk/src/lib.rs",
+      "owner": "core/crates/layerfs-api/sdk",
+      "origin_blob": "7c61b91ec53a792ddcea7f4263c8bd2d2d8f3a12"
+    },
+    "core/crates/layerfs-api/sdk/src/project/api.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "ProjectApi facade; Init/seal/install and daemon history control"
+    },
+    "core/crates/layerfs-api/sdk/src/project/history.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "ProjectApi facade; Init/seal/install and daemon history control"
+    },
+    "core/crates/layerfs-api/sdk/src/project/init.rs": {
+      "status": "M",
+      "origin": "core/crates/layerfs-api/sdk/src/init.rs",
+      "responsibility": "Preserve the existing one-attempt operation beneath the corresponding SDK API",
+      "origin_blob": "fdb02f4fd86c75afa54ba8ddf578b8463fba26fe"
+    },
+    "core/crates/layerfs-api/sdk/src/project/init_types.rs": {
+      "status": "M",
+      "origin": "core/crates/layerfs-api/sdk/src/init_types.rs",
+      "responsibility": "Preserve the existing one-attempt operation beneath the corresponding SDK API",
+      "origin_blob": "f20395ad1ab30b3bc8b7e4354505a46fede03a1a"
+    },
+    "core/crates/layerfs-api/sdk/src/project/install.rs": {
+      "status": "M",
+      "origin": "core/crates/layerfs-api/sdk/src/install.rs",
+      "responsibility": "Preserve the existing one-attempt operation beneath the corresponding SDK API",
+      "origin_blob": "e7a185601281acdd46535baec8ad7344180c686a"
+    },
+    "core/crates/layerfs-api/sdk/src/project/install_types.rs": {
+      "status": "M",
+      "origin": "core/crates/layerfs-api/sdk/src/install_types.rs",
+      "responsibility": "Preserve the existing one-attempt operation beneath the corresponding SDK API",
+      "origin_blob": "78c6872dcb07adf5bd3311c9b277ab27bfa049ff"
+    },
+    "core/crates/layerfs-api/sdk/src/project/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "ProjectApi facade; Init/seal/install and daemon history control"
+    },
+    "core/crates/layerfs-api/sdk/src/sandbox/api.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "SandboxApi facade; delegates lifecycle and ordinary execution to the concrete Sandbox backend"
+    },
+    "core/crates/layerfs-api/sdk/src/sandbox/exec.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "SandboxApi facade; delegates lifecycle and ordinary execution to the concrete Sandbox backend"
+    },
+    "core/crates/layerfs-api/sdk/src/sandbox/lifecycle.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "SandboxApi facade; delegates lifecycle and ordinary execution to the concrete Sandbox backend"
+    },
+    "core/crates/layerfs-api/sdk/src/sandbox/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "SandboxApi facade; delegates lifecycle and ordinary execution to the concrete Sandbox backend"
+    },
+    "core/crates/layerfs-api/sdk/src/sandbox/types.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "SandboxApi facade; delegates lifecycle and ordinary execution to the concrete Sandbox backend"
+    },
+    "core/crates/layerfs-api/sdk/src/workspace/api.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "WorkspaceApi facade; exact mount/control results. Optional exec convenience delegates to Sandbox"
+    },
+    "core/crates/layerfs-api/sdk/src/workspace/commit.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "WorkspaceApi facade; exact mount/control results. Optional exec convenience delegates to Sandbox"
+    },
+    "core/crates/layerfs-api/sdk/src/workspace/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "WorkspaceApi facade; exact mount/control results. Optional exec convenience delegates to Sandbox"
+    },
+    "core/crates/layerfs-api/sdk/src/workspace/mount.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "WorkspaceApi facade; exact mount/control results. Optional exec convenience delegates to Sandbox"
+    },
+    "core/crates/layerfs-api/sdk/src/workspace/status.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "WorkspaceApi facade; exact mount/control results. Optional exec convenience delegates to Sandbox"
+    },
+    "core/crates/layerfs-api/sdk/src/workspace/types.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "WorkspaceApi facade; exact mount/control results. Optional exec convenience delegates to Sandbox"
+    },
+    "core/crates/layerfs-api/sdk/src/workspace/unmount.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "WorkspaceApi facade; exact mount/control results. Optional exec convenience delegates to Sandbox"
+    },
+    "core/crates/layerfs-bridge/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/Cargo.toml",
+      "owner": "core/crates/layerfs-bridge/Cargo.toml",
+      "origin_blob": "e33dbf475f3508d8cb1097f789440c644ae4c71a"
+    },
+    "core/crates/layerfs-bridge/src/control.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/control.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "9e012353bb48615dd7c3b8f8ee9d14d897ac8d14"
+    },
+    "core/crates/layerfs-bridge/src/control_history.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/control_history.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "042033abb6c4b47b15876fdbedad26500ad0708a"
+    },
+    "core/crates/layerfs-bridge/src/control_native.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Additive native mount/readiness/drain/forced filesystem outcome records; no Exec stream/status/cancel wire"
+    },
+    "core/crates/layerfs-bridge/src/control_reply.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/control_reply.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "d5c11d4b6a7bd1748062c857fe14179b7a9e982e"
+    },
+    "core/crates/layerfs-bridge/src/control_request.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/control_request.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "be72d21e25b6be66d7bde019490403e172b78a0c"
+    },
+    "core/crates/layerfs-bridge/src/control_types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/control_types.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "cf5e4b190226566435d4ead581dedc737ad62181"
+    },
+    "core/crates/layerfs-bridge/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/lib.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "0d2db65736a9c24eae356312cd8785dc4f312d07"
+    },
+    "core/crates/layerfs-bridge/src/native/channel.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/native/channel.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "27ec110758d21c9cd43ef6b476327feda62445cb"
+    },
+    "core/crates/layerfs-bridge/src/native/error.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/native/error.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "cc4cb9e2c51f8d67ec5edb65ba5b627b1187c0ea"
+    },
+    "core/crates/layerfs-bridge/src/native/handshake.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/native/handshake.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "7a1e35b4d6a588a5b82a6c247ac056527cccb056"
+    },
+    "core/crates/layerfs-bridge/src/native/io.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/native/io.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "50b5bdbaa890ffb1686fcd086f384c141a7ddf79"
+    },
+    "core/crates/layerfs-bridge/src/native/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/native/mod.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "52b7adf24d6da1c8156e7af112dd0d85a8c1982b"
+    },
+    "core/crates/layerfs-bridge/src/native/profile.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/native/profile.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "6df98be41389ab446d828c6bc630985aa815c205"
+    },
+    "core/crates/layerfs-bridge/src/native/types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/native/types.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "ade60e3881ee45ae18b0d561578a78e984ccca2c"
+    },
+    "core/crates/layerfs-bridge/src/provision.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/provision.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "ba36e27de8497347e61ad9b04e37d59fff742f66"
+    },
+    "core/crates/layerfs-bridge/src/provision_wire.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/provision_wire.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "1f9724850b7de55e3e88741d865869e5e4cc4336"
+    },
+    "core/crates/layerfs-bridge/src/wire.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-bridge/src/wire.rs",
+      "owner": "core/crates/layerfs-bridge",
+      "origin_blob": "8d5825537fa05fc23789aa98525241f3fb76f600"
+    },
+    "core/crates/layerfs-content/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/Cargo.toml",
+      "owner": "core/crates/layerfs-content/Cargo.toml",
+      "origin_blob": "0415b87f52b5c4176244034d41d7aadf8f499379"
+    },
+    "core/crates/layerfs-content/src/contract/error.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/contract/error.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "7f6ba3ef3e7c868a378f9f87b12727a0eef81555"
+    },
+    "core/crates/layerfs-content/src/contract/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/contract/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "1948ddb5d0ef86321580b693336d1feda4b89f5d"
+    },
+    "core/crates/layerfs-content/src/contract/policy.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/contract/policy.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "7f5b23298f0d165e95c25e881dc27cab6487022c"
+    },
+    "core/crates/layerfs-content/src/file/cdc/gear.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/cdc/gear.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "5cff6957e1bea9b6eb2d8ec4c21e33364e644d59"
+    },
+    "core/crates/layerfs-content/src/file/cdc/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/cdc/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "2b93928be3146987b5464c85924245aa49abb397"
+    },
+    "core/crates/layerfs-content/src/file/cdc/zeros.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/cdc/zeros.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "c5642064e61a5450c5db9721eff9f691dff69632"
+    },
+    "core/crates/layerfs-content/src/file/construction/bytes.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/construction/bytes.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "7fcb353c04bdb46f60aab6ca43f206ab0b2d6e8a"
+    },
+    "core/crates/layerfs-content/src/file/construction/chunk_runs.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/construction/chunk_runs.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "cc4c8e0ec7c38cc73b4ca221ea3affcd011f4ff2"
+    },
+    "core/crates/layerfs-content/src/file/construction/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/construction/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "4a604b7dc09fecb680920bd432cf37ab3c11b969"
+    },
+    "core/crates/layerfs-content/src/file/construction/runs.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/construction/runs.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "e34ea360c6e9641af8f0658f2c14c90e81ebceee"
+    },
+    "core/crates/layerfs-content/src/file/edit/apply.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/apply.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "e30cb1e0999ab8e05cf9ec9f12fa56ffd1513b34"
+    },
+    "core/crates/layerfs-content/src/file/edit/backing.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/backing.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "c060053db0930e62326747167dba727100eda29f"
+    },
+    "core/crates/layerfs-content/src/file/edit/compare.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/compare.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "792a31c3904b83829084bdfd4e29b2d7378e61e3"
+    },
+    "core/crates/layerfs-content/src/file/edit/concat.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/concat.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "2d53a1c750eec00d6fab90497b15fda59e921054"
+    },
+    "core/crates/layerfs-content/src/file/edit/draft_codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/draft_codec.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "b0f0fef9e3038c8be9072ce84019d8572c5d7628"
+    },
+    "core/crates/layerfs-content/src/file/edit/engine.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/engine.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "ad5442b80ed42e2a8ed2b3be1b3c82f1f7d35960"
+    },
+    "core/crates/layerfs-content/src/file/edit/finish.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/finish.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "cf4f047cff880784b2c0239d1cb0f4415987dbd5"
+    },
+    "core/crates/layerfs-content/src/file/edit/input.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/input.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "f2cfe3b40b4882adcaeeae93e2d9bf920d80ce07"
+    },
+    "core/crates/layerfs-content/src/file/edit/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "c14b1eacaa85dd4b41b177edd289dc0ee47ac79b"
+    },
+    "core/crates/layerfs-content/src/file/edit/objects.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/objects.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "3a78c06c07d650c04218cf490dc2012aec54c79b"
+    },
+    "core/crates/layerfs-content/src/file/edit/references.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/references.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "25718eeb2e413dd951c294588c406d4a60bc253e"
+    },
+    "core/crates/layerfs-content/src/file/edit/resolution.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/resolution.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "b4372b4a72f3a236c8ea0ca8f555376770b9e745"
+    },
+    "core/crates/layerfs-content/src/file/edit/runs.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/runs.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "703d11585e51c00758b1442f084a536637a74d47"
+    },
+    "core/crates/layerfs-content/src/file/edit/source.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/source.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "371fbe57fb2b119f74f046b469355eb1d441e2dd"
+    },
+    "core/crates/layerfs-content/src/file/edit/split.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/split.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "bb5e5f3cd3ce624858c31982830f614e0a8d1ca1"
+    },
+    "core/crates/layerfs-content/src/file/edit/state.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/state.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "6052abe2072905d6199da7723ff82bdf45c0fba9"
+    },
+    "core/crates/layerfs-content/src/file/edit/tree.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/tree.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "47537c41c0d468f129f02066f9964dc1354f40a1"
+    },
+    "core/crates/layerfs-content/src/file/edit/zero.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/edit/zero.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "f90c6ad1fbbb6706799fdfae80150e05e6005cb6"
+    },
+    "core/crates/layerfs-content/src/file/mapping/build.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mapping/build.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "0f757278d77b399a625052f47ed5615828eec20d"
+    },
+    "core/crates/layerfs-content/src/file/mapping/codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mapping/codec.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "1920dba5f538942b167e86c731a315d01ab5a85e"
+    },
+    "core/crates/layerfs-content/src/file/mapping/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mapping/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "9e43375d6a45708b8420d2c317afff099bee47cf"
+    },
+    "core/crates/layerfs-content/src/file/mapping/predecessor.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mapping/predecessor.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "d70f6863ecb4e81317e4a964ea9da151d7f0d1e9"
+    },
+    "core/crates/layerfs-content/src/file/mapping/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mapping/read.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "5eed3aa00c05fe42e49227649c88144f187f0e58"
+    },
+    "core/crates/layerfs-content/src/file/mapping/repeated.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mapping/repeated.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "f576ca401e73961296b42f1270fb9479a0318032"
+    },
+    "core/crates/layerfs-content/src/file/mapping/types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mapping/types.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "17ba261894279a64ed56db2919d9d86b08496595"
+    },
+    "core/crates/layerfs-content/src/file/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "3a45e179912f42f4af61596dec1ac35222a40dac"
+    },
+    "core/crates/layerfs-content/src/file/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/read.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "d3246d21674113db05e3a10825e81e5b9eb4f7f7"
+    },
+    "core/crates/layerfs-content/src/file/view.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/file/view.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "a01fc1c25bed5f0702597054d9d726c20ff6acf2"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/build.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/build.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "01b991bc994edfb62eb19441234bad3f91d36846"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/codec.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "d7b9b333d528931a97098f545178bd3a5ec4e332"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/keys.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/keys.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "8e62273eaa551999b3b794c15d2529984b41349e"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "35b25ca058c91f9433c9c439d92f9c639c174865"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/patch.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/patch.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "90a9ab0905c1e4989ae2787f56dcb05c8dc8339c"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/portable.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/portable.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "0a731dc0a1a51c652addcf6c73b42333cf591cab"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/read.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "998d0438f2ec42ef9527b60715da7f62103b5066"
+    },
+    "core/crates/layerfs-content/src/filesystem/attributes/value.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/attributes/value.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "3c3d060272cf5303c5933ac4635735bcb56624b2"
+    },
+    "core/crates/layerfs-content/src/filesystem/directory/changes.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owning fallible/bounded directory change inputs where existing public streams need extension"
+    },
+    "core/crates/layerfs-content/src/filesystem/directory/codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/directory/codec.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "390a496ad03aeff73f8e18250c0063e1ea3306a9"
+    },
+    "core/crates/layerfs-content/src/filesystem/directory/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/directory/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "9bd9a8009f65415faf10fb14257e98a8a97e7a14"
+    },
+    "core/crates/layerfs-content/src/filesystem/directory/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/directory/read.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "b695214174da39adcc00f63f6697dbe91ab99f0f"
+    },
+    "core/crates/layerfs-content/src/filesystem/directory/update.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/directory/update.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "360f7ecf715099fc8f6d723b4892042faa048853"
+    },
+    "core/crates/layerfs-content/src/filesystem/identity.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/identity.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "3dcd77e4a708218097529b080d63d594d1ecc71b"
+    },
+    "core/crates/layerfs-content/src/filesystem/inode/codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/inode/codec.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "45c7d649c92096cf177341879bab6c52b6a4c038"
+    },
+    "core/crates/layerfs-content/src/filesystem/inode/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/inode/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "142be5101b41668f16375b11c7d5636352c55e90"
+    },
+    "core/crates/layerfs-content/src/filesystem/inode/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/inode/read.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "db1fef59ef1faa251ea8749418716a0092f340a5"
+    },
+    "core/crates/layerfs-content/src/filesystem/inode/update.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/inode/update.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "7fcfb96c2bcd5ab6a9d0ec5f3d73b4624f9cfddf"
+    },
+    "core/crates/layerfs-content/src/filesystem/input.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/input.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "d9f30a2a78011d56a4d9224c8f496c4cfe4a4bed"
+    },
+    "core/crates/layerfs-content/src/filesystem/limits.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/limits.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "fd8b82ec6ea27758dec5607258d81c9d38de19b8"
+    },
+    "core/crates/layerfs-content/src/filesystem/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "bcc5b7535dd6107f58c761b72fc800481b8678b9"
+    },
+    "core/crates/layerfs-content/src/filesystem/objects.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/objects.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "b720cbc15f87425c4e1a545c3420cbb6b9ee4c57"
+    },
+    "core/crates/layerfs-content/src/filesystem/path.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/path.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "a6779a536b8b8b9974dcb9faa9c93f0e343c6260"
+    },
+    "core/crates/layerfs-content/src/filesystem/qualify/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/qualify/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "1c971d93a43f96f86dca20c0e23c21bf70b2b96f"
+    },
+    "core/crates/layerfs-content/src/filesystem/qualify/proof.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/qualify/proof.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "535b6a13e0f05c0f1f60f10998fbdd5d8abed844"
+    },
+    "core/crates/layerfs-content/src/filesystem/qualify/records.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/qualify/records.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "95c57d069d948e4409ec793ac5a11e19e2b25b1f"
+    },
+    "core/crates/layerfs-content/src/filesystem/qualify/walk.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/qualify/walk.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "5cdef7e1db9ea3bf0257e69e90e8bfcda926cd1a"
+    },
+    "core/crates/layerfs-content/src/filesystem/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/read.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "2354abd41b7c54e6f286656ed37b3a36259883f9"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/backing.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/backing.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "c1cbab3e1c97b0296ea4602e32e75b8871753e98"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/indexed.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/indexed.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "d7c3d23a6607e6744eba4181942c83c210816aef"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/indexed_release.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/indexed_release.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "d192a82bcad0f1613dd00f6373961e16feabbf60"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/indexed_rows.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/indexed_rows.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "f724055ccaad05d5b39d5682347663d4bcc3969d"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/indexed_validation.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Remaining demanded/touched/membership validation state through the existing neutral backing ports"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/indexed_wire.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/indexed_wire.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "3a306dcd4261916c1b6b31b7364c5848f613ea84"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/meaning.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/meaning.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "15704d9adfd1912f0b69d0bbc051f28a6a4a47ee"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/merge.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/merge.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "1e57d7b00c0f2f1c9b4b0d77fbbbe0f9eb61b0db"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "b29c9d11d3ba2fa7b57bb34015204d82b013bd33"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/operation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/operation.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "642a72f7f8e36db51c8874dd46627005f920ba7b"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/record.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "c32af7bafc410d60c7ce1d748cc542359f771bd4"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/reduce.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/reduce.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "105b306687801de154f04df21e863dcb5a622f2b"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/release.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/release.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "cad32ba90cd173fb11cb27328c0ce0f370e9575c"
+    },
+    "core/crates/layerfs-content/src/filesystem/references/runs.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/references/runs.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "28c94fc1ec4f19fdff21c00e0c6b912520a67203"
+    },
+    "core/crates/layerfs-content/src/filesystem/root.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/root.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "058ae6c674988a5528a198e277675670eb7879a1"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/check.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/check.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "27b27ee90c9302196d3aef2c492e81dfde1596a9"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "8e8ce092cef8f811a1a19c3cf61780d5a35c432e"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/source.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/source.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "29829650ee3bbede954e1950cc064a39d478e65f"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/spool.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/spool.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "9e572025b0270684d05ffa4df61fc851e6a87326"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/stream.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/stream.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "f2af6ca278d47833935fae5e28e8702c0fd9df17"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/stream_update.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/stream_update.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "4fb851b3652d6b6107ba0cbf3b8255141df5e8bd"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/update.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/update.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "9452b1d4b4409785d7f6a3b3fd67bea75a5dde33"
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/view.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/rows/view.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "6ed3c065745b976f3056576e425bf5e12182abd1"
+    },
+    "core/crates/layerfs-content/src/filesystem/sorted/budget.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/sorted/budget.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "20e97eef76dc7d54f8a839687d4aa9bc3498c930"
+    },
+    "core/crates/layerfs-content/src/filesystem/sorted/finish.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/sorted/finish.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "2bf32c0b3fff780cbdafbeab29ecf95493ac0820"
+    },
+    "core/crates/layerfs-content/src/filesystem/sorted/format.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/sorted/format.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "6fceb2372f438a2a1e94a607ebf542d6596681cc"
+    },
+    "core/crates/layerfs-content/src/filesystem/sorted/merge.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/sorted/merge.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "617636bd97ced35920f211060635609e858fdf31"
+    },
+    "core/crates/layerfs-content/src/filesystem/sorted/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/sorted/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "15d12e43fab84635cb881899efa121c3724b36f5"
+    },
+    "core/crates/layerfs-content/src/filesystem/sorted/page.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/sorted/page.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "3272facb3036c4635a207a6ca509cdcd80effe8a"
+    },
+    "core/crates/layerfs-content/src/filesystem/state/codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/state/codec.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "01e810f093dd8274a13a5618313f61aea1dd0aca"
+    },
+    "core/crates/layerfs-content/src/filesystem/state/initial.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/state/initial.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "be2f7099f34cab08867250be26fffd6866ed602b"
+    },
+    "core/crates/layerfs-content/src/filesystem/state/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/state/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "e627107ce285597390f27363e656a0ca1afc8755"
+    },
+    "core/crates/layerfs-content/src/filesystem/state/roots.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/state/roots.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "eab6e7ffa03d56bbb8db03bc74e7f3a4ed90c841"
+    },
+    "core/crates/layerfs-content/src/filesystem/state/store.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/state/store.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "b9c5759ed01435479cc86ce2fffd32d403dbfceb"
+    },
+    "core/crates/layerfs-content/src/filesystem/state/types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/state/types.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "a09f4ebad4dc9f927763a17c3c543eadd39e52ea"
+    },
+    "core/crates/layerfs-content/src/filesystem/symlink.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/symlink.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "eb693bac2948be476b0daa91838bf5a1070333b6"
+    },
+    "core/crates/layerfs-content/src/filesystem/update.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/update.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "2f16423303f3aa2c8f054247c5f025033d9f172e"
+    },
+    "core/crates/layerfs-content/src/filesystem/validate.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/validate.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "399c21e95297a7e6c4aae32154f901fa272a0936"
+    },
+    "core/crates/layerfs-content/src/filesystem/validate/backed.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owning backed validation and changed-topology checks; preserve exact existing validation semantics"
+    },
+    "core/crates/layerfs-content/src/filesystem/validate/cycles.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/validate/cycles.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "075c06e8059be0a2a5ca645d233faad6f734ec42"
+    },
+    "core/crates/layerfs-content/src/filesystem/validate/entries.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/filesystem/validate/entries.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "b8a650c250effcea8def246225e071bf0dcdd42c"
+    },
+    "core/crates/layerfs-content/src/filesystem/validate/incremental.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owning backed validation and changed-topology checks; preserve exact existing validation semantics"
+    },
+    "core/crates/layerfs-content/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/lib.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "0b46a6c22b5db1d21cba847ec14230249337b37a"
+    },
+    "core/crates/layerfs-content/src/object/access.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/access.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "887b879fa0ebc8c954a8ecff525b86215f68d13a"
+    },
+    "core/crates/layerfs-content/src/object/admission.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/admission.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "de67ac2bbb2ef6156739373fd52c83fd7cadc553"
+    },
+    "core/crates/layerfs-content/src/object/codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/codec.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "6486f8436a0f45b00399ac2a216fd1d07e8b5e76"
+    },
+    "core/crates/layerfs-content/src/object/context/dispatch.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/context/dispatch.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "94bf578d3c0ac434a22ea941323191ec0620887b"
+    },
+    "core/crates/layerfs-content/src/object/context/inode.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/context/inode.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "ce72e07637fbe7ea0e402741eba52f80498b2f3c"
+    },
+    "core/crates/layerfs-content/src/object/context/mapping.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/context/mapping.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "0deaa57e2e70845f252f475b9d6015cd2bcfca64"
+    },
+    "core/crates/layerfs-content/src/object/context/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/context/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "5644910ad02eb584621de923bf455ac29ea8b407"
+    },
+    "core/crates/layerfs-content/src/object/context/namespace.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/context/namespace.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "f53fc38b78b649bf600644d5884af801ff802a51"
+    },
+    "core/crates/layerfs-content/src/object/context/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/context/read.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "dd5c30251d9e22bb84dc2157cd2c42cefd944e3c"
+    },
+    "core/crates/layerfs-content/src/object/id.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/id.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "87f1f4b7da918632c069d2d113b43db70f49498a"
+    },
+    "core/crates/layerfs-content/src/object/inode_leaf.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/inode_leaf.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "c2eb24ec760f7644b80670d090fe6be8c4d65a37"
+    },
+    "core/crates/layerfs-content/src/object/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/mod.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "3ec68de3973bbf5c08cfee1c688a2854acd457e8"
+    },
+    "core/crates/layerfs-content/src/object/output.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/output.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "498d51cbf2771d1b61089c327c16f4ca864785e5"
+    },
+    "core/crates/layerfs-content/src/object/predecessor.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-content/src/object/predecessor.rs",
+      "owner": "core/crates/layerfs-content",
+      "origin_blob": "f433d8d742795f345266ad977c96319242befba9"
+    },
+    "core/crates/layerfs-daemon/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/Cargo.toml",
+      "owner": "core/crates/layerfs-daemon/Cargo.toml",
+      "origin_blob": "3eeab572ff5d984a4e3785753a9c646042d1a0fd"
+    },
+    "core/crates/layerfs-daemon/src/bin/layerfs-daemon.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Thin serve entry and delegation; no Bash launcher mode"
+    },
+    "core/crates/layerfs-daemon/src/bootstrap.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/bootstrap.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "5e819354885c0ad831d63bcfc27a964419028e66"
+    },
+    "core/crates/layerfs-daemon/src/control/attach.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Mount/Commit/unmount admission, reversible probe, exact outcomes and complete filesystem/daemon drain"
+    },
+    "core/crates/layerfs-daemon/src/control/commit.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Mount/Commit/unmount admission, reversible probe, exact outcomes and complete filesystem/daemon drain"
+    },
+    "core/crates/layerfs-daemon/src/control/failure.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/control/failure.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "6f94c1b4139dfeb2e68dab272165473531d90678"
+    },
+    "core/crates/layerfs-daemon/src/control/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/control/mod.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "e3289fe893d021b70d5f3041d96831d20fe00d03"
+    },
+    "core/crates/layerfs-daemon/src/control/native_state.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Mount/Commit/unmount admission, reversible probe, exact outcomes and complete filesystem/daemon drain"
+    },
+    "core/crates/layerfs-daemon/src/control/operations.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/control/operations.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "c31a3b7a3e07da9a24233be977467c1be742b076"
+    },
+    "core/crates/layerfs-daemon/src/control/registry.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/control/registry.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "7bc5f3b01e86f0dade0444139a707f237f112b3f"
+    },
+    "core/crates/layerfs-daemon/src/control/serve.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/control/serve.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "ae7be206ad2a9dc1f552e57009eb2a274ee39756"
+    },
+    "core/crates/layerfs-daemon/src/control/status.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/control/status.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "48510f05848d5a5d6ad4e63e3c6ee4479249a5c0"
+    },
+    "core/crates/layerfs-daemon/src/control/types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/control/types.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "b69a011ee0d5a1e02819c4273a22f5dad1b31493"
+    },
+    "core/crates/layerfs-daemon/src/control/unmount.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Mount/Commit/unmount admission, reversible probe, exact outcomes and complete filesystem/daemon drain"
+    },
+    "core/crates/layerfs-daemon/src/install.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/install.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "10983307d87e0f21c48edf3011f97e322f34d643"
+    },
+    "core/crates/layerfs-daemon/src/install_file.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/install_file.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "2fae043d20ec1ce2cb9735bdb411a714d8abdb02"
+    },
+    "core/crates/layerfs-daemon/src/install_types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/install_types.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "72e5171c6bc6b7ca839f0e55bce11e5ea4fc43b3"
+    },
+    "core/crates/layerfs-daemon/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/lib.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "e18a1dbb9e048d8f87ad9c83c6b7ed9c1c516d71"
+    },
+    "core/crates/layerfs-daemon/src/native/config.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Daemon composition and custody of native mount readiness; no command process ownership"
+    },
+    "core/crates/layerfs-daemon/src/native/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Daemon composition and custody of native mount readiness; no command process ownership"
+    },
+    "core/crates/layerfs-daemon/src/native/readiness.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Daemon composition and custody of native mount readiness; no command process ownership"
+    },
+    "core/crates/layerfs-daemon/src/native/session.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Daemon composition and custody of native mount readiness; no command process ownership"
+    },
+    "core/crates/layerfs-daemon/src/overlay/captured_run_port.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/captured_run_port.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "c8e2689792a34efab948fcdd0b83cf434c7a32be"
+    },
+    "core/crates/layerfs-daemon/src/overlay/commands.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "2339c756075bd1134dcf1d5c42b64ca3a09bfdb4"
+    },
+    "core/crates/layerfs-daemon/src/overlay/credits.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/credits.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "64479bacfc7d945e88f71f8d89657dcef320a054"
+    },
+    "core/crates/layerfs-daemon/src/overlay/file_port.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/file_port.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "355fbeb7c1220299bf1281f2cce423e24f38668a"
+    },
+    "core/crates/layerfs-daemon/src/overlay/indexed_operation_record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/indexed_operation_record.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "c0ccdfdd020194e139b2add0b98b6de9942df046"
+    },
+    "core/crates/layerfs-daemon/src/overlay/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/mod.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "bcb27282d21e36c498e21252afa73fbb9619b888"
+    },
+    "core/crates/layerfs-daemon/src/overlay/native_ownership_commands.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Consistent answer jobs and indexed native lookup/revocation adapters on the existing SQL owner"
+    },
+    "core/crates/layerfs-daemon/src/overlay/operation_record_port.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/operation_record_port.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "e3562146a6cbf7d569e402e95be948e06c18105d"
+    },
+    "core/crates/layerfs-daemon/src/overlay/owner.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/owner.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "cff6087885f1352338cc8367aa82832669ab7ff9"
+    },
+    "core/crates/layerfs-daemon/src/overlay/queue.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/queue.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "8f0d82309f1715fd76b82ae8bb1cb7a905fe0f54"
+    },
+    "core/crates/layerfs-daemon/src/overlay/read_commands.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Consistent answer jobs and indexed native lookup/revocation adapters on the existing SQL owner"
+    },
+    "core/crates/layerfs-daemon/src/overlay/read_port.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/overlay/read_port.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "ae32a8ad39bf37340b234458db0348b848f0517d"
+    },
+    "core/crates/layerfs-daemon/src/request/credits.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "R handoffs plus N receive slots; bounded owned requests and fair runnable steps"
+    },
+    "core/crates/layerfs-daemon/src/request/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "R handoffs plus N receive slots; bounded owned requests and fair runnable steps"
+    },
+    "core/crates/layerfs-daemon/src/request/queue.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "R handoffs plus N receive slots; bounded owned requests and fair runnable steps"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/attributes.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/directory.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/lookup.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/mutation.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/open.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/read.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/steps/refused.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Resumable filesystem request plans through Workspace/Overlay public interfaces"
+    },
+    "core/crates/layerfs-daemon/src/request/types.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "R handoffs plus N receive slots; bounded owned requests and fair runnable steps"
+    },
+    "core/crates/layerfs-daemon/src/request/workers.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "R handoffs plus N receive slots; bounded owned requests and fair runnable steps"
+    },
+    "core/crates/layerfs-daemon/src/service/completion.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/service/completion.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "a424c5b32bc8f2e681dc3b57bdf9dfc38e05f839"
+    },
+    "core/crates/layerfs-daemon/src/service/job_sql.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/service/job_sql.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "dbe39817eddfad7bcd7d2307ee3fffc1d14efa97"
+    },
+    "core/crates/layerfs-daemon/src/service/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/service/mod.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "e0d1adc9ee5bc287eff740e48e2b8463a0aaa8bd"
+    },
+    "core/crates/layerfs-daemon/src/service/native_observations.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Native request/owner/Store/drain accounting; no command streams or execution registry"
+    },
+    "core/crates/layerfs-daemon/src/service/observations.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/service/observations.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "f24889bfab8bfc0dc35b38232b8887e1e2a2d25e"
+    },
+    "core/crates/layerfs-daemon/src/service/startup.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/service/startup.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "a4e7c52bedddebfa53e7f00af28f4e0d4b4edcfe"
+    },
+    "core/crates/layerfs-daemon/src/store/bind.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/bind.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "25d3da57266e03ba1beac91428356856a530a3d0"
+    },
+    "core/crates/layerfs-daemon/src/store/commit.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/commit.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "da23049cec6c7c8a5cc3e8b77758745f50a0d1d7"
+    },
+    "core/crates/layerfs-daemon/src/store/commit_types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/commit_types.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "b3566a0aeed28f0717898f4903632321ceb5e64b"
+    },
+    "core/crates/layerfs-daemon/src/store/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/mod.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "7eefa968b2dbb15419f962dce94a9106e0f8d746"
+    },
+    "core/crates/layerfs-daemon/src/store/open.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/open.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "ad160753a67435035ceced3a87794c3569d59ffb"
+    },
+    "core/crates/layerfs-daemon/src/store/operation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/operation.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "f37c834964f2b944fe563b7b338bcae23bd1b9c3"
+    },
+    "core/crates/layerfs-daemon/src/store/ports.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/ports.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "dcdf1bd696b0ebc67fb01f6a55c28059efa8de25"
+    },
+    "core/crates/layerfs-daemon/src/store/read_service.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Fair batched demand admission over the fixed healthy read set"
+    },
+    "core/crates/layerfs-daemon/src/store/settle.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/settle.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "a1406caf8bba15661c95b7c9acf3a87e275163f0"
+    },
+    "core/crates/layerfs-daemon/src/store/types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-daemon/src/store/types.rs",
+      "owner": "core/crates/layerfs-daemon",
+      "origin_blob": "b24d677d8ec1a8c8e488a9d0abfe5dc58766de99"
+    },
+    "core/crates/layerfs-fuse/Cargo.toml": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Activate the replacement adapter with the pinned fuser dependency"
+    },
+    "core/crates/layerfs-fuse/src/attributes.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Native request/attribute conversion and bounded native observations"
+    },
+    "core/crates/layerfs-fuse/src/diagnostics.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Native request/attribute conversion and bounded native observations"
+    },
+    "core/crates/layerfs-fuse/src/lib.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Native request/attribute conversion and bounded native observations"
+    },
+    "core/crates/layerfs-fuse/src/mount/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Direct mount/plain detach, connection-specific abort and actual fuser session/join evidence"
+    },
+    "core/crates/layerfs-fuse/src/mount/profile.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Direct mount/plain detach, connection-specific abort and actual fuser session/join evidence"
+    },
+    "core/crates/layerfs-fuse/src/mount/session.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Direct mount/plain detach, connection-specific abort and actual fuser session/join evidence"
+    },
+    "core/crates/layerfs-fuse/src/mount/syscalls.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Direct mount/plain detach, connection-specific abort and actual fuser session/join evidence"
+    },
+    "core/crates/layerfs-fuse/src/request/decode.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "The only fuser-typed request/reply implementation; callback-entry admission and exactly one reply attempt"
+    },
+    "core/crates/layerfs-fuse/src/request/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "The only fuser-typed request/reply implementation; callback-entry admission and exactly one reply attempt"
+    },
+    "core/crates/layerfs-fuse/src/request/reply.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "The only fuser-typed request/reply implementation; callback-entry admission and exactly one reply attempt"
+    },
+    "core/crates/layerfs-fuse/src/request/types.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "The only fuser-typed request/reply implementation; callback-entry admission and exactly one reply attempt"
+    },
+    "core/crates/layerfs-history/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/Cargo.toml",
+      "owner": "core/crates/layerfs-history/Cargo.toml",
+      "origin_blob": "d8538b3f0790c5c69ce77fb7c68fc6984b793dd4"
+    },
+    "core/crates/layerfs-history/src/contract/catalog.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/src/contract/catalog.rs",
+      "owner": "core/crates/layerfs-history",
+      "origin_blob": "56a0a5bdcfbe22679f0cceef25393c6b69ed7a96"
+    },
+    "core/crates/layerfs-history/src/contract/error.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/src/contract/error.rs",
+      "owner": "core/crates/layerfs-history",
+      "origin_blob": "626173f4dc27a187caa7b76b5a1dd445fb09cd3c"
+    },
+    "core/crates/layerfs-history/src/contract/identity.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/src/contract/identity.rs",
+      "owner": "core/crates/layerfs-history",
+      "origin_blob": "f231c892446ba8eb02da2e8f3511539894703752"
+    },
+    "core/crates/layerfs-history/src/contract/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/src/contract/mod.rs",
+      "owner": "core/crates/layerfs-history",
+      "origin_blob": "37313bcbc2d262fdbd0665db7e9b1bab41455bfe"
+    },
+    "core/crates/layerfs-history/src/contract/query.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/src/contract/query.rs",
+      "owner": "core/crates/layerfs-history",
+      "origin_blob": "f32beb56bbf8d288965cd87ca0fcc15b97cc3bf4"
+    },
+    "core/crates/layerfs-history/src/contract/records.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/src/contract/records.rs",
+      "owner": "core/crates/layerfs-history",
+      "origin_blob": "1f89a3636f782e3b4e8edb58e864f1d1e816e4ed"
+    },
+    "core/crates/layerfs-history/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-history/src/lib.rs",
+      "owner": "core/crates/layerfs-history",
+      "origin_blob": "6cee34ae012006e7f8834eb3d83b5513eaf864e5"
+    },
+    "core/crates/layerfs-overlay/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/Cargo.toml",
+      "owner": "core/crates/layerfs-overlay/Cargo.toml",
+      "origin_blob": "07c28846bd1cabe2ee02241d5765eaa139d33b4b"
+    },
+    "core/crates/layerfs-overlay/sql/accounting.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/sql/accounting.sql",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "8cf2aa4a994f529258584686e0635dfc74239cab"
+    },
+    "core/crates/layerfs-overlay/sql/native_ownership.sql": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Shipped native ownership schema/index/job statements; actual schema/version review required"
+    },
+    "core/crates/layerfs-overlay/sql/schema.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/sql/schema.sql",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "19f1c2f466def79200a003c95438e3b57f4c0013"
+    },
+    "core/crates/layerfs-overlay/src/contract/custody.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/contract/custody.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "36edd8533d3714f6af7dad8ee7402472ddec02e6"
+    },
+    "core/crates/layerfs-overlay/src/contract/error.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/contract/error.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "08d5151fd1ce167d8f5acd877a3180d9448669b8"
+    },
+    "core/crates/layerfs-overlay/src/contract/indexed_operation_record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/contract/indexed_operation_record.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "4416346eb21eff67ac1661f2081f0ac36b3b20e6"
+    },
+    "core/crates/layerfs-overlay/src/contract/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/contract/mod.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "0f7f8fd583ea4b9df0a68ab5c00fed1d1ca4f43e"
+    },
+    "core/crates/layerfs-overlay/src/contract/types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/contract/types.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "423f0259b5ff8bf1308b58134225c09213e1f1d2"
+    },
+    "core/crates/layerfs-overlay/src/database/accounting.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/database/accounting.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "3b74679b2ad4b929aff8200bfadc95b943a1787e"
+    },
+    "core/crates/layerfs-overlay/src/database/allocation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/database/allocation.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "663350976a1ff1711a05abb02886f3abd6fae4c5"
+    },
+    "core/crates/layerfs-overlay/src/database/connection.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/database/connection.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "f63d81c7b7b2c8b4b6743303ce59d69e17a3703a"
+    },
+    "core/crates/layerfs-overlay/src/database/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/database/mod.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "22c4bbc3032aa79d9963addfd30d9cc12a54259c"
+    },
+    "core/crates/layerfs-overlay/src/database/profile.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/database/profile.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "7488546efacf69f4ff390ea4b798c546f0d797c2"
+    },
+    "core/crates/layerfs-overlay/src/database/startup.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/database/startup.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "00dfc3edf7f121422881134e49eb6605dd527e30"
+    },
+    "core/crates/layerfs-overlay/src/database/statements.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/database/statements.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "d901f3101e3c5d3859180109a7b1fc7f4b7730aa"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/access_plan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/access_plan.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "d621185243ab0975eea4c184e8c528ece0f21637"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/captured_runs.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/captured_runs.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "3728f27ad1776618a44b5f490f884ceea6d282ff"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/indexed_operation_record_plan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/indexed_operation_record_plan.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "4fb1ad9cc959f0c91510a24d044bba7404b1f3c2"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/lifetime_plan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/lifetime_plan.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "9d9b25c6bfaae11e0eaa963c0d23c61b07381efd"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/metrics.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/metrics.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "be3d92f24bb1692e87bf5400f0fca16b315a70ef"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/mod.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "408430960cc206bb74d7fd8ad6208bc3e6bcb412"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/native_ownership_plan.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "EXPLAIN/statement/work observations for new owning native jobs"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/payload.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/payload.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "3d15bc9c3978d76476935ee468fc6c4b0346514f"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/source_plan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/source_plan.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "aa091c0905dfb7f7fa9df71a0a58e2fa4ff86771"
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/startup.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/diagnostics/startup.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "30791602cc4dbdcee280d8ced5bfd8f696652a3b"
+    },
+    "core/crates/layerfs-overlay/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lib.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "c3da81aedb6116181528745906ceeafe99c2e4dc"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/captured_reader.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/captured_reader.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "c81e13c7564f00c50b605943e744023cac26da29"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/close.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/close.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "df14d4e7b6f5b979671b380e708cf1f3562784e3"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/composition.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/composition.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "05661c266a97a10b6b1884712363a9ed0ac6195f"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/file_owners.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/file_owners.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "db444aed5112c98e6ba5729f1f4b76f8c6f96589"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/frontier.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/frontier.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "aaf9c91382094cec849cef99b908aa7cfa371f2c"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/generation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/generation.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "a7fbf6179e17136c7a0f8fe8d5d984b253561915"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/indexed_operation_record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/indexed_operation_record.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "e44523b07960bf83bf8af8de4fc07a32ab74e086"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/lookup.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/lookup.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "e47d8034daee895079ea77413f92dfb339e4db71"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/mod.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "540331b08b0848a54acdfccabd73de29f29bea81"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/native_group.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Checked mount/serial lookup counts, fixed logical revocation and bounded physical retirement"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/native_lookup.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Checked mount/serial lookup counts, fixed logical revocation and bounded physical retirement"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/operation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/operation.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "2a1d4c0f926633e2da6dd52c57ce61ea512b1188"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/operation_record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/operation_record.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "010a9de4ed598ddcde89a619012eb91b42d596f3"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/orphan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/orphan.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "7e1c47a9c66607773eaca55d569c1effe37fb495"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/retire.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Checked mount/serial lookup counts, fixed logical revocation and bounded physical retirement"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/source.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/source.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "7b6f11cae9d8beef741316a0689dda78e3ec8fef"
+    },
+    "core/crates/layerfs-overlay/src/lifetime/workspace.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/lifetime/workspace.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "ff8c0d74c4d257503ddd9806c81f16458d820972"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/debt.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Indexed native-owner debt retirement and maintained debt/admission observations"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/garbage.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/maintenance/garbage.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "2a6f9231066cd2efb910e2c530a63289ee50703c"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/indexed_operation_record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/maintenance/indexed_operation_record.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "177594a79b2ac074adeb48c101d18aa64e36ff52"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/maintenance/mod.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "88b0317a3b860400dafcf3249ea0f7b976ccff05"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/native_ownership.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Indexed native-owner debt retirement and maintained debt/admission observations"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/orphan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/maintenance/orphan.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "21f32e1b94cc05f81ffefadb21163c6ecc3684a4"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/ready.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/maintenance/ready.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "85c66e7517b3fa12b743e5a320f16dd7d5d51cb2"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/reclaim.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/maintenance/reclaim.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "6eaf21038aa7b160b99b6b6d131581de7cee2e49"
+    },
+    "core/crates/layerfs-overlay/src/maintenance/source_wait.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/maintenance/source_wait.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "5ca4b67726a87e8d038b079e82d3f1b340856e4f"
+    },
+    "core/crates/layerfs-overlay/src/namespace/captured_namespace.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Consistent point/read-acquire jobs and indexed captured namespace streaming"
+    },
+    "core/crates/layerfs-overlay/src/namespace/compound.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/namespace/compound.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "12ec45d056cc8b3bc5a5928f57aa7486f066b0a0"
+    },
+    "core/crates/layerfs-overlay/src/namespace/directory_entry.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/namespace/directory_entry.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "a8dbb23515532c6e4598567300e70b681e5a62dd"
+    },
+    "core/crates/layerfs-overlay/src/namespace/inode.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/namespace/inode.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "a7bb64a9cab372df30e2fccd21603a281984699f"
+    },
+    "core/crates/layerfs-overlay/src/namespace/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/namespace/mod.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "456cb23908ff0376b7da0a619ebb378cb7e8d8c1"
+    },
+    "core/crates/layerfs-overlay/src/namespace/read_compound.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Consistent point/read-acquire jobs and indexed captured namespace streaming"
+    },
+    "core/crates/layerfs-overlay/src/payload/access.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/payload/access.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "56dcc9f5ab986a8568410ae8538df8ed06120339"
+    },
+    "core/crates/layerfs-overlay/src/payload/captured_runs.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/payload/captured_runs.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "a808e7cd88d96f02a705ca759798104d389b0219"
+    },
+    "core/crates/layerfs-overlay/src/payload/captured_types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/payload/captured_types.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "a101d99b66b48312827ed8efb5eac90347a88b31"
+    },
+    "core/crates/layerfs-overlay/src/payload/cells.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/payload/cells.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "998905eb4370fb20e972941ea6806d6e5b7e3306"
+    },
+    "core/crates/layerfs-overlay/src/payload/layers.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/payload/layers.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "be6b77d8b99c6e20923e558c4b20878a3fa719df"
+    },
+    "core/crates/layerfs-overlay/src/payload/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/payload/mod.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "505b431438a91fe915283e875f802179b34bd2ea"
+    },
+    "core/crates/layerfs-overlay/src/payload/stream.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-overlay/src/payload/stream.rs",
+      "owner": "core/crates/layerfs-overlay",
+      "origin_blob": "66722d65ee5c7d7b233bf81bb1b506c4c5bec8cc"
+    },
+    "core/crates/layerfs-persistence/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/Cargo.toml",
+      "owner": "core/crates/layerfs-persistence/Cargo.toml",
+      "origin_blob": "70b441a58afa543850032df61527a2d5d5ceee69"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/abandoned.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/abandoned.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "585dce6994961ad9454dd0fbce4feb2ba7602ff6"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/advance.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/advance.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "3021a46e5de960db486b92e0bc2d43781462caad"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/begin.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/begin.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "769252b7527cf03fe455921a5339a4bb099b4353"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/bind_native.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/bind_native.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "cf331bbb1aa6adc00dc58c07a5ae220b50e8fd29"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/bindings_first.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/bindings_first.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2e0412bf1846b6676e71cf80834ada8020e6431f"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/bindings_next.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/bindings_next.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2e21cf93c14afa24cb0deac2bd727f2d015feb9f"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/charge.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/charge.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2f7afb9651e6014f858b1ccb221786addefe0e68"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/claim_epoch.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/claim_epoch.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "48b9d0f99aeae1014d845c8d4260f5e9a7584d09"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/complete_file.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/complete_file.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "6fecba8ade6e2f6096a3e5ab22f158f08784ef3f"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/credit.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/credit.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "642bc5dcbdc537e5512ebe35589d83f0e1a15962"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directories.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directories.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "b51e3377bb205120f390b3d291f4cdf247482ecf"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directory_path.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directory_path.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "046b852b13df0e61ab4a566af1484cc80e22316d"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directory_sizes.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directory_sizes.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "b16b585602023e757fae9d98dcb85099d4ee9d56"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entries.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entries.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "44cfd466ca797775bfc069000f3f6849fd4751ff"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entry_keys.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entry_keys.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "629fdee98f37f021744a16451f6bfb08d631833c"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entry_tail.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entry_tail.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "cab46bea936dbe97c2de415f06b7ad864c9dd4bd"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "e643afe99b723972a6c50bb302e6578d3868f831"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native_keys.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native_keys.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "ff4df78cda35d1166442d347341cb45bb403cd21"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native_tail.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native_tail.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "9bdae09da0a0401192f8f851e6784c0f550c51f4"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entries_first.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entries_first.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "3c360d0ff70dee47ee36958b624337f0d5d29d17"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entries_next.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entries_next.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a074663365bef812783f9710720adb24dcb68013"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entry_dependencies.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entry_dependencies.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "4deed7889049aaec3cd2a3985afb073f6f3ed6b0"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/file_roots.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/file_roots.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "4e1b6fd54612c0c1df64f6d9bf61120d643cca6e"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/job.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/job.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "cfee908ef82a6fd09d943e19fbfea4c6c077a81b"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/job_sizes.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/job_sizes.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2d4e681d4a55a78a8b8b664d8d829d4a173064cb"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/jobs.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/jobs.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "b2ce789c15738f312a5c9828e1f1c1beba085656"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/owner.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/owner.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "f155e3067458656943f7e0846d48928881855932"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/place_entry.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/place_entry.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "15876c8a4262c69937146150ae05fac1695bd643"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/put_entries.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/put_entries.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a2bfea08df78a63005c1d40a4cb8296251e1805a"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/put_entry.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/put_entry.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "3d5a2dd330153ed5bf11e1fd3d8d81b1a8b0011d"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/put_native.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/put_native.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "ca65534b77a1c9ded3ba8dbd1ab7ec3342398964"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/release.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/release.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "79d8e261d5f553cc86855738b5ae538ad960205e"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/release_abandoned.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/release_abandoned.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "79d8e261d5f553cc86855738b5ae538ad960205e"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/set_directory_root.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/set_directory_root.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "7b9b4b3c550f317efbb5b9bc7f8c3d6262d742ee"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/unplaced_first.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/unplaced_first.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "e47650b6b3824dc057802b3979112d5d8a8a6917"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/unplaced_next.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/unplaced_next.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "ce02f9538a3c0622ae8170a89eec7b067cac73e3"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "fe7526bf2bce0341eb145bc1a19712f9ac68662b"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/history.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/history.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "976d5e08b2003161f4d08f737320b6c3b060effb"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/metadata.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/metadata.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "8645c47fa10cea38b8064c531a6b28c0b2b96948"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/objects.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/objects.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a7f030d293fa28e313d254472788c7f8a2d175c1"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/objects_units.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/objects_units.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "f8a95c85a547403fe865987df166b2c57119f5f6"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/objects_units_index.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/objects_units_index.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "e13ace066d0c9fddd9905093d8de763f5e480ab6"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/allocation_advance_scope.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/allocation_advance_scope.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "f81a32a1ff6afd8d8554fcbf37d6d04934009c4e"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/allocation_insert_scope.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/allocation_insert_scope.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "3f3f639afcef7244bf1dcb36829da879ec65a2c6"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/allocation_scope_by_id.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/allocation_scope_by_id.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "03bc7fdab59e0bbc38a5e65a16e92e3d69394abb"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_by_id.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_by_id.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2168c674341b2437ae0d6558b7269afb9404acf4"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_first_page.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_first_page.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "fb60c5b237abbd5b55903f96f9abb669c482f30e"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_name_taken.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_name_taken.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "66493a918d823d85fb4a54df2da12dc947546688"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_next_page.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_branch_next_page.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "6d75465e526c7bcf2123c170f8bacda01b6f2cf8"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_insert_branch.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/branch_insert_branch.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "641380e7021d3b5c950e4475bb4c4df687e5a9c1"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_advance_branch.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_advance_branch.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "1157ecd59e610bfc32484fbd495e2f6a5b7f871c"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_commit_by_id.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_commit_by_id.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "fbe4e16f444923dba961017ed0915f9211d75e91"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_delete_stage.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_delete_stage.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "51e479101887441499b7c378ddaaab5b6bead854"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_insert_commit.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/commit_insert_commit.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "b0a2c2cd67cb0caab0d891f1f13914a5d8fd5eb2"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_advance_stack.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_advance_stack.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "1947bbe5fe07e415a45c9b3475f29297336ad9a6"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_insert_layer.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_insert_layer.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "11427c15016e74f57f0977786a34869986c8ca2c"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_insert_stack.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_insert_stack.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "534e8fd8bc2dc00e5ba6dc4721ff8480b8b3e1a9"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_layer_by_id.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_layer_by_id.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "41834a73fb7f68c5b0eb9a6caf7f04eb7f940814"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_layer_by_source.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_layer_by_source.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "e789011fc86f529fb328ae1a4afee10690421ee2"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_layer_root.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_layer_root.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "23797c4ae4782527751ff1bec80fb0ed470089fe"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_by_id.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_by_id.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "bda0abe24a76ef4e7b935b4d7ee05e26c990939c"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_first_page.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_first_page.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "6e4c239eec8dfb8c6ad60580c1e5e4df5e959170"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_head.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_head.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2dda32502d7ae15fe989a23b66ed310148f6c0d2"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_name_taken.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_name_taken.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "875ddc40860f3acac944da0a43e7ea68cfbc9dd5"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_next_page.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/layerstack_stack_next_page.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "1bcd9ffd33333ddd6c1674865cc7ae56a4882ef7"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_bump_token.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_bump_token.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "17616dab88d2c283bb35a1338fb20cfe809d672b"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_delete_stage.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_delete_stage.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "51e479101887441499b7c378ddaaab5b6bead854"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_insert_stage.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_insert_stage.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "8e462fa72fcad0f703ce10e5dd10db009e1412e6"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_next_token.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_next_token.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "d86dcd5ff911962df7daeef4f0bafc3bd7e8f7fb"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_stage_by_workspace.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_stage_by_workspace.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2f2c67be474970d5618fb16c492f446d8dc9d304"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_stage_first_page.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_stage_first_page.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "357a251045298d0c08688444d1dd1ce80bdf9f57"
+    },
+    "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_stage_next_page.sql": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/sql/sqlite/queries/history/staging_stage_next_page.sql",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "7d293d1a117e6ed0a34d1b59f11346874eac917e"
+    },
+    "core/crates/layerfs-persistence/src/backend/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "65362efac053d7c8ef4175759a2e9bfdf88563a2"
+    },
+    "core/crates/layerfs-persistence/src/backend/records.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/records.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "7f5ca1bff17adabc9e3229c588bae1d88339d9a5"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/accounting.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/accounting.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "078cda19905f68c853175407fab0f1f0738d8765"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/cleanup.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/cleanup.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "b7229a89ea1324b405266d5dd3b4b0ff88f3e6b7"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/entry_windows.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/entry_windows.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "10c31c7185027dba97e40b65935ffd6ed64b0f48"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "eaeb3cf36de35f2bb6b0c43d85bcaa470b69c8b2"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/reads.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/reads.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "bdeca46f91904dce18673ff80e66dc4a7bd24964"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/root_windows.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/root_windows.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a592a72cba12976af366dc1e59e59fbd5fe0424f"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/statements.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/statements.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "3a0995233744486a02cb65ddd109a3c9e8d65844"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/writes.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/writes.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "78eb17cd044b2cffbe6509110b53b80d52cb1752"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "d8d5d47303f2105fc0d3b6188967e15aec57bf0f"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/file_control.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/file_control.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "e45414b4de45ca5ac7c7880efd25c39cce2fdf1f"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/metadata_allocation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/metadata_allocation.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "75da948ce7f3c8d054a3eac1bbfefdc3c7bddbca"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/metadata_locations.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/metadata_locations.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "980cc239220daa5e4911be1c7b70f9bc1032daa2"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/metadata_policy.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/metadata_policy.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "ba4601548467b04acae5f22310ce66f5eb01d1c4"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/metadata_pooling.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/metadata_pooling.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "ef97c429d40e9e636aec69a41b8d12edced03773"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/metadata_signatures.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/metadata_signatures.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "84a60b8708b0d55fee9101265673ee8c964dec62"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "4455e8acad58e08e4a3ed19b95068c0895b82482"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/objects_read.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "faaba77887465a99053f5e160899ec86ae59a132"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_selection.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/objects_selection.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "d5098f685c73e99f452aeae547a07ccea23e0e36"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/prepared.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/prepared.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "8838bc324828d9a202735e5d2ef601d58f00ee2f"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/profile.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/profile.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "ffc91456872e966eaf927cec3c929e0f78d8ba5e"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/publish.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/publish.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "c7ac0871cf74fb7e6586e919c5abe3a176391756"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/query.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/query.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "d9145db9741706accdf1e04b535af2e64ec97c20"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/reclamation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/reclamation.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "09f19669bf722ccae5df629f0e92d979694d7207"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/rows.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/rows.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "9c9730e0c10ae91f42eaf1267e481226ca66f295"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/schema.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/schema.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "32ccf0941bded8918437990f8f4b1b0167d8ef51"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/seal.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/seal.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "d36653cdb86d5f4a0e2c81778646f387b856f64c"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/seal_allocation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/seal_allocation.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "cb1325101ae41544f08747bd4c0c826a4e3ab859"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/statement_work.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/statement_work.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "07bf7718824a860a71d5420299c3e2b8bb51d82b"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "f87508d77223cea578fff07466c1bf717970263a"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/unit_io.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/unit_io.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "8d86d24df88fef6de6e01cda522e3a061a847c95"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/unit_layout.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/unit_layout.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "1ddf89f34d42598db45244878689020a33b8cde5"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/units_publish.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/units_publish.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "9d5998255795b02fc4198a4557728babace9bfad"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/units_read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/backend/sqlite/units_read.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "33beaba68d75cf5d8c6dd06893ee48276a547527"
+    },
+    "core/crates/layerfs-persistence/src/history/allocation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/allocation.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a02a350137e02a631070c04b2e8dd4d842600174"
+    },
+    "core/crates/layerfs-persistence/src/history/bindings.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/bindings.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "8df2570787aaf4c7898513c620ddc70dee71a542"
+    },
+    "core/crates/layerfs-persistence/src/history/branch.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/branch.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a154b2f3c1e3a63393c3fce29ab8cf459ac4e9e6"
+    },
+    "core/crates/layerfs-persistence/src/history/catalog.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/catalog.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "d29e83e3d894c466242bbd7bf0576a6e32674aa5"
+    },
+    "core/crates/layerfs-persistence/src/history/commit.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/commit.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "8423e1a46656092a020f95f975c2a5dae504d4db"
+    },
+    "core/crates/layerfs-persistence/src/history/layerstack.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/layerstack.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "641a8bbcd1f91c327ba0640d8039efb5d71261f9"
+    },
+    "core/crates/layerfs-persistence/src/history/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "c81aa7c22606731db5be0a0b905fdf191d11bd44"
+    },
+    "core/crates/layerfs-persistence/src/history/provider.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/provider.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "5758f0c4ab4b5af5b9c1dc3380ef177b5480e195"
+    },
+    "core/crates/layerfs-persistence/src/history/rows.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/rows.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "1ebd9e3ccb1185697c32e4a6452d549cc29714e4"
+    },
+    "core/crates/layerfs-persistence/src/history/staging.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/staging.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "1a41b2b76db515e8e0f34622c3868f18912bac61"
+    },
+    "core/crates/layerfs-persistence/src/history/transaction.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/history/transaction.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a4c9d50ff2cbd159913c9e41d6ddd63d11aa32aa"
+    },
+    "core/crates/layerfs-persistence/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/lib.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "4759262eb3b26087addbe0280c9095b0dff357c8"
+    },
+    "core/crates/layerfs-persistence/src/metadata/allocation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/metadata/allocation.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "25e1ce10bf88a5da6ca1515e95cf9ce19e7f243c"
+    },
+    "core/crates/layerfs-persistence/src/metadata/locations.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/metadata/locations.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "a15b8892e1b614d6c5684f2d0c4d04ca2af75480"
+    },
+    "core/crates/layerfs-persistence/src/metadata/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/metadata/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "27126f32df9ce2d67ce8f6af6df6788b8f53cd2a"
+    },
+    "core/crates/layerfs-persistence/src/metadata/policy.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/metadata/policy.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "031f33af92321cbba700b3bfc4e34a557a2852bf"
+    },
+    "core/crates/layerfs-persistence/src/metadata/pooling.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/metadata/pooling.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "c22e82e67f15bb50376f123916bfd085c94f57a1"
+    },
+    "core/crates/layerfs-persistence/src/metadata/signatures.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/metadata/signatures.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "0112c47e9a5ba5c85883f4d6d7c5cdc08006df67"
+    },
+    "core/crates/layerfs-persistence/src/objects/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/objects/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "e4b7e9847d2b21789cbfd93e667287e31361e31e"
+    },
+    "core/crates/layerfs-persistence/src/objects/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/objects/read.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "3874e9a28907cedb5e999c7b1c4da0b2394ddb66"
+    },
+    "core/crates/layerfs-persistence/src/storage/acquisition/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/storage/acquisition/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "c720bc702e9735b741b8718d5ff809b2f9bbc139"
+    },
+    "core/crates/layerfs-persistence/src/storage/acquisition/provider.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/storage/acquisition/provider.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "0cbe8aa76f1c89f31a791a28a146748bf98a1c37"
+    },
+    "core/crates/layerfs-persistence/src/storage/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/storage/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "795d2d260ff30e72d54076d9b98c2bd4c9e3427c"
+    },
+    "core/crates/layerfs-persistence/src/storage/provider.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/storage/provider.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "6cef3e217e6dc8fb2c5c5cbfd9e0b0b5a68c29aa"
+    },
+    "core/crates/layerfs-persistence/src/storage/publication.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/storage/publication.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "2a8fd6cc75c9e80c4347ed89d6383ecd4179e223"
+    },
+    "core/crates/layerfs-persistence/src/store/config.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/store/config.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "8e13a0552f8be1b84a8d7dd9e6f7ca03fefcad7c"
+    },
+    "core/crates/layerfs-persistence/src/store/handles.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/store/handles.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "83eb1a58a35ea51e43d041b0f1033d2022731a5f"
+    },
+    "core/crates/layerfs-persistence/src/store/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/store/mod.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "73d521202fbad44526e5e3af692c978f647182f3"
+    },
+    "core/crates/layerfs-persistence/src/store/open.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/store/open.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "7c3b329664580de284b56bdf8bb7464a582b466d"
+    },
+    "core/crates/layerfs-persistence/src/store/seal.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-persistence/src/store/seal.rs",
+      "owner": "core/crates/layerfs-persistence",
+      "origin_blob": "23354c7c7771d84f22e8f7bbf5e14e3aa4b9d5ea"
+    },
+    "core/crates/layerfs-project/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/Cargo.toml",
+      "owner": "core/crates/layerfs-project/Cargo.toml",
+      "origin_blob": "36cc2a5fc53d94a9cedbf43908b73e273671b6d6"
+    },
+    "core/crates/layerfs-project/src/import/backing.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/backing.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "44fc5802c0304193172936c41fc16617923b4174"
+    },
+    "core/crates/layerfs-project/src/import/batch.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/batch.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "21504ea6b85a8de0c81fd6447a2d678c3e7e7df2"
+    },
+    "core/crates/layerfs-project/src/import/error.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/error.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "39fec9cfa2ab8b1ab1d68d55eb90b2b89e1bb598"
+    },
+    "core/crates/layerfs-project/src/import/files.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/files.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "462226da5f06cf0b3fb9609ae2eb2dd3fbfea056"
+    },
+    "core/crates/layerfs-project/src/import/init.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/init.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "f3a7dd2613ea641f426d42cea0129e2c127703b3"
+    },
+    "core/crates/layerfs-project/src/import/metadata.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/metadata.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "99e30641d74d239a5be34913ae78f6ffa72ef7e2"
+    },
+    "core/crates/layerfs-project/src/import/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/mod.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "937161bb5242261cbee85fc606c59bdb68e2647d"
+    },
+    "core/crates/layerfs-project/src/import/namespace.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/namespace.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "407b933d08241bd4d2c65558992e066a67b7de53"
+    },
+    "core/crates/layerfs-project/src/import/scan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/scan.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "ebbebbf10ff600f8386f9efd0a0b3b0878f275d0"
+    },
+    "core/crates/layerfs-project/src/import/source.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/source.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "62784201ad94938895ecc2d736cd36a32d305d6c"
+    },
+    "core/crates/layerfs-project/src/import/work.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/import/work.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "18a8dc4b5d9134b6ecdf4c93d273a793a84d6395"
+    },
+    "core/crates/layerfs-project/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-project/src/lib.rs",
+      "owner": "core/crates/layerfs-project",
+      "origin_blob": "46c6b2eeeee48406137263db8315ceadcc60f3bc"
+    },
+    "core/crates/layerfs-sandbox/Cargo.toml": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Activate the actual sandbox runtime replacement"
+    },
+    "core/crates/layerfs-sandbox/src/access/identity.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Sandbox setup establishes command identity, Workspace visibility and protected Store/overlay/credential access"
+    },
+    "core/crates/layerfs-sandbox/src/access/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Sandbox setup establishes command identity, Workspace visibility and protected Store/overlay/credential access"
+    },
+    "core/crates/layerfs-sandbox/src/access/visibility.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Sandbox setup establishes command identity, Workspace visibility and protected Store/overlay/credential access"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/create.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/exec.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/inspect.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/logs.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/ports.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/remove.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/docker/streams.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One attempted Docker operation; ordinary Bash/command execution, standard streams and runtime result custody"
+    },
+    "core/crates/layerfs-sandbox/src/backend/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Concrete backend declarations; no generic alternate-backend factory"
+    },
+    "core/crates/layerfs-sandbox/src/lib.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Public concrete Sandbox ownership and ordinary execution interfaces"
+    },
+    "core/crates/layerfs-sandbox/src/lifecycle/create.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Container/daemon startup readiness and exact terminal container-resource disposition"
+    },
+    "core/crates/layerfs-sandbox/src/lifecycle/delete.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Container/daemon startup readiness and exact terminal container-resource disposition"
+    },
+    "core/crates/layerfs-sandbox/src/lifecycle/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Container/daemon startup readiness and exact terminal container-resource disposition"
+    },
+    "core/crates/layerfs-sandbox/src/lifecycle/readiness.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Container/daemon startup readiness and exact terminal container-resource disposition"
+    },
+    "core/crates/layerfs-sandbox/src/owner/config.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owned sandbox/container identity and exact route attachment"
+    },
+    "core/crates/layerfs-sandbox/src/owner/identity.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owned sandbox/container identity and exact route attachment"
+    },
+    "core/crates/layerfs-sandbox/src/owner/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owned sandbox/container identity and exact route attachment"
+    },
+    "core/crates/layerfs-sandbox/src/owner/routing.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owned sandbox/container identity and exact route attachment"
+    },
+    "core/crates/layerfs-sandbox/src/types/execution.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Public sandbox/process results; unknown runtime outcomes retained, no daemon Exec identity"
+    },
+    "core/crates/layerfs-sandbox/src/types/failure.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Public sandbox/process results; unknown runtime outcomes retained, no daemon Exec identity"
+    },
+    "core/crates/layerfs-sandbox/src/types/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Public sandbox/process results; unknown runtime outcomes retained, no daemon Exec identity"
+    },
+    "core/crates/layerfs-sandbox/src/types/sandbox.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Public sandbox/process results; unknown runtime outcomes retained, no daemon Exec identity"
+    },
+    "core/crates/layerfs-storage/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/Cargo.toml",
+      "owner": "core/crates/layerfs-storage/Cargo.toml",
+      "origin_blob": "ced1758fe1786734bcdffdd216e433cba32b1669"
+    },
+    "core/crates/layerfs-storage/src/encoding/codec.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/codec.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "da26a7561133f8151751e46abe39eb929d5d9467"
+    },
+    "core/crates/layerfs-storage/src/encoding/decode.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/decode.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "00e135679b3d6b430edacc6087bd4a1f41dcfe2c"
+    },
+    "core/crates/layerfs-storage/src/encoding/delta/candidates.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/delta/candidates.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "b2a7bea5c582b5d5eeb2b765093038cb3ad564b7"
+    },
+    "core/crates/layerfs-storage/src/encoding/delta/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/delta/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "caff7962522eb669f5471b79c5002446412a1154"
+    },
+    "core/crates/layerfs-storage/src/encoding/delta/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "99889f282a25dace37e7beac91ecf9d4bf1a992e"
+    },
+    "core/crates/layerfs-storage/src/encoding/delta/record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/delta/record.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "48c0aac034547fe2292c54ac967e5127ee5e38cd"
+    },
+    "core/crates/layerfs-storage/src/encoding/delta/select.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/delta/select.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "f9ac6d3f2e388e143f44159ef917b58807b82844"
+    },
+    "core/crates/layerfs-storage/src/encoding/full.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/full.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "5fe59609bcb0c34cce742a93f3e6295475f92173"
+    },
+    "core/crates/layerfs-storage/src/encoding/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "4078ee55987e193497b764041b8688f17342bd71"
+    },
+    "core/crates/layerfs-storage/src/encoding/pack_cache.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pack_cache.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "b6924b8dfcc37ac85702b87b4feab8080104f26d"
+    },
+    "core/crates/layerfs-storage/src/encoding/pack_units.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pack_units.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "b370acef68cfa93ed733c5072d78bf28f01381a4"
+    },
+    "core/crates/layerfs-storage/src/encoding/pool/counters.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pool/counters.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "4787798f4a54401a00ce978009cb5aa9c727aa93"
+    },
+    "core/crates/layerfs-storage/src/encoding/pool/delta.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pool/delta.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "8f8bd6573bf8cbfe33bcdad605a740acf25ec7cc"
+    },
+    "core/crates/layerfs-storage/src/encoding/pool/index.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pool/index.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "11afa246e38d724a86390a2c868c295727f0cdaf"
+    },
+    "core/crates/layerfs-storage/src/encoding/pool/leaf.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pool/leaf.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "2cb1b85a6b8e7825be599d8f77cb51d303830467"
+    },
+    "core/crates/layerfs-storage/src/encoding/pool/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pool/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "e1f902ca3a19ba1441fae504f9ba3daee2a1633d"
+    },
+    "core/crates/layerfs-storage/src/encoding/pool/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pool/read.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "54d4288c10b1cc525393b73e007ac2135d7ca26a"
+    },
+    "core/crates/layerfs-storage/src/encoding/pool/value_group.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/encoding/pool/value_group.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "6d27db96c075589c0a480661c810fd01dd12cedf"
+    },
+    "core/crates/layerfs-storage/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/lib.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "250dfd9c7ec4c6ec08e10578b5932ac26c3024e9"
+    },
+    "core/crates/layerfs-storage/src/pack/assemble.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/pack/assemble.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "aa39022c6a4743ba402fdbf12c7cb4d5575f318d"
+    },
+    "core/crates/layerfs-storage/src/pack/layout.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/pack/layout.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "d9b82dcb6a2c4503fc717f2ecd1f4d5b9dabba02"
+    },
+    "core/crates/layerfs-storage/src/pack/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/pack/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "5aa718219a98dcea116960fa02b62a9337335dca"
+    },
+    "core/crates/layerfs-storage/src/pack/placement.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/pack/placement.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "a125171a7c8a23b9b386373bcba3eea3ccd81d36"
+    },
+    "core/crates/layerfs-storage/src/port/acquisition/contract.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/acquisition/contract.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "7f138744613805cb2e321a35980f541e34f39490"
+    },
+    "core/crates/layerfs-storage/src/port/acquisition/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/acquisition/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "4d9821285654825c6311b576befb931129546130"
+    },
+    "core/crates/layerfs-storage/src/port/acquisition/rows.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/acquisition/rows.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "4c6518491f19eb3798d566e69b849363bee987ec"
+    },
+    "core/crates/layerfs-storage/src/port/acquisition/work.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/acquisition/work.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "5a32d6db7eea8e3a3b6b73f7022ac4c6f9e66c99"
+    },
+    "core/crates/layerfs-storage/src/port/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "83a45265c23b74ab9748008abf833d803c512a70"
+    },
+    "core/crates/layerfs-storage/src/port/pack.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/pack.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "320fc9f227f3db5cb5e5f9d7faacaea1cfe858bc"
+    },
+    "core/crates/layerfs-storage/src/port/persistence.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/persistence.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "ec1e28b114e1ab09bd2e18f6dc5d67081fb11e31"
+    },
+    "core/crates/layerfs-storage/src/port/read_pack.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/read_pack.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "6cabe426115aa04377c48e57e0894067196e6953"
+    },
+    "core/crates/layerfs-storage/src/port/read_scoped.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/read_scoped.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "aa6d4646b8ffe8ad206cfb377e2f407b127ff22b"
+    },
+    "core/crates/layerfs-storage/src/port/read_selection.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/port/read_selection.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "afff979beb7fdca6e3d757c45e23e33b715a88e4"
+    },
+    "core/crates/layerfs-storage/src/read/counters.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/counters.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "595009cd7fa3e5d24b790e79e79f54e2ca49777d"
+    },
+    "core/crates/layerfs-storage/src/read/fetch.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/fetch.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "bccc55f82de7b242828f6445a3a523cbfdf36cd3"
+    },
+    "core/crates/layerfs-storage/src/read/length.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/length.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "e7bdd85caf3ba70390eede0eb8a344347b4ae86f"
+    },
+    "core/crates/layerfs-storage/src/read/locator_cache.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/locator_cache.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "b6f14712aa9b94589572802e4074db5a7ecee63e"
+    },
+    "core/crates/layerfs-storage/src/read/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "1059054b92c7ebed22f3e2d94743f4a02ba34ba5"
+    },
+    "core/crates/layerfs-storage/src/read/objects.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/objects.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "35d4f57eeff616b1f3241155434a09a634fd1c10"
+    },
+    "core/crates/layerfs-storage/src/read/prefetch.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/prefetch.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "b7101a5fc20e8105159313c8661d8ae83bfaf10f"
+    },
+    "core/crates/layerfs-storage/src/read/provider.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/provider.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "01cac893ea98320e3f172e58a874a9e36b515d01"
+    },
+    "core/crates/layerfs-storage/src/read/units.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/read/units.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "a4ae3572f839346cd35680c766d73366d3a94826"
+    },
+    "core/crates/layerfs-storage/src/save/batch.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/batch.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "0463495e156210a9fedf7801bb1c62197047581d"
+    },
+    "core/crates/layerfs-storage/src/save/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "a55d7c58d374e7806d8f930a9f5ce6aa374523f3"
+    },
+    "core/crates/layerfs-storage/src/save/operation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/operation.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "126868797b09d1dd67780962b415ad9ad97e4af2"
+    },
+    "core/crates/layerfs-storage/src/save/pooled.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/pooled.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "5b95e6861d49025a0c0fce9aa4a5172aa4c51ccc"
+    },
+    "core/crates/layerfs-storage/src/save/profile.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/profile.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "d9ec276eefb0566b36af37e3f9ddba35bca9196d"
+    },
+    "core/crates/layerfs-storage/src/save/provider.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/provider.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "e65a6b7b5950a256039b2175d6a837342acbfc13"
+    },
+    "core/crates/layerfs-storage/src/save/publication.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/publication.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "b52a0df3ba26f3201c3ddccce7f7ec63e4c7da64"
+    },
+    "core/crates/layerfs-storage/src/save/reservation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/reservation.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "dfb66e5f0852d210378d88928aa957a8220114b1"
+    },
+    "core/crates/layerfs-storage/src/save/seal.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/seal.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "ad5130b4c54702c33fcdb1678f95531657b8652b"
+    },
+    "core/crates/layerfs-storage/src/save/select.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/select.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "c9a99cb380fd50048ac9ccd351c1aff14c800694"
+    },
+    "core/crates/layerfs-storage/src/save/source.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/source.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "21951aaef2b50d1692d6c7790546614c42c3543d"
+    },
+    "core/crates/layerfs-storage/src/save/state.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/state.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "80b937f7ab1e16bd57fa29fc7d5bddabbf6c0fdf"
+    },
+    "core/crates/layerfs-storage/src/save/wave.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/wave.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "8979dab9090dc636974b4862e4dd55b860c30df0"
+    },
+    "core/crates/layerfs-storage/src/save/work.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/save/work.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "c7b7780a306368cb3095cece6418e28c6e655b89"
+    },
+    "core/crates/layerfs-storage/src/store/error.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/store/error.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "00c22f5f4b2656d06265b3a3e22f6fe0f511830d"
+    },
+    "core/crates/layerfs-storage/src/store/handle.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/store/handle.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "8049aca4c25878c4a657fab09b57af01e113b318"
+    },
+    "core/crates/layerfs-storage/src/store/location.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/store/location.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "e2d8ae88de49e1d573e1e0b9a270f627c1e60681"
+    },
+    "core/crates/layerfs-storage/src/store/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/store/mod.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "346f89330434d9ce6e15bddd68e6251d617a49d9"
+    },
+    "core/crates/layerfs-storage/src/store/policy.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/store/policy.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "8d315fd28d3b3df36c4e5bced0479188d20e8ba5"
+    },
+    "core/crates/layerfs-storage/src/store/reservations.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/store/reservations.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "8a63b9bca0cc568f74b6b8e7ef3f3edbbbe0c297"
+    },
+    "core/crates/layerfs-storage/src/store/source.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-storage/src/store/source.rs",
+      "owner": "core/crates/layerfs-storage",
+      "origin_blob": "a57b4f04185f667c5c251ec7c7d3c96281877084"
+    },
+    "core/crates/layerfs-telemetry/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/Cargo.toml",
+      "owner": "core/crates/layerfs-telemetry/Cargo.toml",
+      "origin_blob": "29040196e3f0286ec3a72717f9a8d44caa83d99b"
+    },
+    "core/crates/layerfs-telemetry/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/lib.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "18f27d74294f02c18596c4557b7ce4552c92161b"
+    },
+    "core/crates/layerfs-telemetry/src/output/collector.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/output/collector.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "befcac0d1eb3625cbcd3dd1763feb83abd42e691"
+    },
+    "core/crates/layerfs-telemetry/src/output/encode.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/output/encode.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "901184ed92880e084f3948afeaa73bcdd4bd03ba"
+    },
+    "core/crates/layerfs-telemetry/src/output/health.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/output/health.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "025971eeb17dcb5ae978136664c9951681295749"
+    },
+    "core/crates/layerfs-telemetry/src/output/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/output/mod.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "c6cce65a8f1d2fa9461ad425520be90a53dde6eb"
+    },
+    "core/crates/layerfs-telemetry/src/output/queue.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/output/queue.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "d9b8037148c43c29ce2258b68a011ac7a4bcb0ac"
+    },
+    "core/crates/layerfs-telemetry/src/output/retention.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/output/retention.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "73ea63cca7ec48fa5ea8619b8dd21be9694fbf4f"
+    },
+    "core/crates/layerfs-telemetry/src/platform/linux.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/platform/linux.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "fbca1dd8b2a9e666eea9851a1150ca9eb95f4452"
+    },
+    "core/crates/layerfs-telemetry/src/platform/macos.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/platform/macos.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "3b194935bcdcf44a675f04cff7d97f8df55db47e"
+    },
+    "core/crates/layerfs-telemetry/src/platform/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/platform/mod.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "87c18e1d810c5a75141e99dabf507f5c0f80e2e9"
+    },
+    "core/crates/layerfs-telemetry/src/runtime/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/runtime/mod.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "45d7dede3336a8aa7920cb2242a2e8c6198fe4a8"
+    },
+    "core/crates/layerfs-telemetry/src/runtime/monitor.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/runtime/monitor.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "688f9cc7c3f0539e5c3b3d7a2f9c4cdfe72fca91"
+    },
+    "core/crates/layerfs-telemetry/src/runtime/observation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/runtime/observation.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "6e9b85e5b9aef64d0aab01ca5fa6b9121e771b8e"
+    },
+    "core/crates/layerfs-telemetry/src/runtime/operation.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/runtime/operation.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "e2d304e2967d0eca27f2d9be9b208555f8a144e8"
+    },
+    "core/crates/layerfs-telemetry/src/runtime/session.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/runtime/session.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "b90219aecab9452bbd2da451f7ce994ed7bcf8a3"
+    },
+    "core/crates/layerfs-telemetry/src/timer/bounded_json.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/bounded_json.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "77b3d0c5adeee82b4dc6d861ef3222a8e77f3ac1"
+    },
+    "core/crates/layerfs-telemetry/src/timer/format.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/format.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "1b06d0d493d66808aef7b4f96c78db813125b151"
+    },
+    "core/crates/layerfs-telemetry/src/timer/json.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/json.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "7b3164c603e901f7f5d37e93a56cf802daf7d49e"
+    },
+    "core/crates/layerfs-telemetry/src/timer/limits.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/limits.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "57c49deade59df91bbd1c35716b239c702b46944"
+    },
+    "core/crates/layerfs-telemetry/src/timer/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/mod.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "3c8704a3397bd2f7b59c1dacf73c696776c6e80e"
+    },
+    "core/crates/layerfs-telemetry/src/timer/recording.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/recording.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "e32f4ce6134e0d15849e4306e458aed558a7d119"
+    },
+    "core/crates/layerfs-telemetry/src/timer/report.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/report.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "505b0768d73be887cc1cfe55793b35d2ea6f79fb"
+    },
+    "core/crates/layerfs-telemetry/src/timer/scope.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-telemetry/src/timer/scope.rs",
+      "owner": "core/crates/layerfs-telemetry",
+      "origin_blob": "cdb9c28659721d61310b568fac362a95915c8a9e"
+    },
+    "core/crates/layerfs-workspace/Cargo.toml": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/Cargo.toml",
+      "owner": "core/crates/layerfs-workspace/Cargo.toml",
+      "origin_blob": "c2014c912742fe8d3aba8dcdfcf70ae6446ae20d"
+    },
+    "core/crates/layerfs-workspace/src/base/cache.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/base/cache.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "0b45110baf7ee3241967f96c68f818c187e4899d"
+    },
+    "core/crates/layerfs-workspace/src/base/client.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/base/client.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "2ab67a6ceb1c4bb4847e50e87b08e459709eec0c"
+    },
+    "core/crates/layerfs-workspace/src/base/file.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/base/file.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "5edf6821da402f8f1aab5631e6bbf1e8ff1eb506"
+    },
+    "core/crates/layerfs-workspace/src/base/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/base/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "8caa655f6af38ced8b0a10f06a109c502baf6a81"
+    },
+    "core/crates/layerfs-workspace/src/base/view.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/base/view.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "dbac6426bfe65b06f5f1bff63172bcf8e38ce856"
+    },
+    "core/crates/layerfs-workspace/src/construction/captured/context.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/captured/context.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "8cdc0f523e00e2c2ee1bf2f0bddc327a0802c764"
+    },
+    "core/crates/layerfs-workspace/src/construction/captured/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/captured/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "805dc8e2aca4b6089342e91f69c2f97b3a03e304"
+    },
+    "core/crates/layerfs-workspace/src/construction/captured/normalize.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/captured/normalize.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "57a9837aa0919560b3d115b35334e516682d0427"
+    },
+    "core/crates/layerfs-workspace/src/construction/captured/owner.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/captured/owner.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "09e2659c1ec71d5b36095fb75ab012aac9529180"
+    },
+    "core/crates/layerfs-workspace/src/construction/captured/scan.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/captured/scan.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "96826b04559f28ee535a9c7643f9e016258ab800"
+    },
+    "core/crates/layerfs-workspace/src/construction/captured/source.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/captured/source.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "309723ed98ae1516b0f30d19589841bd07b730e4"
+    },
+    "core/crates/layerfs-workspace/src/construction/captured/state.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/captured/state.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "cb95d97e5fb8bc36a6954e044aeac6a973197c33"
+    },
+    "core/crates/layerfs-workspace/src/construction/context.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One captured-state constructor handed to the existing daemon Store Commit orchestrator"
+    },
+    "core/crates/layerfs-workspace/src/construction/driver.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One captured-state constructor handed to the existing daemon Store Commit orchestrator"
+    },
+    "core/crates/layerfs-workspace/src/construction/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "7d4d4a4457e225f6a87b3dc1c364be36a85a6923"
+    },
+    "core/crates/layerfs-workspace/src/construction/namespace/assemble.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Bounded captured namespace inputs: names/links/metadata/file roots; delegate canonical algorithms to Content"
+    },
+    "core/crates/layerfs-workspace/src/construction/namespace/cursor.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Bounded captured namespace inputs: names/links/metadata/file roots; delegate canonical algorithms to Content"
+    },
+    "core/crates/layerfs-workspace/src/construction/namespace/directories.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Bounded captured namespace inputs: names/links/metadata/file roots; delegate canonical algorithms to Content"
+    },
+    "core/crates/layerfs-workspace/src/construction/namespace/inodes.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Bounded captured namespace inputs: names/links/metadata/file roots; delegate canonical algorithms to Content"
+    },
+    "core/crates/layerfs-workspace/src/construction/namespace/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Bounded captured namespace inputs: names/links/metadata/file roots; delegate canonical algorithms to Content"
+    },
+    "core/crates/layerfs-workspace/src/construction/namespace/normalize.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Bounded captured namespace inputs: names/links/metadata/file roots; delegate canonical algorithms to Content"
+    },
+    "core/crates/layerfs-workspace/src/construction/outcome.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "One captured-state constructor handed to the existing daemon Store Commit orchestrator"
+    },
+    "core/crates/layerfs-workspace/src/construction/records.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/construction/records.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "907335c0c273f4c337a42e24ea434b1893995f4f"
+    },
+    "core/crates/layerfs-workspace/src/construction/scratch/mod.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Use the existing operation-record port for attempt-scoped backing and exact disposal"
+    },
+    "core/crates/layerfs-workspace/src/construction/scratch/records.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Use the existing operation-record port for attempt-scoped backing and exact disposal"
+    },
+    "core/crates/layerfs-workspace/src/construction/scratch/release.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Use the existing operation-record port for attempt-scoped backing and exact disposal"
+    },
+    "core/crates/layerfs-workspace/src/lib.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/lib.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "de63bfe210bc804e57fff8562b14a16a99ca7863"
+    },
+    "core/crates/layerfs-workspace/src/mutation/driver.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/mutation/driver.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "a43e3340802b98dfda196c55fd2b9a6ad609b214"
+    },
+    "core/crates/layerfs-workspace/src/mutation/eval.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/mutation/eval.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "66a6ac4b50451ab0aa9ac68c36ab24518ae67f4a"
+    },
+    "core/crates/layerfs-workspace/src/mutation/facts.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/mutation/facts.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "f93317cf51fea20e6f998329a94e47997c2595b6"
+    },
+    "core/crates/layerfs-workspace/src/mutation/job.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/mutation/job.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "79916f2b1ac7567987e13d6e735f8cf9bc514ca6"
+    },
+    "core/crates/layerfs-workspace/src/mutation/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/mutation/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "ffa8b938a5d92e2ff09329149f0865a58958fce6"
+    },
+    "core/crates/layerfs-workspace/src/operations/attributes.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/attributes.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "0f5e6bf9b021f8700be98895d86094f2433c3589"
+    },
+    "core/crates/layerfs-workspace/src/operations/file/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/file/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "0a0a4dc4f129699e4450073c895352b12d98cb01"
+    },
+    "core/crates/layerfs-workspace/src/operations/file/read.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/file/read.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "69aeef5e8ba731540023f396d756b9d18088cdae"
+    },
+    "core/crates/layerfs-workspace/src/operations/file/write.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/file/write.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "6fb69dea2b52d8a6e953bfb5bb614cd891da02ce"
+    },
+    "core/crates/layerfs-workspace/src/operations/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "a9d8112c88bba446c4019dab009d80da5cc720ad"
+    },
+    "core/crates/layerfs-workspace/src/operations/namespace/create.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/namespace/create.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "fc0fea1a2234fcc597ffcd73947c299f5026ba35"
+    },
+    "core/crates/layerfs-workspace/src/operations/namespace/list.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/namespace/list.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "ee7f26394e359c6814290503845b9d0d33860d96"
+    },
+    "core/crates/layerfs-workspace/src/operations/namespace/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/namespace/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "eaf6b1ba465f431c87abf33d72817f3286ba7c7b"
+    },
+    "core/crates/layerfs-workspace/src/operations/namespace/remove.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/namespace/remove.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "c4c877c644bc0e4c55e43e3b93a7306a36c2677b"
+    },
+    "core/crates/layerfs-workspace/src/operations/namespace/rename.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/namespace/rename.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "f0d7739699de936743b0f0066776dc6425e18e79"
+    },
+    "core/crates/layerfs-workspace/src/operations/read_plan.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Consistent resumable read-class plans and explicit owning effects"
+    },
+    "core/crates/layerfs-workspace/src/operations/types.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/operations/types.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "637138fea250d67a13c256039936fbc462bd0c5a"
+    },
+    "core/crates/layerfs-workspace/src/ports/captured_namespace.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Owning captured namespace cursor/fact port; no SQL or kernel types"
+    },
+    "core/crates/layerfs-workspace/src/ports/captured_runs.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/ports/captured_runs.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "91d046f771664dadf381e375a31c15e3c55c1c4f"
+    },
+    "core/crates/layerfs-workspace/src/ports/files.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/ports/files.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "7d268272fda8b00b9d760bb9e5fc1f96aeb5745a"
+    },
+    "core/crates/layerfs-workspace/src/ports/lengths.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/ports/lengths.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "d7ec9d94cc033e69e870e1a15a0784c0c24d4f8d"
+    },
+    "core/crates/layerfs-workspace/src/ports/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/ports/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "054685f10368609709d96d3bee8e9420e257c24d"
+    },
+    "core/crates/layerfs-workspace/src/ports/operation_record.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/ports/operation_record.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "b27b8926de3692c275a1b1189d625dde959a12e7"
+    },
+    "core/crates/layerfs-workspace/src/ports/overlay.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/ports/overlay.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "db1135bc04aa47b42ab3fc5c49e6a363da0611bc"
+    },
+    "core/crates/layerfs-workspace/src/workspace/install.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/workspace/install.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "ffd3d60b4c758701311327fd076f8cc2b5376bb0"
+    },
+    "core/crates/layerfs-workspace/src/workspace/mod.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/workspace/mod.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "787018a95c6c9a6cff4adb61f2962f6982cd29d4"
+    },
+    "core/crates/layerfs-workspace/src/workspace/serials.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/workspace/serials.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "11ae3ab57337ca6eee8ab5d004e6b8c1498bf207"
+    },
+    "core/crates/layerfs-workspace/src/workspace/state.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/workspace/state.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "aa34d171635f3bac3f107f55ed931efe936cf43e"
+    },
+    "core/crates/layerfs-workspace/src/workspace/view.rs": {
+      "status": "E",
+      "origin": "core/crates/layerfs-workspace/src/workspace/view.rs",
+      "owner": "core/crates/layerfs-workspace",
+      "origin_blob": "1bb631b856948124f3bcb43d39c86a7c05ceccbd"
+    }
+  },
+  "prospective_external_proofs": {
+    "core/crates/layerfs-api/sdk/tests/project_api.rs": "Project Init/install/fork through current public owners",
+    "core/crates/layerfs-api/sdk/tests/sandbox_api.rs": "Ordinary sandbox lifecycle/exec facade",
+    "core/crates/layerfs-api/sdk/tests/workspace_api.rs": "Mount/Commit/status/unmount and ordinary exec convenience",
+    "core/crates/layerfs-sandbox/tests/normal_exec.rs": "Ordinary Bash streams/status with no daemon command registration",
+    "core/crates/layerfs-sandbox/tests/workspace_visibility.rs": "Mounted access and protected database/credential visibility",
+    "core/crates/layerfs-sandbox/tests/lifecycle.rs": "Container creation/readiness/deletion and retained failures",
+    "core/crates/layerfs-fuse/tests/native_mount.rs": "Actual mount/handshake/profile/detach",
+    "core/crates/layerfs-fuse/tests/native_requests.rs": "Reply/receive-slot/request custody",
+    "core/crates/layerfs-fuse/tests/native_mutations.rs": "Permissions/aliases/truncate/rename/cache semantics",
+    "core/crates/layerfs-fuse/tests/native_mmap.rs": "Kernel-origin mapping writes and published frontier",
+    "core/crates/layerfs-fuse/tests/native_teardown.rs": "Busy probe, one abort/plain detach and exact loop disposition",
+    "core/crates/layerfs-workspace/tests/captured_namespace.rs": "Complete captured names/links/metadata assembly",
+    "core/crates/layerfs-workspace/tests/incremental_namespace.rs": "Changed-only work and exact topology checks",
+    "core/crates/layerfs-daemon/tests/mounted_commit.rs": "Mount/change/Commit/remount through the ordinary product",
+    "core/crates/layerfs-daemon/tests/external_executor.rs": "Filesystem semantics and Commit without any Exec registration",
+    "core/crates/layerfs-daemon/tests/native_drain.rs": "Daemon work surviving loop exit; no premature retirement",
+    "core/crates/layerfs-daemon/tests/mounted_concurrency.rs": "Several processes/Workspaces and writer during Commit",
+    "core/crates/layerfs-overlay/tests/native_ownership.rs": "Checked lookup/decrement/revocation and bounded retirement"
+  },
+  "preserved_working_tree": {
+    "AGENTS.md": "64c4d07180035760fd19611abe752f39b317331badcb163f7572180838eedbf2",
+    "core/AGENTS.md": "b4f871f1f0ea293a28e49695c8cc0c9ee0e38b26179386856a3cbc5c8abc56bf",
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  }
+}
