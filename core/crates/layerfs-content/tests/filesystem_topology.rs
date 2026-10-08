@@ -695,6 +695,51 @@ fn an_update_with_a_disconnected_fresh_directory_cycle_is_refused() {
 }
 
 #[test]
+fn a_cycle_through_a_fresh_directory_inside_the_moved_directory_is_refused() {
+    // `d` holds `e`. One batch allocates `p` inside `e`, moves `d` under `p` and
+    // drops `d` from the root: d -> p -> e -> d, with nothing left under the
+    // root. The stored directory is bound under a fresh one and the fresh one
+    // under a stored one, so no single binding joins two stored directories,
+    // and every derived count is one: only the effective tree shows the cycle.
+    let (mut session, d, e, _f) = nested();
+    let p = session.allocate();
+    let before = session.store.len();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name("d"), None)],
+            },
+            DirectoryUpdate {
+                parent: e,
+                changes: vec![(name("p"), Some(p))],
+            },
+            DirectoryUpdate {
+                parent: p,
+                changes: vec![(name("d"), Some(d))],
+            },
+        ],
+        &[InodeUpdate {
+            serial: p,
+            value: directory("unused"),
+        }],
+        &[p],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+        ),
+        "a moved directory below a fresh directory it already holds must be refused: {outcome:?}"
+    );
+    assert_eq!(
+        session.store.len(),
+        before,
+        "the refusal arrives before any object is offered"
+    );
+}
+
+#[test]
 fn a_permutation_of_65_directory_bindings_is_one_linear_walk() {
     let mut session = Session::new(1).expect("empty");
     let serials: Vec<u64> = (0..65).map(|_| session.allocate()).collect();

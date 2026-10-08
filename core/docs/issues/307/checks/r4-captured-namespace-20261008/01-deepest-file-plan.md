@@ -464,3 +464,84 @@ An interface change stops the track and comes back to the lead.
 | R4-6, R4-7 | Counted Content work (track C) and counted producer, SQL and release work at three base sizes (track I) |
 | R4-8, R4-10 | Daemon integration over a real Disposable Store (track I) |
 | R4-9 | Producer tests with a failing provider and consumer (track W); daemon custody (track I) |
+
+## Amendment 1 (2026-10-08): corrections found by track C before any product edit
+
+Track C traced section 4 against the existing topology tests before editing
+and stopped on a defect in the plan. No product source had changed. The
+counter-example is retained as a test that passes on the validator this plan
+replaces (`filesystem_topology::a_cycle_through_a_fresh_directory_inside_the_moved_directory_is_refused`,
+receipt `C-attempt1-filesystem_topology.txt`).
+
+### A-1 The territory gate in 4.2 was unsound
+
+Base `/d/e`, both stored. One batch allocates a fresh directory `p`, binds
+`e/p`, binds `p/d` and unbinds `d` from the root. Under 4.2 as written the
+moved stored directory `d` has a fresh parent, so no territory walk ran; the
+rooted proof then walked `d -> p -> e`, found `e` stored, unplaced and unmarked,
+and accepted `d -> p -> e -> d` with nothing under the root. Every derived
+count is 1, so D-2 does not catch it either.
+
+Corrected gate. The territory pass runs when both hold:
+
+1. at least one stored directory is placed (moved), and
+2. at least one placement of any directory, fresh or stored, has a parent that
+   is stored, unplaced and not the root.
+
+Soundness: with a valid base (D-1) and one final binding per directory (D-2), a
+cycle containing a stored unplaced directory must leave the base tree through a
+moved stored ancestor (1) and re-enter stored unplaced territory through a
+placement (2). A cycle made only of placed edges is caught by the step-bounded
+upward walk without any territory.
+
+Cost consequence, replacing the sentence in D-3: no base walk happens unless a
+stored directory moves **and** some directory is placed under a stored non-root
+directory in the same batch. `mkdir existing/new; mv /old existing/new/old` now
+walks `old`'s subtree once; a move under a fresh directory that hangs off the
+root, or any batch that only creates, removes or renames within one parent,
+stays walk-free. D-4 (owner question 1) is unchanged: ancestry evidence would
+remove the walk.
+
+### A-2 A fresh directory bound only inside a dropped directory is refused on both routes
+
+A dropped directory is a declared-new directory that carries a header and is
+never bound. A fresh directory `F` bound only inside it was refused by the old
+build walk (`effective tree cycle`) and accepted by the old update walk, which
+then emitted an unreachable directory inode. The rooted proof refuses it on
+both routes with `effective tree cycle`: an upward walk that ends at an
+unplaced fresh directory reaches neither the root nor a base position. This
+strengthens the update route; no existing test pins the old acceptance. Owner
+question 10.
+
+Related finding, recorded not changed: files and symlinks bound only inside a
+dropped directory are still counted and emitted with no reachable name (existing
+behaviour on both routes). A stored directory or symlink that keeps its base
+binding and is bound again inside a dropped directory used to be emitted with a
+non-file count of 2; D-2 now refuses it with `multiple parents`.
+
+### A-3 The classification window is a route property
+
+4.2 said classification runs in windows of at most 64 rows. On the resident
+routes the input is resident by definition and
+`filesystem_bounds::binding_lookups_are_batched_per_phase` pins that the phase's
+base demands are one grouped read whose wave count does not grow with the number
+of bindings. That property is kept: the resident routes classify the whole
+input as one window. The backed streamed route, which is the only route the
+producer uses, classifies in windows bounded by a named constant row count, so
+its resident state is bounded independently of the base and of the total change
+and its wave count grows with change rows divided by the window. The exact
+demand count in that test changes because one pass replaces two.
+
+### A-4 Smaller points
+
+- `FilesystemResources::check()` keeps its minimum `ordering_bytes` sanity
+  refusal on every route; 7.1 behaviour 8 means no `ordering_bytes`-derived
+  refusal of a total, not the removal of that minimum.
+- On the resident routes, which have no backing, the topology containers are
+  bounded by the existing resident ordering budget and refuse on container size
+  with the error the existing resident limits already use. Work examined is
+  never a refusal. The label `cycle check work limit` stays retired.
+- The benchmark probe
+  `core/benchmark/fs-bench-pro-storage-content/tests/namespace_batch_probe.rs`
+  and architecture records 04, 06, 10, 51 and 53 describe the retired walks and
+  limits; they are updated by the lead in the documentation step.
