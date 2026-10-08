@@ -270,6 +270,45 @@ require every commit to shrink. Never remove required validation, compress code
 into dense lines, or move implementation outside the declared scope to improve
 the number. Complete the comparison before committing; do not invent estimates.
 
+### File and folder layout listings
+
+When a plan, handoff, review or reply shows a source layout, current or
+planned, use one vertical listing per crate in a fenced block:
+
+```
+construction/                       [753]
+  mod.rs                               4
+  records.rs                         247
+  driver.rs                            —   new
+  captured/                         [502]  (existing constructor, reused)
+    owner.rs                         256
+    scan.rs                          246
+  scratch/                             —   cond.
+    records.rs                         —
+```
+
+- **One path per line.** Indent two spaces per directory level. Directories end
+  in `/`; list a directory's own files before its subdirectories. Do not join
+  siblings on one line or use brace groups such as `{mod,cursor}.rs`.
+- **Every existing file carries its production LOC**, right-aligned in one
+  column, from the pinned `tools/production_loc.py --files` at a stated commit.
+  This is the `prod` column, never physical lines or Git statistics.
+- **Every directory carries its subtotal in brackets**, summing all listed
+  production files beneath it. If only part of a directory is shown, say so in
+  its annotation; the bracketed number then covers only the files shown.
+- **A file that does not exist yet shows `—`**, followed by `new` (planned) or
+  `cond.` (added only if existing code cannot cover the need). Never print an
+  estimated LOC for it.
+- **Annotations are short, in parentheses, after the number**: what changes in
+  this step, or why the file is listed. Keep ownership rationale in prose.
+- **State the scope above the listing**: the commit, the counter, and which
+  crates or directories are included. Tests live outside `src/` and are not
+  counted; name their directory in prose if it matters.
+
+A listing is a snapshot. It does not make a planned name a scaffolding
+requirement, and an existing source file or `core/Cargo.toml` still decides
+what is built.
+
 ## 5. Why these rules exist (worked example)
 
 The historical cache-credit failure and its immutable ledger remain linked in
