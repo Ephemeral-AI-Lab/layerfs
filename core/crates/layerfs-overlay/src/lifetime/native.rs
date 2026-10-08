@@ -24,6 +24,7 @@ impl Overlay {
             )?;
             let mount = NativeMount { route, owner, root };
             self.insert_native_lookup(mount, root, true, 0)?;
+            self.set_native_parent(mount, root, root)?;
             Ok(mount)
         })
     }
@@ -184,13 +185,13 @@ impl Overlay {
             .pop().ok_or(OverlayError::Stale)
     }
     pub(crate) fn release_native_source(&self, source: BaseSource) -> OverlayResult<()> {
-        let serial = self
+        let (serial, directory) = self
             .query(
                 StatementKind::Lease,
-                "SELECT serial FROM native_source WHERE ns=?1 AND owner=?2",
+                "SELECT serial,(SELECT directory FROM native_directory_read WHERE ns=?1 AND owner=?2) FROM native_source WHERE ns=?1 AND owner=?2",
                 &[&source.route.ns, &integer(source.owner)?],
                 16,
-                |r| unsigned(r, 0),
+                |r| Ok((unsigned(r, 0)?, r.get::<_, Option<i64>>(1)?)),
             )?
             .pop()
             .ok_or(OverlayError::Stale)?;
@@ -211,7 +212,11 @@ impl Overlay {
             integer(serial)?,
             LeaseKind::FileReader,
             false,
-        )
+        )?;
+        if let Some(directory) = directory {
+            self.queue_native_directory(source.route.ns, directory)?;
+        }
+        Ok(())
     }
     pub(crate) fn native_lookup_row(
         &self,
@@ -357,7 +362,7 @@ impl Overlay {
         self.atomic_cleanup(|| {
             self.check_native_attached(mount)?;
             let held = self.query(StatementKind::Lease,
-                "SELECT EXISTS(SELECT 1 FROM native_source WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_file WHERE ns=?1 AND mount=?2)",
+                "SELECT EXISTS(SELECT 1 FROM native_source WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_file WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_directory WHERE ns=?1 AND mount=?2 AND closed=0)",
                 &[&mount.route.ns, &integer(mount.owner)?], 16, |r| r.get::<_, bool>(0))?[0];
             if held { return Err(OverlayError::BaseSourcesPending); }
             self.execute(StatementKind::Lease, "UPDATE native_mount SET revoked=1 WHERE ns=?1 AND owner=?2",

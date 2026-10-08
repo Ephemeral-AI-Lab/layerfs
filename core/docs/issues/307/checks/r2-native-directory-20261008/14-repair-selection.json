@@ -1,0 +1,21 @@
+{
+  "selected": {
+    "layerfs-overlay": [
+      "native_directory"
+    ],
+    "layerfs-workspace": [
+      "native_directory",
+      "native_read_plan",
+      "nonfile",
+      "payload",
+      "namespace_view"
+    ],
+    "layerfs-daemon": [
+      "native_jobs",
+      "owner",
+      "job_cost",
+      "completion_ownership"
+    ]
+  },
+  "timeout_seconds": 100
+}

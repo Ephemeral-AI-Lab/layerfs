@@ -1,0 +1,22 @@
+{
+  "selected": {
+    "layerfs-overlay": [
+      "native_directory",
+      "compound"
+    ],
+    "layerfs-workspace": [
+      "native_directory",
+      "namespace",
+      "namespace_view",
+      "mutation_plan"
+    ],
+    "layerfs-daemon": [
+      "native_jobs",
+      "completion_ownership",
+      "native_application"
+    ]
+  },
+  "timeout_seconds": 100,
+  "scope": "Parent move atomicity and affected namespace/native ownership paths; earlier unaffected checks retained",
+  "native_application_timeout_seconds": 9
+}

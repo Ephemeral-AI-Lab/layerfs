@@ -4,6 +4,10 @@ use crate::{
     inode, BaseSource, FileRead, InodeKind, NativeDecision, NativeMount, NativeObservation,
     Overlay, OverlayError, OverlayResult, SourceRows, StatementKind,
 };
+enum NativeOpen {
+    File(bool),
+    Directory,
+}
 impl Overlay {
     /// The callback is one bounded semantic decision over current rows and
     /// previously acquired immutable facts. It must perform no provider I/O.
@@ -26,19 +30,35 @@ impl Overlay {
         writable: bool,
         decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
-        self.observe_native_inner(mount, source, false, Some(writable), decide)
+        self.observe_native_inner(
+            mount,
+            source,
+            false,
+            Some(NativeOpen::File(writable)),
+            decide,
+        )
+    }
+    /// Current directory decision and its descriptor/read ownership are atomic.
+    pub fn observe_native_directory<T>(
+        &self,
+        mount: NativeMount,
+        source: BaseSource,
+        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
+    ) -> NativeObservation<T> {
+        self.observe_native_inner(mount, source, false, Some(NativeOpen::Directory), decide)
     }
     fn observe_native_inner<T>(
         &self,
         mount: NativeMount,
         source: BaseSource,
         lookup: bool,
-        open: Option<bool>,
+        open: Option<NativeOpen>,
         decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
         let mut decision = None;
         let mut acquired = None;
         let mut open_candidate = None;
+        let mut directory_candidate = None;
         let result = self
             .atomic(|| {
                 let (request, protected) = self.check_native_source(mount, source)?;
@@ -73,10 +93,13 @@ impl Overlay {
                         return Err(OverlayError::Missing);
                     }
                     self.add_native_lookup(mount, inode.serial)?;
+                    if inode.kind == InodeKind::Directory {
+                        self.set_native_parent(mount, inode.serial, protected)?;
+                    }
                 } else if inode.serial != protected {
                     return Err(OverlayError::Invalid("native observation serial"));
                 }
-                if let Some(writable) = open {
+                if let Some(NativeOpen::File(writable)) = open {
                     if inode.kind != InodeKind::File || inode.nlink == 0 {
                         return Err(OverlayError::Missing);
                     }
@@ -98,6 +121,15 @@ impl Overlay {
                         ],
                         32,
                     )?;
+                }
+                if matches!(open, Some(NativeOpen::Directory)) {
+                    if inode.kind != InodeKind::Directory
+                        || (inode.nlink == 0 && inode.serial != mount.root)
+                    {
+                        return Err(OverlayError::Missing);
+                    }
+                    directory_candidate =
+                        Some(self.retain_native_directory(mount, &request, inode.serial)?);
                 }
                 // Negative keys reserve an internal request domain without colliding
                 // with public positive FileRead request IDs. The owner is still the
@@ -124,6 +156,7 @@ impl Overlay {
             result,
             candidate: acquired,
             open_candidate,
+            directory_candidate,
         }
     }
     /// Read-only observation of the original independent owner after loss.

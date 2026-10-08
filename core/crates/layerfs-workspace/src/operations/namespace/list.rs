@@ -1,7 +1,7 @@
 //! Bounded three-way ordered name merge; deletion work advances its resume key.
 use crate::{OverlayRead, SourceView, WorkspaceResult};
 use layerfs_content::ContentError;
-use layerfs_overlay::{DirectoryEntry, PAGE_ROWS};
+use layerfs_overlay::{DirectoryEntry, DirectoryEntryWindow, PAGE_ROWS};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ViewListing {
     pub entries: Vec<(Vec<u8>, u64)>,
@@ -24,6 +24,20 @@ impl SourceView {
             return Err(ContentError::PathLimitExceeded.into());
         }
         let local = overlay.directory_entries(self.source, parent, after)?;
+        self.list_from_window(parent, after, local)
+    }
+    /// Compose an already completed local owner page with its immutable base.
+    /// This performs provider demand only; callers admit that capacity before
+    /// calling it and retain the original source/completion through consumption.
+    pub fn list_from_window(
+        &self,
+        parent: u64,
+        after: Option<&[u8]>,
+        local: DirectoryEntryWindow,
+    ) -> WorkspaceResult<ViewListing> {
+        if after.is_some_and(|key| key.len() > 255) {
+            return Err(ContentError::PathLimitExceeded.into());
+        }
         if local.source != self.source || local.parent != parent {
             return Err(ContentError::InvalidRecord("source name response").into());
         }

@@ -1,0 +1,22 @@
+{
+  "parent": "1da897903d0f77a753fd2fee89f8b9556387ea4c",
+  "scope": "Native directory open/source/cookie ownership; resumable read-page composition; daemon typed jobs. Full Fuse service integration follows.",
+  "decisions": [
+    "NativeDirectory is an engine-issued directory owner, using the existing FileHandle lease/reference semantics; no resident visited-tree map.",
+    "Directory parent relation is one indexed row per independently held directory and cascades on last file_custody deletion. Native lookup records the observed parent; R3 rename must update that relation atomically.",
+    "Cookie0 is start,1 follows dot,2 follows dotdot. Positive cookies>=3 retain exact name boundaries for this one open.",
+    "A bounded proposal reuses published name cookies and reserves distinct IDs for new names. Reservation is allocation, not enumeration progress; only accepted reply entries publish cookie mappings. Unused IDs remain holes, never valid offsets.",
+    "Concurrent proposals can assign alias cookies to one name, each valid; subsequent proposals reuse the first indexed published name mapping. No duplicate-name lifetime cap.",
+    "Each directory read has independent Source2 and a backed handle association. RELEASEDIR prevents new reads while existing sources retain cookie/header/metadata access.",
+    "After last directory-read source release, automatic maintenance removes at most64cookie rows per turn, then the closed header. Terminal logical close need not wait for physical cookie deletion.",
+    "Workspace merges the current local page with immutable base outside SQL using its existing64-key algorithm; entry kinds captured with local page or demanded from owned base; READDIR acquires no lookup count."
+  ],
+  "not_claimed": [
+    "native mounted Ready",
+    "kernel permissions",
+    "latency/RSS/cold eligibility",
+    "complete normal drain"
+  ],
+  "profiles": "Overlay MEMORY/OFF/EXCLUSIVE; all Store executions explicitly Disposable/WAL/OFF. Durable NOT_RUN.",
+  "test_timeout_seconds": 100
+}

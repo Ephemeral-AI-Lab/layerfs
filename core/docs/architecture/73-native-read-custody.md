@@ -1,7 +1,7 @@
 # Native read observation and lookup custody
 
 > **Status:** Implemented R2 component on parent78374ced6,2026-10-08.
-> Native Fuse activation, directories, Ready and normal drain remain open.
+> Native Fuse activation, Ready and normal drain remain open.
 
 Overlay schema17 adds one engine-minted NativeMount per Workspace and indexed
 native_lookup, native_source and native_read associations in the existing Overlay.
@@ -94,3 +94,7 @@ The [native-open component receipts](../issues/307/checks/r2-native-open-2026100
 extend the public engine, canonical Workspace and actual Daemon tests for these
 transitions. Schema versions and earlier proof identities above are historical;
 this in-process Overlay is freshly initialized, with no migration or reopen path.
+
+Schema19 subsequently adds [native directory ownership and cookies](74-native-directory-custody.md).
+The earlier component limitations above retain their original scope; kernel
+integration and complete R2 acceptance remain open.

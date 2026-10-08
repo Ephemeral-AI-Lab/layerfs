@@ -1,0 +1,15 @@
+{
+  "selected": {
+    "layerfs-overlay": [
+      "native_directory",
+      "engine",
+      "startup_cost",
+      "costs"
+    ],
+    "layerfs-daemon": [
+      "native_jobs"
+    ]
+  },
+  "timeout_seconds": 100,
+  "reuse": "Unchanged Workspace semantics and other passing scope retained from07/12/17; final change is directory-open partial index and EXPLAIN assertion."
+}

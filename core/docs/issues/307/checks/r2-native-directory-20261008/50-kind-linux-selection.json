@@ -1,0 +1,12 @@
+{
+  "selected": {
+    "layerfs-workspace": [
+      "native_directory"
+    ],
+    "layerfs-daemon": [
+      "native_jobs"
+    ]
+  },
+  "timeout_seconds": 100,
+  "scope": "Final directory kind-demand path; preserve/reuse unaffected earlier Linux cases, including native_application. No new measured operation."
+}

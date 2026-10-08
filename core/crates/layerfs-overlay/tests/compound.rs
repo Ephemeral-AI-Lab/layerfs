@@ -70,6 +70,7 @@ fn directory_entries(directory_entries: Vec<DirectoryEntryChange>) -> Changes {
     Changes {
         open: None,
         detached: None,
+        moved_directory: None,
         directory_entries,
         ..Changes::default()
     }
@@ -97,6 +98,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     let changes = Changes {
         open: None,
         detached: None,
+        moved_directory: None,
         inodes: vec![directory(10, 1), file(20, active)],
         directory_entries: vec![bound(10, b"bin\xff\0name", 20)],
         cell: Some((20, cell.clone())),
@@ -137,6 +139,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     let refused = Changes {
         open: None,
         detached: None,
+        moved_directory: None,
         inodes: vec![file(30, active), file(31, active + 1)],
         directory_entries: vec![bound(10, b"later", 30)],
         cell: None,
@@ -165,12 +168,14 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes {
             open: None,
             detached: None,
+            moved_directory: None,
             inodes: (40..45).map(|serial| file(serial, 0)).collect(),
             ..Changes::default()
         },
         Changes {
             open: None,
             detached: None,
+            moved_directory: None,
             inodes: vec![file(40, 0), file(40, 0)],
             ..Changes::default()
         },
@@ -187,6 +192,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes {
             open: None,
             detached: None,
+            moved_directory: None,
             inodes: vec![Inode {
                 entries: 1,
                 ..file(40, 0)
@@ -196,6 +202,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes {
             open: None,
             detached: None,
+            moved_directory: None,
             inodes: vec![file(40, 0)],
             cell: Some((
                 41,
@@ -386,6 +393,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
             &Changes {
                 open: None,
                 detached: None,
+                moved_directory: None,
                 inodes: vec![directory(1, 0), directory(2, 0)],
                 ..Changes::default()
             },
@@ -427,6 +435,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                 &Changes {
                     open: None,
                     detached: None,
+                    moved_directory: None,
                     inodes: vec![file(count, 0), file(count + 1, 0)],
                     directory_entries: vec![bound(1, &from, count), bound(1, &to, count + 1)],
                     cell: None,
@@ -448,6 +457,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                 &Changes {
                     open: None,
                     detached: None,
+                    moved_directory: None,
                     inodes: vec![
                         directory(1, count),
                         directory(2, 1),

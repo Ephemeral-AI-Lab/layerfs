@@ -1,0 +1,132 @@
+[
+  {
+    "command": [
+      "core/target/debug/deps/native_directory-da74e859bec14402",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "5e7b2feb1346735247a9d0b7fb8907ada441ba26a8c5bcc54630e0fcdabf9aa5",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 3166612625,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-overlay-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_directory-4879169c5ca57f2f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "1a1a070842c92c3a128fd65e098dee1a7768e9721f885b28ab8ca76e7ec95aa1",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 833517666,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-workspace-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_read_plan-65f8e2c046be7435",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "0d535b5c72633a3f9a79cff8ca86d94f3f2b34e9e7901f71b7114a7e6bee6e41",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1207380042,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-workspace-native_read_plan.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/nonfile-f4088d6159f094d3",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "66a628e76c594c5b87d88db68a33b50df5ea84d02a7d0518ad6541bc90a5ea50",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 835530625,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-workspace-nonfile.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/payload-2fde78705c15b398",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "ddd69e274f20e96de762e36c905c977249538173fa609c542795f033fb419ef4",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1202040959,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-workspace-payload.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/namespace_view-a68799712699a55d",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "d525088f9917c78812aa5abf0f16892a446bbb0388f1cfe29bf8413f98137e89",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2503428333,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-workspace-namespace_view.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_jobs-296ccdda6ee0193f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "0c065aa371592bc558eec413743ac5b921589c04bd9801f79ff58ab5c350db35",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1201742709,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-daemon-native_jobs.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/owner-7a7301fc46dcf1ed",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "2d51d57f5f8b1987ff4e9d2cdeab497fb7bf5f3565abbe9f0fbe4e407ffea8c9",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1056938625,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-daemon-owner.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/job_cost-fd2d3e5aadb233ea",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "8113c8cdc25819311ea78d582ef298ffd2ed1825de99760d7c1ae2be095a290d",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 823464417,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-daemon-job_cost.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/completion_ownership-41a80abdf2599e43",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "861caeab7350845bb2184f2a6c3c13b2de004da3c0bf821588a6b582be44a382",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 954525000,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/17-host-layerfs-daemon-completion_ownership.txt"
+  }
+]

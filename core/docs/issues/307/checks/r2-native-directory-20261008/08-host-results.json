@@ -1,0 +1,41 @@
+[
+  {
+    "command": [
+      "core/target/debug/deps/native_directory-da74e859bec14402",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "f776f73cc51bcf0074b2ff0dabea94c922a3bc66ba23f734a47a70e6110ad59b",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 922858667,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/07-host-layerfs-overlay-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_lookup-c3a8c6eab76f3974",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "6311c1719e288610d21def6e0f0b2eac1b71d9e9f1229be5d151e054a6bc1401",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 986865958,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/07-host-layerfs-overlay-native_lookup.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/engine-31ef5a26acdeed4a",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "15e7a07597d43a226bb8458bc11ecb1e62e51384082d0c7fb9b2cd49d935638c",
+    "exit_code": 101,
+    "timeout": false,
+    "wall_ns": 2997110042,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/07-host-layerfs-overlay-engine.txt"
+  }
+]

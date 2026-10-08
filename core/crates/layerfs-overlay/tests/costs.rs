@@ -59,7 +59,9 @@ fn failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts() {
         &temp.0.join("overlay.sqlite"),
         ProfileConfig {
             pager_kib: 4,
-            max_pages: Some(64),
+            // Schema19 no longer fits64 pages. This still leaves fewer pages
+            // than the unchanged128KiB mutation needs and must fail in DML.
+            max_pages: Some(96),
         },
     )
     .unwrap();

@@ -1,0 +1,70 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "wall_ns": 5122580875
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_directory-4879169c5ca57f2f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "c61b9e8fdaed3a85a41291b194c4645a1f30cc2ce48afff67fc0f33c4f4a48ee",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2274216583,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/46-host-layerfs-workspace-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_jobs-296ccdda6ee0193f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "26295d13a3bc513bc460f7c528eebdefa5d842626f37326d90772054b7e4c4db",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 829732250,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/46-host-layerfs-daemon-native_jobs.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "wall_ns": 4220279125
+  }
+]

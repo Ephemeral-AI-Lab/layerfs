@@ -108,7 +108,7 @@ CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
 CREATE INDEX lease_resource ON lease(ns,kind,resource,owner);
 CREATE TABLE maintenance (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7,8,9,10)),
+    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7,8,9,10,11)),
     resource INTEGER NOT NULL CHECK(resource>=0),
     target INTEGER NOT NULL CHECK(target<>0),
     phase INTEGER NOT NULL DEFAULT 0 CHECK(phase>=0),
@@ -242,4 +242,48 @@ CREATE TABLE native_file (
     FOREIGN KEY(ns,mount) REFERENCES native_mount(ns,owner),
     FOREIGN KEY(ns,owner) REFERENCES file_handle(ns,owner) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
-PRAGMA user_version=18;
+CREATE TABLE native_parent (
+    ns INTEGER NOT NULL,
+    mount INTEGER NOT NULL CHECK(mount>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    parent INTEGER NOT NULL CHECK(parent>0),
+    PRIMARY KEY(ns,serial),
+    FOREIGN KEY(ns,serial) REFERENCES file_custody(ns,serial) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+CREATE TABLE native_directory (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    mount INTEGER NOT NULL CHECK(mount>0),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    request BLOB NOT NULL CHECK(length(request)=8),
+    next_cookie INTEGER NOT NULL DEFAULT 3 CHECK(next_cookie>=3),
+    closed INTEGER NOT NULL DEFAULT 0 CHECK(closed IN(0,1)),
+    PRIMARY KEY(ns,owner), UNIQUE(ns,mount,request)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX native_directory_open ON native_directory(ns,mount,owner) WHERE closed=0;
+CREATE TABLE native_directory_read (
+    ns INTEGER NOT NULL,
+    owner INTEGER NOT NULL CHECK(owner>0),
+    directory INTEGER NOT NULL CHECK(directory>0),
+    offset INTEGER NOT NULL CHECK(offset>=0),
+    parent INTEGER NOT NULL CHECK(parent>0),
+    first_cookie INTEGER,
+    end_cookie INTEGER,
+    published INTEGER NOT NULL DEFAULT 0 CHECK(published IN(0,1)),
+    PRIMARY KEY(ns,owner),
+    FOREIGN KEY(ns,owner) REFERENCES native_source(ns,owner) ON DELETE CASCADE,
+    FOREIGN KEY(ns,directory) REFERENCES native_directory(ns,owner),
+    CHECK((first_cookie IS NULL AND end_cookie IS NULL AND published=0) OR
+          (first_cookie IS NOT NULL AND end_cookie IS NOT NULL AND first_cookie>=3 AND end_cookie>=first_cookie))
+) STRICT, WITHOUT ROWID;
+CREATE INDEX native_directory_read_owner ON native_directory_read(ns,directory,owner);
+CREATE TABLE native_cookie (
+    ns INTEGER NOT NULL,
+    owner INTEGER NOT NULL CHECK(owner>0),
+    cookie INTEGER NOT NULL CHECK(cookie>=3),
+    name BLOB NOT NULL CHECK(length(name)>0 AND length(name)<=255),
+    PRIMARY KEY(ns,owner,cookie),
+    FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX native_cookie_name ON native_cookie(ns,owner,name,cookie);
+PRAGMA user_version=19;

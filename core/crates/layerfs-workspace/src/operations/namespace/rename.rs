@@ -120,6 +120,8 @@ pub(crate) fn rename(
     Ok(Some(Some(Changes {
         open: None,
         detached: None,
+        moved_directory: (moved.kind == InodeKind::Directory && !same)
+            .then_some((moved.serial, action.new_parent)),
         inodes,
         directory_entries: vec![
             unbind(action.parent, action.name, inherited),

@@ -1,0 +1,106 @@
+[
+  {
+    "command": [
+      "core/target/debug/deps/native_directory-da74e859bec14402",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "7c2bc66b21c8b369f2bf9375ec1db372e1dbba67a070e4b44140477bbf35655a",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2700401917,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-overlay-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/compound-015a16aad54419dc",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "3354ca0e4164640a766ebe43a9a2220868d9391671c2915c7fe39cceda92bb07",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2294991083,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-overlay-compound.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_directory-4879169c5ca57f2f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "e85f889584756b393e8df8b698c4c96d8ee60603239907a8fc0bb1d6f65b4e25",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1696315792,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-workspace-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/namespace-82c9e95b2594de86",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "022bb52c3f224a5cf4bacf2e1ed8b69eb0cf1d056aa5c69c7017d2029b8c8c31",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1422394917,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-workspace-namespace.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/namespace_view-a68799712699a55d",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "482236733912dcfac49fd89eaff61a5f83bddefc4cd58ccd81bff0fa63317350",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2492280500,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-workspace-namespace_view.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/mutation_plan-8a40f60d4e773829",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "7276235dedeeb0834ccc7e99e57aa4d5367f4bf9eb4964b51417d4c61fd30d18",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 832153375,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-workspace-mutation_plan.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_jobs-296ccdda6ee0193f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "f1eeb06274a6910b06ac47056f494287f17821528d915dfba866b426f4668efe",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 886947917,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-daemon-native_jobs.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/completion_ownership-41a80abdf2599e43",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "362d831fa306bfe2d96de89420a6075d4642f363baf9eae7cb93bd2f0dd84d2b",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1259082667,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/36-host-layerfs-daemon-completion_ownership.txt"
+  }
+]

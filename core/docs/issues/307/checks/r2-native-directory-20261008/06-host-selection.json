@@ -1,0 +1,31 @@
+{
+  "selected": {
+    "layerfs-overlay": [
+      "native_directory",
+      "native_lookup",
+      "engine",
+      "lifetimes",
+      "source",
+      "orphans",
+      "resources",
+      "startup_cost",
+      "costs",
+      "compound"
+    ],
+    "layerfs-workspace": [
+      "native_directory",
+      "native_read_plan",
+      "nonfile",
+      "payload"
+    ],
+    "layerfs-daemon": [
+      "native_jobs",
+      "owner",
+      "job_cost",
+      "completion_ownership"
+    ]
+  },
+  "timeout_seconds": 100,
+  "scope": "functional component; no native mount or numerical qualification",
+  "Store": "Explicit Disposable only"
+}

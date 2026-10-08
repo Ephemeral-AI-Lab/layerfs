@@ -1,0 +1,24 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r2-directory-kind-cff6c3c71af34d499293c6d5afdd1caf",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "core/docs/issues/307/checks/r2-native-directory-20261008/linux-kind-check.py"
+  ],
+  "exit_code": 0,
+  "stdout": "b6c30724faf90e948b99decd5eab9ac35211db1ad4e1ed23a0498d98bd98ed0e\n",
+  "stderr": ""
+}

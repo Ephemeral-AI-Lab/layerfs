@@ -4,8 +4,8 @@ use crate::{
 };
 use layerfs_content::{filesystem::PathName, ContentError};
 use layerfs_overlay::{
-    BaseSource, FileRead, Inode, InodeKind, NativeDecision, NativeMount, NativeObservation,
-    OpenFile, Overlay, OverlayError, OverlayResult, SourceRows,
+    BaseSource, FileRead, Inode, InodeKind, NativeDecision, NativeDirectory, NativeMount,
+    NativeObservation, OpenFile, Overlay, OverlayError, OverlayResult, SourceRows,
 };
 use std::{fmt, sync::Arc};
 
@@ -14,6 +14,7 @@ pub enum NativeReadOperation {
     Lookup { parent: u64, name: PathName },
     Getattr { serial: u64 },
     Open { serial: u64, writable: bool },
+    Opendir { serial: u64 },
 }
 #[derive(Clone, Debug)]
 pub struct NativeReadJob {
@@ -47,6 +48,7 @@ pub struct NativeReadValue {
     pub stat: ViewStat,
     pub read: FileRead,
     pub file: Option<OpenFile>,
+    pub directory: Option<NativeDirectory>,
     pub original: Arc<NativeReadOutcome>,
 }
 #[derive(Debug)]
@@ -83,6 +85,10 @@ impl NativeReadJob {
             db.observe_native_open(self.mount, self.source, writable, |rows, protected| {
                 self.decide_on(rows, protected)
             })
+        } else if matches!(self.operation, NativeReadOperation::Opendir { .. }) {
+            db.observe_native_directory(self.mount, self.source, |rows, protected| {
+                self.decide_on(rows, protected)
+            })
         } else {
             db.observe_native(self.mount, self.source, lookup, |rows, protected| {
                 self.decide_on(rows, protected)
@@ -96,9 +102,9 @@ impl NativeReadJob {
     ) -> OverlayResult<NativeDecision<NativeReadDecision>> {
         let wanted = match self.operation {
             NativeReadOperation::Lookup { parent, .. } => parent,
-            NativeReadOperation::Getattr { serial } | NativeReadOperation::Open { serial, .. } => {
-                serial
-            }
+            NativeReadOperation::Getattr { serial }
+            | NativeReadOperation::Open { serial, .. }
+            | NativeReadOperation::Opendir { serial } => serial,
         };
         if wanted != protected {
             return Err(OverlayError::Stale);
@@ -136,6 +142,7 @@ impl NativeReadJob {
         match &self.operation {
             // The source's independent read reference permits removed metadata.
             NativeReadOperation::Getattr { serial } => eval.target(*serial),
+            NativeReadOperation::Opendir { serial } => eval.directory(*serial),
             NativeReadOperation::Open { serial, .. } => {
                 let inode = eval.existing(*serial)?;
                 match inode {
@@ -209,6 +216,7 @@ impl NativeReadPlan {
                         stat: inode.clone().into(),
                         read: *read,
                         file: original.open_candidate,
+                        directory: original.directory_candidate,
                         original,
                     }));
                 }

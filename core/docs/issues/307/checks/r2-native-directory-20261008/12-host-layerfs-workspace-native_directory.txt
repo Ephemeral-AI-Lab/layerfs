@@ -1,0 +1,16 @@
+
+running 2 tests
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... 
+thread 'opened_directory_retains_parent_and_metadata_after_forget_and_rmdir' panicked at crates/layerfs-workspace/tests/native_directory.rs:192:10:
+called `Result::unwrap()` on an `Err` value: Content(PathNotFound)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    opened_directory_retains_parent_and_metadata_after_forget_and_rmdir
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

@@ -2,8 +2,9 @@
 #[path = "support/installed_store.rs"]
 mod support;
 use layerfs_daemon::{
-    bootstrap::open_store, store::BindRequest, Command, Completion, NativeJob, NativeReply, Owner,
-    OwnerClient, OwnerConfig, Pending, Response,
+    bootstrap::open_store, store::BindRequest, Command, Completion, NativeDirectoryJob,
+    NativeDirectoryReply, NativeJob, NativeReply, Owner, OwnerClient, OwnerConfig, Pending,
+    Response,
 };
 use layerfs_history::WorkspaceId;
 use layerfs_overlay::{ProfileConfig, Route, StatementKind};
@@ -36,6 +37,13 @@ fn finish(mut pending: Pending) -> Completion {
 }
 fn job(client: &OwnerClient, route: Route, command: Command) -> Completion {
     finish(client.try_submit(Some(route), command).unwrap())
+}
+fn dir_job(client: &OwnerClient, route: Route, command: NativeDirectoryJob) -> Completion {
+    job(
+        client,
+        route,
+        Command::Native(NativeJob::Directory(Box::new(command))),
+    )
 }
 #[test]
 fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal() {
@@ -306,6 +314,140 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
             .is_err()
     );
     assert!(job(&client, route, Command::ReleaseBaseSource(processing))
+        .result()
+        .is_ok());
+    let done = job(
+        &client,
+        route,
+        Command::Native(NativeJob::Source {
+            mount,
+            request: 100,
+            serial: root,
+        }),
+    );
+    let source = match done.result() {
+        Ok(Response::Native(NativeReply::Source(source))) => *source,
+        other => panic!("{other:?}"),
+    };
+    drop(done);
+    let view = operation.workspace().view_for_source(source).unwrap();
+    let mut plan = view
+        .native_read_plan(mount, NativeReadOperation::Opendir { serial: root })
+        .unwrap();
+    let mut opened = None;
+    for _ in 0..4 {
+        let done = job(
+            &client,
+            route,
+            Command::Native(NativeJob::Observe(Box::new(plan.job().unwrap().clone()))),
+        );
+        let original = match done.result() {
+            Ok(Response::Native(NativeReply::Observed(original))) => original.clone(),
+            other => panic!("{other:?}"),
+        };
+        if let Some(value) = plan.accept(original).unwrap() {
+            opened = Some((value, done));
+            break;
+        }
+        drop(done);
+        plan.supply(&view).unwrap();
+    }
+    let (value, opened) = opened.expect("bounded directory open rounds");
+    let directory = value.directory.unwrap();
+    assert!(job(&client, route, Command::ReleaseFileRead(value.read))
+        .result()
+        .is_ok());
+    assert!(job(&client, route, Command::ReleaseBaseSource(source))
+        .result()
+        .is_ok());
+    drop((value, opened));
+    let source_reply = dir_job(
+        &client,
+        route,
+        NativeDirectoryJob::Read {
+            directory,
+            request: 101,
+            offset: 2,
+        },
+    );
+    let read = match source_reply.result() {
+        Ok(Response::Native(NativeReply::Directory(NativeDirectoryReply::Read(read)))) => {
+            read.clone()
+        }
+        other => panic!("{other:?}"),
+    };
+    let before = store.work();
+    let page_reply = dir_job(
+        &client,
+        route,
+        NativeDirectoryJob::Page {
+            read: read.clone(),
+            after: None,
+        },
+    );
+    assert_eq!(store.work(), before, "directory owner made Store demand");
+    let page = match page_reply.result() {
+        Ok(Response::Native(NativeReply::Directory(NativeDirectoryReply::Page(page)))) => {
+            page.clone()
+        }
+        other => panic!("{other:?}"),
+    };
+    let directory_view = operation
+        .workspace()
+        .view_for_source(read.source())
+        .unwrap();
+    let listing = directory_view.native_directory_listing(&page).unwrap();
+    assert_eq!(listing.entries.len(), 1);
+    let cookie_reply = dir_job(
+        &client,
+        route,
+        NativeDirectoryJob::PrepareCookies {
+            read: read.clone(),
+            names: listing
+                .entries
+                .iter()
+                .map(|entry| entry.name.clone())
+                .collect(),
+        },
+    );
+    let cookies = match cookie_reply.result() {
+        Ok(Response::Native(NativeReply::Directory(NativeDirectoryReply::Cookies(plan)))) => {
+            plan.clone()
+        }
+        other => panic!("{other:?}"),
+    };
+    assert!(dir_job(
+        &client,
+        route,
+        NativeDirectoryJob::PublishCookies {
+            plan: cookies.clone(),
+            accepted: 1
+        }
+    )
+    .result()
+    .is_ok());
+    assert!(
+        dir_job(&client, route, NativeDirectoryJob::Close(directory))
+            .result()
+            .is_ok()
+    );
+    assert!(
+        job(&client, route, Command::Native(NativeJob::Revoke(mount)))
+            .result()
+            .is_err()
+    );
+    let source = read.source();
+    drop((
+        listing,
+        cookies,
+        page,
+        read,
+        directory_view,
+        cookie_reply,
+        page_reply,
+        source_reply,
+    ));
+    assert!(job(&client, route, Command::ReleaseBaseSource(source))
         .result()
         .is_ok());
     assert!(

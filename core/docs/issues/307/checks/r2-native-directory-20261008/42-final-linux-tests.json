@@ -1,0 +1,159 @@
+[
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "wall_ns": 62503094029
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_directory-d3e5076ec7c5ad67",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "71f3b717d262853679e328abaa59cf2f38a04d583b870acb307d57472967f728",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 89856166,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-overlay-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/compound-596352e4ccec617f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "6421e3747dc78d6021e16a2348315bf1dbcda5a54a8a310d9d623e6c495fec82",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 613862209,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-overlay-compound.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_directory-d7d2b8e2c80241f4",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "9169ad551dee532f8d96c94eb14971f5dbd2d6d1a2716c624edabd821dfb9c2e",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 145148833,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-workspace-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/namespace-5a4c3abb8b7a4a75",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "7067062c6628f352dd6fbcf9c70ffa81148064c39c567f30b8f6f4b849a24d6f",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 145846167,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-workspace-namespace.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/namespace_view-3abdc3fb3f3a3241",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "7c6effd05f44c271741ea725fc3fcc4a433260c9264fb596c73ad24ac778d3e0",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 910019917,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-workspace-namespace_view.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/mutation_plan-bcbfa7447463e447",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "af3c2c32f6056040c20c6a1d3dcd242c3cfd6bc79bcf1be4552e8e623c590c89",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 137761626,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-workspace-mutation_plan.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_jobs-a48cb6353cd68702",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "6ae1b98e68d1ba7770e94af033facceeec428559931a4174a766f073b5ac61c0",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 196065959,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-daemon-native_jobs.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "1d1f1ded13418638897c2d684af7ee0e3ae225ee5fa189762a147dfe0238fee0",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 154529416,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-daemon-completion_ownership.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "52cab73f71daab1107049c80d7b48add163a7cd8d4239732b2073ea51bc89c42",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 202159167,
+    "timeout_seconds": 9,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-layerfs-daemon-native_application.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "wall_ns": 7529626878
+  }
+]

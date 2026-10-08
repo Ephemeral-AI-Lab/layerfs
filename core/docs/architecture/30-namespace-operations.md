@@ -78,6 +78,13 @@ The windows bound one job; they are not totals. `Overlay::source_rows` gives the
 job consistent point reads: an inode's latest row, and for a name both its
 active row and its latest lower row.
 
+R2 directory custody extension2026-10-08: a cross-parent directory rename also
+supplies `Changes::moved_directory`. The same transaction validates its final
+binding and updates the indexed retained native parent, if present, without
+visiting open handles. File/name changes and same-parent renames omit that work.
+See [native directory custody](74-native-directory-custody.md); native kernel
+mutation/coherence qualification remains R3.
+
 A removed name becomes a whiteout only where something below still binds it:
 the latest lower local row decides, and only when there is none does the
 supplied "base binds this name" fact decide. Otherwise the active row is deleted

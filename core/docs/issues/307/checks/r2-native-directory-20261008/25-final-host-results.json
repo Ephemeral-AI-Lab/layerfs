@@ -1,0 +1,109 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "wall_ns": 17501630125
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_directory-da74e859bec14402",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "fb0c6109996475d81f028756d8b016d8d384f37a10c9abdd51bd71f396ef4bf6",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1850106500,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/23-host-layerfs-overlay-native_directory.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/engine-31ef5a26acdeed4a",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "d79747302e8d3d6712021488878a15e81c95562bc3d01f661326bf6bb50789c8",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2725611708,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/23-host-layerfs-overlay-engine.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/startup_cost-0425104fb12c0702",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "b6e4712571f9cfa8412cbec235b9bdbc87723863bc0f639a84c48b46835468a1",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 772369833,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/23-host-layerfs-overlay-startup_cost.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/costs-349e2bf53982389c",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "e1fdcf429559012fbe4162c6d03f9a3812fe8ff86a5f7dd6c9ac1a56449a9464",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 783825042,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/23-host-layerfs-overlay-costs.txt"
+  },
+  {
+    "command": [
+      "core/target/debug/deps/native_jobs-296ccdda6ee0193f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "e8bb548fbaac81fa3153877f1ddb91034b9317de0213386fbfe8c9b6209ad62d",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 820972459,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-directory-20261008/23-host-layerfs-daemon-native_jobs.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "wall_ns": 3901976000
+  }
+]

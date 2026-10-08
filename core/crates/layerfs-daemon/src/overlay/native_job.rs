@@ -1,5 +1,5 @@
 //! Native custody jobs on the existing fair owner, independent of fuser types.
-use crate::ServiceClass;
+use crate::{NativeDirectoryJob, NativeDirectoryReply, ServiceClass};
 use layerfs_overlay::{
     BaseSource, FileRead, NativeMount, NativeMountState, OpenFile, Overlay, OverlayError,
     OverlayResult, Route,
@@ -47,6 +47,7 @@ pub enum NativeJob {
         handle: u64,
     },
     Observe(Box<NativeReadJob>),
+    Directory(Box<NativeDirectoryJob>),
     Forget {
         mount: NativeMount,
         serial: u64,
@@ -65,6 +66,7 @@ pub enum NativeReply {
     RetainedFile(Option<OpenFile>),
     File(OpenFile),
     Observed(Arc<NativeReadOutcome>),
+    Directory(NativeDirectoryReply),
     State(NativeMountState),
     Done,
 }
@@ -73,6 +75,7 @@ impl NativeJob {
         match self {
             Self::Source { .. } | Self::FileSource { .. } => ServiceClass::Source,
             Self::Observe(_) => ServiceClass::Read,
+            Self::Directory(job) => job.class(),
             _ => ServiceClass::Lifecycle,
         }
     }
@@ -84,6 +87,7 @@ impl NativeJob {
                     + 4 * (std::mem::size_of::<layerfs_workspace::Need>() + 255)
                     + 2 * std::mem::size_of::<usize>(),
             ),
+            Self::Directory(job) => job.charge(),
             _ => (0, 256),
         }
     }
@@ -100,6 +104,7 @@ impl NativeJob {
             | Self::State(mount)
             | Self::Revoke(mount) => Some(mount.route()),
             Self::Observe(job) => Some(job.source().route()),
+            Self::Directory(job) => Some(job.route()),
             Self::Mount { .. } | Self::RetainedMount => None,
         };
         if expected.is_some_and(|expected| expected != route) {
@@ -147,6 +152,7 @@ impl NativeJob {
                 .close_native_file(mount, serial, handle)
                 .map(|()| NativeReply::Done),
             Self::Observe(job) => Ok(NativeReply::Observed(Arc::new(job.perform(db)))),
+            Self::Directory(job) => job.perform(db).map(NativeReply::Directory),
             Self::Forget {
                 mount,
                 serial,

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r2-directory-final-b1a43f21d1f84a669b032c37fdf81d9b",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "core/docs/issues/307/checks/r2-native-directory-20261008/linux-final-check.py"
+  ],
+  "exit_code": 0,
+  "stdout": "92b5fe47bf26f4e1c0cc256abd64c33d6cc0573d658a5b1dff94713c5de2db2f\n",
+  "stderr": ""
+}

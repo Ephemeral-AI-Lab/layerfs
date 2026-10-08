@@ -88,6 +88,7 @@ pub(crate) fn create(
     let changes = Changes {
         open: None,
         detached: None,
+        moved_directory: None,
         inodes: vec![inode.clone(), touched(&directory, now, true, false)?],
         directory_entries: vec![bind(parent, name, fresh.serial)],
         cell,
@@ -124,6 +125,7 @@ pub(crate) fn link(
     let changes = Changes {
         open: None,
         detached: None,
+        moved_directory: None,
         inodes: vec![file.clone(), touched(&directory, now, true, false)?],
         directory_entries: vec![bind(parent, name, serial)],
         cell: None,

@@ -45,6 +45,14 @@ impl Overlay {
         }) {
             return Err(OverlayError::Invalid("removed inode final"));
         }
+        let moved_directory = changes.moved_directory.map(|(serial, parent)| {
+            if serial == parent || !changes.directory_entries.iter().any(|entry| {
+                entry.parent == parent && matches!(entry.binding, crate::Binding::Bound { serial: target, .. } if target == serial)
+            }) {
+                return Err(OverlayError::Invalid("moved directory final binding"));
+            }
+            Ok((integer(serial)?, integer(parent)?))
+        }).transpose()?;
         for (index, inode) in changes.inodes.iter().enumerate() {
             check(inode)?;
             if changes.inodes[..index]
@@ -149,6 +157,11 @@ impl Overlay {
                         24 + change.name.len() as u64,
                     )? as i64;
                 }
+            }
+            if let Some((serial, parent)) = moved_directory {
+                self.execute(StatementKind::Lease,
+                    "UPDATE native_parent SET parent=?3 WHERE ns=?1 AND serial=?2 AND serial<>parent",
+                    &[&route.ns, &serial, &parent], 24)?;
             }
             if let Some((serial, cell)) = &changes.cell {
                 self.put_cell(route, integer(*serial)?, layer(*serial)?, cell)?;
