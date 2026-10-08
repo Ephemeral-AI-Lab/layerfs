@@ -1,0 +1,86 @@
+[
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/mutation_plan-bcbfa7447463e447",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "95456d36250ed9ee8b92dfe28d2b6cf3d3a5f6646a4308188ee54797e6fef3a5",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 144656333,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/namespace-5a4c3abb8b7a4a75",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "430adf172876986fd3ab7c31cdf8e3972dfde363da406265e569e3a6a0aa8510",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 140278209,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/namespace_daemon-5611af2d323973aa",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "5d8f3cfea367e60a67baa06384b88e5cfdd5d594e37478670e1987074d7f2e2c",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1769224793,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/namespace_profile-9173cb74d8ce94f7",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "8c13b24a7a415679d9dd5e83c7d73a7756fbf88664c15684e53337b7e0027ca0",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1167746834,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/namespace_view-3abdc3fb3f3a3241",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "8794f3b66011614dd47a1b7645bed1f580accbbf72c092511eaa246f51d196f2",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 904391959,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/payload-aec2b3c179845f78",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "dd2fe83c6249b0ce3f9560c7f993b05b902ffe6ebd622bf99e6a0af2dc37b55f",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 335159750,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/nonfile-f0a2713533387e02",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "f50e970ee4279695f73172af4fb6a7e4237ef7ae23567e15a7e0aecc373d4658",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 134472958,
+    "wall_stop_seconds": 100
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "commit": "e71e329ac81e0095aac1df2b3ecb369276a88929",
+  "first_parent": "fbcb7751f38dc425c53dddfb61afb66d38b97b92",
+  "committed_tree": "cd2d48b51d590af4d010f271e5f084a79e231b4b",
+  "matches_final_staged_tree": true,
+  "committed_count_recomputed": true,
+  "production_loc": {
+    "before": 170795,
+    "after": 170986,
+    "delta": 191
+  },
+  "subtotals": {
+    "active": 62695,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443,
+    "reference": 65417
+  },
+  "owned_container_removed": "b409789c721cf10e03048e84ed0340fd5a4547d5856ac9dc5fe4f8d7c034882a",
+  "full_R2_R5": "unfinished; continuing authorized implementation",
+  "approval_pending": false
+}

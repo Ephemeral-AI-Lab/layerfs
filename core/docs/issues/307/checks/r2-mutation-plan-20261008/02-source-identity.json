@@ -1,0 +1,12 @@
+{
+  "core/crates/layerfs-workspace/src/lib.rs": "8c1bcbf9dc3be1b4c930ec9b3ef456aadfdd2be9be7f7a42bfacdc20c49771fd",
+  "core/crates/layerfs-workspace/src/mutation/driver.rs": "6f7eac1cfe16bcb76615ee915b6957382bf2650483cd8e10e1c92f504fa0226e",
+  "core/crates/layerfs-workspace/src/mutation/facts.rs": "270839e78b446c1a8c19074bd15c9252f26c87c4540a60f7a8279daab6483c4d",
+  "core/crates/layerfs-workspace/src/mutation/mod.rs": "7c92fabf2c69bf0c3c84c6c4b97287bb63c258b2c07a83fb4d402e103e3521b1",
+  "core/crates/layerfs-workspace/src/operations/types.rs": "829f844bcd4813419b51faba82cf1d03b200eb1f29fc8dae8f01dbb6b668cb46",
+  "core/crates/layerfs-workspace/src/mutation/plan.rs": "c2b21d9743846522895066b9c8130b818971a3d464e92a2822d8b8b99ce8dae0",
+  "core/crates/layerfs-workspace/tests/mutation_plan.rs": "313b68027e27f9dfd025ea512ed7da0b113c26d52801064371e27303d34da443",
+  "core/Cargo.toml": "1e7491027ba16b0f7e6fc0d12e7e2b292369d652dbaac6d1be1b7e23a366a29c",
+  "core/Cargo.lock": "05d0c98c3fef6bdd46d33ed161ac913fad5a4406a50445fdb835dfe3a3eee159",
+  ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+}

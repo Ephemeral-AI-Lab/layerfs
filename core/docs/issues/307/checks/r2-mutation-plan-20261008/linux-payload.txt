@@ -1,0 +1,10 @@
+
+running 3 tests
+test fragmented_inherited_bytes_are_read_as_one_base_range ... S5_READ_GAPS inherited_gaps=2048 objects=5 upstream_bytes=33640 same_as_unfragmented_range=true overwritten_window_objects=0
+ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... S5_WRITE_DEMAND inherited_file_bytes=400000 first_write_upstream_bytes=2094 attribute_facts_upstream_bytes=2094 later_write_upstream_bytes=0 base_read_128k_upstream_bytes=33640
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+

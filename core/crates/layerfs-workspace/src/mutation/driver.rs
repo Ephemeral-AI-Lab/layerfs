@@ -1,9 +1,7 @@
 //! Operation driver: owner rounds over immutable facts, then one publication.
 use crate::{
-    BaseFacts, InodeSerials, JobOutcome, NamespaceJob, Operation, Outcome, OverlayJobs, SourceView,
-    Time, Workspace, WorkspaceError, WorkspaceResult,
+    InodeSerials, Operation, Outcome, OverlayJobs, SourceView, Time, Workspace, WorkspaceResult,
 };
-use layerfs_content::ContentError;
 use layerfs_overlay::OverlayError;
 
 impl Workspace {
@@ -32,35 +30,15 @@ impl Workspace {
         } else {
             None
         };
-        let mut job = NamespaceJob {
-            source: view.source(),
-            root: view.root_serial(),
-            operation,
-            now,
-            serial,
-            facts: BaseFacts::default(),
-        };
+        let mut plan = self
+            .prepare_mutation(view, operation, now, serial)
+            .map_err(|failure| failure.error)?;
         loop {
-            match overlay.namespace(&job)? {
-                JobOutcome::Applied { publication, inode } => {
-                    return Ok(Outcome::Applied {
-                        publication,
-                        stat: inode.map(Into::into),
-                    })
-                }
-                JobOutcome::Unchanged { inode } => {
-                    return Ok(Outcome::Unchanged {
-                        stat: inode.map(Into::into),
-                    })
-                }
-                JobOutcome::Refused(refusal) => return Err(WorkspaceError::Refused(refusal)),
-                JobOutcome::Needs(needs) => {
-                    if needs.is_empty() {
-                        return Err(ContentError::InvalidRecord("empty namespace needs").into());
-                    }
-                    view.supply(&mut job.facts, needs, job.operation.destination_path())?;
-                }
+            let result = overlay.namespace(plan.job().expect("prepared owner stage"));
+            if let Some(outcome) = plan.accept(result)? {
+                return Ok(outcome);
             }
+            plan.supply(view)?;
         }
     }
 }

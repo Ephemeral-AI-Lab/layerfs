@@ -1,0 +1,16 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.81s
+     Running tests/payload.rs (core/target/debug/deps/payload-ddb5fb04adfa7145)
+
+running 3 tests
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+test fragmented_inherited_bytes_are_read_as_one_base_range ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+

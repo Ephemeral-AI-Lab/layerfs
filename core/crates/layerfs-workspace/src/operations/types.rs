@@ -123,7 +123,8 @@ impl Operation {
             _ => None,
         }
     }
-    pub(crate) const fn creates(&self) -> bool {
+    /// Whether preparation needs one serial from the Workspace's allocator.
+    pub const fn creates(&self) -> bool {
         matches!(
             self,
             Self::Create { .. } | Self::Mkdir { .. } | Self::Symlink { .. }

@@ -1,0 +1,43 @@
+
+running 1 test
+test complete_operations_keep_point_work_as_names_and_inodes_grow ... S4_PLANS ["lower-name: SEARCH directory_entry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH directory_entry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH directory_entry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=172 btree-cursors=5 btree-scan-opcodes=0", "put-inode: vm-program opcodes=306 btree-cursors=5 btree-scan-opcodes=0"]
+S4_OPERATION siblings=128 operation=create-inherited-parent owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=create-local-parent owner_rounds=1 statements=53 vm_steps=1546 rows_changed=22 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=link-file owner_rounds=1 statements=53 vm_steps=1569 rows_changed=20 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-replace owner_rounds=1 statements=65 vm_steps=1979 rows_changed=24 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=unlink owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=mkdir owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-directory-across-parents owner_rounds=1 statements=72 vm_steps=2015 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rmdir owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=chmod-utimens owner_rounds=1 statements=37 vm_steps=1014 rows_changed=16 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-local owner_rounds=0 statements=27 vm_steps=612 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-inherited owner_rounds=0 statements=34 vm_steps=714 rows_changed=8 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=list-window owner_rounds=0 statements=23 vm_steps=1356 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-inherited-parent owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-local-parent owner_rounds=1 statements=53 vm_steps=1546 rows_changed=22 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=link-file owner_rounds=1 statements=53 vm_steps=1569 rows_changed=20 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-replace owner_rounds=1 statements=65 vm_steps=1979 rows_changed=24 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=unlink owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=mkdir owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-directory-across-parents owner_rounds=1 statements=72 vm_steps=2015 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rmdir owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=chmod-utimens owner_rounds=1 statements=37 vm_steps=1014 rows_changed=16 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-local owner_rounds=0 statements=27 vm_steps=612 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-inherited owner_rounds=0 statements=34 vm_steps=714 rows_changed=8 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=list-window owner_rounds=0 statements=23 vm_steps=1356 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-inherited-parent owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-local-parent owner_rounds=1 statements=53 vm_steps=1546 rows_changed=22 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=link-file owner_rounds=1 statements=53 vm_steps=1569 rows_changed=20 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-replace owner_rounds=1 statements=65 vm_steps=1979 rows_changed=24 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=unlink owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=mkdir owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-directory-across-parents owner_rounds=1 statements=72 vm_steps=2015 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rmdir owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=chmod-utimens owner_rounds=1 statements=37 vm_steps=1014 rows_changed=16 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-local owner_rounds=0 statements=27 vm_steps=612 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-inherited owner_rounds=0 statements=34 vm_steps=714 rows_changed=8 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=list-window owner_rounds=0 statements=23 vm_steps=1356 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+

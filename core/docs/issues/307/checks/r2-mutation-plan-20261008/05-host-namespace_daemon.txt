@@ -1,0 +1,21 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.57s
+     Running tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-816de57db25da955)
+
+running 8 tests
+test closed_and_stopped_services_return_exact_outcomes_without_effect ... ok
+test a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture ... ok
+test orphans::non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer ... ok
+test orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup ... ok
+test opposing_directory_moves_from_real_threads_never_form_a_cycle ... ok
+test concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs ... ok
+test concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exact ... ok
+test payload_complete_operations_have_indexed_work_through_the_real_owner ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s
+

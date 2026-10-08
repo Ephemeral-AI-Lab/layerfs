@@ -1,0 +1,44 @@
+{
+  "mutation_plan": {
+    "path": "core/target/debug/deps/mutation_plan-8a40f60d4e773829",
+    "sha256": "0753a1fce53ba04f7c84816e9dc3e25467483b00b3266063c97edbbdb5d34870",
+    "host_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s",
+    "linux_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+  },
+  "namespace": {
+    "path": "core/target/debug/deps/namespace-82c9e95b2594de86",
+    "sha256": "5b7e69f14dbe117c60d468b1f39070c69c61ab05a7ca9d4d0b68adeb8e66d610",
+    "host_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+    "linux_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s"
+  },
+  "namespace_daemon": {
+    "path": "core/target/debug/deps/namespace_daemon-d6177e9b800f7428",
+    "sha256": "9302335557e901daf97f89bf37d55c87f14a0363658bf4ac77925cb43df76207",
+    "host_result": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s",
+    "linux_result": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s"
+  },
+  "namespace_profile": {
+    "path": "core/target/debug/deps/namespace_profile-fed05e6e77b1c08d",
+    "sha256": "2a33793f8229c8410dacbdde7e0ffa8bce4bef342bc6f12fac217a3a319fdf15",
+    "host_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.32s",
+    "linux_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s"
+  },
+  "namespace_view": {
+    "path": "core/target/debug/deps/namespace_view-a68799712699a55d",
+    "sha256": "6a6541d4f615a209dca18cc8f9bc2fabd8587b95d03236a401bcbf85f3636ce7",
+    "host_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.72s",
+    "linux_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s"
+  },
+  "payload": {
+    "path": "core/target/debug/deps/payload-2fde78705c15b398",
+    "sha256": "12175caa37c0a75052273a668221abedf2ccf7d1b26c9fbd68eb42262f42b39a",
+    "host_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s",
+    "linux_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s"
+  },
+  "nonfile": {
+    "path": "core/target/debug/deps/nonfile-f4088d6159f094d3",
+    "sha256": "8759532f2794473631616144b45401120f79e24069fea40fce67a7cd56cc1804",
+    "host_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+    "linux_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s"
+  }
+}

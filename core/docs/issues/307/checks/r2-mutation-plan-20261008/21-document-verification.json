@@ -1,0 +1,292 @@
+{
+  "local_links": [
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "31-payload-streams.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../../crates/layerfs-workspace/src/operations/types.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../../crates/layerfs-workspace/src/mutation/job.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../../crates/layerfs-workspace/src/mutation/driver.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../../crates/layerfs-overlay/src/namespace/compound.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "33-independent-custody.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../issues/307/checks/s4-namespace/compound-profile.log",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../issues/307/checks/s4-namespace/operation-profile.log",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../issues/307/S4-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../../crates/layerfs-workspace/src/mutation/plan.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/30-namespace-operations.md",
+      "target": "../issues/307/checks/r2-mutation-plan-20261008/18-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FUSER-LIFECYCLE-DECISION-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md#4-combined-implementation-rollout",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/01-deepest-file-plan.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/06-independent-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/07-verification-scope.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/65-application-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/81-foundation-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R1-COMPLETE-FUSE-HANDOFF-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-NATIVE-PREREQUISITE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-completion-future-20261008/20-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/36-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-mutation-plan-20261008/18-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-FUSER-LIFECYCLE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r4-captured-namespace-port-20261008/19-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "PRE-S8-COMPLETION-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/10-commit-confirmation.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/19-component-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/21-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/65-application-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/64-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/67-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/81-foundation-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/80-source-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/84-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/59-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "../../architecture/72-owned-sandbox-lifecycle.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/106-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R1-COMPLETE-FUSE-HANDOFF-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-completion-20261008/26-build-runtime-pins.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-completion-20261008/28-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-completion-future-20261008/20-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FUSER-LIFECYCLE-DECISION-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-FUSER-LIFECYCLE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r4-captured-namespace-port-20261008/19-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/36-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/37-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-mutation-plan-20261008/18-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-mutation-plan-20261008/19-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/checks/r2-mutation-plan-20261008/18-results.md",
+      "target": "19-exact-production-loc.json",
+      "exists": true
+    }
+  ],
+  "full_whitespace_exit": 2,
+  "full_whitespace_output": "core/docs/issues/307/checks/r2-mutation-plan-20261008/05-host-mutation_plan.txt:19: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/05-host-namespace.txt:18: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/05-host-namespace_daemon.txt:21: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/05-host-namespace_profile.txt:14: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/05-host-namespace_view.txt:18: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/05-host-nonfile.txt:16: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/05-host-payload.txt:16: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/linux-mutation_plan.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/linux-namespace.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/linux-namespace_daemon.txt:33: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/linux-namespace_profile.txt:43: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/linux-namespace_view.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/linux-nonfile.txt:8: new blank line at EOF.\ncore/docs/issues/307/checks/r2-mutation-plan-20261008/linux-payload.txt:10: new blank line at EOF.\n",
+  "scope": "Raw Rust transcripts retain final blank lines; scoped source/docs/JSON check passed. No source/link failures."
+}

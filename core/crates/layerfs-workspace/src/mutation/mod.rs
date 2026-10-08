@@ -3,3 +3,4 @@ pub(crate) mod driver;
 pub(crate) mod eval;
 pub(crate) mod facts;
 pub(crate) mod job;
+pub(crate) mod plan;

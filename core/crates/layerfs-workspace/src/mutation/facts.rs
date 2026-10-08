@@ -90,10 +90,10 @@ impl SourceView {
     pub(crate) fn supply(
         &self,
         facts: &mut BaseFacts,
-        needs: Vec<Need>,
+        needs: &[Need],
         path: Option<&[PathName]>,
     ) -> WorkspaceResult<()> {
-        for need in needs {
+        for need in needs.iter().cloned() {
             facts.make_room();
             match need {
                 Need::Inode(serial) => {

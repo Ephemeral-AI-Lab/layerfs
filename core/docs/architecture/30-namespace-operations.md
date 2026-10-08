@@ -171,3 +171,35 @@ through the direct engine and through the real daemon owner with concurrent
 threads, a blocked provider and an interleaved capture. See the
 [S4 exit audit](../issues/307/S4-EXIT-AUDIT.md) for the criterion map, checks and
 remaining obligations.
+
+
+## Resumable mutation plan, R2 component
+
+[`Workspace::prepare_mutation`](../../crates/layerfs-workspace/src/mutation/plan.rs)
+creates an owned `MutationPlan` without SQL, provider I/O or serial allocation.
+Creating operations declare `Operation::creates()`; their caller supplies one
+serial from the same scope's authoritative allocator. Preparation validates its
+shape/range and exact Workspace route, returning the original owned operation on
+refusal. Source ownership remains with the caller; constructing/dropping a plan
+never acquires/releases the source or guesses a publication outcome.
+
+The plan has Owner, Base and Finished stages. Owner exposes the existing
+`NamespaceJob`, whose decision and publication logic is unchanged. `accept`
+consumes that original result. Only a nonempty Needs outcome opens the Base stage;
+Applied, Unchanged, Refused and original service failures finish it. Base `supply`
+uses the same existing immutable fact routine, with the exact retained source,
+and no SQL. A failed base demand keeps input, accumulated facts and needs in the
+finished plan. The caller receives the original error and retains it alongside
+that plan. No later job is exposed after terminal success or failure.
+
+The synchronous `Workspace::mutate` now drives this same plan. A native executor
+can park separately around its original SQL pending handle and its immutable-read
+admission before calling supply. It must still supply bounded request credits,
+healthy reader admission, original error/completion custody and actual source/
+reply disposal. The plan is not an executor and does not make existing blocking
+ports safe for native workers. Existing fact-cache/ancestry behavior is unchanged;
+this component does not establish arbitrary-depth topology qualification.
+
+[Component results](../issues/307/checks/r2-mutation-plan-20261008/18-results.md)
+cover preparation/owner demand separation, interleaving before the deciding round,
+one publication, original failures and retained input after a base/source refusal.

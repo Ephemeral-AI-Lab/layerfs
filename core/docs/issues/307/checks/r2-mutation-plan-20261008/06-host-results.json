@@ -1,0 +1,128 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "mutation_plan"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 5648933791
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "namespace"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1702053500
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "namespace_daemon"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 4085001709
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "namespace_profile"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 3735537333
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "namespace_view"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 3444123125
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "payload"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 2090518209
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "nonfile"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1465673084
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "parent": "e71e329ac81e0095aac1df2b3ecb369276a88929",
+  "scope": "Resumable Workspace mutation rounds reused by synchronous API; native executor and reader admission remain separate",
+  "files": {
+    "mutation/plan.rs": "Owned Owner/Base/Finished stages, original input retention, exact source validation, no provider/SQL work in preparation",
+    "mutation/driver.rs": "Existing synchronous mutate drives the same new plan",
+    "mutation/facts.rs": "Borrow needs so a failed demand retains original list",
+    "operations/types.rs": "Public creates predicate for separately admitted serial allocation",
+    "tests/mutation_plan.rs": "Real Content/Overlay preparation, interleaving, one publication, original errors and failed-source/base custody"
+  },
+  "tests": [
+    "mutation_plan",
+    "namespace",
+    "namespace_daemon",
+    "namespace_profile",
+    "namespace_view",
+    "payload",
+    "nonfile"
+  ],
+  "test_wall_seconds": 100,
+  "global_store": "NOT_RUN; Content in-memory public fixture and Overlay only",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "claims": "functional component only; no performance/residency/native acceptance"
+}

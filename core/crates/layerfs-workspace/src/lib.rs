@@ -45,6 +45,7 @@ pub use facts::{BaseFacts, Need};
 pub use install::PreparedBase;
 pub use job::{JobOutcome, NamespaceJob};
 pub use list::ViewListing;
+pub use mutation::plan::{MutationInputFailure, MutationPlan, MutationStage};
 pub use operation::{Operation, Outcome, Position, Refusal, Time, WriteData};
 pub use port::OverlayCapturedNamespace;
 pub use port::{FileLengths, OverlayCapturedRuns, OverlayFileRead, OverlayJobs, OverlayRead};
