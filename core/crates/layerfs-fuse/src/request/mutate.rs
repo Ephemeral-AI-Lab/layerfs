@@ -89,13 +89,9 @@ impl MutationReply {
         let generation = Generation(request.mount.owner_id());
         let mutation = match NativeMutation::perform(services, request).await {
             Ok(mutation) => mutation,
-            Err(failure) if failure.fenced() => {
-                self.error(terminal::STOPPED);
-                return terminal::mutation(&fence, failure).await;
-            }
             Err(failure) => {
-                self.error(Errno::EIO);
-                return reply_order::retained(failure);
+                self.error(terminal::errno(failure.fenced()));
+                return terminal::mutation(&fence, failure).await;
             }
         };
         let composed = match mutation.value() {

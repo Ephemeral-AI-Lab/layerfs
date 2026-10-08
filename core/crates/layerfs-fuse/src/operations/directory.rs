@@ -1,6 +1,6 @@
 //! One native enumeration request, bounded pages and exact accepted cookies.
 use crate::{
-    ports::{Fenced, RequestServices, ServiceError, ServiceReply},
+    ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
 use layerfs_overlay::{
@@ -101,13 +101,18 @@ impl DirectoryFailure {
     pub fn fenced(&self) -> bool {
         self.reason.is::<Fenced>()
     }
-    /// Ends a fenced enumeration. Its page, listing and unpublished cookie
-    /// plan are dropped first: a prepared plan made no offset valid, and its
-    /// read row goes with the source. The source, when one was acquired, is
-    /// then released once through the disposal call the fence never refuses.
-    /// Any other failure is returned unchanged.
+    /// The failed step was a base demand of this request alone.
+    pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
+        self.reason.downcast_ref()
+    }
+    /// Ends an enumeration that was fenced or whose base demand failed. Its
+    /// page, listing and unpublished cookie plan are dropped first: a
+    /// prepared plan made no offset valid, and its read row goes with the
+    /// source. The source, when one was acquired, is then released once
+    /// through the disposal call the fence never refuses. Any other failure
+    /// is returned unchanged.
     pub async fn relinquish(self) -> Result<(), DirectoryFailure> {
-        if !self.fenced() {
+        if !self.fenced() && self.base_demand().is_none() {
             return Err(self);
         }
         let Self {
@@ -255,8 +260,12 @@ impl DirectoryStream {
                 )));
             }
             let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
-            let listing = immutable.native_directory_listing(page)?;
+            let listing = immutable.native_directory_listing(page);
             drop(immutable);
+            let listing = match listing {
+                Ok(listing) => listing,
+                Err(error) => return Err(self.services.failed_base_read(error.into())),
+            };
             self.page = None; // All original page consumers ended before another SQL job.
             if listing.entries.is_empty() {
                 match listing.continuation {

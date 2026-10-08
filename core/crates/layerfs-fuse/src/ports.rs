@@ -14,7 +14,7 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex,
     },
 };
 
@@ -24,14 +24,74 @@ pub type ServiceFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ServiceErr
 /// One mount's terminal stop, shared by its lane, its requests and their
 /// service ports. Only forced teardown sets it, once; nothing clears it. A
 /// default fence is never stopped. It carries no request, job or lease.
+///
+/// The same shared record keeps the mount's bounded diagnostic of requests
+/// that ended on their own because a base demand failed: a count and the most
+/// recent original cause, in one fixed slot. Recording stops nothing.
 #[derive(Clone, Debug, Default)]
 pub struct Fence(Arc<FenceState>);
 #[derive(Debug, Default)]
 struct FenceState {
     stopped: AtomicBool,
     terminal_replies: AtomicU64,
+    failed_demands: Mutex<FailedDemands>,
+}
+/// A mount's failed base demands: how many requests one ended, and the
+/// original cause of the most recent. Earlier causes are not kept here.
+#[derive(Clone, Debug, Default)]
+pub struct FailedDemands {
+    pub count: u64,
+    pub latest: Option<Arc<dyn Error + Send + Sync>>,
+}
+/// A canonical base demand made for one request failed in the Store read
+/// path: admission to a reader, or a read through the admitted view. It
+/// carries the original cause from that request's demand scope. Only the
+/// service adapter produces it, through [`Fence::failed_demand`], and never
+/// for an owner job's failure, an uncertain outcome or a failed release. The
+/// failure belongs to the request alone; it says nothing about the mount.
+#[derive(Clone, Debug)]
+pub struct BaseDemandFailed {
+    cause: Arc<dyn Error + Send + Sync>,
+}
+impl BaseDemandFailed {
+    pub fn cause(&self) -> &Arc<dyn Error + Send + Sync> {
+        &self.cause
+    }
+}
+impl fmt::Display for BaseDemandFailed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "canonical base demand failed: {}", self.cause)
+    }
+}
+impl Error for BaseDemandFailed {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.cause.as_ref())
+    }
 }
 impl Fence {
+    /// For the service adapter: records one failed base demand in this
+    /// mount's slot and returns the marker its request fails with. The marker
+    /// has no other constructor, so none exists without its record.
+    pub fn failed_demand(&self, cause: Arc<dyn Error + Send + Sync>) -> BaseDemandFailed {
+        let mut record = self
+            .0
+            .failed_demands
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        record.count = record.count.saturating_add(1);
+        let earlier = record.latest.replace(cause.clone());
+        drop(record);
+        drop(earlier);
+        BaseDemandFailed { cause }
+    }
+    /// Observation only; the slot is fixed and is never cleared.
+    pub fn failed_demands(&self) -> FailedDemands {
+        self.0
+            .failed_demands
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .clone()
+    }
     pub fn stopped(&self) -> bool {
         self.0.stopped.load(Ordering::Acquire)
     }
@@ -169,7 +229,14 @@ pub trait RequestServices: Send + Sync {
     fn view(&self, source: BaseSource) -> Result<SourceView, ServiceError>;
     /// Await actual reader admission before obtaining a provider-capable view.
     /// Drop all resulting views/plans before parking for another engine job.
+    /// A refused or failed admission is a [`BaseDemandFailed`].
     fn immutable<'a>(&'a self, view: &'a SourceView) -> ServiceFuture<'a, SourceView>;
+    /// Classifies the failure of one canonical read made on a view from
+    /// `immutable`. When this request's demand scope recorded the original
+    /// provider failure the answer is a [`BaseDemandFailed`] carrying it;
+    /// any other failure of that step is returned unchanged. No demand is
+    /// made here and none is repeated.
+    fn failed_base_read(&self, step: ServiceError) -> ServiceError;
     fn observe(
         &self,
         job: NativeReadJob,

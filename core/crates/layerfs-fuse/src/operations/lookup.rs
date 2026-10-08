@@ -1,6 +1,6 @@
 //! LOOKUP/GETATTR/OPEN/OPENDIR share the existing atomic semantic plan.
 use crate::{
-    ports::{Fenced, RequestServices, ServiceError, ServiceReply},
+    ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
 use layerfs_overlay::{BaseSource, FileRead, NativeMount};
@@ -113,11 +113,16 @@ impl ReadFailure {
     pub fn fenced(&self) -> bool {
         self.reason.is::<Fenced>()
     }
-    /// Ends a fenced request: its read and source are released once through
-    /// the disposal calls, which the fence never refuses. Any other failure is
+    /// The failed step was a base demand of this request alone.
+    pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
+        self.reason.downcast_ref()
+    }
+    /// Ends a request that was fenced or whose base demand failed: its read
+    /// and source are released once through the disposal calls, which the
+    /// fence never refuses. Nothing is demanded again. Any other failure is
     /// returned unchanged, and a failed release keeps what remains.
     pub async fn relinquish(self) -> Result<(), ReadFailure> {
-        if !self.fenced() {
+        if !self.fenced() && self.base_demand().is_none() {
             return Err(self);
         }
         self.custody.dispose().await
@@ -225,7 +230,9 @@ impl Custody {
             let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
             let result = self.plan.as_mut().unwrap().supply(&immutable);
             drop(immutable); // Return the actual reader before another SQL wait.
-            result?;
+            if let Err(error) = result {
+                return Err(self.services.failed_base_read(error.into()));
+            }
             NextTurn::default().await;
         }
     }

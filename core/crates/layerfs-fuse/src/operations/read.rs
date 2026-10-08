@@ -72,16 +72,16 @@ impl Custody {
         let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
         let data = if link {
             immutable
-                .readlink_window(read, local.get().clone())?
-                .as_bytes()
-                .to_vec()
+                .readlink_window(read, local.get().clone())
+                .map(|target| target.as_bytes().to_vec())
         } else {
             let mut data = Vec::with_capacity(length as usize);
-            immutable.read_file_window(read, offset, length, local.get().clone(), &mut data)?;
-            data
+            immutable
+                .read_file_window(read, offset, length, local.get().clone(), &mut data)
+                .map(|_| data)
         };
         drop(immutable);
         drop(local);
-        Ok(data)
+        data.map_err(|error| self.services.failed_base_read(error.into()))
     }
 }

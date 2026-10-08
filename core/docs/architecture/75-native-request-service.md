@@ -84,7 +84,9 @@ Provider calls use a private try-lock only to borrow that owned reader; contenti
 is an explicit ConcurrentDemand error, never a blocking admission wait. Store
 pool locks do not span provider work. All clones of the admitted client/view must
 be disposed before parking for another engine job. Provider failure remains in
-the original per-request scope and the reader's quarantine custody.
+the original per-request scope and the reader's quarantine custody; how the
+request that observed it ends is described under
+[Failed base demand](#failed-base-demand).
 
 ## Terminal fence and gated ports
 
@@ -159,6 +161,65 @@ no kernel mount; receipts are in the
 [R6 checks](../issues/307/checks/r6-concurrency-teardown-20261009/). The
 callback-level terminal reply on a real aborted mount is proven by the later
 forced-unmount rows, not here.
+
+## Failed base demand
+
+A canonical base demand that fails belongs to the request that made it. The
+mount keeps serving: the request replies `EIO` once, gives back what it holds
+and ends `Complete`. It is not retained and nothing is fenced. No second demand
+is made on its behalf and nothing is retried.
+
+The classification is a typed marker, never an error's text.
+[`BaseDemandFailed`](../../crates/layerfs-fuse/src/ports.rs) carries the
+original cause and has one constructor, `Fence::failed_demand`, which the
+[daemon adapter](../../crates/layerfs-daemon/src/service/filesystem_port.rs)
+alone calls, for the Store read path only:
+
+| Step | Where it fails | Cause carried |
+| --- | --- | --- |
+| Reader admission | `immutable`: the read ticket is refused, its wait fails, or the admitted client is refused | the scope's earlier failure, or `PortError::ReadAdmission` |
+| Fact round | `plan.supply` on the admitted view, in the read and mutation drivers | the `PortError` this request's scope recorded |
+| File or link window | `read_file_window`, `readlink_window` | same |
+| Directory listing | `native_directory_listing` | same |
+
+The reads of the last three rows run inside Fuse on the view `immutable`
+returned, so Fuse cannot see whether the provider failed. It hands the step's
+error to
+`RequestServices::failed_base_read`, and the adapter answers from this
+request's `StorePorts` failure scope: a recorded `PortError` becomes the marker,
+anything else is returned unchanged. A failure at one of those steps with no
+recorded provider failure is therefore not a failed base demand: a stale source,
+contention on the admitted reader, a poisoned scope. `PortError::History` is
+never one either; it is the serial allocator's write.
+
+Everything else ends `Retained` exactly as before: any owner job's failure, an
+uncertain mutation or publication outcome, a failed reply-ticket step, a failed
+release, and a mutation that holds a publication ticket whatever its failure.
+The [terminal path](../../crates/layerfs-fuse/src/request/terminal.rs) and the
+drivers' relinquishers are the ones the fence uses; what a request can hold at
+the failed step is the table of the previous section, with `EIO` in place of
+`ENOTCONN` and no count on the fence's terminal replies.
+
+The cause survives the request twice. A failure that left a reader's outcome
+unknown quarantines that reader, and `Store::reader_failures` keeps the reader's
+index with the same original `PortError`. Independently, each lane's `Fence`
+keeps a fixed record, read with `MountQueue::fence().failed_demands()`: a count
+of requests ended this way and the most recent cause, as the same allocation
+the request's scope held. One slot per mount, nothing queued, never cleared; an
+earlier cause is dropped when a later one replaces it. A failure that
+quarantines nothing, such as stopped read admission, is recorded there alone.
+The record is in memory only: no wire record, status field or `NativeWork`
+counter carries it.
+
+[`cold_failure_scope.rs`](../../crates/layerfs-daemon/tests/cold_failure_scope.rs)
+proves this with a real owner, a Store with two read sessions and a dispatcher
+lane, and no kernel mount: a lookup served by a session in an uncertain state
+completes holding nothing, the lane is neither terminal nor retaining, the
+record and the quarantine hold one and the same `PortError`, later requests
+read exact bytes, a read, a mutation and an enumeration refused a reader each
+release what they hold, and an owner job's failure is still retained. The
+callback-level `EIO` on a real mount is exercised by the mounted failure-scope
+rows, not there.
 
 ## Native semantic and reply flow
 

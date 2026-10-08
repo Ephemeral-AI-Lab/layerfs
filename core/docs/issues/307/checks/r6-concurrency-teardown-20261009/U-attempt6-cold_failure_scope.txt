@@ -1,0 +1,23 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 236a173cc, uncommitted product/test paths=12, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/cold_failure_scope-bd5834c6dd9aab4d --test-threads=1 --nocapture (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause ... COLD-DEMAND request=(base_demand,source_held,no_read)->Complete lane=(completed 1, retained 0, terminal false) quarantined=1 record=(count 1, latest=Store port: Storage(UnknownOutcome { original: Io(Custom { kind: Other, error: Uncertain }) }))
+COLD-ADMISSION read=(base_demand,source_held,read_held=true)->released mutation=(base_demand,source_held,no_ticket)->released directory=(base_demand,source_held)->released quarantined=1 record=(count 4, latest=ReadAdmission(Stopped))
+ok
+test an_owner_job_failure_is_not_a_base_demand_and_is_still_retained ... OWNER-FAILURE request=(not base_demand)->Retained lane=(completed 0, retained 1) relinquish=unchanged record=(count 0) reason=owner completion: Err(Overlay(Stale))
+
+thread 'an_owner_job_failure_is_not_a_base_demand_and_is_still_retained' panicked at crates/layerfs-daemon/tests/cold_failure_scope.rs:78:9:
+bounded observation: owner credits returned
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    an_owner_job_failure_is_not_a_base_demand_and_is_still_retained
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.08s
+
+R4_WALL seconds<=6 limit=100s lock_wait=0s
+EXIT 101

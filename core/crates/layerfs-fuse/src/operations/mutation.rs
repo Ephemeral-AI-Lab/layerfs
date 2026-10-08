@@ -1,7 +1,7 @@
 //! One native mutation over Workspace's resumable plan: source, fact rounds,
 //! a single publishing owner job, then exact post-reply ticket/source release.
 use crate::{
-    ports::{Fenced, RequestServices, ServiceError, ServiceReply},
+    ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
 use layerfs_overlay::{BaseSource, NativeMount, OpenFile, OverlayError, Publication};
@@ -159,12 +159,17 @@ impl MutationFailure {
     pub fn fenced(&self) -> bool {
         self.reason.is::<Fenced>()
     }
-    /// Ends a fenced mutation: its source is released once through the
-    /// disposal call, which the fence never refuses. A fenced step precedes
-    /// the publishing job, so no ticket can be owed; a failure that holds one
-    /// anyway, or that was not fenced, is returned unchanged.
+    /// The failed step was a base demand of this request alone.
+    pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
+        self.reason.downcast_ref()
+    }
+    /// Ends a mutation that was fenced or whose base demand failed: its
+    /// source is released once through the disposal call, which the fence
+    /// never refuses. Both kinds of step precede the publishing job, so no
+    /// ticket can be owed; a failure that holds one anyway, or that is of
+    /// neither kind, is returned unchanged.
     pub async fn relinquish(self) -> Result<(), MutationFailure> {
-        if !self.fenced() || self.custody.publication.is_some() {
+        if (!self.fenced() && self.base_demand().is_none()) || self.custody.publication.is_some() {
             return Err(self);
         }
         let Self { mut custody, .. } = self;
@@ -358,7 +363,9 @@ impl Custody {
             let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
             let result = self.plan.as_mut().unwrap().supply(&immutable);
             drop(immutable); // Return the actual reader before another SQL wait.
-            result?;
+            if let Err(error) = result {
+                return Err(self.services.failed_base_read(error.into()));
+            }
             NextTurn::default().await;
         }
     }

@@ -169,13 +169,9 @@ async fn enumerate(
                 return dispose(stream).await;
             }
             Ok(DirectoryStep::Batch(batch)) => batch,
-            Err(error) if error.fenced() => {
-                reply.error(terminal::STOPPED);
-                return terminal::directory(fence, error).await;
-            }
             Err(error) => {
-                reply.error(Errno::EIO);
-                return RequestDisposition::Retained(Box::new(error));
+                reply.error(terminal::errno(error.fenced()));
+                return terminal::directory(fence, error).await;
             }
         };
         let mut accepted = 0;
@@ -213,14 +209,11 @@ async fn enumerate(
         }
         stream = match batch.accept(accepted).await {
             Ok(stream) => stream,
-            // Nothing was published: the offered entries are never sent.
-            Err(error) if error.fenced() => {
-                reply.error(terminal::STOPPED);
-                return terminal::directory(fence, error).await;
-            }
+            // A fenced publication published nothing: the offered entries
+            // are never sent. Any other failure here is retained.
             Err(error) => {
-                reply.error(Errno::EIO);
-                return RequestDisposition::Retained(Box::new(error));
+                reply.error(terminal::errno(error.fenced()));
+                return terminal::directory(fence, error).await;
             }
         };
     }

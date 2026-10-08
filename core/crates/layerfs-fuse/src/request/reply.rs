@@ -62,12 +62,8 @@ impl ReadReply {
                 Ok(answer) => answer,
                 Err(error) => {
                     let error = error.with_data_input(self.data_input());
-                    if error.fenced() {
-                        self.error(terminal::STOPPED);
-                        return terminal::read(&fence, error).await;
-                    }
-                    self.error(Errno::EIO);
-                    return RequestDisposition::Retained(Box::new(error));
+                    self.error(terminal::errno(error.fenced()));
+                    return terminal::read(&fence, error).await;
                 }
             };
         let value = match answer.value() {
@@ -152,13 +148,9 @@ async fn data(
                 Err(error) => RequestDisposition::Retained(Box::new(error)),
             }
         }
-        Err(error) if error.fenced() => {
-            reply.error(terminal::STOPPED);
-            terminal::read(fence, error).await
-        }
         Err(error) => {
-            reply.error(Errno::EIO);
-            RequestDisposition::Retained(Box::new(error))
+            reply.error(terminal::errno(error.fenced()));
+            terminal::read(fence, error).await
         }
     }
 }

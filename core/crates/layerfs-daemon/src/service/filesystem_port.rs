@@ -1,11 +1,12 @@
 //! Async Fuse ports over the existing fair SQL owner and direct Store readers.
 use crate::{
-    store::{BoundWorkspace, StoreOperation},
+    store::{BoundWorkspace, PortError, StoreOperation},
     Command, Completion, NativeDirectoryJob, NativeDirectoryReply, NativeJob, NativeReply,
     OwnerError, Response,
 };
 use layerfs_fuse::ports::{
-    Fence, Fenced, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
+    BaseDemandFailed, Fence, Fenced, MountServices, RequestServices, ServiceError, ServiceFuture,
+    ServiceReply,
 };
 use layerfs_history::HistoryError;
 use layerfs_overlay::{
@@ -46,6 +47,17 @@ impl FilesystemPort {
         } else {
             Ok(())
         }
+    }
+    /// The original cause of a failed Store read made for this request:
+    /// recorded in the mount's bounded slot and returned as the marker that
+    /// ends this request alone. A serial reservation is the History
+    /// allocator's write, not a base read; its failure is left as it is.
+    fn demand(&self, cause: Arc<PortError>) -> ServiceError {
+        if matches!(cause.as_ref(), PortError::History(_)) {
+            return Box::new(cause);
+        }
+        let marker: BaseDemandFailed = self.1.failed_demand(cause);
+        Box::new(marker)
     }
     fn complete(&self, command: Command, gated: bool) -> ServiceFuture<'_, Completion> {
         Box::pin(async move {
@@ -278,19 +290,37 @@ impl RequestServices for FilesystemPort {
     fn immutable<'a>(&'a self, view: &'a SourceView) -> ServiceFuture<'a, SourceView> {
         Box::pin(async move {
             self.fenced(true)?;
+            // A reader that cannot be had is a failed base demand of this
+            // request: nothing was read and nothing is asked again.
             let lease = {
-                let mut ticket = self.0.ports().read_ticket()?;
+                let mut ticket = self
+                    .0
+                    .ports()
+                    .read_ticket()
+                    .map_err(|cause| self.demand(cause))?;
                 // Leaving this block on a stop cancels the unstarted ticket.
                 poll_fn(|cx| match self.fenced(true) {
                     Ok(()) => Pin::new(&mut ticket)
                         .poll(cx)
-                        .map_err(|error| Box::new(error) as ServiceError),
+                        .map_err(|error| self.demand(Arc::new(PortError::ReadAdmission(error)))),
                     Err(fenced) => Poll::Ready(Err(fenced)),
                 })
                 .await?
             };
-            Ok(view.with_client(self.0.admitted_client(lease)?))
+            let client = self
+                .0
+                .admitted_client(lease)
+                .map_err(|cause| self.demand(cause))?;
+            Ok(view.with_client(client))
         })
+    }
+    fn failed_base_read(&self, step: ServiceError) -> ServiceError {
+        // The canonical read ran in Fuse on the admitted view; whether the
+        // provider failed is known only to this request's demand scope.
+        match self.0.ports().failure() {
+            Ok(Some(cause)) => self.demand(cause),
+            Ok(None) | Err(_) => step,
+        }
     }
     fn observe(
         &self,
