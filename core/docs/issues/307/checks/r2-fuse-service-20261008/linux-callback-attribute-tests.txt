@@ -1,0 +1,9 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.15s
+     Running tests/attributes.rs (core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c)
+
+running 2 tests
+test attributes_preserve_signed_fraction_identity_mode_and_link_count ... ok
+test root_projection_is_bijective_and_does_not_assume_serial_one ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

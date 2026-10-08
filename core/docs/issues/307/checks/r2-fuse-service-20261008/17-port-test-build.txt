@@ -1,0 +1,40 @@
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0599]: no method named `work` found for struct `OwnerClient` in the current scope
+   --> crates/layerfs-daemon/tests/filesystem_port.rs:148:16
+    |
+148 |         client.work().unwrap().outstanding,
+    |                ^^^^ method not found in `OwnerClient`
+
+error[E0599]: no method named `work` found for struct `OwnerClient` in the current scope
+   --> crates/layerfs-daemon/tests/filesystem_port.rs:171:23
+    |
+171 |     assert_eq!(client.work().unwrap().outstanding, 0);
+    |                       ^^^^ method not found in `OwnerClient`
+
+error[E0599]: no method named `work` found for struct `OwnerClient` in the current scope
+   --> crates/layerfs-daemon/tests/filesystem_port.rs:190:23
+    |
+190 |     assert_eq!(client.work().unwrap().outstanding, 1);
+    |                       ^^^^ method not found in `OwnerClient`
+
+error[E0599]: no method named `work` found for struct `OwnerClient` in the current scope
+   --> crates/layerfs-daemon/tests/filesystem_port.rs:192:23
+    |
+192 |     assert_eq!(client.work().unwrap().outstanding, 0);
+    |                       ^^^^ method not found in `OwnerClient`
+
+error[E0599]: no method named `work` found for struct `OwnerClient` in the current scope
+   --> crates/layerfs-daemon/tests/filesystem_port.rs:278:25
+    |
+278 |     let before = client.work().unwrap().admitted;
+    |                         ^^^^ method not found in `OwnerClient`
+
+error[E0599]: no method named `work` found for struct `OwnerClient` in the current scope
+   --> crates/layerfs-daemon/tests/filesystem_port.rs:323:23
+    |
+323 |     assert_eq!(client.work().unwrap().admitted, before);
+    |                       ^^^^ method not found in `OwnerClient`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-daemon` (test "filesystem_port") due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...

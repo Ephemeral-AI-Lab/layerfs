@@ -1,0 +1,14 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "metadata",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--offline",
+    "--format-version",
+    "1"
+  ],
+  "exit_code": 0,
+  "stderr": "     Locking 27 packages to latest compatible versions\n      Adding equivalent v1.0.2\n      Adding fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)\n      Adding indexmap v2.14.2\n      Adding lock_api v0.4.14\n      Adding log v0.4.34\n      Adding nix v0.29.0 (available: v0.31.3)\n      Adding num_enum v0.7.6\n      Adding num_enum_derive v0.7.6\n      Adding page_size v0.6.0\n      Adding parking_lot v0.12.5\n      Adding parking_lot_core v0.9.12\n      Adding proc-macro-crate v3.5.0\n      Adding redox_syscall v0.5.18\n      Adding ref-cast v1.0.27\n      Adding ref-cast-impl v1.0.27\n      Adding scopeguard v1.2.0\n      Adding serde_core v1.0.229\n      Adding serde_derive v1.0.229\n      Adding toml_datetime v1.1.1+spec-1.1.0\n      Adding toml_edit v0.25.15+spec-1.1.0\n      Adding toml_parser v1.1.3+spec-1.1.0\n      Adding winapi v0.3.9\n      Adding winapi-i686-pc-windows-gnu v0.4.0\n      Adding winapi-x86_64-pc-windows-gnu v0.4.0\n      Adding winnow v1.0.4\n      Adding zerocopy v0.8.57\n      Adding zerocopy-derive v0.8.57\n"
+}

@@ -1,0 +1,26 @@
+{
+  "host": [
+    {
+      "path": "core/target/debug/deps/filesystem_port-9a367c3ce80975d4",
+      "sha256": "b62feff9751fa4a6700b063196bc63bf26699df98d70b0c978e37a2da499ef9f",
+      "bytes": 7517504
+    }
+  ],
+  "linux": [
+    {
+      "path": "core/target/cluster2-linux/debug/deps/dispatch-751192237192367e",
+      "sha256": "eae1b7e4af6ba00db12d7b1d28b3c6d11315e80705eb2bec9fa50c4e0324cdde",
+      "bytes": 55859024
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c",
+      "sha256": "c0f88fb49a65c9c05a912f3ff256ed5ceaea776bceaebcb2f76a4331bdde7995",
+      "bytes": 15895840
+    },
+    {
+      "path": "core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb",
+      "sha256": "5e032ba4f2068cf862492cb13b5077d5c11afa363cb1206c3f3d8ab2941c13ca",
+      "bytes": 115069408
+    }
+  ]
+}

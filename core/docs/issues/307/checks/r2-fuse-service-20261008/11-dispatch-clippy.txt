@@ -1,0 +1,7 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+    Checking blake3 v1.8.5
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.84s

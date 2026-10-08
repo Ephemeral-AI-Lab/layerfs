@@ -1,0 +1,93 @@
+{"command": ["python3", "-B", "core/tools/check_fuser_integrity.py"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 2409693501, "output": "linux-callback-fuser-integrity.txt"}
+{
+  "checked_manifests_locks_configs": 104,
+  "errors": [],
+  "authorized_patch_verified": true,
+  "registry_package_verified": false
+}
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-fuse", "--all-targets", "--no-run"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 9389430421, "output": "linux-callback-fuse-build.txt"}
+   Compiling blake3 v1.8.5
+   Compiling zerocopy v0.8.57
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.34s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_fuse-4681942db72805bc)
+  Executable tests/attributes.rs (core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c)
+  Executable tests/dispatch.rs (core/target/cluster2-linux/debug/deps/dispatch-751192237192367e)
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--test", "filesystem_port", "--no-run"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 21008390842, "output": "linux-callback-port-build.txt"}
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 20.95s
+  Executable tests/filesystem_port.rs (core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb)
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-fuse", "--test", "dispatch", "--", "--test-threads=1"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 276506875, "output": "linux-callback-dispatch-tests.txt"}
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running tests/dispatch.rs (core/target/cluster2-linux/debug/deps/dispatch-751192237192367e)
+
+running 8 tests
+test completion_event_resumes_without_another_request_and_old_wakers_are_stale ... ok
+test fixed_workers_share_mounts_and_survive_zero_mounts ... ok
+test handoff_after_pool_shutdown_retains_original_and_returns_terminal_error ... ok
+test notification_registration_does_not_keep_a_disposed_request_alive ... ok
+test panic_and_failure_retain_original_future_and_do_not_stop_other_mounts ... ok
+test rejected_copy_capacity_keeps_receive_ownership_and_permit_cancel_is_exact ... ok
+test two_borrowed_waiters_wake_on_terminal_without_releasing_original_credit ... ok
+test wake_during_poll_is_coalesced_and_never_lost ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-fuse", "--test", "attributes", "--", "--test-threads=1"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 222745542, "output": "linux-callback-attribute-tests.txt"}
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.15s
+     Running tests/attributes.rs (core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c)
+
+running 2 tests
+test attributes_preserve_signed_fraction_identity_mode_and_link_count ... ok
+test root_projection_is_bijective_and_does_not_assume_serial_one ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--test", "filesystem_port", "--", "--test-threads=1"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 323314458, "output": "linux-callback-port-tests.txt"}
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.20s
+     Running tests/filesystem_port.rs (core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb)
+
+running 2 tests
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+{"command": ["cargo", "clippy", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-fuse", "-p", "layerfs-daemon", "--all-targets", "--", "-D", "warnings"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 12504237214, "output": "linux-callback-clippy.txt"}
+    Checking layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+    Checking nix v0.31.3
+    Checking parking_lot_core v0.9.12
+   Compiling zerocopy v0.8.57
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+    Checking num_enum v0.7.6
+    Checking ref-cast v1.0.27
+    Checking page_size v0.6.0
+    Checking parking_lot v0.12.5
+    Checking layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Checking layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+    Checking layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+    Checking layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+    Checking layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+    Checking layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.32s
+

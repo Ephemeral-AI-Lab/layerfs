@@ -96,5 +96,10 @@ transitions. Schema versions and earlier proof identities above are historical;
 this in-process Overlay is freshly initialized, with no migration or reopen path.
 
 Schema19 subsequently adds [native directory ownership and cookies](74-native-directory-custody.md).
+
+The replacement [native request service](75-native-request-service.md) now drives
+these plans through actual Owner futures and admitted direct Store readers.
+Its initial callback adapter does not yet establish mounted application Ready
+or normal detach/drain; the earlier component receipts retain their original scope.
 The earlier component limitations above retain their original scope; kernel
 integration and complete R2 acceptance remain open.

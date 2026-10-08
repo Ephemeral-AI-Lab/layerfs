@@ -1,0 +1,35 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-fuse",
+    "--test",
+    "dispatch",
+    "--",
+    "--test-threads=1"
+  ],
+  "wall_bound_seconds": 100,
+  "kind": "component functional test; natural caches; no performance/residency claim",
+  "profile": "Overlay MEMORY/OFF/EXCLUSIVE; global Store not opened; Durable NOT_RUN disabled",
+  "source_commit": "8d800de670ab138807ce8e0eb014a0a00ee7463b",
+  "dirty": true,
+  "sources": {
+    "core/crates/layerfs-fuse/src/dispatch/admission.rs": "97176fba5b801bf4184eec62cec4652680cad5f94fd0009715054405b2c8f5b9",
+    "core/crates/layerfs-fuse/src/dispatch/diagnostics.rs": "80af7615217537ddb83e01376e7b631fe4288a31c478cc70e17053f3f02ec724",
+    "core/crates/layerfs-fuse/src/dispatch/mod.rs": "d5d6a4916898f9ae29dfa10a66bd85660a9464bbe7064727031e4392493cfec0",
+    "core/crates/layerfs-fuse/src/dispatch/queue.rs": "30973dd03f2557d429395c6a393b41c78d506da1c8ea319024031a4e176231c2",
+    "core/crates/layerfs-fuse/src/dispatch/task.rs": "781d69040aed95c29f356ec4259fe5d3afe660fef84e4b37bff62b5bd93babd3",
+    "core/crates/layerfs-fuse/src/dispatch/types.rs": "44d7348fcec34514110073a9d9070af1df53895d17a21a880953c7135d5991d4",
+    "core/crates/layerfs-fuse/src/dispatch/workers.rs": "54a762bed2225631096fb47c5e0db9d061805599a20922e30d1c3d33d91f6b3a",
+    "core/crates/layerfs-fuse/src/lib.rs": "95f6a6e75ad5febd7b9109ca9204bd912a3ace45dfac2fa83f2ca66d52f59459",
+    "core/crates/layerfs-fuse/tests/dispatch.rs": "59c879fe4de28dad317109970c0091e8ca7d0e58104bd4c50ee80f59fe5d62c1",
+    "core/crates/layerfs-fuse/tests/support/mod.rs": "de7d6d3d0f2a3aed6e663f644fac91c8658b5aeffc5ca369bc298e72f1bfb6f1"
+  },
+  "exit": 0,
+  "elapsed_ns": 996618875
+}

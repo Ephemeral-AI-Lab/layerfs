@@ -188,3 +188,15 @@ R2 native read/lookup custody: [results](checks/r2-native-lookup-20261008/35-res
 R2 native regular-file ownership: [results](checks/r2-native-open-20261008/25-results.md), [exact LOC](checks/r2-native-open-20261008/26-exact-production-loc.json). Production LOC:172718 ->172929 (delta+211); core107301→107512, active64427→64638; reference65417/predecessors37431/integration5443 unchanged. Atomic open decisions, exact encoded-handle validation, independent file processing after FORGET/unlink/release and indexed mapping cleanup pass71host/72Linux tests. Full R2 remains ACTIVE; directories, native dispatcher, Ready, permissions and complete drain remain required.
 
 R2 native directory ownership/cookies: [results](checks/r2-native-directory-20261008/62-results.md), [exact LOC](checks/r2-native-directory-20261008/63-exact-production-loc.json). Production LOC:172929 ->173827 (delta+898); core107512→108410, active64638→65536; reference65417/predecessors37431/integration5443 unchanged. Exact directory/source custody, accepted-entry cookies, current retained parents, empty-whiteout continuation and bounded live cleanup have91host/92Linux covering tests with scoped evidence reuse. Full R2 remains ACTIVE; real Fuse activation/dispatch, mount Ready, permissions and normal drain/native proofs remain required.
+
+R2 replacement Fuse request service: [results](checks/r2-fuse-service-20261008/71-results.md),
+[exact LOC](checks/r2-fuse-service-20261008/68-exact-production-loc.json).
+Production LOC:173827 ->176088 (delta+2261); core108410→110671, active65536→67797,
+reference65417 unchanged. Intact1447-line predecessor relocation reclassifies
+excluded predecessors37431→38878 and excluded integration5443→3996, with no
+retirement. Shared fixed workers, real deferred Owner/admitted Store ports,
+original request/reply custody and initial Linux read callbacks have10host/12Linux
+component tests plus49tooling tests. The original wake-ownership cycle failure and
+all compile failures remain in the receipts. Full R2 remains ACTIVE: directory
+callbacks, complete kernel accounting, mount/Ready, permissions and normal native
+drain/proofs are still required. Application ControlReady is not native Ready.

@@ -1,0 +1,4 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.60s
+  Executable tests/dispatch.rs (core/target/debug/deps/dispatch-90817d26534023de)

@@ -1,0 +1,37 @@
+{"command": ["python3", "-B", "core/tools/check_fuser_integrity.py"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 2433970251, "output": "linux-final-port-fuser-integrity.txt"}
+{
+  "checked_manifests_locks_configs": 104,
+  "errors": [],
+  "authorized_patch_verified": true,
+  "registry_package_verified": false
+}
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-fuse", "--all-targets", "--no-run"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 3911462252, "output": "linux-final-port-fuse-build.txt"}
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.88s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_fuse-4681942db72805bc)
+  Executable tests/attributes.rs (core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c)
+  Executable tests/dispatch.rs (core/target/cluster2-linux/debug/deps/dispatch-751192237192367e)
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--test", "filesystem_port", "--no-run"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 9027914004, "output": "linux-final-port-port-build.txt"}
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.96s
+  Executable tests/filesystem_port.rs (core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb)
+
+{"command": ["cargo", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--test", "filesystem_port", "--", "--test-threads=1"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 325554875, "output": "linux-final-port-port-tests.txt"}
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.21s
+     Running tests/filesystem_port.rs (core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb)
+
+running 2 tests
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+{"command": ["cargo", "clippy", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-fuse", "-p", "layerfs-daemon", "--all-targets", "--", "-D", "warnings"], "exit": 0, "timeout": false, "wall_bound_seconds": 100, "elapsed_ns": 4471685544, "output": "linux-final-port-clippy.txt"}
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.25s
+

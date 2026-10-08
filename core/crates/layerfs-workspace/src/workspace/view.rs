@@ -68,6 +68,14 @@ impl Workspace {
     }
 }
 impl SourceView {
+    /// Reuses this exact retained source/root with an admitted provider. This
+    /// neither acquires a source nor reads the Store; the caller owns both.
+    pub fn with_client(&self, client: std::sync::Arc<crate::CanonicalClient>) -> Self {
+        Self {
+            base: self.base.with_client(client),
+            source: self.source,
+        }
+    }
     pub const fn source(&self) -> BaseSource {
         self.source
     }
@@ -158,6 +166,18 @@ impl SourceView {
             return Err(layerfs_overlay::OverlayError::Stale.into());
         }
         let local = overlay.file_read(read, 0, layerfs_overlay::CELL_BYTES as u32)?;
+        self.readlink_window(read, local)
+    }
+    /// Compose an already completed local window without another owner job.
+    /// Its completion and independent read reference stay owned by the caller.
+    pub fn readlink_window(
+        &self,
+        read: layerfs_overlay::FileRead,
+        local: Option<layerfs_overlay::LocalRead>,
+    ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+        if read.source().route() != self.source.route() {
+            return Err(layerfs_overlay::OverlayError::Stale.into());
+        }
         self.emit_link(read.serial(), local, read.source().root())
     }
     pub fn readlink_captured(

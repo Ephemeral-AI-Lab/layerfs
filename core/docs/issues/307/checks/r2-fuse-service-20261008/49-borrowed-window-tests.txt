@@ -1,0 +1,9 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/filesystem_port.rs (core/target/debug/deps/filesystem_port-9a367c3ce80975d4)
+
+running 2 tests
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

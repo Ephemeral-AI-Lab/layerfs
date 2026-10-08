@@ -1,0 +1,31 @@
+{
+  "added": [],
+  "removed": [],
+  "changed": [
+    {
+      "before": {
+        "name": "layerfs-fuse",
+        "version": "0.1.6",
+        "dependencies": [
+          "fuser",
+          "layerfs-overlay",
+          "layerfs-workspace",
+          "libc",
+          "nix"
+        ]
+      },
+      "after": {
+        "name": "layerfs-fuse",
+        "version": "0.1.6",
+        "dependencies": [
+          "fuser",
+          "layerfs-content",
+          "layerfs-overlay",
+          "layerfs-workspace",
+          "libc",
+          "nix"
+        ]
+      }
+    }
+  ]
+}

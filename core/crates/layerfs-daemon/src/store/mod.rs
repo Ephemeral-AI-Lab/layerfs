@@ -6,6 +6,7 @@ mod open;
 mod operation;
 mod ports;
 mod read_handle;
+mod read_scope;
 mod read_service;
 mod read_state;
 mod settle;

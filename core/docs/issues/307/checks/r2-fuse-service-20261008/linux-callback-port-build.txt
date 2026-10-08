@@ -1,0 +1,8 @@
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 20.95s
+  Executable tests/filesystem_port.rs (core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb)

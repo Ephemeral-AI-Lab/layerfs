@@ -1,0 +1,10 @@
+{
+  "command": [
+    "docker",
+    "start",
+    "-a",
+    "6e31a5eed6aefcdac5377d8aede3a4bab2829c8fd53f68e79ca62726e1928a79"
+  ],
+  "exit": 0,
+  "elapsed_ns": 46441997709
+}

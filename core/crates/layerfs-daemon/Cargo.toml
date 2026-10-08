@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-fuse = { path = "../layerfs-fuse" }
 layerfs-bridge = { path = "../layerfs-bridge" }
 layerfs-content = { path = "../layerfs-content" }
 layerfs-storage = { path = "../layerfs-storage" }

@@ -52,6 +52,13 @@ impl BoundWorkspace {
     }
 }
 impl StoreOperation {
+    /// One native bounded step's provider uses an already admitted reader.
+    pub fn admitted_client(
+        &self,
+        reader: super::ReadLease,
+    ) -> Result<Arc<CanonicalClient>, Arc<super::PortError>> {
+        self.ports.client_on(reader)
+    }
     pub const fn workspace(&self) -> &Workspace {
         &self.workspace
     }

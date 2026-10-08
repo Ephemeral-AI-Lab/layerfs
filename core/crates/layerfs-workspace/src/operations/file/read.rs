@@ -49,6 +49,22 @@ impl SourceView {
             return Err(layerfs_overlay::OverlayError::Stale.into());
         }
         let local = overlay.file_read(read, offset, length)?;
+        self.read_file_window(read, offset, length, local, sink)
+    }
+    /// Compose a completed owner window using the same bounded inherited-range
+    /// algorithm. The caller retains that completion and the FileRead owner
+    /// through all provider/output consumers; this method submits no SQL.
+    pub fn read_file_window(
+        &self,
+        read: FileRead,
+        offset: u64,
+        length: u32,
+        local: Option<LocalRead>,
+        sink: &mut dyn Write,
+    ) -> WorkspaceResult<u64> {
+        if read.source().route() != self.source.route() {
+            return Err(layerfs_overlay::OverlayError::Stale.into());
+        }
         self.emit_local(
             read.serial(),
             offset,

@@ -6,6 +6,22 @@ from check_product_boundary import production_files, unsafe_violations, violatio
 
 
 class ProductBoundaryTests(unittest.TestCase):
+    def test_native_fuse_owns_requests_without_reverse_daemon_dependency(self):
+        path = Path("core/crates/layerfs-fuse/src/ports.rs")
+        for source in ["use layerfs_workspace::SourceView;", "use layerfs_overlay::NativeMount;",
+                       "use layerfs_content::filesystem::PathName;"]:
+            self.assertFalse(violations(path, source))
+        for source in ["use layerfs_daemon::Pending;", "use layerfs_persistence::Handles;",
+                       "use layerfs_sdk::WorkspaceApi;"]:
+            self.assertTrue(violations(path, source))
+        self.assertTrue(unsafe_violations(path, "unsafe fn syscall() {}"))
+        root = Path("core/crates/layerfs-fuse/src/lib.rs")
+        self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]"))
+        self.assertTrue(unsafe_violations(root, "mod mount;"))
+        prefix = '[package]\nname="layerfs-fuse"\n[dependencies]\n'
+        self.assertTrue(dependency_violations(prefix + 'layerfs-daemon={path="../layerfs-daemon"}'))
+        self.assertFalse(dependency_violations('[package]\nname="layerfs-daemon"\n[dependencies]\nlayerfs-fuse={path="../layerfs-fuse"}'))
+
     def test_overlay_terminology_distinguishes_records_from_temporary_buffers(self):
         path = Path("core/crates/layerfs-overlay/src/contract/types.rs")
         for source in ["pub struct Dentry {}", "pub struct ScratchRecord {}",

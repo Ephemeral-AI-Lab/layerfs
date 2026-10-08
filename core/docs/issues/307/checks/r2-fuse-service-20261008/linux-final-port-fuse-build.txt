@@ -1,0 +1,5 @@
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.88s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_fuse-4681942db72805bc)
+  Executable tests/attributes.rs (core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c)
+  Executable tests/dispatch.rs (core/target/cluster2-linux/debug/deps/dispatch-751192237192367e)

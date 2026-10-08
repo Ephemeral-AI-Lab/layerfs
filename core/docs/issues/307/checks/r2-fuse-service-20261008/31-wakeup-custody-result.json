@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-fuse",
+    "--test",
+    "dispatch",
+    "notification_registration_does_not_keep_a_disposed_request_alive",
+    "--",
+    "--exact"
+  ],
+  "exit": 101,
+  "wall_bound_seconds": 100,
+  "elapsed_ns": 3096749333,
+  "scope": "new count-driven original-future lifetime diagnostic; no Store/kernel/performance claim"
+}

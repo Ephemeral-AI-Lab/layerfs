@@ -1,0 +1,18 @@
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+error[E0521]: borrowed data escapes outside of closure
+   --> crates/layerfs-fuse/tests/dispatch.rs:325:17
+    |
+323 |         .inspect_retained(0, |failure| match failure {
+    |                               -------
+    |                               |
+    |                               `failure` is a reference that is only valid in the closure body
+    |                               has type `FailureView<'1>`
+324 |             FailureView::Request(error) => assert_eq!(
+325 |                 error.downcast_ref::<DispatchError>(),
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                 |
+    |                 `failure` escapes the closure body here
+    |                 argument requires that `'1` must outlive `'static`
+
+For more information about this error, try `rustc --explain E0521`.
+error: could not compile `layerfs-fuse` (test "dispatch") due to 1 previous error

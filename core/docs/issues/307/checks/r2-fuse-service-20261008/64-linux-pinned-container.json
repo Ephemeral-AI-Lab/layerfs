@@ -1,0 +1,18 @@
+{
+  "create": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r2-fuse-pinned-d1cddd9cb89c46b29845b5b2e98597f1",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "core/docs/issues/307/checks/r2-fuse-service-20261008/linux-pinned-proof.py"
+  ],
+  "container": "ab92ca183c875737d715fa8e719a530a235da66055853cce2c58547342b291f1"
+}

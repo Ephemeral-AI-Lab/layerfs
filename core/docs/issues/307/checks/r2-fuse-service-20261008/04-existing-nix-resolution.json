@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "metadata",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--offline",
+    "--format-version",
+    "1"
+  ],
+  "exit_code": 0,
+  "stderr": "",
+  "reason": "Reuse already selected nix0.31.3; initial manifest incorrectly introduced0.29.0. No existing locked package should change."
+}

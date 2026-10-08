@@ -11,11 +11,14 @@ Daemon Overlay owns separate disposable backing with no synchronization guarante
 
 The [cluster-two design](docs/issues/303/README.md), current
 [implementation tracker](docs/issues/307/PROGRESS.md) and separate S7/S8/S9 audits
-own unfinished integration. SDK now supplies authenticated local object/Save/history
-handlers and a bounded fair typed service. Native Bridge authentication is active;
-logical runtime/control codecs, complete client delivery and owning Sandbox/API-core
-assembly remain open. Native FUSE replacement is excluded. Excluded predecessors,
-server and root reference are retained source, without dependency or fallback use.
+own unfinished integration. SDK supplies host Init/install and authenticated
+controls; each daemon directly opens the shared Store. Bridge and the replacement
+Sandbox provide the verified R1 startup/control and ordinary execution boundary.
+The [replacement Fuse request service](docs/architecture/75-native-request-service.md)
+is active with real deferred engine/Store reads and initial Linux callbacks.
+Application mount/Ready, directory callbacks and normal drain remain R2 work.
+Excluded predecessors, server and root reference are retained source, without
+dependency or fallback use.
 
 Project Init includes ignored/dependency/cache/output/.git paths and opaque symlink
 targets, and has removed the inherited4GiB refusal. Collection diagnostics still

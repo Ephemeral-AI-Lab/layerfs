@@ -1,0 +1,125 @@
+{
+  "sources": {
+    "core/crates/layerfs-fuse/tests/dispatch.rs": "a06bfc244dabd532aac2807b48d9bef456dc08f2d72b33e8e295415982563e0c",
+    "core/crates/layerfs-fuse/tests/attributes.rs": "8043ec27d8f1814d9cfdf4ec31ab55f54cac902b71bedade4ff0683fad4a3e0a",
+    "core/crates/layerfs-fuse/tests/support/mod.rs": "de7d6d3d0f2a3aed6e663f644fac91c8658b5aeffc5ca369bc298e72f1bfb6f1",
+    "core/crates/layerfs-fuse/src/ports.rs": "36e448f8e42da7e99d5157f433d5c880c4113d737b26c9e9237c7f87ad9d5ef2",
+    "core/crates/layerfs-fuse/src/lib.rs": "aab201caa59be24e77aeaa5f60be4336fbd0c860b67c6e98d11da54a740b0c90",
+    "core/crates/layerfs-fuse/src/attributes.rs": "13eacce727c4ec0af9b7210de52156844fc2e98c6d54254c416c1c89a121a974",
+    "core/crates/layerfs-fuse/src/dispatch/types.rs": "44d7348fcec34514110073a9d9070af1df53895d17a21a880953c7135d5991d4",
+    "core/crates/layerfs-fuse/src/dispatch/diagnostics.rs": "80af7615217537ddb83e01376e7b631fe4288a31c478cc70e17053f3f02ec724",
+    "core/crates/layerfs-fuse/src/dispatch/queue.rs": "30973dd03f2557d429395c6a393b41c78d506da1c8ea319024031a4e176231c2",
+    "core/crates/layerfs-fuse/src/dispatch/task.rs": "9cc6d18dfa3b9275655edf7ff4579a2424d7e122b9e50dda9c0625478143b20d",
+    "core/crates/layerfs-fuse/src/dispatch/mod.rs": "d5d6a4916898f9ae29dfa10a66bd85660a9464bbe7064727031e4392493cfec0",
+    "core/crates/layerfs-fuse/src/dispatch/workers.rs": "54a762bed2225631096fb47c5e0db9d061805599a20922e30d1c3d33d91f6b3a",
+    "core/crates/layerfs-fuse/src/dispatch/admission.rs": "ca972dc8c02cda8ca38bdbedc856311b4629531dc456dcdfe1928c893a137e9a",
+    "core/crates/layerfs-fuse/src/operations/lookup.rs": "a05d4c94f458474f9cd289be01c927e0fa819f6d5f2d82ac893306a2cf2a3f8d",
+    "core/crates/layerfs-fuse/src/operations/mod.rs": "e5678c5b86c02e08e6fa76fbbff6bee838fab03b601834d0dcb85edc30d5613b",
+    "core/crates/layerfs-fuse/src/operations/read.rs": "2ec04974e7a5d33f648c0242fac82862791dd421d93fccb772b11d245765558b",
+    "core/crates/layerfs-fuse/src/mount/profile.rs": "1dde9fb8295eb366dba4b75a599976e196427b8e3059d6669b040d600af5fa18",
+    "core/crates/layerfs-fuse/src/mount/mod.rs": "32fba0615f76dfaf22ca3ae53a0482c4d0eab9ca381b3c84671fa07e289c30f9",
+    "core/crates/layerfs-fuse/src/request/mod.rs": "faf5bf0117194d2e7181857ea361455ce79a5b4b5b99949c73fe96ced968f451",
+    "core/crates/layerfs-fuse/src/request/state.rs": "98c0c7b9b416b9cb52d4b23f9607a2ab230ddbac06eb48a0516a48209f72db1f",
+    "core/crates/layerfs-fuse/src/request/reply.rs": "652375fc9f218cdca96ee09938fba37ad5d9066cfd42ea7f8dc309b5370f5890",
+    "core/crates/layerfs-fuse/src/request/callbacks.rs": "73d7e630bea944b7f64cf4a320dce385f4bfe9f296546dd51fd6dcd5821e3906",
+    "core/crates/layerfs-fuse/Cargo.toml": "9c439dbb86530818d0fc1161901fee42455cb92bb6465fc191934207dd5072d4",
+    "core/crates/layerfs-daemon/src/service/filesystem_port.rs": "db91722ff45126a00b4d25eacc96f0030270fa28a2a91803394fb1c32063f560",
+    "core/crates/layerfs-daemon/tests/filesystem_port.rs": "c11640c6be0b09351ccd4bb46fe04bdaca31ee89ca7d6a117777184beb59166b",
+    "core/Cargo.lock": "1bed61e3640d93d630e7933f948bb4dc88e0a9275503650ec239b5294476fdf9"
+  },
+  "records": [
+    {
+      "command": [
+        "python3",
+        "-B",
+        "core/tools/check_fuser_integrity.py"
+      ],
+      "exit": 0,
+      "timeout": false,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 2433970251,
+      "output": "linux-final-port-fuser-integrity.txt"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-fuse",
+        "--all-targets",
+        "--no-run"
+      ],
+      "exit": 0,
+      "timeout": false,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 3911462252,
+      "output": "linux-final-port-fuse-build.txt"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-daemon",
+        "--test",
+        "filesystem_port",
+        "--no-run"
+      ],
+      "exit": 0,
+      "timeout": false,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 9027914004,
+      "output": "linux-final-port-port-build.txt"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-daemon",
+        "--test",
+        "filesystem_port",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "timeout": false,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 325554875,
+      "output": "linux-final-port-port-tests.txt"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-fuse",
+        "-p",
+        "layerfs-daemon",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "timeout": false,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 4471685544,
+      "output": "linux-final-port-clippy.txt"
+    }
+  ],
+  "scope": "functional component verification; natural caches; no mount/performance/residency claim",
+  "profile": "explicit global Disposable/WAL/OFF; Overlay MEMORY/OFF/EXCLUSIVE; Durable NOT_RUN disabled"
+}

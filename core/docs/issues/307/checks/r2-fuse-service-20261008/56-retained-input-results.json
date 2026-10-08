@@ -1,0 +1,67 @@
+{
+  "records": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-daemon",
+        "--test",
+        "filesystem_port",
+        "--no-run"
+      ],
+      "exit": 0,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 3032237000,
+      "output": "53-retained-input-build.txt"
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-daemon",
+        "--test",
+        "filesystem_port",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 502629125,
+      "output": "54-retained-input-tests.txt"
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "clippy",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-fuse",
+        "-p",
+        "layerfs-daemon",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "wall_bound_seconds": 100,
+      "elapsed_ns": 2267791375,
+      "output": "55-retained-input-clippy.txt"
+    }
+  ],
+  "profile": "explicit Disposable/WAL/OFF; Overlay MEMORY/OFF/EXCLUSIVE; Durable NOT_RUN disabled",
+  "scope": "changed original request/input and read-window custody; natural caches; no native mount/performance/residency claim"
+}

@@ -68,6 +68,20 @@ impl Store {
     }
 }
 impl StorePorts {
+    /// Bind one already admitted reader to the existing canonical client/cache.
+    /// Its last client/view consumer returns the reader. No admission or wait
+    /// occurs inside these provider calls; a concurrent demand is refused.
+    pub fn client_on(
+        self: &Arc<Self>,
+        reader: ReadLease,
+    ) -> Result<Arc<CanonicalClient>, Arc<PortError>> {
+        self.check_reader(&reader)?;
+        Ok(super::read_scope::client(
+            self.clone(),
+            reader,
+            self.store.cache.clone(),
+        ))
+    }
     pub fn client(self: &Arc<Self>) -> Arc<CanonicalClient> {
         Arc::new(CanonicalClient::with_cache(
             self.clone(),

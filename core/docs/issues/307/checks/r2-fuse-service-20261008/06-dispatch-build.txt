@@ -1,0 +1,6 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 14.85s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_fuse-989c74e08f56812b)

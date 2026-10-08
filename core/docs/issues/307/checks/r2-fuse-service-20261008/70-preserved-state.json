@@ -1,0 +1,21 @@
+{
+  "protected_sha256": {
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  },
+  "predecessor_files_unchanged": 15,
+  "protected_containers": [
+    "9cf2fe345496b45d79ff272e6c698552948f1e92ea106926826a770592623b24 true",
+    "ce75ac504df9d0e58cedcdd0df93fe7ef39c3b66ef3c13b0bb6b580def64516c true",
+    "d2433851ea5990e273b0673fdbd5c180917f1216f3c81bdfb4517da0207e2c2a true",
+    "d2550144998b4b71de98cb9ecf6448f87c7b99a3c2f69ea778a29413fffa5ffb true"
+  ],
+  "owned_removed": [
+    "07c0a9035bfb02e4bdcca3da24c5edb102065185151949cfff73efaef6981470",
+    "6e31a5eed6aefcdac5377d8aede3a4bab2829c8fd53f68e79ca62726e1928a79",
+    "d810080a55c58f055207dd44b77c1b1ac518327b66cd9e9c96eabf5ffd0ca0a2",
+    "ab92ca183c875737d715fa8e719a530a235da66055853cce2c58547342b291f1"
+  ],
+  "durable": "NOT_RUN \u2014 disabled by owner"
+}

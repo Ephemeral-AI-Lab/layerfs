@@ -1,0 +1,28 @@
+[
+  {
+    "path": "core/target/cluster2-linux/debug/deps/dispatch-751192237192367e",
+    "sha256": "eae1b7e4af6ba00db12d7b1d28b3c6d11315e80705eb2bec9fa50c4e0324cdde",
+    "bytes": 55859024,
+    "command": [
+      "core/target/cluster2-linux/debug/deps/dispatch-751192237192367e",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 73560292
+  },
+  {
+    "path": "core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c",
+    "sha256": "c0f88fb49a65c9c05a912f3ff256ed5ceaea776bceaebcb2f76a4331bdde7995",
+    "bytes": 15895840,
+    "command": [
+      "core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 7921666
+  }
+]

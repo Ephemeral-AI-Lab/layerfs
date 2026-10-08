@@ -1,0 +1,25 @@
+{
+  "source_commit": "8d800de670ab138807ce8e0eb014a0a00ee7463b",
+  "tree": "be11d96ec9db31b897109323379fec9f3e009dae",
+  "files": {
+    "core/crates/layerfs-fuse/Cargo.toml": "53e8f9222b1191e7f5ce1b39f357dc6ab9a8ff8d6568e3414ebb24b19361834b",
+    "core/crates/layerfs-fuse/src/adapter.rs": "e361037d9c87ac42dda651e06a708053b999bfa54a69a7e5038a3e1398380fa7",
+    "core/crates/layerfs-fuse/src/lib.rs": "e689d19b782c5689b5549adf7485d236757259c0657137fea3e385c3c9ae3fd3",
+    "core/crates/layerfs-fuse/src/mount.rs": "c0180038ca7dfe496834c8565e9689f34085f92b59fc4de0267cf55591ceb27e",
+    "core/crates/layerfs-fuse/src/replies.rs": "b2c91de4ffa5d674b084b4cf8bd31f0c862e3ea2f0787b4882c6a7b9515ed246",
+    "core/crates/layerfs-fuse/src/trace.rs": "c8cd412bf5b249ab23eb8abea9a2a150a4e2385c2191d27b675b96e8173ca982",
+    "core/crates/layerfs-fuse/tests/check_mount.py": "4c4582fce33acf491fbb25bb389468c51f75c98af22f44be06dc603769590b8d",
+    "core/crates/layerfs-fuse/tests/kernel_resize.rs": "60e5664db2fbab575b9ad97f66804fdef3cce96577db6e3ac0f172eefbeeb2ff",
+    "core/crates/layerfs-fuse/tests/kernel_resize_route.py": "138cfbe12a16a928fcb3eff2656a78b84d5a20821fe0bdd155b991d9160d3294",
+    "core/crates/layerfs-fuse/tests/kernel_write.rs": "4288d300d1530b3363ab0df72d30a5511df53d5a23899d7252a68213fee5c5a4",
+    "core/crates/layerfs-fuse/tests/kernel_write_route.py": "c8de56109deebe425521b12058b90a3ecf8ecef76bf4f6ab1c87c2359f1239ef",
+    "core/crates/layerfs-fuse/tests/mount_failure.rs": "f2ab0594a525f707b50be9e343cc2db91808046b27cf0ae2693edfe1afe44bd8",
+    "core/crates/layerfs-fuse/tests/mount_failure_route.py": "db4733c5a2cfcda167c350a4f7132225ff986960bc88759fa99959b3a6580ce6",
+    "core/crates/layerfs-fuse/tests/position_manifest.py": "a4234777e511400e93f8f9086a23dc83ef0f983354b724a926ea4d1d02686548",
+    "core/crates/layerfs-fuse/tests/position_master.py": "98798142818d0ba31cac6f177e3122537b4e18bdcf53ca0c44a16921e4808c1f"
+  },
+  "archive": "core/target/r2-fuse-predecessor.tar",
+  "archive_sha256": "c9d98e9d13218490e852a58a511e13ee5e905876421449faff79ae58d639e112",
+  "production_loc": 1447,
+  "disposition": "Dormant incompatible predecessor remains excluded and unchanged. This exact tree/byte inventory precedes relocation to layerfs-fuse-legacy with explicit LOC reclassification when the real replacement is activated. No native replacement code or member has been introduced by this receipt."
+}

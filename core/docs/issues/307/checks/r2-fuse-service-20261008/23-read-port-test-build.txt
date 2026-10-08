@@ -1,0 +1,5 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.22s
+  Executable tests/filesystem_port.rs (core/target/debug/deps/filesystem_port-69409918d6e74d03)

@@ -1,0 +1,8 @@
+{
+  "from": "core/crates/layerfs-fuse",
+  "to": "core/crates/layerfs-fuse-legacy",
+  "all_15_file_hashes_unchanged": true,
+  "production_loc_reclassified": 1447,
+  "classification": "excluded integration -> excluded predecessor; no deletion, no simplification claim",
+  "parent": "8d800de670ab138807ce8e0eb014a0a00ee7463b"
+}

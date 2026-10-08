@@ -56,6 +56,15 @@ are superseded, not moved code. Only optional admin cancellation/client provenan
 is deferred; full R2–R5 requirements remain. The [next-agent prompt](../307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md)
 awaits owner dispatch; this review performs no implementation or native proof.
 
+Subsequent dispatched R2 work activates a thirteenth member, the
+[replacement Fuse request service](../../architecture/75-native-request-service.md).
+Its intact predecessor moves to excluded `layerfs-fuse-legacy`. Fixed shared
+workers, event-driven request custody, actual asynchronous Owner/Store read ports
+and initial Linux callbacks are implemented and component-tested. Application
+mount/Ready, full directory callbacks, permissions and normal detach/drain remain
+unfinished; the full R2 Goal is active. This supersedes the earlier exclusion
+status for current routing without changing that review's historical evidence.
+
 ## Primary design documents
 
 Seven primary contracts own the current operation and implementation design.

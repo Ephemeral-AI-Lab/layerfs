@@ -1,0 +1,5 @@
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.76s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-ff0edbc3e9373cae)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_fuse-602ac6cb5619df09)

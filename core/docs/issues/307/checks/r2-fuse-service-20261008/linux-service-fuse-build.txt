@@ -1,0 +1,49 @@
+ Downloading crates ...
+  Downloaded unicode-ident v1.0.24
+  Downloaded zerocopy-derive v0.8.57
+  Downloaded syn v3.0.5
+  Downloaded zerocopy v0.8.57
+   Compiling unicode-ident v1.0.24
+   Compiling nix v0.31.3
+   Compiling blake3 v1.8.5
+   Compiling parking_lot_core v0.9.12
+   Compiling scopeguard v1.2.0
+   Compiling zerocopy v0.8.57
+   Compiling ref-cast v1.0.27
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling page_size v0.6.0
+   Compiling proc-macro2 v1.0.107
+   Compiling lock_api v0.4.14
+   Compiling log v0.4.34
+   Compiling parking_lot v0.12.5
+   Compiling memchr v2.8.3
+   Compiling quote v1.0.47
+   Compiling syn v2.0.119
+   Compiling syn v3.0.5
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling ref-cast-impl v1.0.27
+   Compiling num_enum_derive v0.7.6
+   Compiling zerocopy-derive v0.8.57
+   Compiling num_enum v0.7.6
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+error[E0308]: mismatched types
+  --> crates/layerfs-fuse/src/request/callbacks.rs:34:40
+   |
+34 |         let name = match PathName::new(name.as_bytes()) {
+   |                          ------------- ^^^^^^^^^^^^^^^ expected `&str`, found `&[u8]`
+   |                          |
+   |                          arguments to this function are incorrect
+   |
+   = note: expected reference `&str`
+              found reference `&[u8]`
+note: associated function defined here
+  --> /work/core/crates/layerfs-content/src/filesystem/path.rs:22:12
+   |
+22 |     pub fn new(value: &str) -> ContentResult<Self> {
+   |            ^^^
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-fuse` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,13 @@
+{
+  "full_whitespace_exit": 2,
+  "full_whitespace_output": "core/docs/issues/307/checks/r2-fuse-service-20261008/09-dispatch-tests.txt:14: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/21-port-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/24-read-port-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/33-weak-notification-tests.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/36-linux-checks.txt:59: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/44-linux-checks.txt:93: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/49-borrowed-window-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/54-retained-input-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/58-linux-checks.txt:37: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/linux-callback-attribute-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/linux-callback-dispatch-tests.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/linux-callback-port-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/linux-final-port-port-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/linux-pinned-0.txt:13: new blank line at EOF.\ncore/docs/issues/307/checks/r2-fuse-service-20261008/linux-pinned-1.txt:7: new blank line at EOF.\n",
+  "scoped_whitespace_exit": 0,
+  "scope": "all staged source/docs/tooling/JSON; exclude original .txt stdout transcripts",
+  "source_identity": "52-source-identity.json unchanged",
+  "counted_product_trees_confirmed": {
+    "core/crates": "dd92e12aec22df5d15f33f64f142ea5bc53cb9ce",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "local_document_links": "PASS",
+  "protected_untracked_paths_excluded": true
+}

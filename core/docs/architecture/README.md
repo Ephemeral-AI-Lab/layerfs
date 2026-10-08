@@ -433,3 +433,4 @@ process-specific cancellation, and it supplies no filesystem drain evidence.
 - [Owned Sandbox lifecycle and authenticated SDK startup](72-owned-sandbox-lifecycle.md): actual R1d source/proof, original failure custody and remaining native/cancellation/drain scope.
 - [Native read observation and lookup custody](73-native-read-custody.md): atomic Workspace answer/count/read ownership, exact source association and bounded retirement; native Fuse integration remains R2.
 - [Native directory sources and indexed cookies](74-native-directory-custody.md): exact directory owners, accepted-entry cookie publication, current parent relationships and bounded live cleanup; native kernel integration remains R2.
+- [Native request dispatcher and direct ports](75-native-request-service.md): shared fixed workers, event-driven custody, actual Owner/Store adapters and initial Linux read callbacks; application mount/Ready/drain remains unfinished R2 work.
