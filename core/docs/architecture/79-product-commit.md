@@ -146,10 +146,11 @@ holds back later source acquisitions until it has run.
 - `FilesystemResources` are Content's defaults; no Store-derived source exists.
 - A request that stayed retained with its source would park install after a
   known publication.
-- A queued install holds back later source acquisitions, and those parked
-  jobs still occupy ordinary slots of the Workspace. Sixteen concurrent
-  requests can then leave no slot for the request whose source the install
-  waits for. Not fixed here; it is R6 work.
+- A queued install holds back later source acquisitions. Since R6 those
+  held-back jobs are counted in the Workspace's own Source slots, so they
+  leave the ordinary slots to the request whose source the install waits
+  for; see [owner slot accounting](21-daemon-owner.md#r6-slot-accounting-source-acquisitions-have-their-own-bound).
+  Proven at owner scope; the mounted interleaving is not staged there.
 - `CommitSuccess` holds the capture and install completions, and a
   `CommitFailure` the capture's and any original failed completion, each one
   credit, until dropped. On the driver's own route (`Service::execute`) a

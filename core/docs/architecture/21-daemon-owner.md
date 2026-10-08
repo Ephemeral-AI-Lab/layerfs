@@ -116,6 +116,8 @@ The slice after `6e84b9181` adds schema6 transient source custody and maintained
 install readiness. The owner now has six classes: new source acquisitions wait
 behind a finite known-install fence while existing reads/releases, mutations and
 other namespaces progress. See [base-source windows](28-base-source-windows.md).
+Those waiting acquisitions are admitted against their own lane slots; see
+[R6 slot accounting](#r6-slot-accounting-source-acquisitions-have-their-own-bound).
 Earlier schema/class/query receipts keep their original pins. Actual prepared
 Workspace/actor/native composition and effective merge remain required.
 
@@ -297,3 +299,54 @@ retain the oversized-input regression, the initial service-class fixture error,
 the worker-loss three-second failed wait, the Send/Sync compile failure and the
 subsequent host/Linux selections. No native Ready, scheduling throughput, cold
 cache or process-residency qualification follows from this component.
+
+## R6 slot accounting: Source acquisitions have their own bound
+
+R6 track A changes how a lane counts its admitted jobs
+([plan, section 2.1](../issues/307/checks/r6-concurrency-teardown-20261009/01-deepest-file-plan.md)).
+A [lane](../../crates/layerfs-daemon/src/overlay/queue.rs) keeps three
+counters, and `Lane::slots` selects the one a class is admitted against:
+
+| Counter | Classes | Bound per lane |
+| --- | --- | --- |
+| `lifecycle` | Lifecycle | `lifecycle_jobs_per_namespace` (2) |
+| `source` | Source: `AcquireBaseSource`, the native `Source`, `FileSource`, `HandleSource` and `OpenSource`, and the directory `Read` | `jobs_per_namespace` (16) |
+| `ordinary` | Read, Mutation, Capture and OperationRecord together | `jobs_per_namespace` (16) |
+
+`try_submit` refuses `AdmissionFull` at the matching bound and otherwise
+increments that counter; dropping the job's credit decrements it; the lane
+leaves the rotation when all three are zero. Each counter still covers queued,
+executing and caller-held results.
+
+Before this change Source jobs shared the `ordinary` counter. A queued known
+install holds back every later Source job of its lane and itself parks until
+the earlier base readers release. The install and fifteen held-back
+acquisitions then filled all sixteen ordinary slots, and the request whose
+source the install waited for could not admit its next Read or Mutation job:
+it waited for a slot that only its own release could free. Held-back
+acquisitions now occupy Source slots, which a holder does not need. After its
+one acquisition a native request submits only Read, Mutation and Lifecycle
+jobs. An acquisition arriving at the Source bound is refused before any effect
+and waits holding nothing.
+
+No fixed bound moved. `OwnerConfig`, the credited-byte limit, the lifecycle
+reserve and the notification table are unchanged, and no queue grows: every
+class queue already had its bound as capacity, and the Source queue is limited
+by the Source counter. A lane can now hold up to
+`2 * jobs_per_namespace + lifecycle_jobs_per_namespace` admitted jobs (34 with
+the defaults, 18 before), so `outstanding`, `queued` and `peak_queued` can read
+higher under the same byte limit. `Lane` grows by one word, which
+`scheduler_bytes` reports for each configured lane.
+
+[`install_slots.rs`](../../crates/layerfs-daemon/tests/install_slots.rs)
+stages the cycle through the public owner API with the default configuration:
+one held source, a parked install, fifteen held-back acquisitions, then the
+holder's Read job. It also fills the Source and ordinary bounds beside each
+other and checks that each refuses on its own. On the source before this
+change the same test stops at the holder's Read job with `AdmissionFull`; that
+receipt and the host and Linux runs are in the
+[R6 receipts](../issues/307/checks/r6-concurrency-teardown-20261009/). This is
+an owner-scope functional proof. It makes no timing, fairness or residency
+claim, and it does not stage the mounted interleaving. A request that stays
+retained with its source still parks an install; see
+[product Commit limits](79-product-commit.md#limits).

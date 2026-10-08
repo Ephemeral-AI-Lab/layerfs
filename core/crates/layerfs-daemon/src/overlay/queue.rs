@@ -77,16 +77,28 @@ impl Job {
     }
 }
 /// One namespace's admitted jobs. Queues hold job pointers in capacity fixed at
-/// startup; a lane is reused once its last credit is released.
+/// startup; a lane is reused once its last credit is released. Each counter is
+/// the credits of its classes: queued, executing and caller-held results.
 pub(crate) struct Lane {
     pub namespace: i64,
     pub active: bool,
     pub queues: [VecDeque<Box<Job>>; 6],
     pub next: usize,
     pub ordinary: usize,
+    pub source: usize,
     pub lifecycle: usize,
 }
 impl Lane {
+    /// The slot counter a class is admitted against. Source acquisitions have
+    /// their own: the ones a queued install holds back take no ordinary slot
+    /// from the holder of the earlier source that install waits for.
+    pub fn slots(&mut self, class: ServiceClass) -> &mut usize {
+        match class {
+            ServiceClass::Lifecycle => &mut self.lifecycle,
+            ServiceClass::Source => &mut self.source,
+            _ => &mut self.ordinary,
+        }
+    }
     fn new(config: OwnerConfig) -> Self {
         Self {
             namespace: 0,
@@ -100,6 +112,7 @@ impl Lane {
             }),
             next: 0,
             ordinary: 0,
+            source: 0,
             lifecycle: 0,
         }
     }
@@ -179,12 +192,8 @@ impl State {
         let Some(lane) = self.lane(namespace) else {
             return;
         };
-        if class == ServiceClass::Lifecycle {
-            lane.lifecycle -= 1;
-        } else {
-            lane.ordinary -= 1;
-        }
-        if lane.lifecycle == 0 && lane.ordinary == 0 {
+        *lane.slots(class) -= 1;
+        if lane.lifecycle == 0 && lane.ordinary == 0 && lane.source == 0 {
             lane.active = false;
             self.rotation.retain(|ns| *ns != namespace);
         }

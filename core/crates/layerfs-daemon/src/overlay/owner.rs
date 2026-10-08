@@ -261,15 +261,17 @@ impl OwnerClient {
         if bytes > limit || state.work.credited_bytes > limit - bytes {
             return Err((OwnerError::AdmissionFull, command));
         }
+        // Source acquisitions and the other four ordinary classes each have
+        // `jobs_per_namespace` slots of a lane; Lifecycle has its own bound.
+        let bound = if class == ServiceClass::Lifecycle {
+            config.lifecycle_jobs_per_namespace
+        } else {
+            config.jobs_per_namespace
+        };
         let active = |lane: &crate::queue::Lane| lane.active && lane.namespace == namespace;
         let slot = match state.lanes.iter().position(active) {
             Some(slot) => {
-                let lane = &state.lanes[slot];
-                if (class == ServiceClass::Lifecycle
-                    && lane.lifecycle == config.lifecycle_jobs_per_namespace)
-                    || (class != ServiceClass::Lifecycle
-                        && lane.ordinary == config.jobs_per_namespace)
-                {
+                if *state.lanes[slot].slots(class) == bound {
                     return Err((OwnerError::AdmissionFull, command));
                 }
                 slot
@@ -298,11 +300,7 @@ impl OwnerClient {
             lane.namespace = namespace;
             lane.next = 0;
         }
-        if class == ServiceClass::Lifecycle {
-            lane.lifecycle += 1;
-        } else {
-            lane.ordinary += 1;
-        }
+        *lane.slots(class) += 1;
         lane.queues[class as usize].push_back(Box::new(Job {
             id,
             route,
