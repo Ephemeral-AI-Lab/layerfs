@@ -103,7 +103,10 @@ product mental model or campaign-specific benchmark procedures.
   [forced teardown](docs/architecture/80-forced-teardown.md). It is refused where
   no abort control is bound, which includes the current Sandbox topology, and a
   stop after an effect is `Retained` with no way back. No daemon-wide graceful
-  drain exists and none is planned.
+  drain exists and none is planned. Source acquisitions have their own owner
+  slots, and a failed cold read ends its own request with `EIO` while the
+  mount keeps serving; the concurrency, teardown and failure-scope proofs and
+  their limits are in the [R6 record](docs/issues/307/R6-COMPLETION-20261009.md).
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,

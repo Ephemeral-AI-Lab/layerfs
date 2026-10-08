@@ -1,0 +1,19 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 2b4dc28a6, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_fusectl-fcf789a6910cf56b --test-threads=1 --nocapture
+
+running 2 tests
+test fp2_the_own_connection_agrees_with_the_ready_receipt_and_its_abort_control_is_bound ... FP-2 fusectl: mount=/tmp/layerfs-installed-7-fp2-fusectl/mounts/1 device=0:91 abort_bound=true receipt(max_background=1 congestion_threshold=1) fusectl(max_background=1 congestion_threshold=1 waiting=0)
+FP-2 fusectl: mount=/tmp/layerfs-installed-7-fp2-fusectl/mounts/2 device=0:92 abort_bound=true receipt(max_background=1 congestion_threshold=1) fusectl(max_background=1 congestion_threshold=1 waiting=0)
+FP-2 fusectl: connections=[91, 92] both_removed_after_normal_unmount=true observed_maximum_request_size=NOT_RUN
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+test fp9_a_second_cold_cached_read_queues_in_the_kernel_behind_a_parked_readahead_read ... FP-9 hold: leases_held=2 max_background=1 waiting(idle=0 one_reader=1 two_readers=2 least_over_100=2) mount_handoffs_since_idle(one_reader=1 two_readers=1) admitted=1 parked=1 received_max=0 read_admissions_waiting=1 classification=background: the second read is held by the kernel behind the limit of one background request
+FP-9 foreground: append_exit=Some(Some(0)) handoffs=19->21 completed=18->20 parked=1 waiting_after=3 readers_still_blocked=2 reader_grants=22->22
+FP-9 after release: both_readers_exact=true bytes_each=614523 appended_file_exact=true waiting=0 reader_grants=55 receipt_opcodes(read=18 open=5 write=2 release=6 flush=7)
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

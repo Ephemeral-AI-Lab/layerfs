@@ -1,0 +1,12 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 2b4dc28a6, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/forced_unavailable-32a8e0aa68623c66 --test-threads=1 --nocapture
+
+running 1 test
+test force_without_an_abort_control_is_refused_and_the_workspace_stays_ready ... FORCED_UNAVAILABLE abort_bound=false code=Failed phase=force:capability relinquish_unknown=both native_phase=Ready activity=Idle epoch_unchanged=true mount_row=present read_after=exact write_after=ok
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0
