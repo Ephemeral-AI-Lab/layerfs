@@ -405,3 +405,69 @@ forallL/N/P, alwayslabelledcut withits ownStore/fixture/oracles. Neverpair reduc
 controls withfullL orclaim fullE19 tracked/mutationcounts froman alteredcut.
 Thisplatformlimit doesnotcloseR7 orreplaceindependentfullL work; allnondependent
 work andallowedoptimizations remain required.
+
+## Preparation after522238bd5
+
+Plan113 andstage record committed522238bd50fc75aa1bba17cb279c84f0aa58cafc,
+exactstagedtreeb02989cae045f509064d87d4099a343cd5924fc5; ProductionLOC
+185857->185857(delta0), core120440/active77566/predecessors38878/
+integration3996/reference65417 unchanged. Committedconfirmation ischecked
+againstsamepinnedcounter. Producttree remains6a03560dfecd7e322c5592a3ef0673ff190aef2a.
+112 explicitstop passed; failed111container stoppedretained. Cutauthor nowowned
+byproductarm; nofullStoreororiginalsource changes. Linuxrepresentation preflight
+andrunner source/endpoint/counter gates areunder matrixagentownership.
+
+Hostfullscope first36/263 buildlistedbinaries nowpassedonce
+(105-host-suite-000through035). complete_installed_roots explicitlyskipped only
+huge_native_namespace_is_complete_after_install becauseLAYERFS_Q1_PREPARED is
+notsupplied; prepare_huge_native_namespace remainsitsoriginalignoredsetup role.
+Threeother native-root tests passedincluding dense500000000bytes. macOS
+handoff's explicitchildbinaryprecondition willalso beNOT_RUN byexacttestname.
+NoDurableexecution, kernelFUSEclaimsfrommacOS orfullsuitecompletion yet.
+
+A separatecold-source gap wasfoundbeforebaseline: E12/E13 classA readsnative
+/replay/F andmaster.json warmed bystaging, whilecurrentLpredicate coversStore/
+overlay andN/Ppredicates covernativefixture only. Theircoldreceipt mustenforce
+per-fileeviction/mincore foractualReplay regularinputs additionally, withall
+componentscold beforeattempt, orselection remainsNOT_RUN. No warmsetupcredit,
+Store-substitution, VMdrop orfsync. ClassB/C warmthscopes mustalso beexplicit.
+
+Linuxall-active --all-targets --no-run114 passed263binaries,113480207500ns
+externalbuildwall; inventory/tmp/layerfs-r7-linux-test-binaries-20261009.json.
+NoLinuxsuitebinary runyet. NoDurable executed.
+
+Cutauthorreview found bufferedomission-output closecouldreplace originalcopy/
+sourceerror. Agentcorrected to unbuffered one-write/shortwrite-refusal and
+independentclosecustody, preserving priororiginalcauses; independentrereview
+found noselected-sourceblocker. Cutsetup115 passed once,93275983083ns external
+setupwall. Full119976entries/103108regular/16868dirs, omitted10070symlinks;
+minus34997entries/31215regular/3782dirs, omitted28; replay85387entries/71894regular/
+13493dirs, omitted10042. Total6994278566regularbytes read/written acrosscuts;
+master.json remainsbyte-identical. Zeroaliases; sourceunwritten. Its515899392-byte
+setup-processlifetimehighwater isnotdaemon/phase memory evidence. Exactreceipt
+/tmp/layerfs-r7-representable-cuts-20261009/cut-preparation-receipt.json.
+
+Leadsealinvocation116 usedguessedwrongreceiptfilename preparation-receipt.json
+andFAILED beforeanyseal/output. Corrected117 readsactual cut-preparation-receipt.json
+fromauthor source andisrunning, withfreshappend-onlyreceipt. No115 author replay,
+failedreceipt relabel orfullsource mutation. Independentoutputseals and actual
+representableSDKstaging remain prerequisites.
+
+Oracle source-review beforebaseline: rawGitindexbytes include filesystem-specific
+stat-cache fields, so native-vs-L rawindexhash isnotassumedportable. Existingraw
+.git oracle scope cannot becomePASS byignoringthe mismatch silently. A prospective
+scopedsemanticindex oracle decision/proof remainsneeded; affectedselections stay
+unrununtilvalidinputs/oracles. Productarm nowowns onlyneworacle_prepare.py for
+non-Git scoped/native-reference expectations andcomparison-performing scripts.
+Observe-onlyexit0 cannotbeverificationPASS. Hostoriginal stdoutvalidation must
+readactualhostartifacts, neverassumehostpaths visibleinsidecontainer. No timing
+oroptimizationacceptance yet.
+
+Independentcutseals117 nowPASS,41106647167ns setupwall; expectedset hashesmatch
+allthreeactualroots. Rawinventories/tmp/layerfs-r7-cut-{full,minus,replay}-inventory-
+20261009.jsonl andcompletepins/tmp/layerfs-r7-cut-root-seals-20261009.json.
+FullcutSHA973d6a02b9402a6a4aba44e1e8e7a43066d67e70449b4c6e5e2f2742123f27f3;
+minus460c4910f018f231c051d0ec174a8ae58b48ecd11904acb158690b568aaf5188;
+replaye61f2b971af44b6ac851122e537887d6f111fade128d0bf98747fa8e6257c282.
+No rewriting116FAILED,115author replay, metadata normalization orfullfixture
+replacement. SeparateInit/install andactualSDKcopy proof are next.
