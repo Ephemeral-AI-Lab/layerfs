@@ -165,7 +165,7 @@ collect. Until now the set cited them ad hoc with no single inventory.
 | --- | --- | --- |
 | `SortedWork` | `filesystem/sorted/page.rs` | `pages_read`, `read_waves`, `pages_created`, `pages_reused`, `change_keys`, `untouched_subtrees`, `peak_scratch_bytes` |
 | `ObjectWork` | `filesystem/objects.rs` | `objects_read`, `read_waves`, `bytes_read`, `objects_emitted`, `bytes_emitted` |
-| `ValidationWork` | `filesystem/validate.rs` | `objects_read`, `read_waves`, `inode_demands`, `inode_pages_read`, `directory_pages_read`, `entries_examined` |
+| `ValidationWork` | `filesystem/validate.rs` | `objects_read`, `read_waves`, `inode_demands`, `inode_pages_read`, `directory_pages_read`, `entries_examined`, `inode_pages_by_site`, `placements`, `ancestry_steps`, `territory_directories`, `territory_entries`, `peak_window_rows`, `in_place_scans`, `in_place_rows`, `in_place_directories` |
 | `ReferenceWork` | `filesystem/references/reduce.rs` | `rows_touched`, `rows_spilled`, `base_records_read`, `base_waves`, `final_values`, `final_removals`, `serials_scanned`, `peak_pending`, `runs` |
 | `MergeWork` | `filesystem/references/merge.rs` | `rows_written`, `rows_read`, `runs_created`, `merges`, `peak_level`, `peak_live_runs`, `peak_run_bytes` |
 | `ReleaseWork` | `filesystem/references/release.rs` | `pages`, `entries`, `base_records`, `released`, `traversed_directories`, `peak_depth` |
@@ -284,7 +284,7 @@ three of them are not counts at all.
 | ---: | --- | --- | --- | --- |
 | 1 | `MAXIMUM_READ_DEMANDS` | content `filesystem/objects.rs` | ids per C1 read wave | count — **read batch** |
 | 2 | `READ_OBJECT_LIMIT` | storage `policy.rs` | ids per C2 read wave | count — **read batch** |
-| 3 | `validate::walk_limit` | content `filesystem/validate.rs` | entries across one operation's cycle walks | resource-derived count |
+| 3 | resident topology containers (retired `validate::walk_limit`) | content `filesystem/validate/backed.rs` | entries per container on resident routes; none on the backed route | resource-derived count |
 | 4 | `MAXIMUM_EDITS_PER_OPERATION` | content `file/edit/input.rs` | edits per stream | count |
 | 5 | `MAXIMUM_ATTRIBUTE_KEYS` | content `filesystem/limits.rs` | keys per listing | count |
 | 6 | `DEFAULT_MAXIMUM_PENDING` | content `references/reduce.rs` | reducer pending rows | count |
@@ -323,7 +323,7 @@ with batching; `filesystem_limits.rs` pins it that way
 | `BATCH_CANONICAL_BYTES_LIMIT` | 512 KiB | usually binds first: 512 average objects ≈ 512 KiB only at ~1 KiB each |
 | `TRANSACTION_ROW_LIMIT` | 8,191 | one transaction spans many waves |
 | `TRANSACTION_CANONICAL_BYTES_LIMIT` | 4 MiB − 1 | `2²²−1`, an encoding ceiling, not a round number |
-| `validate::walk_limit` | `floor(ordering_bytes / 1024)` | charged cumulatively across an operation's existing-tree cycle walks |
+| resident topology containers | `floor(ordering_bytes / 1024)` each | container size on resident routes only; work examined is never a refusal since R4 |
 | `READ_WAVE_OBJECTS` | 32 | mapping read waves; ≤ 1 MiB payloads |
 | `EDIT_DEFERRED_LIMIT` | 8 MiB − 1 | binds by failing the operation, never by dropping state |
 | `DEPENDENCY_PACK_CACHE_BYTES` | 4 MiB | released wholesale; costs reads, never correctness |
@@ -337,7 +337,7 @@ with batching; `filesystem_limits.rs` pins it that way
 | `ChainCounters.objects` | objects requested | objects read **including dependencies** |
 | `ChainCounters.max_depth` | a policy value | the longest chain *actually reconstructed* |
 | `ReferenceWork.rows_touched` | inodes affected | work, not cardinality — "a serial registered by the caller and then observed once counts twice" |
-| `ValidationWork.entries_examined` | tree size | entries **charged to the walk**, which is per-walk scoped |
+| `ValidationWork.entries_examined` | tree size | base directory entries a **territory walk** read; zero unless a stored directory moved across parents |
 | `PoolCounters.reused_values` | deduped values | values that reused an existing ordinal in the bounded window |
 | `StoreReadCounters.ceiling` | a limit | the watermark **applied** to every acquired location |
 | `StoreReadCounters.opens` | connections per operation | connections **this wave** opened (added at V3): one `read_batch` call is one wave and opens one connection, so an operation's connection lifetime is the **sum over the waves it issued** — `StoreProvider::connection_opens()` carries that sum, and P1-2 is the item that lowers it |

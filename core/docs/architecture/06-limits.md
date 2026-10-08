@@ -90,7 +90,8 @@ selected phase and at most one original provider unit. The fixed wake latch adds
 its own allocation and ownership beyond existing registry gauges. The application
 checks bounded control work each turn and after a borrowed park permit before
 waiting. Pending actual worker joins prevent parking; wait bounds change no
-operation, Save, Workspace or Bash lifetime. Captured normalization, complete
+operation, Save, Workspace or Bash lifetime. Captured namespace normalization
+was added in R4 ([captured namespace construction](78-captured-namespace-construction.md)); complete
 root qualification, original release/Commit composition and E/Q numerical/
 resource gates remain open. Component functional checks qualify none of those
 aggregate limits or performance gates.
@@ -130,10 +131,13 @@ engine immediately rather than allowing EOF finalization. Original accepted
 children, failed Completion/command custody and record owners remain retained;
 there is no failed-operation replay or implicit release.
 
-The resident route retains its prior reducer/release allowances. Grouped
-validator/addition/graph containers, ordering-derived validator limits and
-whole-base/rebound alias walks remain open, as do namespace normalization, P14
-qualification and actual same-Save/Save/history/install/unknown integration.
+The resident route retains its prior reducer/release allowances. R4 removed the
+whole-base and rebound alias walks, the grouped addition and graph containers
+and the ordering-derived validator limits from the backed route, and added
+namespace normalization; see
+[captured namespace construction](78-captured-namespace-construction.md). P14
+qualification and product same-Save/Save/history/install/unknown integration
+remain open.
 These component bounds and functional checks supply no E/Q numerical gate,
 eligible phase residency, physical allocation/reservation/high-water/freelist,
 device I/O, sustainable service rate or whole-operation resource acceptance.
@@ -261,6 +265,8 @@ one component rather than split across both.
 
 ### 7.4 Filesystem update
 
+> **Updated by R4.** `validate::check` now takes the reader, the input and the work counters only, and `CheckedInput` no longer carries `additions`. Validation on the backed route is windowed and keeps its topology evidence in indexed records; see [captured namespace construction](78-captured-namespace-construction.md). The diagram below still shows the call order.
+
 ```text
    C1: update_filesystem(&mut FilesystemObjects{reader, consumer}, input, backing)
         │
@@ -316,7 +322,8 @@ where, because a limit that is stated but not enforced is not a limit.
 | name component | 255 B | `MAXIMUM_NAME_BYTES` |
 | path | 4,096 B / 256 components | `path.rs` |
 | operation scratch | 4 MiB | `MAXIMUM_OPERATION_SCRATCH_BYTES` |
-| validation walk | `floor(ordering_bytes / 1024)` entries across rebound directories | `validate::walk_limit` |
+| validation topology containers (resident routes only) | `floor(ordering_bytes / 1024)` entries each; the backed route has no such limit | `validate/backed.rs` |
+| classification window (backed route) | 64 rows | `validate::CLASSIFICATION_WINDOW_ROWS` |
 | read wave | 4,096 objects | `objects::MAXIMUM_READ_DEMANDS` |
 | symlink target | 4,096 B | `MAXIMUM_SYMLINK_TARGET_BYTES` |
 | attribute domain / key | 64 B / 255 B | `limits` |
@@ -348,8 +355,12 @@ across the host's arenas. It counts candidate pages even when a later cleanup
 retires them; `MetadataStatus.allocated_pages` instead counts pages still
 allocated at observation. The two numbers need not match.
 
-C1's current `validate::check_parent_aliases` reads the full base tree when a
-stored directory gains a changed binding, and `check_effective_cycles` reads the
+Since R4, C1's validation reads no base tree for aliases, and lists a moved
+subtree only when a stored directory moves across parents under a stored
+directory other than the root
+([captured namespace construction](78-captured-namespace-construction.md#validation)).
+Before R4, `validate::check_parent_aliases` read the full base tree when a
+stored directory gained a changed binding, and `check_effective_cycles` read the
 effective moved subtree. Those are Commit-time costs on the frozen generation;
 the local rename publication is atomic, but the current Commit does not have a
 proved path-local complexity bound.
@@ -475,6 +486,8 @@ slice (`04-filesystem.md` §5.8).
 | Service resident replacement window | 64 KiB | `file_stream::WINDOW_BYTES` |
 
 ### Three bounds that are easy to misread
+
+> **Updated by R4.** This first bound no longer exists. There is no validation walk ceiling: a directory of any size can be renamed or relocated, a rename inside its own parent lists nothing, and a move across parents under a stored directory lists the moved subtree once without a limit. `InvalidRecord("cycle check work limit")` is retired. See [captured namespace construction](78-captured-namespace-construction.md). The text of bound 1 is kept as history.
 
 **1. The validation walk ceiling is charged per walk, not per operation.** The
 source is explicit, and the consequence is a real behavioral boundary rather than

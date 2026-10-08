@@ -41,15 +41,19 @@ product mental model or campaign-specific benchmark procedures.
   failure custody. Run-aware localized edits reuse the frozen sparse scanner
   and bounded positive immutable zero evidence. Streamed directory inputs share
   the canonical filesystem algorithm; backed serial state supplies new-parent
-  membership, rebuilt roots and initial counts/final row streams. Remaining
-  validation/reducer/release state stays under its existing resource limits.
+  membership, rebuilt roots and initial counts/final row streams. On the backed
+  route validation classifies in 64-row windows and keeps its topology evidence
+  in indexed records; resident routes keep their resource-derived limits.
   Captured local inode/run points retain exact reader root/floor and bounded
   forward metadata progress. Captured regular-file normalization now derives
   authenticated base facts, coalesces final changes into indexed records and
   consumes them once through the retained FileView/fallible edit source. Backed
   reference reduction/release uses fixed rows, sealed membership passes and
-  guarded FIFO/cursor transitions. Namespace normalization, remaining validation/
-  topology state and live namespace normalization remain unfinished. The Store
+  guarded FIFO/cursor transitions. Captured namespace normalization is the
+  `CapturedNamespace` producer
+  ([captured namespace construction](docs/architecture/78-captured-namespace-construction.md));
+  no product code calls it yet, and live namespace normalization remains
+  unfinished. The Store
   half of Commit is implemented with exact original failure/unknown custody;
   see [Store Commit](docs/architecture/65-store-commit-composition.md).
   The external E01 example records original startup work, diagnostics and Stop
@@ -190,13 +194,15 @@ overall Ready/unmount and Commit composition. Dependency is daemon -> fuse ->
 workspace, never Fuse -> daemon. Request dispatch/read ports, mount/Ready and
 per-Workspace normal drain are implemented ([R2 record](docs/issues/307/R2-COMPLETION-20261008.md)),
 as is ordinary native mutation ([R3 record](docs/issues/307/R3-COMPLETION-20261008.md));
-R4–R5 integration remains unfinished. See the
+as is the captured namespace producer with its bounded validation
+([R4 record](docs/issues/307/R4-COMPLETION-20261008.md)), which the Commit
+driver reaches only in a daemon test. R5 integration remains unfinished. See the
 [reviewed ownership](docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
 Moving blocking OwnerClient calls behind a port does not establish deferred service.
 
 ### Shared construction and completion boundaries
 
-Source checked at `4156e9070`, guidance updated 2026-10-08. Namespace Init and
+Source checked at `5747f0119`, guidance updated 2026-10-08. Namespace Init and
 daemon construction share Content, Storage and Persistence through their public
 ports. Their input adapters and publication lifecycles have distinct owners:
 
@@ -206,6 +212,8 @@ ports. Their input adapters and publication lifecycles have distinct owners:
 | New captured file | Workspace `CapturedFileEdits` calls Content `construct_runs` over data/zero windows |
 | Existing captured file | The same adapter calls `apply_indexed_edits_view_backed` over an authenticated retained `FileView` and normalized final edits |
 | Initial namespace | Project streams acquired bindings/inodes through Content directory/table builders |
+| Captured namespace | Workspace `CapturedNamespace` seals headers, typed values and fresh ranks into indexed records and calls Content `update_filesystem_streamed_backed`; names come from the retained captured reader |
+| Captured symlink and metadata | The same producer calls Content `emit_symlink` for a fresh target and patches or builds the portable attribute tree; a stored symlink keeps its base content root |
 | Object output | Content emits `FinalizedObject`; Storage `SaveSink` implements `FinalizedConsumer` by forwarding to `Save::accept` |
 
 Use the actual Store-derived construction policy and bounded capacities on
@@ -224,8 +232,13 @@ Current source has captured-file normalization and the Store half of Commit.
 `BoundWorkspace::commit` captures once, begins a Save, invokes a caller-supplied
 Content constructor, finishes the Save, publishes through History and installs
 the known root locally. Full captured namespace assembly, including names,
-links, metadata and changed file roots, remains S10 integration work. S8 FUSE/Exec
-and direct-Content Store-half proofs do not establish that integration.
+links, metadata and changed file roots, is
+[`CapturedNamespace`](crates/layerfs-workspace/src/construction/driver.rs). It
+is not wired into a product Commit: a daemon test's closure acquires the
+captured reader and operation owner, runs it and hands the driver the original
+cause on failure. That wiring, mounted Commit and its failure classification
+are R5. S8 FUSE/Exec and direct-Content Store-half proofs do not establish that
+integration.
 See [captured-file construction](crates/layerfs-workspace/src/construction/captured/owner.rs),
 [the shared Save sink](crates/layerfs-storage/src/save/operation.rs) and
 [Store Commit composition](docs/architecture/65-store-commit-composition.md).

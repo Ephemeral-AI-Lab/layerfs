@@ -87,11 +87,16 @@ An attempted failure retains the original Completion, receipt and credit. The
 adapter never replays, refreshes or releases reader ownership. Successful daemon
 pages are cloned into a bounded constructor-owned window while the original
 credited completion is briefly alive; this is not zero-copy or a whole-process
-memory bound. Schema, SQL and its existing access algorithms are unchanged.
+memory bound. Schema, SQL and its existing access algorithms were unchanged at
+this stage. R4 added three reader-bound jobs (`ReaderParentDirectoryEntries`,
+`ReaderDirectoryEntry`, `ReaderSymlink`) and one statement, with no schema or
+index change ([captured namespace construction](78-captured-namespace-construction.md)).
 
 [Component selection and receipts](../issues/307/checks/r4-captured-namespace-port-20261008/01-selection.json)
 cover fixed capture membership, full-name ordering/whiteouts, points, retained
-root/floor, release and original error custody. This boundary is implemented;
-the sealed StreamedRowSource adapter, complete files/names/metadata construction,
-Content backed validation/topology and mounted Commit remain separate unfinished
-R4/R5 work. Existing Store-half composition is unchanged.
+root/floor, release and original error custody. This boundary is implemented.
+The sealed StreamedRowSource adapter, complete files/names/metadata construction
+and Content backed validation/topology are implemented by R4
+([captured namespace construction](78-captured-namespace-construction.md)) and reach this
+driver only in a daemon test; product wiring and mounted Commit remain R5.
+Existing Store-half composition is unchanged.

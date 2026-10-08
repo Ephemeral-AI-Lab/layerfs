@@ -545,3 +545,89 @@ demand count in that test changes because one pass replaces two.
   `core/benchmark/fs-bench-pro-storage-content/tests/namespace_batch_probe.rs`
   and architecture records 04, 06, 10, 51 and 53 describe the retired walks and
   limits; they are updated by the lead in the documentation step.
+
+## Amendment 2 (2026-10-08): corrections after implementation and independent review
+
+This amendment records what the committed plan got wrong or left out. The plan
+text above is kept as written; where the two disagree this amendment governs,
+and source at the R4 completion commit governs both.
+
+### B-1 Five bracketed subtotals in the section 3 layout were wrong
+
+The per-file `prod` numbers in the section 3 listing were taken from the pinned
+`tools/production_loc.py --files` at `37dcf5405` and are correct. Five directory
+brackets did not equal the sum of the files listed beneath them. Recomputed
+from the listed files:
+
+| Line | Printed | Sum of listed files |
+| --- | --- | --- |
+| `layerfs-content/src/filesystem/` | `[2559]` | 2487 |
+| `layerfs-overlay/src/namespace/` | `[460]` | 479 |
+| `layerfs-overlay/src/` | `[1015]` | 1034 |
+| `layerfs-daemon/src/overlay/` | `[956]` | 916 |
+| `layerfs-workspace/src/` | `[1702]` | 1708 |
+
+No decision depended on a bracket. The commit comparisons use the whole-tree
+counter, not this listing.
+
+### B-2 In-place renames (not in the plan; added during track C)
+
+Under A-1 a stored directory renamed inside its own parent (`mv p/old p/new`)
+is a placement of a stored directory, so with the gate open its whole subtree
+was listed although it cannot have moved. Track C added one pass,
+`validate/in_place.rs`, between classification and the territory pass:
+
+- For each stored parent that holds a stored directory's placement, the
+  parent's change rows are read once through the input's own cursor, 64 names
+  at a time, and resolved in the parent's base listing with one grouped lookup
+  per window. Record kind `0x4653_0024` marks a scanned parent so several
+  renames in one parent cost one scan.
+- A base binding is *displaced* when the row removes its name or binds the name
+  to another inode. A displaced stored directory whose placement names that
+  same parent is marked in place. It then counts as stored and unplaced: it is
+  not walked as moved, and a placement under it counts as landing under a
+  stored directory.
+- A name the row restates is not displaced. A directory that keeps its base
+  name and gains another has two bindings and is refused by its derived count.
+- The first version recognized removed names only. An independent reviewer
+  showed it missed `mv d d.old; mkdir d`; the rule above replaced it in the
+  track C review round, with tests for the recreate, rotation and swap shapes
+  and for cycles through them.
+- Deviation from the gate's wording: the pass also scans the root as a parent.
+  A rename directly under the root is then in place rather than a move to the
+  root. Both readings are sound; the scan costs the root's change rows.
+
+Counters added for it: `in_place_scans`, `in_place_rows`,
+`in_place_directories`.
+
+### B-3 A-3 restated: what is one window and what is the whole input
+
+A-3 said the resident routes classify the whole input as one window. That is
+not what the code does. On every route rows are classified 64 at a time, with
+one grouped restated-name lookup per stored parent and one placement batch per
+window. What is whole-input on the resident routes is one grouped inode demand
+made before the first window (it keeps the pinned wave count), the memo of
+`ordering_bytes / 1024` records, and the topology evidence held in resident
+maps under the same bound. `peak_window_rows` reports the rows that demand
+covered: the total on the resident routes, at most 64 on the backed route.
+
+### B-4 The territory gate is one decision for the whole operation
+
+A-1's gate opens when some stored directory is placed out of place and some
+placement lands under a stored, unmoved, non-root directory. The two need not
+be related. An unrelated `mkdir` under a stored directory in the same operation
+therefore makes a directory moved to the root list its subtree. This is sound
+and bounded by the moved subtrees, but it is not the least work. A narrower
+sound gate exists (list a moved stored directory only when its own upward chain
+of placements lands on a stored, unmoved, non-root directory). It is not
+implemented in R4 and is reported for owner decision.
+
+### B-5 Rules the plan stated loosely
+
+- A walk that ends at an allocated directory nothing binds is refused with
+  `effective tree cycle` on build and update alike, whether the directory
+  placed inside it is fresh or stored. A-2 named only the fresh case.
+- The producer's Content result on failure is a label. The unchanged Commit
+  driver treats that label as an unknown outcome, so a caller must hand the
+  driver the original cause from `CapturedNamespaceCustody`. Section 7.3 did
+  not say this. The R4 daemon test closure does it; the product closure is R5.

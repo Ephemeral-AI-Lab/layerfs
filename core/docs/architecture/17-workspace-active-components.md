@@ -102,7 +102,9 @@ Intervening G2 with a nonzero Base retains its original coordinates; a fresh
 absent Base follows P0's adoption rule. Symlink target extents and directory
 bindings do not undergo regular-file collapse. One-identity resident updates use
 `node_index`. C2 and History formats remain unchanged, and complete C1 alias/cycle
-validation remains separate work; canonical parent indexing stays deferred.
+validation was separate work at this stage (R4 replaced it, see
+[captured namespace construction](78-captured-namespace-construction.md));
+canonical parent indexing stays deferred.
 
 The adaptation removes dirty declarations for fresh directories/symlinks whose
 last binding disappears before capture, retaining their selected private facts

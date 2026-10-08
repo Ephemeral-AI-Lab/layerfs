@@ -477,6 +477,8 @@ composition and the Daemon's bounded return clone. Missing cells alone remain
 Inherited; actual cutoff or lower EOF establishes local Zero. Reader acquisition,
 original failure custody and explicit release remain with the caller.
 
+> **Updated by R4.** Of the items this paragraph lists as unfinished, the grouped validator, addition and graph state and the whole-base alias walks were replaced, and captured namespace normalization was added; see [captured namespace construction](78-captured-namespace-construction.md). Root qualification and product Commit composition remain unfinished.
+
 These are component source and functional boundaries. Captured final-state edit
 normalization, grouped validator/addition/graph state, whole-base alias walks,
 reducer/touched/zero/release backing, complete root qualification and the actual
@@ -534,6 +536,8 @@ its original error immediately to the fallible inode engine, so a failed row
 cannot masquerade as normal EOF and finalize a filesystem root. Traversing a
 newly accepted directory requires the explicitly supplied accepted-object reader;
 it has no fallback to the initial reader or inferred same-Save authority.
+
+> **Updated by R4.** Namespace final-state normalization exists as the `CapturedNamespace` producer, and the grouped validator state and alias walks named below were replaced; see [captured namespace construction](78-captured-namespace-construction.md). The other items remain unfinished.
 
 These are file and selected reference/release component implementations with
 public functional proofs. Namespace final-state normalization, grouped validator

@@ -74,7 +74,8 @@ logical unmount. Commit without a namespace producer validates token and origina
 custody read-only, then refuses before lifecycle admission, capture, Save or epoch
 change. Original Unknown and known publication take precedence. Real construction
 still enters the existing Commit driver; no placeholder producer or second driver
-has been added. Native attachment and captured namespace normalization are R2/R4/R5.
+has been added. Native attachment is R2; captured namespace normalization is
+implemented by R4 but not called by this driver's product callers, which is R5.
 
 The current executable has no complete application stop/fence/join operation.
 It does not claim a graceful daemon drain when the process/container is stopped.

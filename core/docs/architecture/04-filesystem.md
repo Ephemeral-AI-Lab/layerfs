@@ -406,9 +406,18 @@ the spool removes its file; `cleanup` is the checked form of the same act.
 
 ### 5.9 Validation frontier and update corrections after phases 1–3
 
+> **Superseded in part by R4.** Validation's topology passes were replaced: the
+> whole-base alias walk, the per-binding subtree walks and the
+> `cycle check work limit` refusal described below no longer exist, and the
+> backed streamed route refuses no total derived from `ordering_bytes`. The
+> current algorithm is in
+> [captured namespace construction](78-captured-namespace-construction.md#validation).
+> The paragraphs below remain accurate for the resident routes' declared
+> totals, the base-record memo and the unreachable-parent pass.
+
 Validation derives a resident-entry allowance as
-`floor(FilesystemResources.ordering_bytes / 1024)`. Row counts, changed names,
-the reachability frontier and each effective-tree walk are checked against that
+`floor(FilesystemResources.ordering_bytes / 1024)`. On the resident routes, row
+counts, changed names and each topology container are checked against that
 declared resource. The unreachable-parent pass that precedes validation retains one charged
 membership entry per declared-new directory parent other than the root — only
 such a parent can end the operation with no binding at all — and joins one
@@ -431,10 +440,9 @@ absent serials evicts when full; eviction can add reads but cannot admit an
 unchecked binding. The service checks prepared totals before decoding a wide
 row, so one declared row cannot allocate past this validation allowance.
 
-A newly allocated directory is followed through its own changed bindings during
-update cycle validation. The parent-alias pass visits each changed binding once,
-indexes changed names and their final bindings for lookup, and does not decode
-the same spool row for every restated name. C1 sends final typed values to the
+Since R4 a directory binding is classified once as restated or placed, and a
+second parent is refused by the derived count or by a second placement; there
+is no parent-alias pass. C1 sends final typed values to the
 reference reducer as rows arrive rather than making a second vector of all
 values. The server checks every binding in a directory row even when a read wave
 fills partway through that row. The Bridge treats an I/O error during its final

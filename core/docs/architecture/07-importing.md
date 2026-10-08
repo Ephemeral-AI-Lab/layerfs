@@ -144,6 +144,8 @@ Build the directory structure with no files in it.
        resources:   FilesystemResources::default(),
    })
         │
+> **Updated by R4.** Sections of this record that describe `check_build_reachability`, a 4,096-entry subtree walk and the refusal `InvalidRecord("cycle check work limit")` describe the validator before R4. Validation now records placements and proves them with a step-bounded upward walk; no entry-count ceiling exists, binding a filled directory is not refused, and a directory can always be renamed or moved. See [captured namespace construction](78-captured-namespace-construction.md). The bottom-up trap below no longer applies; the pipeline ordering it motivated remains valid.
+
         ├── check_build_reachability: ONE walk from the root,
         │     ONE counter, charging EVERY stated binding
         │     ⇒ no independent count cap for a base-less build

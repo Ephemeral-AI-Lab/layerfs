@@ -46,7 +46,9 @@ Unchanged; this is the owning source contract, not a topology assertion.
 run the same private operation driver as the existing build/update entrypoints.
 `check_streamed_input` exposes the shared shape checks. Existing `PreparedRows`,
 `RowSource`, `DirectoryUpdate`, `FilesystemInput`, `validate::check`,
-`CheckedInput`, and all old function signatures are unchanged. The old source
+`CheckedInput`, and all old function signatures were unchanged at this stage.
+(R4 later removed `validate::check`'s unused dropped-parent argument and
+`CheckedInput.additions`.) The old source
 continues to return its explicit resident directory row. A streamed source is
 a separate trait and never invokes those legacy Vec-returning methods.
 
@@ -69,26 +71,29 @@ accepted child objects still belong to the caller's Save/consumer custody. A
 consumer failure while accepting the final object retains that consumer's own
 custody contract and never becomes a successful result.
 
-Alias survival uses the actual tri-state stream point. The streamed route does
-not copy all changed names into a second lookup map. The explicit resident
-route retains its former changed-name map for that alias pass, avoiding repeated
-whole-row clones for each point. Both use the same alias verdict logic.
+At this stage alias survival used the tri-state stream point on the streamed
+route and a changed-name map on the resident route. R4 removed the alias pass
+on both: a second parent is refused by the derived count or by a second
+placement ([captured namespace construction](78-captured-namespace-construction.md)).
 
 [validate/entries.rs](../../crates/layerfs-content/src/filesystem/validate/entries.rs)
 consumes the existing effective-name merge with one bounded canonical directory
 page and one changed-name lookahead. The cycle walk no longer needs a complete
 base/merged directory Vec. Initial reachability opens each selected directory's
 cursor instead of collecting a resident adjacency map. These are input-consumption
-changes: existing alias whole-base and cycle subtree walks remain. Paged
+changes. The alias whole-base and cycle subtree walks that remained at this
+stage were replaced in R4
+([captured namespace construction](78-captured-namespace-construction.md#validation)). Paged
 consumption can interleave object reads with child inspection; it supplies no
 new topology certificate or fixed physical-I/O/latency claim.
 
 ## Remaining state and ownership
 
 This boundary removes the per-directory input Vec requirement, not every
-input-sized collection. Validation still has grouped demanded serials,
-additions/candidate maps, examined/seen/frontier state and its resource-sized
-base memo. The additive [backed serial-state route](53-backed-filesystem-serial-state.md)
+input-sized collection. At this stage validation still had grouped demanded
+serials, additions/candidate maps and examined/seen/frontier state; R4 replaced
+them on the backed route with 64-row windows and indexed topology records. The
+resource-sized base memo remains. The additive [backed serial-state route](53-backed-filesystem-serial-state.md)
 now puts new-parent membership, rebuilt directory roots and initial count/final
 row iteration behind the existing neutral construction records and sealed input
 cursors. The resident route keeps its former maps/arrays. Reducer fresh membership,

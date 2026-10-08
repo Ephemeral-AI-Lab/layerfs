@@ -98,7 +98,8 @@ checks complete count consumption. Backed construction collects neither all
 counts nor all final inode rows. Resident construction retains its count Vec and
 complete final-row Vec, including its rows-before-inode-output error order and
 phase placement. Existing public signatures, `validate::check` and `CheckedInput`
-remain unchanged; their explicit resident contract is preserved.
+were unchanged at this stage; R4 later removed `validate::check`'s unused
+argument and `CheckedInput.additions`.
 
 An input failure during backed final-row consumption may follow accepted child
 pages. Those pages remain with the actual consumer/Save. No final filesystem root
@@ -186,15 +187,18 @@ optional supplied OrderingBacking still receives its independent checked cleanup
 before a final root, while construction-record owner release stays caller fenced.
 There is no OperationOwner release in Content or Drop.
 
-This does not remove validator totals or every input-size container. Validation
-still derives declared/walk limits from ordering_bytes and can refuse: grouped
-complete demand vectors, additions/by-parent/candidate/bound maps, seen/frontier
-sets and the alias whole-base/rebound subtree walks remain. Initial validator
-row totals still use those limits even though its count/final rows are backed.
+This stage did not remove validator totals or every input-size container. R4
+did so for the backed route: the grouped demand vectors,
+additions/by-parent/candidate/bound maps, seen/frontier sets, the alias
+whole-base and rebound subtree walks and the `ordering_bytes`-derived refusals
+are gone there, replaced by windowed classification and topology records at
+kinds `0x4653_0020..=0x4653_0024`
+([captured namespace construction](78-captured-namespace-construction.md#validation)).
+Resident routes keep container bounds derived from `ordering_bytes`.
 Directory-tree listing retains its existing canonical-tree traversal internals;
-this is not the deferred complete P14 qualification. Captured ordered-name/count/
-tri-state jobs, typed namespace normalization and complete Commit/Save/history/
-install composition remain separate work. The regular-file adapter is described
+this is not the deferred complete P14 qualification. Captured ordered-name and
+tri-state jobs and typed namespace normalization were added in R4; product
+Commit/Save/history/install composition remains separate work. The regular-file adapter is described
 in [captured file normalization](56-captured-file-normalization.md).
 
 P14 requires owning qualification of the exact immutable root and actual checked

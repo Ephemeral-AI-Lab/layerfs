@@ -10,7 +10,9 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 > This implements a neutral Overlay/Daemon record provider. The subsequent
 > [Content editor](50-backed-file-edit-state.md) and
 > [Workspace adapter](52-workspace-edit-backing-port.md) use it. Captured
-> normalization, sparse Commit and S10/P3 remain unfinished.
+> namespace normalization now uses these records too
+> ([captured namespace construction](78-captured-namespace-construction.md)); sparse Commit and
+> S10/P3 remain unfinished.
 
 Overlay owns these records in its existing daemon database. Daemon schedules
 short credited OperationRecord jobs. Content owns the meaning of kinds, draft encodings,
