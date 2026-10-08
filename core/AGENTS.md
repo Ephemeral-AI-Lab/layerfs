@@ -25,7 +25,8 @@ product mental model or campaign-specific benchmark procedures.
   unfinished. See [S6 audit](docs/issues/307/S6-EXIT-AUDIT.md). Its temporarily relocated `layerfs-workspace-legacy` source remains
   excluded.
   Daemon exposes the fair SQL owner and a direct global Store adapter with a
-  fixed read set, one immutable cache shared across Workspaces, bounded root
+  fixed read set with fair admission/quarantine and read-only bind snapshots,
+  one immutable cache shared across Workspaces, bounded root
   binding and operation-owned exact failures. Concrete opening stays outside
   the provider-independent adapter; see the
   [direct Store boundary](docs/architecture/61-direct-store-adapter.md).

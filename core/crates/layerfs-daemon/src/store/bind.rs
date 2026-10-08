@@ -25,13 +25,15 @@ impl Store {
         let mut snapshot = None;
         let result = (|| {
             let captured = self
-                .history
-                .branch_snapshot(request.branch)
-                .map_err(BindError::History)?
+                .read_ticket(Some(request.workspace))
+                .and_then(|ticket| ticket.wait())
+                .map_err(|error| BindError::Read(Arc::new(super::PortError::ReadAdmission(error))))?
+                .snapshot(request.branch)
+                .map_err(BindError::Read)?
                 .ok_or(BindError::MissingBranch(request.branch))?;
             snapshot = Some(captured.clone());
             phase = BindPhase::Root;
-            let ports = self.ports(captured.scope);
+            let ports = self.ports_for(captured.scope, request.workspace);
             let client = ports.client();
             let base = checked_base(client, &captured).map_err(|error| BindError::Content {
                 error,

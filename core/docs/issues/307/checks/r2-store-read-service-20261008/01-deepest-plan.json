@@ -1,0 +1,19 @@
+{
+  "parent": "0bd4e28e191a2d00cb2f64d6e666b1140f980019",
+  "goal": "Full R2 remains active; this is the Store reader prerequisite checkpoint",
+  "plan": {
+    "store/read_service.rs": "Fixed fair per-Workspace registration/lease pool, Future wakeups, no native reader-mutex waits or extra reader threads; only original idle handles move to consumers.",
+    "store/read_state.rs": "Fixed lanes/slots and round-robin FIFO dispatch; before-effect capacity refusal; release/cancel/stop without provider work under state lock.",
+    "store/read_handle.rs": "Paired opened Storage/read-only History, one read lease, unknown-outcome quarantine with original error retained; original handles are never reopened or retried.",
+    "store/open.rs": "Replace blind rotating reader mutexes with pool; retain existing bounded cache and adapter counters.",
+    "store/ports.rs": "Per-operation failure ownership without failure mutex across provider I/O; explicit read-on-lease APIs plus synchronous compatibility outside native workers.",
+    "store/bind.rs": "Branch snapshot through a read-only session; keep phase/input/original failure ownership.",
+    "bootstrap.rs": "Pair actual read-only providers and configure queue once; application/install derive reader queue resources from daemon limits.",
+    "tests/store_read_service.rs": "Public real Disposable Store tests for idle capacity, FIFO/Workspace rotation, registration/release races, cancellation/stop, snapshot/writer independence and failure scope.",
+    "tests/installed_store.rs and store_commit.rs": "Existing direct Store semantics and publication/custody regression coverage."
+  },
+  "profile": "Explicit Disposable/WAL/OFF global Store; Overlay independent MEMORY/OFF/EXCLUSIVE",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "test_limit_seconds": 100,
+  "proof_scope": "functional component; native composition, exact per-demand async semantics, Ready and normal drain still need integration and owning proofs"
+}

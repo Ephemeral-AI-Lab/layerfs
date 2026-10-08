@@ -50,6 +50,9 @@ impl Failure {
                         let (code, moved) = history(error);
                         (code, moved, error.to_string())
                     }
+                    BindError::Read(error) => {
+                        (port(Some(error.as_ref()), false), None, error.to_string())
+                    }
                     BindError::MissingBranch(id) => {
                         (ControlCode::Missing, None, format!("Branch {id} missing"))
                     }
@@ -133,6 +136,13 @@ fn port(error: Option<&PortError>, opaque: bool) -> ControlCode {
         Some(PortError::Storage(error)) => storage(error),
         Some(PortError::History(error)) => history(error).0,
         Some(PortError::Poisoned) => ControlCode::Unknown,
+        Some(PortError::ConcurrentDemand) => ControlCode::Busy,
+        Some(PortError::ReadAdmission(error)) => match error {
+            crate::store::ReadAdmissionError::Capacity => ControlCode::Capacity,
+            crate::store::ReadAdmissionError::Poisoned => ControlCode::Unknown,
+            crate::store::ReadAdmissionError::InvalidLimits => ControlCode::Invalid,
+            _ => ControlCode::Failed,
+        },
         None if opaque => ControlCode::Unknown,
         None => ControlCode::Failed,
     }

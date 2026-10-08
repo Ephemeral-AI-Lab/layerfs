@@ -1,0 +1,156 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 30.50s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-77c9832298339be7)
+  Executable unittests src/bin/layerfs-daemon.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-cb13d83b54484162)
+  Executable tests/admission_future.rs (core/target/cluster2-linux/debug/deps/admission_future-0669276ae382012e)
+  Executable tests/captured_namespace.rs (core/target/cluster2-linux/debug/deps/captured_namespace-9c9a8a15019d0b1d)
+  Executable tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-eb66ab7f963249de)
+  Executable tests/complete_installed_roots.rs (core/target/cluster2-linux/debug/deps/complete_installed_roots-16464fe442a967ed)
+  Executable tests/completion_future.rs (core/target/cluster2-linux/debug/deps/completion_future-01a38d32a7e5336a)
+  Executable tests/completion_ownership.rs (core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c)
+  Executable tests/completion_storage.rs (core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b)
+  Executable tests/construction_cursor.rs (core/target/cluster2-linux/debug/deps/construction_cursor-07de2b18561b362d)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-429c3690851e8b2c)
+  Executable tests/e2_startup_receipts.rs (core/target/cluster2-linux/debug/deps/e2_startup_receipts-9c92e0224dade04c)
+  Executable tests/edit_backing.rs (core/target/cluster2-linux/debug/deps/edit_backing-24e3ad85e8e9d52b)
+  Executable tests/finite_service.rs (core/target/cluster2-linux/debug/deps/finite_service-7919da4c90c994e0)
+  Executable tests/host_handoff.rs (core/target/cluster2-linux/debug/deps/host_handoff-4cdc6cae8d18612d)
+  Executable tests/indexed_operation_record.rs (core/target/cluster2-linux/debug/deps/indexed_operation_record-f7132d37f46cf1cf)
+  Executable tests/installed_qualification.rs (core/target/cluster2-linux/debug/deps/installed_qualification-633d7c5f52039959)
+  Executable tests/installed_store.rs (core/target/cluster2-linux/debug/deps/installed_store-08f9c29a011e4e8b)
+  Executable tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-97b0619943df4135)
+  Executable tests/native_application.rs (core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029)
+  Executable tests/native_control.rs (core/target/cluster2-linux/debug/deps/native_control-83467c0a8be9b56b)
+  Executable tests/native_install.rs (core/target/cluster2-linux/debug/deps/native_install-035242047b6cc903)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77)
+  Executable tests/root_qualification.rs (core/target/cluster2-linux/debug/deps/root_qualification-f04f6db36b728ea2)
+  Executable tests/shared_processes.rs (core/target/cluster2-linux/debug/deps/shared_processes-19348c8a37ad0fa6)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-6022c7bd339d8d01)
+  Executable tests/store_commit.rs (core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735)
+  Executable tests/store_read_service.rs (core/target/cluster2-linux/debug/deps/store_read_service-9f2f1c6f18275a98)
+  Executable unittests examples/e2_startup.rs (core/target/cluster2-linux/debug/examples/e2_startup-764e95f467052da9)
+  Executable unittests examples/engine_finite.rs (core/target/cluster2-linux/debug/examples/engine_finite-b4194296b8df16f9)
+  Executable unittests examples/resource_growth.rs (core/target/cluster2-linux/debug/examples/resource_growth-3ee8bc1eb229e503)
+  Executable unittests examples/resource_prepare.rs (core/target/cluster2-linux/debug/examples/resource_prepare-6727760423608d12)
+  Executable unittests examples/store_accounting.rs (core/target/cluster2-linux/debug/examples/store_accounting-8271dac67dde7a86)
+
+{"command": ["core/target/cluster2-linux/debug/deps/store_read_service-9f2f1c6f18275a98", "--test-threads=1", "--nocapture"], "sha256": "b1cb7e2084e7d0241c0a852398162a2c294e44a72d9acbb0520a7c49969f6a30", "exit_code": 0, "timeout": false, "wall_ns": 313509208, "wall_stop_seconds": 100}
+
+running 9 tests
+test a_reader_grant_cannot_be_charged_to_a_different_workspace ... ok
+test bind_reads_snapshot_while_the_original_writer_session_is_occupied ... ok
+test cancellation_capacity_and_stop_dispose_only_unattempted_admission ... ok
+test idle_selection_and_replaced_wakeup_do_not_wait_on_a_busy_reader ... ok
+test last_quarantine_wakes_waiters_with_terminal_no_reader_disposition ... ok
+test original_reader_release_races_future_registration_without_polling ... ok
+test quarantined_session_keeps_original_failure_and_only_healthy_reader_is_reused ... ok
+test waiting_operation_has_no_failure_lock_and_its_failures_do_not_poison_other_requests ... ok
+test workspace_rotation_and_fifo_prevent_a_hot_lane_owning_the_next_reader ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/installed_store-08f9c29a011e4e8b", "--test-threads=1", "--nocapture"], "sha256": "6e06147be083bb5dd0616010eb5b491bfe656eaf7242561009bc81e6c89b4212", "exit_code": 0, "timeout": false, "wall_ns": 397532042, "wall_stop_seconds": 100}
+
+running 3 tests
+test bounded_bind_batches_lengths_cache_and_original_failure ... DIRECT_STORE count=1 cold_bind_batches=10 warm_bind_batches=0 fixed_read_handles=2 adapter=StoreWork { object_batches: 17, object_ids: 19, length_batches: 4, length_ids: 5, serial_reservations: 0 } cache=ClientWork { cache_hits: 72, cache_misses: 15, upstream_batches: 15, authenticated_bytes: 1393, evictions: 0, charged_cache_bytes: 5233, cached_objects: 15 }
+DIRECT_STORE count=1024 cold_bind_batches=11 warm_bind_batches=0 fixed_read_handles=2 adapter=StoreWork { object_batches: 26, object_ids: 28, length_batches: 4, length_ids: 5, serial_reservations: 0 } cache=ClientWork { cache_hits: 87, cache_misses: 24, upstream_batches: 24, authenticated_bytes: 22238, evictions: 0, charged_cache_bytes: 28382, cached_objects: 24 }
+ok
+test direct_reads_finish_under_another_process_writer_and_busy_stays_typed ... DIRECT_STORE_WRITER reads_during_hold=2 busy=History::Busy next_explicit_reservation_gap=0 child=released-and-joined
+ok
+test four_workspaces_read_concurrently_and_consume_disjoint_scope_ranges ... DIRECT_STORE_MULTI workspaces=4 callers=4 distinct_serials=32 reservations=4 overlay_databases=1 read_handles=3 work=StoreWork { object_batches: 54, object_ids: 54, length_batches: 32, length_ids: 32, serial_reservations: 4 }
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735", "--test-threads=1", "--nocapture"], "sha256": "f41492cea92a29f4b246c2388a69b802418f016aa533c056266dbe7303bc329e", "exit_code": 0, "timeout": false, "wall_ns": 592352500, "wall_stop_seconds": 100}
+
+running 8 tests
+test a_held_producer_does_not_hold_workspace_metadata_or_read_capacity ... STORE_COMMIT_FIXTURE case=commit-admission files=8
+ok
+test busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss ... STORE_COMMIT_FIXTURE case=commit-refusals files=8
+STORE_COMMIT_REFUSALS busy_before_construction=true no_new_stage=true effective_bytes_preserved=true original_missing_dependency=true original_read_failure=true later_explicit_call=Committed
+ok
+test committed_up_to_date_overwrite_and_new_bind_preserve_exact_roots ... STORE_COMMIT_FIXTURE case=commit-outcomes files=8
+STORE_COMMIT count=3 initial=1 refills=0 publication=1 history=1 installed=true
+STORE_UP_TO_DATE count=3 initial=1 refills=0 publication=1 history=1
+STORE_OVERWRITE both_candidates_installed=true captured_parent_preserved=true new_bind=last_root old_workspace_view_preserved=true
+ok
+test history_busy_after_save_has_no_stage_and_counts_only_acknowledged_save_writes ... STORE_HISTORY_BUSY save_writes=2 failed_history_statements=1 new_stage_rows=0 local_bytes=preserved later_explicit_call_writes=3
+ok
+test known_publication_survives_an_unattempted_local_install ... STORE_COMMIT_FIXTURE case=commit-install-refusal files=8
+STORE_COMMIT_INSTALL_FAILURE history=known-Committed install=unattempted original_capture=retained next_commit=InFlight new_workspace=published-bytes
+ok
+test later_mutation_survives_capture_publication_and_known_install ... STORE_COMMIT_FIXTURE case=commit-later-mutation files=8
+STORE_LATER_MUTATION captured=G first_published=G live_after_install=H next_published=H old_workspace=G namespace_entries=8
+ok
+test nested_storage_unknown_keeps_original_capture_and_blocks_another_commit ... STORE_COMMIT_FIXTURE case=nested-unknown files=8
+NESTED_UNKNOWN original_and_cleanup_and_nested=retained definite_control=resolved later_explicit_commit=passed no_stage=true terminal_unknowns=3
+ok
+test unknown_history_acknowledgement_retains_original_intent_and_capture ... STORE_UNKNOWN_ACK original=UnknownOutcome capture_and_intent=retained local_resolution=not-attempted install=not-attempted observer_does_not_resolve=true fixture_teardown=explicit-after-owner-stop
+ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/native_control-83467c0a8be9b56b", "--test-threads=1", "--nocapture"], "sha256": "93e3e440e9860e0d942032eb16edd3a4fc5b8f2ce5c8d570f7e330a1fbce59ad", "exit_code": 0, "timeout": false, "wall_ns": 447810042, "wall_stop_seconds": 100}
+
+running 7 tests
+test an_original_unknown_blocks_another_commit_and_normal_unmount ... CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true
+ok
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed
+ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+ok
+test control_without_constructor_refuses_before_capture_save_or_registry_epoch ... ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_FLOW overwrite_last_effect=true captured_parent_preserved=true calls=20 Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true
+ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... CONTROL_LOST_ORIGINAL client=ControlFailure { call: Call { id: 2, request: Commit(WorkspaceToken { workspace: WorkspaceId(5555555555555555555555555555555555555555555555555555555555555555), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(Io(Kind(UnexpectedEof))), fence_error: None } daemon_reply=Committed(Committed(CommitRecord { id: CommitId(12a45c302337ef6dee99f0b7af24d6700c0d501d0c0cf8f93e667bb72c6a94ddc2), stack: LayerStackId(3136363636363636363636363636363636), root: ObjectId("b8a28a159b259b05525a75765e5919a9523b2fc2c032511a7d80254c072e03ba"), parent: None, base_layer: LayerId(32b63e79cc2e06402232bd2f764faaf31294f5659dffc5c87d6fce70150f8d2722) })) capture=Capture { route: Route { engine: 6, ns: 1, incarnation: [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85] }, generation: Generation(1), revision: 1, base_root: [181, 63, 163, 96, 34, 184, 93, 7, 244, 83, 126, 237, 199, 255, 200, 39, 41, 188, 173, 50, 132, 57, 83, 179, 155, 74, 94, 198, 96, 11, 112, 166] }
+CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true
+ok
+test status_retains_known_publication_when_the_engine_is_unavailable ... CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown
+ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/native_install-035242047b6cc903", "--test-threads=1", "--nocapture"], "sha256": "1dfb28a078dc42b6d5e0b5fb56e5e1d7d25f654ccc13ffe66df91ab74c6cddf7", "exit_code": 0, "timeout": false, "wall_ns": 238745500, "wall_stop_seconds": 100}
+
+running 3 tests
+test authenticated_install_opens_one_store_and_reads_the_complete_root ... INSTALL_ROOT_ORACLE paths=6 full_regular_bytes=300048 hardlink=true raw_symlink=true host_sqlite=3.53.2 daemon_sqlite=3.53.2 work=InstallWork { records: 3, write_calls: 3, written: 180224, sync_calls: 0, peak_record_bytes: 65519 }
+ok
+test existing_store_is_refused_before_upload_and_preserved ... ok
+test interrupted_transfer_keeps_original_partial_file_and_claim_refuses_another_installer ... INSTALL_PARTIAL original_bytes=31 published=false claim_acknowledged=true no_product_cleanup=true
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029", "--test-threads=1", "--nocapture"], "sha256": "441a1fc5c66b8d7d057dbe41444bba6b1a1b292536190ae6c7a937cf6ee7aa94", "exit_code": 0, "timeout": false, "wall_ns": 192441958, "wall_stop_seconds": 9}
+
+running 1 test
+test actual_daemon_install_hello_bind_status_no_constructor_and_session_end ... DAEMON_APPLICATION direct_store=true overlay_sqlite=3.53.2 store_sqlite=3.53.2 logical_bind=true native_fuse_ready=false sealed_source_absent=true session_end=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.37s
+clippy_exit=0

@@ -1,5 +1,5 @@
 //! Concrete Store composition, outside the provider-independent adapter.
-use crate::store::Store;
+use crate::store::{ReadLimits, Store, StoreReader};
 use layerfs_persistence::{Handles, PersistenceConfig, SqlWork, StorageProvider};
 use layerfs_storage::{ReservationBlocks, Storage, StorageError, StorageResult};
 use std::sync::Arc;
@@ -62,6 +62,27 @@ pub fn open_store_observed(
     cache_bytes: usize,
     reservations: ReservationBlocks,
 ) -> StorageResult<OpenedStore> {
+    open_store_observed_with_limits(
+        config,
+        binding,
+        cursor_key,
+        read_handles,
+        cache_bytes,
+        reservations,
+        ReadLimits::default(),
+    )
+}
+
+/// Explicit fixed queue selection before readiness, alongside the read set.
+pub fn open_store_observed_with_limits(
+    config: PersistenceConfig,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    read_handles: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+    read_limits: ReadLimits,
+) -> StorageResult<OpenedStore> {
     if read_handles == 0 {
         return Err(StorageError::Integrity("empty Store read set"));
     }
@@ -73,7 +94,10 @@ pub fn open_store_observed(
     for _ in 0..read_handles {
         let opened = Handles::open_read_only(config.clone(), binding, cursor_key)?;
         observed_readers.push(opened.storage.clone());
-        readers.push(Storage::new(opened.storage)?);
+        readers.push(StoreReader::new(
+            Storage::new(opened.storage)?,
+            Arc::new(opened.history),
+        ));
     }
     let store = Arc::new(Store::new(
         writer.storage.clone(),
@@ -81,6 +105,7 @@ pub fn open_store_observed(
         readers,
         cache_bytes,
         reservations,
+        read_limits,
     )?);
     Ok(OpenedStore {
         store,

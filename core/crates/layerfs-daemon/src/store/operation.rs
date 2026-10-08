@@ -24,7 +24,7 @@ pub struct StoreOperation {
 }
 impl BoundWorkspace {
     pub fn operation(&self) -> WorkspaceResult<StoreOperation> {
-        let ports = self.store.ports(self.snapshot()?.scope);
+        let ports = self.store.ports_for(self.snapshot()?.scope, self.identity);
         let client = ports.client();
         let workspace = self.workspace.scoped(client.clone())?;
         Ok(StoreOperation {

@@ -1,0 +1,32 @@
+{
+  "store_read_service": {
+    "host_binary": "core/target/debug/deps/store_read_service-59817982d8532ecc",
+    "host_sha256": "b82973998f58c3d64babe1c989fe4887b6e135ff56b178562e31c1f40ee63439",
+    "host_result": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+    "linux_result": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s"
+  },
+  "installed_store": {
+    "host_binary": "core/target/debug/deps/installed_store-2b1a44751bd98486",
+    "host_sha256": "bb186f7900e8631065a4513766998dc3b007d60f3b8fffe7790a563bef8e1ff9",
+    "host_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s",
+    "linux_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s"
+  },
+  "store_commit": {
+    "host_binary": "core/target/debug/deps/store_commit-8242be4c721374ee",
+    "host_sha256": "bf44b9d77b540f1208a6a006a2b3dc38c8c461b14c2386364f8227b200d6293c",
+    "host_result": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+    "linux_result": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s"
+  },
+  "native_control": {
+    "host_binary": "core/target/debug/deps/native_control-bd68a39d519dadf1",
+    "host_sha256": "9630b11963825afcdbf8c9bcc1d70db98353283899f2ba33edb4c11f8c4a88a6",
+    "host_result": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+    "linux_result": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s"
+  },
+  "native_install": {
+    "host_binary": "core/target/debug/deps/native_install-914e6f75a3caa409",
+    "host_sha256": "af9148f63a4e1131fd9bab451768de9de846946a7cd5cfe987311e04ef547fb2",
+    "host_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+    "linux_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+  }
+}

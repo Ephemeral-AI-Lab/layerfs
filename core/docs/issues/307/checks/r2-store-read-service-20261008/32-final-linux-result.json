@@ -1,0 +1,235 @@
+{
+  "command": [
+    "docker",
+    "start",
+    "-a",
+    "06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df"
+  ],
+  "exit_code": 0,
+  "wall_ns": 38985931416,
+  "inspect": [
+    {
+      "Id": "06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df",
+      "Created": "2026-10-08T04:44:00.22286871Z",
+      "Path": "python3",
+      "Args": [
+        "-c",
+        "from pathlib import Path\nimport subprocess,json,hashlib,re,time,os,signal,sys\nout=Path('core/docs/issues/307/checks/r2-store-read-service-20261008')\nassert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in json.loads((out/'34-final-source-identity.json').read_text()).items())\nbase=['--manifest-path','core/Cargo.toml','--locked','-p','layerfs-daemon','--all-targets']\nbuild=subprocess.run(['cargo','test',*base,'--no-run'],capture_output=True,text=True,timeout=300)\nprint(build.stdout+build.stderr,flush=True)\nif build.returncode:sys.exit(build.returncode)\nrecords=[]\nfor name in ['store_read_service','installed_store','store_commit','native_control','native_install','native_application']:\n binary=re.search(r'Executable tests/'+name+r'\\.rs \\(([^)]+)\\)',build.stdout+build.stderr)[1]\n cmd=[binary,'--test-threads=1','--nocapture'];limit=9 if name=='native_application' else 100;start=time.monotonic_ns();timeout=False\n with (out/('linux-final-'+name+'.txt')).open('x') as log:\n  p=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)\n  try:code=p.wait(timeout=limit)\n  except subprocess.TimeoutExpired:timeout=True;os.killpg(p.pid,signal.SIGKILL);code=p.wait()\n record={'command':cmd,'sha256':hashlib.sha256(Path(binary).read_bytes()).hexdigest(),'exit_code':code,'timeout':timeout,'wall_ns':time.monotonic_ns()-start,'wall_stop_seconds':limit}\n records.append(record);print(json.dumps(record),flush=True);print((out/('linux-final-'+name+'.txt')).read_text(),flush=True)\n if code:break\n(out/'31-final-linux-test-results.json').write_text(json.dumps(records,indent=2)+'\\n')\nif any(r['exit_code'] for r in records):sys.exit(1)\nr=subprocess.run(['cargo','clippy',*base,'--','-D','warnings'],timeout=300)\nprint('clippy_exit='+str(r.returncode),flush=True);sys.exit(r.returncode)\n"
+      ],
+      "State": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-08T04:44:00.332685585Z",
+        "FinishedAt": "2026-10-08T04:44:38.983071214Z"
+      },
+      "Image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "ResolvConfPath": "/var/lib/docker/containers/06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df/resolv.conf",
+      "HostnamePath": "/var/lib/docker/containers/06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df/hostname",
+      "HostsPath": "/var/lib/docker/containers/06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df/hosts",
+      "LogPath": "/var/lib/docker/containers/06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df/06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df-json.log",
+      "Name": "/layerfs-r2-read-final-9e4b2141f8514d3396a249df9ba17fa6",
+      "RestartCount": 0,
+      "Driver": "overlayfs",
+      "Platform": "linux",
+      "MountLabel": "",
+      "ProcessLabel": "",
+      "AppArmorProfile": "",
+      "ExecIDs": null,
+      "HostConfig": {
+        "Binds": null,
+        "ContainerIDFile": "",
+        "LogConfig": {
+          "Type": "json-file",
+          "Config": {}
+        },
+        "NetworkMode": "bridge",
+        "PortBindings": {},
+        "RestartPolicy": {
+          "Name": "no",
+          "MaximumRetryCount": 0
+        },
+        "AutoRemove": false,
+        "VolumeDriver": "",
+        "VolumesFrom": null,
+        "ConsoleSize": [
+          0,
+          0
+        ],
+        "CapAdd": null,
+        "CapDrop": null,
+        "CgroupnsMode": "private",
+        "Dns": null,
+        "DnsOptions": [],
+        "DnsSearch": [],
+        "ExtraHosts": null,
+        "GroupAdd": null,
+        "IpcMode": "private",
+        "Cgroup": "",
+        "Links": null,
+        "OomScoreAdj": 0,
+        "PidMode": "",
+        "Privileged": false,
+        "PublishAllPorts": false,
+        "ReadonlyRootfs": false,
+        "SecurityOpt": null,
+        "UTSMode": "",
+        "UsernsMode": "",
+        "ShmSize": 67108864,
+        "Runtime": "runc",
+        "Isolation": "",
+        "CpuShares": 0,
+        "Memory": 0,
+        "NanoCpus": 0,
+        "CgroupParent": "",
+        "BlkioWeight": 0,
+        "BlkioWeightDevice": [],
+        "BlkioDeviceReadBps": [],
+        "BlkioDeviceWriteBps": [],
+        "BlkioDeviceReadIOps": [],
+        "BlkioDeviceWriteIOps": [],
+        "CpuPeriod": 0,
+        "CpuQuota": 0,
+        "CpuRealtimePeriod": 0,
+        "CpuRealtimeRuntime": 0,
+        "CpusetCpus": "",
+        "CpusetMems": "",
+        "Devices": [],
+        "DeviceCgroupRules": null,
+        "DeviceRequests": null,
+        "MemoryReservation": 0,
+        "MemorySwap": 0,
+        "MemorySwappiness": null,
+        "OomKillDisable": null,
+        "PidsLimit": null,
+        "Ulimits": [],
+        "CpuCount": 0,
+        "CpuPercent": 0,
+        "IOMaximumIOps": 0,
+        "IOMaximumBandwidth": 0,
+        "Mounts": [
+          {
+            "Type": "bind",
+            "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+            "Target": "/work"
+          }
+        ],
+        "MaskedPaths": [
+          "/proc/acpi",
+          "/proc/asound",
+          "/proc/interrupts",
+          "/proc/kcore",
+          "/proc/keys",
+          "/proc/latency_stats",
+          "/proc/sched_debug",
+          "/proc/scsi",
+          "/proc/timer_list",
+          "/proc/timer_stats",
+          "/sys/devices/virtual/powercap",
+          "/sys/firmware"
+        ],
+        "ReadonlyPaths": [
+          "/proc/bus",
+          "/proc/fs",
+          "/proc/irq",
+          "/proc/sys",
+          "/proc/sysrq-trigger"
+        ]
+      },
+      "Storage": {
+        "RootFS": {
+          "Snapshot": {
+            "Name": "overlayfs"
+          }
+        }
+      },
+      "Mounts": [
+        {
+          "Type": "bind",
+          "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+          "Destination": "/work",
+          "Mode": "",
+          "RW": true,
+          "Propagation": "rprivate"
+        }
+      ],
+      "Config": {
+        "Hostname": "06dc77e0c8dd",
+        "Domainname": "",
+        "User": "",
+        "AttachStdin": false,
+        "AttachStdout": true,
+        "AttachStderr": true,
+        "Tty": false,
+        "OpenStdin": false,
+        "StdinOnce": false,
+        "Env": [
+          "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+          "LAYERFS_CONSTRUCTION_WORKERS=1",
+          "HTTP_PROXY=http://http.docker.internal:3128",
+          "HTTPS_PROXY=http://http.docker.internal:3128",
+          "no_proxy=localhost,127.0.0.1,::1",
+          "http_proxy=http://http.docker.internal:3128",
+          "https_proxy=http://http.docker.internal:3128",
+          "NO_PROXY=localhost,127.0.0.1,::1",
+          "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+          "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "RUSTUP_HOME=/usr/local/rustup",
+          "RUST_VERSION=1.85.1"
+        ],
+        "Cmd": [
+          "python3",
+          "-c",
+          "from pathlib import Path\nimport subprocess,json,hashlib,re,time,os,signal,sys\nout=Path('core/docs/issues/307/checks/r2-store-read-service-20261008')\nassert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in json.loads((out/'34-final-source-identity.json').read_text()).items())\nbase=['--manifest-path','core/Cargo.toml','--locked','-p','layerfs-daemon','--all-targets']\nbuild=subprocess.run(['cargo','test',*base,'--no-run'],capture_output=True,text=True,timeout=300)\nprint(build.stdout+build.stderr,flush=True)\nif build.returncode:sys.exit(build.returncode)\nrecords=[]\nfor name in ['store_read_service','installed_store','store_commit','native_control','native_install','native_application']:\n binary=re.search(r'Executable tests/'+name+r'\\.rs \\(([^)]+)\\)',build.stdout+build.stderr)[1]\n cmd=[binary,'--test-threads=1','--nocapture'];limit=9 if name=='native_application' else 100;start=time.monotonic_ns();timeout=False\n with (out/('linux-final-'+name+'.txt')).open('x') as log:\n  p=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)\n  try:code=p.wait(timeout=limit)\n  except subprocess.TimeoutExpired:timeout=True;os.killpg(p.pid,signal.SIGKILL);code=p.wait()\n record={'command':cmd,'sha256':hashlib.sha256(Path(binary).read_bytes()).hexdigest(),'exit_code':code,'timeout':timeout,'wall_ns':time.monotonic_ns()-start,'wall_stop_seconds':limit}\n records.append(record);print(json.dumps(record),flush=True);print((out/('linux-final-'+name+'.txt')).read_text(),flush=True)\n if code:break\n(out/'31-final-linux-test-results.json').write_text(json.dumps(records,indent=2)+'\\n')\nif any(r['exit_code'] for r in records):sys.exit(1)\nr=subprocess.run(['cargo','clippy',*base,'--','-D','warnings'],timeout=300)\nprint('clippy_exit='+str(r.returncode),flush=True);sys.exit(r.returncode)\n"
+        ],
+        "Image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+        "Volumes": null,
+        "WorkingDir": "/work",
+        "Entrypoint": null,
+        "Labels": {
+          "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+        },
+        "StopTimeout": 1
+      },
+      "NetworkSettings": {
+        "SandboxID": "",
+        "SandboxKey": "",
+        "Ports": {},
+        "Networks": {
+          "bridge": {
+            "IPAMConfig": null,
+            "Links": null,
+            "Aliases": null,
+            "DriverOpts": null,
+            "GwPriority": 0,
+            "NetworkID": "4f62f8c725aa5e53b8edeea262e53602992e41785867345d9156ea1031704dce",
+            "EndpointID": "",
+            "Gateway": "",
+            "IPAddress": "",
+            "MacAddress": "",
+            "IPPrefixLen": 0,
+            "IPv6Gateway": "",
+            "GlobalIPv6Address": "",
+            "GlobalIPv6PrefixLen": 0,
+            "DNSNames": null
+          }
+        }
+      },
+      "ImageManifestDescriptor": {
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": "sha256:a3e35be406fa88cdf84e3fbb8e170e57a321d6331061cd6e92b528de0e43d3a9",
+        "size": 1448,
+        "platform": {
+          "architecture": "arm64",
+          "os": "linux"
+        }
+      }
+    }
+  ]
+}

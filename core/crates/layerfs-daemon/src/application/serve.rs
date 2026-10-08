@@ -70,6 +70,7 @@ impl Application {
             read_handles: usize::from(l.read_handles),
             cache_bytes: usize::try_from(l.cache_bytes).map_err(|_| self.poisoned(slot))?,
             reservations: ReservationBlocks::default(),
+            read_limits: super::config::read_limits(l),
         };
         let result = crate::install::receive_install_manifest(
             connection,

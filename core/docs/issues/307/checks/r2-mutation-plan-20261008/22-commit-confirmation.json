@@ -1,0 +1,28 @@
+{
+  "commit": "0bd4e28e191a2d00cb2f64d6e666b1140f980019",
+  "first_parent": "e71e329ac81e0095aac1df2b3ecb369276a88929",
+  "committed_tree": "6db83412007d5eb29252c7e178c01f8216e15d04",
+  "matches_final_staged_tree": true,
+  "committed_count_recomputed": true,
+  "production_loc": {
+    "before": 170986,
+    "after": 171080,
+    "delta": 94
+  },
+  "subtotals": {
+    "active": 62789,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443,
+    "reference": 65417
+  },
+  "protected_notes_unchanged": true,
+  "owned_containers_removed": [
+    "b409789c721cf10e03048e84ed0340fd5a4547d5856ac9dc5fe4f8d7c034882a",
+    "1b984ccd87f6a3baad4c81ba628b343826b78b470f34153368da69ea829b13a6"
+  ],
+  "r2": "IN_PROGRESS; mutation continuation component verified; native service/Store admission/ownership/control/drain incomplete",
+  "r3": "NOT_STARTED native mutation/coherence",
+  "r4": "IN_PROGRESS; captured namespace page port only",
+  "r5": "NOT_STARTED mounted Commit",
+  "approval_pending": false
+}

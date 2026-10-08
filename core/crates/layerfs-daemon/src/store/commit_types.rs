@@ -119,6 +119,10 @@ impl CommitError {
                     PortError::Storage(e) => e.is_unknown_outcome(),
                     PortError::History(e) => e.unknown(),
                     PortError::Poisoned => true,
+                    PortError::ConcurrentDemand => false,
+                    PortError::ReadAdmission(error) => {
+                        matches!(error, super::ReadAdmissionError::Poisoned)
+                    }
                 },
             ),
             Self::History(error) => error.unknown(),

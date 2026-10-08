@@ -1,14 +1,17 @@
 //! One operation's original failures over batched public Store demands.
-use super::Store;
+use super::{ReadAdmissionError, ReadLease, ReadTicket, Store};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
-use layerfs_history::{HistoryError, ReserveRequest};
+use layerfs_history::{HistoryError, ReserveRequest, WorkspaceId};
 use layerfs_storage::StorageError;
 use layerfs_workspace::{
     CanonicalClient, FileLengths, InodeSerials, WorkspaceError, WorkspaceResult,
 };
 use std::{
     fmt,
-    sync::{atomic::Ordering, Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 /// Original provider failure, retained independently from shared cache state.
@@ -17,6 +20,8 @@ pub enum PortError {
     Storage(StorageError),
     History(HistoryError),
     Poisoned,
+    ConcurrentDemand,
+    ReadAdmission(ReadAdmissionError),
 }
 impl fmt::Display for PortError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -28,7 +33,8 @@ impl std::error::Error for PortError {
         match self {
             Self::Storage(e) => Some(e),
             Self::History(e) => Some(e),
-            Self::Poisoned => None,
+            Self::ReadAdmission(e) => Some(e),
+            Self::Poisoned | Self::ConcurrentDemand => None,
         }
     }
 }
@@ -36,14 +42,28 @@ impl std::error::Error for PortError {
 pub struct StorePorts {
     store: Arc<Store>,
     scope: ObjectId,
+    workspace: Option<WorkspaceId>,
     failure: Mutex<Option<Arc<PortError>>>,
+    attempting: AtomicBool,
 }
 impl Store {
     pub fn ports(self: &Arc<Self>, scope: ObjectId) -> Arc<StorePorts> {
+        self.ports_in(scope, None)
+    }
+    pub fn ports_for(self: &Arc<Self>, scope: ObjectId, workspace: WorkspaceId) -> Arc<StorePorts> {
+        self.ports_in(scope, Some(workspace))
+    }
+    fn ports_in(
+        self: &Arc<Self>,
+        scope: ObjectId,
+        workspace: Option<WorkspaceId>,
+    ) -> Arc<StorePorts> {
         Arc::new(StorePorts {
             store: self.clone(),
             scope,
+            workspace,
             failure: Mutex::new(None),
+            attempting: AtomicBool::new(false),
         })
     }
 }
@@ -62,45 +82,84 @@ impl StorePorts {
             .map(|first| first.clone())
             .map_err(|_| PortError::Poisoned)
     }
-    fn attempt<T>(&self, call: impl FnOnce() -> Result<T, PortError>) -> Result<T, Arc<PortError>> {
-        let mut first = self
-            .failure
-            .lock()
-            .map_err(|_| Arc::new(PortError::Poisoned))?;
-        if let Some(error) = first.as_ref() {
-            return Err(error.clone());
+    fn attempt<T>(
+        &self,
+        call: impl FnOnce() -> Result<T, Arc<PortError>>,
+    ) -> Result<T, Arc<PortError>> {
+        self.attempting
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .map_err(|_| Arc::new(PortError::ConcurrentDemand))?;
+        let _attempt = Attempt(&self.attempting);
+        if let Some(error) = self.failure().map_err(Arc::new)? {
+            return Err(error);
         }
-        call().map_err(|error| {
-            let error = Arc::new(error);
+        call().inspect_err(|error| {
+            // Retain this original failure even if an earlier observer poisoned
+            // the mutex. Subsequent access still reports the poison explicitly.
+            let mut first = self
+                .failure
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
             *first = Some(error.clone());
-            error
+        })
+    }
+    /// Native callers await admission before executing a provider demand.
+    pub fn read_ticket(&self) -> Result<ReadTicket, Arc<PortError>> {
+        if let Some(error) = self.failure().map_err(Arc::new)? {
+            return Err(error);
+        }
+        self.store
+            .read_ticket(self.workspace)
+            .map_err(|e| Arc::new(PortError::ReadAdmission(e)))
+    }
+    fn check_reader(&self, reader: &ReadLease) -> Result<(), Arc<PortError>> {
+        if Arc::ptr_eq(&reader.pool, &self.store.readers) && reader.workspace() == self.workspace {
+            Ok(())
+        } else {
+            Err(Arc::new(PortError::Storage(StorageError::Integrity(
+                "foreign Store/Workspace reader",
+            ))))
+        }
+    }
+    pub fn objects_on(
+        &self,
+        reader: &mut ReadLease,
+        ids: &[ObjectId],
+    ) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
+        self.attempt(|| {
+            self.check_reader(reader)?;
+            reader.objects(ids)
+        })
+    }
+    pub fn file_lengths_on(
+        &self,
+        reader: &mut ReadLease,
+        ids: &[ObjectId],
+    ) -> Result<Vec<u64>, Arc<PortError>> {
+        self.attempt(|| {
+            self.check_reader(reader)?;
+            reader.file_lengths(ids)
         })
     }
     /// Bounded grouped metadata demand, with original cardinality/order.
     pub fn file_lengths(&self, ids: &[ObjectId]) -> Result<Vec<u64>, Arc<PortError>> {
         self.attempt(|| {
-            self.store.counts.lengths.fetch_add(1, Ordering::Relaxed);
-            self.store
-                .counts
-                .length_ids
-                .fetch_add(ids.len() as u64, Ordering::Relaxed);
-            self.store
-                .read(|handle| handle.reader()?.file_lengths(ids))
-                .map_err(PortError::Storage)
+            let mut reader = self
+                .read_ticket()?
+                .wait()
+                .map_err(|e| Arc::new(PortError::ReadAdmission(e)))?;
+            reader.file_lengths(ids)
         })
     }
 }
 impl AuthenticatedObjects for StorePorts {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         self.attempt(|| {
-            self.store.counts.objects.fetch_add(1, Ordering::Relaxed);
-            self.store
-                .counts
-                .object_ids
-                .fetch_add(ids.len() as u64, Ordering::Relaxed);
-            self.store
-                .read(|handle| handle.reader()?.read_objects(ids))
-                .map_err(PortError::Storage)
+            let mut reader = self
+                .read_ticket()?
+                .wait()
+                .map_err(|e| Arc::new(PortError::ReadAdmission(e)))?;
+            reader.objects(ids)
         })
         .map_err(|error| match error.as_ref() {
             PortError::Storage(StorageError::ObjectMissing(_)) => ContentError::MissingObject,
@@ -137,15 +196,24 @@ impl InodeSerials for StorePorts {
                     scope: self.scope,
                     count,
                 })
-                .map_err(PortError::History)?;
+                .map_err(|error| Arc::new(PortError::History(error)))?;
             if range.scope != self.scope || range.count != count {
-                return Err(PortError::History(HistoryError::Integrity(
+                return Err(Arc::new(PortError::History(HistoryError::Integrity(
                     "inode reservation identity",
-                )));
+                ))));
             }
-            range.end().map_err(PortError::History)?;
+            range
+                .end()
+                .map_err(|error| Arc::new(PortError::History(error)))?;
             Ok((range.start, range.count))
         })
         .map_err(|e| WorkspaceError::Service(Box::new(e)))
+    }
+}
+
+struct Attempt<'a>(&'a AtomicBool);
+impl Drop for Attempt<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
     }
 }

@@ -1,12 +1,16 @@
 //! Opened provider ownership and fixed read capacity.
-use layerfs_history::HistoryCatalog;
+use super::{
+    read_service::ReadPool, PortError, ReadAdmissionError, ReadLimits, ReadServiceWork, ReadTicket,
+    StoreReader,
+};
+use layerfs_history::{HistoryCatalog, WorkspaceId};
 use layerfs_storage::{
     port::PackPersistence, ReservationBlocks, Storage, StorageError, StoragePolicy, StorageResult,
 };
 use layerfs_workspace::{CanonicalCache, ClientWork};
 use std::sync::{
-    atomic::{AtomicU64, AtomicUsize, Ordering},
-    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 
 /// Exact adapter demand counts. They do not substitute for provider work receipts.
@@ -32,36 +36,38 @@ pub(super) struct Counts {
 pub struct Store {
     pub(super) writer: Arc<dyn PackPersistence>,
     pub(super) history: Arc<dyn HistoryCatalog>,
-    readers: Vec<Mutex<Storage>>,
-    next: AtomicUsize,
+    pub(super) readers: Arc<ReadPool>,
     policy: StoragePolicy,
     reservations: ReservationBlocks,
     pub(super) cache: Arc<CanonicalCache>,
-    pub(super) counts: Counts,
+    pub(super) counts: Arc<Counts>,
 }
 impl Store {
     /// Takes already opened providers. Read capacity is fixed for this daemon.
     pub fn new(
         writer: Arc<dyn PackPersistence>,
         history: Arc<dyn HistoryCatalog>,
-        readers: Vec<Storage>,
+        readers: Vec<StoreReader>,
         cache_bytes: usize,
         reservations: ReservationBlocks,
+        read_limits: ReadLimits,
     ) -> StorageResult<Self> {
         let reservations = reservations.validate()?;
         let policy = writer.policy()?.validated()?;
-        if readers.is_empty() || readers.iter().any(|read| read.policy() != policy) {
+        if readers.is_empty() || readers.iter().any(|read| read.storage.policy() != policy) {
             return Err(StorageError::Integrity("Store read set or policy"));
         }
+        let counts = Arc::new(Counts::default());
+        let readers = ReadPool::new(readers, read_limits, counts.clone())
+            .map_err(|_| StorageError::Integrity("Store read admission limits"))?;
         Ok(Self {
             writer,
             history,
-            readers: readers.into_iter().map(Mutex::new).collect(),
-            next: AtomicUsize::new(0),
+            readers,
             policy,
             reservations,
             cache: Arc::new(CanonicalCache::new(cache_bytes)),
-            counts: Counts::default(),
+            counts,
         })
     }
     /// Independent mutable producer state over the same opened write provider.
@@ -76,7 +82,7 @@ impl Store {
         self.history.as_ref()
     }
     pub fn read_handles(&self) -> usize {
-        self.readers.len()
+        self.readers.work().readers
     }
     pub fn cache_work(&self) -> layerfs_content::ContentResult<ClientWork> {
         self.cache.diagnostics()
@@ -90,14 +96,25 @@ impl Store {
             serial_reservations: self.counts.serials.load(Ordering::Relaxed),
         }
     }
-    pub(super) fn read<T>(
+    /// Reserve fair before-effect admission. None is the explicitly unscoped
+    /// control/constructor lane; native callers use their actual Workspace id.
+    pub fn read_ticket(
         &self,
-        read: impl FnOnce(&Storage) -> StorageResult<T>,
-    ) -> StorageResult<T> {
-        let index = self.next.fetch_add(1, Ordering::Relaxed) % self.readers.len();
-        let handle = self.readers[index]
-            .lock()
-            .map_err(|_| StorageError::Integrity("Store read owner poisoned"))?;
-        read(&handle)
+        workspace: Option<WorkspaceId>,
+    ) -> Result<ReadTicket, ReadAdmissionError> {
+        self.readers.request(workspace)
+    }
+    pub fn read_work(&self) -> ReadServiceWork {
+        self.readers.work()
+    }
+    pub fn workspace_reads(&self, workspace: WorkspaceId) -> Result<usize, ReadAdmissionError> {
+        self.readers.outstanding(workspace)
+    }
+    pub fn reader_failures(&self) -> Vec<(usize, Arc<PortError>)> {
+        self.readers.failures()
+    }
+    /// Whole-Store shutdown only. Workspace unmount must not stop other readers.
+    pub fn stop_reads(&self) {
+        self.readers.stop();
     }
 }

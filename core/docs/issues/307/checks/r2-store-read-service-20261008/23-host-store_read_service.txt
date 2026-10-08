@@ -1,0 +1,42 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+warning: field `count` is never read
+  --> crates/layerfs-daemon/tests/support/installed_store.rs:23:9
+   |
+19 | pub struct Fixture {
+   |            ------- field in this struct
+...
+23 |     pub count: usize,
+   |         ^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: method `cleanup` is never used
+  --> crates/layerfs-daemon/tests/support/installed_store.rs:95:12
+   |
+25 | impl Fixture {
+   | ------------ method in this implementation
+...
+95 |     pub fn cleanup(self) {
+   |            ^^^^^^^
+
+warning: `layerfs-daemon` (test "store_read_service") generated 2 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/store_read_service.rs (core/target/debug/deps/store_read_service-59817982d8532ecc)
+
+running 9 tests
+test cancellation_capacity_and_stop_dispose_only_unattempted_admission ... ok
+test last_quarantine_wakes_waiters_with_terminal_no_reader_disposition ... ok
+test workspace_rotation_and_fifo_prevent_a_hot_lane_owning_the_next_reader ... ok
+test original_reader_release_races_future_registration_without_polling ... ok
+test waiting_operation_has_no_failure_lock_and_its_failures_do_not_poison_other_requests ... ok
+test quarantined_session_keeps_original_failure_and_only_healthy_reader_is_reused ... ok
+test idle_selection_and_replaced_wakeup_do_not_wait_on_a_busy_reader ... ok
+test a_reader_grant_cannot_be_charged_to_a_different_workspace ... ok
+test bind_reads_snapshot_while_the_original_writer_session_is_occupied ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

@@ -533,7 +533,10 @@ fn observed_store(
         .map(|_| {
             let read = Handles::open_read_only(f.config.clone(), support::BINDING, support::CURSOR)
                 .unwrap();
-            layerfs_storage::Storage::new(read.storage).unwrap()
+            layerfs_daemon::store::StoreReader::new(
+                layerfs_storage::Storage::new(read.storage).unwrap(),
+                Arc::new(read.history),
+            )
         })
         .collect();
     let history = history_boundary::ObservedHistory {
@@ -548,6 +551,7 @@ fn observed_store(
         readers,
         2 * 1024 * 1024,
         ReservationBlocks::default(),
+        layerfs_daemon::store::ReadLimits::default(),
     )
     .unwrap();
     (Arc::new(store), handles)

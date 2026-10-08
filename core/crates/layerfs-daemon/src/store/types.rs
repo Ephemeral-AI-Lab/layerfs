@@ -20,6 +20,7 @@ pub enum BindPhase {
 pub enum BindError {
     MissingBranch(BranchId),
     History(HistoryError),
+    Read(Arc<PortError>),
     Content {
         error: ContentError,
         provider: Option<Arc<PortError>>,

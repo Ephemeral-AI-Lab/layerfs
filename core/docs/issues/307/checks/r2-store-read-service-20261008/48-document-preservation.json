@@ -1,0 +1,483 @@
+{
+  "local_links": [
+    {
+      "file": "core/AGENTS.md",
+      "target": "../AGENTS.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "Cargo.toml",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/S6-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/61-direct-store-adapter.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F12-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/S7-COMPLETION-OWNERSHIP-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/65-store-commit-composition.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F14-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F5-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/68-native-workspace-control.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../cluster_one_handbook.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../cas_cdc_deltaencoding_handbook.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/303/README.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/303/06-cluster-one-integration.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/64-overlay-terminology.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/BRANCH-OVERWRITE-DECISION-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/44-acquisition-backing.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/43-backed-initial-acquisition.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "crates/layerfs-workspace/src/construction/captured/owner.rs",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "crates/layerfs-storage/src/save/operation.rs",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/65-store-commit-composition.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../docs/general/optimization-guide.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../AGENTS.md#production-loc-comparison-for-every-commit",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../AGENTS.md#active-persistence-profile--owner-direction-2026-10-07",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/architecture/60-shared-store-foundation.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/PRE-S8-F1-F4-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/303/06-cluster-one-integration.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../AGENTS.md#4-code-build-and-docs",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../.cargo/config.toml",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "../docs/general/agent-measurement-policy.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "benchmark/fs-bench-pro/AGENTS.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/FUSER-LIFECYCLE-DECISION-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/FUSER-OFFICIAL-CANDIDATE-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/AGENTS.md",
+      "target": "docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/61-direct-store-adapter.md",
+      "target": "65-store-commit-composition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/61-direct-store-adapter.md",
+      "target": "../issues/307/PRE-S8-F6-F7-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/61-direct-store-adapter.md",
+      "target": "../issues/307/PRE-S8-F12-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/61-direct-store-adapter.md",
+      "target": "../../crates/layerfs-daemon/src/store/read_service.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/61-direct-store-adapter.md",
+      "target": "../../crates/layerfs-daemon/src/store/read_handle.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/61-direct-store-adapter.md",
+      "target": "../issues/307/checks/r2-store-read-service-20261008/45-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FUSER-LIFECYCLE-DECISION-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md#4-combined-implementation-rollout",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/01-deepest-file-plan.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/06-independent-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/07-verification-scope.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/65-application-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/81-foundation-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R1-COMPLETE-FUSE-HANDOFF-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-NATIVE-PREREQUISITE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-completion-future-20261008/20-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/36-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-mutation-plan-20261008/18-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-store-read-service-20261008/45-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-FUSER-LIFECYCLE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r4-captured-namespace-port-20261008/19-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "PRE-S8-COMPLETION-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/10-commit-confirmation.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/19-component-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/21-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/65-application-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/64-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/67-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/81-foundation-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/80-source-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/84-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/59-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "../../architecture/72-owned-sandbox-lifecycle.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/106-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R1-COMPLETE-FUSE-HANDOFF-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-completion-20261008/26-build-runtime-pins.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-completion-20261008/28-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-completion-future-20261008/20-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FUSER-LIFECYCLE-DECISION-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-FUSER-LIFECYCLE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r4-captured-namespace-port-20261008/19-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/36-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/37-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-mutation-plan-20261008/18-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-mutation-plan-20261008/19-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-store-read-service-20261008/45-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-store-read-service-20261008/46-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/checks/r2-store-read-service-20261008/45-results.md",
+      "target": "44-next-r2-work.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/checks/r2-store-read-service-20261008/45-results.md",
+      "target": "46-exact-production-loc.json",
+      "exists": true
+    }
+  ],
+  "protected_notes_unchanged": true,
+  "full_whitespace_exit": 2,
+  "full_whitespace_output": "core/docs/issues/307/checks/r2-store-read-service-20261008/08-host-installed_store.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/08-host-native_control.txt:19: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/08-host-native_install.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/08-host-store_commit.txt:20: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/08-host-store_read_service.txt:40: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/12-host-installed_store.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/12-host-native_control.txt:19: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/12-host-native_install.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/12-host-store_commit.txt:20: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/12-host-store_read_service.txt:42: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/23-host-installed_store.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/23-host-native_control.txt:19: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/23-host-native_install.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/23-host-store_commit.txt:20: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/23-host-store_read_service.txt:42: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/36-store-read-service.txt:21: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-final-installed_store.txt:12: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-final-native_application.txt:7: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-final-native_control.txt:24: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-final-native_install.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-final-store_commit.txt:28: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-final-store_read_service.txt:14: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-installed_store.txt:12: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-native_application.txt:7: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-native_control.txt:24: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-native_install.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-store_commit.txt:28: new blank line at EOF.\ncore/docs/issues/307/checks/r2-store-read-service-20261008/linux-store_read_service.txt:14: new blank line at EOF.\n",
+  "scope": "Full whitespace check preserves original Rust transcript final blank lines; scoped source/docs/JSON check passed."
+}

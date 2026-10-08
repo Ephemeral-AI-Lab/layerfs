@@ -1,0 +1,20 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/store_commit.rs (core/target/debug/deps/store_commit-8242be4c721374ee)
+
+running 8 tests
+test a_held_producer_does_not_hold_workspace_metadata_or_read_capacity ... ok
+test unknown_history_acknowledgement_retains_original_intent_and_capture ... ok
+test known_publication_survives_an_unattempted_local_install ... ok
+test committed_up_to_date_overwrite_and_new_bind_preserve_exact_roots ... ok
+test nested_storage_unknown_keeps_original_capture_and_blocks_another_commit ... ok
+test later_mutation_survives_capture_publication_and_known_install ... ok
+test history_busy_after_save_has_no_stage_and_counts_only_acknowledged_save_writes ... ok
+test busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+

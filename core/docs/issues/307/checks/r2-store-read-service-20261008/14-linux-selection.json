@@ -1,0 +1,22 @@
+{
+  "scope": "Store read service and affected install/control/application regression",
+  "tests": [
+    "store_read_service",
+    "installed_store",
+    "store_commit",
+    "native_control",
+    "native_install",
+    "native_application"
+  ],
+  "limits_seconds": {
+    "native_application": 9,
+    "other_tests": 100
+  },
+  "cache": "natural functional verification; no cold/performance claim",
+  "image_reused": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "store_placement": "component fixture /tmp inside container; native_application tests daemon startup/control only, not full mounted shared-volume qualification",
+  "profile": "explicit Disposable/WAL/OFF",
+  "overlay": "MEMORY/OFF/EXCLUSIVE",
+  "construction_workers": 1,
+  "durable": "NOT_RUN \u2014 disabled by owner"
+}

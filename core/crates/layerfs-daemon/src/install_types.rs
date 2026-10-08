@@ -16,6 +16,7 @@ pub struct StoreSettings {
     pub read_handles: usize,
     pub cache_bytes: usize,
     pub reservations: ReservationBlocks,
+    pub read_limits: crate::store::ReadLimits,
 }
 impl Default for StoreSettings {
     fn default() -> Self {
@@ -23,6 +24,7 @@ impl Default for StoreSettings {
             read_handles: 4,
             cache_bytes: 8 * 1024 * 1024,
             reservations: ReservationBlocks::default(),
+            read_limits: crate::store::ReadLimits::default(),
         }
     }
 }

@@ -1,0 +1,130 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 300,
+    "timeout": false,
+    "wall_ns": 4260063667
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "store_read_service"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 2015862917
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "installed_store"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 1306073458
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "store_commit"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 996681333
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "native_control"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 978108000
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "native_install"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 866483792
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 101,
+    "limit_seconds": 300,
+    "timeout": false,
+    "wall_ns": 2108191500
+  }
+]

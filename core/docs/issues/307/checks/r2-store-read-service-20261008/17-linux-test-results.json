@@ -1,0 +1,74 @@
+[
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/store_read_service-9f2f1c6f18275a98",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "7f91abd0808ea422b05f89e99dfa1152b82ccc0174015e38b0bae83f81958500",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 347609167,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/installed_store-08f9c29a011e4e8b",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "547284287689e89dbf7054c1f0642cd03e8db6177d8bf144e3940cbfa891c323",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 412315833,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "523233fe9570d2fbab0c8e6f9012b91d119ab221567e8945f601dde0cd25a853",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 530166959,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_control-83467c0a8be9b56b",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "a0047657ed8ac46dff04c6741180b7f8ef00f46fead58a6c21c27da8554022ea",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 511263917,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_install-035242047b6cc903",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "831d5dc78796e43ac53813d678c1b104855b432a9208c7255333e5d55207a559",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 263118875,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "c5f4354255f3b402c5635ec1c18d526ced0126062339a443958e516c10d2139a",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 203050083,
+    "wall_stop_seconds": 9
+  }
+]
