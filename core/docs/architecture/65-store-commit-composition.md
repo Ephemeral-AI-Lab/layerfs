@@ -64,3 +64,34 @@ reply order does not. The same adapter installs each known candidate without
 refresh/rebase. New Workspaces bind the last root; existing Workspaces keep their
 own installed view. Current F8/F13 proofs and retained old-policy receipts are
 linked from the [overwrite decision](../issues/307/BRANCH-OVERWRITE-DECISION-20261007.md).
+
+## R4 captured namespace page boundary, 2026-10-08
+
+Source addition after5cf3e1220: Workspace's
+[OverlayCapturedNamespace](../../crates/layerfs-workspace/src/ports/captured_namespace.rs)
+extends the existing captured-inode/run point boundary with ordered inode pages
+and parent/full-name pages. Direct Overlay and the daemon
+[OwnerClient adapter](../../crates/layerfs-daemon/src/overlay/captured_namespace_port.rs)
+use the existing ReaderInodes/ReaderDirectoryEntries jobs and exact independently
+retained CapturedReader. The constructor thread may use this synchronous port;
+a native receiver/service worker must use the separate event-driven boundary.
+
+These are local captured changes, including whiteouts, not the full base union.
+Pages contain at most64 rows and resume after the last full key. Later active
+inserts do not enlarge the captured EOF. Inode points and pages retain the same
+reader root/floor through install and logical Close. The caller releases the
+reader only after all consumers and original outcome custody have ended.
+
+On service admission failure the original command is retained as Unattempted.
+An attempted failure retains the original Completion, receipt and credit. The
+adapter never replays, refreshes or releases reader ownership. Successful daemon
+pages are cloned into a bounded constructor-owned window while the original
+credited completion is briefly alive; this is not zero-copy or a whole-process
+memory bound. Schema, SQL and its existing access algorithms are unchanged.
+
+[Component selection and receipts](../issues/307/checks/r4-captured-namespace-port-20261008/01-selection.json)
+cover fixed capture membership, full-name ordering/whiteouts, points, retained
+root/floor, release and original error custody. This boundary is implemented;
+the sealed StreamedRowSource adapter, complete files/names/metadata construction,
+Content backed validation/topology and mounted Commit remain separate unfinished
+R4/R5 work. Existing Store-half composition is unchanged.

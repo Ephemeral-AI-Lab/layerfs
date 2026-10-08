@@ -1,0 +1,14 @@
+{
+  "local_markdown_targets": 52,
+  "missing": [],
+  "full_whitespace": {
+    "exit_code": 2,
+    "output": "core/docs/issues/307/checks/r4-captured-namespace-port-20261008/05-host-captured_namespace.txt:7: new blank line at EOF.\ncore/docs/issues/307/checks/r4-captured-namespace-port-20261008/06-host-captured_runs.txt:8: new blank line at EOF.\ncore/docs/issues/307/checks/r4-captured-namespace-port-20261008/linux-captured_namespace.txt:7: new blank line at EOF.\ncore/docs/issues/307/checks/r4-captured-namespace-port-20261008/linux-captured_runs.txt:8: new blank line at EOF.\n"
+  },
+  "scoped_whitespace": {
+    "exit_code": 0,
+    "output": ""
+  },
+  "proof_source_hashes_match": true,
+  "protected_untracked_unchanged": true
+}

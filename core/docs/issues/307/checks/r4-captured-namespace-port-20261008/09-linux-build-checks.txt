@@ -1,0 +1,78 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 36.46s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-77c9832298339be7)
+  Executable unittests src/bin/layerfs-daemon.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-cb13d83b54484162)
+  Executable tests/captured_namespace.rs (core/target/cluster2-linux/debug/deps/captured_namespace-9c9a8a15019d0b1d)
+  Executable tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-eb66ab7f963249de)
+  Executable tests/complete_installed_roots.rs (core/target/cluster2-linux/debug/deps/complete_installed_roots-16464fe442a967ed)
+  Executable tests/completion_future.rs (core/target/cluster2-linux/debug/deps/completion_future-01a38d32a7e5336a)
+  Executable tests/completion_ownership.rs (core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c)
+  Executable tests/completion_storage.rs (core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b)
+  Executable tests/construction_cursor.rs (core/target/cluster2-linux/debug/deps/construction_cursor-07de2b18561b362d)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-429c3690851e8b2c)
+  Executable tests/e2_startup_receipts.rs (core/target/cluster2-linux/debug/deps/e2_startup_receipts-9c92e0224dade04c)
+  Executable tests/edit_backing.rs (core/target/cluster2-linux/debug/deps/edit_backing-24e3ad85e8e9d52b)
+  Executable tests/finite_service.rs (core/target/cluster2-linux/debug/deps/finite_service-7919da4c90c994e0)
+  Executable tests/host_handoff.rs (core/target/cluster2-linux/debug/deps/host_handoff-4cdc6cae8d18612d)
+  Executable tests/indexed_operation_record.rs (core/target/cluster2-linux/debug/deps/indexed_operation_record-f7132d37f46cf1cf)
+  Executable tests/installed_qualification.rs (core/target/cluster2-linux/debug/deps/installed_qualification-633d7c5f52039959)
+  Executable tests/installed_store.rs (core/target/cluster2-linux/debug/deps/installed_store-08f9c29a011e4e8b)
+  Executable tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-97b0619943df4135)
+  Executable tests/native_application.rs (core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029)
+  Executable tests/native_control.rs (core/target/cluster2-linux/debug/deps/native_control-83467c0a8be9b56b)
+  Executable tests/native_install.rs (core/target/cluster2-linux/debug/deps/native_install-035242047b6cc903)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77)
+  Executable tests/root_qualification.rs (core/target/cluster2-linux/debug/deps/root_qualification-f04f6db36b728ea2)
+  Executable tests/shared_processes.rs (core/target/cluster2-linux/debug/deps/shared_processes-19348c8a37ad0fa6)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-6022c7bd339d8d01)
+  Executable tests/store_commit.rs (core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735)
+  Executable unittests examples/e2_startup.rs (core/target/cluster2-linux/debug/examples/e2_startup-764e95f467052da9)
+  Executable unittests examples/engine_finite.rs (core/target/cluster2-linux/debug/examples/engine_finite-b4194296b8df16f9)
+  Executable unittests examples/resource_growth.rs (core/target/cluster2-linux/debug/examples/resource_growth-3ee8bc1eb229e503)
+  Executable unittests examples/resource_prepare.rs (core/target/cluster2-linux/debug/examples/resource_prepare-6727760423608d12)
+  Executable unittests examples/store_accounting.rs (core/target/cluster2-linux/debug/examples/store_accounting-8271dac67dde7a86)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-9a7d1072abd477fb)
+  Executable tests/base.rs (core/target/cluster2-linux/debug/deps/base-0965db8aaa406fd2)
+  Executable tests/captured_file_edits.rs (core/target/cluster2-linux/debug/deps/captured_file_edits-ae8eff98cad65fe4)
+  Executable tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-5a4c3abb8b7a4a75)
+  Executable tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-5611af2d323973aa)
+  Executable tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-9173cb74d8ce94f7)
+  Executable tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-3abdc3fb3f3a3241)
+  Executable tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-f0a2713533387e02)
+  Executable tests/operation_scope.rs (core/target/cluster2-linux/debug/deps/operation_scope-fe7193ffa2efc0c9)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-aec2b3c179845f78)
+
+{"command": ["core/target/cluster2-linux/debug/deps/captured_namespace-9c9a8a15019d0b1d", "--test-threads=1", "--nocapture"], "sha256": "f61c311a86a998b796f960cbcfa2a11a4dd60e9ec572845cda7496d66ae3941e", "exit_code": 0, "timeout": false, "wall_ns": 198891625, "wall_stop_seconds": 100}
+
+running 2 tests
+test direct_provider_pages_and_points_keep_the_exact_capture_after_install_and_close ... ok
+test owner_pages_preserve_original_failed_completion_and_unattempted_command ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/captured_runs-eb66ab7f963249de", "--test-threads=1", "--nocapture"], "sha256": "5ffac88f5d8af3b009ec0f79216f4f5dc19549f42d1a4243344dc1551ee188e6", "exit_code": 0, "timeout": false, "wall_ns": 164520209, "wall_stop_seconds": 100}
+
+running 3 tests
+test actual_owner_returns_bounded_window_with_original_root_after_install_and_close ... ok
+test captured_inode_point_retains_old_metadata_and_forward_seek_bounds ... ok
+test original_attempted_and_unattempted_run_errors_keep_custody_and_other_scope_progress ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.36s
+clippy_exit=0

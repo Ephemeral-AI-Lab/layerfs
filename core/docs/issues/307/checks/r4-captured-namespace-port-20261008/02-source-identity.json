@@ -1,0 +1,12 @@
+{
+  "core/crates/layerfs-workspace/src/ports/captured_namespace.rs": "5c534e50657cd092ab7a4ab4069da09dcba592c91e806ac00575a744f7493dcb",
+  "core/crates/layerfs-workspace/src/ports/mod.rs": "cd72c44f73f39e1fff3d6eabe6acd8085d3a8bb154b28812c3e8d9d71e5b669c",
+  "core/crates/layerfs-workspace/src/lib.rs": "553caff145b3e2f5b5fd1ba2215f1a2df2e4120db13073bbfd6cc042ed214e37",
+  "core/crates/layerfs-daemon/src/overlay/captured_namespace_port.rs": "b3e7281340c79d0afee1cc5a771e5ca2104bf3ec75d0c0e371337da0271865c2",
+  "core/crates/layerfs-daemon/src/overlay/mod.rs": "e8c7dc5c37296873a70db3088b51d0de89cd519598f553e6a3d78f9382cb90d3",
+  "core/crates/layerfs-daemon/tests/captured_namespace.rs": "4776a2e41923a06623dccf1cc2068c231ec47de783f5be5dab17c0c6b05d851f",
+  "core/crates/layerfs-daemon/tests/captured_runs.rs": "ed83dcae8122584e6423146467b71babf245ca267286b28ed86126251f6d8dc3",
+  "core/Cargo.toml": "1e7491027ba16b0f7e6fc0d12e7e2b292369d652dbaac6d1be1b7e23a366a29c",
+  "core/Cargo.lock": "05d0c98c3fef6bdd46d33ed161ac913fad5a4406a50445fdb835dfe3a3eee159",
+  ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+}

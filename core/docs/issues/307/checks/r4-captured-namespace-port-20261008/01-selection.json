@@ -1,0 +1,34 @@
+{
+  "source_parent": "5cf3e1220b563abce21e437810139da1f9a6acb0",
+  "scope": "R4 captured namespace public page/point port, not a full constructor or topology qualification",
+  "plan": "Workspace provider-neutral OverlayCapturedNamespace extends captured-run points with64-row inode/name pages. Direct Overlay and existing OwnerClient jobs reuse the same readers/schema/SQL. Original failed Completion or unattempted Command is retained. Separate build/proof/checkpoint; no native or Store execution.",
+  "files": [
+    "core/crates/layerfs-workspace/src/ports/captured_namespace.rs",
+    "core/crates/layerfs-workspace/src/ports/mod.rs",
+    "core/crates/layerfs-workspace/src/lib.rs",
+    "core/crates/layerfs-daemon/src/overlay/captured_namespace_port.rs",
+    "core/crates/layerfs-daemon/src/overlay/mod.rs",
+    "core/crates/layerfs-daemon/tests/captured_namespace.rs",
+    "core/crates/layerfs-daemon/tests/captured_runs.rs",
+    "core/Cargo.toml",
+    "core/Cargo.lock",
+    ".cargo/config.toml"
+  ],
+  "public_tests": [
+    "captured_namespace",
+    "captured_runs"
+  ],
+  "oracles": [
+    "130 captured inode/name rows in3 pages including14 whiteouts,255-byte names with253 shared bytes; fixed EOF after130 later active rows",
+    "points agree with pages; original root after install/Close",
+    "released reader is stale; failed cursor read retains original Completion and credit; stopped service returns exact unattempted Command"
+  ],
+  "bounds": {
+    "test_wall_seconds": 100,
+    "setup_job_wait_seconds": 3,
+    "rows_per_page": 64
+  },
+  "cache": "natural, functional only; no performance or residency claim",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "remaining": "Sealed StreamedRowSource producer, captured files/metadata integration, Content backed validation/topology and R5 all remain unfinished"
+}

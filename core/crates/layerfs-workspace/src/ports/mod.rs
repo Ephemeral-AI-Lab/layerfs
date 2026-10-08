@@ -1,6 +1,8 @@
 //! Service boundaries; declarations and reexports only.
+mod captured_namespace;
 mod captured_runs;
 mod files;
+pub use captured_namespace::OverlayCapturedNamespace;
 pub use captured_runs::OverlayCapturedRuns;
 mod lengths;
 mod operation_record;

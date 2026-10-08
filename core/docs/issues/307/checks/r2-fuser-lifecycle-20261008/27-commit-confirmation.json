@@ -1,0 +1,29 @@
+{
+  "commit": "5cf3e1220b563abce21e437810139da1f9a6acb0",
+  "first_parent": "e1cc4ef2e4e6479f6b19e2484bf1e8198bbb926b",
+  "committed_tree": "83f2d7c607e337ed1b4328979a65e0b7e23e7f16",
+  "matches_final_staged_tree": true,
+  "production_loc": {
+    "before": 170710,
+    "after": 170710,
+    "delta": 0
+  },
+  "subtotals": {
+    "active": 62419,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443,
+    "reference": 65417
+  },
+  "dependency_modified_rust_files": {
+    "core/vendor/fuser-0.18.0/src/lib.rs": 744,
+    "core/vendor/fuser-0.18.0/src/session.rs": 465,
+    "core/vendor/fuser-0.18.0/src/session/lifecycle.rs": 296
+  },
+  "dependency_delta": 307,
+  "committed_counts_recomputed": true,
+  "owned_runtime_resources_remaining": 0,
+  "protected_containers_still_running": true,
+  "protected_untracked_files_unchanged": true,
+  "scope": "authorized fuser dependency lifecycle only; full R2-R5 incomplete",
+  "goal_status": "No app Goal exists; none created or marked complete"
+}

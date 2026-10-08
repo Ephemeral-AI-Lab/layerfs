@@ -1,0 +1,26 @@
+[
+  {
+    "command": [
+      "core/target/debug/deps/captured_namespace-0cf6d38a816baeae",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "binary_sha256": "32786efd74d3856fec31c83cc140b174cce792d40c7dd522703644b5d39a7462",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1330641958,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/debug/deps/captured_runs-ba9b769117a2d136",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "binary_sha256": "3138883aeba8e0c7b8ecf1788448ebce267032322fa879110caeeac2dc0ce69e",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 803242291,
+    "wall_stop_seconds": 100
+  }
+]

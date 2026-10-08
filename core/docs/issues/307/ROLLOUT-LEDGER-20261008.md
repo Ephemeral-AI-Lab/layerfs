@@ -20,7 +20,7 @@ implementation. This ledger records actual state, not promised acceptance.
 | R1 real SDK and ordinary Sandbox lifecycle/execution/access | COMPLETE — owner-selected R1 scope | [Deepest-file plan](checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md); real Project/Workspace facade and [daemon application checkpoint](checks/r1-daemon-composition-20261008/65-application-results.md) verified; [ordinary runtime foundation](checks/r1-sandbox-runtime-20261008/81-foundation-results.md) now verified; [owned lifecycle/SDK startup/access](checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt) now verified; [final no-admin verification and R2 handoff](R1-COMPLETE-FUSE-HANDOFF-20261008.md) closes only the rollout R1 requirements. Optional administrative cancellation/provenance is owner-deferred; native Ready belongs to R2. Old excluded Sandbox cannot activate unchanged |
 | R2 real native Ready/read/permissions/indexed custody/normal drain | IN_PROGRESS — completion events and dependency lifecycle verified; native product floor unfinished | [Initial source inspection and plan](R2-NATIVE-PREREQUISITE-20261008.md); [Pending Future component](checks/r2-completion-future-20261008/20-results.md); [fuser lifecycle checkpoint](R2-FUSER-LIFECYCLE-20261008.md). Bound is not Ready. Archived native draft remains unqualified and unapplied |
 | R3 ordinary mutation/kernel coherence | NOT_STARTED | Component mutation source exists; native semantics/races/mappings/removed references unproved |
-| R4 captured namespace and incremental topology | NOT_STARTED | Existing captured files/operation records/Content route reused; owning namespace producer, bounded validation and checked ancestry remain |
+| R4 captured namespace and incremental topology | IN_PROGRESS — captured namespace page port verified | [Component results](checks/r4-captured-namespace-port-20261008/19-results.md); exact reader pages/points and original error custody. Complete namespace producer, bounded validation and checked ancestry remain unfinished |
 | R5 actual mounted live Commit/known install/survival | NOT_STARTED | Existing Store Commit is component source/proof only; complete normalizer and custody composition remain |
 | R6 several Workspaces/processes, sustained cleanup, forced FS drain | NOT_STARTED | Component finite-arrival/cleanup proofs retain their exact scope; native integrated route remains |
 | R7 covered excluded core predecessor/integration/Server retirement | NOT_STARTED | Root reference retained; no new source retirement in R0 |
@@ -168,3 +168,11 @@ core105293/active62419/reference65417/predecessors37431/integration5443 unchange
 Affected dependency Rust files are separately1198 ->1505 (delta +307); no
 first-party reduction or retirement is credited. Exact first-parent/staged and
 post-commit confirmations are retained with the checkpoint receipts.
+
+The [R4 captured namespace page checkpoint](checks/r4-captured-namespace-port-20261008/19-results.md)
+exposes provider-neutral retained-reader pages and the actual Owner adapter,
+reusing existing typed jobs/SQL. Five selected public tests pass on each platform,
+with scoped locked builds/Clippy, formatting,761-file guard and48 tooling tests.
+Production LOC170710 ->170795 (delta +85); core105293 ->105378 and
+active62419 ->62504; other subtotals unchanged. R4's complete producer and
+bounded/incremental Content validation remain unfinished.

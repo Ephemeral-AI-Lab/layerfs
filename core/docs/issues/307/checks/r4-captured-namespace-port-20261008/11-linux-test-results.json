@@ -1,0 +1,26 @@
+[
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/captured_namespace-9c9a8a15019d0b1d",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "f61c311a86a998b796f960cbcfa2a11a4dd60e9ec572845cda7496d66ae3941e",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 198891625,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/captured_runs-eb66ab7f963249de",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "5ffac88f5d8af3b009ec0f79216f4f5dc19549f42d1a4243344dc1551ee188e6",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 164520209,
+    "wall_stop_seconds": 100
+  }
+]
