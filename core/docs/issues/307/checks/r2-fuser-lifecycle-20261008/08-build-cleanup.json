@@ -1,0 +1,19 @@
+{
+  "container_id": "6cc9caac0f58d0b70bac0c71e1f4e2ce3bb70d864f29829dd4111ca685f967aa",
+  "state": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-08T00:31:24.795109543Z",
+    "FinishedAt": "2026-10-08T00:32:00.944435546Z"
+  },
+  "exit_code": 0,
+  "stdout": "6cc9caac0f58d0b70bac0c71e1f4e2ce3bb70d864f29829dd4111ca685f967aa\n",
+  "stderr": ""
+}

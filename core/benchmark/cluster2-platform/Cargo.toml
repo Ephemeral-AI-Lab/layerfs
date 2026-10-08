@@ -11,6 +11,7 @@ publish = false
 fuser = { version = "=0.18.0", default-features = false }
 rusqlite = { version = "=0.40.2", features = ["bundled", "blob"] }
 layerfs-content = { path = "../../crates/layerfs-content" }
+nix = { version = "=0.31.3", features = ["fs", "mount", "user"] }
 
 [[bin]]
 name = "platform-proof"
@@ -27,3 +28,7 @@ fuser = { version = "=0.18.0", path = "../../vendor/fuser-0.18.0" }
 [[bin]]
 name = "request-time-proof"
 path = "request-time.rs"
+
+[[bin]]
+name = "session-lifecycle-proof"
+path = "session-lifecycle.rs"

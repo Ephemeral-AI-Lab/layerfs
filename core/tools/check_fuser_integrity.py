@@ -3,8 +3,8 @@
 
 This is a focused dependency check, not an aggregate pre-push/CI wrapper.
 Registry packages are checked against their locked archive checksum and every
-archived file. The owner-authorized 0.18.0 timestamp patch has a separate pinned
-archive/file/patch identity; all other fuser overrides remain rejected.
+archived file. The owner-authorized timestamp and receive-loop lifecycle patches
+have separate pinned identities; all other fuser overrides remain rejected.
 """
 from __future__ import annotations
 
@@ -25,6 +25,9 @@ BASE_CHECKSUM = "b82b6597d216503555ead6b358f341ef748869bf5c6fbae6a0cb9dd231baecf
 PATCH_CHECKSUM = "854e35c1cdabc8fbe78d5293c947f66130e1c137e88438f2dfe64bf9c2cc804d"
 TIME_CHECKSUM = "a333dba1c186c022eb55b950ec8895fb767c63e8ca156150b605d31d6876287d"
 PROVENANCE_CHECKSUM = "0b31522ec62aff6bc87def615e19386598b63f1ce6d9acedf0fc2d0e26ad1643"
+LIFECYCLE_PROVENANCE_CHECKSUM = "5c118bfa89447b02628025e04058af6822466f03541a50be2c5fcdefad94182a"
+LIFECYCLE_PATCH_CHECKSUM = "926f4d134babce182421f7dc82c12617acee821b9e78cf499f0fb00187696af5"
+LIFECYCLE_FILES = {"CHANGELOG.md", "src/lib.rs", "src/session.rs", "src/session/lifecycle.rs"}
 PATCH_MANIFESTS = {
     "core/Cargo.toml": "vendor/fuser-0.18.0",
     "core/benchmark/cluster2-platform/Cargo.toml": "../../vendor/fuser-0.18.0",
@@ -119,7 +122,7 @@ def lock_errors(document, approved=APPROVED_REVISIONS, patched=False):
 
 
 def patched_package_errors(root: Path):
-    """Verify the entire checked-in archive copy and the one authorized diff."""
+    """Verify the complete archive copy and both separately authorized deltas."""
     record = root / PATCH_RECORD
     source = root / PATCH_PACKAGE
     try:
@@ -140,6 +143,21 @@ def patched_package_errors(root: Path):
         expected = metadata["published_files"] | metadata["modified_files"]
         if len(expected) != 85:
             return ["fuser published file inventory is incomplete"]
+        lifecycle_raw = (record / "lifecycle-provenance.json").read_bytes()
+        if hashlib.sha256(lifecycle_raw).hexdigest() != LIFECYCLE_PROVENANCE_CHECKSUM:
+            return ["fuser lifecycle provenance changed"]
+        lifecycle = json.loads(lifecycle_raw)
+        if (lifecycle["timestamp_provenance_sha256"] != PROVENANCE_CHECKSUM
+                or lifecycle["archive_sha256"] != BASE_CHECKSUM
+                or set(lifecycle["files"]) != LIFECYCLE_FILES):
+            return ["fuser lifecycle delta has an unauthorized base or file scope"]
+        if (lifecycle["patch_sha256"] != LIFECYCLE_PATCH_CHECKSUM
+                or hashlib.sha256((record / "session-lifecycle.patch").read_bytes()).hexdigest()
+                != LIFECYCLE_PATCH_CHECKSUM):
+            return ["fuser lifecycle diff changed"]
+        expected |= lifecycle["files"]
+        if len(expected) != 86:
+            return ["fuser lifecycle inventory is incomplete"]
         errors = []
         actual = set()
         for path in source.rglob("*"):

@@ -2,6 +2,15 @@
 
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 
+Owner-authorized lifecycle extension2026-10-08: `session-lifecycle-proof` exercises
+the additive public Session runner/monitor/outcome. Cases are ready, panic,
+io-error, destroy-panic, invalid, partial-spawn and native. Partial-spawn requires
+a dedicated container with pids.max2 (caller plus one receiver); native requires
+the owned /dev/fuse and mount powers below. Each complete proof has an8s wall
+stop, with2s internal observation bounds. Parser fixtures are not native evidence.
+The [exact selection/results](../../docs/issues/307/checks/r2-fuser-lifecycle-20261008/18-proof-summary.json)
+retain identities, outcomes and cleanup; this qualifies no LayerFS native route.
+
 Current dependency selection2026-10-06: the owner-authorized
 [fuser0.18.0 timestamp patch](../../patches/fuser-0.18.0/README.md) is applied via
 this independent harness root's `[patch.crates-io]`. The historical results below

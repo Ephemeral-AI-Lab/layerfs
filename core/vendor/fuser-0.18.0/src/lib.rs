@@ -79,6 +79,9 @@ use crate::session::MAX_WRITE_SIZE;
 pub use crate::session::Session;
 pub use crate::session::SessionACL;
 pub use crate::session::SessionUnmounter;
+pub use crate::session::lifecycle::{
+    ReceiverOutcome, SessionMonitor, SessionOutcome, SessionPhase, SessionRunner, SessionSnapshot,
+};
 
 mod access_flags;
 mod bsd_file_flags;

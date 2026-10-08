@@ -1,0 +1,24 @@
+{
+  "source_parent": "e1cc4ef2e4e6479f6b19e2484bf1e8198bbb926b",
+  "scope": "Owner-authorized dependency lifecycle only; no R2 native product acceptance",
+  "cases": [
+    "ready",
+    "panic",
+    "io-error",
+    "destroy-panic",
+    "partial-spawn",
+    "invalid",
+    "native"
+  ],
+  "proof_wall_stop_seconds": 8,
+  "inner_wait_seconds": 2,
+  "build_first": true,
+  "native_environment": "pinned ARM64 image; exact owned containers; native case dev/fuse, SYS_ADMIN, AppArmor unconfined, Privileged=false; no Store or host data service",
+  "partial_spawn_environment": "pids.max=2; main thread plus first receiver; second receiver spawn must fail before effect",
+  "unchanged_timestamp_regression": "existing request-time-proof once after rebuilding affected fuser, under8s",
+  "test_artifact": "external public Session parser/loop runner; synthetic cases are not native mount evidence",
+  "no_new_dependencies": "independent harness names already locked nix0.31.3 directly, adding only its root dependency edge; all resolved package versions unchanged",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "cache": "natural functional; no speed/storage/RSS qualification",
+  "source_review_limit": "No public scheduling control forces a delayed individual buffer allocation; partial startup/rendezvous and real failure cases cover the public boundaries without injected product hooks"
+}

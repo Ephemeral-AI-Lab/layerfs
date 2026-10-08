@@ -18,7 +18,7 @@ implementation. This ledger records actual state, not promised acceptance.
 | --- | --- | --- |
 | R0 contract/proof/guide/layout/dispatch reconciliation | COMPLETE — documentation scope only | [Deepest-file plan](checks/r0-owner-reconciliation-20261008/01-deepest-file-plan.md), [owner/proof disposition](checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md); [independent review](checks/r0-owner-reconciliation-20261008/06-independent-review-disposition.md) and [scoped document verification](checks/r0-owner-reconciliation-20261008/07-verification-scope.md); exact staged LOC/identity recorded in checkpoint receipts; no native product claim |
 | R1 real SDK and ordinary Sandbox lifecycle/execution/access | COMPLETE — owner-selected R1 scope | [Deepest-file plan](checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md); real Project/Workspace facade and [daemon application checkpoint](checks/r1-daemon-composition-20261008/65-application-results.md) verified; [ordinary runtime foundation](checks/r1-sandbox-runtime-20261008/81-foundation-results.md) now verified; [owned lifecycle/SDK startup/access](checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt) now verified; [final no-admin verification and R2 handoff](R1-COMPLETE-FUSE-HANDOFF-20261008.md) closes only the rollout R1 requirements. Optional administrative cancellation/provenance is owner-deferred; native Ready belongs to R2. Old excluded Sandbox cannot activate unchanged |
-| R2 real native Ready/read/permissions/indexed custody/normal drain | IN_PROGRESS — completion event prerequisite verified; native floor unfinished | [Initial source inspection and plan](R2-NATIVE-PREREQUISITE-20261008.md); [Pending Future component](checks/r2-completion-future-20261008/20-results.md). Bound is not Ready. Archived native draft remains unqualified and unapplied |
+| R2 real native Ready/read/permissions/indexed custody/normal drain | IN_PROGRESS — completion events and dependency lifecycle verified; native product floor unfinished | [Initial source inspection and plan](R2-NATIVE-PREREQUISITE-20261008.md); [Pending Future component](checks/r2-completion-future-20261008/20-results.md); [fuser lifecycle checkpoint](R2-FUSER-LIFECYCLE-20261008.md). Bound is not Ready. Archived native draft remains unqualified and unapplied |
 | R3 ordinary mutation/kernel coherence | NOT_STARTED | Component mutation source exists; native semantics/races/mappings/removed references unproved |
 | R4 captured namespace and incremental topology | NOT_STARTED | Existing captured files/operation records/Content route reused; owning namespace producer, bounded validation and checked ancestry remain |
 | R5 actual mounted live Commit/known install/survival | NOT_STARTED | Existing Store Commit is component source/proof only; complete normalizer and custody composition remain |
@@ -155,3 +155,16 @@ Production LOC:170673 ->170710 (delta +37); core105256 ->105293,
 active62382 ->62419, reference65417/predecessors37431/integration5443 unchanged.
 The [fuser lifecycle authorization](FUSER-LIFECYCLE-DECISION-20261008.md) resolves
 the inspected dependency policy prerequisite; its code/proof remains next work.
+
+The subsequent [fuser lifecycle checkpoint](R2-FUSER-LIFECYCLE-20261008.md)
+implements that authorized dependency API. Eight selected Linux cases pass,
+including real pids-limit partial spawn and native mount/Ready/detach/join with
+zero ordinary callbacks before serving. Its original timestamp provenance is
+unchanged, and lifecycle provenance is separately pinned. This is dependency
+scope only: full R2 native service/permissions/custody/drain remains in progress.
+
+Dependency checkpoint accounting: Production LOC170710 ->170710 (delta +0),
+core105293/active62419/reference65417/predecessors37431/integration5443 unchanged.
+Affected dependency Rust files are separately1198 ->1505 (delta +307); no
+first-party reduction or retirement is credited. Exact first-parent/staged and
+post-commit confirmations are retained with the checkpoint receipts.

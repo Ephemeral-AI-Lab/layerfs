@@ -1,0 +1,18 @@
+{
+  "package": "fuser",
+  "version": "0.18.0",
+  "authorization": "core/docs/issues/307/FUSER-LIFECYCLE-DECISION-20261008.md",
+  "archive_sha256": "b82b6597d216503555ead6b358f341ef748869bf5c6fbae6a0cb9dd231baecfd",
+  "timestamp_provenance_sha256": "0b31522ec62aff6bc87def615e19386598b63f1ce6d9acedf0fc2d0e26ad1643",
+  "patch_sha256": "926f4d134babce182421f7dc82c12617acee821b9e78cf499f0fb00187696af5",
+  "files": {
+    "CHANGELOG.md": "746f0d7f8af19b887f09d52c747dd6bd69e02f74e5dbc9287761631fe92e8209",
+    "src/lib.rs": "7586f0ba8e573b32ed75578089e9992d7ea116727ff5ee270bf91d17def36387",
+    "src/session.rs": "59d3cd7c75f494857fcb8aea774bbf7462a9a9fdc791b7aeb2ee4f14fd7722c7",
+    "src/session/lifecycle.rs": "e23757085fde3fc96c861459e3a505ec15521d195ed39735082a6d0d751c5000"
+  },
+  "added_files": [
+    "src/session/lifecycle.rs"
+  ],
+  "scope": "Additive receive-loop startup/monitor/retained-join API; ordinary Session::run preserved; original timestamp patch unchanged"
+}

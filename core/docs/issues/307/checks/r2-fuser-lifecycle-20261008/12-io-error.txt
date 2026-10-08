@@ -1,0 +1,1 @@
+SESSION_LIFECYCLE case=io-error PASS snapshot=SessionSnapshot { phase: Joined, revision: 11, configured: 2, created: 2, entered: 2, exited: 2, joined: 2 }

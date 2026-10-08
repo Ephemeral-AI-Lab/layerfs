@@ -1,0 +1,1 @@
+SESSION_LIFECYCLE case=partial-spawn PASS snapshot=SessionSnapshot { phase: Joined, revision: 7, configured: 2, created: 1, entered: 1, exited: 1, joined: 1 }

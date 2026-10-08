@@ -1,0 +1,5 @@
+
+thread '<unnamed>' panicked at session-lifecycle.rs:69:9:
+original destroy panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+SESSION_LIFECYCLE case=destroy-panic PASS snapshot=SessionSnapshot { phase: Joined, revision: 11, configured: 2, created: 2, entered: 2, exited: 2, joined: 2 }

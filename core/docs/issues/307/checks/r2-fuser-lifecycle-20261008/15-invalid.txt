@@ -1,0 +1,1 @@
+SESSION_LIFECYCLE case=invalid PASS snapshot=SessionSnapshot { phase: Joined, revision: 3, configured: 0, created: 0, entered: 0, exited: 0, joined: 0 }

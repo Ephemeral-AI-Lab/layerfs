@@ -1,0 +1,9 @@
+{
+  "base": "HEAD vendor with original timestamp correction",
+  "patch_sha256": "926f4d134babce182421f7dc82c12617acee821b9e78cf499f0fb00187696af5",
+  "exit_code": 0,
+  "stdout": "patching file CHANGELOG.md\npatching file 'src/lib.rs'\npatching file 'src/session.rs'\npatching file 'src/session/lifecycle.rs'\n",
+  "stderr": "",
+  "all_authorized_files_match": true,
+  "timestamp_unchanged": true
+}

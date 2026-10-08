@@ -9,6 +9,11 @@
 > within the stated responsibility and line ceilings; the reuse and ownership
 > columns are not adjustable without a specification change.
 
+Later owner authorization2026-10-08 permits the [scoped fuser lifecycle extension](FUSER-LIFECYCLE-DECISION-20261008.md).
+It supersedes this plan's timestamp-only dependency restriction for that exact
+entry/exit/startup/join API. The original archive/timestamp pins remain unchanged;
+the lifecycle delta has separate exact provenance. Product R2–R5 proofs remain.
+
 Review correction after `77cf51686`, 2026-10-08: follow the revised
 [specification](S8-SPECIFICATION-20261008.md) and
 [correction ledger](checks/s8-spec-review-fixes-20261008/02-correction-ledger.md).

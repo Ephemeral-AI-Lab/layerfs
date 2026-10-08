@@ -5,6 +5,8 @@
 //! filesystem is mounted, the session loop receives, dispatches and replies to kernel requests
 //! for filesystem operations under its mount point.
 
+pub(crate) mod lifecycle;
+
 use std::borrow::Cow;
 use std::fs::File;
 use std::io;
@@ -148,6 +150,16 @@ impl<FS: Filesystem> AsFd for Session<FS> {
 }
 
 impl<FS: Filesystem> Session<FS> {
+    /// Prepare an observable receiver lifecycle without starting its threads.
+    ///
+    /// The runner retains all receiver joins, including after partial startup
+    /// or a receiver panic. Its monitor establishes all-loop serving without
+    /// filesystem probes. Mount ownership remains the Session's original policy;
+    /// use `from_fd` for externally owned mount and detach control.
+    pub fn into_runner(self) -> lifecycle::SessionRunner<FS> {
+        lifecycle::SessionRunner::new(self)
+    }
+
     /// Create a new session by mounting the given filesystem to the given mountpoint
     /// # Errors
     /// Returns an error if the options are incorrect, or if the fuse device can't be mounted.
@@ -522,10 +534,15 @@ pub(crate) struct SessionEventLoop<FS: Filesystem> {
 
 impl<FS: Filesystem> SessionEventLoop<FS> {
     fn event_loop(&self) -> io::Result<()> {
+        self.event_loop_started(|| Ok(()))
+    }
+
+    fn event_loop_started(&self, started: impl FnOnce() -> io::Result<()>) -> io::Result<()> {
         // Buffer for receiving requests from the kernel. Only one is allocated and
         // it is reused immediately after dispatching to conserve memory and allocations.
         let mut buf = FuseReadBuf::new();
         let buf = buf.as_mut();
+        started()?;
         loop {
             // Read the next request from the given channel to kernel driver
             // The kernel driver makes sure that we get exactly one request per read

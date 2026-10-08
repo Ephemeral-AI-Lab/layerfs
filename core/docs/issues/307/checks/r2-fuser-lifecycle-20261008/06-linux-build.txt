@@ -1,0 +1,102 @@
+command=["cargo", "test", "--manifest-path", "core/benchmark/cluster2-platform/Cargo.toml", "--locked", "--all-targets", "--no-run"]
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling find-msvc-tools v0.1.14
+   Compiling libc v0.2.190
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling winnow v1.0.4
+   Compiling cfg-if v1.0.5
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling cc v1.6.0
+   Compiling smallvec v1.16.2
+   Compiling parking_lot_core v0.9.12
+   Compiling rustversion v1.0.23
+   Compiling nix v0.31.3
+   Compiling indexmap v2.14.2
+   Compiling ref-cast v1.0.27
+   Compiling zerocopy v0.8.59
+   Compiling bitflags v2.13.2
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling memoffset v0.9.1
+   Compiling syn v2.0.119
+   Compiling syn v3.0.6
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling toml_edit v0.25.15+spec-1.1.0
+   Compiling blake3 v1.8.5
+   Compiling libsqlite3-sys v0.38.2
+   Compiling log v0.4.34
+   Compiling layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+   Compiling proc-macro-crate v3.5.0
+   Compiling parking_lot v0.12.5
+   Compiling page_size v0.6.0
+   Compiling memchr v2.8.3
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling ref-cast-impl v1.0.27
+   Compiling num_enum_derive v0.7.6
+   Compiling zerocopy-derive v0.8.59
+   Compiling num_enum v0.7.6
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/benchmark/cluster2-platform)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.36s
+  Executable unittests platform.rs (core/target/cluster2-linux/debug/deps/platform_proof-987a162bdf5f8e61)
+  Executable unittests request-time.rs (core/target/cluster2-linux/debug/deps/request_time_proof-191c2d20750ed3d4)
+  Executable unittests session-lifecycle.rs (core/target/cluster2-linux/debug/deps/session_lifecycle_proof-65de5f75111244ad)
+  Executable unittests timestamp.rs (core/target/cluster2-linux/debug/deps/timestamp_proof-9b08f9f0875b8fed)
+exit=0
+command=["cargo", "build", "--manifest-path", "core/benchmark/cluster2-platform/Cargo.toml", "--locked", "--bins"]
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling libc v0.2.190
+   Compiling rustversion v1.0.23
+   Compiling parking_lot_core v0.9.12
+   Compiling ref-cast v1.0.27
+   Compiling zerocopy v0.8.59
+   Compiling blake3 v1.8.5
+   Compiling nix v0.31.3
+   Compiling libsqlite3-sys v0.38.2
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling syn v2.0.119
+   Compiling syn v3.0.6
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling page_size v0.6.0
+   Compiling parking_lot v0.12.5
+   Compiling ref-cast-impl v1.0.27
+   Compiling zerocopy-derive v0.8.59
+   Compiling num_enum_derive v0.7.6
+   Compiling num_enum v0.7.6
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/benchmark/cluster2-platform)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.48s
+exit=0
+command=["cargo", "clippy", "--manifest-path", "core/benchmark/cluster2-platform/Cargo.toml", "--locked", "--all-targets", "--", "-D", "warnings"]
+    Checking cfg-if v1.0.5
+    Checking libc v0.2.190
+    Checking smallvec v1.16.2
+    Checking scopeguard v1.2.0
+    Checking bitflags v2.13.2
+   Compiling rustversion v1.0.23
+    Checking zerocopy v0.8.59
+    Checking ref-cast v1.0.27
+    Checking blake3 v1.8.5
+    Checking lock_api v0.4.14
+    Checking libsqlite3-sys v0.38.2
+    Checking layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+    Checking log v0.4.34
+    Checking memchr v2.8.3
+    Checking rusqlite v0.40.2
+    Checking layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Checking num_enum v0.7.6
+    Checking parking_lot_core v0.9.12
+    Checking page_size v0.6.0
+    Checking nix v0.31.3
+    Checking parking_lot v0.12.5
+    Checking fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+    Checking layerfs-cluster2-platform-proof v0.0.0 (/work/core/benchmark/cluster2-platform)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.92s
+exit=0
+binary=core/target/cluster2-linux/debug/session-lifecycle-proof sha256=2a41c3e84f386f4ca533461e4b8412943fba85cf4f4a417bb80341f296ceda4a
+binary=core/target/cluster2-linux/debug/request-time-proof sha256=af116fbb0dae82e5f65ee13158936d838b027579a11959bc1ed0399ed7e5d803

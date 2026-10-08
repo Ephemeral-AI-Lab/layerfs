@@ -196,7 +196,8 @@ remain binding; moving them out of this file does not weaken them.
   aliases, source includes or error-driven substitutes. Keep platform cfgs.
 - No new dependency if an existing crate supplies the capability. Never patch,
   fork, vendor, replace or edit third-party code/registry packages, except the
-  owner's explicitly authorized fuser 0.18.0 signed-timestamp patch described in
+  owner's explicitly authorized fuser 0.18.0 timestamp and scoped receive-loop
+  lifecycle patches described in
   [core provenance checks](core/AGENTS.md#fuser-provenance-and-authorized-patch-checks).
   Use locked builds and report an incompatible required dependency with evidence.
 - One attempted operation; no automatic retry/busy handler, refresh/reprepare

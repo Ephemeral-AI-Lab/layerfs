@@ -1,0 +1,10 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/tools/check_fuser_integrity.py"
+  ],
+  "exit_code": 0,
+  "stdout": "{\n  \"checked_manifests_locks_configs\": 103,\n  \"errors\": [],\n  \"authorized_patch_verified\": true,\n  \"registry_package_verified\": false\n}\n",
+  "stderr": ""
+}

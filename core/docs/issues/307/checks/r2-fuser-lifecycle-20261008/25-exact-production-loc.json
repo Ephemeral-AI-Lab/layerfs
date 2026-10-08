@@ -1,0 +1,49 @@
+{
+  "first_parent": "e1cc4ef2e4e6479f6b19e2484bf1e8198bbb926b",
+  "counted_staged_tree": "77952ce07dd408ae5b3feab8ea00f6cd7d3e9a5c",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "Independent git archive parent/staged extractions; pinned production_loc.scan/per_file counts first-party Rust and shipped SQL under unchanged scope/exclusions; Cargo-member classification. Separately run same counted_lines scanner on modified dependency Rust files, excluding comments/blanks/inline tests. Dependency patch growth is reported, not included as first-party product or credited as simplification.",
+  "before": {
+    "combined": 170710,
+    "core": 105293,
+    "subtotals": {
+      "active": 62419,
+      "excluded_predecessors": 37431,
+      "excluded_integration": 5443,
+      "reference": 65417
+    },
+    "dependency_modified_rust_files_separate": {
+      "core/vendor/fuser-0.18.0/src/lib.rs": 741,
+      "core/vendor/fuser-0.18.0/src/session.rs": 457,
+      "core/vendor/fuser-0.18.0/src/session/lifecycle.rs": 0
+    },
+    "dependency_modified_rust_total": 1198,
+    "product_trees": {
+      "core/crates": "add31191eb4acdd1e0634f5e02e2fb3a12c086a2",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "after": {
+    "combined": 170710,
+    "core": 105293,
+    "subtotals": {
+      "active": 62419,
+      "excluded_predecessors": 37431,
+      "excluded_integration": 5443,
+      "reference": 65417
+    },
+    "dependency_modified_rust_files_separate": {
+      "core/vendor/fuser-0.18.0/src/lib.rs": 744,
+      "core/vendor/fuser-0.18.0/src/session.rs": 465,
+      "core/vendor/fuser-0.18.0/src/session/lifecycle.rs": 296
+    },
+    "dependency_modified_rust_total": 1505,
+    "product_trees": {
+      "core/crates": "add31191eb4acdd1e0634f5e02e2fb3a12c086a2",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "delta": 0,
+  "dependency_modified_rust_delta": 307,
+  "migration": "No first-party relocation, duplication or retirement; explicit third-party dependency extension"
+}

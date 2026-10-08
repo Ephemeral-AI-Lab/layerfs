@@ -1,0 +1,25 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r2-lifecycle-build-662bc64c9aa54ffa921ed4cd7f83557e",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-c",
+    "from pathlib import Path\nimport hashlib,json,subprocess,sys\nout=Path('core/docs/issues/307/checks/r2-fuser-lifecycle-20261008')\npins=json.loads((out/'03-source-identity.json').read_text())\nassert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in pins.items())\nbase=['--manifest-path','core/benchmark/cluster2-platform/Cargo.toml','--locked']\nfor cmd in [['cargo','test',*base,'--all-targets','--no-run'],['cargo','build',*base,'--bins'],['cargo','clippy',*base,'--all-targets','--','-D','warnings']]:\n    print('command='+json.dumps(cmd),flush=True)\n    run=subprocess.run(cmd,timeout=300)\n    print('exit='+str(run.returncode),flush=True)\n    if run.returncode:sys.exit(run.returncode)\nfor name in ['session-lifecycle-proof','request-time-proof']:\n    path=Path('core/target/cluster2-linux/debug')/name\n    print('binary='+str(path)+' sha256='+hashlib.sha256(path.read_bytes()).hexdigest(),flush=True)\n"
+  ],
+  "exit_code": 0,
+  "stdout": "6cc9caac0f58d0b70bac0c71e1f4e2ce3bb70d864f29829dd4111ca685f967aa\n",
+  "stderr": ""
+}

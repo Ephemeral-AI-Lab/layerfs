@@ -1,0 +1,50 @@
+{
+  "case": "partial-spawn",
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r2-loop-partial-spawn-d8e26787b4f041cf980bca3be6662442",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/session-lifecycle-proof,dst=/proof,readonly",
+    "--pids-limit",
+    "2",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "/proof",
+    "partial-spawn"
+  ],
+  "binary_sha256": "2a41c3e84f386f4ca533461e4b8412943fba85cf4f4a417bb80341f296ceda4a",
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "create_exit": 0,
+  "create_stdout": "3ecc3904ae9037d01515ba327773be456628020218f542099789609a8300b282\n",
+  "create_stderr": "",
+  "wall_stop_seconds": 8,
+  "container_id": "3ecc3904ae9037d01515ba327773be456628020218f542099789609a8300b282",
+  "exit_code": 0,
+  "timeout": false,
+  "observed_state": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-08T00:32:44.624347219Z",
+    "FinishedAt": "2026-10-08T00:32:44.718374094Z"
+  },
+  "privileged": false,
+  "pids_limit": 2,
+  "actual_image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "cleanup": {
+    "exit_code": 0,
+    "stdout": "3ecc3904ae9037d01515ba327773be456628020218f542099789609a8300b282\n",
+    "stderr": ""
+  },
+  "status": "PASS",
+  "complete_command_wall_ns": 353885083
+}

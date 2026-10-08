@@ -77,7 +77,7 @@ class FuserIntegrityTests(unittest.TestCase):
             shutil.copytree(repository / PATCH_RECORD, root / PATCH_RECORD)
             shutil.copytree(repository / PATCH_PACKAGE, root / PATCH_PACKAGE)
             self.assertFalse(patched_package_errors(root))
-            for name in ['src/time.rs', 'src/session.rs']:
+            for name in ['src/time.rs', 'src/session.rs', 'src/session/lifecycle.rs', 'src/lib.rs', 'CHANGELOG.md']:
                 path = root / PATCH_PACKAGE / name
                 original = path.read_bytes()
                 path.write_bytes(original + b'// unauthorized edit\n')
@@ -94,6 +94,23 @@ class FuserIntegrityTests(unittest.TestCase):
             injected.unlink()
             injected.symlink_to(root / PATCH_PACKAGE / 'src/time.rs')
             self.assertTrue(patched_package_errors(root))
+
+    def test_lifecycle_provenance_and_diff_are_both_required_and_exact(self):
+        repository = Path(__file__).resolve().parents[2]
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            shutil.copytree(repository / PATCH_RECORD, root / PATCH_RECORD)
+            shutil.copytree(repository / PATCH_PACKAGE, root / PATCH_PACKAGE)
+            self.assertFalse(patched_package_errors(root))
+            for name in ['lifecycle-provenance.json', 'session-lifecycle.patch']:
+                path = root / PATCH_RECORD / name
+                original = path.read_bytes()
+                path.write_bytes(original + b'\n')
+                self.assertTrue(patched_package_errors(root))
+                path.unlink()
+                self.assertTrue(patched_package_errors(root))
+                path.write_bytes(original)
+                self.assertFalse(patched_package_errors(root))
 
     def test_cargo_directory_and_path_overrides_are_rejected(self):
         self.assertTrue(config_errors({'paths': ['../fuser']}))

@@ -1,0 +1,31 @@
+{
+  "local_markdown_targets": 163,
+  "missing": [],
+  "full_whitespace": {
+    "exit_code": 2,
+    "output": "core/patches/fuser-0.18.0/session-lifecycle.patch:11: trailing whitespace.\n+ \ncore/patches/fuser-0.18.0/session-lifecycle.patch:23: trailing whitespace.\n+ \ncore/patches/fuser-0.18.0/session-lifecycle.patch:34: trailing whitespace.\n+ \ncore/patches/fuser-0.18.0/session-lifecycle.patch:39: trailing whitespace.\n+ \ncore/patches/fuser-0.18.0/session-lifecycle.patch:55: trailing whitespace.\n+ \n"
+  },
+  "scoped_whitespace": {
+    "exit_code": 0,
+    "output": "",
+    "excluded": [
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/06-linux-build.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/10-ready.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/11-panic.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/12-io-error.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/13-destroy-panic.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/14-partial-spawn.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/15-invalid.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/16-native.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/17-timestamps.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/19-tools.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/20-boundary.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/21-format-core.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/22-format-harness.txt",
+      "core/docs/issues/307/checks/r2-fuser-lifecycle-20261008/23-format-patch.txt",
+      "core/patches/fuser-0.18.0/session-lifecycle.patch"
+    ]
+  },
+  "protected_notes_preserved": true,
+  "source_identity_matches_proofs": true
+}

@@ -1,0 +1,85 @@
+[
+  {
+    "name": "19-tools",
+    "command": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "core/tools",
+      "-p",
+      "test_*.py"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 420995708,
+    "wall_stop_seconds": 100
+  },
+  {
+    "name": "20-boundary",
+    "command": [
+      "python3",
+      "-B",
+      "core/tools/check_product_boundary.py"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 590119667,
+    "wall_stop_seconds": 100
+  },
+  {
+    "name": "21-format-core",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "fmt",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2424309708,
+    "wall_stop_seconds": 100
+  },
+  {
+    "name": "22-format-harness",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "fmt",
+      "--manifest-path",
+      "core/benchmark/cluster2-platform/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2180283458,
+    "wall_stop_seconds": 100
+  },
+  {
+    "name": "23-format-patch",
+    "command": [
+      "rustfmt",
+      "+1.85.1",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "core/vendor/fuser-0.18.0/src/session.rs",
+      "core/vendor/fuser-0.18.0/src/session/lifecycle.rs",
+      "core/vendor/fuser-0.18.0/src/lib.rs"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 45112875,
+    "wall_stop_seconds": 100
+  }
+]

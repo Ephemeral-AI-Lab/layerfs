@@ -8,6 +8,13 @@
 > implementation, native mount, measurement, qualification or release admission.
 > No build, test, mount or benchmark was run to produce it.
 
+Later owner authorization2026-10-08 permits the [scoped fuser lifecycle extension](FUSER-LIFECYCLE-DECISION-20261008.md),
+superseding the timestamp-only dependency restriction for that exact API. New
+native assembly uses the explicit Session runner/monitor and retains all original
+join outcomes. This changes the dependency mechanism, not I-3/I-8/I-9/I-14 or the
+full product proof obligations. Original specification/source receipts remain
+historical; the extension's dependency proofs are recorded separately.
+
 This is the single decision owner for S8. The
 [implementation plan](S8-IMPLEMENTATION-PLAN-20261008.md),
 [mechanism and evidence ledger](S8-MECHANISM-EVIDENCE-20261008.md),

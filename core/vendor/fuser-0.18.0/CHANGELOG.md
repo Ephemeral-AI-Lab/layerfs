@@ -1,5 +1,11 @@
 # FUSE for Rust - Changelog
 
+## LayerFS local lifecycle extension - 2026-10-08
+
+* Add an explicit Session runner with all-receiver startup observation and
+  retained original joins after partial startup, receive failure or panic.
+  Mount and connection disposition remain with the caller.
+
 ## 0.18.0 - 2026-07-22
 * Remove deprecated feature flags `abi-*`
 * Rename `mount2()` to `mount()`

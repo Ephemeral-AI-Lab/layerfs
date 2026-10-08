@@ -1,0 +1,20 @@
+{
+  "commit": "e1cc4ef2e4e6479f6b19e2484bf1e8198bbb926b",
+  "first_parent": "4236225ee70da89a264308167549f95e660c5dcb",
+  "committed_tree": "e2102a74859f6e2c4d0f05f2e19b1060a53b3a72",
+  "matches_final_staged_tree": true,
+  "production_loc": {
+    "before": 170673,
+    "after": 170710,
+    "delta": 37
+  },
+  "subtotals": {
+    "active": 62419,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443,
+    "reference": 65417
+  },
+  "committed_count_recomputed": true,
+  "scope": "R2 completion Future prerequisite only; native floor/R3/R4/R5 unfinished",
+  "owned_runtime_resources_remaining": 0
+}
