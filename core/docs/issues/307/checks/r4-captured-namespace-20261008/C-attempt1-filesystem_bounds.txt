@@ -1,0 +1,26 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_bounds-6a5d10a6b1d3fc43 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 17 tests
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+test a_build_has_no_independent_cycle_walk_limit ... ok
+test a_directory_larger_than_the_former_walk_ceiling_can_be_rebound ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test one_grouped_demand_is_one_charged_wave ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

@@ -173,7 +173,8 @@ pub fn update_filesystem_streamed_timed(
 
 /// Builds with serial state in the caller's distinct filesystem attempt scope.
 /// The record port is the existing neutral protocol; no scope is acquired or
-/// released here. Remaining validation/reducer/resource limits still apply.
+/// released here. Validation, reduction and release hold their state in those
+/// records, so no total of the input is refused against the ordering budget.
 pub fn build_filesystem_streamed_backed(
     objects: &mut FilesystemObjects<'_>,
     input: &impl PreparedDirectoryStreams,
@@ -315,16 +316,16 @@ fn run_body<'b>(
     unreachable_parents(input, state)?;
     let dropped = state.dropped_view(input);
     let mut validation = ValidationWork::default();
-    let checked = phases.phase("validate", || {
-        validate::check_operation(objects.reader(), input, &dropped, &mut validation)
+    let topology = phases.phase("validate", || {
+        validate::check_operation(objects.reader(), input, state, &mut validation)
     })?;
     let reader = objects.reader();
     let mut counters = FilesystemUpdateCounters {
         validation,
         ..FilesystemUpdateCounters::default()
     };
-    let table = checked.topology.table();
-    let base_table = checked.topology.base.map(|root| root.inode_table());
+    let table = topology.table();
+    let base_table = topology.base.map(|root| root.inode_table());
     // A build already supplies sorted new serials and every final typed value.
     // One count per declared serial avoids ordering runs and their lookups.
     let resources = input.resources();
@@ -367,7 +368,7 @@ fn run_body<'b>(
             }
             let mut parents = Vec::with_capacity(updates.len());
             for update in &updates {
-                if checked.topology.table.is_some()
+                if topology.table.is_some()
                     && !dropped.contains(update.header.parent)?
                     && !input.is_new(update.header.parent)?
                 {
@@ -403,7 +404,7 @@ fn run_body<'b>(
                 let content_root = if update.header.change_rows == 0 {
                     // An unchanged directory retains its root; a new directory
                     // needs one actual empty page.
-                    if input.is_new(update.header.parent)? || checked.topology.table.is_none() {
+                    if input.is_new(update.header.parent)? || topology.table.is_none() {
                         crate::filesystem::directory::update::empty_directory(objects)?.0
                     } else {
                         base.ok_or(ContentError::InvalidRecord("directory parent record"))?
@@ -412,7 +413,7 @@ fn run_body<'b>(
                 } else {
                     let base_directory = if input.is_new(update.header.parent)? {
                         None
-                    } else if checked.topology.table.is_some() {
+                    } else if topology.table.is_some() {
                         let record =
                             base.ok_or(ContentError::InvalidRecord("directory parent record"))?;
                         if record.kind != InodeKind::Directory {
@@ -557,7 +558,7 @@ fn run_body<'b>(
             reducer.note_value(update.serial, update.value)?;
         }
     }
-    if checked.topology.table.is_some() {
+    if topology.table.is_some() {
         // Only an update can release descendants: a new filesystem has no base
         // binding to lose, and its root is never released.
         if state.backed() {
@@ -642,7 +643,7 @@ fn run_body<'b>(
     // successful result always means the ordering resources were released.
     *cleanup_attempted = true;
     phases.phase("cleanup", || reducer.release())?;
-    let root = match checked.topology.base {
+    let root = match topology.base {
         Some(root) => root.with_inode_table(inode_table),
         None => FilesystemRoot::new(
             profile_id(),

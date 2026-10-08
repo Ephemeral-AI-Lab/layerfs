@@ -1,0 +1,27 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_ordering-b07997645b40395c --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 18 tests
+test a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account ... ok
+test a_fresh_build_charges_its_count_array_to_the_ordering_ceiling ... ok
+test a_fresh_build_counts_bindings_without_ordering_runs ... ok
+test a_high_pending_ceiling_runs_spill_free_to_the_byte_bound ... ok
+test a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop ... ok
+test a_spill_keeps_the_scans_of_tiers_above_its_level ... ok
+test a_spilled_lookup_agrees_with_a_full_scan_of_every_tier ... ok
+test a_stale_run_file_does_not_block_a_later_backing ... ok
+test a_successful_operation_releases_its_ordering_resources_once ... ok
+test append_read_flush_and_release_failures_fail_the_operation_without_a_root ... ok
+test carried_state_removes_the_zero_count_re_pass ... ok
+test growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes ... ok
+test records_are_fixed_width_and_every_malformed_field_is_rejected ... ok
+test run_lookup_answers_every_serial_in_every_order ... ok
+test the_operation_ceiling_is_enforced_before_the_rows_are_written ... ok
+test the_parent_membership_charges_parents_not_bindings ... ok
+test the_pending_threshold_changes_only_where_the_rows_live ... ok
+test tier_carries_keep_the_newest_row_and_accumulate_counts ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

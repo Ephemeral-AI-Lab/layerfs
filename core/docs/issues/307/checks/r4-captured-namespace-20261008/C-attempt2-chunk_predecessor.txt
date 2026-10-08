@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/chunk_predecessor-370cc89c7f55b8c2 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test a_base_less_build_is_unchanged ... ok
+test a_base_the_provider_cannot_serve_is_a_refusal ... ok
+test a_branched_base_mapping_is_walked_and_a_grown_result_stops_at_its_end ... ok
+test a_whole_file_base_offers_nothing ... ok
+test an_identical_version_is_offered_its_own_chunks ... ok
+test every_chunk_is_offered_the_base_extent_covering_its_own_range ... ok
+test the_correspondence_reads_mapping_pages_and_no_payload ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

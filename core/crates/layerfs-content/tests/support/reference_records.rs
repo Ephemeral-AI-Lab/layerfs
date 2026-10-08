@@ -11,6 +11,15 @@ pub const TOUCH: u32 = CONTEXT + 6;
 pub const WORK: u32 = CONTEXT + 7;
 pub const FRAME: u32 = CONTEXT + 8;
 pub const NODE: u32 = CONTEXT + 9;
+/// Validation topology evidence; the reserved range ends at `CONTEXT + 0x2F`.
+pub const PLACED: u32 = CONTEXT + 0x20;
+pub const TERRITORY: u32 = CONTEXT + 0x21;
+pub const ROOTED: u32 = CONTEXT + 0x22;
+pub const QUEUE: u32 = CONTEXT + 0x23;
+pub const SCANNED: u32 = CONTEXT + 0x24;
+pub fn topology(kind: u32) -> bool {
+    (PLACED..=CONTEXT + 0x2F).contains(&kind)
+}
 pub fn key(kind: u32, serial: u64) -> ConstructionRecordKey {
     let mut key = [0; 32];
     key[24..].copy_from_slice(&serial.to_be_bytes());
@@ -37,7 +46,12 @@ pub struct Records {
     pub duplicate_key: bool,
     pub maximum_job: usize,
     pub maximum_keys: usize,
+    pub maximum_changes: usize,
     pub enumerations: usize,
+    /// Point reads, guarded batches and enumerations of topology kinds.
+    pub topology_reads: usize,
+    pub topology_batches: usize,
+    pub topology_enumerations: usize,
     pub row_versions: BTreeMap<u64, Vec<Vec<u8>>>,
 }
 impl Records {
@@ -66,6 +80,9 @@ impl IndexedConstructionBacking for Records {
     }
     fn get(&mut self, key: ConstructionRecordKey) -> ContentResult<Option<Vec<u8>>> {
         self.enter()?;
+        if topology(key.kind) {
+            self.topology_reads += 1;
+        }
         let serial = u64::from_be_bytes(key.key[24..].try_into().unwrap());
         if key.kind == ROW
             && self.scan_starts >= 2
@@ -108,6 +125,12 @@ impl IndexedConstructionBacking for Records {
                 .sum::<usize>();
         assert!(bytes <= 65_536);
         self.maximum_job = self.maximum_job.max(bytes);
+        self.maximum_changes = self.maximum_changes.max(changes.len());
+        if changes.iter().any(|change| topology(change.key.kind)) {
+            assert!(changes.iter().all(|change| topology(change.key.kind)));
+            assert!(changes.len() <= 64, "one topology batch is one key window");
+            self.topology_batches += 1;
+        }
         if changes
             .iter()
             .any(|change| self.fail_kind == Some(change.key.kind))
@@ -180,6 +203,20 @@ impl IndexedConstructionBacking for Records {
     }
     fn keys_after(&mut self, kind: u32, after: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
         self.enter()?;
+        if kind == PLACED {
+            // The placement pass is a plain sealed enumeration: it shares the
+            // window bound and none of the touched-membership fault machinery.
+            self.topology_enumerations += 1;
+            let keys = self
+                .values
+                .keys()
+                .filter(|key| key.kind == kind && after.is_none_or(|after| key.key > after))
+                .take(64)
+                .map(|key| key.key)
+                .collect::<Vec<_>>();
+            self.maximum_keys = self.maximum_keys.max(keys.len());
+            return Ok(keys);
+        }
         assert_eq!(kind, TOUCH);
         if after.is_none() {
             self.scan_starts += 1;

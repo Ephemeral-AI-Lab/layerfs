@@ -1,0 +1,17 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_localized-6b3e672532146568 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 8 tests
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test a_page_two_passes_reach_is_demanded_once_for_the_operation ... ok
+test a_pure_deletion_never_walks_the_rightmost_path ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+test an_overwrite_still_demands_the_predecessor_path ... ok
+test localized_work_is_independent_of_file_size ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

@@ -549,26 +549,45 @@ fn removed_and_unchanged_points_distinguish_a_move_from_a_second_parent() {
 fn paged_effective_names_match_the_resident_move_with_removals_and_insertions() {
     let mut session = directory_base();
     let serials = (0..131).map(|_| session.allocate()).collect::<Vec<_>>();
-    let children = [DirectoryUpdate {
-        parent: 2,
-        changes: serials
-            .iter()
-            .enumerate()
-            .map(|(index, serial)| (generated_name(index), Some(*serial)))
-            .collect(),
-    }];
-    let values = serials
+    let holder = session.allocate();
+    let children = [
+        DirectoryUpdate {
+            parent: 1,
+            changes: vec![(name_of("holder"), Some(holder))],
+        },
+        DirectoryUpdate {
+            parent: 2,
+            changes: serials
+                .iter()
+                .enumerate()
+                .map(|(index, serial)| (generated_name(index), Some(*serial)))
+                .collect(),
+        },
+        DirectoryUpdate {
+            parent: holder,
+            changes: Vec::new(),
+        },
+    ];
+    let mut values = serials
         .iter()
         .map(|serial| InodeUpdate {
             serial: *serial,
             value: generated_value(*serial),
         })
         .collect::<Vec<_>>();
-    session.apply(&children, &values, &serials).unwrap();
+    values.push(InodeUpdate {
+        serial: holder,
+        value: generated_value(1),
+    });
+    let mut new = serials.clone();
+    new.push(holder);
+    session.apply(&children, &values, &new).unwrap();
+    // The directory moves under a stored directory, so its effective names are
+    // paged once by the territory walk; a move within the root lists nothing.
     let changes = [
         DirectoryUpdate {
             parent: 1,
-            changes: vec![(name_of("directory"), None), (name_of("moved"), Some(2))],
+            changes: vec![(name_of("directory"), None)],
         },
         DirectoryUpdate {
             parent: 2,
@@ -579,12 +598,29 @@ fn paged_effective_names_match_the_resident_move_with_removals_and_insertions() 
                 (name_of("g00065"), Some(serials[65])),
             ],
         },
+        DirectoryUpdate {
+            parent: holder,
+            changes: vec![(name_of("moved"), Some(2))],
+        },
     ];
     let streamed = update_streamed(&session, &changes).unwrap();
     let resident = session.apply(&changes, &[], &[]).unwrap();
     assert_eq!(streamed.root, resident.root);
     assert_eq!(streamed.value, resident.value);
-    assert!(streamed.counters.validation.directory_pages_read >= 3);
+    let validation = streamed.counters.validation;
+    // Three listing pages of the moved directory's 131 base names.
+    assert!(validation.directory_pages_read >= 3);
+    // Two names removed and two inserted leave 131 effective names, all files.
+    assert_eq!(
+        (
+            validation.territory_directories,
+            validation.territory_entries,
+            validation.entries_examined,
+        ),
+        (1, 131, 131),
+        "the walk covers the moved directory and nothing else: {validation:?}"
+    );
+    assert_eq!(validation, resident.counters.validation);
 }
 
 #[test]

@@ -1,0 +1,14 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_parent_lookup-c2b6251d280fd5e5 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 5 tests
+test inherited_children_resolve_and_list_by_parent_identity ... ok
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+test partial_parent_batches_preserve_values_new_directories_and_removals ... ok
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

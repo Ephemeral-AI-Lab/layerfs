@@ -1,6 +1,6 @@
 //! The existing effective-name merge, consumed with one base page/lookahead.
 use super::{charge_directory, ValidationWork};
-use crate::error::{ContentError, ContentResult};
+use crate::error::ContentResult;
 use crate::filesystem::directory::read::{list_after, DirectoryReadWork};
 use crate::filesystem::rows::view::DirectoryRow;
 use crate::filesystem::{DirectoryRoot, PathName};
@@ -40,12 +40,7 @@ impl<'a> EffectiveEntries<'a> {
             changes_done: false,
         })
     }
-    fn base_next(
-        &mut self,
-        visited: &mut usize,
-        limit: usize,
-        work: &mut ValidationWork,
-    ) -> ContentResult<()> {
+    fn base_next(&mut self, work: &mut ValidationWork) -> ContentResult<()> {
         while self.base_next.is_none() {
             if let Some(entry) = self.page.next() {
                 self.base_next = Some(entry);
@@ -64,13 +59,9 @@ impl<'a> EffectiveEntries<'a> {
                 &mut directory,
             )?;
             charge_directory(work, directory);
-            *visited = visited.saturating_add(page.entries.len());
             work.entries_examined = work
                 .entries_examined
                 .saturating_add(page.entries.len() as u64);
-            if *visited > limit {
-                return Err(ContentError::InvalidRecord("cycle check work limit"));
-            }
             self.base_done = page.continuation.is_none();
             self.after = page.continuation;
             self.page = page.entries.into_iter();
@@ -79,12 +70,10 @@ impl<'a> EffectiveEntries<'a> {
     }
     pub fn next_entry(
         &mut self,
-        visited: &mut usize,
-        limit: usize,
         work: &mut ValidationWork,
     ) -> ContentResult<Option<(PathName, u64)>> {
         loop {
-            self.base_next(visited, limit, work)?;
+            self.base_next(work)?;
             if self.change_next.is_none() && !self.changes_done {
                 self.change_next = self.changes.next().transpose()?;
                 self.changes_done = self.change_next.is_none();

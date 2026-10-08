@@ -1,0 +1,10 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_ordering_consolidate-fe5582263e7e7fa5 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 1 test
+test consolidation_never_writes_into_a_run_it_merges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

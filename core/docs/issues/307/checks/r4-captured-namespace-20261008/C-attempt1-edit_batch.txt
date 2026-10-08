@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_batch-16513af13f6403e3 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test adjacent_edits_stay_separate_segments ... ok
+test an_overlapping_stream_is_rejected_before_any_work ... ok
+test delete_only_streams_are_monotonic_in_result_coordinates ... ok
+test every_object_the_edit_emits_is_reachable_from_its_root ... ok
+test many_small_edits_are_applied_in_one_pass ... ok
+test repeated_length_changes_accumulate ... ok
+test several_separated_edits_apply_in_order ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

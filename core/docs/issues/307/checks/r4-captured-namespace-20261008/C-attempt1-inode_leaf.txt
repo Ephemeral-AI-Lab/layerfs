@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/inode_leaf-21e5d147d56215b9 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test a_leaf_round_trips_with_its_exact_layout ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test checked_pooling_leaf_reuses_decode_and_retains_all_ordinal_checks ... ok
+test malformed_leaves_are_rejected ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

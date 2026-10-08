@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_reference-8670d2abe57506d1 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 3 tests
+test an_interior_join_reads_its_boundary_child_once ... ok
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

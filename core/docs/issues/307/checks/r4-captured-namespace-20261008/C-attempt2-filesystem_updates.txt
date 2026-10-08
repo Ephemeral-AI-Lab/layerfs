@@ -1,0 +1,15 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_updates-86b9911038e50d5d --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 6 tests
+test a_content_only_change_leaves_every_directory_page_untouched ... ok
+test a_same_name_no_op_keeps_the_root_identity ... ok
+test a_tiny_tree_is_created_and_read_back_exactly ... ok
+test a_type_replacement_replaces_the_binding_and_the_record ... ok
+test an_unsorted_or_duplicate_change_list_is_refused_before_any_write ... ok
+test removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

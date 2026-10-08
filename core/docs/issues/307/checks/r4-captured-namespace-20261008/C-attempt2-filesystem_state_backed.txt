@@ -1,0 +1,19 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_state_backed-373f48841672c661 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 10 tests
+test atomic_not_applied_and_malformed_root_are_refusals_not_fallbacks ... ok
+test backed_initial_counts_and_streamed_final_rows_preserve_real_alias_counts ... ok
+test backed_new_parent_membership_exceeds_only_the_old_map_allowance_and_drops_empty_parent ... ok
+test backed_update_consumes_rebuilt_roots_in_order_before_values_and_matches_move_alias_result ... ok
+test disappearing_replayed_root_cannot_be_overwritten_by_a_supplied_directory_value ... ok
+test exact_context_marker_refuses_reuse_before_new_effects_and_retains_original_batch ... ok
+test late_initial_count_read_failure_keeps_accepted_inode_pages_and_no_final_root ... ok
+test missing_declared_count_or_directory_root_never_uses_a_default_or_supplied_draft_root ... ok
+test original_parent_count_and_post_accept_root_failures_stop_without_another_job ... ok
+test stale_serial_state_refuses_its_missing_guard_and_file_editor_kinds_remain_separate ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

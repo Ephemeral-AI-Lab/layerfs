@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/object_identity-d672793851e8e656 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 11 tests
+test chunk_fixture_bytes_and_identity_are_frozen ... ok
+test identity_has_no_variable_width_or_text_shortcuts ... ok
+test identity_is_domain_separated_and_not_a_raw_digest ... ok
+test identity_of_a_damaged_canonical_object_changes ... ok
+test malformed_envelopes_are_rejected_exactly ... ok
+test mapping_profile_and_empty_form_identities_are_frozen ... ok
+test moving_an_objects_pieces_keeps_its_advisory_predecessors ... ok
+test small_fixture_bytes_and_identity_are_frozen ... ok
+test the_envelope_ceiling_is_enforced_at_plus_or_minus_one ... ok
+test the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope ... ok
+test writing_to_a_sink_matches_the_single_allocation_encoder ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

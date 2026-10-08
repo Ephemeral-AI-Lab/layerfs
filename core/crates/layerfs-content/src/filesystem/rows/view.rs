@@ -8,7 +8,6 @@ use crate::filesystem::{
     DirectoryUpdate, FilesystemResources, FilesystemRootId, InodeScope, PathName,
 };
 use crate::object::inode_leaf::InodeValue;
-use std::{cell::RefCell, collections::BTreeMap};
 
 pub(crate) trait OperationInput {
     fn base(&self) -> Option<FilesystemRootId>;
@@ -27,16 +26,6 @@ pub(crate) trait OperationInput {
     fn is_new(&self, serial: u64) -> ContentResult<bool> {
         Ok(self.new_position(serial)?.is_some())
     }
-    fn binding_change(&self, parent: u64, name: &PathName) -> ContentResult<DirectoryChangeLookup> {
-        match self.directory_for(parent)? {
-            Some(row) => row.binding_for(name),
-            None => Ok(DirectoryChangeLookup::Unchanged),
-        }
-    }
-    fn prepare_binding_points(&self) -> ContentResult<()> {
-        Ok(())
-    }
-    fn clear_binding_points(&self) {}
 }
 
 pub(crate) trait OperationDirectories<'a> {
@@ -175,17 +164,12 @@ impl Iterator for CheckedChanges<'_> {
     }
 }
 
-type BindingPoints = BTreeMap<u64, BTreeMap<PathName, Option<u64>>>;
 pub(crate) struct ResidentInput<'a> {
     input: &'a dyn PreparedRows,
-    points: RefCell<Option<BindingPoints>>,
 }
 impl<'a> ResidentInput<'a> {
     pub fn new(input: &'a dyn PreparedRows) -> Self {
-        Self {
-            input,
-            points: RefCell::new(None),
-        }
+        Self { input }
     }
 }
 struct ResidentDirectories<'a> {
@@ -240,36 +224,6 @@ impl OperationInput for ResidentInput<'_> {
     }
     fn new_position(&self, serial: u64) -> ContentResult<Option<usize>> {
         self.input.new_position(serial)
-    }
-    fn prepare_binding_points(&self) -> ContentResult<()> {
-        // This is the old route's explicit resident changed-name map. Streamed
-        // input never enters this adapter and never creates this materialization.
-        let mut points = BTreeMap::new();
-        let mut rows = self.input.directories()?;
-        while let Some(row) = rows.next_row()? {
-            points.insert(row.parent, row.changes.into_iter().collect());
-        }
-        *self.points.borrow_mut() = Some(points);
-        Ok(())
-    }
-    fn clear_binding_points(&self) {
-        let _ = self.points.borrow_mut().take();
-    }
-    fn binding_change(&self, parent: u64, name: &PathName) -> ContentResult<DirectoryChangeLookup> {
-        let points = self.points.borrow();
-        if let Some(points) = points.as_ref() {
-            return Ok(points
-                .get(&parent)
-                .and_then(|names| names.get(name))
-                .map_or(DirectoryChangeLookup::Unchanged, |binding| {
-                    binding.map_or(DirectoryChangeLookup::Removed, DirectoryChangeLookup::Bound)
-                }));
-        }
-        drop(points);
-        match self.directory_for(parent)? {
-            Some(row) => row.binding_for(name),
-            None => Ok(DirectoryChangeLookup::Unchanged),
-        }
     }
 }
 
@@ -330,21 +284,6 @@ impl OperationInput for StreamedInput<'_> {
             header,
             changes: Changes::Streamed(self.input),
         }))
-    }
-    fn binding_change(&self, parent: u64, name: &PathName) -> ContentResult<DirectoryChangeLookup> {
-        let header = self.input.directory_header(parent)?;
-        if header.is_some_and(|header| header.parent != parent) {
-            return Err(ContentError::InvalidRecord("directory header lookup"));
-        }
-        let result = self.input.directory_change(parent, name)?;
-        if header.is_none() && result != DirectoryChangeLookup::Unchanged {
-            return Err(ContentError::InvalidRecord("directory change lookup"));
-        }
-        if matches!(result, DirectoryChangeLookup::Bound(serial) if !super::serial_in_range(serial))
-        {
-            return Err(ContentError::InvalidRecord("inode serial"));
-        }
-        Ok(result)
     }
     fn inodes(&self) -> ContentResult<Box<dyn InodeRowSource + '_>> {
         self.input.inodes()

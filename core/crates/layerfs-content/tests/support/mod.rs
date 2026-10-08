@@ -580,3 +580,4 @@ impl layerfs_content::AuthenticatedObjects for Counted<'_> {
 
 pub mod reference_records;
 pub mod reference_rows;
+pub mod topology;

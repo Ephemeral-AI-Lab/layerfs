@@ -1,0 +1,17 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_failure-3ab14e7b7e14d8c2 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 8 tests
+test a_binding_serial_outside_the_stored_range_is_refused ... ok
+test a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine ... ok
+test a_malformed_or_unauthenticated_demanded_page_is_rejected_without_a_root ... ok
+test a_read_failure_at_each_boundary_publishes_no_root_and_keeps_the_old_one ... ok
+test a_refusing_consumer_ends_the_operation_once_without_a_root ... ok
+test cancellation_leaves_no_owned_ordering_resources_and_repeatable_state ... ok
+test invalid_input_is_refused_before_anything_is_emitted ... ok
+test the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

@@ -1,0 +1,15 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_rows-693f80d7588e60d3 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 6 tests
+test a_spool_refuses_a_key_that_does_not_rise_inside_its_run ... ok
+test a_spool_refuses_a_row_beyond_its_declared_totals_or_capacity ... ok
+test a_spool_that_does_not_hold_its_declared_rows_is_refused ... ok
+test a_spooled_update_publishes_the_same_root_as_resident_rows ... ok
+test a_wide_spooled_generation_applies_every_row_from_the_file ... ok
+test the_spool_file_is_removed_when_the_update_is_done ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

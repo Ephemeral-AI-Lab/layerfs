@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/runs-5c6ef8e3bd9527f3 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 4 tests
+test invalid_windows_and_consumer_failure_stop_the_single_operation ... ok
+test multi_level_repetition_matches_streaming_extent_builder_without_zero_byte_scan ... ok
+test run_roots_equal_streaming_at_cutoff_cdc_and_leaf_partition_boundaries ... ok
+test terabyte_zero_runs_emit_logarithmic_objects_and_read_exact_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

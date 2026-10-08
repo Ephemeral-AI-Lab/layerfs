@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_timing-ba40441586125e5a --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 4 tests
+test a_failing_edit_returns_its_original_error_and_an_error_outcome ... ok
+test a_real_edit_reports_its_scopes_without_a_database ... ok
+test an_equal_replacement_reports_the_comparison_scope ... ok
+test recording_enabled_and_disabled_produce_the_same_result ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

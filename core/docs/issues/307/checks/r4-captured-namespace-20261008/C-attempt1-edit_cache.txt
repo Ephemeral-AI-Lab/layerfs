@@ -1,0 +1,14 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_cache-f4ac7d869651eece --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 5 tests
+test a_full_cache_survives_a_rejected_new_summary_without_retaining_the_page ... ok
+test cached_pages_still_check_each_requested_summary_without_another_demand ... ok
+test more_than_two_cache_windows_evict_and_retained_pages_move_without_a_copy ... ok
+test provider_refusal_and_absence_end_the_original_demand_once ... ok
+test rehashed_malformed_or_short_nonroot_pages_are_never_retained ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

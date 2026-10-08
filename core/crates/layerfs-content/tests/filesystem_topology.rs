@@ -367,23 +367,30 @@ fn a_base_resident_directory_can_be_renamed_by_unbinding_first() {
     );
 }
 
-#[test]
-fn a_base_resident_symlink_cannot_gain_a_second_parent() {
+/// Builds `/link` and a directory `holder`, which the root binds only when asked.
+///
+/// Left unbound, `holder` is declared new with a header and nothing holds it,
+/// so the base drops it and no later update can name it.
+fn symlink_tree(bind_holder: bool) -> (Session, u64, u64) {
     let mut session = Session::new(1).expect("empty");
     let link = session.allocate();
     let holder = session.allocate();
-    let mut link_value = value(
+    let link_value = value(
         InodeKind::Symlink,
         synthetic("topology/symlink-target"),
         synthetic("topology/meta"),
     );
-    link_value.namespace_ref_count = 0;
+    let mut root = Vec::new();
+    if bind_holder {
+        root.push((name("holder"), Some(holder)));
+    }
+    root.push((name("link"), Some(link)));
     session
         .apply(
             &[
                 DirectoryUpdate {
                     parent: 1,
-                    changes: vec![(name("link"), Some(link))],
+                    changes: root,
                 },
                 DirectoryUpdate {
                     parent: holder,
@@ -403,7 +410,16 @@ fn a_base_resident_symlink_cannot_gain_a_second_parent() {
             &[link, holder],
         )
         .expect("symlink tree");
-    let outcome = session.apply(
+    (session, link, holder)
+}
+
+/// Restates `/link` and binds the same symlink twice more.
+fn bind_the_symlink_again(
+    session: &mut Session,
+    link: u64,
+    holder: u64,
+) -> layerfs_content::ContentResult<layerfs_content::filesystem::FilesystemResult> {
+    session.apply(
         &[
             DirectoryUpdate {
                 parent: 1,
@@ -416,11 +432,43 @@ fn a_base_resident_symlink_cannot_gain_a_second_parent() {
         ],
         &[],
         &[],
+    )
+}
+
+#[test]
+fn a_base_resident_symlink_cannot_gain_a_second_parent() {
+    // R4: the base binds `holder`, so the update names two stored directories
+    // and the symlink's derived count of three is what refuses it. The fixture
+    // used to leave `holder` unbound; that statement is pinned just below.
+    let (mut session, link, holder) = symlink_tree(true);
+    let outcome = bind_the_symlink_again(&mut session, link, holder);
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("multiple parents"))
+        ),
+        "a stored symlink bound again must be refused: {outcome:?}"
     );
-    assert!(matches!(
-        outcome,
-        Err(ContentError::InvalidRecord("multiple parents"))
-    ));
+}
+
+#[test]
+fn a_header_for_a_directory_the_base_dropped_is_a_missing_inode() {
+    // The fixture `a_base_resident_symlink_cannot_gain_a_second_parent` had
+    // before R4: `holder` was never bound, so the base holds no such directory.
+    // The symlink's second parent is now decided by its derived count, after
+    // the directory merge, so the header naming an absent directory is refused
+    // first, where the old same-batch check answered `multiple parents`.
+    let (mut session, link, holder) = symlink_tree(false);
+    let before = session.store.len();
+    let outcome = bind_the_symlink_again(&mut session, link, holder);
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("missing base inode"))
+        ),
+        "a header for a directory the base does not hold: {outcome:?}"
+    );
+    assert_eq!(session.store.len(), before, "nothing is offered");
 }
 
 #[test]
@@ -827,4 +875,198 @@ fn a_build_cycle_that_the_root_holds_is_refused() {
         ),
         "a cycle the root reaches through one edge must be refused: {outcome:?}"
     );
+}
+
+#[test]
+fn a_fresh_directory_bound_only_inside_a_dropped_directory_is_refused_by_an_update() {
+    // `dead` is declared new, carries a header and nothing binds it, so it is
+    // dropped. `inside` is bound only there: its upward walk ends at a directory
+    // that reaches neither the root nor a base position.
+    let (mut session, _d, _e, _f) = nested();
+    let dead = session.allocate();
+    let inside = session.allocate();
+    let before = session.store.len();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: dead,
+                changes: vec![(name("inside"), Some(inside))],
+            },
+            DirectoryUpdate {
+                parent: inside,
+                changes: Vec::new(),
+            },
+        ],
+        &[
+            InodeUpdate {
+                serial: dead,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: inside,
+                value: directory("unused"),
+            },
+        ],
+        &[dead, inside],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+        ),
+        "a fresh directory held only by a dropped one must be refused: {outcome:?}"
+    );
+    assert_eq!(
+        session.store.len(),
+        before,
+        "the refusal arrives before any object is offered"
+    );
+}
+
+#[test]
+fn a_fresh_directory_bound_only_inside_a_dropped_directory_is_refused_by_a_build() {
+    // The same statement with no base: the root binds nothing, `2` is dropped
+    // and `3` is bound only inside it. Both routes refuse with the same label.
+    let mut store = TreeStore::new();
+    let input = FilesystemInput {
+        base: None,
+        scope: layerfs_content::filesystem::scope_for_seed([0x44; 32]),
+        root_serial: 1,
+        directories: &[
+            DirectoryUpdate {
+                parent: 1,
+                changes: Vec::new(),
+            },
+            DirectoryUpdate {
+                parent: 2,
+                changes: vec![(name("inside"), Some(3))],
+            },
+            DirectoryUpdate {
+                parent: 3,
+                changes: Vec::new(),
+            },
+        ],
+        inodes: &[
+            InodeUpdate {
+                serial: 1,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: 2,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: 3,
+                value: directory("unused"),
+            },
+        ],
+        new_inodes: &[1, 2, 3],
+        resources: resources(),
+    };
+    let outcome = with_objects(&mut store, |objects| {
+        build_filesystem(objects, &input, None)
+    });
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+        ),
+        "a fresh directory held only by a dropped one must be refused: {outcome:?}"
+    );
+    assert!(store.is_empty(), "nothing is offered before the refusal");
+}
+
+#[test]
+fn a_stored_directory_bound_again_inside_a_dropped_directory_is_refused() {
+    // `e` keeps `/d/e` and is bound once more inside a directory this batch
+    // allocates and never binds. The placement's upward walk ends at that
+    // dropped directory, which reaches neither the root nor a base position, so
+    // the proof refuses it before anything is offered. The validator this
+    // replaced emitted the directory with a count of two.
+    let (mut session, _d, e, _f) = nested();
+    let dead = session.allocate();
+    let before = session.store.len();
+    let outcome = session.apply(
+        &[DirectoryUpdate {
+            parent: dead,
+            changes: vec![(name("again"), Some(e))],
+        }],
+        &[InodeUpdate {
+            serial: dead,
+            value: directory("unused"),
+        }],
+        &[dead],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+        ),
+        "a binding inside a dropped directory reaches nothing: {outcome:?}"
+    );
+    assert_eq!(session.store.len(), before, "nothing was offered");
+}
+
+#[test]
+fn a_stored_directory_moved_only_into_a_dropped_directory_is_refused() {
+    // `e` loses `/d/e` and is bound only inside a dropped directory. Its
+    // derived count would be one, so only the proof can refuse it: accepted,
+    // it would stay in the inode table with no reachable name.
+    let (mut session, d, e, _f) = nested();
+    let dead = session.allocate();
+    let before = session.store.len();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: d,
+                changes: vec![(name("e"), None)],
+            },
+            DirectoryUpdate {
+                parent: dead,
+                changes: vec![(name("e"), Some(e))],
+            },
+        ],
+        &[InodeUpdate {
+            serial: dead,
+            value: directory("unused"),
+        }],
+        &[dead],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+        ),
+        "a stored directory moved into a dropped one reaches nothing: {outcome:?}"
+    );
+    assert_eq!(session.store.len(), before, "nothing was offered");
+}
+
+#[test]
+fn a_stored_symlink_bound_again_inside_a_dropped_directory_has_two_parents() {
+    // A symlink is not topology evidence. A binding stated in a dropped
+    // directory is still counted, so the symlink's derived count is two and the
+    // reducer refuses it; the dropped directory builds no page.
+    let (mut session, link, _holder) = symlink_tree(true);
+    let dead = session.allocate();
+    let before = session.store.len();
+    let outcome = session.apply(
+        &[DirectoryUpdate {
+            parent: dead,
+            changes: vec![(name("again"), Some(link))],
+        }],
+        &[InodeUpdate {
+            serial: dead,
+            value: directory("unused"),
+        }],
+        &[dead],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("multiple parents"))
+        ),
+        "a second binding inside a dropped directory is a second parent: {outcome:?}"
+    );
+    assert_eq!(session.store.len(), before, "nothing was offered");
 }

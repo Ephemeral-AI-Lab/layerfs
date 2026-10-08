@@ -1,0 +1,18 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/streaming-c345efb6c36a40d8 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 9 tests
+test a_discarding_consumer_never_allocates_a_payload_copy ... ok
+test a_late_input_failure_is_returned_once_after_early_output ... ok
+test a_short_source_is_a_definitive_whole_file_result ... ok
+test children_are_emitted_before_their_parents ... ok
+test input_requests_stay_bounded_by_the_declared_windows ... ok
+test many_files_do_not_retain_the_whole_workload ... ok
+test root_identity_is_stable_across_repeated_streaming_runs ... ok
+test the_builder_retains_a_bounded_number_of_entries ... ok
+test unknown_length_and_known_length_agree_object_by_object ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

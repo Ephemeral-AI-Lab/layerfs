@@ -1,0 +1,22 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_references_backed-962fbe5734095183 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 13 tests
+test authenticated_max_count_plus_one_is_length_overflow_before_release_or_final_root_on_both_routes ... ok
+test complete_zero_seed_finishes_before_any_directory_release_even_across_windows ... ok
+test deep_release_persists_namespace_frames_and_finishes_all_fifo_windows ... ok
+test late_final_row_failure_is_forwarded_as_error_without_eof_finalization_or_later_demand ... ok
+test missing_fresh_membership_and_stale_row_guard_cannot_change_rows_or_touch_witnesses ... ok
+test missing_work_window_is_not_false_completion_and_no_rows_are_dropped_for_final_scan ... ok
+test new_child_inside_released_rebuilt_parent_remains_an_explicit_refusal_with_known_children_retained ... ok
+test paged_release_keeps_actual_utf8_name_boundaries_and_all_repeated_parent_pages ... ok
+test rebuilt_released_directory_requires_same_save_capability_and_keeps_original_accepted_reader_error ... ok
+test release_creates_lower_serial_rows_repeated_counts_and_surviving_aliases_without_losing_final_rows ... ok
+test required_row_touch_fresh_and_full_key_grammar_fail_without_final_output_or_later_calls ... ok
+test row_plus_touch_mutation_and_child_progress_are_atomic_and_keep_original_refusal_custody ... ok
+test wide_multiwindow_direct_rows_remove_the_reducer_quota_and_match_canonical_roots ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 61c0f4aa3, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_streamed-26327536ba8072bf --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test a_present_empty_update_retains_the_original_directory_and_root ... ok
+test counts_order_and_point_disagreement_refuse_before_final_output ... ok
+test generated_wide_stream_matches_the_existing_resident_canonical_root ... ok
+test original_cursor_failure_stops_before_future_rows_objects_or_replay ... ok
+test paged_effective_names_match_the_resident_move_with_removals_and_insertions ... ok
+test removed_and_unchanged_points_distinguish_a_move_from_a_second_parent ... ok
+test the_same_effective_cycle_validator_rejects_a_streamed_self_move ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

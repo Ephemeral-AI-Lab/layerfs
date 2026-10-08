@@ -13,12 +13,34 @@ pub(super) const COUNT: u32 = CONTEXT + 3;
 pub(crate) const QUALIFY_CONTEXT: u32 = CONTEXT + 0x10;
 pub(crate) const QUALIFY_INODE: u32 = CONTEXT + 0x11;
 pub(crate) const QUALIFY_QUEUE: u32 = CONTEXT + 0x12;
+/// Validation topology evidence: placements, territory marks, rooted marks, the
+/// territory queue and scanned parents. Kinds +0x20..=+0x2F are reserved for it.
+pub(crate) const TOPOLOGY_PLACED: u32 = CONTEXT + 0x20;
+pub(crate) const TOPOLOGY_TERRITORY: u32 = CONTEXT + 0x21;
+pub(crate) const TOPOLOGY_ROOTED: u32 = CONTEXT + 0x22;
+pub(crate) const TOPOLOGY_QUEUE: u32 = CONTEXT + 0x23;
+pub(crate) const TOPOLOGY_SCANNED: u32 = CONTEXT + 0x24;
 pub(super) const WINDOW: usize = 65_536;
 
-pub(super) fn key(kind: u32, serial: u64) -> ConstructionRecordKey {
+pub(crate) fn key(kind: u32, serial: u64) -> ConstructionRecordKey {
     let mut key = [0; 32];
     key[24..].copy_from_slice(&serial.to_be_bytes());
     ConstructionRecordKey { kind, key }
+}
+/// The serial a full enumerated key addresses; any other key shape is refused.
+pub(crate) fn serial(key: [u8; 32]) -> ContentResult<u64> {
+    if key[..24].iter().any(|byte| *byte != 0) {
+        return Err(ContentError::InvalidRecord("filesystem state key"));
+    }
+    let serial = u64::from_be_bytes(
+        key[24..]
+            .try_into()
+            .map_err(|_| ContentError::UnexpectedEof)?,
+    );
+    if serial == 0 {
+        return Err(ContentError::InvalidRecord("filesystem state key"));
+    }
+    Ok(serial)
 }
 pub(super) fn context(input: &dyn OperationInput) -> Vec<u8> {
     // The base-presence flag distinguishes None from a full all-zero identity.

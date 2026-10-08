@@ -741,8 +741,8 @@ fn merge_inputs_and_output_are_covered_by_the_declared_ceiling() {
 
 #[test]
 fn a_build_has_no_independent_cycle_walk_limit() {
-    // A base-less build walks only its supplied bindings. The former fixed
-    // 4,096 boundary is charged as work and can be crossed under resources.
+    // A base-less build proves only the directories it places. The former fixed
+    // 4,096 boundary bounds nothing and can be crossed under resources.
     let limit = 4_096;
     let scope = layerfs_content::filesystem::scope_for_seed([0x6d; 32]);
     let temp = TempDir::new("bounds-cycle-limit");
@@ -781,20 +781,36 @@ fn a_build_has_no_independent_cycle_walk_limit() {
         build_filesystem(&mut objects, &input, Some(&mut backing))
     };
     let built = build_wide(limit - 8, scope).expect("a directory just under the limit");
-    assert!(
-        built.counters.validation.entries_examined > 0,
-        "the walk's entries are charged to the build: {:?}",
+    // The reachability walk that charged one entry per supplied binding is
+    // retired: a build of files alone places no directory and walks nothing.
+    assert_eq!(
+        (
+            built.counters.validation.entries_examined,
+            built.counters.validation.placements,
+            built.counters.validation.ancestry_steps,
+        ),
+        (0, 0, 0),
+        "a build of files has no topology to prove: {:?}",
         built.counters.validation
     );
-    // The old boundary is still charged as work, and a larger build succeeds.
+    // What the build does classify is its rows: the root header and each name.
+    assert_eq!(
+        built.counters.validation.peak_window_rows,
+        (limit - 8 + 1) as u64
+    );
+    // The former boundary is ordinary classified input, and a larger build succeeds.
     let at_limit = build_wide(
         limit,
         layerfs_content::filesystem::scope_for_seed([0x6f; 32]),
     )
     .expect("a build stating exactly the ceiling is accepted");
     assert_eq!(
-        at_limit.counters.validation.entries_examined, limit as u64,
-        "the accepted boundary build charges exactly the ceiling's entries: {:?}",
+        (
+            at_limit.counters.validation.entries_examined,
+            at_limit.counters.validation.peak_window_rows,
+        ),
+        (0, (limit + 1) as u64),
+        "the boundary build classifies its rows and walks none: {:?}",
         at_limit.counters.validation
     );
     let beyond = build_wide(
@@ -803,14 +819,17 @@ fn a_build_has_no_independent_cycle_walk_limit() {
     )
     .expect("one binding over the former limit builds");
     assert_eq!(
-        beyond.counters.validation.entries_examined,
-        (limit + 1) as u64
+        (
+            beyond.counters.validation.entries_examined,
+            beyond.counters.validation.peak_window_rows,
+        ),
+        (0, (limit + 2) as u64)
     );
     let _ = backing.cleanup_failed();
 }
 
-/// A subtree past the former fixed 4,096-entry ceiling can still be renamed
-/// when the caller's ordering-memory resource covers the actual walk.
+/// A subtree past the former fixed 4,096-entry ceiling can still be renamed:
+/// no ceiling applies, because a rename within one parent walks nothing.
 #[test]
 fn a_directory_larger_than_the_former_walk_ceiling_can_be_rebound() {
     let limit = 4_096;
@@ -884,14 +903,25 @@ fn a_directory_larger_than_the_former_walk_ceiling_can_be_rebound() {
         .apply(&directories, &inodes, &new_inodes)
         .expect("growing a large directory does not walk it");
 
-    // Step three: the rename pays for its effective walk and succeeds.
+    // Step three: the rename stays inside the root, so no placement can land
+    // in the moved directory and its entries are never listed.
     let directories = vec![DirectoryUpdate {
         parent: 1,
         changes: vec![(name("d"), None), (name("moved"), Some(parent))],
     }];
-    session
+    let renamed = session
         .apply(&directories, &[], &[])
-        .expect("resource-backed rename");
+        .expect("a rename within the root");
+    let validation = renamed.counters.validation;
+    assert_eq!(
+        (
+            validation.placements,
+            validation.territory_directories,
+            validation.entries_examined,
+        ),
+        (1, 0, 0),
+        "one placement under the root and no base walk: {validation:?}"
+    );
     let _ = child;
 }
 
@@ -1407,15 +1437,18 @@ fn binding_lookups_are_batched_per_phase() {
     // each demand was its own root descent, so the validation's wave count grew
     // with k (2k on a two-level inode table); now the phase's demands are one
     // grouped read, so the wave count is the table's height whatever k is — while
-    // `inode_demands` still counts every demand.
+    // `inode_demands` still counts every demand. A resident input is one
+    // classification window, which is what keeps that grouped read single.
     let (small_demands, small_waves, small_pages, small_root) = binding_demands(500);
     let (large_demands, large_waves, large_pages, large_root) = binding_demands(1_500);
-    // Each file is renamed: two changes, each naming the same stored child.
+    // Each file is renamed: one removed name and one bound name. One
+    // classification pass replaced the binding loop and the cycle walk that each
+    // demanded every bound child, so a bound child is demanded once.
     assert_eq!(
-        small_demands, 1_001,
-        "500 renames demand 1,000 children plus the parent"
+        small_demands, 501,
+        "500 renames demand 500 bound children plus the parent"
     );
-    assert_eq!(large_demands, 3_001, "the demand count follows k");
+    assert_eq!(large_demands, 1_501, "the demand count follows k");
     assert_eq!(
         small_waves, large_waves,
         "the wave count does not: {small_waves} against {large_waves}"

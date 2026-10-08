@@ -94,9 +94,12 @@ impl IndexedConstructionBacking for Records {
     ) -> ContentResult<ConstructionRecordApply> {
         self.enter()?;
         assert!(changes.windows(2).all(|p| p[0].key < p[1].key));
+        // Serial state and reference rows, plus the validation's topology
+        // evidence in its own reserved kinds.
         assert!(changes
             .iter()
-            .all(|c| (CONTEXT..=CONTEXT + 9).contains(&c.key.kind)));
+            .all(|c| (CONTEXT..=CONTEXT + 9).contains(&c.key.kind)
+                || (CONTEXT + 0x20..=CONTEXT + 0x2F).contains(&c.key.kind)));
         let bytes = changes.capacity() * std::mem::size_of::<ConstructionRecordChange>()
             + changes
                 .iter()
@@ -164,10 +167,10 @@ impl IndexedConstructionBacking for Records {
     }
     fn keys_after(&mut self, kind: u32, after: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
         self.enter()?;
-        assert_eq!(
-            kind,
-            CONTEXT + 6,
-            "only sealed touched membership uses this cursor"
+        // The rooted proof enumerates the placements classification sealed.
+        assert!(
+            kind == CONTEXT + 6 || kind == CONTEXT + 0x20,
+            "only sealed touched membership and sealed placements use this cursor"
         );
         Ok(self
             .values
@@ -425,7 +428,14 @@ fn backed_initial_counts_and_streamed_final_rows_preserve_real_alias_counts() {
     )
     .unwrap();
     assert_eq!((result.root, result.value), (expected.root, expected.value));
-    assert_eq!(result.counters, expected.counters);
+    // R4: the classification window is a route property - one window of 64
+    // rows with a backing, the whole input (one header and 258 bound names)
+    // without one. Every other counter is the same on both routes.
+    assert_eq!(result.counters.validation.peak_window_rows, 64);
+    assert_eq!(expected.counters.validation.peak_window_rows, 259);
+    let mut counters = result.counters;
+    counters.validation.peak_window_rows = expected.counters.validation.peak_window_rows;
+    assert_eq!(counters, expected.counters);
 }
 
 #[test]

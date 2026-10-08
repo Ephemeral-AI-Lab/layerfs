@@ -3,7 +3,7 @@ use super::{
     record::Row,
     reduce::{FinalChange, PendingState, ReferenceWork},
 };
-use crate::object::inode_leaf::InodeValue;
+use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::{ContentError, ContentResult};
 
 pub(super) fn retained(row: &mut Row) -> ContentResult<()> {
@@ -100,6 +100,14 @@ pub(super) fn finish(row: Row, root: u64, work: &mut ReferenceWork) -> ContentRe
             }
         }
     };
+    // The leaf grammar gives a directory or a symlink exactly one binding. The
+    // count is derived from the bindings the merge observed, so a second parent
+    // is refused here, where the value is produced, on every reducer route.
+    if value
+        .is_some_and(|value| value.kind != InodeKind::RegularFile && value.namespace_ref_count > 1)
+    {
+        return Err(ContentError::InvalidRecord("multiple parents"));
+    }
     if value.is_some() {
         work.final_values = work.final_values.saturating_add(1);
     } else {
