@@ -1,0 +1,36 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 36f72ebd7, uncommitted product/test paths=5, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_parking-06841449600ba812 --test-threads=1 --nocapture
+
+running 4 tests
+test fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progresses ... FP-34 admission: readers=20 leases_held=2 a_admitted=16 a_parked=16 a_received=2 a_queued=0 a_running=0 a_retained=0 steady_observations=100 read_admissions_waiting=16 sibling_append=Some(Some(0)) b_completed=13->16 a_after=(16,16,2) readers_still_blocked=20
+FP-34 admission: sampler observations=185 max_admitted=16 max_received=2 max_parked=16 over_bound=0 after_release readers_exact=20 a_retained=0 a_terminal=0
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+test fp8_a_read_of_a_file_written_through_the_mount_completes_while_cold_reads_are_parked ... FP-8 read: readers=4 leases_held=2 read_while_held=None a_parked=4->5 a_handoffs=42->44 a_completed=38->39 read_admissions_waiting=4->5 reader_grants=46->46
+PARKING_DEVIATION FP-8: the read of a file written through the mount did not complete while every Store reader was leased: after 3s the process had not exited; A parked 4 -> 5, Store read admissions waiting 4 -> 5, grants 46 -> 46. The request waits for a reader although the file has no base demand
+FP-8 read: after release the same process returned its 26 exact bytes
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+
+thread 'fp8_a_read_of_a_file_written_through_the_mount_completes_while_cold_reads_are_parked' panicked at crates/layerfs-daemon/tests/mounted_parking.rs:236:9:
+FP-8 read: 1 product expectations did not hold: [
+    "FP-8: the read of a file written through the mount did not complete while every Store reader was leased: after 3s the process had not exited; A parked 4 -> 5, Store read admissions waiting 4 -> 5, grants 46 -> 46. The request waits for a reader although the file has no base demand",
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked ... FP-8 writes: readers=4 leases_held=2 parked_on_a=4 read_admissions_waiting=4 same_mount_append=Some(Some(0)) a_handoffs=42->45 a_completed=38->41 sibling_append=Some(Some(0)) b_completed=13->16 parked_on_a_after=4 readers_still_blocked=4 reader_grants=46->46
+FP-8 writes: after release readers_exact=4 reader_grants=60 both_files_exact=true
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+test the_holds_are_exact_and_are_returned_on_every_path ... HOLDS readers=2 leased_all=true further_admission_waited=true unwinding_holder_quarantined=0 lifecycle_pair_refused_third=true credits_returned=true
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+
+failures:
+
+failures:
+    fp8_a_read_of_a_file_written_through_the_mount_completes_while_cold_reads_are_parked
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.91s
+
+R4_WALL seconds<=5 limit=115s lock_wait=0s
+EXIT 101
