@@ -792,3 +792,46 @@ Added from the R5 reviews, into existing tracks:
   completions; an owner started with one Lifecycle slot serves a mount and
   refuses every Commit.
 
+## Amendment 1 (2026-10-09, before tracks U and W edit product source)
+
+From the read-only design checks of tracks U and W against `66e4e7ab1`, and
+track A's result. Each item replaces the text it names.
+
+- **Frozen interface (section 4).** `Forced.detach` is
+  `DetachAttempt { NotAttempted, Detached, Failed(Errno) }`, exported from
+  `layerfs_fuse::session`; `Option<Errno>` could not tell "not attempted" from
+  "succeeded". `EBUSY` is `Failed(EBUSY)`; track D maps it to `Busy`.
+- **Gates (section 2.2).** `reserve_serial` is synchronous and has neither
+  wait. It gets an entry check: a stopped fence returns `Fenced` before the
+  attempt. That is a third kind of gate, for this one call.
+- **RELEASEDIR.** Its handle lookup is a gated call. Under a stopped fence it
+  replies `ENOTCONN` and leaves the handle row to Revoke; RELEASE still
+  closes its file. Recorded as a difference, not unified.
+- **Fence ownership.** The lane owns the fence; a stale lane yields a fence
+  that is already stopped. A terminal reply is counted at the reply attempt
+  whatever its release result; a receive waiter's `ENOTCONN` is not counted.
+- **Single effects.** After one forced detach attempt, a second
+  `force_drain` and a normal `detach()` are refused before any syscall. A
+  fenced failure that holds a publication ends `Retained`.
+- **Abort control binding.** Bound only for a mount row of type `fuse`,
+  source `layerfs` and device major 0.
+- **Wire (section 2.2).** `AbortDisposition`, `DetachDisposition` and
+  `ForcedCleanup` are fieldless one-byte enums; the short count and errnos
+  have no wire field and go into the bounded detail text. The only
+  cross-field checks are the two on `TeardownStage::Abort`. Worst-case sizes
+  read from source: tag 11 55 bytes, tag 14 304, tag 15 2,356.
+- **Write sets (section 4).** `mounted_commit_failures.rs` needs no edit in
+  track U. Track U builds the daemon, so it starts only after A is committed.
+- **Row R6-1 (section 5).** After 15 queued acquisitions the Source counter
+  is 15, because the holder's completion was dropped; the test queues a 16th
+  and the refused one is the 17th.
+- **Order (section 4).** Proof tracks P1 and P2 start beside U and W: they
+  need neither forced teardown nor the fusectl support. P1 owns
+  `support/holds.rs`. Track T shrinks to `support/fusectl.rs`,
+  `support/history_gate.rs` and the `try_force` helper, after D. Their
+  receipts are taken again at the final identity where a later track changes
+  product source under them.
+- **Noted:** `core/benchmark/fs-bench-pro/shared/evidence_engine.py` bounds
+  `peak_queued` by `4 * 18`, the old per-lane ceiling. Not edited in R6; the
+  harness is revisited before the R8 freeze.
+
