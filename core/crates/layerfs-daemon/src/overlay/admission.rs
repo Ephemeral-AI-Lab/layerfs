@@ -143,6 +143,12 @@ impl OwnerClient {
         })
     }
 }
+impl OwnerClient {
+    /// The fixed limits this owner was started with.
+    pub fn configuration(&self) -> OwnerConfig {
+        self.shared.config
+    }
+}
 struct ThreadWake(Thread);
 impl Wake for ThreadWake {
     fn wake(self: Arc<Self>) {

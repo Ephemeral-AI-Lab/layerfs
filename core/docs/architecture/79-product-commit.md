@@ -36,8 +36,21 @@ the install and the releases — waits for a credit before its one attempt
 (`OwnerClient::submit_waiting`, [`overlay/admission.rs`](../../crates/layerfs-daemon/src/overlay/admission.rs)),
 as a filesystem request does. A Workspace busy with other callers delays a
 Commit; it does not refuse it. The wait is readiness before the attempt, not a
-retry: a stopped owner, or a charge that no released credit could cover,
-returns the original command unattempted. It has no bound of its own.
+retry: a stopped owner, a charge that no released credit could cover, or a
+full table of admission registrations returns the original command
+unattempted. It has no bound of its own, and waiters are woken together with
+no queue order, so sustained traffic can delay a Commit without limit.
+
+The Commit thread keeps completions of its own while it waits: the capture's
+(one ordinary credit) throughout, and on a failure the original completion of
+a refused acquisition or port call (one Lifecycle or ordinary credit).
+`commit_captured` therefore refuses before any effect, as a settled
+`Context` failure, when the owner was started with fewer than two ordinary or
+two Lifecycle job slots per Workspace: its own wait could never end. After a
+locally settled failure the done resolution's completion is dropped before
+the releases, because with the default two Lifecycle slots it and a refused
+acquisition's completion would otherwise hold both; `locally_settled` records
+the fact and `CommitFailure::local` is then `None`.
 
 Commit does not consult the native mount state. A Bound Workspace and a
 mounted one commit the same way, and the frontier is whatever is locally
@@ -81,7 +94,7 @@ Nothing is released inside the closure. When the driver returns:
 | --- | --- |
 | Committed or UpToDate, with known install | Released: reader, then owner |
 | Definite failure that the driver resolved locally | Released the same way |
-| Uncertain cause, known publication with failed install, or failed local resolution | Kept. `CommitFailure::namespace` names both, with the attempt's record and file custody |
+| Uncertain cause, known publication with failed install, or failed local resolution | Kept. `CommitFailure::namespace` names both. When construction itself failed it also holds the attempt's record and file custody, with the first cause moved out into `CommitFailure::error` |
 
 The attempt's custody is dropped before the first release. A release that is
 refused or fails ends the sequence; the owner it did not release stays named
@@ -99,7 +112,15 @@ ran, and under a caller's constructor.
 A known Commit whose reader or owner was not released is still published and
 installed. The registry records `LocalFailure` with the publication, the reply
 is the existing "known result followed by a local failure" form, and later
-Commit and normal unmount are refused as for any retained custody.
+Commit and normal unmount are refused as for any retained custody. A settled
+failure whose reader or owner was not released is recorded `Uncertain` and
+answered with code `Unknown`, with the original cause in the detail: the
+nonpublication is known, the custody is not ended.
+
+A guarded record change that the Overlay answered `NotApplied` is a definite
+nonapplication, yet its completion carries an `Ok` reply and is classified
+with the unknown outcomes: the producer's own records were not what it had
+written, and both owners are kept for inspection instead of being released.
 
 ## Wire
 
@@ -129,8 +150,12 @@ holds back later source acquisitions until it has run.
   jobs still occupy ordinary slots of the Workspace. Sixteen concurrent
   requests can then leave no slot for the request whose source the install
   waits for. Not fixed here; it is R6 work.
-- `CommitSuccess` and an unresolved `CommitFailure` still hold the capture
-  and install or resolution completions, each one credit, until dropped.
+- `CommitSuccess` holds the capture and install completions, and a
+  `CommitFailure` the capture's and any original failed completion, each one
+  credit, until dropped. On the driver's own route (`Service::execute`) a
+  failure also keeps the resolution's.
+- Admission waits are unordered and unbounded; fairness between a waiting
+  Commit and filesystem requests is R6 work.
 - An unknown outcome has no resolver. Its custody stays until an owner ruling
   or forced teardown.
 - Durable: `NOT_RUN — disabled by owner until explicit reauthorization`.

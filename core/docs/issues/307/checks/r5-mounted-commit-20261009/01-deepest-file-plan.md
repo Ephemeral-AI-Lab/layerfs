@@ -261,3 +261,28 @@ change. The host-and-Linux product test without a mount is a rewritten case in
 the existing `native_control.rs`; the fuller model test moves to track K as
 `product_commit.rs`, which calls `BoundWorkspace::commit_captured` directly
 because the registry does not expose its bound Workspace to a test.
+
+## Amendment 2 (recorded with the fixes, 2026-10-09)
+
+Three corrections to sections 2.2 and 2.3, each made as its own source
+identity after a proof track or a fresh-context review found the plan wrong:
+
+- **Release receipt.** The plan kept "two original release completions". Each
+  holds a Lifecycle credit and a Workspace has two, so a settled refusal could
+  not release its operation owner (track K, `K-attempt2`). The receipt now
+  records which owners were released and keeps only a refused release's
+  completion (`6e8cb6ede`).
+- **Admission.** The plan left Commit jobs on `try_submit`. They wait for a
+  credit before their one attempt (`OwnerClient::submit_waiting`,
+  `6e8cb6ede`). The wait made two self-deadlocks reachable, which the review
+  found: a refused owner acquisition's completion plus the resolution's held
+  both Lifecycle credits (`R1-attempt1`, hang reproduced), and an owner started
+  with one slot of a kind. The resolution's completion is dropped before the
+  releases, and the product route refuses before effect below two slots.
+- **Control after a settled failure.** Section 2.3 covered an unreleased owner
+  only after a known Commit. A settled failure with an unreleased owner is now
+  recorded `Uncertain` and answered `Unknown`.
+
+Not changed: a `NotApplied` record reply stays classified with the unknown
+outcomes (decision for owner review in the completion record).
+

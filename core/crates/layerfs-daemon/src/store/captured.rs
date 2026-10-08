@@ -20,6 +20,20 @@ impl BoundWorkspace {
     /// synchronous captured ports, so it is never a native receive or
     /// request-service worker.
     pub fn commit_captured(&self) -> Result<CommitSuccess, Box<CommitFailure>> {
+        // This thread keeps the capture's completion while it waits for
+        // ordinary credits, and may keep one failed acquisition's while it
+        // waits for a Lifecycle credit. With fewer than two slots of either
+        // kind that wait could never end, so nothing is attempted.
+        let slots = self.owner.configuration();
+        if slots.jobs_per_namespace < 2 || slots.lifecycle_jobs_per_namespace < 2 {
+            let mut refused = CommitFailure::new(
+                CommitError::Context("owner job slots below the Commit minimum"),
+                self.identity,
+                self.route(),
+            );
+            refused.locally_settled = true;
+            return Err(Box::new(refused));
+        }
         let held = RefCell::new(None);
         let result = self.commit(|save, capture, _| {
             let mut slot = held.borrow_mut();
@@ -38,6 +52,9 @@ impl BoundWorkspace {
                 // Only a definite, locally resolved nonpublication ends the
                 // attempt's ownership. Anything else keeps every owner.
                 if let (true, Some(held)) = (failure.locally_settled, &mut held) {
+                    // The resolution is known done; its completion would keep
+                    // a Lifecycle credit that the releases wait for.
+                    failure.local = None;
                     self.release_captured(held);
                 }
                 failure.namespace = held;

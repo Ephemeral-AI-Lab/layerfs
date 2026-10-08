@@ -733,7 +733,12 @@ fn definite_refusal(label: &str, config: OwnerConfig) {
         publish.locally_settled && publish.published.is_none(),
         "{publish:?}"
     );
-    assert!(done(publish.local.as_ref()), "{publish:?}");
+    // The resolution is known done (`locally_settled`); the product route
+    // drops its completion before the releases, which need that credit.
+    assert!(
+        publish.local.is_none() && publish.local_error.is_none(),
+        "{publish:?}"
+    );
     assert!(publish.saved.is_some() && publish.intent.is_some());
     let namespace = publish.namespace.as_ref().expect("the product closure ran");
     assert!(
@@ -993,5 +998,147 @@ fn a_commit_waits_for_owner_admission_and_is_not_refused() {
     model::assert_same(&expected, &live(&workspace), "live view after install");
     settled(&client, 0);
     rig.close(&workspace);
+    rig.finish();
+}
+
+/// The reader is acquired, then the operation owner is refused with a
+/// definite original completion, which the failure keeps with its Lifecycle
+/// credit. The local resolution and the reader's release each need one more:
+/// with two per Workspace the Commit must still end, settled, and must
+/// release the reader it acquired.
+#[test]
+fn a_refused_owner_acquisition_is_settled_and_releases_the_reader() {
+    let rig = Rig::new("product-commit-owner-refused", tree);
+    let workspace = rig.bind(1);
+    let mut session = Session::new(&workspace, rig.base.clone());
+    session.all(&[
+        Do::Create("kept.txt", 0o644),
+        Do::Write("kept.txt", 0, b"committed after the refusal"),
+    ]);
+    let expected = session.model.flat();
+    let client = rig.owner.client();
+    assert_eq!(rig.owner.configuration().lifecycle_jobs_per_namespace, 2);
+    // A real operation owner already holds the request the first capture of
+    // this Workspace uses, so the constructor's own acquisition is refused.
+    let blocker = match job(
+        &client,
+        workspace.route(),
+        Command::AcquireOperation { request: 1 },
+    )
+    .result()
+    {
+        Ok(Response::Operation(Some(owner))) => *owner,
+        other => panic!("{other:?}"),
+    };
+    settled(&client, 0);
+    let finished = AtomicBool::new(false);
+    let failure = std::thread::scope(|scope| {
+        let commit = scope.spawn(|| {
+            let result = workspace.commit_captured();
+            finished.store(true, Ordering::Release);
+            result
+        });
+        // A Commit parked on its own credits can never be joined: end the
+        // process with the evidence instead of waiting for the wall limit.
+        let until = Instant::now() + Duration::from_secs(30);
+        while !finished.load(Ordering::Acquire) {
+            if Instant::now() >= until {
+                evidence(format_args!(
+                    "PRODUCT_COMMIT_OWNER_REFUSED outcome=HUNG diagnostics={:?}",
+                    client.diagnostics()
+                ));
+                std::process::exit(3);
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        commit.join().unwrap()
+    })
+    .expect_err("the operation owner was refused");
+    assert_eq!(failure.phase, CommitPhase::Construct);
+    assert_eq!(request(failure.capture.unwrap()), 1);
+    let CommitError::Completion(original) = &failure.error else {
+        panic!("{:?}", failure.error)
+    };
+    assert!(original.result().is_err(), "{original:?}");
+    assert!(
+        failure.locally_settled && failure.published.is_none(),
+        "{failure:?}"
+    );
+    assert!(failure.local.is_none() && failure.local_error.is_none());
+    let namespace = failure.namespace.as_ref().expect("the closure ran");
+    assert!(!namespace.retained(), "{namespace:?}");
+    assert_eq!(namespace.released, [ReleasedOwner::Reader], "{namespace:?}");
+    assert!(
+        namespace.release_failure.is_none() && namespace.release_error.is_none(),
+        "{namespace:?}"
+    );
+    evidence(format_args!(
+        "PRODUCT_COMMIT_OWNER_REFUSED lifecycle_slots=2 phase={:?} original={:?} locally_settled={} released={:?} retained={}",
+        failure.phase,
+        original.result().as_ref().err(),
+        failure.locally_settled,
+        namespace.released,
+        namespace.retained()
+    ));
+    drop(failure);
+    // The Overlay holds no reader for that request, and only the blocker.
+    assert_eq!(retained(&rig, &workspace, 1), (None, Some(blocker)));
+    assert!(done(Some(&job(
+        &client,
+        workspace.route(),
+        Command::ReleaseOperation(blocker)
+    ))));
+    model::assert_same(&expected, &live(&workspace), "live view after the refusal");
+    let success = workspace
+        .commit_captured()
+        .unwrap_or_else(|failure| panic!("{failure:?}"));
+    let published = record(&success);
+    receipt(success.namespace.as_ref(), success.capture);
+    drop(success);
+    model::assert_same(&expected, &rebound(&rig, 2, published.root), "fresh bind");
+    settled(&client, 0);
+    rig.close(&workspace);
+    rig.finish();
+}
+
+/// The Commit thread keeps one completion of each kind while it waits for
+/// another. An owner started with a single Lifecycle slot could never serve
+/// that wait, so the product route refuses before any effect.
+#[test]
+fn a_commit_is_refused_before_effect_below_two_job_slots() {
+    let (rig, handles) = observed(
+        "product-commit-slots",
+        Boundary::LostAcknowledgement,
+        OwnerConfig {
+            lifecycle_jobs_per_namespace: 1,
+            ..OwnerConfig::default()
+        },
+    );
+    let workspace = rig.bind(1);
+    let mut session = Session::new(&workspace, rig.base.clone());
+    session.all(&[Do::Create("never.txt", 0o644)]);
+    let expected = session.model.flat();
+    let before = history(&rig);
+    let refused = workspace.commit_captured().unwrap_err();
+    assert_eq!(refused.phase, CommitPhase::Admission);
+    assert!(
+        matches!(
+            refused.error,
+            CommitError::Context("owner job slots below the Commit minimum")
+        ),
+        "{:?}",
+        refused.error
+    );
+    assert!(refused.locally_settled && refused.published.is_none());
+    assert!(refused.capture.is_none() && refused.namespace.is_none());
+    evidence(format_args!(
+        "PRODUCT_COMMIT_SLOTS lifecycle_slots=1 phase={:?} error={:?} locally_settled={} capture=None",
+        refused.phase, refused.error, refused.locally_settled
+    ));
+    drop(refused);
+    assert_eq!(history(&rig), before);
+    model::assert_same(&expected, &live(&workspace), "live view after the refusal");
+    rig.close(&workspace);
+    drop(handles);
     rig.finish();
 }

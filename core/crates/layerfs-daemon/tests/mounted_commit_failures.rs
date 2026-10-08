@@ -962,7 +962,11 @@ impl Case {
         );
         expect!(
             self.checks,
-            left.published.is_none() && left.settled && left.local == Some(true),
+            // When the constructor ran, the product route drops the done
+            // resolution's completion before its releases.
+            left.published.is_none()
+                && left.settled
+                && left.local == (!constructed).then_some(true),
             "{name}: a definite nonpublication is resolved locally: published={:?} settled={} local={:?} local_error={:?}",
             left.published,
             left.settled,

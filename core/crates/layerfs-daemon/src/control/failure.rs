@@ -93,7 +93,18 @@ impl Failure {
                 )
             }
             Self::Commit(failed) => {
-                let (code, moved, detail) = commit(&failed.error);
+                let (mut code, moved, mut detail) = commit(&failed.error);
+                // A settled failure whose reader or owner was not released
+                // still leaves custody; the reply must not read as settled.
+                if code != ControlCode::Unknown
+                    && failed
+                        .namespace
+                        .as_ref()
+                        .is_some_and(|kept| kept.retained())
+                {
+                    code = ControlCode::Unknown;
+                    detail = format!("captured namespace custody retained after: {detail}");
+                }
                 (
                     code,
                     moved,

@@ -156,15 +156,15 @@ impl Service {
     ) -> Result<Success, Failure> {
         let workspace = self.admit(token, Activity::Committing)?;
         let result = run(&workspace);
-        // A known Commit whose reader or operation owner could not be
-        // released keeps that custody: it is published, and nothing later is
-        // admitted past it.
-        let unreleased = result.as_ref().is_ok_and(|commit| {
-            commit
-                .namespace
-                .as_ref()
-                .is_some_and(CapturedConstruction::retained)
-        });
+        // A Commit whose reader or operation owner could not be released
+        // keeps that custody, published or settled: nothing later is admitted
+        // past it.
+        let unreleased = match &result {
+            Ok(commit) => &commit.namespace,
+            Err(failed) => &failed.namespace,
+        }
+        .as_ref()
+        .is_some_and(CapturedConstruction::retained);
         let update = (|| {
             let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             let binding = bound_mut(&mut entries, token)?;
@@ -181,7 +181,7 @@ impl Service {
                 }
                 Err(failed) => {
                     binding.published = failed.published.clone();
-                    binding.activity = if failed.locally_settled {
+                    binding.activity = if failed.locally_settled && !unreleased {
                         Activity::Idle
                     } else if failed.published.is_some() {
                         Activity::LocalFailure
