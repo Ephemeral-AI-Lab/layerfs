@@ -1,0 +1,27 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+error: implementation of `FnOnce` is not general enough
+  --> crates/layerfs-workspace/src/operations/native_read.rs:84:13
+   |
+84 |             db.observe_native_open(self.mount, self.source, writable, decide)
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ implementation of `FnOnce` is not general enough
+   |
+   = note: closure with signature `fn(SourceRows<'2>, u64) -> Result<NativeDecision<NativeReadDecision>, OverlayError>` must implement `FnOnce<(SourceRows<'1>, u64)>`, for any lifetime `'1`...
+   = note: ...but it actually implements `FnOnce<(SourceRows<'2>, u64)>`, for some specific lifetime `'2`
+
+error: implementation of `FnOnce` is not general enough
+  --> crates/layerfs-workspace/src/operations/native_read.rs:86:13
+   |
+86 |             db.observe_native(self.mount, self.source, lookup, decide)
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ implementation of `FnOnce` is not general enough
+   |
+   = note: closure with signature `fn(SourceRows<'2>, u64) -> Result<NativeDecision<NativeReadDecision>, OverlayError>` must implement `FnOnce<(SourceRows<'1>, u64)>`, for any lifetime `'1`...
+   = note: ...but it actually implements `FnOnce<(SourceRows<'2>, u64)>`, for some specific lifetime `'2`
+
+error: could not compile `layerfs-workspace` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

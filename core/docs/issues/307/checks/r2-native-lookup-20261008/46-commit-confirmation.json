@@ -1,0 +1,22 @@
+{
+  "commit": "cc0b9a06a36f44b837f3e85aff98476215d4dd17",
+  "tree": "030ba0df81a679cac3dc50ec25ca0ab1388c0762",
+  "first_parent": "78374ced665f62ddd502fda00013ee7703b84609",
+  "committed_tree_matches_final_staged": true,
+  "count": {
+    "combined": 172718,
+    "core": 107301,
+    "subtotals": {
+      "active": 64427,
+      "excluded_predecessors": 37431,
+      "excluded_integration": 5443,
+      "reference": 65417
+    },
+    "product_trees": {
+      "core/crates": "fc8249fa7dea97cc5a790423192bf29fde7cd530",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "delta": 935,
+  "production_trees_match_counted_snapshot": true
+}

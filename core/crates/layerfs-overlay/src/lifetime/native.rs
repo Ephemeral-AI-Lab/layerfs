@@ -92,58 +92,67 @@ impl Overlay {
             if self.native_lookup_row(mount, serial)?.is_none() {
                 return Err(OverlayError::Stale);
             }
-            let state = self.state(mount.route)?;
-            let owner = self.mint_owner(mount.route)?;
-            self.execute(
-                StatementKind::Lease,
-                "INSERT INTO native_source VALUES(?1,?2,?3,?4,?5,0)",
-                &[
-                    &mount.route.ns,
-                    &integer(mount.owner)?,
-                    &request.to_be_bytes().as_slice(),
-                    &integer(owner)?,
-                    &integer(serial)?,
-                ],
-                40,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                crate::sql::BASE_SOURCE_INSERT,
-                &[
-                    &mount.route.ns,
-                    &integer(owner)?,
-                    &state.base_root.as_slice(),
-                    &2_i64,
-                ],
-                56,
-            )?;
-            self.execute(
-                StatementKind::Workspace,
-                crate::sql::BASE_SOURCE_INCREMENT,
-                &[&mount.route.ns],
-                8,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                "INSERT INTO lease VALUES(?1,5,?2,?3)",
-                &[&mount.route.ns, &integer(owner)?, &integer(serial)?],
-                24,
-            )?;
-            self.file_ref(
-                mount.route.ns,
-                integer(serial)?,
-                LeaseKind::FileReader,
-                true,
-            )?;
-            Ok(BaseSource {
-                route: mount.route,
-                owner,
-                class: 2,
-                root: state.base_root,
-                installed: state.installed,
-            })
+            self.retain_native_source(mount, request, serial)
         })
     }
+    pub(crate) fn retain_native_source(
+        &self,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+    ) -> OverlayResult<BaseSource> {
+        let state = self.state(mount.route)?;
+        let owner = self.mint_owner(mount.route)?;
+        self.execute(
+            StatementKind::Lease,
+            "INSERT INTO native_source VALUES(?1,?2,?3,?4,?5,0)",
+            &[
+                &mount.route.ns,
+                &integer(mount.owner)?,
+                &request.to_be_bytes().as_slice(),
+                &integer(owner)?,
+                &integer(serial)?,
+            ],
+            40,
+        )?;
+        self.execute(
+            StatementKind::Lease,
+            crate::sql::BASE_SOURCE_INSERT,
+            &[
+                &mount.route.ns,
+                &integer(owner)?,
+                &state.base_root.as_slice(),
+                &2_i64,
+            ],
+            56,
+        )?;
+        self.execute(
+            StatementKind::Workspace,
+            crate::sql::BASE_SOURCE_INCREMENT,
+            &[&mount.route.ns],
+            8,
+        )?;
+        self.execute(
+            StatementKind::Lease,
+            "INSERT INTO lease VALUES(?1,5,?2,?3)",
+            &[&mount.route.ns, &integer(owner)?, &integer(serial)?],
+            24,
+        )?;
+        self.file_ref(
+            mount.route.ns,
+            integer(serial)?,
+            LeaseKind::FileReader,
+            true,
+        )?;
+        Ok(BaseSource {
+            route: mount.route,
+            owner,
+            class: 2,
+            root: state.base_root,
+            installed: state.installed,
+        })
+    }
+
     pub fn retained_native_source(
         &self,
         mount: NativeMount,
@@ -348,7 +357,7 @@ impl Overlay {
         self.atomic_cleanup(|| {
             self.check_native_attached(mount)?;
             let held = self.query(StatementKind::Lease,
-                "SELECT EXISTS(SELECT 1 FROM native_source WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2)",
+                "SELECT EXISTS(SELECT 1 FROM native_source WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_file WHERE ns=?1 AND mount=?2)",
                 &[&mount.route.ns, &integer(mount.owner)?], 16, |r| r.get::<_, bool>(0))?[0];
             if held { return Err(OverlayError::BaseSourcesPending); }
             self.execute(StatementKind::Lease, "UPDATE native_mount SET revoked=1 WHERE ns=?1 AND owner=?2",

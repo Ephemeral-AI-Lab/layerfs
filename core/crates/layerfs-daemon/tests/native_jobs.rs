@@ -165,6 +165,88 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
         .result()
         .is_ok());
     drop(receipt);
+    let done = job(
+        &client,
+        route,
+        Command::Native(NativeJob::Source {
+            mount,
+            request: u64::MAX - 1,
+            serial,
+        }),
+    );
+    let source = match done.result() {
+        Ok(Response::Native(NativeReply::Source(source))) => *source,
+        other => panic!("{other:?}"),
+    };
+    drop(done);
+    let view = operation.workspace().view_for_source(source).unwrap();
+    let mut plan = view
+        .native_read_plan(
+            mount,
+            NativeReadOperation::Open {
+                serial,
+                writable: false,
+            },
+        )
+        .unwrap();
+    let mut opened = None;
+    for _ in 0..4 {
+        let receipt = job(
+            &client,
+            route,
+            Command::Native(NativeJob::Observe(Box::new(plan.job().unwrap().clone()))),
+        );
+        let original = match receipt.result() {
+            Ok(Response::Native(NativeReply::Observed(original))) => original.clone(),
+            other => panic!("{other:?}"),
+        };
+        if let Some(value) = plan.accept(original).unwrap() {
+            opened = Some((value, receipt));
+            break;
+        }
+        drop(receipt);
+        plan.supply(&view).unwrap();
+    }
+    let (value, receipt) = opened.expect("bounded open fact rounds");
+    let file = value.file.unwrap();
+    assert!(!file.writable());
+    assert_eq!(
+        receipt
+            .work()
+            .sql
+            .family(StatementKind::Begin)
+            .unwrap()
+            .executions,
+        1
+    );
+    assert_eq!(
+        receipt
+            .work()
+            .sql
+            .family(StatementKind::Commit)
+            .unwrap()
+            .executions,
+        1
+    );
+    let done = job(
+        &client,
+        route,
+        Command::Native(NativeJob::RetainedFile {
+            mount,
+            request: u64::MAX - 1,
+        }),
+    );
+    assert!(
+        matches!(done.result(), Ok(Response::Native(NativeReply::RetainedFile(Some(retained)))) if *retained == file)
+    );
+    drop(done);
+    assert!(job(&client, route, Command::ReleaseFileRead(value.read))
+        .result()
+        .is_ok());
+    assert!(job(&client, route, Command::ReleaseBaseSource(source))
+        .result()
+        .is_ok());
+    drop((value, receipt));
     assert!(job(
         &client,
         route,
@@ -176,6 +258,56 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     )
     .result()
     .is_ok());
+    assert!(
+        job(&client, route, Command::Native(NativeJob::Revoke(mount)))
+            .result()
+            .is_err()
+    );
+    let done = job(
+        &client,
+        route,
+        Command::Native(NativeJob::FileSource {
+            mount,
+            request: u64::MAX - 2,
+            serial,
+            handle: file.owner_id(),
+        }),
+    );
+    let processing = match done.result() {
+        Ok(Response::Native(NativeReply::Source(source))) => *source,
+        other => panic!("{other:?}"),
+    };
+    drop(done);
+    assert!(job(
+        &client,
+        route,
+        Command::Native(NativeJob::CloseFile {
+            mount,
+            serial,
+            handle: file.owner_id(),
+        })
+    )
+    .result()
+    .is_ok());
+    assert!(job(
+        &client,
+        route,
+        Command::Native(NativeJob::File {
+            mount,
+            serial,
+            handle: file.owner_id(),
+        })
+    )
+    .result()
+    .is_err());
+    assert!(
+        job(&client, route, Command::Native(NativeJob::Revoke(mount)))
+            .result()
+            .is_err()
+    );
+    assert!(job(&client, route, Command::ReleaseBaseSource(processing))
+        .result()
+        .is_ok());
     assert!(
         job(&client, route, Command::Native(NativeJob::Revoke(mount)))
             .result()

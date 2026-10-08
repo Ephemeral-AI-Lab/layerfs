@@ -132,7 +132,7 @@ CREATE TABLE file_custody (
 ) STRICT, WITHOUT ROWID;
 CREATE TABLE file_handle (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    request INTEGER NOT NULL CHECK(request>0),
+    request INTEGER NOT NULL CHECK(request<>0),
     owner INTEGER NOT NULL CHECK(owner>0),
     serial INTEGER NOT NULL CHECK(serial>0),
     writable INTEGER NOT NULL CHECK(writable IN(0,1)),
@@ -233,4 +233,13 @@ CREATE TABLE native_read (
     owner INTEGER NOT NULL CHECK(owner>0),
     PRIMARY KEY(ns,mount,request), UNIQUE(ns,owner)
 ) STRICT, WITHOUT ROWID;
-PRAGMA user_version=17;
+CREATE TABLE native_file (
+    ns INTEGER NOT NULL,
+    mount INTEGER NOT NULL CHECK(mount>0),
+    request BLOB NOT NULL CHECK(length(request)=8),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    PRIMARY KEY(ns,mount,owner), UNIQUE(ns,mount,request), UNIQUE(ns,owner),
+    FOREIGN KEY(ns,mount) REFERENCES native_mount(ns,owner),
+    FOREIGN KEY(ns,owner) REFERENCES file_handle(ns,owner) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+PRAGMA user_version=18;

@@ -98,16 +98,17 @@ product mental model or campaign-specific benchmark procedures.
 
 ## Architecture and public contracts
 
-Overlay schema17 uses `directory_entry` and `operation_record` terminology,
+Overlay schema18 uses `directory_entry` and `operation_record` terminology,
 including owned/indexed variants, throughout SQL and the active public ports.
 Workspaces still share physical tables partitioned by namespace. The naming
 change authorizes no physical table redesign; generic temporary buffers and
 historical receipts retain their distinct terms. See the
 [terminology guide](docs/architecture/64-overlay-terminology.md).
 Schema17 adds native mount/source/lookup/read associations, atomic Workspace
-read observations and bounded revoked-lookup retirement; see
+read observations and bounded revoked-lookup retirement. Schema18 adds native
+file associations over the existing OpenFile owner and atomic open decisions; see
 [native read custody](docs/architecture/73-native-read-custody.md). This component
-does not establish native Fuse handles, Ready, kernel service or full drain.
+does not establish native directories, Ready, kernel service or full drain.
 
 `docs/architecture/` describes product source, not release qualification.
 A source change to boundaries, canonical/physical format, algorithm or named

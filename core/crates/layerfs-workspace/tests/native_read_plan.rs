@@ -120,3 +120,61 @@ fn processing_source_survives_forget_and_last_name_removal_before_getattr() {
         NativeMountState::Revoked
     );
 }
+
+#[test]
+fn native_open_retains_removed_metadata_after_last_lookup_and_handle_release() {
+    let b = Bench::new("native-open-unlinked");
+    let mount = b.overlay.create_native_mount(b.route(), 1).unwrap();
+    let serial = lookup(&b, mount, 1, "file");
+    let source = b.overlay.acquire_native_source(mount, 2, serial).unwrap();
+    let view = b.workspace.view_for_source(source).unwrap();
+    let mut plan = view
+        .native_read_plan(
+            mount,
+            NativeReadOperation::Open {
+                serial,
+                writable: true,
+            },
+        )
+        .unwrap();
+    let mut opened = None;
+    for _ in 0..4 {
+        if let Some(value) = plan
+            .accept(Arc::new(plan.job().unwrap().perform(&b.overlay)))
+            .unwrap()
+        {
+            opened = Some(value);
+            break;
+        }
+        plan.supply(&view).unwrap();
+    }
+    let opened = opened.expect("bounded open fact rounds");
+    let file = opened.file.unwrap();
+    b.overlay.release_file_read(opened.read).unwrap();
+    b.overlay.release_base_source(source).unwrap();
+    b.overlay.forget_native(mount, serial, 1).unwrap();
+    b.applied(unlink(1, "file"), T2);
+    b.applied(unlink(1, "alias"), T2);
+    assert!(b.overlay.acquire_native_source(mount, 3, serial).is_err());
+    let source = b
+        .overlay
+        .acquire_native_file_source(mount, 4, serial, file.owner_id())
+        .unwrap();
+    b.overlay
+        .close_native_file(mount, serial, file.owner_id())
+        .unwrap();
+    let view = b.workspace.view_for_source(source).unwrap();
+    let mut plan = view
+        .native_read_plan(mount, NativeReadOperation::Getattr { serial })
+        .unwrap();
+    let value = plan
+        .accept(Arc::new(plan.job().unwrap().perform(&b.overlay)))
+        .unwrap()
+        .unwrap();
+    assert_eq!(value.stat.namespace_refs, 0);
+    assert_eq!(value.stat.serial, serial);
+    assert_eq!(value.file, None);
+    b.overlay.release_file_read(value.read).unwrap();
+    b.overlay.release_base_source(source).unwrap();
+    b.overlay.revoke_native_mount(mount).unwrap();
+}

@@ -1,5 +1,5 @@
 //! Native connection identity and one atomic semantic observation's custody.
-use crate::{FileRead, Inode, OverlayResult, Route};
+use crate::{FileRead, Inode, OpenFile, OverlayResult, Route};
 
 /// One engine-minted native connection. Copying the token acquires no owner.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,6 +36,9 @@ pub struct NativeObservation<T> {
     /// completion. Only result Ok proves acquisition; never release/adopt this
     /// candidate on a guess when the original result failed or is uncertain.
     pub candidate: Option<FileRead>,
+    /// Original open candidate, subject to the same completion rule as read.
+    /// A successful observation is required before this can be used as a handle.
+    pub open_candidate: Option<OpenFile>,
 }
 
 /// Whether the native connection's logical admission has been revoked.

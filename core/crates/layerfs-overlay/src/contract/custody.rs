@@ -11,6 +11,11 @@ pub struct OpenFile {
     pub(crate) writable: bool,
 }
 impl OpenFile {
+    /// Nonrecycled engine identity suitable for an encoded native handle.
+    /// The number alone grants no access; validate mount, route and serial.
+    pub const fn owner_id(self) -> u64 {
+        self.owner
+    }
     pub const fn route(self) -> Route {
         self.route
     }

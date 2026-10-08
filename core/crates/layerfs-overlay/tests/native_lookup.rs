@@ -94,6 +94,100 @@ fn inode(serial: u64) -> Inode {
 }
 
 #[test]
+fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
+    let f = Fixture::new();
+    f.lookup(1, 2);
+    let mut files = Vec::new();
+    for (request, writable) in [(u64::MAX, false), (u64::MAX - 1, true)] {
+        let source = f.db.acquire_native_source(f.mount, request, 2).unwrap();
+        let outcome =
+            f.db.observe_native_open(f.mount, source, writable, |_, serial| {
+                assert_eq!(serial, 2);
+                Ok(NativeDecision::Finished {
+                    inode: Some(inode(2)),
+                    value: 2,
+                })
+            });
+        let read = outcome.result.unwrap().unwrap();
+        let file = outcome.open_candidate.unwrap();
+        assert_eq!(
+            f.db.retained_native_file(f.mount, request).unwrap(),
+            Some(file)
+        );
+        assert_eq!(f.db.native_file(f.mount, 2, file.owner_id()).unwrap(), file);
+        assert_eq!(file.writable(), writable);
+        assert_eq!(f.db.check_file(file, true).is_ok(), writable);
+        assert!(f.db.native_file(f.mount, 3, file.owner_id()).is_err());
+        f.db.release_file_read(read).unwrap();
+        f.db.release_base_source(source).unwrap();
+        files.push(file);
+    }
+    assert_ne!(files[0].owner_id(), files[1].owner_id());
+    f.db.forget_native(f.mount, 2, 1).unwrap();
+    assert!(f.db.acquire_native_source(f.mount, 3, 2).is_err());
+    assert!(f.db.revoke_native_mount(f.mount).is_err());
+    let other = Fixture::new();
+    assert!(f
+        .db
+        .native_file(other.mount, 2, files[0].owner_id())
+        .is_err());
+    let processing =
+        f.db.acquire_native_file_source(f.mount, 4, 2, files[0].owner_id())
+            .unwrap();
+    f.db.close_native_file(f.mount, 2, files[0].owner_id())
+        .unwrap();
+    assert!(f
+        .db
+        .close_native_file(f.mount, 2, files[0].owner_id())
+        .is_err());
+    assert_eq!(f.db.retained_native_file(f.mount, u64::MAX).unwrap(), None);
+    // The existing exact file close also cascades its native association.
+    f.db.close_file(files[1]).unwrap();
+    assert_eq!(
+        f.db.retained_native_file(f.mount, u64::MAX - 1).unwrap(),
+        None
+    );
+    assert!(f
+        .db
+        .acquire_native_file_source(f.mount, 5, 2, files[1].owner_id())
+        .is_err());
+    assert!(f.db.revoke_native_mount(f.mount).is_err());
+    f.db.release_base_source(processing).unwrap();
+    f.db.revoke_native_mount(f.mount).unwrap();
+}
+
+#[test]
+fn native_open_refuses_removed_and_nonregular_answers_without_acquisition() {
+    let f = Fixture::new();
+    f.lookup(1, 2);
+    for (request, kind, nlink) in [(2, InodeKind::File, 0), (3, InodeKind::Directory, 1)] {
+        let source = f.db.acquire_native_source(f.mount, request, 2).unwrap();
+        let before = f.db.resources(Some(f.mount.route())).unwrap().counts;
+        let outcome = f.db.observe_native_open(f.mount, source, true, |_, _| {
+            Ok(NativeDecision::Finished {
+                inode: Some(Inode {
+                    kind,
+                    nlink,
+                    ..inode(2)
+                }),
+                value: request,
+            })
+        });
+        assert!(matches!(outcome.result, Err(OverlayError::Missing)));
+        assert_eq!(outcome.decision, Some(request));
+        assert!(outcome.open_candidate.is_none());
+        assert!(outcome.candidate.is_none());
+        assert_eq!(
+            f.db.resources(Some(f.mount.route())).unwrap().counts,
+            before
+        );
+        f.db.release_base_source(source).unwrap();
+    }
+    f.db.forget_native(f.mount, 2, 1).unwrap();
+    f.db.revoke_native_mount(f.mount).unwrap();
+}
+
+#[test]
 fn aggregate_forget_is_checked_and_implicit_root_is_independent() {
     let f = Fixture::new();
     assert_eq!(f.db.native_lookup_count(f.mount, 1).unwrap(), Some(0));

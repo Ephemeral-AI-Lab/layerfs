@@ -1,8 +1,8 @@
 //! Atomic native answer, kernel lookup increment and independent read ownership.
 use crate::{
     db::{integer, unsigned},
-    inode, BaseSource, FileRead, NativeDecision, NativeMount, NativeObservation, Overlay,
-    OverlayError, OverlayResult, SourceRows, StatementKind,
+    inode, BaseSource, FileRead, InodeKind, NativeDecision, NativeMount, NativeObservation,
+    Overlay, OverlayError, OverlayResult, SourceRows, StatementKind,
 };
 impl Overlay {
     /// The callback is one bounded semantic decision over current rows and
@@ -15,8 +15,30 @@ impl Overlay {
         lookup: bool,
         decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
+        self.observe_native_inner(mount, source, lookup, None, decide)
+    }
+    /// Like a native stat observation, but retains a regular OpenFile in the
+    /// deciding transaction. Current namespace metadata must still be linked.
+    pub fn observe_native_open<T>(
+        &self,
+        mount: NativeMount,
+        source: BaseSource,
+        writable: bool,
+        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
+    ) -> NativeObservation<T> {
+        self.observe_native_inner(mount, source, false, Some(writable), decide)
+    }
+    fn observe_native_inner<T>(
+        &self,
+        mount: NativeMount,
+        source: BaseSource,
+        lookup: bool,
+        open: Option<bool>,
+        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
+    ) -> NativeObservation<T> {
         let mut decision = None;
         let mut acquired = None;
+        let mut open_candidate = None;
         let result = self
             .atomic(|| {
                 let (request, protected) = self.check_native_source(mount, source)?;
@@ -54,6 +76,29 @@ impl Overlay {
                 } else if inode.serial != protected {
                     return Err(OverlayError::Invalid("native observation serial"));
                 }
+                if let Some(writable) = open {
+                    if inode.kind != InodeKind::File || inode.nlink == 0 {
+                        return Err(OverlayError::Missing);
+                    }
+                    let file = self.retain_file(
+                        mount.route,
+                        -integer(source.owner)?,
+                        inode.serial,
+                        writable,
+                    )?;
+                    open_candidate = Some(file);
+                    self.execute(
+                        StatementKind::Lease,
+                        "INSERT INTO native_file VALUES(?1,?2,?3,?4)",
+                        &[
+                            &mount.route.ns,
+                            &integer(mount.owner)?,
+                            &request.as_slice(),
+                            &integer(file.owner)?,
+                        ],
+                        32,
+                    )?;
+                }
                 // Negative keys reserve an internal request domain without colliding
                 // with public positive FileRead request IDs. The owner is still the
                 // existing independently minted FileRead/source/lease identity.
@@ -78,6 +123,7 @@ impl Overlay {
             decision,
             result,
             candidate: acquired,
+            open_candidate,
         }
     }
     /// Read-only observation of the original independent owner after loss.

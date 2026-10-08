@@ -1,0 +1,34 @@
+
+running 3 tests
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... S6_FAILURE round=0 transition_statements=9 read_statements=10 read_vm=469 live_namespace_layers<=2
+S6_FAILURE round=1 transition_statements=9 read_statements=5 read_vm=262 live_namespace_layers<=2
+S6_FAILURE round=2 transition_statements=9 read_statements=5 read_vm=198 live_namespace_layers<=2
+S6_FAILURE round=3 transition_statements=9 read_statements=5 read_vm=158 live_namespace_layers<=2
+S6_FAILURE round=4 transition_statements=9 read_statements=5 read_vm=142 live_namespace_layers<=2
+S6_FAILURE round=5 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=6 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=7 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=8 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=9 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=10 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=11 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=12 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=13 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=14 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=15 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=16 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=17 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=18 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=19 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=20 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=21 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=22 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+S6_FAILURE round=23 transition_statements=9 read_statements=5 read_vm=134 live_namespace_layers<=2
+ok
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... S6_STALE jobs=76 bytes_removed=4186112 pages_before=(1223, 0) pages_after=(1223, 1163)
+S6_PLANS ["SEARCH maintenance USING INDEX maintenance_ready (ready=? AND (ns,kind,resource,target)>(?,?,?,?))", "SEARCH maintenance USING COVERING INDEX maintenance_generation (ns=? AND target=? AND kind=?)"]
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+

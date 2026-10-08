@@ -108,35 +108,40 @@ impl Overlay {
             if current.kind != InodeKind::File || current.nlink == 0 {
                 return Err(OverlayError::Missing);
             }
-            let owner = self.mint_owner(source.route)?;
-            let serial = integer(current.serial)?;
-            self.execute(
-                StatementKind::Lease,
-                "INSERT INTO file_handle VALUES(?1,?2,?3,?4,?5)",
-                &[
-                    &source.route.ns,
-                    &request,
-                    &integer(owner)?,
-                    &serial,
-                    &writable,
-                ],
-                33,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                "INSERT INTO lease VALUES(?1,7,?2,?3)",
-                &[&source.route.ns, &integer(owner)?, &serial],
-                24,
-            )?;
-            self.file_ref(source.route.ns, serial, LeaseKind::FileHandle, true)?;
-            Ok(OpenFile {
-                route: source.route,
-                owner,
-                serial: current.serial,
-                writable,
-            })
+            self.retain_file(source.route, request, current.serial, writable)
         })
     }
+    /// The enclosing owner transaction has already validated current metadata.
+    pub(crate) fn retain_file(
+        &self,
+        route: Route,
+        request: i64,
+        serial: u64,
+        writable: bool,
+    ) -> OverlayResult<OpenFile> {
+        let owner = self.mint_owner(route)?;
+        let serial = integer(serial)?;
+        self.execute(
+            StatementKind::Lease,
+            "INSERT INTO file_handle VALUES(?1,?2,?3,?4,?5)",
+            &[&route.ns, &request, &integer(owner)?, &serial, &writable],
+            33,
+        )?;
+        self.execute(
+            StatementKind::Lease,
+            "INSERT INTO lease VALUES(?1,7,?2,?3)",
+            &[&route.ns, &integer(owner)?, &serial],
+            24,
+        )?;
+        self.file_ref(route.ns, serial, LeaseKind::FileHandle, true)?;
+        Ok(OpenFile {
+            route,
+            owner,
+            serial: serial as u64,
+            writable,
+        })
+    }
+
     /// Original open custody, queried by its caller-known request identity.
     pub fn retained_file(&self, route: Route, request: u64) -> OverlayResult<Option<OpenFile>> {
         self.state(route)?;
@@ -184,37 +189,39 @@ impl Overlay {
     /// Exact close after this descriptor's native/request continuations finish.
     /// Read-processing windows keep their own independent references.
     pub fn close_file(&self, file: OpenFile) -> OverlayResult<()> {
-        self.atomic_cleanup(|| {
-            self.check_file(file, false)?;
-            self.execute(
-                StatementKind::Lease,
-                "DELETE FROM file_handle WHERE ns=?1 AND owner=?2 AND serial=?3",
-                &[
-                    &file.route.ns,
-                    &integer(file.owner)?,
-                    &integer(file.serial)?,
-                ],
-                24,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
-                &[
-                    &file.route.ns,
-                    &integer(file.owner)?,
-                    &integer(file.serial)?,
-                ],
-                24,
-            )?;
-            self.file_ref(
-                file.route.ns,
-                integer(file.serial)?,
-                LeaseKind::FileHandle,
-                false,
-            )?;
-            self.queue_closed(file.route)
-        })
+        self.atomic_cleanup(|| self.close_file_inner(file))
     }
+    pub(crate) fn close_file_inner(&self, file: OpenFile) -> OverlayResult<()> {
+        self.check_file(file, false)?;
+        self.execute(
+            StatementKind::Lease,
+            "DELETE FROM file_handle WHERE ns=?1 AND owner=?2 AND serial=?3",
+            &[
+                &file.route.ns,
+                &integer(file.owner)?,
+                &integer(file.serial)?,
+            ],
+            24,
+        )?;
+        self.execute(
+            StatementKind::Lease,
+            "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
+            &[
+                &file.route.ns,
+                &integer(file.owner)?,
+                &integer(file.serial)?,
+            ],
+            24,
+        )?;
+        self.file_ref(
+            file.route.ns,
+            integer(file.serial)?,
+            LeaseKind::FileHandle,
+            false,
+        )?;
+        self.queue_closed(file.route)
+    }
+
     /// Acquires an independently owned read window under a current source.
     /// Its engine-owned source domain cannot collide with caller source IDs.
     pub fn acquire_file_read(

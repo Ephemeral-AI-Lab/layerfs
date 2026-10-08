@@ -1,7 +1,7 @@
 # Native read observation and lookup custody
 
 > **Status:** Implemented R2 component on parent78374ced6,2026-10-08.
-> Native Fuse activation, handles/directories, Ready and normal drain remain open.
+> Native Fuse activation, directories, Ready and normal drain remain open.
 
 Overlay schema17 adds one engine-minted NativeMount per Workspace and indexed
 native_lookup, native_source and native_read associations in the existing Overlay.
@@ -64,3 +64,33 @@ lookup races with unlink, hard-link identity, full-width request keys, rollback
 decision retention, automatic bounded retirement and the real Daemon/Store route.
 Actual indexed plans are paired with DatabaseWork; they do not establish native
 kernel behavior, latency, cold cache eligibility, RSS bounds or full R2 acceptance.
+
+Schema18 extension on parentcc0b9a06a retains regular native file handles through
+the existing OpenFile capability. NativeReadOperation::Open uses the same fact
+rounds and current evaluator; its final transaction validates a linked regular
+inode, retains OpenFile and an independent processing read, and records the
+mount/request association. Original open candidates are retained before later
+association/read/commit failure, under the same no-adoption completion rule.
+
+[Native file ownership](../../crates/layerfs-overlay/src/lifetime/native_file.rs)
+validates the engine/route, mount incarnation, serial and encoded nonrecycled
+OpenFile owner ID together. Separate opens have separate owners and retain their
+own writable flag. After FORGET/unlink, an actual handle may acquire an independent
+native request source. Later RELEASE does not invalidate that source or its read
+window. No new file token hierarchy, resident inode map or second close algorithm
+is introduced. NativeJob exposes File/FileSource/RetainedFile/CloseFile through
+the same SQL owner and completion credit.
+
+The native_file association references the exact file_handle row. Exact close
+through either public path deletes the association atomically through a foreign
+key cascade; its owner index prevents a namespace scan on ordinary file close.
+Native file request keys occupy the negative internal engine-owner domain while
+full64bit original kernel request keys remain in native_file. Public caller
+open request IDs remain positive. Mount revocation now also refuses remaining
+native file owners. Directory ownership and complete detached-connection drain
+still require their own implementation; an empty source/read set is insufficient.
+
+The [native-open component receipts](../issues/307/checks/r2-native-open-20261008/25-results.md)
+extend the public engine, canonical Workspace and actual Daemon tests for these
+transitions. Schema versions and earlier proof identities above are historical;
+this in-process Overlay is freshly initialized, with no migration or reopen path.

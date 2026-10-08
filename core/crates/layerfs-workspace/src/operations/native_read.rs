@@ -4,8 +4,8 @@ use crate::{
 };
 use layerfs_content::{filesystem::PathName, ContentError};
 use layerfs_overlay::{
-    BaseSource, FileRead, Inode, NativeDecision, NativeMount, NativeObservation, Overlay,
-    OverlayError,
+    BaseSource, FileRead, Inode, InodeKind, NativeDecision, NativeMount, NativeObservation,
+    OpenFile, Overlay, OverlayError, OverlayResult, SourceRows,
 };
 use std::{fmt, sync::Arc};
 
@@ -13,6 +13,7 @@ use std::{fmt, sync::Arc};
 pub enum NativeReadOperation {
     Lookup { parent: u64, name: PathName },
     Getattr { serial: u64 },
+    Open { serial: u64, writable: bool },
 }
 #[derive(Clone, Debug)]
 pub struct NativeReadJob {
@@ -45,6 +46,7 @@ pub struct NativeReadPlan {
 pub struct NativeReadValue {
     pub stat: ViewStat,
     pub read: FileRead,
+    pub file: Option<OpenFile>,
     pub original: Arc<NativeReadOutcome>,
 }
 #[derive(Debug)]
@@ -77,48 +79,74 @@ impl NativeReadJob {
     /// increment and its independent processing owner. Provider I/O is absent.
     pub fn perform(&self, db: &Overlay) -> NativeReadOutcome {
         let lookup = matches!(self.operation, NativeReadOperation::Lookup { .. });
-        db.observe_native(self.mount, self.source, lookup, |rows, protected| {
-            let wanted = match self.operation {
-                NativeReadOperation::Lookup { parent, .. } => parent,
-                NativeReadOperation::Getattr { serial } => serial,
-            };
-            if wanted != protected {
-                return Err(OverlayError::Stale);
-            }
-            let mut eval = Eval {
-                rows,
-                facts: &self.facts,
-                root: self.mount.root_serial(),
-                open_serial: None,
-                needs: Vec::new(),
-            };
-            let decision = match self.decide(&mut eval) {
-                Ok(Some(inode)) => NativeReadDecision::Value(inode),
-                Ok(None) if !eval.needs.is_empty() => NativeReadDecision::Needs(eval.needs),
-                Ok(None) => NativeReadDecision::Failed(
-                    ContentError::InvalidRecord("empty native read needs").into(),
-                ),
-                Err(WorkspaceError::Overlay(error)) => return Err(error),
-                Err(WorkspaceError::Refused(refusal)) => NativeReadDecision::Refused(refusal),
-                Err(error) => NativeReadDecision::Failed(error),
-            };
-            Ok(match decision {
-                NativeReadDecision::Needs(_) => NativeDecision::Needs(decision),
-                NativeReadDecision::Value(ref inode) => NativeDecision::Finished {
-                    inode: Some(inode.clone()),
-                    value: decision,
-                },
-                _ => NativeDecision::Finished {
-                    inode: None,
-                    value: decision,
-                },
+        if let NativeReadOperation::Open { writable, .. } = self.operation {
+            db.observe_native_open(self.mount, self.source, writable, |rows, protected| {
+                self.decide_on(rows, protected)
             })
+        } else {
+            db.observe_native(self.mount, self.source, lookup, |rows, protected| {
+                self.decide_on(rows, protected)
+            })
+        }
+    }
+    fn decide_on(
+        &self,
+        rows: SourceRows<'_>,
+        protected: u64,
+    ) -> OverlayResult<NativeDecision<NativeReadDecision>> {
+        let wanted = match self.operation {
+            NativeReadOperation::Lookup { parent, .. } => parent,
+            NativeReadOperation::Getattr { serial } | NativeReadOperation::Open { serial, .. } => {
+                serial
+            }
+        };
+        if wanted != protected {
+            return Err(OverlayError::Stale);
+        }
+        let mut eval = Eval {
+            rows,
+            facts: &self.facts,
+            root: self.mount.root_serial(),
+            open_serial: None,
+            needs: Vec::new(),
+        };
+        let decision = match self.decide(&mut eval) {
+            Ok(Some(inode)) => NativeReadDecision::Value(inode),
+            Ok(None) if !eval.needs.is_empty() => NativeReadDecision::Needs(eval.needs),
+            Ok(None) => NativeReadDecision::Failed(
+                ContentError::InvalidRecord("empty native read needs").into(),
+            ),
+            Err(WorkspaceError::Overlay(error)) => return Err(error),
+            Err(WorkspaceError::Refused(refusal)) => NativeReadDecision::Refused(refusal),
+            Err(error) => NativeReadDecision::Failed(error),
+        };
+        Ok(match decision {
+            NativeReadDecision::Needs(_) => NativeDecision::Needs(decision),
+            NativeReadDecision::Value(ref inode) => NativeDecision::Finished {
+                inode: Some(inode.clone()),
+                value: decision,
+            },
+            _ => NativeDecision::Finished {
+                inode: None,
+                value: decision,
+            },
         })
     }
     fn decide(&self, eval: &mut Eval<'_>) -> WorkspaceResult<Option<Inode>> {
         match &self.operation {
             // The source's independent read reference permits removed metadata.
             NativeReadOperation::Getattr { serial } => eval.target(*serial),
+            NativeReadOperation::Open { serial, .. } => {
+                let inode = eval.existing(*serial)?;
+                match inode {
+                    Some(inode) if inode.kind == InodeKind::File => Ok(Some(inode)),
+                    Some(inode) if inode.kind == InodeKind::Directory => {
+                        Err(WorkspaceError::Refused(Refusal::IsDirectory))
+                    }
+                    Some(_) => Err(WorkspaceError::Refused(Refusal::Invalid)),
+                    None => Ok(None),
+                }
+            }
             NativeReadOperation::Lookup { parent, name } => {
                 let directory = eval.directory(*parent)?;
                 let layers = eval.layers(*parent, name)?;
@@ -180,6 +208,7 @@ impl NativeReadPlan {
                     return Ok(Some(NativeReadValue {
                         stat: inode.clone().into(),
                         read: *read,
+                        file: original.open_candidate,
                         original,
                     }));
                 }

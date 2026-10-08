@@ -1,0 +1,18 @@
+{
+  "parent": "cc0b9a06a36f44b837f3e85aff98476215d4dd17",
+  "scope": "Extend atomic native read decisions with real OpenFile acquisition and indexed mount/encoded-handle associations. Native handle processing can retain a source after FORGET/unlink; exact release uses existing file ownership.",
+  "files": {
+    "overlay/lifetime/file_owners.rs": "Factor existing open retention into a validated internal primitive; reuse exact OpenFile/lease/file_ref implementation.",
+    "overlay/lifetime/native_file.rs": "Validate full mount/serial/handle and original request association, acquire independently protected processing source, close actual original file.",
+    "overlay/lifetime/native_observation.rs": "Open acquisition inside deciding transaction; retain candidate before later failure.",
+    "overlay/contract/native.rs": "Expose original open candidate without new file token type.",
+    "workspace/operations/native_read.rs": "Open semantics through existing Eval; final stat/read/open ownership.",
+    "daemon/overlay/native_job.rs": "Typed native file/source/release jobs on current owner."
+  },
+  "schema": 18,
+  "profiles": "Overlay MEMORY/OFF/EXCLUSIVE; selected Store fixtures explicitly Disposable/WAL/OFF only. Durable NOT_RUN.",
+  "limits": {
+    "test_seconds": 100
+  },
+  "remaining": "Directory ownership/cookies and full native dispatcher/session/Ready/drain still required. Mount revoke refuses existing native files until actual releases; native connection teardown is not inferred."
+}

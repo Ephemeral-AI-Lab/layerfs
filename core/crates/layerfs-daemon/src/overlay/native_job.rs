@@ -1,8 +1,8 @@
 //! Native custody jobs on the existing fair owner, independent of fuser types.
 use crate::ServiceClass;
 use layerfs_overlay::{
-    BaseSource, FileRead, NativeMount, NativeMountState, Overlay, OverlayError, OverlayResult,
-    Route,
+    BaseSource, FileRead, NativeMount, NativeMountState, OpenFile, Overlay, OverlayError,
+    OverlayResult, Route,
 };
 use layerfs_workspace::{NativeReadJob, NativeReadOutcome};
 use std::sync::Arc;
@@ -26,6 +26,26 @@ pub enum NativeJob {
         mount: NativeMount,
         request: u64,
     },
+    FileSource {
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        handle: u64,
+    },
+    RetainedFile {
+        mount: NativeMount,
+        request: u64,
+    },
+    File {
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    },
+    CloseFile {
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    },
     Observe(Box<NativeReadJob>),
     Forget {
         mount: NativeMount,
@@ -42,6 +62,8 @@ pub enum NativeReply {
     Source(BaseSource),
     RetainedSource(Option<BaseSource>),
     RetainedRead(Option<FileRead>),
+    RetainedFile(Option<OpenFile>),
+    File(OpenFile),
     Observed(Arc<NativeReadOutcome>),
     State(NativeMountState),
     Done,
@@ -49,7 +71,7 @@ pub enum NativeReply {
 impl NativeJob {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
-            Self::Source { .. } => ServiceClass::Source,
+            Self::Source { .. } | Self::FileSource { .. } => ServiceClass::Source,
             Self::Observe(_) => ServiceClass::Read,
             _ => ServiceClass::Lifecycle,
         }
@@ -70,6 +92,10 @@ impl NativeJob {
             Self::Source { mount, .. }
             | Self::RetainedSource { mount, .. }
             | Self::RetainedRead { mount, .. }
+            | Self::FileSource { mount, .. }
+            | Self::RetainedFile { mount, .. }
+            | Self::File { mount, .. }
+            | Self::CloseFile { mount, .. }
             | Self::Forget { mount, .. }
             | Self::State(mount)
             | Self::Revoke(mount) => Some(mount.route()),
@@ -97,6 +123,29 @@ impl NativeJob {
             Self::RetainedRead { mount, request } => db
                 .retained_native_read(mount, request)
                 .map(NativeReply::RetainedRead),
+            Self::FileSource {
+                mount,
+                request,
+                serial,
+                handle,
+            } => db
+                .acquire_native_file_source(mount, request, serial, handle)
+                .map(NativeReply::Source),
+            Self::RetainedFile { mount, request } => db
+                .retained_native_file(mount, request)
+                .map(NativeReply::RetainedFile),
+            Self::File {
+                mount,
+                serial,
+                handle,
+            } => db.native_file(mount, serial, handle).map(NativeReply::File),
+            Self::CloseFile {
+                mount,
+                serial,
+                handle,
+            } => db
+                .close_native_file(mount, serial, handle)
+                .map(|()| NativeReply::Done),
             Self::Observe(job) => Ok(NativeReply::Observed(Arc::new(job.perform(db)))),
             Self::Forget {
                 mount,
