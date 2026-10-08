@@ -2,6 +2,7 @@
 mod api;
 mod attach;
 mod binding;
+mod cleanup;
 mod commit;
 mod status;
 mod unmount;

@@ -123,3 +123,45 @@ R5, after `bb5b3c220`: `execute_control` no longer refuses Commit. It runs the
 captured namespace producer through the unchanged driver
 ([product Commit](79-product-commit.md)). The paragraph above that says no
 product constructor exists describes the earlier source.
+
+## Explicit operator observations
+
+The R7 source amendment after planning identity `980c169e6` adds request tag 12,
+`Request::Observed { scope, request }`. It carries a caller-selected 32-byte
+nonzero public scope followed by exactly one ordinary request tag and body.
+Encoding and decoding refuse a zero scope, another Observed layer, Hello or
+EndSession before parsing or allocating an inner wrapper. Every earlier control
+record keeps its original bytes and the observed operation returns its ordinary
+existing reply. Application owns the diagnostic sink; a direct Service call
+refuses an unprocessed wrapper. The operation executes once and its original
+known result, failure or unknown survives diagnostic transfer failure.
+
+`WorkspaceApi::with_observations(&mut Control, &scope)` selects the wrapper through the
+same private exchange used by ordinary facade methods. Its one caller-owned
+scope reference lives only in that borrowed facade alongside its Control
+reference; the facade remains two pointers. `WorkspaceApi::new` retains the
+ordinary request encoding. The daemon retains no observation preference; a later
+ordinary request on the same channel has ordinary behavior. SDK reply matching
+validates one checked layer and preserves exact token/correlation checks. The
+caller supplies a fresh scope for each observed channel/run. The daemon stores
+no used-scope registry or connection nonce. Evidence groups use existing daemon
+instance plus caller scope plus call as identity; slot is attribution only and
+may be reused. An evidence consumer rejects duplicate complete identities.
+
+Cleanup is a separate explicit observation, `WorkspaceApi::cleanup(token)`:
+request tag 13 carries the existing WorkspaceToken, and reply tag 16 carries the
+same token followed by one strict state byte (1 Live, 2 Held, 3 Queued, 4 Gone).
+It observes indexed existing namespace/incarnation and terminal-queue state in
+the current daemon's allocated namespace domain. It does not recreate a Route,
+retain the removed control binding, advance maintenance, repeat Unmount or
+resolve an original unknown. A live row requires exact incarnation agreement;
+an absent valid allocated row is Gone. Invalid/unallocated namespaces retain a
+typed refusal. Logical Unmounted and physical Gone remain distinct outcomes.
+
+Existing Store SQL observations can now be copied one writer/reader at a time
+without constructing an additional reader vector. The application observation
+schema and its separate epochs are described in
+[daemon application](70-daemon-application-startup-control.md#numeric-observation-schema).
+This instrumentation is source behavior, not qualification or a measured
+optimization result. Its owning external tests include additive literal bytes,
+malicious nesting, observed facade scope, and authentic Linux binary observations.

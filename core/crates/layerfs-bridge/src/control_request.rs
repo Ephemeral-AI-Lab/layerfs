@@ -15,9 +15,19 @@ impl Call {
         if self.id == 0 {
             return Err(ControlError("control correlation"));
         }
+        let request = self.request.without_observation()?;
         let mut out = Writer::new(MAGIC);
         out.put(&self.id.to_be_bytes())?;
-        match &self.request {
+        if let Request::Observed { scope, .. } = &self.request {
+            out.byte(12)?;
+            out.put(scope)?;
+        }
+        match request {
+            Request::Observed { .. } => return Err(ControlError("invalid observed operation")),
+            Request::Cleanup(token) => {
+                out.byte(13)?;
+                put_token(&mut out, *token)?;
+            }
             Request::EndSession => out.byte(8)?,
             Request::Hello(value) => {
                 out.byte(7)?;
@@ -91,7 +101,28 @@ impl Call {
         if id == 0 {
             return Err(ControlError("control correlation"));
         }
-        let request = match input.byte()? {
+        let tag = input.byte()?;
+        let observed = tag == 12;
+        let scope = if observed {
+            let scope = input.array::<32>()?;
+            if scope == [0; 32] {
+                return Err(ControlError("zero observation scope"));
+            }
+            Some(scope)
+        } else {
+            None
+        };
+        let tag = if observed {
+            let inner = input.byte()?;
+            if matches!(inner, 7 | 8 | 12) {
+                return Err(ControlError("invalid observed operation"));
+            }
+            inner
+        } else {
+            tag
+        };
+        let request = match tag {
+            13 => Request::Cleanup(token(&mut input)?),
             8 => Request::EndSession,
             7 => Request::Hello(crate::daemon_wire::request(&mut input)?),
             1 => Request::Mount {
@@ -142,6 +173,13 @@ impl Call {
             _ => return Err(ControlError("control operation")),
         };
         input.finish()?;
+        let request = match scope {
+            Some(scope) => Request::Observed {
+                scope,
+                request: Box::new(request),
+            },
+            None => request,
+        };
         Ok(Self { id, request })
     }
 }

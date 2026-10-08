@@ -6,6 +6,14 @@ use crate::{
 use layerfs_bridge::control::{ControlCode, Reply};
 use layerfs_history::HistoryError;
 use layerfs_workspace::WorkspaceError;
+/// Original native terminal receipt; it already owns the drained connection
+/// facts. Keep their concrete type instead of erasing counted work behind Debug.
+#[cfg(target_os = "linux")]
+pub type NativeEvidence = layerfs_fuse::session::Drained;
+/// Native sessions cannot be constructed on other platforms.
+#[cfg(not(target_os = "linux"))]
+#[derive(Debug)]
+pub enum NativeEvidence {}
 /// Original known control result with every attempted engine/Commit completion.
 #[derive(Debug)]
 pub struct Success {
@@ -16,7 +24,7 @@ pub struct Success {
     pub commit: Option<CommitSuccess>,
     pub observation_failure: Option<Box<Failure>>,
     /// Original native connection receipt of a terminal unmount.
-    pub native: Option<Box<dyn std::fmt::Debug + Send>>,
+    pub native: Option<Box<NativeEvidence>>,
 }
 /// A native attach or unmount refusal with its original evidence.
 #[derive(Debug)]

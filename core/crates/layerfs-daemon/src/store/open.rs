@@ -107,6 +107,11 @@ impl Store {
     pub fn read_work(&self) -> ReadServiceWork {
         self.readers.work()
     }
+    /// One nonblocking Storage-counter snapshot of a fixed reader index.
+    /// A leased, contended or unavailable reader returns None without acquisition.
+    pub fn reader_storage_diagnostics(&self, index: usize) -> Option<layerfs_storage::Diagnostics> {
+        self.readers.storage_diagnostics(index)
+    }
     pub fn workspace_reads(&self, workspace: WorkspaceId) -> Result<usize, ReadAdmissionError> {
         self.readers.outstanding(workspace)
     }

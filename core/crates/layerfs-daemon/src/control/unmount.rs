@@ -2,14 +2,14 @@
 use super::{
     native::Native,
     registry::{bound_mut, idle},
-    Failure, Service, Success,
+    Failure, NativeEvidence, Service, Success,
 };
 use crate::{store::BoundWorkspace, Command, Completion, Response};
 use layerfs_bridge::control::{Activity, ForcedFacts, Reply, WorkspaceToken};
-use std::{fmt, sync::Arc};
+use std::sync::Arc;
 
 /// Original native connection receipt carried to Close.
-type Receipt = Option<Box<dyn fmt::Debug + Send>>;
+type Receipt = Option<Box<NativeEvidence>>;
 
 /// What terminal admission took out of the registry entry.
 pub(super) enum Departure {

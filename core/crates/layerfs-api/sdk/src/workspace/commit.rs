@@ -1,6 +1,6 @@
 //! Explicit Commit over the existing daemon constructor/publication owner.
 use super::WorkspaceApi;
-use crate::{operation::exchange, OperationFailure};
+use crate::OperationFailure;
 use layerfs_bridge::control::{Reply, Request, WorkspaceToken};
 use layerfs_history::CommitStagedOutcome;
 
@@ -13,7 +13,7 @@ impl WorkspaceApi<'_> {
         token: WorkspaceToken,
     ) -> Result<CommitStagedOutcome, Box<OperationFailure>> {
         let request = Request::Commit(token);
-        match exchange(self.control, request.clone())? {
+        match self.exchange(request.clone())? {
             Reply::Committed(outcome) => Ok(outcome),
             reply => Err(OperationFailure::unexpected(request, reply)),
         }

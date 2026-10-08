@@ -184,6 +184,11 @@ pub enum Command {
         input: layerfs_workspace::PreparedBase,
     },
     CleanupState,
+    /// Explicit read-only terminal observation; carries no mutable Route.
+    ObserveCleanup {
+        namespace: i64,
+        incarnation: [u8; 32],
+    },
     Close,
     ReleaseClosedCapture(Capture),
     Inode(u64),
@@ -303,6 +308,7 @@ impl Command {
             | Self::RetainedBaseSource { .. }
             | Self::ReleaseBaseSource(_)
             | Self::CleanupState
+            | Self::ObserveCleanup { .. }
             | Self::Close
             | Self::ReleaseClosedCapture(_)
             | Self::ResolveFailed(_)
@@ -459,6 +465,20 @@ impl Command {
             .map_err(crate::OwnerError::Overlay)
     }
     fn perform_overlay(self, db: &Overlay, route: Option<Route>) -> OverlayResult<Response> {
+        if route.is_none() && matches!(self, Self::Resources { global: true }) {
+            return db
+                .resources(None)
+                .map(|resources| Response::Resources(Box::new(resources)));
+        }
+        if let Self::ObserveCleanup {
+            namespace,
+            incarnation,
+        } = self
+        {
+            return db
+                .observe_cleanup(namespace, incarnation)
+                .map(Response::CleanupState);
+        }
         if let Self::Open {
             incarnation,
             base_root,
@@ -471,7 +491,10 @@ impl Command {
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
             Self::Native(job) => job.perform(db, route).map(Response::Native),
-            Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => {
+            Self::Open { .. }
+            | Self::InstallPrepared { .. }
+            | Self::Namespace(_)
+            | Self::ObserveCleanup { .. } => {
                 unreachable!()
             }
             Self::IndexedOperationRecord(job) => {

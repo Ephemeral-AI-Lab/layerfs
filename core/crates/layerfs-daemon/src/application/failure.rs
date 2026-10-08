@@ -36,7 +36,8 @@ pub enum ApplicationError {
         /// Original terminal byte/work/cause, not a replayed final reply.
         ending: Box<layerfs_bridge::native::PeerEndFailure>,
     },
-    /// Original product refusal delivered successfully, with unresolved custody.
+    /// Original control receipt retained after an unresolved operation or a
+    /// separate failed diagnostic transfer. Its known outcome stays unchanged.
     RetainedControl(Box<Served>),
     /// Original install result retained after application publication synchronization failed.
     InstallPublication(Box<Result<InstalledStore, Box<InstallFailure>>>),
@@ -57,7 +58,7 @@ impl fmt::Display for ApplicationError {
             Self::SessionEnd { ending, .. } => {
                 write!(f, "after original session reply: {}", ending.cause)
             }
-            Self::RetainedControl(_) => f.write_str("original unresolved control custody retained"),
+            Self::RetainedControl(_) => f.write_str("original control receipt retained"),
             Self::InstallPublication(_) => {
                 f.write_str("original install result retained; application publication poisoned")
             }

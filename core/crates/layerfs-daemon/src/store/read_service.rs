@@ -222,6 +222,25 @@ impl ReadPool {
             ..state.work
         }
     }
+    /// Copies counters only while the fixed reader remains in pool custody.
+    /// Contention, poisoning, an invalid index or an active lease is unavailable;
+    /// this observation never admits a reader or waits for one to return.
+    pub fn storage_diagnostics(&self, index: usize) -> Option<layerfs_storage::Diagnostics> {
+        let state = self.state.try_lock().ok()?;
+        if state.poisoned || index >= state.work.readers {
+            return None;
+        }
+        if let Some((reader, _)) = state.retired.get(index)?.as_ref() {
+            return Some(reader.storage.diagnostics());
+        }
+        if let Some((_, reader)) = state.idle.iter().find(|(id, _)| *id == index) {
+            return Some(reader.storage.diagnostics());
+        }
+        state.slots.iter().find_map(|slot| match &slot.state {
+            Disposition::Ready(id, reader) if *id == index => Some(reader.storage.diagnostics()),
+            _ => None,
+        })
+    }
     pub fn outstanding(&self, workspace: WorkspaceId) -> Result<usize, ReadAdmissionError> {
         let state = self.lock();
         if state.poisoned {

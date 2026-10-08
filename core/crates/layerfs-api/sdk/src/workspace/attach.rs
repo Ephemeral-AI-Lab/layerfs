@@ -1,6 +1,6 @@
 //! Native attachment: Ready is acknowledged separately from the logical binding.
 use super::{BoundWorkspace, WorkspaceApi};
-use crate::{operation::exchange, OperationFailure};
+use crate::OperationFailure;
 use layerfs_bridge::control::{ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken};
 use layerfs_history::{BranchId, WorkspaceId};
 
@@ -28,7 +28,7 @@ impl WorkspaceApi<'_> {
     /// leaves the outcome unknown; observe it with `locate`, never by replay.
     pub fn attach(&mut self, token: WorkspaceToken) -> Result<ReadyMount, Box<OperationFailure>> {
         let request = Request::Attach(token);
-        match exchange(self.control, request.clone())? {
+        match self.exchange(request.clone())? {
             Reply::Ready(ready) => Ok(*ready),
             reply => Err(OperationFailure::unexpected(request, reply)),
         }
@@ -40,7 +40,7 @@ impl WorkspaceApi<'_> {
         workspace: WorkspaceId,
     ) -> Result<WorkspaceStatus, Box<OperationFailure>> {
         let request = Request::Locate(workspace);
-        match exchange(self.control, request.clone())? {
+        match self.exchange(request.clone())? {
             Reply::Located(status) => Ok(*status),
             reply => Err(OperationFailure::unexpected(request, reply)),
         }

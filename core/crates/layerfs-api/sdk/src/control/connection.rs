@@ -175,8 +175,17 @@ impl Control {
     }
 }
 fn matches_reply(request: &Request, reply: &Reply) -> bool {
+    let Ok(request) = request.without_observation() else {
+        return false;
+    };
     match (request, reply) {
         (_, Reply::Refused(_)) => true,
+        (
+            Request::Cleanup(token),
+            Reply::Cleanup {
+                token: observed, ..
+            },
+        ) => token == observed,
         (Request::EndSession, Reply::SessionEnded) => true,
         (Request::Hello(request), Reply::Hello(status)) => request
             .expected_instance

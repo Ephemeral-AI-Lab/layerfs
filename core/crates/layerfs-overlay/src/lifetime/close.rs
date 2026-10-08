@@ -1,6 +1,10 @@
 //! Logical close and exact last-owner eligibility, without namespace sweeps.
 use crate::{Capture, Overlay, OverlayError, OverlayResult, Route, StatementKind};
 pub(crate) const CLOSE_KEY: i64 = i64::MAX;
+const OBSERVE_CLEANUP: &str = "SELECT w.incarnation,w.lifecycle,
+    EXISTS(SELECT 1 FROM reclaim WHERE ns=?1 AND queue_key=?2),
+    (SELECT seq FROM sqlite_sequence WHERE name='workspace')
+    FROM (SELECT ?1 AS ns) AS selected LEFT JOIN workspace w ON w.ns=selected.ns";
 
 /// Bounded close/cleanup observation for a minted route.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -11,6 +15,62 @@ pub enum CleanupState {
     Gone,
 }
 impl Overlay {
+    /// Read-only terminal observation without minting a mutable Route. A missing
+    /// row is Gone within this engine's allocated namespace domain; this does
+    /// not attest that a caller's incarnation previously owned the absent row.
+    /// Existing rows require exact incarnation agreement. Namespace identifiers
+    /// are never reused, including after their physical reclamation.
+    pub fn observe_cleanup(
+        &self,
+        namespace: i64,
+        incarnation: [u8; 32],
+    ) -> OverlayResult<CleanupState> {
+        self.available()?;
+        if namespace <= 0 || incarnation == [0; 32] {
+            return Err(OverlayError::Stale);
+        }
+        let row = self.query(
+            StatementKind::Workspace,
+            OBSERVE_CLEANUP,
+            &[&namespace, &CLOSE_KEY],
+            64,
+            |row| {
+                Ok((
+                    row.get::<_, Option<Vec<u8>>>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<i64>>(3)?,
+                ))
+            },
+        )?;
+        let (stored, closed, queued, allocated) = row.first().ok_or(OverlayError::Stale)?;
+        if allocated.is_none_or(|last| namespace > last) {
+            return Err(OverlayError::Stale);
+        }
+        let Some(stored) = stored else {
+            return Ok(CleanupState::Gone);
+        };
+        if stored.as_slice() != incarnation {
+            return Err(OverlayError::Stale);
+        }
+        Ok(match (closed, queued) {
+            (Some(0), _) => CleanupState::Live,
+            (Some(_), 0) => CleanupState::Held,
+            (Some(_), _) => CleanupState::Queued,
+            (None, _) => return Err(OverlayError::Stale),
+        })
+    }
+    /// Exact plan of the read-only namespace observation. The only
+    /// sqlite_sequence entry in this schema belongs to workspace.
+    pub fn explain_cleanup_observation(&self) -> OverlayResult<Vec<String>> {
+        self.query(
+            StatementKind::Explain,
+            &format!("EXPLAIN QUERY PLAN {OBSERVE_CLEANUP}"),
+            &[&1_i64, &CLOSE_KEY],
+            512,
+            |row| row.get(3),
+        )
+    }
     /// Revokes new mutations/acquisitions and queues only eligible terminal work.
     /// Existing reply attempts/releases and exact captures retain their custody.
     pub fn close(&self, route: Route) -> OverlayResult<()> {

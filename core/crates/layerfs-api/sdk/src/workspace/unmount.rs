@@ -1,6 +1,6 @@
 //! Logical terminal control through the existing daemon lifetime owner.
 use super::WorkspaceApi;
-use crate::{operation::exchange, OperationFailure};
+use crate::OperationFailure;
 use layerfs_bridge::control::{ForcedOutcome, Reply, Request, WorkspaceToken};
 
 impl WorkspaceApi<'_> {
@@ -11,7 +11,7 @@ impl WorkspaceApi<'_> {
     /// as its own typed cause; this facade adds no teardown shortcut.
     pub fn unmount(&mut self, token: WorkspaceToken) -> Result<(), Box<OperationFailure>> {
         let request = Request::Unmount(token);
-        match exchange(self.control, request.clone())? {
+        match self.exchange(request.clone())? {
             Reply::Unmounted(_) => Ok(()),
             reply => Err(OperationFailure::unexpected(request, reply)),
         }
@@ -32,7 +32,7 @@ impl WorkspaceApi<'_> {
             token,
             relinquish_unknown,
         };
-        match exchange(self.control, request.clone())? {
+        match self.exchange(request.clone())? {
             Reply::ForceUnmounted(closed) => Ok(closed.outcome),
             reply => Err(OperationFailure::unexpected(request, reply)),
         }

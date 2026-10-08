@@ -5,6 +5,15 @@ use crate::{
 };
 /// Owned first request; installation payload records are never routed through this.
 #[derive(Clone, Debug, Eq, PartialEq)]
+// Pinned 1.85.1 Clippy loses layout through recursive boxed Request and reports
+// Call/InitialRecord as zero bytes. Actual ARM64 layout is Request112, Call120,
+// StoreManifest208, InitialRecord208: the variant gap is 88, below its 200 gate.
+// External observed_records::actual_inline_initial_record_layout_has_no_large_variant_gap
+// guards the real layout. Expectation becomes unfulfilled if the heuristic is fixed.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "pinned Clippy recursive-Request layout false positive; external layout guard verifies the actual 88-byte gap"
+)]
 pub enum InitialRecord {
     /// One original correlated control request.
     Control(Call),

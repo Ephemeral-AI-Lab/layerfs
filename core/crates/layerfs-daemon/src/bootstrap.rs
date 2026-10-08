@@ -18,6 +18,20 @@ pub struct StoreDiagnostics {
     pub readers: Vec<SqlWork>,
 }
 impl OpenedStore {
+    /// Copies one existing session's work without collecting reader snapshots.
+    /// None selects the writer; a reader index outside the fixed set is absent.
+    pub(crate) fn session_diagnostics(
+        &self,
+        reader: Option<usize>,
+    ) -> StorageResult<Option<SqlWork>> {
+        let provider = match reader {
+            None => Some(&self.writer),
+            Some(index) => self.readers.get(index),
+        };
+        provider
+            .map(|provider| provider.diagnostics().map_err(StorageError::from))
+            .transpose()
+    }
     /// Reads existing session counters; this issues no SQL or provider reopen.
     pub fn diagnostics(&self) -> StorageResult<StoreDiagnostics> {
         Ok(StoreDiagnostics {

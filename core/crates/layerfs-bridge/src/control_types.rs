@@ -16,6 +16,19 @@ pub struct WorkspaceToken {
 /// One explicitly requested control operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Request {
+    /// Execute one ordinary control once and report its existing numeric work
+    /// to the daemon's diagnostic sink. No observation preference is retained.
+    /// Nested observations, Hello and EndSession are invalid.
+    Observed {
+        /// Fresh caller-selected public diagnostic scope for this channel/run.
+        /// Zero is invalid. The daemon keeps no registry of previously used scopes.
+        scope: [u8; 32],
+        /// One original ordinary operation, never another observation wrapper.
+        request: Box<Request>,
+    },
+    /// Observe physical cleanup of one allocated namespace without repeating
+    /// its terminal operation or retaining its deleted control binding.
+    Cleanup(WorkspaceToken),
     /// End this authenticated control session; no Workspace is closed.
     EndSession,
     /// Observe/wait for actual daemon startup, separate from a native mount.
@@ -48,6 +61,26 @@ pub enum Request {
         /// Permit local disposal of stopped unknown Commit custody; it stays unknown.
         relinquish_unknown: bool,
     },
+}
+impl Request {
+    /// Returns the original operation after validating at most one observation
+    /// layer. This validation never allocates, traverses or executes a request.
+    pub fn without_observation(&self) -> Result<&Self, crate::control::ControlError> {
+        match self {
+            Self::Observed { scope, request } => {
+                if *scope == [0; 32] {
+                    return Err(crate::control::ControlError("zero observation scope"));
+                }
+                match request.as_ref() {
+                    Self::Observed { .. } | Self::Hello(_) | Self::EndSession => {
+                        Err(crate::control::ControlError("invalid observed operation"))
+                    }
+                    operation => Ok(operation),
+                }
+            }
+            operation => Ok(operation),
+        }
+    }
 }
 /// Correlation for one attempted request on an authenticated connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -152,6 +185,13 @@ pub struct ControlRefusal {
 /// Original command result. Bound is engine/Store preparation; Ready is kernel readiness.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Reply {
+    /// One exact namespace cleanup observation; it drives no maintenance work.
+    Cleanup {
+        /// Original requested namespace/incarnation, returned without redirection.
+        token: WorkspaceToken,
+        /// Existing indexed row/terminal-queue state at this observation.
+        state: CleanupObservation,
+    },
     /// Original control-session end acknowledgment; filesystem ownership is unchanged.
     SessionEnded,
     /// Original application startup observation; never native Workspace Ready.
@@ -183,6 +223,20 @@ pub enum Reply {
     Retained(Box<crate::control_native::TeardownCustody>),
     /// Forced terminal close acknowledged with its dispositions and cleanup state.
     ForceUnmounted(Box<crate::control_forced::ForceUnmounted>),
+}
+/// Maintained cleanup state in the current daemon's allocated namespace domain.
+/// A live row must match the token incarnation; missing allocated rows are Gone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CleanupObservation {
+    /// The exact existing namespace row is live rather than logically closed.
+    Live,
+    /// The exact row is closed but terminal reclamation is held by existing custody.
+    Held,
+    /// The exact closed row has terminal reclamation queued.
+    Queued,
+    /// No row exists within this daemon's allocated namespace domain. Absence
+    /// does not attest which historical incarnation previously occupied it.
+    Gone,
 }
 /// Correlated original reply; transport failure does not reverse its effects.
 #[derive(Clone, Debug, Eq, PartialEq)]

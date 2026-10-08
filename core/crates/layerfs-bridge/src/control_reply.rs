@@ -1,8 +1,8 @@
 //! Exact known control results and explicitly scoped status observations.
 use crate::{
     control::{
-        Activity, Answer, ControlCode, ControlError, ControlRefusal, LocalObservation, Reply,
-        WorkspaceStatus, HISTORY_WINDOW,
+        Activity, Answer, CleanupObservation, ControlCode, ControlError, ControlRefusal,
+        LocalObservation, Reply, WorkspaceStatus, HISTORY_WINDOW,
     },
     control_forced::{facts, forced, put_facts, put_forced},
     control_history::*,
@@ -20,6 +20,16 @@ impl Answer {
         let mut out = Writer::new(MAGIC);
         out.put(&self.id.to_be_bytes())?;
         match &self.reply {
+            Reply::Cleanup { token, state } => {
+                out.byte(16)?;
+                put_token(&mut out, *token)?;
+                out.byte(match state {
+                    CleanupObservation::Live => 1,
+                    CleanupObservation::Held => 2,
+                    CleanupObservation::Queued => 3,
+                    CleanupObservation::Gone => 4,
+                })?;
+            }
             Reply::SessionEnded => out.byte(9)?,
             Reply::Hello(value) => {
                 out.byte(8)?;
@@ -102,6 +112,17 @@ impl Answer {
             return Err(ControlError("control correlation"));
         }
         let reply = match input.byte()? {
+            16 => {
+                let token = token(&mut input)?;
+                let state = match input.byte()? {
+                    1 => CleanupObservation::Live,
+                    2 => CleanupObservation::Held,
+                    3 => CleanupObservation::Queued,
+                    4 => CleanupObservation::Gone,
+                    _ => return Err(ControlError("cleanup observation")),
+                };
+                Reply::Cleanup { token, state }
+            }
             9 => Reply::SessionEnded,
             8 => Reply::Hello(crate::daemon_wire::status(&mut input)?),
             1 => Reply::Bound {

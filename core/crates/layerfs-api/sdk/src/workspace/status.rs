@@ -1,6 +1,6 @@
 //! Bounded original Workspace observations, never a hidden Store refresh.
 use super::WorkspaceApi;
-use crate::{operation::exchange, OperationFailure};
+use crate::OperationFailure;
 use layerfs_bridge::control::{Reply, Request, WorkspaceStatus, WorkspaceToken};
 
 impl WorkspaceApi<'_> {
@@ -10,7 +10,7 @@ impl WorkspaceApi<'_> {
         token: WorkspaceToken,
     ) -> Result<WorkspaceStatus, Box<OperationFailure>> {
         let request = Request::Status(token);
-        match exchange(self.control, request.clone())? {
+        match self.exchange(request.clone())? {
             Reply::Status(status) => Ok(*status),
             reply => Err(OperationFailure::unexpected(request, reply)),
         }

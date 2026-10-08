@@ -239,7 +239,19 @@ impl OwnerClient {
         route: Option<Route>,
         command: Command,
     ) -> Result<Pending, (OwnerError, Command)> {
-        if route.is_none() != matches!(command, Command::Open { .. }) {
+        if (route.is_none()
+            && !matches!(
+                command,
+                Command::Open { .. }
+                    | Command::ObserveCleanup { .. }
+                    | Command::Resources { global: true }
+            ))
+            || (route.is_some()
+                && matches!(
+                    command,
+                    Command::Open { .. } | Command::ObserveCleanup { .. }
+                ))
+        {
             return Err((OwnerError::InvalidAdmission, command));
         }
         let Some(bytes) = command.charge() else {

@@ -1,6 +1,6 @@
 //! Acknowledged Store/engine binding, explicitly distinct from native Ready.
 use super::WorkspaceApi;
-use crate::{operation::exchange, OperationFailure};
+use crate::OperationFailure;
 use layerfs_bridge::control::{Reply, Request, WorkspaceToken};
 use layerfs_history::{BranchId, BranchSnapshot, WorkspaceId};
 
@@ -21,7 +21,7 @@ impl WorkspaceApi<'_> {
         branch: BranchId,
     ) -> Result<BoundWorkspace, Box<OperationFailure>> {
         let request = Request::Mount { workspace, branch };
-        match exchange(self.control, request.clone())? {
+        match self.exchange(request.clone())? {
             Reply::Bound { token, binding } => Ok(BoundWorkspace { token, binding }),
             reply => Err(OperationFailure::unexpected(request, reply)),
         }

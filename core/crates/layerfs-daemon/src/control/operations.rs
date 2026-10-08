@@ -41,6 +41,10 @@ impl Service {
     /// this caller's thread; retained original custody refuses it first.
     pub fn execute_control(&self, request: &Request) -> Result<Success, Failure> {
         match request {
+            Request::Observed { .. } => Err(Failure::Rejected(
+                ControlCode::Invalid,
+                "observed control requires application diagnostic owner",
+            )),
             Request::EndSession => Ok(Success::reply(Reply::SessionEnded)),
             Request::Hello(_) => Err(Failure::Rejected(
                 ControlCode::Invalid,
@@ -48,6 +52,7 @@ impl Service {
             )),
             Request::Mount { workspace, branch } => self.mount(*workspace, *branch),
             Request::Status(token) => self.status(*token),
+            Request::Cleanup(token) => self.cleanup(*token),
             Request::Commit(token) => self.commit(*token, BoundWorkspace::commit_captured),
             Request::Unmount(token) => self.unmount(*token),
             Request::ForceUnmount {

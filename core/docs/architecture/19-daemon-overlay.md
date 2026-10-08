@@ -170,3 +170,27 @@ See [shared physical capacity](35-shared-physical-capacity.md) and the
 [S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
 checkpoint limitations and numbers above retain their original source identity.
 Native/runtime/kernel and integrated qualification remain later milestones.
+
+## Read-only terminal cleanup observation
+
+The R7 instrumentation slice adds `Overlay::observe_cleanup(namespace,
+incarnation)` without changing schema 19. It performs one fixed query over the
+namespace primary key, its existing terminal reclaim key and the existing
+AUTOINCREMENT sequence. Live rows require the original incarnation and report
+Live, Held or Queued from their actual close/owner/queue state. An absent row
+reports Gone only when the namespace lies in this daemon's already allocated
+domain. Namespace IDs are not reused. Gone establishes present physical absence;
+it does not attest that the supplied absent-row incarnation existed historically.
+Invalid, future and mismatched live identities remain errors.
+
+The observation creates no mutable Route, advances no maintenance, adds no
+retained lookup/tombstone/index, and is independent of unrelated namespace or
+root size. `explain_cleanup_observation` uses the same production query. Host
+proof receipt 028 in the R7 stage records one statement, 55 VM steps and zero
+full-scan steps beside 64 and 256 unrelated namespaces, with its actual SQLite
+profile. Linux proof 095 records 47 VM steps at both sizes with SQLite 3.53.2;
+its plan and runtime profile remain separate from the host receipt. Mounted
+release lifecycle proof 084 observes Gone after both normal unmounts at its
+scoped tree. These are scoped counts and functionality, not qualification.
+The authenticated daemon Cleanup control prices one read-only owner job
+after terminal routing removal, as described in the native-control guide.

@@ -181,7 +181,12 @@ impl Application {
                     }
                 }
                 InitialRecord::Control(call) => {
-                    let outcome = self.control(&call, slot);
+                    let (outcome, diagnostic_error) =
+                        if matches!(call.request, Request::Observed { .. }) {
+                            self.observed_control(&call, slot)
+                        } else {
+                            (self.control(&call, slot), None)
+                        };
                     let session_end =
                         matches!(call.request, Request::EndSession) && outcome.is_ok();
                     let reserved_refusal = slot == usize::from(self.setup.limits.connections)
@@ -192,15 +197,29 @@ impl Application {
                                 _
                             ))
                         );
-                    let served = crate::control::answer_call(&mut connection, call, outcome)
-                        .map_err(|cause| ConnectionFailure {
+                    let served = match crate::control::answer_call(&mut connection, call, outcome) {
+                        Ok(served) => served,
+                        Err(cause) => {
+                            return Err(ConnectionFailure {
+                                slot,
+                                received: None,
+                                original: None,
+                                cause: ApplicationError::Control(cause),
+                                fence_error: None,
+                                diagnostic_error,
+                            })
+                        }
+                    };
+                    if let Some(error) = diagnostic_error {
+                        return Err(ConnectionFailure {
                             slot,
                             received: None,
                             original: None,
-                            cause: ApplicationError::Control(cause),
-                            fence_error: None,
-                            diagnostic_error: None,
-                        })?;
+                            cause: ApplicationError::RetainedControl(Box::new(served)),
+                            fence_error: connection.send.close().err(),
+                            diagnostic_error: Some(error),
+                        });
+                    }
                     // A failed operation with unresolved custody is held, not
                     // dropped merely because its refusal was sent successfully.
                     if let Err(cause) = &served.outcome {
@@ -253,14 +272,21 @@ impl Application {
         call: &Call,
         slot: usize,
     ) -> Result<crate::control::Success, crate::control::Failure> {
+        self.control_operation(&call.request, slot)
+    }
+    pub(super) fn control_operation(
+        &self,
+        request: &Request,
+        slot: usize,
+    ) -> Result<crate::control::Success, crate::control::Failure> {
         use crate::control::{Failure, Success};
         use layerfs_bridge::control::{ControlCode, DaemonPhase};
-        if matches!(call.request, Request::EndSession) {
+        if matches!(request, Request::EndSession) {
             return Ok(Success::reply(Reply::SessionEnded));
         }
-        if let Request::Hello(request) = call.request {
+        if let Request::Hello(request) = request {
             return self
-                .hello(request, slot)
+                .hello(*request, slot)
                 .map(|status| Success::reply(Reply::Hello(status)));
         }
         let state = self.state.lock().map_err(|_| Failure::Poisoned)?;
@@ -276,7 +302,7 @@ impl Application {
         let phase = state.startup.phase;
         drop(state);
         match service {
-            Some(service) => service.execute_control(&call.request),
+            Some(service) => service.execute_control(request),
             None if phase == DaemonPhase::Retained => Err(Failure::Rejected(
                 ControlCode::Unknown,
                 "original Store startup custody retained",

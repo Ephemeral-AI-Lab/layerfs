@@ -305,6 +305,7 @@ fn quarantined_session_keeps_original_failure_and_only_healthy_reader_is_reused(
     quarantine(&f.readers[0], f.root);
     let mut bad = lease(f.ticket(1), &f.store);
     assert_eq!(bad.index(), 0);
+    assert!(f.store.reader_storage_diagnostics(0).is_none());
     let original = bad.objects(&[f.root]).unwrap_err();
     assert!(matches!(original.as_ref(), PortError::Storage(error) if error.is_unknown_outcome()));
     let before = f.store.work();
@@ -312,6 +313,7 @@ fn quarantined_session_keeps_original_failure_and_only_healthy_reader_is_reused(
     assert_eq!(f.store.work(), before);
     drop(bad);
     assert_eq!(f.store.read_work().quarantined, 1);
+    assert!(f.store.reader_storage_diagnostics(0).is_some());
     let failures = f.store.reader_failures();
     assert_eq!(failures[0].0, 0);
     assert!(Arc::ptr_eq(&failures[0].1, &original));
@@ -323,6 +325,53 @@ fn quarantined_session_keeps_original_failure_and_only_healthy_reader_is_reused(
     );
     drop(good);
     assert_eq!(lease(f.ticket(3), &f.store).index(), 1);
+}
+#[test]
+fn diagnostic_reader_snapshots_leave_admission_and_provider_work_unchanged() {
+    for (count, label) in [(1, "reader-diag-one"), (4, "reader-diag-four")] {
+        let f = Fixture::new(label, count, limits());
+        let before = f.store.read_work();
+        let demands = f.store.work();
+        let sql: Vec<_> = f
+            .readers
+            .iter()
+            .map(|reader| reader.diagnostics().unwrap().statements)
+            .collect();
+        for index in 0..count {
+            assert!(f.store.reader_storage_diagnostics(index).is_some());
+        }
+        assert!(f.store.reader_storage_diagnostics(count).is_none());
+        assert_eq!(f.store.read_work(), before);
+        assert_eq!(f.store.work(), demands);
+        let ticket = f.ticket(9);
+        assert_eq!(f.store.read_work().assigned, 1);
+        assert!(
+            f.store.reader_storage_diagnostics(0).is_some(),
+            "assigned reader should remain visible"
+        );
+        let held = lease(ticket, &f.store);
+        let during = f.store.read_work();
+        assert!(
+            f.store.reader_storage_diagnostics(held.index()).is_none(),
+            "active lease must be unavailable"
+        );
+        for index in 1..count {
+            assert!(f.store.reader_storage_diagnostics(index).is_some());
+        }
+        assert_eq!(f.store.read_work(), during);
+        assert_eq!(f.store.work(), demands);
+        assert_eq!(
+            f.readers
+                .iter()
+                .map(|reader| reader.diagnostics().unwrap().statements)
+                .collect::<Vec<_>>(),
+            sql
+        );
+        drop(held);
+        assert!(f.store.reader_storage_diagnostics(0).is_some());
+        assert_eq!(f.store.read_work().scheduler_bytes, before.scheduler_bytes);
+        assert_eq!(f.store.read_work().outstanding, 0);
+    }
 }
 
 #[test]
