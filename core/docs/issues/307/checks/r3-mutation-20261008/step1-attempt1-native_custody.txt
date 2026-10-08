@@ -1,0 +1,23 @@
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+
+thread 'an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it' panicked at crates/layerfs-daemon/tests/native_custody.rs:52:10:
+called `Result::unwrap()` on an `Err` value: (AdmissionFull, Native(RetainedMount))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_FORGET names=27 inodes=26 reclaim_requests=1 forget_units=26 work=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 54, handoffs: 54, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 26 } baseline=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 1, source_rows: 0, owner_details: 4, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 } looked=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 27, source_rows: 0, owner_details: 68, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 } returned=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 1, source_rows: 0, owner_details: 4, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }
+ok
+
+failures:
+
+failures:
+    an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+R3_WALL seconds<=2 limit=110s
+EXIT 101
