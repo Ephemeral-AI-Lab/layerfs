@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "2f8e1ec422a40f4220c40315867c72dd3463ff28",
+  "source_tree": "a38b0c6846dc94a8be1909ec4dcf11e5b772910c",
+  "worktree_status": "?? core/benchmark/r7-tools/\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r7-environment-20261009",
+    "--network",
+    "none",
+    "--device",
+    "/dev/fuse",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--security-opt",
+    "apparmor=unconfined",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "sh",
+    "-c",
+    "uname -a; id; test -c /dev/fuse; ls -l /dev/fuse; command -v bash; command -v node; command -v git; df -k /tmp; cat /proc/self/status"
+  ],
+  "limit_seconds": 20,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

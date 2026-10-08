@@ -1,0 +1,66 @@
+Linux 537bca8dd901 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+uid=0(root) gid=0(root) groups=0(root)
+crw-rw-rw- 1 root root 10, 229 Oct  8 19:58 /dev/fuse
+/usr/bin/bash
+/usr/bin/git
+Filesystem     1K-blocks     Used Available Use% Mounted on
+overlay        205313420 28819408 165991920  15% /
+Name:	cat
+Umask:	0022
+State:	R (running)
+Tgid:	11
+Ngid:	0
+Pid:	11
+PPid:	1
+TracerPid:	0
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+FDSize:	64
+Groups:	0 
+NStgid:	11
+NSpid:	11
+NSpgid:	1
+NSsid:	1
+Kthread:	0
+VmPeak:	    2372 kB
+VmSize:	    2372 kB
+VmLck:	       0 kB
+VmPin:	       0 kB
+VmHWM:	    1100 kB
+VmRSS:	    1100 kB
+RssAnon:	      92 kB
+RssFile:	    1008 kB
+RssShmem:	       0 kB
+VmData:	     356 kB
+VmStk:	     132 kB
+VmExe:	      36 kB
+VmLib:	    1728 kB
+VmPTE:	      48 kB
+VmSwap:	       0 kB
+HugetlbPages:	       0 kB
+CoreDumping:	0
+THP_enabled:	1
+untag_mask:	0xffffffffffffff
+Threads:	1
+SigQ:	0/15665
+SigPnd:	0000000000000000
+ShdPnd:	0000000000000000
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+SigCgt:	0000000000000000
+CapInh:	0000000000000000
+CapPrm:	00000000a82425fb
+CapEff:	00000000a82425fb
+CapBnd:	00000000a82425fb
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	2
+Seccomp_filters:	1
+Speculation_Store_Bypass:	vulnerable
+SpeculationIndirectBranch:	unknown
+Cpus_allowed:	ff
+Cpus_allowed_list:	0-7
+Mems_allowed:	1
+Mems_allowed_list:	0
+voluntary_ctxt_switches:	0
+nonvoluntary_ctxt_switches:	1
