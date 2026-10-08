@@ -5,8 +5,9 @@ use std::{
     future::Future,
     mem::size_of,
     pin::Pin,
-    sync::Mutex,
-    task::{Context, Poll, Waker},
+    sync::{Arc, Mutex},
+    task::{Context, Poll, Wake, Waker},
+    thread::{self, Thread},
 };
 
 #[derive(Default)]
@@ -140,6 +141,36 @@ impl OwnerClient {
             route,
             command: Some(command),
         })
+    }
+}
+struct ThreadWake(Thread);
+impl Wake for ThreadWake {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.unpark();
+    }
+}
+impl OwnerClient {
+    /// The synchronous form for a control or constructor thread: one
+    /// before-effect readiness wait for a credit, then the single
+    /// submission. A stopped owner or a refusal that waiting cannot cure
+    /// returns the original input. Never call it on a Fuse receive or
+    /// request-service worker, or while holding the credits it waits for.
+    pub fn submit_waiting(
+        &self,
+        route: Option<Route>,
+        command: Command,
+    ) -> Result<Pending, (OwnerError, Command)> {
+        let mut admission = self.submit_when_available(route, command)?;
+        let waker = Waker::from(Arc::new(ThreadWake(thread::current())));
+        loop {
+            match Pin::new(&mut admission).poll(&mut Context::from_waker(&waker)) {
+                Poll::Ready(outcome) => return outcome,
+                Poll::Pending => thread::park(),
+            }
+        }
     }
 }
 impl Admission {

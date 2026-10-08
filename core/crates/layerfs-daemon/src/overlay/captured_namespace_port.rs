@@ -5,13 +5,14 @@ use layerfs_workspace::{OverlayCapturedNamespace, WorkspaceError, WorkspaceResul
 
 impl OwnerClient {
     /// This synchronous port serves the constructor thread, never a native
-    /// dispatch/service worker. Failure keeps the original command/completion.
+    /// dispatch/service worker. It waits for a credit before its one attempt.
+    /// Failure keeps the original command/completion.
     fn captured_namespace_job(
         &self,
         reader: CapturedReader,
         command: Command,
     ) -> WorkspaceResult<crate::Completion> {
-        self.try_submit(Some(reader.capture().route()), command)
+        self.submit_waiting(Some(reader.capture().route()), command)
             .map_err(|(cause, command)| {
                 WorkspaceError::Service(Box::new(crate::OwnerError::Unattempted {
                     cause: Box::new(cause),

@@ -30,6 +30,15 @@ is one construction producer by structure: one Storage producer, one Save, one
 closure, and the Workspace's `committing` flag. No construction thread is
 spawned.
 
+Every owner job of the Commit thread — Capture, the reader and owner
+acquisitions, each captured port call of the producer, the local resolution,
+the install and the releases — waits for a credit before its one attempt
+(`OwnerClient::submit_waiting`, [`overlay/admission.rs`](../../crates/layerfs-daemon/src/overlay/admission.rs)),
+as a filesystem request does. A Workspace busy with other callers delays a
+Commit; it does not refuse it. The wait is readiness before the attempt, not a
+retry: a stopped owner, or a charge that no released credit could cover,
+returns the original command unattempted. It has no bound of its own.
+
 Commit does not consult the native mount state. A Bound Workspace and a
 mounted one commit the same way, and the frontier is whatever is locally
 published, whichever process published it and whatever that process's exit
@@ -77,12 +86,14 @@ Nothing is released inside the closure. When the driver returns:
 The attempt's custody is dropped before the first release. A release that is
 refused or fails ends the sequence; the owner it did not release stays named
 in the receipt beside the original completion or submission error. Nothing is
-retried.
+retried. The completion of a release that is done is dropped at once and only
+its fact is recorded (`released`): a held completion keeps a Lifecycle credit,
+and a Workspace has two.
 
 `CommitSuccess::namespace` and `CommitFailure::namespace` carry
 [`CapturedConstruction`](../../crates/layerfs-daemon/src/store/commit_types.rs):
-the producer's counted work, Content's filesystem counters, the two original
-release completions and whatever was kept. It is `None` when the closure never
+the producer's counted work, Content's filesystem counters, which owners were
+released, and whatever was kept. It is `None` when the closure never
 ran, and under a caller's constructor.
 
 A known Commit whose reader or owner was not released is still published and
@@ -114,6 +125,12 @@ holds back later source acquisitions until it has run.
 - `FilesystemResources` are Content's defaults; no Store-derived source exists.
 - A request that stayed retained with its source would park install after a
   known publication.
+- A queued install holds back later source acquisitions, and those parked
+  jobs still occupy ordinary slots of the Workspace. Sixteen concurrent
+  requests can then leave no slot for the request whose source the install
+  waits for. Not fixed here; it is R6 work.
+- `CommitSuccess` and an unresolved `CommitFailure` still hold the capture
+  and install or resolution completions, each one credit, until dropped.
 - An unknown outcome has no resolver. Its custody stays until an owner ruling
   or forced teardown.
 - Durable: `NOT_RUN — disabled by owner until explicit reauthorization`.

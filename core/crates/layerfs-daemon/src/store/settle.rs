@@ -4,9 +4,12 @@ use crate::{Command, Completion, OwnerError, Response};
 use std::sync::atomic::Ordering;
 
 impl BoundWorkspace {
+    /// One original job of the Commit thread. Admission is a readiness wait
+    /// before the single attempt, as for a filesystem request: a Workspace
+    /// busy with other callers delays the Commit and does not refuse it.
     pub(super) fn job(&self, command: Command) -> Result<Completion, OwnerError> {
         self.owner
-            .try_submit(Some(self.route()), command)
+            .submit_waiting(Some(self.route()), command)
             .map_err(|(cause, command)| OwnerError::Unattempted {
                 cause: Box::new(cause),
                 command: Box::new(command),

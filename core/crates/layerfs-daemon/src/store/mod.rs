@@ -15,7 +15,7 @@ mod types;
 pub(crate) use bind::checked_base;
 
 pub use commit_types::{
-    CapturedConstruction, CommitError, CommitFailure, CommitPhase, CommitSuccess,
+    CapturedConstruction, CommitError, CommitFailure, CommitPhase, CommitSuccess, ReleasedOwner,
 };
 pub use open::{Store, StoreWork};
 pub use operation::{BoundWorkspace, StoreOperation};

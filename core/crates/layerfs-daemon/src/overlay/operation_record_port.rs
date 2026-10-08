@@ -1,4 +1,5 @@
 //! Workspace raw-record port over original short credited OperationRecord jobs.
+//! Constructor-thread port: each job waits for a credit before its one attempt.
 use crate::{
     Command, Completion, IndexedOperationRecordJob, IndexedOperationRecordReply, OwnerClient,
     OwnerError, Response,
@@ -19,7 +20,7 @@ fn original_job(
 ) -> WorkspaceResult<Completion> {
     let command = Command::IndexedOperationRecord(Box::new(job));
     let pending = client
-        .try_submit(Some(scope.owner.route()), command)
+        .submit_waiting(Some(scope.owner.route()), command)
         .map_err(|(cause, command)| {
             WorkspaceError::Service(Box::new(OwnerError::Unattempted {
                 cause: Box::new(cause),

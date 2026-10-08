@@ -82,7 +82,11 @@ inserts do not enlarge the captured EOF. Inode points and pages retain the same
 reader root/floor through install and logical Close. The caller releases the
 reader only after all consumers and original outcome custody have ended.
 
-On service admission failure the original command is retained as Unattempted.
+Since R5 each captured port call and each Commit-thread job waits for an owner
+credit before its one attempt (`OwnerClient::submit_waiting`; see
+[product Commit](79-product-commit.md)); a full Workspace delays it and does not
+refuse it. On a service admission failure that no credit can cure (a stopped
+owner, an impossible charge) the original command is retained as Unattempted.
 An attempted failure retains the original Completion, receipt and credit. The
 adapter never replays, refreshes or releases reader ownership. Successful daemon
 pages are cloned into a bounded constructor-owned window while the original

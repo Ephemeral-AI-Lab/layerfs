@@ -25,8 +25,7 @@ use layerfs_content::ObjectId;
 use layerfs_daemon::{
     bootstrap::open_store,
     control::{Failure, Success},
-    store::{CapturedConstruction, Store},
-    Response,
+    store::{CapturedConstruction, ReleasedOwner, Store},
 };
 use layerfs_history::{
     CommitHistoryRequest, CommitId, CommitRecord, CommitStagedOutcome, PageResult, WorkspaceId,
@@ -264,15 +263,15 @@ pub fn receipt<'a>(done: &'a Success, what: &str) -> &'a CapturedConstruction {
         .as_ref()
         .unwrap_or_else(|| panic!("{what}: the product constructor did not run"));
     assert!(!namespace.retained(), "{what}: {namespace:?}");
-    assert_eq!(namespace.released.len(), 2, "{what}: reader, then owner");
-    for released in &namespace.released {
-        assert!(
-            matches!(released.result(), Ok(Response::Done)),
-            "{what}: {released:?}"
-        );
-    }
+    assert_eq!(
+        namespace.released,
+        [ReleasedOwner::Reader, ReleasedOwner::Operation],
+        "{what}: reader, then owner"
+    );
     assert!(
-        namespace.release_error.is_none() && namespace.custody.is_none(),
+        namespace.release_error.is_none()
+            && namespace.release_failure.is_none()
+            && namespace.custody.is_none(),
         "{what}: {namespace:?}"
     );
     let outcome = match &commit.history {

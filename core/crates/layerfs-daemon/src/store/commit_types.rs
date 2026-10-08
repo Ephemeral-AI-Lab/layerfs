@@ -54,10 +54,19 @@ pub struct CapturedConstruction {
     pub operation: Option<OperationOwner>,
     /// A failed attempt's record and file custody while its owners are kept.
     pub custody: Option<Box<CapturedNamespaceCustody>>,
-    /// Original release completions in attempt order: reader, then owner.
-    pub released: Vec<Completion>,
+    /// Releases known done, in attempt order: reader, then owner. Each
+    /// completion is dropped once read, so it holds no Lifecycle credit.
+    pub released: Vec<ReleasedOwner>,
+    /// The original completion of a release that was attempted and refused.
+    pub release_failure: Option<Box<Completion>>,
     /// The submission failure that ended the release sequence.
     pub release_error: Option<OwnerError>,
+}
+/// One owner of a namespace attempt whose release is known done.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReleasedOwner {
+    Reader,
+    Operation,
 }
 impl CapturedConstruction {
     /// True while an acquired reader or operation owner is not known released.

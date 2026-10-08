@@ -3,7 +3,7 @@
 //! the driver's outcome is known; unresolved custody stays with the failure.
 use super::{
     BoundWorkspace, CapturedConstruction, CommitError, CommitFailure, CommitSuccess, PortError,
-    StoreOperation,
+    ReleasedOwner, StoreOperation,
 };
 use crate::{Command, Completion, OwnerError, Response};
 use layerfs_content::{
@@ -122,7 +122,9 @@ impl BoundWorkspace {
     }
     /// The attempt's custody is dropped first, then the reader is released,
     /// then the operation owner. A release that is refused or fails stops the
-    /// sequence; what it did not release stays named in the receipt.
+    /// sequence; what it did not release stays named in the receipt. A done
+    /// release's completion is dropped at once: holding it would keep a
+    /// Lifecycle credit of this Workspace.
     fn release_captured(&self, held: &mut CapturedConstruction) {
         held.custody = None;
         if let Some(reader) = held.reader {
@@ -130,19 +132,21 @@ impl BoundWorkspace {
                 return;
             }
             held.reader = None;
+            held.released.push(ReleasedOwner::Reader);
         }
         if let Some(owner) = held.operation {
             if self.released(Command::ReleaseOperation(owner), held) {
                 held.operation = None;
+                held.released.push(ReleasedOwner::Operation);
             }
         }
     }
     fn released(&self, command: Command, held: &mut CapturedConstruction) -> bool {
         match self.job(command) {
+            Ok(done) if matches!(done.result(), Ok(Response::Done)) => true,
             Ok(done) => {
-                let released = matches!(done.result(), Ok(Response::Done));
-                held.released.push(done);
-                released
+                held.release_failure = Some(Box::new(done));
+                false
             }
             Err(error) => {
                 held.release_error = Some(error);
