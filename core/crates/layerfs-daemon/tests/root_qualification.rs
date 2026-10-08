@@ -36,6 +36,18 @@ fn job(
         std::thread::yield_now();
     }
 }
+/// The engine thread drops its own final credit after the consumer observes a
+/// completion: bound the wait for that release before an exact counter check.
+fn settled(client: &OwnerClient, outstanding: usize) {
+    let end = Instant::now() + Duration::from_secs(3);
+    while client.diagnostics().unwrap().outstanding != outstanding {
+        assert!(
+            Instant::now() < end,
+            "engine did not release its final credit"
+        );
+        std::thread::yield_now();
+    }
+}
 fn scope(client: &OwnerClient, tag: u8) -> IndexedOperationRecordScope {
     let opened = job(
         client,
@@ -193,6 +205,7 @@ fn a_real_root_qualifies_through_short_original_operation_record_jobs() {
     let own = context(&session, session.root);
 
     let first = scope(&client, 21);
+    settled(&client, 0);
     let before = client.diagnostics().unwrap();
     let mut records = IndexedEditRecords::new(&client, first);
     let mut work = QualificationWork::default();
@@ -209,6 +222,7 @@ fn a_real_root_qualifies_through_short_original_operation_record_jobs() {
     assert_eq!(provider.calls, work.record_reads + work.record_batches);
     assert_eq!(provider.converted_changes, work.record_changes);
     assert_eq!((provider.terminal_calls, provider.saturated), (0, false));
+    settled(&client, before.outstanding);
     let after = client.diagnostics().unwrap();
     assert_eq!(after.admitted - before.admitted, provider.calls);
     assert_eq!(after.outstanding, before.outstanding);
@@ -259,6 +273,7 @@ fn a_real_root_qualifies_through_short_original_operation_record_jobs() {
 
     release(&client, first);
     release(&client, second);
+    settled(&client, 0);
     assert_eq!(client.diagnostics().unwrap().outstanding, 0);
     owner.stop().unwrap();
     std::fs::remove_dir_all(path).unwrap();

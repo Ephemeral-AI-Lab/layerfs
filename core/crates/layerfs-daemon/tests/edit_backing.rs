@@ -46,6 +46,18 @@ fn wait(pending: Pending) -> Completion {
         std::thread::yield_now();
     }
 }
+/// The engine thread drops its own final credit after the consumer observes a
+/// completion: bound the wait for that release before an exact counter check.
+fn settled(client: &OwnerClient, outstanding: usize) {
+    let end = Instant::now() + Duration::from_secs(3);
+    while client.diagnostics().unwrap().outstanding != outstanding {
+        assert!(
+            Instant::now() < end,
+            "engine did not release its final credit"
+        );
+        std::thread::yield_now();
+    }
+}
 fn job(client: &OwnerClient, route: Option<Route>, command: Command) -> Completion {
     wait(
         client
@@ -149,6 +161,7 @@ fn terminal_refusal_keeps_original_completion_and_other_scope_progresses() {
         ))
     ));
     assert!(done.work().sql.total().vm_steps > 0);
+    settled(&client, 1);
     let before = client.diagnostics().unwrap();
     assert_eq!(before.outstanding, 1);
     assert!(before.credited_bytes > 0);
@@ -167,6 +180,7 @@ fn terminal_refusal_keeps_original_completion_and_other_scope_progresses() {
         EditRecordApply::Applied
     );
     assert_eq!(healthy.get(key(5, 0)).unwrap(), Some(vec![4]));
+    settled(&client, 1);
     assert_eq!(client.diagnostics().unwrap().outstanding, 1);
     let custody = backing.into_custody();
     assert_eq!(custody.scope, first);
@@ -352,6 +366,7 @@ fn canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup()
         drop(done);
         std::thread::yield_now();
     }
+    settled(&client, 0);
     assert_eq!(client.diagnostics().unwrap().outstanding, 0);
     owner.stop().unwrap();
 }

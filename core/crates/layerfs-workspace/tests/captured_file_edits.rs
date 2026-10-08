@@ -286,6 +286,18 @@ fn job(client: &OwnerClient, route: Option<Route>, command: Command) -> Completi
         std::thread::yield_now();
     }
 }
+/// The engine thread drops its own final credit after the consumer observes a
+/// completion: bound the wait for that release before an exact counter check.
+fn settled(client: &OwnerClient, outstanding: usize) {
+    let end = Instant::now() + Duration::from_secs(3);
+    while client.diagnostics().unwrap().outstanding != outstanding {
+        assert!(
+            Instant::now() < end,
+            "engine did not release its final credit"
+        );
+        std::thread::yield_now();
+    }
+}
 fn release_operation(case: &Case, owner: OperationOwner) {
     assert!(case.job(Command::ReleaseOperation(owner)).result().is_ok());
 }
@@ -369,6 +381,7 @@ fn overlapping_writes_shrink_regrow_and_cross_cell_spans_match_final_bytes() {
         Some(&1)
     );
     case.release(attempt.custody, false);
+    settled(&case.client, 0);
     assert_eq!(case.client.diagnostics().unwrap().credited_bytes, 0);
 }
 
