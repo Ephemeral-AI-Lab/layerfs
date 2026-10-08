@@ -126,6 +126,12 @@ gives back what it holds. `Fenced` is produced only before submission: once a
 job is admitted its `Pending` is awaited to the original result, and the
 request continues from that result until its next acquiring call.
 
+The fence check and the submission share no lock. A request that passed its
+check while the stop was being made can still submit that one acquiring job,
+including a mutation. The job is awaited to its original result and the drain
+waits for it, so nothing is lost; "starts nothing new" holds from that
+request's next gate onwards.
+
 A request whose failure is `Fenced` takes the
 [terminal path](../../crates/layerfs-fuse/src/request/terminal.rs): one
 `ENOTCONN` reply attempt, one count on the fence, then release of what it holds
@@ -177,7 +183,7 @@ alone calls, for the Store read path only:
 
 | Step | Where it fails | Cause carried |
 | --- | --- | --- |
-| Reader admission | `immutable`: the read ticket is refused, its wait fails, or the admitted client is refused | the scope's earlier failure, or `PortError::ReadAdmission` |
+| Reader admission | `immutable`: the read ticket is refused or its wait fails | the scope's earlier failure, or `PortError::ReadAdmission` |
 | Fact round | `plan.supply` on the admitted view, in the read and mutation drivers | the `PortError` this request's scope recorded |
 | File or link window | `read_file_window`, `readlink_window` | same |
 | Directory listing | `native_directory_listing` | same |
@@ -186,11 +192,21 @@ The reads of the last three rows run inside Fuse on the view `immutable`
 returned, so Fuse cannot see whether the provider failed. It hands the step's
 error to
 `RequestServices::failed_base_read`, and the adapter answers from this
-request's `StorePorts` failure scope: a recorded `PortError` becomes the marker,
-anything else is returned unchanged. A failure at one of those steps with no
-recorded provider failure is therefore not a failed base demand: a stale source,
-contention on the admitted reader, a poisoned scope. `PortError::History` is
-never one either; it is the serial allocator's write.
+request's `StorePorts` failure scope: a recorded request-scoped `PortError`
+becomes the marker, and otherwise the step's own error is returned unchanged. A
+failure at one of those steps with no recorded provider failure is therefore
+not a failed base demand: a stale source, contention on the admitted reader, a
+poisoned scope.
+
+Only the Store's own answer to this request's read is request-scoped:
+`PortError::Storage` (a provider read failure, including one that quarantined
+its reader) and `PortError::ReadAdmission` with `NoReaders` or `Stopped` (no
+reader is left to admit it). Every other cause is returned unchanged and ends
+`Retained` as before: a poisoned pool or scope lock, the admission table bound
+(`Capacity`), `InvalidLimits`, a concurrent demand, a reader of another Store
+or Workspace refused by `admitted_client`, and `PortError::History`, which is
+the serial allocator's write. Those are not staged by a test; they are
+classified by source.
 
 Everything else ends `Retained` exactly as before: any owner job's failure, an
 uncertain mutation or publication outcome, a failed reply-ticket step, a failed
@@ -204,12 +220,16 @@ The cause survives the request twice. A failure that left a reader's outcome
 unknown quarantines that reader, and `Store::reader_failures` keeps the reader's
 index with the same original `PortError`. Independently, each lane's `Fence`
 keeps a fixed record, read with `MountQueue::fence().failed_demands()`: a count
-of requests ended this way and the most recent cause, as the same allocation
-the request's scope held. One slot per mount, nothing queued, never cleared; an
-earlier cause is dropped when a later one replaces it. A failure that
-quarantines nothing, such as stopped read admission, is recorded there alone.
-The record is in memory only: no wire record, status field or `NativeWork`
-counter carries it.
+of failed base demands, the first cause and the most recent cause, each as the
+same allocation the request's scope held. Two slots per mount, nothing queued,
+never cleared: the first original cause is never replaced, and a cause between
+the first and the latest is dropped when a later one arrives. The count is
+taken when the demand fails, so a request whose release then fails and is
+retained is counted too. A failure that quarantines nothing, such as stopped
+read admission, is recorded there alone. The connection's drain receipt
+(`Drained`, and `Undrained` at a stop) copies the record, so it leaves with the
+terminal unmount's native receipt or stays with the retained custody. No wire
+record, status field or `NativeWork` counter carries it.
 
 [`cold_failure_scope.rs`](../../crates/layerfs-daemon/tests/cold_failure_scope.rs)
 proves this with a real owner, a Store with two read sessions and a dispatcher

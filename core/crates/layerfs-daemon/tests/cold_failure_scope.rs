@@ -381,10 +381,15 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
         failures[0].1.as_ref(),
         PortError::Storage(error) if error.is_unknown_outcome()
     ));
-    let FailedDemands { count, latest } = fence.failed_demands();
+    let FailedDemands {
+        count,
+        first,
+        latest,
+    } = fence.failed_demands();
     let latest = latest.unwrap();
     assert_eq!(count, 1);
     assert!(Arc::ptr_eq(&latest, &cause));
+    assert!(Arc::ptr_eq(&first.unwrap(), &cause));
     assert!(std::ptr::eq(port_error(&latest), failures[0].1.as_ref()));
     println!(
         "COLD-DEMAND request=(base_demand,source_held,no_read)->Complete lane=(completed 1, retained 0, terminal false) quarantined=1 record=(count 1, latest={})",
@@ -543,9 +548,18 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     assert!(!failure.fenced() && failure.retained_source().is_some());
     wait(failure.relinquish()).unwrap();
 
-    // One fixed slot: the count grew by three, only the last cause is kept.
-    let FailedDemands { count, latest } = fence.failed_demands();
+    // Fixed slots: the count grew by three; the first original cause is
+    // still the quarantined reader's failure and the latest is the last one.
+    let FailedDemands {
+        count,
+        first,
+        latest,
+    } = fence.failed_demands();
     assert_eq!(count, 4);
+    assert!(std::ptr::eq(
+        port_error(&first.unwrap()),
+        rig.store.reader_failures()[0].1.as_ref()
+    ));
     stopped(&latest.unwrap());
     let readers = rig.store.read_work();
     assert_eq!((readers.quarantined, readers.outstanding), (1, 0));
@@ -553,7 +567,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     assert!(!fence.stopped());
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "COLD-ADMISSION read=(base_demand,source_held,read_held={window})->released mutation=(base_demand,source_held,no_ticket)->released directory=(base_demand,source_held)->released quarantined=1 record=(count 4, latest=ReadAdmission(Stopped))"
+        "COLD-ADMISSION read=(base_demand,source_held,read_held={window})->released mutation=(base_demand,source_held,no_ticket)->released directory=(base_demand,source_held)->released quarantined=1 record=(count 4, first=quarantined reader failure, latest=ReadAdmission(Stopped))"
     );
 
     drop(wait(services.close_file(mount, serial, handle)).unwrap());

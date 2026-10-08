@@ -109,6 +109,7 @@ impl NativeSession {
             directory: self.directory,
             outcome: self.outcome,
             work,
+            failed_demands: self.fence.failed_demands(),
         }))
     }
     pub(super) fn stopped(self, stop: Stop) -> Box<Undrained> {
@@ -131,6 +132,7 @@ impl NativeSession {
             lane: facts.work.err(),
             panic,
             forced: self.forced(),
+            failed_demands: self.fence.failed_demands(),
             session: self,
         })
     }

@@ -147,6 +147,7 @@ impl NativeSession {
             Ok(super::Detach::Busy) | Err(_) => {
                 AttachRemainder::Retained(Box::new(super::Undrained {
                     loops: self.monitor.as_ref().map(SessionMonitor::snapshot),
+                    failed_demands: self.fence.failed_demands(),
                     session: self,
                     stage: super::DrainStage::Detach,
                     work: None,

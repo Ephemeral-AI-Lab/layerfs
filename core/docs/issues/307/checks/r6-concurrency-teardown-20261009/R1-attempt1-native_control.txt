@@ -1,0 +1,6 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 067d226d2, uncommitted product/test paths=6, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_control --test-threads=1 an_unresolved_moved_head --nocapture (cwd core/crates/layerfs-daemon)
+Can't exec "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/native_control": No such file or directory at /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r4-locked.pl line 15.
+exec: No such file or directory at /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r4-locked.pl line 15.
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 2

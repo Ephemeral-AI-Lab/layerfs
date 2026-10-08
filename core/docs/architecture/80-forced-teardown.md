@@ -37,8 +37,12 @@ is never parsed.
 
 ## Admission
 
-One registry section decides, in this order. A refusal changes nothing: no
-phase, activity or epoch moves, and no syscall or engine job is made.
+One registry section decides, in this order. A refusal changes nothing in the
+entry: no phase, activity or epoch moves, and no syscall or engine job is made.
+A refusal coded `Unknown` still ends the caller's control connection, as every
+`Unknown` control answer has since native control was introduced: the
+application closes that connection and keeps its slot until the embedding
+application takes it, although such a refusal carries no custody of its own.
 
 | Condition | Answer |
 | --- | --- |
@@ -48,6 +52,7 @@ phase, activity or epoch moves, and no syscall or engine job is made.
 | No native connection (`Unattached`) | `Invalid` at `force:admission` |
 | An Attach outcome is unknown (`Attaching`) | `Unknown` at `force:admission` |
 | Activity is `Uncertain` and `relinquish_unknown` is false | `Unknown` at `force:custody` |
+| Activity is `LocalFailure` with no stored publication | `Unknown` at `force:custody`, whatever the flag. No current producer leaves this state |
 | The connection has no abort control | `Failed` at `force:capability`; the Workspace stays Ready |
 | Otherwise | Admitted: native phase `Stopping`, activity `Closing` |
 
@@ -68,8 +73,11 @@ read:
 | `Uncertain` | `Unknown` | `relinquish_unknown` required |
 
 `Uncertain` also covers a settled failure whose reader or operation owner was
-not released; the registry cannot tell that from an unknown publication, so the
-receipt says `Unknown` for both. Relinquishing is not a resolution: the
+not released, and a definite failure with no publication whose local
+resolution of the capture is not known done. The registry cannot tell either
+from an unknown publication, so the receipt says `Unknown` for all three, and
+so does the failed Commit's own reply (without a moved-head state: that stays
+in its detail text). Relinquishing is not a resolution: the
 namespace is closed with the capture, reader and operation owner still in the
 engine, and no release of that custody is attempted.
 
@@ -82,7 +90,10 @@ After admission, outside the registry lock, each step is made once:
    here: `Retained` at stage `Abort`, nothing further attempted, request
    service not stopped, `fenced` 0. If the session refuses before the write,
    no effect was made: the same connection returns to Ready with the activity
-   it had, and the reply is `Failed` at `force:capability`.
+   it had, and the reply is `Failed` at `force:capability`. The entry's epoch
+   has then advanced twice, at admission and at the return. The guard reads
+   the bound control under the admission lock, so no current sequence reaches
+   this branch.
 2. **Fence, drain and detach.** A written abort stops the mount's request
    service. `NativeSession::force_drain` waits, bounded by `drain_wait`, for
    every loop to be joined and for no received or admitted request to remain,
@@ -117,7 +128,10 @@ that entry returns the stored custody with the same stage, detail and forced
 facts, and makes no syscall and no engine job. `detached` and `work` in a
 returned custody are read live from the connection's maintained counters, so
 they can differ between two replies while a retained request is still
-finishing.
+finishing; they are not frozen at the stop. A stop at `Revoke` or `Close`
+follows the lane's release, so the lane counters in `work` read zero there and
+the drained receipt kept as evidence holds the last values; `detached` and the
+loop counts are still the connection's own.
 
 Status shows only the native phase (`Stopping`, `Draining`, then `Retained`)
 and activity `Closing`. The forced facts are not part of status; they are
@@ -139,6 +153,10 @@ returned only by a later `Unmount`, `ForceUnmount` or `Attach`.
   Revoke or Close can be refused `AdmissionFull`. Force then ends `Retained` at
   `Revoke` or `Close` with that original refusal, after the abort and the
   detach; it never waits for the slot.
+- Status copies its engine observation and returns the Lifecycle slot before
+  its reply is sent. A Status job still occupies one slot while it runs, so
+  two of them in flight at the instant of the forced (or normal) Revoke or
+  Close can refuse that job the same way. This window is not staged by a test.
 - With `relinquish_unknown`, and for a known publication whose reader or owner
   was not released, the closed namespace stays `Held` and its rows are not
   reclaimed in that daemon.

@@ -1,0 +1,35 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 067d226d2, uncommitted product/test paths=13, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_control-44a6886354e47711 --test-threads=1 --nocapture (cwd core/crates/layerfs-daemon)
+
+running 10 tests
+test a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown ... CONTROL_UNRESOLVED original_error=Storage(Busy) locally_settled=false local_done=false local_error=Some(Unattempted { cause: Stopped, command: ResolveFailed(Capture { route: Route { engine: 1, ns: 1, incarnation: [93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93] }, generation: Generation(1), revision: 1, base_root: [147, 62, 83, 240, 179, 133, 175, 174, 250, 144, 229, 69, 77, 119, 172, 197, 152, 111, 61, 89, 63, 104, 48, 110, 217, 184, 204, 18, 212, 250, 89, 220] }) }) published=None reply_code=Unknown reply_phase=Commit Construct registry=Uncertain force_unattached=Invalid
+ok
+test an_original_unknown_blocks_another_commit_and_normal_unmount ... CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true
+ok
+test an_unresolved_moved_head_failure_is_answered_and_not_dropped ... CONTROL_UNRESOLVED_MOVED original_error=History(HeadMoved(MovedState { expected_head: None, actual_head: None, expected_base: LayerId(32ab6148542d2ca280b168d434a3b1ab89b4dd672cc9203dcf8a303cc52d68bd16), actual_base: LayerId(32ab6148542d2ca280b168d434a3b1ab89b4dd672cc9203dcf8a303cc52d68bd16) })) locally_settled=false reply_code=Unknown reply_moved=None reply_phase=Commit Construct detail_keeps_moved_state=true registry=Uncertain
+ok
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed
+ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+ok
+test forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect ... CONTROL_FORCE_UNATTACHED code=Invalid phase=force:admission relinquish_unknown=both stale_namespace=Invalid absent=Missing epoch_unchanged=true activity=Idle
+ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_FLOW overwrite_last_effect=true captured_parent_preserved=true calls=20 Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true
+ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... CONTROL_LOST_ORIGINAL client=ControlFailure { call: Call { id: 2, request: Commit(WorkspaceToken { workspace: WorkspaceId(5555555555555555555555555555555555555555555555555555555555555555), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(CloseFailed { original: Io(Kind(UnexpectedEof)), close: Os { code: 57, kind: NotConnected, message: "Socket is not connected" } }), fence_error: None } daemon_reply=Committed(Committed(CommitRecord { id: CommitId(1265e17081ca39cdeade4a373bc3250bc402ad056f71ee9678f39433de21e4ab54), stack: LayerStackId(3136363636363636363636363636363636), root: ObjectId("aead932355c5a1979a7fdccdb3b78cca57aeb678466856a19c5a5d1c4b4c3ce7"), parent: None, base_layer: LayerId(3267c82da5a7b33044927fdb86c52420c43a73db2d54e869ab38a73ef6a44a917e) })) capture=Capture { route: Route { engine: 8, ns: 1, incarnation: [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85] }, generation: Generation(1), revision: 1, base_root: [75, 21, 73, 135, 19, 79, 225, 99, 95, 30, 119, 164, 151, 49, 85, 178, 253, 14, 210, 189, 166, 160, 154, 152, 209, 11, 32, 17, 95, 175, 80, 168] }
+CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true
+ok
+test product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_up_to_date ... PRODUCT_COMMIT inode_rows=1 entry_rows=0 files=1 record_jobs=42 released=2
+ok
+test status_retains_known_publication_when_the_engine_is_unavailable ... CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown
+ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

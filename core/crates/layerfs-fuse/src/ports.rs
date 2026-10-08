@@ -26,8 +26,8 @@ pub type ServiceFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ServiceErr
 /// default fence is never stopped. It carries no request, job or lease.
 ///
 /// The same shared record keeps the mount's bounded diagnostic of requests
-/// that ended on their own because a base demand failed: a count and the most
-/// recent original cause, in one fixed slot. Recording stops nothing.
+/// whose base demand failed: a count, the first original cause and the most
+/// recent one, in fixed slots. Recording stops nothing.
 #[derive(Clone, Debug, Default)]
 pub struct Fence(Arc<FenceState>);
 #[derive(Debug, Default)]
@@ -36,11 +36,13 @@ struct FenceState {
     terminal_replies: AtomicU64,
     failed_demands: Mutex<FailedDemands>,
 }
-/// A mount's failed base demands: how many requests one ended, and the
-/// original cause of the most recent. Earlier causes are not kept here.
+/// A mount's failed base demands: how many were recorded, the original cause
+/// of the first and of the most recent. Causes between the two are not kept
+/// here. The drain receipt of the mount's connection carries this record.
 #[derive(Clone, Debug, Default)]
 pub struct FailedDemands {
     pub count: u64,
+    pub first: Option<Arc<dyn Error + Send + Sync>>,
     pub latest: Option<Arc<dyn Error + Send + Sync>>,
 }
 /// A canonical base demand made for one request failed in the Store read
@@ -79,12 +81,14 @@ impl Fence {
             .lock()
             .unwrap_or_else(|poison| poison.into_inner());
         record.count = record.count.saturating_add(1);
+        // The first original cause is never replaced.
+        record.first.get_or_insert_with(|| cause.clone());
         let earlier = record.latest.replace(cause.clone());
         drop(record);
         drop(earlier);
         BaseDemandFailed { cause }
     }
-    /// Observation only; the slot is fixed and is never cleared.
+    /// Observation only; the slots are fixed and are never cleared.
     pub fn failed_demands(&self) -> FailedDemands {
         self.0
             .failed_demands

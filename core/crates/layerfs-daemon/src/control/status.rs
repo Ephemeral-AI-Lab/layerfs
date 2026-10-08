@@ -63,7 +63,10 @@ impl Service {
                         closed: state.closed,
                         base_readers: state.base_readers,
                     };
-                    (Some(local), Some(done), None)
+                    // Copied: the observation's Lifecycle slot returns here,
+                    // not when the reply is sent.
+                    drop(done);
+                    (Some(local), None, None)
                 }
                 _ => (
                     None,

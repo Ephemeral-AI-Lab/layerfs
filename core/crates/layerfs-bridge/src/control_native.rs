@@ -153,7 +153,8 @@ pub struct TeardownCustody {
     pub stage: TeardownStage,
     /// Kernel detach is known.
     pub detached: bool,
-    /// Counters observed at the stopping boundary, when available.
+    /// The connection's maintained counters as read when this reply was
+    /// made, when available. They are not frozen at the stopping boundary.
     pub work: Option<NativeWork>,
     /// Bounded original cause description; never parsed to decide custody.
     pub detail: String,

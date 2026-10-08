@@ -1,7 +1,7 @@
 //! Exact per-connection custody: mount, receive loops, their owner and receipts.
 use crate::{
     mount::{AbortWrite, MountEntry, Negotiation},
-    ports::Fence,
+    ports::{FailedDemands, Fence},
     request::{Accounting, OpcodeWork},
     DispatchError, MountQueue, MountWork,
 };
@@ -261,6 +261,8 @@ pub struct Undrained {
     pub panic: Option<Box<dyn Any + Send>>,
     /// Present once forced teardown made its abort write.
     pub forced: Option<Forced>,
+    /// The mount's failed base demands as recorded at the stop.
+    pub failed_demands: FailedDemands,
 }
 impl fmt::Debug for Undrained {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -271,6 +273,7 @@ impl fmt::Debug for Undrained {
             .field("lane", &self.lane)
             .field("panicked", &self.panic.is_some())
             .field("forced", &self.forced)
+            .field("failed_demands", &self.failed_demands)
             .field("session", &self.session)
             .finish()
     }
@@ -290,6 +293,9 @@ pub struct Drained {
     pub removed: io::Result<()>,
     /// Present when forced teardown drained this connection.
     pub forced: Option<Forced>,
+    /// Requests of this mount that ended on a failed base demand: the count
+    /// with the first and the most recent original cause.
+    pub failed_demands: FailedDemands,
 }
 impl Drained {
     /// Joined is disposal; clean additionally requires successful loops.

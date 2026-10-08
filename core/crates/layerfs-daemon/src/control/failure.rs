@@ -115,6 +115,9 @@ impl Failure {
                     code = ControlCode::Unknown;
                     detail = format!("Commit custody retained after: {detail}");
                 }
+                // Only a moved-head answer carries the moved state; the
+                // rewritten reply keeps it in its detail text alone.
+                let moved = moved.filter(|_| code == ControlCode::HeadMoved);
                 (
                     code,
                     moved,

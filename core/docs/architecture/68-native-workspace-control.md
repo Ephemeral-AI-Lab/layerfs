@@ -44,6 +44,9 @@ Status copies binding, control activity, known publication and diagnostic epoch
 coherently under the registry owner. It then obtains one indexed engine State row,
 with its own revision, generation and maintained counters. These observations
 have separate scopes; the result is not an atomic snapshot of the whole daemon.
+The row's values are copied and its completion is dropped before the reply is
+sent, so an answered Status holds no Lifecycle slot (R6); only a failed
+observation keeps its original completion with the reply.
 If the engine is unavailable, its fields are absent with the original typed
 observation refusal, while known control publication remains visible. The server
 keeps the original failed observation receipt. There is no Store statement,

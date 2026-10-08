@@ -166,11 +166,17 @@ impl Service {
             evidence,
             forced,
         };
-        let custody = kept.custody(token);
-        if let Ok(binding) = bound_mut(&mut entries, token) {
-            if let Native::Leaving(leaving) = &binding.native {
-                kept.ready = Some(leaving.ready.clone());
+        let mut binding = bound_mut(&mut entries, token).ok();
+        if let Some(Native::Leaving(leaving)) = binding.as_ref().map(|binding| &binding.native) {
+            kept.ready = Some(leaving.ready.clone());
+            // A stop after the session was consumed still reports its
+            // connection's own detach and loop facts.
+            if kept.observer.is_none() {
+                kept.observer = Some(leaving.observer.clone());
             }
+        }
+        let custody = kept.custody(token);
+        if let Some(binding) = binding.as_mut() {
             binding.native = Native::Retained(Box::new(kept));
             binding.epoch = binding.epoch.saturating_add(1);
         }

@@ -1,6 +1,6 @@
 //! Async Fuse ports over the existing fair SQL owner and direct Store readers.
 use crate::{
-    store::{BoundWorkspace, PortError, StoreOperation},
+    store::{BoundWorkspace, PortError, ReadAdmissionError, StoreOperation},
     Command, Completion, NativeDirectoryJob, NativeDirectoryReply, NativeJob, NativeReply,
     OwnerError, Response,
 };
@@ -48,12 +48,24 @@ impl FilesystemPort {
             Ok(())
         }
     }
+    /// The Store's own answer to this request's read: a provider read
+    /// failure, or no reader left to admit it. A poisoned lock, a table
+    /// bound, a concurrent demand and the History allocator's write are not
+    /// base reads of one request and stay as they are.
+    fn scoped(cause: &PortError) -> bool {
+        matches!(
+            cause,
+            PortError::Storage(_)
+                | PortError::ReadAdmission(
+                    ReadAdmissionError::NoReaders | ReadAdmissionError::Stopped
+                )
+        )
+    }
     /// The original cause of a failed Store read made for this request:
-    /// recorded in the mount's bounded slot and returned as the marker that
-    /// ends this request alone. A serial reservation is the History
-    /// allocator's write, not a base read; its failure is left as it is.
+    /// recorded in the mount's bounded slots and returned as the marker that
+    /// ends this request alone. Any other cause is returned unchanged.
     fn demand(&self, cause: Arc<PortError>) -> ServiceError {
-        if matches!(cause.as_ref(), PortError::History(_)) {
+        if !Self::scoped(&cause) {
             return Box::new(cause);
         }
         let marker: BaseDemandFailed = self.1.failed_demand(cause);
@@ -307,10 +319,12 @@ impl RequestServices for FilesystemPort {
                 })
                 .await?
             };
+            // A reader of another Store or Workspace is a wiring failure,
+            // not this request's base demand.
             let client = self
                 .0
                 .admitted_client(lease)
-                .map_err(|cause| self.demand(cause))?;
+                .map_err(|cause| -> ServiceError { Box::new(cause) })?;
             Ok(view.with_client(client))
         })
     }
@@ -318,8 +332,8 @@ impl RequestServices for FilesystemPort {
         // The canonical read ran in Fuse on the admitted view; whether the
         // provider failed is known only to this request's demand scope.
         match self.0.ports().failure() {
-            Ok(Some(cause)) => self.demand(cause),
-            Ok(None) | Err(_) => step,
+            Ok(Some(cause)) if Self::scoped(&cause) => self.demand(cause),
+            _ => step,
         }
     }
     fn observe(

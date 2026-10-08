@@ -749,3 +749,86 @@ fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
     drop((original, f.service, f.installed));
     f.native.cleanup();
 }
+
+/// The same unresolved capture after a moved-head answer: the reply is
+/// rewritten to `Unknown`, so it must not carry the moved state a moved-head
+/// answer alone may carry. The moved state stays in the detail text.
+#[test]
+fn an_unresolved_moved_head_failure_is_answered_and_not_dropped() {
+    use layerfs_daemon::{control::Failure, store::CommitError};
+    use layerfs_history::{error::MovedState, HistoryError};
+    let f = fixture::Fixture::new("control-unresolved-moved");
+    let record = f.native.project.branch.branch.clone();
+    let branch = record.id;
+    let moved = MovedState {
+        expected_head: record.head_commit,
+        actual_head: record.head_commit,
+        expected_base: record.base_layer,
+        actual_base: record.base_layer,
+    };
+    let service = f.service.clone();
+    let (send_entered, entered) = mpsc::sync_channel(1);
+    let (send_release, release) = mpsc::sync_channel(1);
+    let (channel, worker) = support::pair(move |connection| {
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        // A definite moved-head refusal by itself: it maps to HeadMoved with
+        // its state. The engine is gone when the capture is resolved.
+        let original = service
+            .serve_one(connection, |_, _, _| {
+                send_entered.send(()).unwrap();
+                release.recv_timeout(Duration::from_secs(3)).unwrap();
+                Err(CommitError::History(HistoryError::HeadMoved(Box::new(
+                    moved,
+                ))))
+            })
+            .unwrap();
+        drop(
+            service
+                .serve_one(connection, |_, _, _| {
+                    unreachable!("unresolved constructor cannot enter")
+                })
+                .unwrap(),
+        );
+        original
+    });
+    let mut client = Control::new(channel);
+    let (token, _) = mount(&mut client, identity(94), branch);
+    fixture::write(&f.service, token, b'W');
+    let calling = std::thread::spawn(move || {
+        let reply = client.call(Request::Commit(token));
+        (client, reply)
+    });
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    f.owner.stop().unwrap();
+    send_release.send(()).unwrap();
+    let (mut client, reply) = calling.join().unwrap();
+    let refusal = match reply.unwrap() {
+        Reply::Refused(value) => value,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(refusal.code, ControlCode::Unknown, "{refusal:?}");
+    assert!(refusal.moved.is_none() && refusal.published.is_none());
+    assert!(refusal.detail.contains("head moved"), "{refusal:?}");
+    // The connection is still answered: the registry says the same thing.
+    assert_eq!(status(&mut client, token).activity, Activity::Uncertain);
+    let original = worker.join();
+    let failed = match &original.outcome {
+        Err(Failure::Commit(failed)) => failed,
+        other => panic!("{other:?}"),
+    };
+    assert!(matches!(
+        &failed.error,
+        CommitError::History(HistoryError::HeadMoved(state)) if **state == moved
+    ));
+    assert!(!failed.locally_settled && failed.published.is_none());
+    println!(
+        "CONTROL_UNRESOLVED_MOVED original_error={:?} locally_settled={} reply_code={:?} reply_moved=None reply_phase={} detail_keeps_moved_state=true registry=Uncertain",
+        failed.error, failed.locally_settled, refusal.code, refusal.phase
+    );
+    drop((original, f.service, f.installed));
+    f.native.cleanup();
+}
