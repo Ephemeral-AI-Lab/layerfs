@@ -1,0 +1,15 @@
+{
+  "command": [
+    "core/target/debug/deps/filesystem_port-9a367c3ce80975d4",
+    "directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close",
+    "--exact"
+  ],
+  "binary_sha256": "c3ae651dd12cadbed4dad97d38b7a3a0a8135ee2bdc54355f025ec744a103ebb",
+  "harness_sha256": "b77cfdf1ab08cc5ee25a112e3cd43b3fcd550deeca4cd0658caf161d44479877",
+  "wall_bound_seconds": 100,
+  "profile": "explicit Disposable/WAL/OFF; Overlay MEMORY/OFF/EXCLUSIVE; Durable disabled NOT_RUN",
+  "scope": "changed full16-offered-directory-batch and zero-prefix pressure case; natural caches; no kernel/performance/residency claim",
+  "exit": 0,
+  "timeout": false,
+  "elapsed_ns": 1855366375
+}

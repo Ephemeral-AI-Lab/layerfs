@@ -9,8 +9,9 @@ its 1447 production lines are reclassified as a predecessor, not retired.
 
 This component implements the shared dispatcher, actual asynchronous engine and
 admitted Store adapters, native read continuations and an initial Linux callback
-adapter. It does not yet mount the application: READDIR/RELEASEDIR, complete
-callback accounting, session ownership, Attach/Locate/Ready and normal unmount
+adapter. READDIR/RELEASEDIR and directory-handle GETATTR are now wired as well.
+It does not yet mount the application: complete callback accounting, session
+ownership, Attach/Locate/Ready and normal unmount
 composition remain required R2 work. R1 ControlReady remains distinct from native
 Ready. These interfaces are implementation documentation, not mounted acceptance.
 
@@ -90,18 +91,44 @@ semantic refusals release their processing source after the reply attempt.
 Unknown/failed steps retain request identity, source/read candidates, observation
 and exact service/provider failures without guessed cleanup.
 
-READ and READLINK acquire a completed local window and reuse Workspace's existing
+READ and READLINK consume their metadata answer before requesting a local window.
+The original metadata value/Arc and Completion are disposed; independent FileRead
+and source capabilities remain owned. This prevents sixteen metadata consumers
+from occupying all sixteen ordinary SQL slots while each requests another job.
+The unchanged capacity passes the explicit full-handoff pressure case. They then
+acquire a completed local window and reuse Workspace's existing
 composition algorithm through `read_file_window` and `readlink_window`. The Store
 reader returns before the data reply is consumed. Reply data is disposed before
 FileRead and source release. Open and kernel lookup owners remain independent;
 the integration test reads an open file after all its lookup references vanish.
 
 [Linux callbacks](../../crates/layerfs-fuse/src/request/callbacks.rs) currently
-wire LOOKUP, GETATTR, OPEN, OPENDIR, READ, READLINK, RELEASE and FORGET into that
+wire LOOKUP, GETATTR, OPEN, OPENDIR, READ, READLINK, READDIR, RELEASEDIR, RELEASE and FORGET into that
 service. The default batch-forget callback invokes the counted single-unit path.
 Remaining callback families and complete opcode/unit observations still need
-integration before native qualification. In particular, directory handles need
-their complete native callback consumer and GETATTR association.
+integration before native qualification. GETATTR classifies file/directory handles
+through one indexed union in an atomic source acquisition, without failed-kind
+fallback. Closed, foreign or mismatched handles cannot acquire a new source.
+
+The [directory consumer](../../crates/layerfs-fuse/src/operations/directory.rs)
+holds one independently owned read source. A bounded deep copy consumes the
+original read reply; sharing an Arc alone is not a custody transfer. Each page
+completion remains through canonical reads and is consumed before the next SQL
+job. An offered cookie plan is copied into bounded request storage before its
+original completion is consumed, leaving ordinary SQL credit for publication.
+Sixteen offered batches can therefore publish prefixes at the unchanged limits.
+The consuming `DirectoryBatch::accept` permits one attempt for the exact prefix
+that fit, including zero; unused reservations do not become positions. Empty
+whiteout pages continue with a yielded turn. Existing sources and cookie plans
+survive descriptor close; new handle acquisitions fail. Failure retains original
+page/cookie responses, source, input offset and requested publication prefix.
+
+The native reply adapter limits encoded directory output to128KiB using the pinned
+24-byte fuse_dirent header and8-byte alignment. Actual fuser insertion determines
+the accepted prefix. Further names resume through the last published cookie;
+this is no namespace-size cap. Kernel buffer and resource qualification remain
+unrun. [Consumer checkpoint evidence](../issues/307/checks/r2-native-consumers-20261008/36-results.md)
+records the original sixteen-slot stall and the subsequent source/receipt scope.
 
 The pinned fuser reply consumes one reply attempt but exposes no delivery result.
 No success is inferred from it. Conversion failures retain the decided request.

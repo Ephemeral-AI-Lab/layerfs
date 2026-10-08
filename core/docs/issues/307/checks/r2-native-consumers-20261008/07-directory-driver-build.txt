@@ -1,0 +1,24 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+error[E0700]: hidden type for `impl Iterator<Item = (&'static str, u64, u64)>` captures lifetime that does not appear in bounds
+   --> crates/layerfs-fuse/src/operations/directory.rs:157:9
+    |
+151 |       pub fn dots(&self) -> impl Iterator<Item = (&'static str, u64, u64)> {
+    |                   -----     ---------------------------------------------- opaque type defined here
+    |                   |
+    |                   hidden type `Filter<std::array::IntoIter<(&'static str, u64, u64), 2>, {closure@crates/layerfs-fuse/src/operations/directory.rs:159:21: 159:42}>` captures the anonymous lifetime defined here
+...
+157 | /         values
+158 | |             .into_iter()
+159 | |             .filter(move |(_, _, cookie)| *cookie > self.offset)
+    | |________________________________________________________________^
+    |
+help: add a `use<...>` bound to explicitly capture `'_`
+    |
+151 |     pub fn dots(&self) -> impl Iterator<Item = (&'static str, u64, u64)> + use<'_> {
+    |                                                                          +++++++++
+
+For more information about this error, try `rustc --explain E0700`.
+error: could not compile `layerfs-fuse` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

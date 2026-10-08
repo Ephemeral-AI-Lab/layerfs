@@ -1,18 +1,39 @@
 //! Borrowed kernel input enters fixed receive accounting before owned copies.
 use super::{
+    failure::{failed, KernelInput},
     reply::ReadReply,
-    state::{failed, NativeFilesystem},
+    state::NativeFilesystem,
 };
 use crate::RequestDisposition;
 use fuser::{
     Errno, FileHandle, Filesystem, INodeNo, KernelConfig, LockOwner, OpenAccMode, OpenFlags,
-    ReplyAttr, ReplyData, ReplyEmpty, ReplyEntry, ReplyOpen, Request,
+    ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, Request,
 };
 use layerfs_content::filesystem::PathName;
 use layerfs_workspace::NativeReadOperation;
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt};
 
 impl Filesystem for NativeFilesystem {
+    fn readdir(
+        &self,
+        req: &Request,
+        inode: INodeNo,
+        handle: FileHandle,
+        offset: u64,
+        reply: ReplyDirectory,
+    ) {
+        self.read_directory(req, inode, handle, offset, reply);
+    }
+    fn releasedir(
+        &self,
+        req: &Request,
+        inode: INodeNo,
+        handle: FileHandle,
+        _: OpenFlags,
+        reply: ReplyEmpty,
+    ) {
+        self.release_directory(req, inode, handle, reply);
+    }
     fn init(&mut self, _: &Request, config: &mut KernelConfig) -> io::Result<()> {
         let negotiated = crate::mount::negotiate(config)?;
         self.negotiation
@@ -185,7 +206,15 @@ impl Filesystem for NativeFilesystem {
             .await;
             match outcome {
                 Ok(()) => RequestDisposition::Complete,
-                Err(error) => failed(request, mount, error),
+                Err(error) => failed(
+                    request,
+                    mount,
+                    KernelInput::Forget {
+                        inode: inode.0,
+                        count,
+                    },
+                    error,
+                ),
             }
         }));
     }
@@ -199,20 +228,8 @@ impl Filesystem for NativeFilesystem {
         _: bool,
         reply: ReplyEmpty,
     ) {
-        let received = match self.queue.receive() {
-            Ok(received) => received,
-            Err(_) => {
-                reply.error(Errno::EIO);
-                return;
-            }
-        };
-        let permit = match received.admit(0) {
-            Ok(permit) => permit,
-            Err(failure) => {
-                reply.error(Errno::ENOTCONN);
-                drop(failure);
-                return;
-            }
+        let Some((permit, reply)) = self.admit_reply(0, reply, ReplyEmpty::error) else {
+            return;
         };
         let mount = self.queue.identity();
         let serial = self.identity.serial(inode);
@@ -233,7 +250,16 @@ impl Filesystem for NativeFilesystem {
                 }
                 Err(error) => {
                     reply.error(Errno::EIO);
-                    failed(request, mount, error)
+                    failed(
+                        request,
+                        mount,
+                        KernelInput::Release {
+                            inode: inode.0,
+                            handle: handle.0,
+                            directory: false,
+                        },
+                        error,
+                    )
                 }
             }
         }));

@@ -1,0 +1,87 @@
+[
+  {
+    "command": [
+      "python3",
+      "-B",
+      "core/tools/check_fuser_integrity.py"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 2454145500,
+    "output": "linux-fuser-integrity.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-fuse",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 17137805342,
+    "output": "linux-fuse-build.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "filesystem_port",
+      "--no-run"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 19949598426,
+    "output": "linux-port-build.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 427905625,
+    "output": "linux-port-tests.txt",
+    "binary_sha256": "111ad36736c77d8eda2cf55172717b309aca87e9324ab4bdec9bbcb53007daa0"
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-fuse",
+      "-p",
+      "layerfs-daemon",
+      "-p",
+      "layerfs-overlay",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 8603820296,
+    "output": "linux-clippy.txt"
+  }
+]

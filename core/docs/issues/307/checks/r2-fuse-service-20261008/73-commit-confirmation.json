@@ -1,0 +1,43 @@
+{
+  "commit": "8431b6ba9fd2703b74d92905e3a7b3108586b6bd",
+  "tree": "390331c9b1ffb091e3d9dc82f9b3be2e6e3d6fe5",
+  "first_parent": "8d800de670ab138807ce8e0eb014a0a00ee7463b",
+  "production_loc": {
+    "before": {
+      "combined": 173827,
+      "core": 108410,
+      "subtotals": {
+        "active": 65536,
+        "excluded_predecessors": 37431,
+        "excluded_integration": 5443,
+        "reference": 65417
+      },
+      "product_trees": {
+        "core/crates": "734bb4300993255f653d38f45e494fcd5e934d0b",
+        "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+      }
+    },
+    "after": {
+      "combined": 176088,
+      "core": 110671,
+      "subtotals": {
+        "active": 67797,
+        "excluded_predecessors": 38878,
+        "excluded_integration": 3996,
+        "reference": 65417
+      },
+      "product_trees": {
+        "core/crates": "dd92e12aec22df5d15f33f64f142ea5bc53cb9ce",
+        "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+      }
+    },
+    "delta": 2261
+  },
+  "predecessor_tree_unchanged": "be11d96ec9db31b897109323379fec9f3e009dae",
+  "additional_compilation_manifest_sha256": {
+    "core/crates/layerfs-fuse/Cargo.toml": "9c439dbb86530818d0fc1161901fee42455cb92bb6465fc191934207dd5072d4",
+    "core/crates/layerfs-daemon/Cargo.toml": "7f2f8e08cec841144016197c8a0b44d77a3369e76d685bc905601d04ef7f2253",
+    "core/crates/layerfs-workspace/Cargo.toml": "df8f0d962f1217489d35b4d5eedd1a9b367553c884d2c6c416c82873e0fa0c90"
+  },
+  "status": "Component checkpoint verified; full R2 Goal remains ACTIVE and unfinished"
+}

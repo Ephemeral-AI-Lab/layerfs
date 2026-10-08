@@ -1,18 +1,13 @@
 //! Per-mount callback state; the request worker pool remains daemon-wide.
+use super::failure::{failed, KernelInput};
 use super::reply::ReadReply;
 use crate::{
-    attributes::Identity,
-    mount::Negotiation,
-    ports::{MountServices, ServiceError},
-    DispatchError, MountQueue, Permit, RequestDisposition,
+    attributes::Identity, mount::Negotiation, ports::MountServices, DispatchError, MountQueue,
+    Permit,
 };
 use fuser::Errno;
-use layerfs_overlay::NativeMount;
 use layerfs_workspace::NativeReadOperation;
-use std::{
-    fmt,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 pub struct NativeFilesystem {
     pub(super) queue: MountQueue,
@@ -40,17 +35,25 @@ impl NativeFilesystem {
         self.negotiation.clone()
     }
     pub(super) fn admit(&self, reply: ReadReply, bytes: usize) -> Option<(Permit, ReadReply)> {
+        self.admit_reply(bytes, reply, ReadReply::error)
+    }
+    pub(super) fn admit_reply<R>(
+        &self,
+        bytes: usize,
+        reply: R,
+        error: fn(R, Errno),
+    ) -> Option<(Permit, R)> {
         let received = match self.queue.receive() {
             Ok(received) => received,
             Err(_) => {
-                reply.error(Errno::EIO);
+                error(reply, Errno::EIO);
                 return None;
             }
         };
         match received.admit(bytes) {
             Ok(permit) => Some((permit, reply)),
             Err(failure) => {
-                reply.error(Errno::ENOTCONN);
+                error(reply, Errno::ENOTCONN);
                 drop(failure);
                 None
             }
@@ -73,13 +76,19 @@ impl NativeFilesystem {
             let services = match services.request() {
                 Ok(services) => services,
                 Err(error) => {
+                    let data = reply.data_input();
                     reply.error(Errno::EIO);
-                    return RequestDisposition::Retained(Box::new(RequestFailure {
+                    return failed(
                         request,
                         mount,
-                        reason: error,
-                        read_input: Some((protected, handle, operation)),
-                    }));
+                        KernelInput::Read {
+                            protected,
+                            handle,
+                            operation,
+                            data,
+                        },
+                        error,
+                    );
                 }
             };
             reply
@@ -89,33 +98,4 @@ impl NativeFilesystem {
                 .await
         }));
     }
-}
-#[derive(Debug)]
-struct RequestFailure {
-    request: u64,
-    mount: NativeMount,
-    reason: ServiceError,
-    read_input: Option<(u64, Option<u64>, NativeReadOperation)>,
-}
-impl fmt::Display for RequestFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "native request {} on {:?}, input {:?}: {}",
-            self.request, self.mount, self.read_input, self.reason
-        )
-    }
-}
-impl std::error::Error for RequestFailure {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(self.reason.as_ref())
-    }
-}
-pub(super) fn failed(request: u64, mount: NativeMount, reason: ServiceError) -> RequestDisposition {
-    RequestDisposition::Retained(Box::new(RequestFailure {
-        request,
-        mount,
-        reason,
-        read_input: None,
-    }))
 }

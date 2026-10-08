@@ -81,5 +81,8 @@ No job performs provider I/O or imports fuser types.
 covers concurrent aliases, partial/empty accepted prefixes, old offsets after
 deletion, parent moves, removed directories, empty whiteout continuation, actual
 indexed plans and SQL work, live64-row cleanup and the real Daemon/Store path.
-This does not establish kernel reply-buffer behavior, native Ready/permissions,
+The later [native consumer](75-native-request-service.md) now wires bounded pages,
+accepted-cookie prefixes, READDIR/RELEASEDIR and directory-handle GETATTR. Its
+component tests include sixteen offered batches and reads surviving descriptor
+close. This does not establish kernel reply-buffer behavior, native Ready/permissions,
 mounted memory bounds, cold-cache eligibility, latency or complete R2 acceptance.

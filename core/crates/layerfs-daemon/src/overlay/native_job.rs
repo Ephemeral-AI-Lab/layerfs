@@ -32,6 +32,12 @@ pub enum NativeJob {
         serial: u64,
         handle: u64,
     },
+    HandleSource {
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        handle: u64,
+    },
     RetainedFile {
         mount: NativeMount,
         request: u64,
@@ -73,7 +79,9 @@ pub enum NativeReply {
 impl NativeJob {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
-            Self::Source { .. } | Self::FileSource { .. } => ServiceClass::Source,
+            Self::Source { .. } | Self::FileSource { .. } | Self::HandleSource { .. } => {
+                ServiceClass::Source
+            }
             Self::Observe(_) => ServiceClass::Read,
             Self::Directory(job) => job.class(),
             _ => ServiceClass::Lifecycle,
@@ -97,6 +105,7 @@ impl NativeJob {
             | Self::RetainedSource { mount, .. }
             | Self::RetainedRead { mount, .. }
             | Self::FileSource { mount, .. }
+            | Self::HandleSource { mount, .. }
             | Self::RetainedFile { mount, .. }
             | Self::File { mount, .. }
             | Self::CloseFile { mount, .. }
@@ -111,6 +120,14 @@ impl NativeJob {
             return Err(OverlayError::Stale);
         }
         match self {
+            Self::HandleSource {
+                mount,
+                request,
+                serial,
+                handle,
+            } => db
+                .acquire_native_handle_source(mount, request, serial, handle)
+                .map(NativeReply::Source),
             Self::Mount { root } => db.create_native_mount(route, root).map(NativeReply::Mount),
             Self::RetainedMount => db
                 .retained_native_mount(route)

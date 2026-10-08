@@ -1,11 +1,18 @@
 //! Bounded READ/READLINK consumers over original completed local windows.
+use super::lookup::Custody;
 use super::{NativeRead, ReadFailure};
 use crate::ports::ServiceError;
-use layerfs_overlay::{OverlayError, CELL_BYTES, READ_WINDOW};
+use layerfs_overlay::{FileRead, OverlayError, CELL_BYTES, READ_WINDOW};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReadDataInput {
+    File { offset: u64, length: u32 },
+    Link,
+}
 
 pub struct NativeData {
     data: Vec<u8>,
-    request: NativeRead,
+    custody: Custody,
 }
 impl NativeData {
     pub fn bytes(&self) -> &[u8] {
@@ -13,9 +20,9 @@ impl NativeData {
     }
     /// Reply data is gone before either processing reference can be released.
     pub async fn dispose(self) -> Result<(), ReadFailure> {
-        let Self { data, request } = self;
+        let Self { data, custody } = self;
         drop(data);
-        request.dispose().await
+        custody.dispose().await
     }
 }
 impl NativeRead {
@@ -26,50 +33,51 @@ impl NativeRead {
         self.data(0, CELL_BYTES as u32, true).await
     }
     async fn data(self, offset: u64, length: u32, link: bool) -> Result<NativeData, ReadFailure> {
-        let result = self.window(offset, length, link).await;
+        let read = match self.value() {
+            Ok(value) if value.file.is_none() && value.directory.is_none() => value.read,
+            _ => return Err(self.retain(Box::new(OverlayError::Invalid("native data answer")))),
+        };
+        let Self { value, mut custody } = self;
+        custody.data_input = Some(if link {
+            ReadDataInput::Link
+        } else {
+            ReadDataInput::File { offset, length }
+        });
+        // Data requests have consumed their metadata answer. Its original Arc
+        // and every projection end before the next ordinary owner job; keeping
+        // all16 such completions would exhaust the16 ordinary job slots. The
+        // independent FileRead/source capabilities continue to protect bytes.
+        drop(value);
+        custody.plan = None;
+        custody.receipt = None;
+        let result = custody.window(read, offset, length, link).await;
         match result {
-            Ok(data) => Ok(NativeData {
-                data,
-                request: self,
-            }),
-            Err(reason) => {
-                let Self { value, custody } = self;
-                drop(value);
-                Err(ReadFailure::new(reason, custody))
-            }
+            Ok(data) => Ok(NativeData { data, custody }),
+            Err(reason) => Err(ReadFailure::new(reason, custody)),
         }
     }
-    async fn window(&self, offset: u64, length: u32, link: bool) -> Result<Vec<u8>, ServiceError> {
+}
+impl Custody {
+    async fn window(
+        &self,
+        read: FileRead,
+        offset: u64,
+        length: u32,
+        link: bool,
+    ) -> Result<Vec<u8>, ServiceError> {
         if length as usize > READ_WINDOW {
             return Err(Box::new(OverlayError::Invalid("native read window")));
         }
-        let value = self
-            .value()
-            .map_err(|_| OverlayError::Invalid("native refused read"))?;
-        let local = self
-            .custody
-            .services
-            .local_read(value.read, offset, length)
-            .await?;
-        let immutable = self
-            .custody
-            .services
-            .immutable(self.custody.view.as_ref().unwrap())
-            .await?;
+        let local = self.services.local_read(read, offset, length).await?;
+        let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
         let data = if link {
             immutable
-                .readlink_window(value.read, local.get().clone())?
+                .readlink_window(read, local.get().clone())?
                 .as_bytes()
                 .to_vec()
         } else {
             let mut data = Vec::with_capacity(length as usize);
-            immutable.read_file_window(
-                value.read,
-                offset,
-                length,
-                local.get().clone(),
-                &mut data,
-            )?;
+            immutable.read_file_window(read, offset, length, local.get().clone(), &mut data)?;
             data
         };
         drop(immutable);

@@ -1,0 +1,75 @@
+[
+  {
+    "command": [
+      "python3",
+      "-B",
+      "core/tools/check_fuser_integrity.py"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 2334716751,
+    "output": "linux-final-fuser-integrity.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-fuse",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 4536323544,
+    "output": "linux-final-fuse-build.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "filesystem_port",
+      "--no-run"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 7272018170,
+    "output": "linux-final-port-build.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-fuse",
+      "-p",
+      "layerfs-daemon",
+      "-p",
+      "layerfs-overlay",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "timeout": false,
+    "wall_bound_seconds": 100,
+    "elapsed_ns": 4447671085,
+    "output": "linux-final-clippy.txt"
+  }
+]

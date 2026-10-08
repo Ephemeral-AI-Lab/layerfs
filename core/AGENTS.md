@@ -82,7 +82,7 @@ product mental model or campaign-specific benchmark procedures.
   The replacement Fuse is now active with a fixed shared dispatcher, actual
   deferred Owner/Store ports and an initial native read callback adapter.
   Its intact predecessor is excluded under `layerfs-fuse-legacy`. Application
-  mount/Ready, directory callbacks, permissions and complete normal drain remain
+  mount/Ready, complete callback accounting, permissions and complete normal drain remain
   R2 work; see [native request service](docs/architecture/75-native-request-service.md).
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and

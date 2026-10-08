@@ -1,0 +1,7 @@
+{
+  "changed_since_18": [
+    "core/crates/layerfs-fuse/src/request/directory.rs"
+  ],
+  "change": "Bound native READDIR output to128KiB using pinned24-byte fuse_dirent header and8-byte padding; preserve accepted-prefix cookies",
+  "verification": "Host/Linux semantic consumer tests reuse unchanged driver/port identities; final Linux compile/clippy covers callback-only change. Actual kernel buffer qualification remains NOT_RUN."
+}

@@ -16,7 +16,7 @@ controls; each daemon directly opens the shared Store. Bridge and the replacemen
 Sandbox provide the verified R1 startup/control and ordinary execution boundary.
 The [replacement Fuse request service](docs/architecture/75-native-request-service.md)
 is active with real deferred engine/Store reads and initial Linux callbacks.
-Application mount/Ready, directory callbacks and normal drain remain R2 work.
+Application mount/Ready, full callback accounting and normal drain remain R2 work.
 Excluded predecessors, server and root reference are retained source, without
 dependency or fallback use.
 

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "core/target/debug/deps/filesystem_port-9a367c3ce80975d4",
+    "full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credit",
+    "--exact"
+  ],
+  "source_head": "8431b6ba9fd2703b74d92905e3a7b3108586b6bd",
+  "harness_sha256": "63a4c35f49b403dba4b09904ca23e6f93cbfca82c434b014a72987c207d4a59b",
+  "binary_sha256": "a1b37e4c31b124f672c51ee89e3e10696b55e98d6f4d37ff7aab2e714861f4e9",
+  "wall_bound_seconds": 100,
+  "profile": "explicit global Disposable/WAL/OFF; Overlay MEMORY/OFF/EXCLUSIVE; Durable disabled NOT_RUN",
+  "scope": "count-driven full16-slot functional credit diagnostic; natural caches; no kernel mount or performance/residency claim",
+  "exit": 101,
+  "timeout": false,
+  "elapsed_ns": 6566174583
+}

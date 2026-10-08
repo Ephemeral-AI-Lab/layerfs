@@ -1,12 +1,16 @@
 //! Async Fuse ports over the existing fair SQL owner and direct Store readers.
 use crate::{
     store::{BoundWorkspace, StoreOperation},
-    Command, Completion, NativeJob, NativeReply, OwnerError, Response,
+    Command, Completion, NativeDirectoryJob, NativeDirectoryReply, NativeJob, NativeReply,
+    OwnerError, Response,
 };
 use layerfs_fuse::ports::{
     MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
 };
-use layerfs_overlay::{BaseSource, FileRead, LocalRead, NativeMount};
+use layerfs_overlay::{
+    BaseSource, FileRead, LocalRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
+    NativeDirectoryRead, NativeMount,
+};
 use layerfs_workspace::{NativeReadJob, NativeReadOutcome, SourceView};
 use std::sync::Arc;
 
@@ -50,6 +54,101 @@ impl FilesystemPort {
     }
 }
 impl RequestServices for FilesystemPort {
+    fn directory(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    ) -> ServiceFuture<'_, ServiceReply<NativeDirectory>> {
+        self.job(
+            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Handle {
+                mount,
+                serial,
+                handle,
+            }))),
+            |response| match response {
+                Response::Native(NativeReply::Directory(NativeDirectoryReply::Handle(value))) => {
+                    Some(*value)
+                }
+                _ => None,
+            },
+        )
+    }
+    fn directory_read(
+        &self,
+        directory: NativeDirectory,
+        request: u64,
+        offset: u64,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryRead>>> {
+        self.job(
+            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Read {
+                directory,
+                request,
+                offset,
+            }))),
+            |response| match response {
+                Response::Native(NativeReply::Directory(NativeDirectoryReply::Read(value))) => {
+                    Some(value.clone())
+                }
+                _ => None,
+            },
+        )
+    }
+    fn directory_page(
+        &self,
+        read: Arc<NativeDirectoryRead>,
+        after: Option<Vec<u8>>,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryPage>>> {
+        self.job(
+            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Page {
+                read,
+                after,
+            }))),
+            |response| match response {
+                Response::Native(NativeReply::Directory(NativeDirectoryReply::Page(value))) => {
+                    Some(value.clone())
+                }
+                _ => None,
+            },
+        )
+    }
+    fn directory_cookies(
+        &self,
+        read: Arc<NativeDirectoryRead>,
+        names: Vec<Vec<u8>>,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeCookiePlan>>> {
+        self.job(
+            Command::Native(NativeJob::Directory(Box::new(
+                NativeDirectoryJob::PrepareCookies { read, names },
+            ))),
+            |response| match response {
+                Response::Native(NativeReply::Directory(NativeDirectoryReply::Cookies(value))) => {
+                    Some(value.clone())
+                }
+                _ => None,
+            },
+        )
+    }
+    fn publish_cookies(
+        &self,
+        plan: Arc<NativeCookiePlan>,
+        accepted: usize,
+    ) -> ServiceFuture<'_, ServiceReply<()>> {
+        self.job(
+            Command::Native(NativeJob::Directory(Box::new(
+                NativeDirectoryJob::PublishCookies { plan, accepted },
+            ))),
+            directory_done,
+        )
+    }
+    fn close_directory(&self, directory: NativeDirectory) -> ServiceFuture<'_, ServiceReply<()>> {
+        self.job(
+            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Close(
+                directory,
+            )))),
+            directory_done,
+        )
+    }
     fn local_read(
         &self,
         read: FileRead,
@@ -101,7 +200,7 @@ impl RequestServices for FilesystemPort {
         handle: Option<u64>,
     ) -> ServiceFuture<'_, ServiceReply<BaseSource>> {
         let command = match handle {
-            Some(handle) => NativeJob::FileSource {
+            Some(handle) => NativeJob::HandleSource {
                 mount,
                 request,
                 serial,
@@ -164,6 +263,13 @@ impl RequestServices for FilesystemPort {
 }
 fn done(response: &Response) -> Option<()> {
     matches!(response, Response::Done).then_some(())
+}
+fn directory_done(response: &Response) -> Option<()> {
+    matches!(
+        response,
+        Response::Native(NativeReply::Directory(NativeDirectoryReply::Done))
+    )
+    .then_some(())
 }
 
 /// The local payload stays in the same original Completion and credit cell.

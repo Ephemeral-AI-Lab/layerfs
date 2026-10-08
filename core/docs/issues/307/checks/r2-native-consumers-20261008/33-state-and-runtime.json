@@ -1,0 +1,43 @@
+{
+  "runtime": {
+    "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)",
+    "host": "Darwin 25.4.0 arm64",
+    "docker": "29.5.2/arm64"
+  },
+  "original_pressure_native_work": "MountWork { received: 0, admitted: 16, queued: 0, running: 0, parked: 16, retained: 0, owned_input_bytes: 0, future_bytes: 81664, receive_units: 16, completed: 0, steps: 111, wakes: 95, terminal: false }",
+  "retained_failed_fixture": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-installed-56560-full-native-handoff",
+  "failed_fixture_files": {
+    "overlay": {
+      "bytes": 282624,
+      "sha256": "077519800cb049b2f4f9957032db468980bcd201cfdb3790dbd6312d3143b30d"
+    },
+    "store.sqlite": {
+      "bytes": 172032,
+      "sha256": "15cf6fd4ebdfa2305b1b416eb1a6fe5c62edb52329730e0408e97c0fd231ea86"
+    },
+    "store.sqlite-shm": {
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    "store.sqlite-wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "failed_fixture_owner": "exited component test56560; no actual native mount was made",
+  "protected_containers": [
+    "9cf2fe345496b45d79ff272e6c698552948f1e92ea106926826a770592623b24 true",
+    "ce75ac504df9d0e58cedcdd0df93fe7ef39c3b66ef3c13b0bb6b580def64516c true",
+    "d2433851ea5990e273b0673fdbd5c180917f1216f3c81bdfb4517da0207e2c2a true",
+    "d2550144998b4b71de98cb9ecf6448f87c7b99a3c2f69ea778a29413fffa5ffb true"
+  ],
+  "protected_notes_sha256": {
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  },
+  "owned_check_containers_removed": [
+    "e6ad01c4fdbe3d34229953bcc161c720efef80b39cf7e625ad71b4475cdcb37b",
+    "a52cc5659d583e518493c3f140729e5a094e145b2e3a1a14e105849a44fa7ef3"
+  ]
+}

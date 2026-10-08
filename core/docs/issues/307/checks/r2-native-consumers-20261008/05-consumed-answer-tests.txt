@@ -1,0 +1,8 @@
+
+running 3 tests
+test full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credit ... ok
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+

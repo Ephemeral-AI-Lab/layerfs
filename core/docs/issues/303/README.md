@@ -61,7 +61,7 @@ Subsequent dispatched R2 work activates a thirteenth member, the
 Its intact predecessor moves to excluded `layerfs-fuse-legacy`. Fixed shared
 workers, event-driven request custody, actual asynchronous Owner/Store read ports
 and initial Linux callbacks are implemented and component-tested. Application
-mount/Ready, full directory callbacks, permissions and normal detach/drain remain
+mount/Ready, full callback accounting, permissions and normal detach/drain remain
 unfinished; the full R2 Goal is active. This supersedes the earlier exclusion
 status for current routing without changing that review's historical evidence.
 

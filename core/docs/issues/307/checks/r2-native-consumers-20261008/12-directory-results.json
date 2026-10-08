@@ -1,0 +1,15 @@
+{
+  "command": [
+    "core/target/debug/deps/filesystem_port-9a367c3ce80975d4",
+    "--test-threads=1"
+  ],
+  "source_head": "8431b6ba9fd2703b74d92905e3a7b3108586b6bd",
+  "binary_sha256": "9abba0508e423ae95dd324ab0af82dac80a16e17e9af6fb0f27badbd28da9727",
+  "harness_sha256": "a1135f64e07f67206e326075838555acc93ff9a7b89a307b8b48c8330ed13736",
+  "wall_bound_seconds": 100,
+  "profile": "explicit Disposable/WAL/OFF; Overlay MEMORY/OFF/EXCLUSIVE; Durable disabled NOT_RUN",
+  "scope": "native consumer/credit/handle and accepted-cookie integration; natural caches; no kernel/performance/residency claim",
+  "exit": 0,
+  "timeout": false,
+  "elapsed_ns": 2001495625
+}

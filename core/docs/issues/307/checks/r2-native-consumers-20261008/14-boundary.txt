@@ -1,0 +1,1 @@
+PASS: scanned 804 production Rust/SQL files; semantic review still required

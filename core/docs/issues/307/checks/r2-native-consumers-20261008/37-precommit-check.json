@@ -1,0 +1,13 @@
+{
+  "source_identity_23_unchanged": true,
+  "links": "PASS",
+  "full_whitespace_exit": 2,
+  "full_whitespace_output": "core/docs/issues/307/checks/r2-native-consumers-20261008/02-pressure-test.txt:18: new blank line at EOF.\ncore/docs/issues/307/checks/r2-native-consumers-20261008/05-consumed-answer-tests.txt:8: new blank line at EOF.\ncore/docs/issues/307/checks/r2-native-consumers-20261008/11-directory-tests.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-native-consumers-20261008/16-directory-pressure-test.txt:6: new blank line at EOF.\ncore/docs/issues/307/checks/r2-native-consumers-20261008/20-linux-checks.txt:43: new blank line at EOF.\ncore/docs/issues/307/checks/r2-native-consumers-20261008/26-linux-final-checks.txt:26: new blank line at EOF.\ncore/docs/issues/307/checks/r2-native-consumers-20261008/linux-port-tests.txt:9: new blank line at EOF.\n",
+  "source_docs_tooling_whitespace_exit": 0,
+  "source_docs_tooling_scope": "all staged paths except original .txt transcripts",
+  "counted_product_trees_match": {
+    "core/crates": "d20bfd96156d3f3a873bbf53a25f008aaa7317aa",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "owner_stop_boundary": "finish this checkpoint and repository handoff, then pause active R2; see38-owner-stop-request.txt"
+}

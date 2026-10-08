@@ -1,0 +1,14 @@
+{
+  "command": [
+    "core/target/debug/deps/filesystem_port-9a367c3ce80975d4",
+    "--test-threads=1"
+  ],
+  "binary_sha256": "8d4beee00cb73ecd0b61d1ed140a152ebc8dd91f053d16633fe1dc76aa36138e",
+  "harness_sha256": "63a4c35f49b403dba4b09904ca23e6f93cbfca82c434b014a72987c207d4a59b",
+  "wall_bound_seconds": 100,
+  "profile": "explicit Disposable/WAL/OFF; Overlay MEMORY/OFF/EXCLUSIVE; Durable NOT_RUN disabled",
+  "scope": "changed native metadata consumption and full16-slot forward progress; no kernel or performance/residency claim",
+  "exit": 0,
+  "timeout": false,
+  "elapsed_ns": 457155875
+}

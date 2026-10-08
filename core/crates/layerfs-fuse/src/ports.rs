@@ -1,5 +1,8 @@
 //! External engine/Store boundaries; all waiting returns to the native pool.
-use layerfs_overlay::{BaseSource, FileRead, LocalRead, NativeMount};
+use layerfs_overlay::{
+    BaseSource, FileRead, LocalRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
+    NativeDirectoryRead, NativeMount,
+};
 use layerfs_workspace::{NativeReadJob, NativeReadOutcome, SourceView};
 use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 
@@ -8,7 +11,9 @@ pub type ServiceFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ServiceErr
 
 /// A projection and its original service completion. Field order drops the
 /// projection before its credit owner. Keep this receipt through every consumer
-/// of a cloned payload; copying an independently owned engine token is allowed.
+/// sharing its original payload. Consuming a bounded response into independent
+/// request-owned storage ends those consumers; Arc::clone alone does not. Copying
+/// an engine token acquires no new lease and does not release its backed owner.
 pub struct ServiceReply<T> {
     value: ReplyValue<T>,
 }
@@ -51,6 +56,34 @@ pub trait MountServices: Send + Sync {
 /// One kernel request's original operations. No concrete daemon command,
 /// completion, registry or application configuration crosses this boundary.
 pub trait RequestServices: Send + Sync {
+    fn directory(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    ) -> ServiceFuture<'_, ServiceReply<NativeDirectory>>;
+    fn directory_read(
+        &self,
+        directory: NativeDirectory,
+        request: u64,
+        offset: u64,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryRead>>>;
+    fn directory_page(
+        &self,
+        read: Arc<NativeDirectoryRead>,
+        after: Option<Vec<u8>>,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryPage>>>;
+    fn directory_cookies(
+        &self,
+        read: Arc<NativeDirectoryRead>,
+        names: Vec<Vec<u8>>,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeCookiePlan>>>;
+    fn publish_cookies(
+        &self,
+        plan: Arc<NativeCookiePlan>,
+        accepted: usize,
+    ) -> ServiceFuture<'_, ServiceReply<()>>;
+    fn close_directory(&self, directory: NativeDirectory) -> ServiceFuture<'_, ServiceReply<()>>;
     fn local_read(
         &self,
         read: FileRead,

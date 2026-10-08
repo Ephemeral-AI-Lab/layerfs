@@ -5,6 +5,26 @@ use crate::{
 };
 
 impl Overlay {
+    /// A kernel GETATTR handle can denote a file or a directory. Classify both
+    /// indexed associations in one attempted transaction; do not try one failed
+    /// acquisition and then fall back to another handle kind.
+    pub fn acquire_native_handle_source(
+        &self,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        handle: u64,
+    ) -> OverlayResult<BaseSource> {
+        self.atomic(|| {
+            self.check_native_mount(mount)?;
+            let rows = self.query(StatementKind::Lease,
+                "SELECT 1 FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 AND n.owner=?3 AND f.serial=?4 UNION ALL SELECT 1 FROM native_directory d WHERE d.ns=?1 AND d.mount=?2 AND d.owner=?3 AND d.serial=?4 AND d.closed=0",
+                &[&mount.route.ns, &integer(mount.owner)?, &integer(handle)?, &integer(serial)?],
+                32, |_| Ok(()))?;
+            if rows.len() != 1 { return Err(OverlayError::Stale); }
+            self.retain_native_source(mount, request, serial)
+        })
+    }
     /// Validate all connection/route/serial/handle fields before file use.
     pub fn native_file(
         &self,

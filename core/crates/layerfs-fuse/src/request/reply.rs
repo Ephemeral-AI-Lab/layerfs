@@ -8,6 +8,7 @@ use crate::{
 use fuser::{
     Errno, FileHandle, FopenFlags, Generation, ReplyAttr, ReplyData, ReplyEntry, ReplyOpen,
 };
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_overlay::NativeMount;
 use layerfs_workspace::NativeReadOperation;
 use std::{sync::Arc, time::Duration};
@@ -21,6 +22,17 @@ pub(super) enum ReadReply {
     Link(ReplyData),
 }
 impl ReadReply {
+    pub fn data_input(&self) -> Option<crate::operations::ReadDataInput> {
+        use crate::operations::ReadDataInput;
+        match self {
+            Self::Data(_, offset, length) => Some(ReadDataInput::File {
+                offset: *offset,
+                length: *length,
+            }),
+            Self::Link(_) => Some(ReadDataInput::Link),
+            _ => None,
+        }
+    }
     pub fn error(self, error: Errno) {
         match self {
             Self::Entry(reply) => reply.error(error),
@@ -45,6 +57,7 @@ impl ReadReply {
             {
                 Ok(answer) => answer,
                 Err(error) => {
+                    let error = error.with_data_input(self.data_input());
                     self.error(Errno::EIO);
                     return RequestDisposition::Retained(Box::new(error));
                 }
@@ -58,9 +71,23 @@ impl ReadReply {
         };
         match self {
             Self::Data(reply, offset, length) => {
+                if value.stat.kind != InodeKind::RegularFile {
+                    reply.error(if value.stat.kind == InodeKind::Directory {
+                        Errno::EISDIR
+                    } else {
+                        Errno::EINVAL
+                    });
+                    return dispose(answer).await;
+                }
                 return data(reply, answer.read_file(offset, length).await).await;
             }
-            Self::Link(reply) => return data(reply, answer.readlink().await).await,
+            Self::Link(reply) => {
+                if value.stat.kind != InodeKind::Symlink {
+                    reply.error(Errno::EINVAL);
+                    return dispose(answer).await;
+                }
+                return data(reply, answer.readlink().await).await;
+            }
             Self::Open(reply, directory) => {
                 let handle = if directory {
                     value.directory.map(|value| value.owner_id())

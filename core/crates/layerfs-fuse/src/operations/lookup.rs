@@ -17,12 +17,13 @@ pub(super) struct Custody {
     protected: u64,
     handle: Option<u64>,
     operation: NativeReadOperation,
+    pub data_input: Option<super::ReadDataInput>,
     source: Option<BaseSource>,
     read: Option<FileRead>,
     pub view: Option<SourceView>,
-    plan: Option<NativeReadPlan>,
+    pub plan: Option<NativeReadPlan>,
     // Retain engine completion credit through every cloned outcome consumer.
-    receipt: Option<ServiceReply<Arc<NativeReadOutcome>>>,
+    pub receipt: Option<ServiceReply<Arc<NativeReadOutcome>>>,
 }
 /// A deciding answer still owns processing references until reply consumers end.
 /// The kernel's lookup/open/directory owners persist independently afterwards.
@@ -45,6 +46,7 @@ impl fmt::Debug for ReadFailure {
             .field("mount", &self.custody.mount)
             .field("request", &self.custody.request)
             .field("operation", &self.custody.operation)
+            .field("data_input", &self.custody.data_input)
             .field("source", &self.custody.source)
             .field("read", &self.custody.read)
             .finish_non_exhaustive()
@@ -87,6 +89,14 @@ impl ReadFailure {
     pub fn operation(&self) -> &NativeReadOperation {
         &self.custody.operation
     }
+    pub const fn data_input(&self) -> Option<super::ReadDataInput> {
+        self.custody.data_input
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn with_data_input(mut self, input: Option<super::ReadDataInput>) -> Self {
+        self.custody.data_input = input;
+        self
+    }
     pub const fn retained_source(&self) -> Option<BaseSource> {
         self.custody.source
     }
@@ -116,6 +126,7 @@ impl NativeRead {
             protected,
             handle,
             operation,
+            data_input: None,
             source: None,
             read: None,
             view: None,
@@ -140,18 +151,21 @@ impl NativeRead {
     /// Called only after the single reply attempt and disposal of its payload.
     /// Processing releases use original tokens once; kernel owners stay live.
     pub async fn dispose(self) -> Result<(), ReadFailure> {
-        let Self { value, mut custody } = self;
+        let Self { value, custody } = self;
         drop(value);
-        custody.plan = None;
-        custody.view = None;
-        custody.receipt = None;
-        match custody.release().await {
-            Ok(()) => Ok(()),
-            Err(reason) => Err(ReadFailure::new(reason, custody)),
-        }
+        custody.dispose().await
     }
 }
 impl Custody {
+    pub async fn dispose(mut self) -> Result<(), ReadFailure> {
+        self.plan = None;
+        self.view = None;
+        self.receipt = None;
+        match self.release().await {
+            Ok(()) => Ok(()),
+            Err(reason) => Err(ReadFailure::new(reason, self)),
+        }
+    }
     async fn prepare(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
         let granted = self
             .services

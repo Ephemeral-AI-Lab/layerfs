@@ -200,3 +200,15 @@ component tests plus49tooling tests. The original wake-ownership cycle failure a
 all compile failures remain in the receipts. Full R2 remains ACTIVE: directory
 callbacks, complete kernel accounting, mount/Ready, permissions and normal native
 drain/proofs are still required. Application ControlReady is not native Ready.
+
+R2 native consumers and directory callbacks: [results](checks/r2-native-consumers-20261008/36-results.md),
+[exact LOC](checks/r2-native-consumers-20261008/34-exact-production-loc.json).
+Production LOC:176088 ->176905 (delta+817); core110671→111488, active67797→68614;
+reference65417/predecessors38878/integration3996 unchanged, with no relocation.
+An original full16-slot metadata/data credit stall is retained and fixed by actual
+consumer disposal, without increasing capacity. READDIR/RELEASEDIR, exact accepted
+cookies and file/directory GETATTR handle association are wired and covered by
+4host/4Linux consumer cases, including16 simultaneous offered directory batches.
+Native callback output is bounded to128KiB; actual kernel buffers, mount/Ready,
+permissions and complete normal drain remain unqualified. The owner requests a
+verified checkpoint/handoff and pause here; full R2 is not complete.

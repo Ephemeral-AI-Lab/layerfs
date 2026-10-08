@@ -7,7 +7,7 @@ use layerfs_daemon::{
     OwnerError, Response,
 };
 use layerfs_fuse::{
-    operations::{NativeRead, ReadFailure},
+    operations::{DirectoryStep, DirectoryStream, NativeRead, ReadFailure},
     ports::MountServices,
     Dispatch, DispatchConfig, FailureView, RequestDisposition,
 };
@@ -438,6 +438,386 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
     drop(pool);
     drop(queue);
     drop(bound);
+    drop(store);
+    f.cleanup();
+}
+
+#[test]
+fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credit() {
+    use std::sync::Mutex;
+    struct Gate(Mutex<(bool, Vec<Option<Waker>>)>);
+    struct Turn(Arc<Gate>, usize);
+    impl Future for Turn {
+        type Output = ();
+        fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+            let mut state = self.0 .0.lock().unwrap();
+            if state.0 {
+                Poll::Ready(())
+            } else {
+                state.1[self.1] = Some(cx.waker().clone());
+                Poll::Pending
+            }
+        }
+    }
+    let f = support::Fixture::new(1, "full-native-handoff");
+    assert_eq!(f.count, 1);
+    let store = open_store(
+        f.config.clone(),
+        support::BINDING,
+        support::CURSOR,
+        1,
+        0,
+        Default::default(),
+    )
+    .unwrap();
+    let owner = Owner::start(
+        &f.directory.join("overlay"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let bound = store
+        .bind(
+            client.clone(),
+            BindRequest {
+                branch: f.branch,
+                workspace: WorkspaceId::from_authority([110; 32]).unwrap(),
+            },
+        )
+        .unwrap()
+        .workspace;
+    let root = bound
+        .operation()
+        .unwrap()
+        .workspace()
+        .base()
+        .unwrap()
+        .root()
+        .root_inode()
+        .serial();
+    let done = wait(
+        client
+            .try_submit(
+                Some(bound.route()),
+                Command::Native(NativeJob::Mount { root }),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    let mount = match done.result() {
+        Ok(Response::Native(NativeReply::Mount(mount))) => *mount,
+        other => panic!("{other:?}"),
+    };
+    drop(done);
+    let lookup = wait(NativeRead::prepare(
+        bound.request().unwrap(),
+        mount,
+        1,
+        root,
+        None,
+        NativeReadOperation::Lookup {
+            parent: root,
+            name: PathName::new("file-000000").unwrap(),
+        },
+    ))
+    .unwrap();
+    let serial = lookup.value().unwrap().stat.serial;
+    wait(lookup.dispose()).unwrap();
+    let mut pool = Dispatch::start(DispatchConfig {
+        read_handles: 1,
+        namespaces: 1,
+    })
+    .unwrap();
+    let queue = pool.register(mount).unwrap();
+    let count = layerfs_fuse::HANDOFFS;
+    let gate = Arc::new(Gate(Mutex::new((false, vec![None; count]))));
+    let (prepared, ready) = mpsc::channel();
+    let (done, completed) = mpsc::channel();
+    for index in 0..count {
+        let services = bound.request().unwrap();
+        let prepared = prepared.clone();
+        let done = done.clone();
+        let gate = gate.clone();
+        queue
+            .receive()
+            .unwrap()
+            .admit(0)
+            .unwrap()
+            .handoff(Box::pin(async move {
+                let answer = NativeRead::prepare(
+                    services,
+                    mount,
+                    1000 + index as u64,
+                    serial,
+                    None,
+                    NativeReadOperation::Getattr { serial },
+                )
+                .await
+                .unwrap();
+                prepared.send(()).unwrap();
+                Turn(gate, index).await;
+                let data = answer
+                    .read_file(0, layerfs_overlay::READ_WINDOW as u32)
+                    .await
+                    .unwrap();
+                assert_eq!(data.bytes(), support::bytes(0));
+                data.dispose().await.unwrap();
+                done.send(()).unwrap();
+                RequestDisposition::Complete
+            }))
+            .unwrap();
+    }
+    for _ in 0..count {
+        ready.recv_timeout(WAIT).unwrap();
+    }
+    until(|| queue.work().unwrap().parked == count);
+    assert_eq!(client.diagnostics().unwrap().outstanding, count);
+    let wakes = {
+        let mut state = gate.0.lock().unwrap();
+        state.0 = true;
+        std::mem::take(&mut state.1)
+    };
+    for wake in wakes.into_iter().flatten() {
+        wake.wake();
+    }
+    for _ in 0..count {
+        completed.recv_timeout(WAIT).unwrap_or_else(|error| panic!(
+            "full native handoff cannot advance: {error}; native={:?}; owner={:?}; store={:?}; fixture={:?}",
+            queue.work().unwrap(), client.diagnostics().unwrap(), store.read_work(), f.directory));
+    }
+    until(|| queue.work().unwrap().admitted == 0);
+    assert_eq!(client.diagnostics().unwrap().outstanding, 0);
+    let services = bound.request().unwrap();
+    drop(wait(services.forget(mount, serial, 1)).unwrap());
+    let done = wait(
+        client
+            .try_submit(
+                Some(bound.route()),
+                Command::Native(NativeJob::Revoke(mount)),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(done.result().is_ok());
+    drop(done);
+    queue.stop_admission().unwrap();
+    queue.finish().unwrap();
+    assert!(pool.stop().unwrap().clean());
+    drop(services);
+    drop(bound);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+#[test]
+fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close() {
+    let f = support::Fixture::new(65, "native-directory-consumer");
+    assert_eq!(f.count, 65);
+    let store = open_store(
+        f.config.clone(),
+        support::BINDING,
+        support::CURSOR,
+        1,
+        0,
+        Default::default(),
+    )
+    .unwrap();
+    let owner = Owner::start(
+        &f.directory.join("overlay"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let bound = store
+        .bind(
+            client.clone(),
+            BindRequest {
+                branch: f.branch,
+                workspace: WorkspaceId::from_authority([111; 32]).unwrap(),
+            },
+        )
+        .unwrap()
+        .workspace;
+    let root = bound
+        .operation()
+        .unwrap()
+        .workspace()
+        .base()
+        .unwrap()
+        .root()
+        .root_inode()
+        .serial();
+    let done = wait(
+        client
+            .try_submit(
+                Some(bound.route()),
+                Command::Native(NativeJob::Mount { root }),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    let mount = match done.result() {
+        Ok(Response::Native(NativeReply::Mount(mount))) => *mount,
+        other => panic!("{other:?}"),
+    };
+    drop(done);
+    let open = wait(NativeRead::prepare(
+        bound.request().unwrap(),
+        mount,
+        10,
+        root,
+        None,
+        NativeReadOperation::Opendir { serial: root },
+    ))
+    .unwrap();
+    let directory = open.value().unwrap().directory.unwrap();
+    wait(open.dispose()).unwrap();
+    let attributes = wait(NativeRead::prepare(
+        bound.request().unwrap(),
+        mount,
+        11,
+        root,
+        Some(directory.owner_id()),
+        NativeReadOperation::Getattr { serial: root },
+    ))
+    .unwrap();
+    assert_eq!(
+        attributes.value().unwrap().stat.kind,
+        layerfs_content::object::inode_leaf::InodeKind::Directory
+    );
+    wait(attributes.dispose()).unwrap();
+
+    let services = bound.request().unwrap();
+    // Keep every admitted request's offered page alive at once. Their original
+    // SQL replies must already be consumed, so publishing any prefix still has
+    // admission capacity without raising the owner's16-slot configuration.
+    let mut offered = Vec::new();
+    for index in 0..layerfs_fuse::HANDOFFS {
+        let stream = wait(DirectoryStream::prepare(
+            services.clone(),
+            mount,
+            100 + index as u64,
+            root,
+            directory.owner_id(),
+            2,
+        ))
+        .unwrap();
+        let DirectoryStep::Batch(batch) = wait(stream.next()).unwrap() else {
+            panic!("missing pressure page")
+        };
+        offered.push(batch);
+    }
+    until(|| client.diagnostics().unwrap().outstanding == 0);
+    for batch in offered {
+        let stream = wait(batch.accept(0)).unwrap();
+        wait(stream.dispose()).unwrap();
+    }
+    let stream = wait(DirectoryStream::prepare(
+        services.clone(),
+        mount,
+        12,
+        root,
+        directory.owner_id(),
+        0,
+    ))
+    .unwrap();
+    assert_eq!(
+        stream.dots().collect::<Vec<_>>(),
+        vec![(".", root, 1), ("..", root, 2)]
+    );
+    until(|| client.diagnostics().unwrap().outstanding == 0);
+    let DirectoryStep::Batch(batch) = wait(stream.next()).unwrap() else {
+        panic!("missing first directory page")
+    };
+    let first: Vec<_> = batch
+        .entries()
+        .map(|(entry, cookie)| (entry.name.clone(), cookie))
+        .collect();
+    assert_eq!(first.len(), 64);
+    until(|| client.diagnostics().unwrap().outstanding == 0);
+    let last_accepted = first[2].1;
+    let never_accepted = first[3].1;
+    let stream = wait(batch.accept(3)).unwrap();
+    let DirectoryStep::End(stream) = wait(stream.next()).unwrap() else {
+        panic!("partial buffer must end this reply")
+    };
+    wait(stream.dispose()).unwrap();
+    let invalid = match wait(DirectoryStream::prepare(
+        services.clone(),
+        mount,
+        13,
+        root,
+        directory.owner_id(),
+        never_accepted,
+    )) {
+        Err(error) => error,
+        Ok(_) => panic!("reserved but unreturned cookie became visible"),
+    };
+    assert_eq!(invalid.retained_source(), None);
+    drop(invalid);
+
+    let stream = wait(DirectoryStream::prepare(
+        services.clone(),
+        mount,
+        14,
+        root,
+        directory.owner_id(),
+        last_accepted,
+    ))
+    .unwrap();
+    assert_eq!(stream.dots().count(), 0);
+    let DirectoryStep::Batch(batch) = wait(stream.next()).unwrap() else {
+        panic!("missing continuation")
+    };
+    let remainder: Vec<_> = batch
+        .entries()
+        .map(|(entry, _)| entry.name.clone())
+        .collect();
+    assert_eq!(
+        remainder,
+        (3..65)
+            .map(|index| format!("file-{index:06}").into_bytes())
+            .collect::<Vec<_>>()
+    );
+    // RELEASEDIR cannot invalidate an already acquired read/cookie source.
+    drop(wait(services.close_directory(directory)).unwrap());
+    let closed = match wait(NativeRead::prepare(
+        bound.request().unwrap(),
+        mount,
+        15,
+        root,
+        Some(directory.owner_id()),
+        NativeReadOperation::Getattr { serial: root },
+    )) {
+        Err(error) => error,
+        Ok(_) => panic!("closed directory handle acquired a new source"),
+    };
+    assert_eq!(closed.retained_source(), None);
+    drop(closed);
+    let stream = wait(batch.accept(remainder.len())).unwrap();
+    let DirectoryStep::End(stream) = wait(stream.next()).unwrap() else {
+        panic!("unexpected extra names")
+    };
+    wait(stream.dispose()).unwrap();
+    until(|| client.diagnostics().unwrap().outstanding == 0);
+    assert_eq!(store.read_work().outstanding, 0);
+    let done = wait(
+        client
+            .try_submit(
+                Some(bound.route()),
+                Command::Native(NativeJob::Revoke(mount)),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(done.result().is_ok());
+    drop(done);
+    drop(services);
+    drop(bound);
+    owner.stop().unwrap();
     drop(store);
     f.cleanup();
 }
