@@ -31,9 +31,9 @@ mod rig;
 #[allow(dead_code)]
 #[path = "support/native_install.rs"]
 mod support;
-use layerfs_bridge::control::{ReadyMount, Reply, Request};
+use layerfs_bridge::control::{Activity, ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_content::ObjectId;
-use layerfs_daemon::control::Failure;
+use layerfs_daemon::control::{Failure, Service};
 use layerfs_history::{
     CommitHistoryRequest, CommitId, CommitRecord, CommitStagedOutcome, HistoryError,
 };
@@ -56,6 +56,11 @@ use std::{
         unix::fs::{FileExt, MetadataExt},
     },
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    },
+    thread,
     time::{Duration, Instant},
 };
 
@@ -458,6 +463,12 @@ touch -d '2004-01-10 13:37:04 UTC' src/deep/a
 
 /// R5-5: descriptors, a removed working directory and the kernel's caches
 /// across the known install, on the same mount.
+///
+/// Limits. Not covered here: a shared mapping held across install (R5-9
+/// maps across a Commit), access times (not stored), and `O_DIRECT` reads of
+/// files without a kept descriptor, which are compared through cached reads
+/// and the model only. The `lstat` table may be answered from the kernel's
+/// attribute cache; the forced table never is.
 #[test]
 fn retained_descriptors_and_kernel_caches_are_unchanged_by_install() {
     let rig = Rig::new("r5-5a");
@@ -931,6 +942,56 @@ struct Under {
     /// Numbers logged when the Commit was called and when it returned.
     before_call: usize,
     at_return: usize,
+    /// The most numbers a `Watch` sample read from the log before it saw
+    /// this Commit still running, and the number of such samples.
+    during: usize,
+    samples: usize,
+}
+/// A second thread's view of the log while Commits run. `current` is the
+/// Commit the test thread is about to call or has not yet seen return (1 or
+/// 2; 0 for none). One sample reads `current`, then the whole log through
+/// the mount, then the Workspace's control Status, then `current` again. It
+/// counts only if Status said `Committing` and `current` did not change:
+/// then the log was read before that Commit returned, because the registry
+/// leaves `Committing` before the call returns and no other Commit of this
+/// Workspace runs while `current` names this one.
+#[derive(Default)]
+struct Watch {
+    current: AtomicUsize,
+    stop: AtomicBool,
+    during: [AtomicUsize; 2],
+    samples: [AtomicUsize; 2],
+}
+impl Watch {
+    /// Ends at `stop`, and by itself after a minute.
+    fn run(&self, service: Arc<Service>, token: WorkspaceToken, mount: &Path) {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while !self.stop.load(Ordering::SeqCst) && Instant::now() < deadline {
+            let commit = self.current.load(Ordering::SeqCst);
+            if commit != 0 {
+                if let Ok(logged) = logged_now(mount) {
+                    let committing = matches!(
+                        service
+                            .execute_control(&Request::Status(token))
+                            .map(|done| done.reply),
+                        Ok(Reply::Status(status)) if status.activity == Activity::Committing
+                    );
+                    if committing && self.current.load(Ordering::SeqCst) == commit {
+                        self.during[commit - 1].fetch_max(logged, Ordering::SeqCst);
+                        self.samples[commit - 1].fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+            }
+            thread::sleep(Duration::from_millis(2));
+        }
+    }
+}
+/// Stops a `Watch` when the test thread leaves the scope, by return or panic.
+struct Stop<'a>(&'a AtomicBool);
+impl Drop for Stop<'_> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
 }
 /// A root captured while the writer ran holds a prefix of its sequence:
 /// every published mutation is wholly before or wholly after the capture.
@@ -982,11 +1043,29 @@ fn prefix(
         &format!("{what}, the rest"),
     );
     println!(
-        "{what}: k={k} log_lines={lines} pending={pending} logged_before_call={} logged_at_return={} logged_during_call={} paths={}",
+        "{what}: k={k} log_lines={lines} pending={pending} logged_before_call={} logged_while_committing={} samples_while_committing={} logged_at_return={} paths={}",
         under.before_call,
+        under.during,
+        under.samples,
         under.at_return,
-        under.at_return - under.before_call,
         captured.len()
+    );
+    // A write landed during the Commit: a sample read `during` numbers from
+    // the live mount's log and then saw this Commit still running. The root
+    // holds exactly k numbered files, so every number above k was renamed
+    // into place after the capture, and the sample read them before the
+    // call returned.
+    assert!(
+        under.during > k,
+        "{what}: no write was seen between the capture and the return: {k} captured, {} logged while committing in {} samples",
+        under.during,
+        under.samples
+    );
+    assert!(
+        under.at_return >= under.during && under.at_return > k,
+        "{what}: {} logged at return after {} while committing, {k} captured",
+        under.at_return,
+        under.during
     );
     // A number logged before the call was renamed into place before the
     // capture. The capture preceded the return, and its log lacks at most
@@ -1001,6 +1080,24 @@ fn prefix(
 }
 
 /// Two Commits under continuous external writes, then one after them.
+///
+/// Asserted for each Commit under the writer: its root is a prefix state of
+/// the writer's sequence; at least one numbered file was renamed into place
+/// after its capture and read back from the live mount before it returned;
+/// every number logged by its return is on the mount after both installs and
+/// in the next Commit's root, complete and equal to its live copy.
+///
+/// The "during" assertion needs the writer to finish one iteration (about
+/// four milliseconds, two of them an idle wait) while a Commit runs and a
+/// sample to follow it. The first Commit constructs the 300 prepared files
+/// and the second every file written during the first; both have lasted
+/// more than a hundred writer iterations. A product whose Commit returns
+/// within one iteration would fail here rather than pass unobserved.
+///
+/// Limits. Every capture observed so far landed between two iterations of
+/// the writer (log lines equal to k, no pending file): the oracle allows a
+/// capture between the steps of one iteration, but no run has shown one.
+/// How many writes land during a Commit is printed, not bounded.
 fn live_writer(layout: Layout) {
     let what = layout.label;
     let rig = Rig::new(layout.label);
@@ -1018,27 +1115,46 @@ fn live_writer(layout: Layout) {
     );
     assert_eq!(sequence(&prepared, layout, "prepared"), 0);
 
-    let mut writer = Background::spawn(COMMAND, mount, &layout.script(WRITER));
+    let writer = Background::spawn(COMMAND, mount, &layout.script(WRITER));
     let mut before_call = match wait_logged(mount, 5) {
         Ok(logged) => logged,
         Err(error) => stopped(&rig, &ready, Some(writer), "before the Commit", &error),
     };
     // The first Commit is called just after a number was logged. The second
-    // is called when the first returns, wherever the writer then is.
-    let mut under = Vec::new();
-    for number in ["first", "second"] {
-        let record = rig.committed(ready.token, &format!("{what} {number} under the writer"));
-        let at_return = match logged_now(mount) {
-            Ok(logged) => logged,
-            Err(error) => stopped(&rig, &ready, Some(writer), "at a Commit's return", &error),
-        };
-        assert!(writer.alive(), "the writer outlived the {number} Commit");
-        under.push(Under {
-            record,
-            before_call,
-            at_return,
-        });
-        before_call = at_return;
+    // is called when the first returns, wherever the writer then is. A second
+    // thread samples the log and the control Status meanwhile.
+    let watch = Watch::default();
+    let service = rig.harness.service.clone();
+    let token = ready.token;
+    let (mut under, writer) = thread::scope(|scope| {
+        let _stop = Stop(&watch.stop);
+        scope.spawn(|| watch.run(service, token, mount));
+        let mut writer = writer;
+        let mut under = Vec::new();
+        for (index, number) in ["first", "second"].into_iter().enumerate() {
+            watch.current.store(index + 1, Ordering::SeqCst);
+            let record = rig.committed(ready.token, &format!("{what} {number} under the writer"));
+            let at_return = match logged_now(mount) {
+                Ok(logged) => logged,
+                Err(error) => stopped(&rig, &ready, Some(writer), "at a Commit's return", &error),
+            };
+            assert!(writer.alive(), "the writer outlived the {number} Commit");
+            under.push(Under {
+                record,
+                before_call,
+                at_return,
+                during: 0,
+                samples: 0,
+            });
+            before_call = at_return;
+        }
+        watch.current.store(0, Ordering::SeqCst);
+        (under, writer)
+    });
+    // The sampling thread has ended; its counts are final.
+    for (index, commit) in under.iter_mut().enumerate() {
+        commit.during = watch.during[index].load(Ordering::SeqCst);
+        commit.samples = watch.samples[index].load(Ordering::SeqCst);
     }
     let (first, second) = (&under[0], &under[1]);
     assert_eq!(first.record.parent, bound.branch.head_commit);
@@ -1101,6 +1217,16 @@ fn live_writer(layout: Layout) {
         live.len()
     );
     assert!(k1 <= k2, "{k1} then {k2} captured");
+    // What was written during the first Commit is in the next root, and
+    // what was written during either is on the mount after both installs.
+    // `sequence` and `prefix` have checked that each of those is the
+    // complete numbered file, equal to its live copy.
+    assert!(
+        k2 >= first.at_return && n >= second.at_return,
+        "{} logged at the first return, {k2} in the second root; {} logged at the second return, {n} live",
+        first.at_return,
+        second.at_return
+    );
     assert!(
         n > k2,
         "no write followed the capture ({k2} captured, {n} made): the row is not demonstrated"
@@ -1119,7 +1245,10 @@ fn live_writer(layout: Layout) {
         &after_forced,
     );
     let all = rig.published(last.root);
+    // What was written during the second Commit is in the next root: this
+    // one holds every number, each compared with its live copy below.
     assert_eq!(sequence(&all, layout, "the last published root"), n);
+    assert!(n >= second.at_return);
     assert_eq!(log_lines(&all, "the last published root"), n);
     findings.flat("the last published root", &live, &all);
     findings.flat(

@@ -94,7 +94,9 @@ product mental model or campaign-specific benchmark procedures.
   one publishing Overlay job, with no notification and no writeback cache; see
   [native mutation and kernel coherence](docs/architecture/77-native-mutation-coherence.md).
   A control Commit runs the captured namespace producer through the unchanged
-  driver; mounted proofs are recorded with R5. Forced unmount and daemon-wide
+  driver, and waits for owner admission before each of its jobs; the mounted
+  proofs and their limits are in the
+  [R5 record](docs/issues/307/R5-COMPLETION-20261009.md). Forced unmount and daemon-wide
   drain are R6 work.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and

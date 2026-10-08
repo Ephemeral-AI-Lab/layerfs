@@ -562,7 +562,8 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
     let unchanged = again.commit.as_ref().unwrap().namespace.as_ref().unwrap();
     assert!(!unchanged.retained() && unchanged.released.len() == 2);
     drop(again);
-    // A new Workspace binds the published root and reads the committed byte.
+    // A new Workspace binds the published root. Only the root identity is
+    // compared here; the committed bytes are read back in product_commit.
     let other = match f
         .service
         .execute_control(&Request::Mount {

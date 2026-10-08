@@ -1,0 +1,70 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD d5e9312b0, uncommitted product/test paths=4, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_commit_failures-997cb38e87f02c9d --test-threads=1 --nocapture
+
+running 6 tests
+test f1_store_busy_before_save_is_settled_and_a_later_commit_is_exact ... F1 STAGED how=external python3 process holds the Store SQLite writer (BEGIN IMMEDIATE) when Commit begins route=execute_control(Request::Commit) mount=/tmp/layerfs-installed-7-f1/mounts/1 changes_by=bash uid=65534 gid=65534 paths=75 lifecycle_slots=2 ordinary_slots=16 bound_head=None epoch=3
+F1 FAILURE phase=Begin error=Storage(Busy) original_variant=true published=None locally_settled=true local_done=Some(true) local_error=None request=1 candidate=None namespace=None
+F1 REGISTRY activity=Idle published=None epoch=5 local_captured=Some(None) | ENGINE request=1 RetainedCapturedReader=None RetainedOperation=None
+F1 MOUNT same_view_after_failure=true new_write_served=true paths=76
+F1 LATER_COMMIT outcome=Committed parent=None request=2 paths=76 oracles=published_fresh_bind,same_mount owners=Some(reader=None operation=None retained=false released=[Reader, Operation] release_failure=None release_error=None custody=false work=true counters=true) RetainedCapturedReader=None RetainedOperation=None activity=Idle
+F1 UNMOUNT normal=Unmounted drained=true mount_table_entry_gone=true
+F1 RESULT later_commit=Committed,exact unmount=Unmounted deviations=0
+F_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=1
+ok
+test f2_store_busy_at_publication_is_settled_and_releases_both_owners ... F2 STAGED how=external python3 process holds the Store SQLite writer around the real stage_and_commit (support/history_boundary.rs Boundary::HeldWriter) route=execute_control(Request::Commit) mount=/tmp/layerfs-installed-7-f2/mounts/1 changes_by=bash uid=65534 gid=65534 paths=75 lifecycle_slots=2 ordinary_slots=16 bound_head=None epoch=3
+F2 FAILURE phase=Publish error=History(Busy) original_variant=true published=None locally_settled=true local_done=None local_error=None request=1 candidate=Some(ObjectId("afef7c99af478bc6c99ee58e987b6d4b8918a6c009d653b29dfaee021902262f")) namespace=Some(reader=None operation=None retained=false released=[Reader, Operation] release_failure=None release_error=None custody=false work=true counters=true)
+F2 REGISTRY activity=Idle published=None epoch=5 local_captured=Some(None) | ENGINE request=1 RetainedCapturedReader=None RetainedOperation=None
+F2 MOUNT same_view_after_failure=true new_write_served=true paths=76
+F2 LATER_COMMIT outcome=Committed parent=None request=2 paths=76 oracles=published_fresh_bind,same_mount owners=Some(reader=None operation=None retained=false released=[Reader, Operation] release_failure=None release_error=None custody=false work=true counters=true) RetainedCapturedReader=None RetainedOperation=None activity=Idle
+F2 UNMOUNT normal=Unmounted drained=true mount_table_entry_gone=true
+F2 RESULT later_commit=Committed,exact unmount=Unmounted deviations=0
+F_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=1
+ok
+test f3_unknown_history_outcome_keeps_custody_and_the_mount_still_serves ... F3 STAGED how=external catalog boundary scope; not a native SQLite I/O failure (support/history_boundary.rs Boundary::LostAcknowledgement: real publication, then UnknownOutcome) route=execute_control(Request::Commit) mount=/tmp/layerfs-installed-7-f3/mounts/1 changes_by=bash uid=65534 gid=65534 paths=75 lifecycle_slots=2 ordinary_slots=16 bound_head=None epoch=3
+F3 FAILURE phase=Publish error=History(UnknownOutcome) original_variant=true published=None locally_settled=false local_done=None local_error=None request=1 candidate=Some(ObjectId("e8782056c6ad0a428cd30895c76b63990949132f383f7d388b71f9eb3a2d19da")) namespace=Some(reader=Some operation=Some retained=true released=[] release_failure=None release_error=None custody=false work=true counters=true)
+F3 REGISTRY activity=Uncertain published=None epoch=5 local_captured=Some(1) | ENGINE request=1 RetainedCapturedReader=Some RetainedOperation=Some engine_equals_failure=true
+F3 MOUNT same_view_after_failure=true new_write_served=true paths=76
+F3 REFUSALS later_commit=code:Unknown,phase:admission,published:false unmount=code:Unknown,phase:admission epoch_unchanged=true captured_unchanged=true native_phase=Some(Ready) mount_table_entry=present
+F3 MOUNT serves_reads_and_writes_under_retained_custody=true
+F3 OBSERVED independent_session_root=candidate head=Some(CommitId(1255361ab66c34391ebdf97292ba2871fccbaba335dced6e80dbbce4fe37cc8902)) fresh_bind_root=candidate fresh_bind_paths=75 original_failure_settled_by_observation=false activity=Uncertain
+F3 TEARDOWN by_test=plain umount(8) of /tmp/layerfs-installed-7-f3/mounts/1 status=ExitStatus(unix_wait_status(0)) mount_table_entry=gone receive_loops_exited=2/2 registry_phase_after=Ready product_unmount=refused forced_unmount=none deviations=0
+F_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=false handles_after_stop=1
+ok
+test f4_known_publication_with_an_unattempted_install_keeps_custody ... F4 STAGED how=external catalog boundary scope: real publication, then every free admission registration of the local owner is reserved through public submit_when_available (nothing submitted) before stage_and_commit returns route=execute_control(Request::Commit) mount=/tmp/layerfs-installed-7-f4/mounts/1 changes_by=bash uid=65534 gid=65534 paths=75 lifecycle_slots=2 ordinary_slots=16 bound_head=None epoch=3
+F4 BOUNDARY reserved_registrations=288 submitted=0 next_registration_refused=Some("AdmissionFull")
+F4 FAILURE phase=Install error=Owner(Unattempted { cause: AdmissionFull, command: InstallPrepared { workspace: Workspace { route: Route { engine: 4, ns: 1, incarnation: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }, .. }, input: PreparedBase { capture: Capture { route: Route { engine: 4, ns: 1, incarnation: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1 original_variant=true published=Committed(CommitRecord { id: CommitId(12fb2a1210eb84ca58b88a2f59cd47a5e7d7fbdb28333b185d4fc2f6b2af0bdb20), stack: LayerStackId(3117171717171717171717171717171717), root: ObjectId("a62a326825f0b88a806944bd2d5b2d01d113574db392d719d2a616fe77cb8a16"), parent: None, base_layer: LayerId(320441923fefdf5aa431891eb37254511ef8d657623864a9e4f1cba15eea4a598f) }) locally_settled=false local_done=None local_error=None request=1 candidate=Some(ObjectId("a62a326825f0b88a806944bd2d5b2d01d113574db392d719d2a616fe77cb8a16")) namespace=Some(reader=Some operation=Some retained=true released=[] release_failure=None release_error=None custody=false work=true counters=true)
+F4 REGISTRY activity=LocalFailure published=Committed(CommitRecord { id: CommitId(12fb2a1210eb84ca58b88a2f59cd47a5e7d7fbdb28333b185d4fc2f6b2af0bdb20), stack: LayerStackId(3117171717171717171717171717171717), root: ObjectId("a62a326825f0b88a806944bd2d5b2d01d113574db392d719d2a616fe77cb8a16"), parent: None, base_layer: LayerId(320441923fefdf5aa431891eb37254511ef8d657623864a9e4f1cba15eea4a598f) }) epoch=5 local_captured=Some(1) | ENGINE request=1 RetainedCapturedReader=Some RetainedOperation=Some engine_equals_failure=true
+F4 MOUNT same_view_after_failure=true new_write_served=true paths=76
+F4 REFUSALS later_commit=code:Unknown,phase:admission,published:true unmount=code:Unknown,phase:admission epoch_unchanged=true captured_unchanged=true native_phase=Some(Ready) mount_table_entry=present
+F4 MOUNT serves_reads_and_writes_under_retained_custody=true
+F4 OBSERVED independent_session_root=candidate head=Some(CommitId(12fb2a1210eb84ca58b88a2f59cd47a5e7d7fbdb28333b185d4fc2f6b2af0bdb20)) fresh_bind_root=candidate fresh_bind_paths=75 original_failure_settled_by_observation=false activity=LocalFailure
+F4 TEARDOWN by_test=plain umount(8) of /tmp/layerfs-installed-7-f4/mounts/1 status=ExitStatus(unix_wait_status(0)) mount_table_entry=gone receive_loops_exited=2/2 registry_phase_after=Ready product_unmount=refused forced_unmount=none deviations=0
+F_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=false handles_after_stop=1
+ok
+test f5_store_busy_inside_the_producer_is_settled_and_releases_both_owners ... F5 STAGED how=external python3 process holds the Store SQLite writer around the Save's first real publish, which a 6 MiB new file makes happen during construction (storage boundary, every call forwarded) route=execute_control(Request::Commit) mount=/tmp/layerfs-installed-7-f5/mounts/1 changes_by=bash uid=65534 gid=65534 paths=76 lifecycle_slots=2 ordinary_slots=16 bound_head=None epoch=3
+F5 BOUNDARY real_publish_under_held_writer=Some("Busy")
+F5 FAILURE phase=Construct error=Construction { original: Content { error: OutputRejected, provider: None }, storage: Busy } original_variant=true published=None locally_settled=true local_done=None local_error=None request=1 candidate=None namespace=Some(reader=None operation=None retained=false released=[Reader, Operation] release_failure=None release_error=None custody=false work=true counters=false)
+F5 REGISTRY activity=Idle published=None epoch=5 local_captured=Some(None) | ENGINE request=1 RetainedCapturedReader=None RetainedOperation=None
+F5 MOUNT same_view_after_failure=true new_write_served=true paths=77
+F5 LATER_COMMIT outcome=Committed parent=None request=2 paths=77 oracles=published_fresh_bind,same_mount owners=Some(reader=None operation=None retained=false released=[Reader, Operation] release_failure=None release_error=None custody=false work=true counters=true) RetainedCapturedReader=None RetainedOperation=None activity=Idle
+F5 UNMOUNT normal=Unmounted drained=true mount_table_entry_gone=true
+F5 RESULT later_commit=Committed,exact unmount=Unmounted deviations=0
+F_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=1
+ok
+test f6_a_port_refusal_in_the_producers_custody_reaches_the_driver_and_keeps_custody ... F6 STAGED how=external storage boundary scope: on the Save's first real publish, which a 6 MiB new file makes happen during construction, every free admission registration of the local owner is reserved through public submit_when_available (nothing submitted); the publish is then forwarded unchanged route=execute_control(Request::Commit) mount=/tmp/layerfs-installed-7-f6/mounts/1 changes_by=bash uid=65534 gid=65534 paths=76 lifecycle_slots=2 ordinary_slots=16 bound_head=None epoch=3
+F6 BOUNDARY reserved_registrations_and_next_refusal=Some((288, Some("AdmissionFull"))) submitted=0 forwarded_real_publish=Some("published")
+F6 FAILURE phase=Construct error=Owner(Unattempted { cause: AdmissionFull, command: IndexedOperationRecord(Get { scope: IndexedOperationRecordScope { owner: OperationOwner { route: Route { engine: 6, ns: 1, incarnation: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }, owner: 2192 }, file_scope: 77 }, key: IndexedOperationRecordKey { kind: 1 original_variant=true published=None locally_settled=false local_done=None local_error=Some("Unattempted { cause: AdmissionFull, command: ResolveFailed(Capture { route: Route { engine: 6, ns: 1, incarnation: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }, generation: Generation(1), revision: 1562, base_root: [65, 22, 40, 54, 34, 68, 85, 181, 164, 98, 210, 136, 124, 141, 125, 76, 245, 135, 185, 60, ") request=1 candidate=None namespace=Some(reader=Some operation=Some retained=true released=[] release_failure=None release_error=None custody=true work=true counters=false)
+F6 CUSTODY refused_command=Some("IndexedOperationRecord") cause=AdmissionFull local_resolution_refused_command=Some("ResolveFailed") custody_reader_owner_first_cause_moved_out_file_custody=Some,Some,true,true
+F6 REGISTRY activity=Uncertain published=None epoch=5 local_captured=Some(1) | ENGINE request=1 RetainedCapturedReader=Some RetainedOperation=Some engine_equals_failure=true
+F6 MOUNT same_view_after_failure=true new_write_served=true paths=77
+F6 REFUSALS later_commit=code:Unknown,phase:admission,published:false unmount=code:Unknown,phase:admission epoch_unchanged=true captured_unchanged=true native_phase=Some(Ready) mount_table_entry=present
+F6 MOUNT serves_reads_and_writes_under_retained_custody=true
+F6 OBSERVED independent_session_root=bound_root_unchanged head=None candidate=None original_failure_settled_by_observation=false activity=Uncertain
+F6 TEARDOWN by_test=plain umount(8) of /tmp/layerfs-installed-7-f6/mounts/1 status=ExitStatus(unix_wait_status(0)) mount_table_entry=gone receive_loops_exited=2/2 registry_phase_after=Ready product_unmount=refused forced_unmount=none deviations=0
+F_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=false handles_after_stop=1
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.10s
+
+R4_WALL seconds<=9 limit=115s lock_wait=0s
+EXIT 0

@@ -21,6 +21,19 @@
 //!   Store writer around the first real publication of the Save, which a
 //!   change larger than one Save wave makes happen during construction. This
 //!   is a Store refusal before effect, not a missing dependency.
+//! - F6: a cause held in the producer's custody slot. The same storage
+//!   wrapper, on that first real publication, reserves every free admission
+//!   registration of the local owner and then forwards the publication, which
+//!   succeeds. The producer's next waiting captured port call is refused
+//!   before effect, and so is the driver's one local resolution.
+//!
+//! Two limits of this matrix:
+//!
+//! - F4 stages an UNATTEMPTED install after a known publication. An install
+//!   that was attempted and failed is not staged anywhere.
+//! - F3 covers only the world where the publication happened and its
+//!   acknowledgement was lost. An unknown outcome where nothing was published
+//!   is not staged.
 //!
 //! Product expectations are collected and reported after the mount has been
 //! torn down, so a deviation still leaves its whole evidence and no mount.
@@ -49,7 +62,7 @@ use layerfs_bridge::control::{
     Activity, ControlCode, ControlRefusal, NativePhase, ReadyMount, Reply, Request,
     WorkspaceStatus, WorkspaceToken,
 };
-use layerfs_content::ObjectId;
+use layerfs_content::{ContentError, ObjectId};
 use layerfs_daemon::{
     bootstrap::open_store,
     control::{Failure, Success},
@@ -169,8 +182,11 @@ mod catalog_boundary {
 /// port, every call forwarded to the real provider. Not a product hook: the
 /// refusal it stages is the real provider's own answer to a real held writer.
 mod storage_boundary {
+    use crate::catalog_boundary::{saturate, Saturated};
     use crate::held_writer::HeldWriter;
     use layerfs_content::ObjectId;
+    use layerfs_daemon::OwnerClient;
+    use layerfs_overlay::Route;
     use layerfs_storage::{
         location::{LocatedObject, SignatureRow},
         port::{
@@ -188,17 +204,22 @@ mod storage_boundary {
         },
     };
 
-    /// The real writer. Once armed, a real external process holds the Store's
-    /// SQLite writer around the next real `publish`, exactly once.
-    pub struct BusyOnPublish {
+    /// The real writer, with one staged effect around the next real
+    /// `publish`, exactly once. `armed`: a real external process holds the
+    /// Store's SQLite writer around it. `saturating`: every free admission
+    /// registration of that owner is reserved first, nothing submitted, and
+    /// the publication is then forwarded unchanged.
+    pub struct PublishBoundary {
         pub inner: Arc<dyn PackPersistence>,
         pub database: PathBuf,
         pub armed: AtomicBool,
-        /// What the real provider answered under the held writer.
+        pub saturating: Mutex<Option<(OwnerClient, Route)>>,
+        pub held: Mutex<Option<Saturated>>,
+        /// What the real provider answered to the staged publication.
         pub observed: Mutex<Option<String>>,
     }
     type Answer<T> = Result<T, PersistenceError>;
-    impl PackPersistence for BusyOnPublish {
+    impl PackPersistence for PublishBoundary {
         fn policy(&self) -> Answer<StoragePolicy> {
             self.inner.policy()
         }
@@ -235,12 +256,21 @@ mod storage_boundary {
             self.inner.publication_pack_cost(pack)
         }
         fn publish(&self, batch: &Publication) -> Answer<Published> {
-            if !self.armed.swap(false, Ordering::SeqCst) {
+            let owner = self.saturating.lock().unwrap().take();
+            let writer = self
+                .armed
+                .swap(false, Ordering::SeqCst)
+                .then(|| HeldWriter::acquire(&self.database));
+            if owner.is_none() && writer.is_none() {
                 return self.inner.publish(batch);
             }
-            let held = HeldWriter::acquire(&self.database);
+            if let Some((client, route)) = owner {
+                *self.held.lock().unwrap() = Some(saturate(&client, route));
+            }
             let result = self.inner.publish(batch);
-            held.release();
+            if let Some(writer) = writer {
+                writer.release();
+            }
             *self.observed.lock().unwrap() = Some(match &result {
                 Ok(_) => "published".into(),
                 Err(error) => format!("{error:?}"),
@@ -250,7 +280,7 @@ mod storage_boundary {
     }
 }
 use catalog_boundary::PublishedThenSaturated;
-use storage_boundary::BusyOnPublish;
+use storage_boundary::PublishBoundary;
 
 /// Ordinary changes of several kinds, in the tree, inside `.git`, an ignored
 /// directory, the cache and the build output. Run with the mount as the
@@ -342,8 +372,18 @@ enum Staging {
     History(Boundary),
     /// `catalog_boundary::PublishedThenSaturated` around the real catalog.
     InstallRefused,
-    /// `storage_boundary::BusyOnPublish` around the real writer.
-    BusyPublication,
+    /// `storage_boundary::PublishBoundary` around the real writer.
+    Publication,
+}
+/// Why a failure's custody stays, which decides what the retained tail
+/// expects of the driver's local resolution and of the Branch.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Kept {
+    /// The publication happened; the driver attempted no local resolution.
+    Published,
+    /// Nothing was published; the driver's one local resolution was itself
+    /// refused before effect.
+    ResolutionRefused,
 }
 /// One installed Disposable Store, opened once and kept open, and one real
 /// native serving assembly over it: `Harness::new`, as `rig::Rig` uses it.
@@ -352,7 +392,7 @@ struct Fx {
     store: Arc<Store>,
     harness: Harness,
     refusing: Option<Arc<PublishedThenSaturated>>,
-    busy: Option<Arc<BusyOnPublish>>,
+    publishing: Option<Arc<PublishBoundary>>,
     fresh: Cell<u8>,
 }
 /// The same public pieces `open_store` composes, with the writer and History
@@ -397,7 +437,7 @@ impl Fx {
             ),
             "the global Store profile is Disposable, selected explicitly"
         );
-        let (mut refusing, mut busy) = (None, None);
+        let (mut refusing, mut publishing) = (None, None);
         let store = match staging {
             Staging::Plain => open_store(
                 fixture.config.clone(),
@@ -431,17 +471,19 @@ impl Fx {
                 let history: Arc<dyn HistoryCatalog> = catalog;
                 (writer, history)
             }),
-            Staging::BusyPublication => wrapped(&fixture, |handles| {
+            Staging::Publication => wrapped(&fixture, |handles| {
                 let Handles {
                     storage, history, ..
                 } = handles;
-                let writer = Arc::new(BusyOnPublish {
+                let writer = Arc::new(PublishBoundary {
                     inner: storage,
                     database: fixture.config.path.clone(),
                     armed: AtomicBool::new(false),
+                    saturating: Mutex::new(None),
+                    held: Mutex::new(None),
                     observed: Mutex::new(None),
                 });
-                busy = Some(writer.clone());
+                publishing = Some(writer.clone());
                 let writer: Arc<dyn PackPersistence> = writer;
                 let history: Arc<dyn HistoryCatalog> = Arc::new(history);
                 (writer, history)
@@ -453,7 +495,7 @@ impl Fx {
             store,
             harness,
             refusing,
-            busy,
+            publishing,
             fresh: Cell::new(128),
         }
     }
@@ -500,10 +542,10 @@ impl Fx {
             store,
             harness,
             refusing,
-            busy,
+            publishing,
             ..
         } = self;
-        drop((refusing, busy));
+        drop((refusing, publishing));
         if clean {
             harness.stop();
         } else {
@@ -1061,9 +1103,15 @@ impl Case {
     /// A failure whose custody stays: the failure and the engine name the
     /// same reader and owner, later Commit and normal unmount are refused
     /// Unknown before any effect, the mount keeps serving, and an independent
-    /// observation of the publication settles nothing. The test then detaches
-    /// the kernel mount itself.
-    fn retained_tail(mut self, left: Left, failure: Box<CommitFailure>, activity: Activity) {
+    /// observation of the Branch settles nothing. The test then detaches the
+    /// kernel mount itself.
+    fn retained_tail(
+        mut self,
+        left: Left,
+        failure: Box<CommitFailure>,
+        activity: Activity,
+        why: Kept,
+    ) {
         let name = self.name;
         let token = self.token();
         let request = left.request();
@@ -1077,7 +1125,9 @@ impl Case {
         );
         expect!(
             self.checks,
-            !left.settled && left.local.is_none() && left.local_error.is_none(),
+            !left.settled
+                && left.local.is_none()
+                && left.local_error.is_some() == (why == Kept::ResolutionRefused),
             "{name}: nothing local is resolved: settled={} local={:?} local_error={:?}",
             left.settled,
             left.local,
@@ -1206,10 +1256,11 @@ impl Case {
         );
         println!("{name} MOUNT serves_reads_and_writes_under_retained_custody=true");
 
-        // Two observations that do not go through this Workspace: a separate
-        // read-only session of the Store, and a fresh bind of the Branch. The
-        // candidate is published, and its tree is the captured frontier.
-        let candidate = left.candidate.expect("the staged candidate");
+        // Observations that do not go through this Workspace: a separate
+        // read-only session of the Store and, after a publication, a fresh
+        // bind of the Branch. A published candidate is the Branch root and
+        // its tree is the captured frontier; otherwise the Branch is what
+        // this Workspace bound.
         let observer = Handles::open_read_only(
             self.fx.fixture.config.clone(),
             installed::BINDING,
@@ -1222,21 +1273,47 @@ impl Case {
             .unwrap()
             .unwrap();
         drop(observer);
-        expect!(
-            self.checks,
-            observed.effective_root == candidate
-                && observed.branch.head_commit.is_some()
-                && candidate != self.bound.binding.effective_root,
-            "{name}: an independent session reads the candidate as the Branch root: observed={:?} candidate={candidate:?}",
-            observed.effective_root
-        );
-        let published = self.fx.published(candidate);
-        assert_same(
-            &self.before,
-            &published,
-            &format!("{name}: the published candidate, fresh bind"),
-        );
-        // Neither observation settles the original failure.
+        let branch = match why {
+            Kept::Published => {
+                let candidate = left.candidate.expect("the staged candidate");
+                expect!(
+                    self.checks,
+                    observed.effective_root == candidate
+                        && observed.branch.head_commit.is_some()
+                        && candidate != self.bound.binding.effective_root,
+                    "{name}: an independent session reads the candidate as the Branch root: observed={:?} candidate={candidate:?}",
+                    observed.effective_root
+                );
+                let published = self.fx.published(candidate);
+                assert_same(
+                    &self.before,
+                    &published,
+                    &format!("{name}: the published candidate, fresh bind"),
+                );
+                format!(
+                    "independent_session_root=candidate head={:?} fresh_bind_root=candidate fresh_bind_paths={}",
+                    observed.branch.head_commit,
+                    published.len()
+                )
+            }
+            Kept::ResolutionRefused => {
+                expect!(
+                    self.checks,
+                    left.candidate.is_none()
+                        && observed.effective_root == self.bound.binding.effective_root
+                        && observed.branch.head_commit == self.bound.binding.branch.head_commit,
+                    "{name}: an independent session reads the bound Branch unchanged: observed={:?} head={:?} candidate={:?}",
+                    observed.effective_root,
+                    observed.branch.head_commit,
+                    left.candidate
+                );
+                format!(
+                    "independent_session_root=bound_root_unchanged head={:?} candidate={:?}",
+                    observed.branch.head_commit, left.candidate
+                )
+            }
+        };
+        // No observation settles the original failure.
         let observed_status = self.status();
         let observed_engine = self.engine(request);
         expect!(
@@ -1252,9 +1329,7 @@ impl Case {
             observed_status.epoch
         );
         println!(
-            "{name} OBSERVED independent_session_root=candidate head={:?} fresh_bind_root=candidate fresh_bind_paths={} original_failure_settled_by_observation=false activity={:?}",
-            observed.branch.head_commit,
-            published.len(),
+            "{name} OBSERVED {branch} original_failure_settled_by_observation=false activity={:?}",
             observed_status.activity
         );
 
@@ -1374,7 +1449,7 @@ fn f3_unknown_history_outcome_keeps_custody_and_the_mount_still_serves() {
         left.phase,
         left.published
     );
-    case.retained_tail(left, failure, Activity::Uncertain);
+    case.retained_tail(left, failure, Activity::Uncertain, Kept::Published);
 }
 
 /// F4. Known publication, local install not attempted. External catalog
@@ -1432,7 +1507,7 @@ fn f4_known_publication_with_an_unattempted_install_keeps_custody() {
         left.published,
         left.candidate
     );
-    case.retained_tail(left, failure, Activity::LocalFailure);
+    case.retained_tail(left, failure, Activity::LocalFailure, Kept::Published);
 }
 
 /// F5. A definite failure inside the producer: real Store Busy. A change
@@ -1444,10 +1519,10 @@ fn f5_store_busy_inside_the_producer_is_settled_and_releases_both_owners() {
     let mut case = Case::start(
         "F5",
         "external python3 process holds the Store SQLite writer around the Save's first real publish, which a 6 MiB new file makes happen during construction (storage boundary, every call forwarded)",
-        Staging::BusyPublication,
+        Staging::Publication,
         &[CHANGES, BIG],
     );
-    let busy = case.fx.busy.clone().expect("storage boundary");
+    let busy = case.fx.publishing.clone().expect("storage boundary");
     busy.armed.store(true, Ordering::SeqCst);
     let result = case.commit();
     let observed = busy.observed.lock().unwrap().take();
@@ -1457,13 +1532,21 @@ fn f5_store_busy_inside_the_producer_is_settled_and_releases_both_owners() {
         Some("Busy"),
         "staging: the real provider refuses Busy before effect"
     );
+    // The Save keeps the provider's Busy; the producer's own first cause is
+    // Content's label for the sink that refused its output.
     let (left, failure) = case.failure(result, |error| {
         matches!(
             error,
             CommitError::Construction {
+                original,
                 storage: StorageError::Busy,
-                ..
-            }
+            } if matches!(
+                **original,
+                CommitError::Content {
+                    error: ContentError::OutputRejected,
+                    provider: None,
+                }
+            )
         )
     });
     drop(failure);
@@ -1479,4 +1562,139 @@ fn f5_store_busy_inside_the_producer_is_settled_and_releases_both_owners() {
         left.namespace
     );
     case.definite_tail(left, true);
+}
+
+/// The owner commands of the producer's waiting captured ports: the captured
+/// namespace port, the captured run port and the operation record port.
+fn captured_port(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::ReaderInodes { .. }
+            | Command::ReaderInode { .. }
+            | Command::ReaderDirectoryEntries { .. }
+            | Command::ReaderParentDirectoryEntries { .. }
+            | Command::ReaderDirectoryEntry { .. }
+            | Command::ReaderSymlink { .. }
+            | Command::CapturedRun(_)
+            | Command::IndexedOperationRecord(_)
+    )
+}
+/// A command's variant name alone, for an evidence line.
+fn variant(command: &Command) -> String {
+    format!("{command:?}")
+        .chars()
+        .take_while(char::is_ascii_alphanumeric)
+        .collect()
+}
+/// An owner refusal that never admitted its command, with that command.
+fn unattempted(error: &OwnerError) -> Option<&Command> {
+    match error {
+        OwnerError::Unattempted { cause, command }
+            if matches!(**cause, OwnerError::AdmissionFull) =>
+        {
+            Some(command.as_ref())
+        }
+        _ => None,
+    }
+}
+
+/// F6. A cause held in the producer's custody slot reaches the driver as what
+/// it was. External storage boundary scope: on the Save's first real
+/// publication, during construction, the wrapper reserves every free
+/// admission registration of the local owner, submits nothing and forwards
+/// the publication, which succeeds. The producer's next waiting captured port
+/// call is refused before effect; so is the driver's one local resolution.
+#[test]
+fn f6_a_port_refusal_in_the_producers_custody_reaches_the_driver_and_keeps_custody() {
+    let mut case = Case::start(
+        "F6",
+        "external storage boundary scope: on the Save's first real publish, which a 6 MiB new file makes happen during construction, every free admission registration of the local owner is reserved through public submit_when_available (nothing submitted); the publish is then forwarded unchanged",
+        Staging::Publication,
+        &[CHANGES, BIG],
+    );
+    let boundary = case.fx.publishing.clone().expect("storage boundary");
+    let operation = case.fx.harness.service.operation(case.token()).unwrap();
+    let route = operation.workspace().route();
+    drop(operation);
+    *boundary.saturating.lock().unwrap() = Some((case.fx.harness.owner.client(), route));
+    let result = case.commit();
+    // The external effect ends here: every registration is dropped unpolled.
+    let held = boundary.held.lock().unwrap().take();
+    let observed = boundary.observed.lock().unwrap().take();
+    let staged = held
+        .as_ref()
+        .map(|held| (held.registrations.len(), held.refusal.clone()));
+    drop(held);
+    println!(
+        "F6 BOUNDARY reserved_registrations_and_next_refusal={staged:?} submitted=0 forwarded_real_publish={observed:?}"
+    );
+    assert!(
+        matches!(&staged, Some((count, Some(refusal))) if *count > 0 && refusal == "AdmissionFull")
+            && observed.as_deref() == Some("published"),
+        "staging: reserved {staged:?}, the forwarded publish answered {observed:?}"
+    );
+    let (left, failure) = case.failure(result, |error| {
+        matches!(error, CommitError::Owner(owner) if unattempted(owner).is_some_and(captured_port))
+    });
+    // The refused command, from the producer's custody through `classify`.
+    let command = match &failure.error {
+        CommitError::Owner(owner) => unattempted(owner).map(variant),
+        _ => None,
+    };
+    // The driver's one local resolution, refused the same way before effect.
+    let resolution = failure
+        .local_error
+        .as_ref()
+        .and_then(unattempted)
+        .map(variant);
+    // The attempt's custody stays with the failure, its first cause moved out.
+    let custody = failure
+        .namespace
+        .as_ref()
+        .and_then(|namespace| namespace.custody.as_ref())
+        .map(|custody| {
+            (
+                Some(custody.reader),
+                Some(custody.operation),
+                custody.failure.is_none()
+                    && custody.records.failure.is_none()
+                    && custody.file.as_ref().is_none_or(|file| {
+                        file.failure.is_none() && file.records.failure.is_none()
+                    }),
+                custody.file.is_some(),
+            )
+        });
+    println!(
+        "F6 CUSTODY refused_command={command:?} cause=AdmissionFull local_resolution_refused_command={resolution:?} custody_reader_owner_first_cause_moved_out_file_custody={}",
+        custody.as_ref().map_or("None".into(), |(reader, owner, moved, file)| format!(
+            "{},{},{moved},{file}",
+            answer(reader),
+            answer(owner)
+        ))
+    );
+    expect!(
+        case.checks,
+        left.phase == CommitPhase::Construct && left.published.is_none(),
+        "F6: phase {:?} published {:?}",
+        left.phase,
+        left.published
+    );
+    expect!(
+        case.checks,
+        resolution.as_deref() == Some("ResolveFailed"),
+        "F6: the driver's local resolution is refused unattempted, AdmissionFull: {:?}",
+        left.local_error
+    );
+    let owners = left.namespace.as_ref();
+    expect!(
+        case.checks,
+        owners.is_some_and(|owners| owners.custody && owners.work && !owners.counters)
+            && custody.is_some_and(|(reader, owner, moved, _)| {
+                moved && owners.is_some_and(|owners| {
+                    (reader, owner) == (owners.reader, owners.operation)
+                })
+            }),
+        "F6: the failure keeps the attempt's custody, naming the same reader and owner, with its first cause moved out: {owners:?} custody={custody:?}"
+    );
+    case.retained_tail(left, failure, Activity::Uncertain, Kept::ResolutionRefused);
 }

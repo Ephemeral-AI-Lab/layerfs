@@ -1031,17 +1031,13 @@ fn a_refused_owner_acquisition_is_settled_and_releases_the_reader() {
         other => panic!("{other:?}"),
     };
     settled(&client, 0);
-    let finished = AtomicBool::new(false);
     let failure = std::thread::scope(|scope| {
-        let commit = scope.spawn(|| {
-            let result = workspace.commit_captured();
-            finished.store(true, Ordering::Release);
-            result
-        });
+        let commit = scope.spawn(|| workspace.commit_captured());
         // A Commit parked on its own credits can never be joined: end the
         // process with the evidence instead of waiting for the wall limit.
+        // A panic of the Commit thread ends the wait and is joined below.
         let until = Instant::now() + Duration::from_secs(30);
-        while !finished.load(Ordering::Acquire) {
+        while !commit.is_finished() {
             if Instant::now() >= until {
                 evidence(format_args!(
                     "PRODUCT_COMMIT_OWNER_REFUSED outcome=HUNG diagnostics={:?}",
@@ -1106,39 +1102,71 @@ fn a_refused_owner_acquisition_is_settled_and_releases_the_reader() {
 /// that wait, so the product route refuses before any effect.
 #[test]
 fn a_commit_is_refused_before_effect_below_two_job_slots() {
-    let (rig, handles) = observed(
-        "product-commit-slots",
-        Boundary::LostAcknowledgement,
+    for (label, config) in [
+        (
+            "product-commit-slots-lifecycle",
+            OwnerConfig {
+                lifecycle_jobs_per_namespace: 1,
+                ..OwnerConfig::default()
+            },
+        ),
+        (
+            "product-commit-slots-ordinary",
+            OwnerConfig {
+                jobs_per_namespace: 1,
+                ..OwnerConfig::default()
+            },
+        ),
+    ] {
+        let (rig, handles) = observed(label, Boundary::LostAcknowledgement, config);
+        let workspace = rig.bind(1);
+        // No mutation and no view read here: the fixture's own readers need
+        // more than one ordinary slot. The refusal is shown to precede every
+        // effect by the owner's admitted-job count, which does not move.
+        let client = rig.owner.client();
+        let before = history(&rig);
+        let admitted = client.diagnostics().unwrap().admitted;
+        let refused = workspace.commit_captured().unwrap_err();
+        assert_eq!(client.diagnostics().unwrap().admitted, admitted);
+        assert_eq!(refused.phase, CommitPhase::Admission);
+        assert!(
+            matches!(
+                refused.error,
+                CommitError::Context("owner job slots below the Commit minimum")
+            ),
+            "{:?}",
+            refused.error
+        );
+        assert!(refused.locally_settled && refused.published.is_none());
+        assert!(refused.capture.is_none() && refused.namespace.is_none());
+        evidence(format_args!(
+            "PRODUCT_COMMIT_SLOTS ordinary_slots={} lifecycle_slots={} phase={:?} error={:?} locally_settled={} capture=None owner_jobs_admitted_by_the_call=0",
+            config.jobs_per_namespace,
+            config.lifecycle_jobs_per_namespace,
+            refused.phase,
+            refused.error,
+            refused.locally_settled
+        ));
+        drop(refused);
+        assert_eq!(history(&rig), before);
+        rig.close(&workspace);
+        drop(handles);
+        rig.finish();
+    }
+}
+
+/// The minimum the product route accepts: two ordinary and two Lifecycle job
+/// slots. Two definite refusals are settled and release what they acquired,
+/// and a later changed Commit is exact, with no wait on the thread's own
+/// credits. A hang here reaches the wall limit and fails.
+#[test]
+fn a_commit_completes_at_the_minimum_of_two_job_slots() {
+    definite_refusal(
+        "product-commit-minimum",
         OwnerConfig {
-            lifecycle_jobs_per_namespace: 1,
+            jobs_per_namespace: 2,
+            lifecycle_jobs_per_namespace: 2,
             ..OwnerConfig::default()
         },
     );
-    let workspace = rig.bind(1);
-    let mut session = Session::new(&workspace, rig.base.clone());
-    session.all(&[Do::Create("never.txt", 0o644)]);
-    let expected = session.model.flat();
-    let before = history(&rig);
-    let refused = workspace.commit_captured().unwrap_err();
-    assert_eq!(refused.phase, CommitPhase::Admission);
-    assert!(
-        matches!(
-            refused.error,
-            CommitError::Context("owner job slots below the Commit minimum")
-        ),
-        "{:?}",
-        refused.error
-    );
-    assert!(refused.locally_settled && refused.published.is_none());
-    assert!(refused.capture.is_none() && refused.namespace.is_none());
-    evidence(format_args!(
-        "PRODUCT_COMMIT_SLOTS lifecycle_slots=1 phase={:?} error={:?} locally_settled={} capture=None",
-        refused.phase, refused.error, refused.locally_settled
-    ));
-    drop(refused);
-    assert_eq!(history(&rig), before);
-    model::assert_same(&expected, &live(&workspace), "live view after the refusal");
-    rig.close(&workspace);
-    drop(handles);
-    rig.finish();
 }
