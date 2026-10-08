@@ -284,6 +284,50 @@ or the daemon's provider-independent `store/` adapter. Reuse public typed ports;
 do not add a new encoder, SQLite engine, native-tree materialization, source
 include or host Init route for Commit.
 
+### Shared sandbox, Workspace and cache model
+
+Confirmed against active source at81c0711b5; see the
+[source confirmation](checks/multi-workspace-model-confirmation-20261008/01-source-confirmation.json).
+The selected topology is one Sandbox daemon serving several mounted Workspaces,
+within explicit admission capacity. Current Sandbox deploys one daemon, and
+DaemonLimits.namespaces/Service's multi-entry registry permit several logical
+Workspaces in it; no one-Workspace-per-container restriction is encoded. Native
+attachment/visibility is still R2 work. Commands share the configured daemon-wide
+ordinary UID/GID; separate Workspace mounts are not separate security sandboxes.
+
+| Layer | Implemented foundation | Selected native behavior / remaining proof |
+| --- | --- | --- |
+| Per Workspace | Distinct namespace/incarnation, base/snapshot and operation owners | Separate FUSE connection/superblock and kernel dentries/attributes/file pages; exact native routing remains unimplemented |
+| Native service | No active Fuse dispatcher | One daemon-assembled Fuse dispatcher, shared fixed K pool, fair bounded admission and event-driven parking/wakeup across connections |
+| Immutable Store/cache | One Store owner with fixed readers and one Arc<CanonicalCache> shared by its Workspace/operation clients; exact ObjectId keys | Idle healthy reader admission and native fairness/resource qualification remain |
+| Mutable state | One Overlay database per daemon, namespaced Workspace rows and existing fair SQL owner for filesystem/Commit/cleanup | Native aggregate LOOKUP/FORGET and open/request mapping still need atomic indexed integration; no whole-namespace resident map |
+| Commit | Existing Capture/Save/finish/History/install composition keeps Store open | Complete captured namespace producer and live mounted install/coherence/full oracle remain R4/R5 |
+
+K is a planned startup resource selection fixed before Ready. S8 §6.1 already
+selects the initial rule `K = read_handles + 2`; do not invent another default.
+There is no running Fuse pool or K field in the current DaemonLimits/codec. R2
+must implement the startup selection and receipt. It is independent of the two
+fuser receive loops (and N=2 receive slots) planned per mounted connection; adding
+mounts does not multiply K or eliminate per-session library buffers/threads.
+Current application connection workers serve authenticated Control, not FUSE.
+
+The canonical cache is shared only within the owning daemon Store's declared
+authorization context, not automatically across different daemons or tenants.
+ObjectId identifies immutable bytes and does not grant authorization. Each
+operation's StorePorts/provider retains failures and custody; the cache contains
+authenticated bytes/observations rather than provider errors or access decisions.
+Cache hits currently clone bytes and there is no identical-miss coalescing. Its
+configured allowance is a logical charge, not a whole-process RSS guarantee.
+
+Kernel caches remain per mounted filesystem. Sharing canonical objects neither
+deduplicates all kernel file pages nor removes fuser session costs. The ordinary
+R1 proof used two daemons sharing a volume, not simultaneous mounts in one daemon.
+Component multi-Workspace/finite-arrival evidence remains at its exact scope;
+simultaneous mounted Workspaces, sustained/resource fairness and performance are
+unimplemented or unqualified. Shared-cache design supplies no throughput claim.
+Commit install must preserve later active mutations and retained reads; current
+component install/Store-half evidence does not prove mounted page continuity.
+
 ## 6. Dependency-aware implementation and proof plan
 
 Prepare a deepest-file plan for each checkpoint from current source. R2 enables

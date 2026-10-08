@@ -1,0 +1,15 @@
+{
+  "source_hash_mismatches": [],
+  "changed_document_sha256": {
+    "core/docs/issues/307/HANDOFF-R2-R5-IMPLEMENTATION-20261008.md": "427220772c3e21ab146c547c80dafdd57cfe017270a55e542716341e5fdea3e6",
+    "core/docs/issues/307/S8-SPECIFICATION-20261008.md": "df9ad04242a8239bbef33cad2925df248dbabab8bb80c785c2479c3680624cbf"
+  },
+  "local_links_checked": 38,
+  "missing_links": [],
+  "whitespace_exit": 0,
+  "selected_K_rule": "K=read_handles+2; existing S8 plan, not active runtime default",
+  "per_session_receive_loops": 2,
+  "runtime_checks": "NOT_RUN; confirmation and docs only; existing R1 proof source remains identical",
+  "optimization_campaign": false,
+  "R2_implementation": false
+}

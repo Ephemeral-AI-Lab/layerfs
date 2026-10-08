@@ -1,0 +1,43 @@
+{
+  "review_input": "81c0711b53dcefc74001936fb4a016abca27e5f9",
+  "source_sha256": {
+    "core/crates/layerfs-daemon/src/store/open.rs": "7b28cfbec9e70d258e2104ba9dc00d192894305dd7ad712b30f14ed273dac588",
+    "core/crates/layerfs-daemon/src/store/operation.rs": "6fb3d68d711bc58dee77fb9baf56194308af3c3cbb3ac967eb204069312bd7cf",
+    "core/crates/layerfs-daemon/src/store/ports.rs": "cef3f5ce71158add495632068f2e53fff8ae7690d236bbb0420607a2dda48130",
+    "core/crates/layerfs-workspace/src/base/cache.rs": "43c3260e7e2410620f7ce7fab8ab2a4f607fb3d8e1b176e069f57b0bcb62bfe5",
+    "core/crates/layerfs-workspace/src/base/client.rs": "a324790f34e6dd284b74635189fa672813a235fea0a9a9c0e30350d42e8705b3",
+    "core/crates/layerfs-daemon/src/application/owner.rs": "2a7fc720112c73a3249ac8e28ae67c1325f2f11de10e400e235a937c296f3095",
+    "core/crates/layerfs-daemon/src/control/registry.rs": "03bf117cc120e1ef12ae7b2896beb5c554f292192184643b8a5ed07f595c6863",
+    "core/crates/layerfs-bridge/src/daemon_setup.rs": "9ac1dd43b88e0bf7df2eeb895c5b82ca84664b097014ebc121b3b6d26201d648",
+    "core/crates/layerfs-sandbox/src/backend/docker/container_types.rs": "bdf4094acf9b04b72bb80c9d9ab1beb933dbe5c2f69053cc39e12e81c0b3b368",
+    "core/crates/layerfs-daemon/src/store/commit.rs": "5e4beacc9eb1c18fd1626c641eacd35d65424a42f31feb1e69fc74b75fd6ee2c",
+    "core/crates/layerfs-sandbox/src/backend/docker/container.rs": "38bc7e4586fdc3c0b510388497c51f9af3e3c0bc8d20b7a12965763dcea80902",
+    "core/crates/layerfs-sandbox/src/backend/docker/topology.rs": "61835318f4e82d444257c8fff04a8f6b90930d4c3c2a3adb68888ae9f6e6d94b",
+    "core/crates/layerfs-workspace/src/workspace/install.rs": "161022b88d73b0571377f105850d5f701bdd85e56159e4b0dd415f9f305113ec"
+  },
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "implemented": [
+    "one daemon process per owned Sandbox deployment",
+    "shared Store/cache and operation-scoped failure providers",
+    "exact ObjectId cache keys; caller-enforced declared authorization context",
+    "one Overlay and multi-entry logical Workspace registry bounded by configured namespaces",
+    "existing Store-half Commit driver keeps Store open"
+  ],
+  "selected_unimplemented": [
+    "separate FUSE connection/kernel state per attached Workspace",
+    "one shared fixed K Fuse worker pool with parked original continuations",
+    "initial K=read_handles+2, fixed at service startup/readiness; no active DaemonLimits K field",
+    "two fuser receive loops per mount, distinct from K",
+    "full mounted live namespace Commit/install continuity"
+  ],
+  "unqualified": [
+    "simultaneous mounted Workspaces",
+    "native readiness/drain",
+    "native performance/resource fairness and continuous residency"
+  ],
+  "new_runtime_campaign": false,
+  "new_optimization": false
+}

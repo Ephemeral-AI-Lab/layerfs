@@ -448,6 +448,13 @@ reported until Gone. No receiver shutdown silently drops another owner's job.
 | Overlay Owner | 1 per daemon [implemented] | Short typed SQL jobs and maintenance turns | Content decode, Store I/O, reply sends |
 | Mount session owner | 1 per mount, around `fuser::Session::run` | Retain session/result custody; distinguish joined successful completion from errors that can leave unjoined loops | Infer complete drain from run() returning an error |
 
+K is a planned daemon-assembly startup resource, fixed before native Ready; the
+initial rule in this table is `read_handles + 2`, not a measured optimum. No Fuse
+pool or K field exists in current DaemonLimits/its codec. R2 must implement the
+selection/receipt; the current application connection workers serve Control.
+K is distinct from the two per-connection fuser receive loops and N receive slots:
+several mounted Workspaces share K but retain their separate session costs.
+
 The existing daemon engine remains the only SQL scheduler. The Fuse request service
 schedules requests, not SQL: it decides which parked-then-runnable request a
 worker advances next. It adds no whole-Exec or whole-Commit gate, no polling,
@@ -579,10 +586,22 @@ Storage: every length demand reaches a reader. A warm repeat bind performs zero
 object Store demands while still paying one history snapshot and the local Open
 [measured diagnostic evidence: F13, F15].
 
-These settings (8 MiB, four readers) are starting values. They are not an
+StoreSettings supplies starting defaults of8MiB/four readers; actual native
+application startup takes explicit DaemonLimits cache_bytes/read_handles (R1
+selected64KiB/two readers). These are not universal deployed values. They are not an
 optimum and not a bound on the sandbox: acquisition transients, decode arenas,
 output copies, SQLite pagers, per-mount buffers and kernel caches are separate
 domains (section 7.4).
+
+One Store's CanonicalCache is shared by its operation/Workspace clients only
+within the caller-enforced declared authorization context. It is keyed by exact
+ObjectId, never Workspace pathname; immutable identity is not access authority.
+Fresh StorePorts keep original provider failure/custody outside the cache. Each
+daemon still owns a separate cache even if several daemons open the same volume.
+Separate mounted Workspaces retain separate kernel dentries/attributes/file pages;
+canonical cache sharing does not imply deduplication of all native pages or fuser
+per-session buffers/threads. Multiple native mounts and performance/resource
+fairness are not established by the current logical/Store/R1 proofs.
 
 ### 7.2 Mandatory changes
 

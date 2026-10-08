@@ -1,0 +1,27 @@
+{
+  "commit": "81c0711b53dcefc74001936fb4a016abca27e5f9",
+  "first_parent": "5be93f6d7f9352eab3cbfa286fedbc861e6e3494",
+  "committed_tree": "e382f62b2092e63ce1af46294531c412a792c766",
+  "index_matches_commit": true,
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "committed_production_count_recomputed_matches": true,
+  "production_loc": {
+    "before": 170673,
+    "after": 170673,
+    "delta": 0
+  },
+  "migration_subtotals": {
+    "active": 62382,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443
+  },
+  "scope": "Reviewed proposed R2-R5 ownership and reconciled documents only",
+  "R1_source_proof_identity_preserved": true,
+  "R2_R5_implementation_started": false,
+  "agents_dispatched": false,
+  "resources_created": 0,
+  "full_goal": "uncompleted; work stops after documentation review"
+}
