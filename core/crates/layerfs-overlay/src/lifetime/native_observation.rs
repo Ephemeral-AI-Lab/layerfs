@@ -22,7 +22,8 @@ impl Overlay {
         self.observe_native_inner(mount, source, lookup, None, decide)
     }
     /// Like a native stat observation, but retains a regular OpenFile in the
-    /// deciding transaction. Current namespace metadata must still be linked.
+    /// deciding transaction. A removed file stays openable: the source's
+    /// protecting kernel reference already retains its inode and content.
     pub fn observe_native_open<T>(
         &self,
         mount: NativeMount,
@@ -100,7 +101,7 @@ impl Overlay {
                     return Err(OverlayError::Invalid("native observation serial"));
                 }
                 if let Some(NativeOpen::File(writable)) = open {
-                    if inode.kind != InodeKind::File || inode.nlink == 0 {
+                    if inode.kind != InodeKind::File {
                         return Err(OverlayError::Missing);
                     }
                     let file = self.retain_file(

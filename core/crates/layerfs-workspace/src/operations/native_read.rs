@@ -144,8 +144,11 @@ impl NativeReadJob {
             // The source's independent read reference permits removed metadata.
             NativeReadOperation::Getattr { serial } => eval.target(*serial),
             NativeReadOperation::Opendir { serial } => eval.directory(*serial),
+            // The kernel names an inode it still references. A file whose
+            // last name is gone stays openable under that reference, so a
+            // path open racing an unlink or replacement gets the old file.
             NativeReadOperation::Open { serial, .. } => {
-                let inode = eval.existing(*serial)?;
+                let inode = eval.target(*serial)?;
                 match inode {
                     Some(inode) if inode.kind == InodeKind::File => Ok(Some(inode)),
                     Some(inode) if inode.kind == InodeKind::Directory => {

@@ -247,3 +247,104 @@ pub fn refusals(root: &Path) {
     assert!(statistics.blocks_free() > 0 && statistics.blocks_available() > 0);
     assert!(statistics.files_free() > 0);
 }
+pub fn bytes_of(length: usize, seed: u8) -> Vec<u8> {
+    (0..length)
+        .map(|index| (index as u8).wrapping_mul(31).wrapping_add(seed))
+        .collect()
+}
+/// Requests the daemon has received on this mount so far, of every kind.
+pub fn frames(h: &Harness, token: WorkspaceToken) -> u64 {
+    quiet(h, token);
+    let work = h.status(token).native.unwrap().work.unwrap();
+    work.handoffs + work.inline + work.refused
+}
+/// Per-opcode frame counts out of a Debug-rendered drain receipt.
+pub fn opcodes(receipt: &str) -> Vec<u64> {
+    let key = "OpcodeWork { opcodes: [";
+    let at = receipt.find(key).unwrap_or_else(|| panic!("{receipt}")) + key.len();
+    let end = at + receipt[at..].find(']').unwrap();
+    receipt[at..end]
+        .split(", ")
+        .map(|count| count.parse().unwrap())
+        .collect()
+}
+/// Attributes the kernel fetched from the daemon for this call, never the
+/// kernel's cached copy.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Forced {
+    pub inode: u64,
+    pub links: u32,
+    pub size: u64,
+    pub mode: u32,
+}
+pub fn forced(file: &File) -> Result<Forced, Errno> {
+    let mut raw = std::mem::MaybeUninit::<libc::statx>::zeroed();
+    check(unsafe {
+        libc::statx(
+            file.as_raw_fd(),
+            c"".as_ptr(),
+            libc::AT_EMPTY_PATH | libc::AT_STATX_FORCE_SYNC,
+            libc::STATX_BASIC_STATS,
+            raw.as_mut_ptr(),
+        )
+    } as libc::c_long)?;
+    let raw = unsafe { raw.assume_init() };
+    Ok(Forced {
+        inode: raw.stx_ino,
+        links: raw.stx_nlink,
+        size: raw.stx_size,
+        mode: u32::from(raw.stx_mode),
+    })
+}
+/// A reference with no open-file custody: kernel lookup ownership only.
+pub fn path_only(path: &Path) -> File {
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_PATH)
+        .open(path)
+        .unwrap()
+}
+/// One `MAP_SHARED` read-write mapping from offset 0.
+pub struct Mapping {
+    address: *mut u8,
+    length: usize,
+}
+impl Mapping {
+    pub fn shared(file: &File, length: usize) -> Self {
+        let address = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                length,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                file.as_raw_fd(),
+                0,
+            )
+        };
+        assert_ne!(address, libc::MAP_FAILED, "{}", io::Error::last_os_error());
+        Self {
+            address: address.cast(),
+            length,
+        }
+    }
+    pub fn store(&self, offset: usize, bytes: &[u8]) {
+        assert!(offset + bytes.len() <= self.length);
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), self.address.add(offset), bytes.len())
+        }
+    }
+    pub fn load(&self, offset: usize, length: usize) -> Vec<u8> {
+        assert!(offset + length <= self.length);
+        unsafe { std::slice::from_raw_parts(self.address.add(offset), length) }.to_vec()
+    }
+    pub fn sync(&self) {
+        check(
+            unsafe { libc::msync(self.address.cast(), self.length, libc::MS_SYNC) } as libc::c_long,
+        )
+        .unwrap();
+    }
+    /// Unmaps with no `msync`.
+    pub fn unmap(self) {
+        check(unsafe { libc::munmap(self.address.cast(), self.length) } as libc::c_long).unwrap();
+    }
+}

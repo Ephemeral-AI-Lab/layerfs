@@ -103,8 +103,11 @@ FileRead and source release. Open and kernel lookup owners remain independent;
 the integration test reads an open file after all its lookup references vanish.
 
 [Linux callbacks](../../crates/layerfs-fuse/src/request/callbacks.rs)
-wire LOOKUP, GETATTR, read-only OPEN, OPENDIR, READ, READLINK, READDIR, RELEASEDIR,
-RELEASE and FORGET into that service. The default batch-forget callback invokes
+wire LOOKUP, GETATTR, OPEN, OPENDIR, READ, READLINK, READDIR, RELEASEDIR,
+RELEASE and FORGET into that service. R3 added the mutating callbacks and the
+request-service ports they use (`open_source`, `reserve_serial`, `prepare`,
+`mutate`, `reply_attempted`); see
+[native mutation and kernel coherence](77-native-mutation-coherence.md). The default batch-forget callback invokes
 the counted single-unit path. Every other operation has a declared inline answer
 or refusal, and each received unit is counted once by opcode and disposal; the
 table is in [native mount session](76-native-mount-session.md#callback-dispositions-and-accounting).

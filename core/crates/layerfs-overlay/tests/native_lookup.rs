@@ -156,32 +156,51 @@ fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
 }
 
 #[test]
-fn native_open_refuses_removed_and_nonregular_answers_without_acquisition() {
+fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody() {
     let f = Fixture::new();
     f.lookup(1, 2);
-    for (request, kind, nlink) in [(2, InodeKind::File, 0), (3, InodeKind::Directory, 1)] {
-        let source = f.db.acquire_native_source(f.mount, request, 2).unwrap();
-        let before = f.db.resources(Some(f.mount.route())).unwrap().counts;
-        let outcome = f.db.observe_native_open(f.mount, source, true, |_, _| {
-            Ok(NativeDecision::Finished {
-                inode: Some(Inode {
-                    kind,
-                    nlink,
-                    ..inode(2)
-                }),
-                value: request,
-            })
-        });
-        assert!(matches!(outcome.result, Err(OverlayError::Missing)));
-        assert_eq!(outcome.decision, Some(request));
-        assert!(outcome.open_candidate.is_none());
-        assert!(outcome.candidate.is_none());
-        assert_eq!(
-            f.db.resources(Some(f.mount.route())).unwrap().counts,
-            before
-        );
-        f.db.release_base_source(source).unwrap();
-    }
+    // A directory answer acquires nothing.
+    let source = f.db.acquire_native_source(f.mount, 2, 2).unwrap();
+    let before = f.db.resources(Some(f.mount.route())).unwrap().counts;
+    let outcome = f.db.observe_native_open(f.mount, source, true, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(Inode {
+                kind: InodeKind::Directory,
+                nlink: 1,
+                ..inode(2)
+            }),
+            value: 2_u64,
+        })
+    });
+    assert!(matches!(outcome.result, Err(OverlayError::Missing)));
+    assert_eq!(outcome.decision, Some(2));
+    assert!(outcome.open_candidate.is_none());
+    assert!(outcome.candidate.is_none());
+    assert_eq!(
+        f.db.resources(Some(f.mount.route())).unwrap().counts,
+        before
+    );
+    f.db.release_base_source(source).unwrap();
+    // A file whose last name is gone is still referenced by the kernel
+    // lookup that protects this request: it opens, with exact open custody.
+    let source = f.db.acquire_native_source(f.mount, 3, 2).unwrap();
+    let outcome = f.db.observe_native_open(f.mount, source, true, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(Inode {
+                kind: InodeKind::File,
+                nlink: 0,
+                ..inode(2)
+            }),
+            value: 3_u64,
+        })
+    });
+    let read = outcome.result.unwrap().unwrap();
+    let file = outcome.open_candidate.expect("removed file opened");
+    assert_eq!(f.db.retained_native_file(f.mount, 3).unwrap(), Some(file));
+    f.db.release_file_read(read).unwrap();
+    f.db.release_base_source(source).unwrap();
+    f.db.close_native_file(f.mount, 2, file.owner_id()).unwrap();
+    assert_eq!(f.db.retained_native_file(f.mount, 3).unwrap(), None);
     f.db.forget_native(f.mount, 2, 1).unwrap();
     f.db.revoke_native_mount(f.mount).unwrap();
 }

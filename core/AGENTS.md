@@ -85,9 +85,11 @@ product mental model or campaign-specific benchmark procedures.
   Its intact predecessor is excluded under `layerfs-fuse-legacy`. The daemon
   composes Attach/Locate/Ready and reversible normal unmount; see
   [native request service](docs/architecture/75-native-request-service.md) and
-  [native mount session](docs/architecture/76-native-mount-session.md). Native
-  mutation, mounted Commit, forced unmount and daemon-wide drain are R3–R6 work;
-  every mutating operation is a declared refusal until then.
+  [native mount session](docs/architecture/76-native-mount-session.md).
+  Ordinary native mutation is served through the existing Workspace plan and
+  one publishing Overlay job, with no notification and no writeback cache; see
+  [native mutation and kernel coherence](docs/architecture/77-native-mutation-coherence.md).
+  Mounted Commit, forced unmount and daemon-wide drain are R5–R6 work.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,
@@ -186,8 +188,9 @@ parking/resumption, kernel handlers/replies and coherence. Daemon assembles one
 shared Fuse service with its existing SQL/Store services, retaining registry,
 overall Ready/unmount and Commit composition. Dependency is daemon -> fuse ->
 workspace, never Fuse -> daemon. Request dispatch/read ports, mount/Ready and
-per-Workspace normal drain are implemented ([R2 record](docs/issues/307/R2-COMPLETION-20261008.md));
-R3–R5 integration remains unfinished. See the
+per-Workspace normal drain are implemented ([R2 record](docs/issues/307/R2-COMPLETION-20261008.md)),
+as is ordinary native mutation ([R3 record](docs/issues/307/R3-COMPLETION-20261008.md));
+R4–R5 integration remains unfinished. See the
 [reviewed ownership](docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
 Moving blocking OwnerClient calls behind a port does not establish deferred service.
 

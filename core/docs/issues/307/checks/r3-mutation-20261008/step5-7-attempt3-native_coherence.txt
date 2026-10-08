@@ -1,0 +1,30 @@
+
+running 6 tests
+test a_lookup_racing_create_unlink_and_rename_never_binds_a_stale_inode ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_LOOKUP_RACE rounds=240 found_missed_empty=(1885, 46, 53) work=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 7361, handoffs: 7362, inline: 2419, refused: 0, terminal: 0, unadmitted: 0, forget_units: 139 }
+ok
+test map_close_store_exit_process ... ok
+test mutations_racing_the_unmount_probe_keep_normal_results_and_persist ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_PROBE_RACE probes=6 records=7 work=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 122, handoffs: 122, inline: 24, refused: 0, terminal: 0, unadmitted: 0, forget_units: 7 }
+ok
+test removed_references_keep_exact_state_without_open_custody ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_REMOVED file=Forced { inode: 30, links: 0, size: 15, mode: 33188 } engine=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 3, directory_entry_rows: 0, payload_cells: 1, payload_bytes: 15, shrink_rows: 1, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 1, owner_rows: 2, source_rows: 0, owner_details: 6, reply_tickets: 0, retire_targets: 0, maintenance_targets: 1, ready_targets: 0 }
+NATIVE_REOPEN_REMOVED opened
+NATIVE_FCHMOD_REMOVED result=Err(ENOENT)
+ok
+test shared_mapping_stores_are_published_and_never_change_size ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_MAPPED store_units=5 write=7 setattr=1 release=17 work=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 65, handoffs: 65, inline: 20, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }
+ok
+test size_never_shrinks_under_concurrent_append_and_refusals_stay_refused ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_REFUSED write=633 getxattr=1 setxattr=1 listxattr=0 removexattr=0 fallocate=1 fsync=4 samples=12
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.02s
+
+R3_WALL seconds<=6 limit=110s
+EXIT 0

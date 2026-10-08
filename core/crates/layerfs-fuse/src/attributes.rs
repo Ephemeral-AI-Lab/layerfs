@@ -44,7 +44,13 @@ impl Identity {
             InodeKind::Symlink => FileType::Symlink,
         };
         let nlink = if kind == FileType::Directory {
-            2
+            // A directory's count is projected, not stored: 2 while it has a
+            // name (the root always has), 0 once it is removed.
+            if value.namespace_refs == 0 && value.serial != self.root {
+                0
+            } else {
+                2
+            }
         } else {
             u32::try_from(value.namespace_refs).map_err(|_| Errno::EOVERFLOW)?
         };

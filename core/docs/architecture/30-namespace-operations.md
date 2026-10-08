@@ -82,8 +82,14 @@ R2 directory custody extension2026-10-08: a cross-parent directory rename also
 supplies `Changes::moved_directory`. The same transaction validates its final
 binding and updates the indexed retained native parent, if present, without
 visiting open handles. File/name changes and same-parent renames omit that work.
-See [native directory custody](74-native-directory-custody.md); native kernel
-mutation/coherence qualification remains R3.
+See [native directory custody](74-native-directory-custody.md).
+
+R3 native extension 2026-10-08: `NamespaceJob::decide` is the shared decision
+of the ordinary and the native publishing job. A mounted cross-parent directory
+rename proves ancestry from the connection's retained parent index instead of a
+caller-supplied destination path, and `Operation::StoreOpen` is a mapped store
+clipped to the current size. See
+[native mutation and kernel coherence](77-native-mutation-coherence.md).
 
 A removed name becomes a whiteout only where something below still binds it:
 the latest lower local row decides, and only when there is none does the

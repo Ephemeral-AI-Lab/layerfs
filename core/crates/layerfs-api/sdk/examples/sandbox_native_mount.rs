@@ -1,7 +1,8 @@
 //! Positive-path full topology: host Init and install into a shared VM volume,
 //! then control only. The actual daemon mounts the Workspace natively inside
 //! its Sandbox; ordinary nonroot commands launched by the runtime, never
-//! registered with the daemon, read the complete root through plain syscalls.
+//! registered with the daemon, read the complete root and mutate it through
+//! plain syscalls.
 use layerfs_bridge::{
     control::{ControlCode, DaemonPhase, NativePhase, Reply, Request},
     daemon_setup::{DaemonLimits, DaemonSetup},
@@ -231,12 +232,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                /proc/1/root/layerfs-store/global/store.sqlite /proc/1/environ /proc/1/fd /dev/fuse; \
                do test ! -r \"$p\"; test ! -w \"$p\"; done; \
              ! (exec 3<>/dev/fuse) 2>/dev/null; test ! -w /sys/fs/fuse/connections; \
-             ! touch {root}/created 2>/dev/null; ! (echo x >> {root}/file) 2>/dev/null; \
-             ! mkdir {root}/made 2>/dev/null; ! rm {root}/ignored.bin 2>/dev/null; \
+             mkdir {root}/made; printf abc > {root}/made/f; printf def >> {root}/made/f; \
+             test \"$(cat {root}/made/f)\" = abcdef; mv {root}/made/f {root}/made/g; \
+             ln {root}/made/g {root}/made/h; test \"$(stat -c '%h %u' {root}/made/h)\" = '2 501'; \
+             test \"$(dd if={root}/made/h iflag=direct status=none)\" = abcdef; \
+             rm {root}/made/g {root}/made/h; rmdir {root}/made; test ! -e {root}/made; \
+             ! mkfifo {root}/pipe 2>/dev/null; ! chmod 4755 {root}/ignored.bin 2>/dev/null; \
              printf 'KERNEL %s\\n' \"$(uname -r)\"; \
              printf 'DEVICE %s\\n' \"$(stat -c '%F %a %u:%g %t:%T' /dev/fuse)\"; \
              printf 'MOUNT %s\\n' \"$(grep ' {root} ' /proc/self/mountinfo)\"; \
-             printf 'ORDINARY_ACCESS uid=501 gid=20 CapEff=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_device_denied mutation_refused\\n'"
+             printf 'ORDINARY_ACCESS uid=501 gid=20 CapEff=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_device_denied mutation_served special_and_setid_refused\\n'"
         ),
         "/",
     )?;
@@ -386,7 +391,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         owner.runtime.disposition()
     );
     println!(
-        "NATIVE_FULL_TOPOLOGY host_init=true host_data_path=false named_volume={} root={:?} native_fuse=READ_PATH mutation=NOT_RUN commit=NOT_RUN force_unmount=NOT_RUN durable=NOT_RUN",
+        "NATIVE_FULL_TOPOLOGY host_init=true host_data_path=false named_volume={} root={:?} native_fuse=READ_WRITE mutation=RUN commit=NOT_RUN force_unmount=NOT_RUN durable=NOT_RUN",
         args[3], project.initialized.root
     );
     fs::remove_dir_all(directory)?;

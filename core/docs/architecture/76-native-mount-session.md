@@ -4,10 +4,11 @@
 
 This record describes the implemented R2 composition: one Linux kernel
 connection per attached Workspace, its Ready evidence, the control records that
-carry it, and normal terminal unmount. The native surface is the **read path**.
-Every mutating operation is a declared refusal until R3 wires mutation; mounted
-Commit, forced unmount and daemon-wide graceful drain are R5–R6 work. Scope and
-receipts are in the [R2 completion record](../issues/307/R2-COMPLETION-20261008.md).
+carry it, and normal terminal unmount. R3 added ordinary mutation on the same
+connection; see [native mutation and kernel coherence](77-native-mutation-coherence.md).
+Mounted Commit, forced unmount and daemon-wide graceful drain are R5–R6 work.
+Scope and receipts are in the [R2](../issues/307/R2-COMPLETION-20261008.md) and
+[R3](../issues/307/R3-COMPLETION-20261008.md) completion records.
 
 ## Ownership
 
@@ -76,16 +77,15 @@ received unit is counted once by
 
 | Disposition | Operations |
 | --- | --- |
-| Handoff to the shared dispatcher | LOOKUP, GETATTR, OPEN (read-only), READ, READLINK, OPENDIR, READDIR, RELEASE, RELEASEDIR, FORGET units |
+| Handoff to the shared dispatcher | LOOKUP, GETATTR, OPEN, READ, READLINK, OPENDIR, READDIR, RELEASE, RELEASEDIR, FORGET units; and the mutations SETATTR, MKNOD (regular), MKDIR, UNLINK, RMDIR, SYMLINK, RENAME, LINK, WRITE, CREATE |
 | Inline success, no engine job | FLUSH, FSYNC, FSYNCDIR, STATFS |
-| `EROFS` | writable OPEN, SETATTR, MKNOD (regular/FIFO/socket), MKDIR, UNLINK, RMDIR, SYMLINK, RENAME, LINK, WRITE, CREATE, FALLOCATE, COPY_FILE_RANGE |
-| `ENOSYS` | extended attributes, ACCESS, READDIRPLUS, locks, BMAP, IOCTL, POLL, LSEEK |
-| `EPERM` | MKNOD of a device node |
+| `ENOSYS` | extended attributes, ACCESS, READDIRPLUS, locks, BMAP, IOCTL, POLL, LSEEK, FALLOCATE, COPY_FILE_RANGE |
+| Refused at processing, no engine custody | MKNOD of a FIFO, socket or device, set-id bits and foreign ownership (`EPERM`); exchange and whiteout renames (`EINVAL`) |
 
 Inline FSYNC answers success and claims no durability; Disposable backing is
 never synchronized. STATFS reports fixed declared values, not physical capacity,
-and is never an admission signal. A writable OPEN is refused before any engine
-custody exists because no WRITE could use it. `Terminal` counts a reply-bearing
+and is never an admission signal. No operation answers `EROFS` any more.
+`Terminal` counts a reply-bearing
 unit that met stopped admission and received one error attempt. `Unadmitted`
 counts a FORGET unit that met stopped admission: its kernel reference is not
 decremented by guess and stays in indexed custody for revocation.
