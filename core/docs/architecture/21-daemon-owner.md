@@ -253,3 +253,47 @@ The [focused growth follow-up](../issues/307/PRE-S8-RESOURCE-GROWTH-RESULTS-2026
 adds external Rust live-request accounting, actual increasing-size/repeated-Commit
 observations and exact released ownership. It changes no product allocator or
 admission policy; whole-process/OS cache remains a separate resource domain.
+
+
+## R2 event-driven admission and worker exit
+
+The R2 admission checkpoint adds
+[`OwnerClient::submit_when_available`](../../crates/layerfs-daemon/src/overlay/admission.rs).
+It retains the original unattempted command and returns a Future that yields the
+same `Pending` used by immediate admission. Registering/arming precedes checking
+credit, so release before registration, release during the check and terminal
+stop cannot lose the event. Spurious polls replace the current task without
+trying admission again until a credit/stop event. SQL executes only after one
+successful admission; there is no failed-operation replay.
+
+The notification table has exactly `namespaces * (jobs_per_namespace +
+lifecycle_jobs_per_namespace)` slots at startup. Its actual allocation capacity
+is charged to `OwnerWork.scheduler_bytes` and removed from available job bytes.
+Registration has an explicit before-effect capacity refusal. Native assembly must
+budget one registration for every admitted ingress continuation waiting on SQL;
+this table does not itself charge the caller's original command payload or task
+allocation. Native request credits and fair Fuse resumption remain required.
+An input larger than its entire class capacity is refused immediately, while
+transient occupancy can wait for last-credit release. `Admission::into_command`
+returns an unattempted input and frees the slot; dropping a returned `Pending`
+does not cancel an admitted command.
+
+Last-credit disposal and terminal stop wake tasks outside the queue and notifier
+locks. Notification scans only the fixed configured table, without allocating
+an event-sized vector. It does not scan filesystem objects or queued commands.
+`Pending` separately implements Future for one original completion, retaining its
+credit until all Publisher/Pending/Completion owners are gone.
+
+The SQL thread's exit fence now stops admission and returns original unattempted
+queued jobs on normal exit or unwind. It does not rewrite a result already
+published before a callback panic. Explicit `Owner::stop` retains the original
+join panic in `OwnerError::WorkerPanicked`; its mutex preserves Send/Sync error
+custody for a payload that is only Send. Owner Drop remains best-effort cleanup;
+call explicit stop when the result must be observed. This component is not the
+native session/namespace drain conjunction.
+
+[Component receipts](../issues/307/checks/r2-admission-future-20261008/)
+retain the oversized-input regression, the initial service-class fixture error,
+the worker-loss three-second failed wait, the Send/Sync compile failure and the
+subsequent host/Linux selections. No native Ready, scheduling throughput, cold
+cache or process-residency qualification follows from this component.

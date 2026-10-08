@@ -1,0 +1,40 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "admission_future",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1752571833
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "admission_future",
+      "worker_loss_fences_admission_and_retains_the_original_join_failure",
+      "--",
+      "--exact"
+    ],
+    "exit_code": 101,
+    "timeout": false,
+    "wall_ns": 3875854166
+  }
+]

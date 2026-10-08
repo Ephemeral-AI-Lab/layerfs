@@ -1,0 +1,343 @@
+{
+  "local_links": [
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/PRE-S8-TERMINOLOGY-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "31-payload-streams.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "33-independent-custody.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../../crates/layerfs-daemon/src/overlay/owner.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../../crates/layerfs-daemon/src/overlay/queue.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../../crates/layerfs-daemon/src/overlay/credits.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "25-terminal-reclaim.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/S2-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "28-base-source-windows.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "29-effective-base-view.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/S3-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "30-namespace-operations.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "35-shared-physical-capacity.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/S6-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/S7-COMPLETION-OWNERSHIP-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../../crates/layerfs-daemon/src/service/completion.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/checks/r2-completion-future-20261008/01-selection.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../../crates/layerfs-daemon/src/overlay/queue.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../../crates/layerfs-daemon/src/service/job_sql.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/PRE-S8-F10-F14-ENGINE-PLAN-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/PRE-S8-F14-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../../crates/layerfs-daemon/src/overlay/admission.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/architecture/21-daemon-owner.md",
+      "target": "../issues/307/checks/r2-admission-future-20261008/",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FUSER-LIFECYCLE-DECISION-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md#4-combined-implementation-rollout",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/01-deepest-file-plan.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/06-independent-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/07-verification-scope.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/65-application-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/81-foundation-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R1-COMPLETE-FUSE-HANDOFF-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-NATIVE-PREREQUISITE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-completion-future-20261008/20-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/36-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-FUSER-LIFECYCLE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r4-captured-namespace-port-20261008/19-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "PRE-S8-COMPLETION-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r0-owner-reconciliation-20261008/10-commit-confirmation.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/19-component-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sdk-sandbox-20261008/21-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/65-application-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/64-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-daemon-composition-20261008/67-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/81-foundation-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/80-source-review-disposition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-runtime-20261008/84-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/94-final-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/59-native-lifecycle-proof.txt",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "../../architecture/72-owned-sandbox-lifecycle.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-sandbox-lifecycle-20261008/106-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R1-COMPLETE-FUSE-HANDOFF-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-completion-20261008/26-build-runtime-pins.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r1-completion-20261008/28-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-completion-future-20261008/20-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "FUSER-LIFECYCLE-DECISION-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "R2-FUSER-LIFECYCLE-20261008.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r4-captured-namespace-port-20261008/19-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/36-results.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/ROLLOUT-LEDGER-20261008.md",
+      "target": "checks/r2-admission-future-20261008/37-exact-production-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/checks/r2-admission-future-20261008/36-results.md",
+      "target": "37-exact-production-loc.json",
+      "exists": true
+    }
+  ],
+  "protected_notes_unchanged": true,
+  "full_whitespace_exit": 2,
+  "full_whitespace_output": "core/docs/issues/307/checks/r2-admission-future-20261008/13-host-admission_future.txt:18: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/13-host-completion_future.txt:17: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/13-host-completion_ownership.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/13-host-completion_storage.txt:13: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/13-host-job_cost.txt:13: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/13-host-owner.txt:21: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/24-host-admission_future.txt:19: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/24-host-completion_future.txt:17: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/24-host-completion_ownership.txt:15: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/24-host-completion_storage.txt:13: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/24-host-job_cost.txt:13: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/24-host-owner.txt:21: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/24-host-store_commit.txt:20: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/27-linux-build-checks.txt:50: trailing whitespace.\n+test worker_loss_fences_admission_and_retains_the_original_join_failure ... \ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-admission_future.txt:9: trailing whitespace.\n+test worker_loss_fences_admission_and_retains_the_original_join_failure ... \ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-admission_future.txt:16: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-completion_future.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-completion_ownership.txt:51: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-completion_storage.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-job_cost.txt:7: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-owner.txt:16: new blank line at EOF.\ncore/docs/issues/307/checks/r2-admission-future-20261008/linux-store_commit.txt:28: new blank line at EOF.\n",
+  "full_whitespace_reason": "Raw Rust test stdout retains original final blank lines; scoped product/docs/JSON check passes."
+}

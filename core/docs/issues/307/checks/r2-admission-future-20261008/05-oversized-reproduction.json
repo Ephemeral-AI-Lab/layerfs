@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "admission_future",
+    "a_command_larger_than_the_entire_budget_is_refused_without_waiting",
+    "--",
+    "--exact"
+  ],
+  "exit_code": 101,
+  "timeout": false,
+  "limit_seconds": 100,
+  "wall_ns": 2571887833,
+  "selection": "expected pre-fix regression reproduction, not acceptance"
+}

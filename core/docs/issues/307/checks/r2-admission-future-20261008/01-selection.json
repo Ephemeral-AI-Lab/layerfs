@@ -1,0 +1,16 @@
+{
+  "parent": "fbcb7751f38dc425c53dddfb61afb66d38b97b92",
+  "scope": "R2 SQL admission notification; original unattempted command held by bounded caller, fixed slots accounted in owner startup bytes, no native integration claim",
+  "plan": {
+    "core/crates/layerfs-daemon/src/overlay/admission.rs": "Before-effect Admission Future and fixed notification table. Arm before credit check, wake outside locks, cancellation returns original command. Reject impossible charge before waiting.",
+    "core/crates/layerfs-daemon/src/overlay/credits.rs": "Last retained job/result release notifies credit waiters.",
+    "core/crates/layerfs-daemon/src/overlay/queue.rs": "Charge fixed notification storage and notify terminal stop.",
+    "core/crates/layerfs-daemon/tests/admission_future.rs": "Release before/after registration, held completion, same command once, stop, cancellation, bounded registrations, oversized input and64 original racing jobs."
+  },
+  "runtime": "Overlay only MEMORY/OFF/EXCLUSIVE; no global Store",
+  "test_timeout_seconds": 100,
+  "inner_wait_seconds": 3,
+  "cache": "natural functional, no performance/residency claim",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "review_finding": "Initial future can park forever when Command charge exceeds total ordinary capacity because AdmissionFull conflates transient occupancy and permanent oversize. Reproduce with an8MiB original name input before correction."
+}

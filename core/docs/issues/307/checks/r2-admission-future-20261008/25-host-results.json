@@ -1,0 +1,144 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "wall_ns": 9998939959
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "admission_future"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 2120271875
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "completion_future"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 893116250
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "owner"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 995325250
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "completion_ownership"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 888679875
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "completion_storage"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 887249250
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "job_cost"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1059544708
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--test",
+      "store_commit"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1045010791
+  }
+]

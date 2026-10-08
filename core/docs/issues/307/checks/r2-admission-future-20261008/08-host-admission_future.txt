@@ -1,0 +1,43 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/admission_future.rs (core/target/debug/deps/admission_future-903a15c30989ab45)
+
+running 6 tests
+test held_completion_release_wakes_and_admits_original_once ... FAILED
+test fixed_registrations_replace_wakers_and_cancel_without_losing_input ... FAILED
+test stopped_waiter_returns_the_same_unattempted_input ... FAILED
+test release_before_first_poll_is_observed_without_future_event ... ok
+test a_command_larger_than_the_entire_budget_is_refused_without_waiting ... ok
+test credit_release_races_registration_without_a_polling_fallback ... ok
+
+failures:
+
+---- held_completion_release_wakes_and_admits_original_once stdout ----
+
+thread 'held_completion_release_wakes_and_admits_original_once' panicked at crates/layerfs-daemon/tests/admission_future.rs:152:5:
+assertion failed: poll(&mut waiting, &event).is_pending()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- fixed_registrations_replace_wakers_and_cancel_without_losing_input stdout ----
+
+thread 'fixed_registrations_replace_wakers_and_cancel_without_losing_input' panicked at crates/layerfs-daemon/tests/admission_future.rs:213:5:
+assertion failed: poll(&mut first, &old).is_pending()
+
+---- stopped_waiter_returns_the_same_unattempted_input stdout ----
+
+thread 'stopped_waiter_returns_the_same_unattempted_input' panicked at crates/layerfs-daemon/tests/admission_future.rs:188:5:
+assertion failed: poll(&mut waiting, &event).is_pending()
+
+
+failures:
+    fixed_registrations_replace_wakers_and_cancel_without_losing_input
+    held_completion_release_wakes_and_admits_original_once
+    stopped_waiter_returns_the_same_unattempted_input
+
+test result: FAILED. 3 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `-p layerfs-daemon --test admission_future`

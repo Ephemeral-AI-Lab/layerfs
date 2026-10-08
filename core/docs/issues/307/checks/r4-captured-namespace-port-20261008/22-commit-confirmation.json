@@ -1,0 +1,39 @@
+{
+  "commit": "fbcb7751f38dc425c53dddfb61afb66d38b97b92",
+  "first_parent": "5cf3e1220b563abce21e437810139da1f9a6acb0",
+  "committed_tree": "04318f2bd7cb73c07f631e06d5b8eb6327169678",
+  "matches_final_staged_tree": true,
+  "production_loc": {
+    "before": 170710,
+    "after": 170795,
+    "delta": 85
+  },
+  "subtotals": {
+    "active": 62504,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443,
+    "reference": 65417
+  },
+  "committed_count_recomputed": true,
+  "protected_untracked_hashes_unchanged": true,
+  "protected_containers_still_running": true,
+  "owned_containers_all_removed": [
+    "84b555e2b375fab974458ffed9a8683cc35fb43a11eeda26400db31f961543b5",
+    "6cc9caac0f58d0b70bac0c71e1f4e2ce3bb70d864f29829dd4111ca685f967aa",
+    "c7f28b226645c7b69b0c25a30c05067cd8463f76cb71e116d3d906dbb02cb382",
+    "3688c6f01428c951c9c48a01df9397d013056059cedfbf7f440271011f2a5eca",
+    "39e515a47c09a37e1a8258d70fc4d3edaffd203863a3e0cba6bb128eba15bfa4",
+    "394d37763d05ea2fd22fc3fc15cebbb88a422668be16ea0fbafe498652bc7457",
+    "ea3dacf78a37edd72d013f9b8d5e00af079186b843c2aa18bb19dec00ad9a747",
+    "3ecc3904ae9037d01515ba327773be456628020218f542099789609a8300b282",
+    "df0c5b59072b5b98bedda542e2e85c9cf6c1e62406c7e942d8e5927d2d99c165",
+    "9474a939df62d72757a9c72493821fee51168d77f8556d9cdd24f950d42cf351",
+    "a9305666544e61cd08131de74aa3b3328a6dee0bbcd7473cdf4a6f0f793cdc90"
+  ],
+  "owned_runtime_resources_remaining": 0,
+  "r2": "IN_PROGRESS; events/dependency lifecycle verified, native product floor incomplete",
+  "r3": "NOT_STARTED native mutations",
+  "r4": "IN_PROGRESS; namespace page port verified, producer and topology incomplete",
+  "r5": "NOT_STARTED mounted live Commit",
+  "approval_pending": false
+}

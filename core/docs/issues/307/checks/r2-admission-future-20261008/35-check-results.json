@@ -1,0 +1,66 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 300,
+    "timeout": false,
+    "wall_ns": 3202758334
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "fmt",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 2188207791
+  },
+  {
+    "command": [
+      "python3",
+      "-B",
+      "core/tools/check_product_boundary.py"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 559856208
+  },
+  {
+    "command": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "core/tools",
+      "-p",
+      "test_*.py"
+    ],
+    "exit_code": 0,
+    "limit_seconds": 100,
+    "timeout": false,
+    "wall_ns": 397087375
+  }
+]

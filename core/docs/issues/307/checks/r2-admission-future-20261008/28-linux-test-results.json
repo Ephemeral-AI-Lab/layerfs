@@ -1,0 +1,86 @@
+[
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/admission_future-0669276ae382012e",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "0cf83dca018853c5a875d38caa1c3e6eb6e96a98363ff1798b790f13398abb69",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 211498291,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_future-01a38d32a7e5336a",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "49cc71f83cccd6e35e8bf11c873ce7e1109ca2c296d49151d5845e0e93be38e4",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 153070376,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "c7b596b3f3b5cdbed5886832f14f7a25c4ccecc55099a1eeffb8a0fb46b74919",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 359884875,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "800375a627598378337602940938cf36e7a91993e03227ce78636fd89c44a59b",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 145647292,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "64fa695533bb25402526f7e8efe706d72fd4c8f077789f00ad7c4730ef8c0e9e",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 137058626,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/job_cost-97b0619943df4135",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "457509c753f23c0e9e3d7896ff419b92d0938c0c0035e2efb4caff3ca6df843c",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 131395125,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "8ac3da7c91439d1eb428a0c190a419a11e7f89e4b62720067823dbcc829c0d4e",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 503849542,
+    "wall_stop_seconds": 100
+  }
+]

@@ -194,8 +194,17 @@ pub(crate) struct Shared {
     pub state: Mutex<State>,
     pub wake: Condvar,
     pub config: OwnerConfig,
+    pub admission: super::admission::Notifications,
 }
 impl Shared {
+    pub fn job_capacity(&self, class: ServiceClass, work: &OwnerWork) -> usize {
+        let capacity = self.config.bytes.saturating_sub(work.scheduler_bytes);
+        if class == ServiceClass::Lifecycle {
+            capacity
+        } else {
+            capacity.saturating_sub(self.config.lifecycle_reserve)
+        }
+    }
     /// Startup scheduler bytes for a configuration, before any is allocated.
     pub fn planned_bytes(config: OwnerConfig) -> Option<usize> {
         let pointers = config
@@ -206,7 +215,8 @@ impl Shared {
         pointers
             .checked_add(size_of::<Lane>() + size_of::<i64>())?
             .checked_mul(config.namespaces)?
-            .checked_add(2 * size_of::<usize>() + size_of::<Self>())
+            .checked_add(2 * size_of::<usize>() + size_of::<Self>())?
+            .checked_add(super::admission::Notifications::planned_bytes(config)?)
     }
     pub fn sql_progress(
         &self,
@@ -231,9 +241,11 @@ impl Shared {
         let mut lanes = Vec::with_capacity(config.namespaces);
         lanes.resize_with(config.namespaces, || Lane::new(config));
         let rotation = VecDeque::with_capacity(config.namespaces);
+        let admission = super::admission::Notifications::new(config);
         // Actual capacities, which an allocator may round above the request.
         let scheduler_bytes = 2 * size_of::<usize>()
             + size_of::<Self>()
+            + admission.bytes()
             + lanes.capacity() * size_of::<Lane>()
             + rotation.capacity() * size_of::<i64>()
             + lanes
@@ -256,6 +268,7 @@ impl Shared {
             }),
             wake: Condvar::new(),
             config,
+            admission,
         }
     }
     pub fn scheduler_bytes(&self) -> usize {
@@ -371,6 +384,7 @@ impl Shared {
         for job in jobs {
             job.refuse(OwnerError::Stopped);
         }
+        self.admission.notify();
         self.wake.notify_all();
     }
 }

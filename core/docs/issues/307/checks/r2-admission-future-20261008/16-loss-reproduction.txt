@@ -1,0 +1,29 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/admission_future.rs (core/target/debug/deps/admission_future-903a15c30989ab45)
+
+running 1 test
+test worker_loss_fences_admission_and_retains_the_original_join_failure ... FAILED
+
+failures:
+
+---- worker_loss_fences_admission_and_retains_the_original_join_failure stdout ----
+
+thread 'layerfs-overlay-owner' panicked at crates/layerfs-daemon/tests/admission_future.rs:303:9:
+caller task panicked during completion notification
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'worker_loss_fences_admission_and_retains_the_original_join_failure' panicked at crates/layerfs-daemon/tests/admission_future.rs:130:18:
+completion did not wake: Timeout
+
+
+failures:
+    worker_loss_fences_admission_and_retains_the_original_join_failure
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 3.02s
+
+error: test failed, to rerun pass `-p layerfs-daemon --test admission_future`

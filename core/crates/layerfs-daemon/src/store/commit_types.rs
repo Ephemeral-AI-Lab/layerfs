@@ -159,7 +159,7 @@ pub(crate) fn owner_uncertain(error: &OwnerError) -> bool {
             layerfs_overlay::OverlayError::Uncertain { .. }
             | layerfs_overlay::OverlayError::Quarantined,
         ) => true,
-        OwnerError::Disconnected | OwnerError::WorkerPanicked => true,
+        OwnerError::Disconnected | OwnerError::WorkerPanicked(_) => true,
         _ => false,
     }
 }

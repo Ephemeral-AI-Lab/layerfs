@@ -1,0 +1,44 @@
+{
+  "admission_future": {
+    "path": "core/target/debug/deps/admission_future-903a15c30989ab45",
+    "sha256": "a71ff320cff4670aacc9b9f78d2dad38e905921fa5d23260e507109f9ee389eb",
+    "host_result": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+    "linux_result": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s"
+  },
+  "completion_future": {
+    "path": "core/target/debug/deps/completion_future-b2cc04239443606d",
+    "sha256": "524d28cf1bfcd5bbd3ae97c0552612f540a93e8e5e2922137ec4973ff2150bb3",
+    "host_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+    "linux_result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+  },
+  "owner": {
+    "path": "core/target/debug/deps/owner-7a7301fc46dcf1ed",
+    "sha256": "c6d23b2223b63e34fb03895648281666663b982b88845ca32b90d40cb2caa645",
+    "host_result": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s",
+    "linux_result": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s"
+  },
+  "completion_ownership": {
+    "path": "core/target/debug/deps/completion_ownership-41a80abdf2599e43",
+    "sha256": "ce8f4171be553958760bf2b9b7461d0a96cfff13a0a9bb4f4469d4322e93b484",
+    "host_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "linux_result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+  },
+  "completion_storage": {
+    "path": "core/target/debug/deps/completion_storage-2597ed3843afc4c1",
+    "sha256": "f0c937ba5976d3967758fdf96709953574df92a3a21a21dabbc92422e2665f7c",
+    "host_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+    "linux_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+  },
+  "job_cost": {
+    "path": "core/target/debug/deps/job_cost-fd2d3e5aadb233ea",
+    "sha256": "af958f9ef298a1ba56db328e6fe13fb1f2f0ab2ee88058e3b25925141ca6ccef",
+    "host_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+    "linux_result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+  },
+  "store_commit": {
+    "path": "core/target/debug/deps/store_commit-8242be4c721374ee",
+    "sha256": "856ce2c7802e64e85abaf9d37066692a772a44c95100953df08f728352e3aea2",
+    "host_result": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s",
+    "linux_result": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s"
+  }
+}

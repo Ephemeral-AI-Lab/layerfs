@@ -1,0 +1,1119 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/captured_namespace_port.rs:16:41
+   |
+16 |                   WorkspaceError::Service(Box::new(crate::OwnerError::Unattempted {
+   |  _________________________________________^
+17 | |                     cause: Box::new(cause),
+18 | |                     command: Box::new(command),
+19 | |                 }))
+   | |__________________^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/captured_namespace_port.rs:22:57
+   |
+22 |             .map_err(|original| WorkspaceError::Service(Box::new(original)))
+   |                                                         ^^^^^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/captured_namespace_port.rs:37:46
+    |
+37  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/captured_namespace_port.rs:51:46
+    |
+51  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/captured_run_port.rs:18:41
+   |
+18 |                   WorkspaceError::Service(Box::new(crate::OwnerError::Unattempted {
+   |  _________________________________________^
+19 | |                     cause: Box::new(cause),
+20 | |                     command: Box::new(command),
+21 | |                 }))
+   | |__________________^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/captured_run_port.rs:25:54
+   |
+25 |             .map_err(|error| WorkspaceError::Service(Box::new(error)))?;
+   |                                                      ^^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/captured_run_port.rs:28:46
+    |
+28  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/captured_run_port.rs:38:41
+   |
+38 |                   WorkspaceError::Service(Box::new(crate::OwnerError::Unattempted {
+   |  _________________________________________^
+39 | |                     cause: Box::new(cause),
+40 | |                     command: Box::new(command),
+41 | |                 }))
+   | |__________________^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/captured_run_port.rs:45:54
+   |
+45 |             .map_err(|error| WorkspaceError::Service(Box::new(error)))?;
+   |                                                      ^^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/captured_run_port.rs:50:46
+    |
+50  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/file_port.rs:22:46
+    |
+22  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/file_port.rs:46:41
+   |
+46 |                   WorkspaceError::Service(Box::new(crate::OwnerError::Unattempted {
+   |  _________________________________________^
+47 | |                     cause: Box::new(cause),
+48 | |                     command: Box::new(command),
+49 | |                 }))
+   | |__________________^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/file_port.rs:53:54
+   |
+53 |             .map_err(|error| WorkspaceError::Service(Box::new(error)))?;
+   |                                                      ^^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/file_port.rs:56:46
+    |
+56  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:24:37
+   |
+24 |               WorkspaceError::Service(Box::new(OwnerError::Unattempted {
+   |  _____________________________________^
+25 | |                 cause: Box::new(cause),
+26 | |                 command: Box::new(command),
+27 | |             }))
+   | |______________^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:31:50
+   |
+31 |         .map_err(|cause| WorkspaceError::Service(Box::new(cause)))
+   |                                                  ^^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:55:46
+    |
+55  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:72:46
+    |
+72  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:103:59
+    |
+103 |                         original: WorkspaceError::Service(Box::new(done)),
+    |                                                           ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:108:46
+    |
+108 |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:132:46
+    |
+132 |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/operation_record_port.rs:152:46
+    |
+152 |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/owner.rs:146:24
+    |
+146 |                   .spawn(move || {
+    |  __________________-----_^
+    | |                  |
+    | |                  required by a bound introduced by this call
+147 | |                     let _exit = ExitFence(&owner_shared);
+148 | |                     let created = Overlay::create_observed(&path, profile);
+149 | |                     let startup = Arc::new(created.work);
+...   |
+160 | |                     run(&owner_shared, &db);
+161 | |                 })
+    | |_________________^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Send`
+note: required because it appears within the type `Option<Arc<completion::Cell>>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/option.rs:572:10
+note: required because it appears within the type `Publisher`
+   --> crates/layerfs-daemon/src/service/completion.rs:47:19
+    |
+47  | pub(crate) struct Publisher(Option<Arc<Cell>>);
+    |                   ^^^^^^^^^
+note: required because it appears within the type `queue::Job`
+   --> crates/layerfs-daemon/src/overlay/queue.rs:50:19
+    |
+50  | pub(crate) struct Job {
+    |                   ^^^
+    = note: required for `Unique<queue::Job>` to implement `Send`
+note: required because it appears within the type `Box<queue::Job>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `PhantomData<Box<queue::Job>>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/marker.rs:757:12
+note: required because it appears within the type `alloc::raw_vec::RawVec<Box<queue::Job>>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/raw_vec.rs:76:19
+note: required because it appears within the type `VecDeque<Box<queue::Job>>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/collections/vec_deque/mod.rs:90:12
+    = note: required because it appears within the type `[VecDeque<Box<queue::Job>>; 6]`
+note: required because it appears within the type `Lane`
+   --> crates/layerfs-daemon/src/overlay/queue.rs:81:19
+    |
+81  | pub(crate) struct Lane {
+    |                   ^^^^
+note: required because it appears within the type `PhantomData<Lane>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/marker.rs:757:12
+note: required because it appears within the type `alloc::raw_vec::RawVec<Lane>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/raw_vec.rs:76:19
+note: required because it appears within the type `Vec<Lane>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/vec/mod.rs:397:12
+note: required because it appears within the type `queue::State`
+   --> crates/layerfs-daemon/src/overlay/queue.rs:158:19
+    |
+158 | pub(crate) struct State {
+    |                   ^^^^^
+    = note: required for `Mutex<queue::State>` to implement `Sync`
+note: required because it appears within the type `Shared`
+   --> crates/layerfs-daemon/src/overlay/queue.rs:193:19
+    |
+193 | pub(crate) struct Shared {
+    |                   ^^^^^^
+    = note: required for `Arc<Shared>` to implement `Send`
+note: required because it's used within this closure
+   --> crates/layerfs-daemon/src/overlay/owner.rs:146:24
+    |
+146 |                 .spawn(move || {
+    |                        ^^^^^^^
+note: required by a bound in `Builder::spawn`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/std/src/thread/mod.rs:395:5
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+  --> crates/layerfs-daemon/src/overlay/read_port.rs:9:29
+   |
+9  |     WorkspaceError::Service(Box::new(error))
+   |                             ^^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+   = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+  --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+   |
+37 | pub enum OwnerError {
+   |          ^^^^^^^^^^
+   = note: required for the cast from `Box<OwnerError>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/read_port.rs:34:46
+    |
+34  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/read_port.rs:56:46
+    |
+56  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/read_port.rs:78:46
+    |
+78  |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/read_port.rs:102:46
+    |
+102 |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/read_port.rs:123:46
+    |
+123 |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/overlay/read_port.rs:134:46
+    |
+134 |             _ => Err(WorkspaceError::Service(Box::new(done))),
+    |                                              ^^^^^^^^^^^^^^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Sync`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+    = note: required for the cast from `Box<Completion>` to `Box<(dyn std::error::Error + Send + Sync + 'static)>`
+
+error[E0277]: `(dyn Any + Send + 'static)` cannot be shared between threads safely
+   --> crates/layerfs-daemon/src/application/connection.rs:49:24
+    |
+49  |                   .spawn(move || {
+    |  __________________-----_^
+    | |                  |
+    | |                  required by a bound introduced by this call
+50  | |                     let mut result = application.connection(stream, slot);
+51  | |                     if let Err(failure) = &mut result {
+52  | |                         if failure.original.is_none()
+...   |
+79  | |                 });
+    | |_________________^ `(dyn Any + Send + 'static)` cannot be shared between threads safely
+    |
+    = help: the trait `Sync` is not implemented for `(dyn Any + Send + 'static)`
+    = note: required for `Unique<(dyn Any + Send + 'static)>` to implement `Sync`
+note: required because it appears within the type `Box<(dyn Any + Send + 'static)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `OwnerError`
+   --> crates/layerfs-daemon/src/overlay/owner.rs:37:10
+    |
+37  | pub enum OwnerError {
+    |          ^^^^^^^^^^
+note: required because it appears within the type `Result<Response, OwnerError>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `completion::Outcome`
+   --> crates/layerfs-daemon/src/service/completion.rs:33:19
+    |
+33  | pub(crate) struct Outcome {
+    |                   ^^^^^^^
+    = note: required for `Unique<completion::Outcome>` to implement `Sync`
+note: required because it appears within the type `Box<completion::Outcome>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+    = note: required for `OnceLock<Box<completion::Outcome>>` to implement `Sync`
+note: required because it appears within the type `completion::Cell`
+   --> crates/layerfs-daemon/src/service/completion.rs:39:19
+    |
+39  | pub(crate) struct Cell {
+    |                   ^^^^
+    = note: required for `Arc<completion::Cell>` to implement `Send`
+note: required because it appears within the type `Completion`
+   --> crates/layerfs-daemon/src/service/completion.rs:135:12
+    |
+135 | pub struct Completion {
+    |            ^^^^^^^^^^
+note: required because it appears within the type `Option<Completion>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/option.rs:572:10
+note: required because it appears within the type `Success`
+   --> crates/layerfs-daemon/src/control/types.rs:11:12
+    |
+11  | pub struct Success {
+    |            ^^^^^^^
+note: required because it appears within the type `Result<Success, Failure>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:528:10
+note: required because it appears within the type `Served`
+   --> crates/layerfs-daemon/src/control/serve.rs:15:12
+    |
+15  | pub struct Served {
+    |            ^^^^^^
+    = note: required for `Unique<Served>` to implement `Send`
+note: required because it appears within the type `Box<Served>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `ApplicationError`
+   --> crates/layerfs-daemon/src/application/failure.rs:10:10
+    |
+10  | pub enum ApplicationError {
+    |          ^^^^^^^^^^^^^^^^
+note: required because it appears within the type `ConnectionFailure`
+   --> crates/layerfs-daemon/src/application/failure.rs:70:12
+    |
+70  | pub struct ConnectionFailure {
+    |            ^^^^^^^^^^^^^^^^^
+    = note: required for `Unique<ConnectionFailure>` to implement `Send`
+note: required because it appears within the type `Box<ConnectionFailure>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `application::owner::Slot`
+   --> crates/layerfs-daemon/src/application/owner.rs:22:17
+    |
+22  | pub(super) enum Slot {
+    |                 ^^^^
+note: required because it appears within the type `PhantomData<application::owner::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/marker.rs:757:12
+note: required because it appears within the type `alloc::raw_vec::RawVec<application::owner::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/raw_vec.rs:76:19
+note: required because it appears within the type `Vec<application::owner::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/vec/mod.rs:397:12
+note: required because it appears within the type `application::owner::State`
+   --> crates/layerfs-daemon/src/application/owner.rs:34:19
+    |
+34  | pub(super) struct State {
+    |                   ^^^^^
+    = note: required for `Mutex<application::owner::State>` to implement `Sync`
+note: required because it appears within the type `Application`
+   --> crates/layerfs-daemon/src/application/owner.rs:39:12
+    |
+39  | pub struct Application {
+    |            ^^^^^^^^^^^
+    = note: required for `Arc<Application>` to implement `Send`
+note: required because it's used within this closure
+   --> crates/layerfs-daemon/src/application/connection.rs:49:24
+    |
+49  |                 .spawn(move || {
+    |                        ^^^^^^^
+note: required by a bound in `Builder::spawn`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/std/src/thread/mod.rs:395:5
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `layerfs-daemon` (lib test) due to 31 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-daemon` (lib) due to 31 previous errors

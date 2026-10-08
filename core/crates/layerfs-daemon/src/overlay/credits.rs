@@ -55,6 +55,7 @@ impl Drop for Credit {
             state.work.outstanding -= 1;
             state.release(self.namespace, self.class);
         }
+        shared.admission.notify();
         shared.wake.notify_all();
     }
 }

@@ -9,7 +9,7 @@ use layerfs_overlay::{DatabaseProfile, Overlay, OverlayError, ProfileConfig, Rou
 use std::{
     fmt, io,
     path::Path,
-    sync::{atomic::AtomicUsize, mpsc, Arc},
+    sync::{atomic::AtomicUsize, mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
     time::Instant,
 };
@@ -42,7 +42,9 @@ pub enum OwnerError {
     InvalidAdmission,
     IdentityExhausted,
     Disconnected,
-    WorkerPanicked,
+    /// Original join payload. The mutex preserves Sync error custody even
+    /// when the caller's original panic value is Send but not Sync.
+    WorkerPanicked(Mutex<Box<dyn std::any::Any + Send>>),
     Unattempted {
         cause: Box<OwnerError>,
         command: Box<Command>,
@@ -72,6 +74,15 @@ impl std::error::Error for OwnerError {
     }
 }
 
+/// Worker loss closes admission and disposes only queued, unattempted jobs.
+/// The joining owner retains the original panic; published outcomes stay intact.
+struct ExitFence<'a>(&'a Shared);
+impl Drop for ExitFence<'_> {
+    fn drop(&mut self) {
+        self.0.stop();
+    }
+}
+
 /// One initialized daemon service. It owns the connection thread's entire lifetime.
 pub struct Owner {
     client: OwnerClient,
@@ -81,7 +92,7 @@ pub struct Owner {
 }
 #[derive(Clone)]
 pub struct OwnerClient {
-    shared: Arc<Shared>,
+    pub(super) shared: Arc<Shared>,
 }
 impl Owner {
     /// Initializes exactly one overlay before reporting readiness. No retries.
@@ -135,6 +146,7 @@ impl Owner {
             let worker = thread::Builder::new()
                 .name("layerfs-overlay-owner".into())
                 .spawn(move || {
+                    let _exit = ExitFence(&owner_shared);
                     let created = Overlay::create_observed(&path, profile);
                     let startup = Arc::new(created.work);
                     let db = match created.result {
@@ -159,11 +171,15 @@ impl Owner {
                 Ok((Err(error), observed)) => {
                     startup = observed;
                     creation_reported = true;
-                    worker.join().map_err(|_| OwnerError::WorkerPanicked)?;
+                    worker
+                        .join()
+                        .map_err(|payload| OwnerError::WorkerPanicked(Mutex::new(payload)))?;
                     return Err(error);
                 }
                 Err(_) => {
-                    worker.join().map_err(|_| OwnerError::WorkerPanicked)?;
+                    worker
+                        .join()
+                        .map_err(|payload| OwnerError::WorkerPanicked(Mutex::new(payload)))?;
                     return Err(OwnerError::Disconnected);
                 }
             };
@@ -204,7 +220,7 @@ impl Owner {
             .take()
             .ok_or(OwnerError::Stopped)?
             .join()
-            .map_err(|_| OwnerError::WorkerPanicked)
+            .map_err(|payload| OwnerError::WorkerPanicked(Mutex::new(payload)))
     }
 }
 impl Drop for Owner {
@@ -241,12 +257,7 @@ impl OwnerClient {
         let config = self.shared.config;
         // Fixed scheduler state is never available to jobs; ordinary classes
         // additionally leave the lifecycle reserve.
-        let capacity = config.bytes.saturating_sub(state.work.scheduler_bytes);
-        let limit = if class == ServiceClass::Lifecycle {
-            capacity
-        } else {
-            capacity.saturating_sub(config.lifecycle_reserve)
-        };
+        let limit = self.shared.job_capacity(class, &state.work);
         if bytes > limit || state.work.credited_bytes > limit - bytes {
             return Err((OwnerError::AdmissionFull, command));
         }
