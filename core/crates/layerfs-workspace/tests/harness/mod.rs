@@ -120,7 +120,10 @@ impl Bench {
         Self::with_cache(tag, 4 * 1024 * 1024)
     }
     pub fn with_cache(tag: &str, cache: usize) -> Self {
-        let fixture = fixture();
+        Self::over(tag, fixture(), cache)
+    }
+    /// The same harness over another content-built root.
+    pub fn over(tag: &str, fixture: Fixture, cache: usize) -> Self {
         let client = Arc::new(CanonicalClient::with_lengths(
             Arc::new(fixture.store.clone()),
             Arc::new(fixture.store.clone()),
@@ -221,7 +224,14 @@ impl Bench {
                     .map(|(name, serial)| (String::from_utf8(name).unwrap(), serial)),
             );
             match page.continuation {
-                Some(next) => after = Some(next),
+                Some(next) => {
+                    // A listing that does not advance fails here.
+                    assert!(
+                        after.as_ref().is_none_or(|last| *last < next),
+                        "the listing of {parent} did not advance"
+                    );
+                    after = Some(next);
+                }
                 None => return (all, widest),
             }
         }
@@ -312,6 +322,7 @@ impl Bench {
     pub fn content(&self, serial: u64) -> Vec<u8> {
         let mut all = Vec::new();
         loop {
+            let before = all.len() as u64;
             let read = self
                 .window(|view| {
                     view.read(
@@ -326,6 +337,8 @@ impl Bench {
             if read < layerfs_overlay::READ_WINDOW as u64 {
                 return all;
             }
+            // A full window that added nothing would never end this loop.
+            assert_eq!(all.len() as u64, before + read, "serial {serial}");
         }
     }
     pub fn read_at(&self, serial: u64, offset: u64, length: u32) -> Vec<u8> {

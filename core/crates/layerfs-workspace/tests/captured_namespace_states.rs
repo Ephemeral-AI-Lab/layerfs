@@ -1,13 +1,17 @@
-//! R4-3: every captured state of the R3 table, each as its own case. The
-//! recording provider shows which rows the capture really held; the result is
-//! always the complete walk against the independent model.
+//! R4-3: captured states of base and fresh inodes and of entry rows, each as
+//! its own case. This file does not cover the whole R3 table: inodes held by a
+//! real descriptor or lookup (R3 rows 1, 2 and 7) are in
+//! captured_namespace_holds.rs, names rebound to another kind and repeated
+//! directory moves in captured_namespace_rebound.rs, and R3 row 6 in
+//! captured_namespace_fragments.rs. The recording provider shows which rows
+//! the capture really held; the result is always the complete walk against
+//! the independent model.
 mod common;
 mod harness;
 mod oracle;
 mod producer;
-use harness::{Bench, T1};
-use layerfs_overlay::{Inode, InodeKind, OpenFile};
-use layerfs_workspace::{Operation, Outcome, Position};
+use harness::Bench;
+use layerfs_overlay::Inode;
 use oracle::{absent, value};
 use producer::{
     build_over, drain, evidence, record, Built, Call, Drive, Log, Recording, FRESH, HEADER, VALUE,
@@ -40,32 +44,6 @@ fn inodes(log: &Log) -> Vec<Inode> {
 fn inode(log: &Log, serial: u64) -> Option<Inode> {
     inodes(log).into_iter().find(|row| row.serial == serial)
 }
-/// A writable descriptor of a file, opened before any name is removed.
-fn hold(b: &Bench, serial: u64) -> OpenFile {
-    b.window(|view| {
-        let fact = match b.overlay.inode(b.route(), serial).unwrap() {
-            Some(local) => local,
-            None => {
-                let stat = view.stat(&b.overlay, serial).unwrap();
-                Inode {
-                    serial,
-                    kind: InodeKind::File,
-                    mode: u16::try_from(stat.metadata.mode).unwrap(),
-                    mtime_seconds: stat.metadata.mtime_seconds,
-                    mtime_nanoseconds: stat.metadata.mtime_nanoseconds,
-                    nlink: stat.namespace_refs,
-                    size: stat.logical_len,
-                    inherited_cutoff: stat.logical_len,
-                    born: 0,
-                    entries: 0,
-                }
-            }
-        };
-        b.overlay
-            .open_file(view.source(), 9_000 + serial, &fact, true)
-            .unwrap()
-    })
-}
 /// Content's validation work of one moved-directory case, for the receipt.
 fn walked(built: &Built, what: &str) {
     evidence(format_args!(
@@ -78,37 +56,7 @@ fn file_calls(log: &Log) -> u64 {
 }
 
 // Non-root inode with no link: nothing for the inode, no content construction.
-
-#[test]
-fn a_base_file_unlinked_while_held_is_absent_and_never_constructed() {
-    let b = Bench::new("cs-held");
-    let mut d = Drive::new(&b);
-    let held = hold(&b, 2);
-    d.write("file", 0, b"written before the unlink");
-    d.remove("file");
-    d.remove("alias");
-    // A descriptor write after the last name is gone.
-    let later = Operation::WriteOpen {
-        file: held,
-        position: Position::At(4),
-        data: b"held".as_slice().into(),
-    };
-    assert!(matches!(b.run(later, T1).unwrap(), Outcome::Applied { .. }));
-
-    let recording = Recording::new(&b.overlay);
-    let built = build_over(&b, &recording, &d.model, "held");
-    let log = recording.log.borrow();
-    let row = inode(&log, 2).expect("the held file keeps its captured row");
-    assert_eq!((row.nlink, row.born), (0, 0));
-    assert!(absent(&b.fixture.store, built.root, 2));
-    assert_eq!(built.work.files_constructed, 0);
-    assert_eq!(built.work.tombstones_skipped, 1);
-    assert_eq!(file_calls(&log), 0, "no file work for a held orphan");
-    assert_eq!(record(&b, &built.taken, VALUE, 2), None);
-    drop(log);
-    built.release(&b);
-    b.overlay.close_file(held).unwrap();
-}
+// The cases with a real descriptor or lookup are in captured_namespace_holds.rs.
 
 #[test]
 fn a_removed_base_directory_keeps_its_whiteouts_and_has_no_value() {
@@ -175,7 +123,7 @@ fn inodes_created_and_removed_inside_the_capture_are_never_constructed() {
 // Names under a parent created and removed inside the capture: header dropped.
 
 #[test]
-fn names_under_a_fresh_removed_directory_never_reach_the_update() {
+fn a_fresh_removed_directory_and_whatever_is_captured_under_it_never_reach_the_update() {
     let b = Bench::new("cs-dropped");
     let mut d = Drive::new(&b);
     let gone = d.mkdir("gone", 0o755);
@@ -194,12 +142,23 @@ fn names_under_a_fresh_removed_directory_never_reach_the_update() {
     let log = recording.log.borrow();
     // Whatever rows the capture still holds under the two tombstones, each
     // such parent is dropped exactly once and is never opened by the update.
+    // The expected count comes from the capture's own rows: when the capture
+    // holds no row under either tombstone this is 0 == 0 and shows only that
+    // nothing else is dropped. The receipt line states which it was. A header
+    // that is certainly dropped is the injected-row case in
+    // captured_namespace_perturbed.rs and the held case in
+    // captured_namespace_holds.rs.
     let mut parents: Vec<u64> = names(&log)
         .into_iter()
         .map(|row| row.0)
         .filter(|parent| [gone, sub].contains(parent))
         .collect();
     parents.dedup();
+    evidence(format_args!(
+        "R4-3 dropped: tombstone parents with captured name rows = {}, headers_dropped = {}",
+        parents.len(),
+        built.work.headers_dropped
+    ));
     assert_eq!(built.work.headers_dropped, parents.len() as u64);
     for serial in [gone, sub] {
         assert_eq!(record(&b, &built.taken, HEADER, serial), None);

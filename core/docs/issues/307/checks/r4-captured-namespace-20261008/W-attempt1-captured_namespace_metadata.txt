@@ -1,0 +1,25 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_metadata-f14dc8757fd8e3bd --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 2 tests
+test a_metadata_patch_keeps_every_other_key_and_its_value_root ... FAILED
+test the_walker_compares_the_complete_attribute_key_set ... ok
+
+failures:
+
+---- a_metadata_patch_keeps_every_other_key_and_its_value_root stdout ----
+
+thread 'a_metadata_patch_keeps_every_other_key_and_its_value_root' panicked at crates/layerfs-workspace/tests/captured_namespace_metadata.rs:230:5:
+assertion `left == right` failed
+  left: (3, 1)
+ right: (4, 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_metadata_patch_keeps_every_other_key_and_its_value_root
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 101

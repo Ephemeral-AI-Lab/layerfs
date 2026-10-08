@@ -1,0 +1,17 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD dd6891ebe, uncommitted product/test paths=18, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/namespace_daemon-1a47b18e7f042b62 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 8 tests
+test a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture ... ok
+test closed_and_stopped_services_return_exact_outcomes_without_effect ... ok
+test concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs ... ok
+test concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exact ... ok
+test opposing_directory_moves_from_real_threads_never_form_a_cycle ... ok
+test orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup ... ok
+test orphans::non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer ... ok
+test payload_complete_operations_have_indexed_work_through_the_real_owner ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.22s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 0

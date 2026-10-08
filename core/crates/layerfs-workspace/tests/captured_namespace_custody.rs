@@ -1,6 +1,10 @@
 //! R4-9 on the producer side: a failing provider or a rejecting consumer ends
 //! the one attempt with its documented label, the first original failure in
-//! exactly one custody slot, no later request and nothing released.
+//! exactly one custody slot, no later request and nothing released. The sweep
+//! fails the first, a middle and the last call of each of the thirteen call
+//! kinds of one fixed scenario, not every call, and names the slot each must
+//! land in before it runs. Refusals caused by changed rows rather than failed
+//! calls are in captured_namespace_perturbed.rs.
 mod common;
 mod harness;
 mod oracle;
@@ -16,6 +20,7 @@ use producer::{
     build_taken, construct, evidence, injected, record, release, retained, slots, take, Call,
     Drive, Recording, Refused, Reject, Slot, Taken, BACKING, CALLS, CONTEXT, FILE, ORIGINAL,
 };
+use std::collections::BTreeMap;
 
 /// Labels a failing file may end with: its own, or the namespace's when the
 /// file's preparation refused before any construction.
@@ -61,19 +66,7 @@ fn the_scenario_succeeds_and_uses_every_provider_call() {
     let taken = take(&b);
     let built = build_taken(&b, &recording, taken, &d.model, "clean");
     let log = recording.log.borrow();
-    for call in [
-        Call::InodePage,
-        Call::InodePoint,
-        Call::NamePage,
-        Call::ParentPage,
-        Call::NamePoint,
-        Call::Symlink,
-        Call::RunStep,
-        Call::NamespaceApply,
-        Call::NamespaceGet,
-        Call::NamespaceKeys,
-        Call::FileApply,
-    ] {
+    for call in CALLS {
         assert!(log.count(call) > 0, "{call:?} was never needed");
     }
     assert_eq!((log.failed, log.after_failure), (None, 0));
@@ -82,28 +75,112 @@ fn the_scenario_succeeds_and_uses_every_provider_call() {
     built.release(&b);
 }
 
+/// Where the one original failure of a failed call must be kept.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Kept {
+    /// `custody.failure`: a reader call or a point of the namespace itself.
+    Namespace,
+    /// `custody.records.failure`: a record job of the namespace's own scope.
+    NamespaceRecords,
+    /// `custody.file`, in the file custody's own `failure`.
+    File,
+    /// `custody.file`, in the file custody's `records.failure`.
+    FileRecords,
+}
+/// The expected slot of each call kind, stated before any failure is run.
+/// Inode points come from two callers: the name pass asks one per finished
+/// parent before the first inode page, and each file's own preparation asks
+/// its inode afterwards. `parent_points` is the number of the former.
+fn expected(call: Call, nth: u64, parent_points: u64) -> Kept {
+    match call {
+        Call::InodePage | Call::NamePage | Call::ParentPage | Call::NamePoint | Call::Symlink => {
+            Kept::Namespace
+        }
+        Call::InodePoint if nth < parent_points => Kept::Namespace,
+        Call::InodePoint | Call::RunStep => Kept::File,
+        Call::NamespaceApply
+        | Call::NamespaceGet
+        | Call::NamespaceContains
+        | Call::NamespaceKeys => Kept::NamespaceRecords,
+        Call::FileApply | Call::FileRead => Kept::FileRecords,
+    }
+}
+/// The slot that really holds the injected failure, with exactly one held.
+fn kept(attempt: &CapturedNamespaceAttempt, call: Call, taken: &Taken, what: &str) -> Kept {
+    let custody = &attempt.custody;
+    let held = slots(custody);
+    assert_eq!(held.len(), 1, "{what}: {held:?} in {custody:#?}");
+    match held[0] {
+        Slot::Failure => {
+            assert_eq!(injected(&custody.failure), Some(call), "{what}");
+            Kept::Namespace
+        }
+        Slot::Records => {
+            assert_eq!(injected(&custody.records.failure), Some(call), "{what}");
+            assert_eq!(custody.records.scope.file_scope, 0, "{what}");
+            Kept::NamespaceRecords
+        }
+        Slot::File => {
+            let file = custody.file.as_ref().unwrap();
+            assert_eq!(file.records.scope.file_scope, file.serial, "{what}");
+            assert_eq!(file.records.scope.owner, taken.operation, "{what}");
+            match (injected(&file.failure), injected(&file.records.failure)) {
+                (Some(found), None) => {
+                    assert_eq!(found, call, "{what}");
+                    assert!(file.records.failure.is_none(), "{what}: {file:#?}");
+                    Kept::File
+                }
+                (None, Some(found)) => {
+                    assert_eq!(found, call, "{what}");
+                    assert!(file.failure.is_none(), "{what}: {file:#?}");
+                    Kept::FileRecords
+                }
+                other => panic!("{what}: {other:?} inside the file custody: {file:#?}"),
+            }
+        }
+    }
+}
+
 #[test]
-fn every_single_provider_failure_ends_the_attempt_with_one_original_in_one_slot() {
-    // The call counts of the unfailed attempt select the first, a middle and
-    // the last call of each kind. Every run repeats the same fixed scenario.
-    let counts = {
+fn the_first_middle_and_last_failure_of_each_call_kind_lands_in_its_expected_slot() {
+    // The unfailed attempt gives the call counts and, from the order of its
+    // calls, how many inode points belong to the name pass. Every run repeats
+    // the same fixed scenario.
+    let (counts, parent_points) = {
         let b = Bench::new("cu-sweep-count");
         let mut d = Drive::new(&b);
         scenario(&mut d);
         let recording = Recording::new(&b.overlay);
         let taken = take(&b);
         let built = build_taken(&b, &recording, taken, &d.model, "count");
-        let counts = recording.log.borrow().counts.clone();
+        let log = recording.log.borrow();
+        let counts: BTreeMap<Call, u64> = CALLS
+            .into_iter()
+            .map(|call| (call, log.count(call)))
+            .collect();
+        // One point per parent of the name sequence, all before the first
+        // inode page; every later point follows it.
+        let parents = log.parents().len();
+        let first_page = log.sequence(Call::InodePage)[0];
+        let points = log.sequence(Call::InodePoint);
+        assert!(parents > 0 && parents < points.len());
+        assert!(points[..parents].iter().all(|seq| *seq < first_page));
+        assert!(points[parents..].iter().all(|seq| *seq > first_page));
+        drop(log);
         built.release(&b);
-        counts
+        (counts, parents as u64)
     };
     let mut attempts = 0;
+    let mut seen = BTreeMap::<String, u64>::new();
     for call in CALLS {
-        let count = counts.get(&call).copied().unwrap_or(0);
-        if count == 0 {
-            continue;
-        }
+        let count = counts[&call];
+        assert!(count > 0, "{call:?} never occurs in the scenario");
         let mut selected = vec![0, count / 2, count - 1];
+        if call == Call::InodePoint {
+            // Both callers, at their boundary as well.
+            selected.extend([parent_points - 1, parent_points]);
+        }
+        selected.sort_unstable();
         selected.dedup();
         for nth in selected {
             attempts += 1;
@@ -126,31 +203,13 @@ fn every_single_provider_failure_ends_the_attempt_with_one_original_in_one_slot(
                 (custody.reader, custody.operation),
                 (taken.reader, taken.operation)
             );
-            let held = slots(custody);
-            assert_eq!(held.len(), 1, "{what}: {held:?} in {custody:#?}");
-            match held[0] {
-                Slot::Failure => {
-                    assert_eq!(injected(&custody.failure), Some(call), "{what}");
-                    assert_eq!(refusal, ORIGINAL, "{what}");
-                }
-                Slot::Records => {
-                    assert_eq!(injected(&custody.records.failure), Some(call), "{what}");
-                    assert_eq!(refusal, BACKING, "{what}");
-                    assert_eq!(custody.records.scope.file_scope, 0);
-                }
-                Slot::File => {
-                    let file = custody.file.as_ref().unwrap();
-                    assert!(
-                        file.failure.is_some() != file.records.failure.is_some(),
-                        "{what}: one original inside the file custody: {file:#?}"
-                    );
-                    assert_eq!(
-                        injected(&file.failure).or(injected(&file.records.failure)),
-                        Some(call),
-                        "{what}"
-                    );
-                    assert_eq!(file.records.scope.file_scope, file.serial);
-                    assert_eq!(file.records.scope.owner, taken.operation);
+            let wanted = expected(call, nth, parent_points);
+            let found = kept(&attempt, call, &taken, &what);
+            assert_eq!(found, wanted, "{what}: kept in the wrong slot");
+            match wanted {
+                Kept::Namespace => assert_eq!(refusal, ORIGINAL, "{what}"),
+                Kept::NamespaceRecords => assert_eq!(refusal, BACKING, "{what}"),
+                Kept::File | Kept::FileRecords => {
                     assert!(FILE_LABELS.contains(&refusal), "{what}: {refusal}");
                 }
             }
@@ -161,9 +220,9 @@ fn every_single_provider_failure_ends_the_attempt_with_one_original_in_one_slot(
                 assert_eq!(work.header_opens + work.value_opens + work.fresh_opens, 0);
             }
             retained(&b, &taken);
+            *seen.entry(format!("{found:?}")).or_default() += 1;
             evidence(format_args!(
-                "R4-9 sweep {what}: slot={:?} label={refusal:?} calls={} after_failure={}",
-                held[0],
+                "R4-9 sweep {what}: kept={found:?} label={refusal:?} calls={} after_failure={}",
                 log.total(),
                 log.after_failure
             ));
@@ -171,7 +230,12 @@ fn every_single_provider_failure_ends_the_attempt_with_one_original_in_one_slot(
             release(&b, taken, attempt.custody);
         }
     }
-    assert!(attempts >= 15, "only {attempts} failures were exercised");
+    // Thirteen kinds, at least their first and last call, and all four slots.
+    assert!(attempts >= 26, "only {attempts} failures were exercised");
+    assert_eq!(seen.len(), 4, "{seen:?}");
+    evidence(format_args!(
+        "R4-9 sweep: {attempts} failures, by slot {seen:?}, counts {counts:?}"
+    ));
 }
 
 /// The scenario, one injected failure and the refused attempt.

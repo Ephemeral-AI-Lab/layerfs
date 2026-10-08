@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_rebound-fae3eeb6ce1c17d4 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 8 tests
+test a_base_directory_moved_away_and_back_keeps_its_stored_values_with_no_territory_walk ... R3 row 4 moved and returned: validation ValidationWork { objects_read: 3, read_waves: 2, inode_demands: 2, inode_pages_read: 1, directory_pages_read: 1, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 0, prefetch: 1, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, placements: 0, ancestry_steps: 0, territory_directories: 0, territory_entries: 0, peak_window_rows: 2, in_place_scans: 0, in_place_rows: 0, in_place_directories: 0 }
+ok
+test a_base_directory_moved_twice_in_one_capture_is_bound_once ... R3 row 4 moved twice: validation ValidationWork { objects_read: 19, read_waves: 13, inode_demands: 13, inode_pages_read: 7, directory_pages_read: 6, entries_examined: 2, inode_pages_by_site: ValidationReadSites { allocation: 1, prefetch: 1, bindings: 0, aliases: 0, cycles: 5, reachability: 0 }, placements: 3, ancestry_steps: 6, territory_directories: 2, territory_entries: 2, peak_window_rows: 7, in_place_scans: 2, in_place_rows: 2, in_place_directories: 0 }
+ok
+test a_directory_is_replaced_by_a_symlink_and_a_symlink_by_a_directory ... ok
+test a_directory_removed_and_made_again_under_its_name_is_a_new_inode ... ok
+test a_directory_renamed_over_an_empty_directory_replaces_it ... ok
+test a_directory_rescued_from_a_directory_removed_in_the_same_capture_survives ... R3 row 4 rescued: captured name rows under the removed new directory = false, headers_dropped = 0, validation ValidationWork { objects_read: 5, read_waves: 2, inode_demands: 4, inode_pages_read: 1, directory_pages_read: 1, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 0, prefetch: 1, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, placements: 2, ancestry_steps: 4, territory_directories: 0, territory_entries: 0, peak_window_rows: 4, in_place_scans: 0, in_place_rows: 0, in_place_directories: 0 }
+ok
+test a_removed_file_and_symlink_are_replaced_by_directories_with_children ... ok
+test a_removed_stored_directory_tree_is_replaced_by_a_file ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

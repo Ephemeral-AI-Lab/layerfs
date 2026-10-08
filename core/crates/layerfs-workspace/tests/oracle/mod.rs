@@ -1,18 +1,28 @@
 //! Independent namespace model and complete canonical walk for the captured
 //! namespace proofs. The model advances by this file's own rules over paths.
 //! It reads no captured row, producer record or producer counter; the walk
-//! reads a constructed root only to be compared against the model.
+//! reads a constructed root only to be compared against the model. The walk
+//! also decodes the whole inode table and every attribute tree itself, so an
+//! inode no name reaches and an attribute key nobody asked for are both seen.
 #![allow(dead_code)]
 use crate::common::Store;
 use layerfs_content::{
-    filesystem::{FilesystemRead, FilesystemRootId, PathName},
+    filesystem::{
+        attributes::{decode_attribute_page, read_value, AttributeEntry, AttributePage},
+        inode::codec::{decode_inode_page, InodePage},
+        FilesystemRead, FilesystemRootId, PathName,
+    },
     object::inode_leaf::{InodeKind, InodeValue},
-    read_all, ContentError, ObjectId,
+    read_all, AuthenticatedObjects, ContentError, ObjectId,
 };
 use layerfs_telemetry::timer::Timing;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub type Stamp = (i64, u32);
+/// One attribute outside the two typed portable keys: domain, key, value.
+pub type Extra = (String, Vec<u8>, Vec<u8>);
+/// A bound no decoded attribute value of these proofs approaches.
+const VALUE_BYTES: usize = 65_536;
 /// The shared fixture's one metadata time.
 pub const BASE: Stamp = (i64::MAX, 999_999_999);
 
@@ -33,10 +43,14 @@ struct Node {
     body: Body,
     mode: u32,
     mtime: Stamp,
+    /// Every other attribute, in key order. No operation changes them.
+    extra: Vec<Extra>,
 }
 /// One path of a complete comparison. `links` is the canonical count: zero
 /// for the root, the number of names for everything else. `identity` is the
 /// least path naming the same inode, so equal maps mean equal alias classes.
+/// `extra` is every attribute beside mode and mtime, so equal rows mean the
+/// same complete attribute key set with the same values.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Seen {
     pub kind: Kind,
@@ -45,6 +59,7 @@ pub struct Seen {
     pub links: u64,
     pub payload: Vec<u8>,
     pub identity: Vec<u8>,
+    pub extra: Vec<Extra>,
 }
 impl std::fmt::Debug for Seen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -54,7 +69,7 @@ impl std::fmt::Debug for Seen {
             .fold(0_u64, |sum, byte| sum.wrapping_mul(131) ^ u64::from(*byte));
         write!(
             f,
-            "{:?} mode={:o} mtime={:?} links={} bytes={} sum={sum:x} head={:?} identity={:?}",
+            "{:?} mode={:o} mtime={:?} links={} bytes={} sum={sum:x} head={:?} identity={:?} extra={:?}",
             self.kind,
             self.mode,
             self.mtime,
@@ -62,6 +77,7 @@ impl std::fmt::Debug for Seen {
             self.payload.len(),
             String::from_utf8_lossy(&self.payload[..self.payload.len().min(16)]),
             short(&self.identity),
+            self.extra,
         )
     }
 }
@@ -103,6 +119,7 @@ impl Model {
                 body: Body::Directory(BTreeMap::new()),
                 mode,
                 mtime,
+                extra: Vec::new(),
             }],
         }
     }
@@ -128,6 +145,7 @@ impl Model {
             body,
             mode,
             mtime: BASE,
+            extra: Vec::new(),
         });
         assert!(self.names(parent).insert(name.to_vec(), id).is_none());
         id
@@ -192,6 +210,7 @@ impl Model {
             body,
             mode,
             mtime: now,
+            extra: Vec::new(),
         });
         assert!(
             self.names(parent).insert(name.to_vec(), id).is_none(),
@@ -287,6 +306,21 @@ impl Model {
         node.mtime = now;
         true
     }
+    /// A mapped store: only its bytes below the current size land, so the
+    /// size never changes; a store wholly beyond it changes nothing.
+    pub fn store(&mut self, path: &str, offset: u64, data: &[u8], now: Stamp) -> bool {
+        let size = self.bytes(path).len() as u64;
+        let kept = size.saturating_sub(offset).min(data.len() as u64) as usize;
+        let id = self.id(path);
+        self.write_node(id, offset, &data[..kept], now)
+    }
+    /// An attribute of the base that no operation of these proofs changes.
+    pub fn attribute(&mut self, path: &str, domain: &str, key: &[u8], value: &[u8]) {
+        let id = self.id(path);
+        let extra = &mut self.nodes[id].extra;
+        extra.push((domain.to_owned(), key.to_vec(), value.to_vec()));
+        extra.sort();
+    }
     pub fn chmod(&mut self, path: &str, mode: u32) -> bool {
         let id = self.id(path);
         let changed = self.nodes[id].mode != mode;
@@ -340,6 +374,7 @@ impl Model {
                     links: if id == 0 { 0 } else { names },
                     payload,
                     identity,
+                    extra: node.extra.clone(),
                 };
                 (path, seen)
             })
@@ -354,6 +389,9 @@ pub struct Walked {
     pub serials: BTreeMap<Vec<u8>, u64>,
     /// Every regular file's content root with its exact byte length.
     pub files: Vec<(ObjectId, u64)>,
+    /// Every row of the inode table, decoded page by page. Its serials are
+    /// exactly the serials the walk reached from the root.
+    pub table: BTreeMap<u64, InodeValue>,
 }
 impl Walked {
     pub fn serial(&self, path: &str) -> u64 {
@@ -362,6 +400,72 @@ impl Walked {
     pub fn has(&self, path: &str) -> bool {
         self.serials.contains_key(path.as_bytes())
     }
+}
+/// Every row of the root's inode table, read by decoding its pages directly:
+/// the table itself, not what a name happens to reach.
+pub fn table(store: &Store, root: FilesystemRootId) -> BTreeMap<u64, InodeValue> {
+    let reader = FilesystemRead::new(store, root).unwrap();
+    let mut rows = BTreeMap::new();
+    let mut pending = vec![reader.root().inode_table()];
+    let mut visited = BTreeSet::new();
+    while let Some(id) = pending.pop() {
+        assert!(visited.insert(id), "an inode page is referenced twice");
+        let canonical = store.read_canonical_batch(&[id]).unwrap().remove(0);
+        match decode_inode_page(&canonical).unwrap() {
+            InodePage::Leaf { entries } => {
+                for (serial, value) in entries {
+                    assert!(
+                        rows.insert(serial, value).is_none(),
+                        "serial {serial} twice"
+                    );
+                }
+            }
+            InodePage::Branch { children, .. } => {
+                pending.extend(children.into_iter().map(|(_, child)| child));
+            }
+        }
+    }
+    rows
+}
+/// Every entry of one attribute tree in key order, by decoding its pages.
+pub fn attributes(store: &Store, root: ObjectId) -> Vec<AttributeEntry> {
+    let mut all = Vec::new();
+    let mut pending = vec![root];
+    let mut visited = BTreeSet::new();
+    while let Some(id) = pending.pop() {
+        assert!(visited.insert(id), "an attribute page is referenced twice");
+        let canonical = store.read_canonical_batch(&[id]).unwrap().remove(0);
+        match decode_attribute_page(&canonical).unwrap() {
+            AttributePage::Leaf { entries, .. } => all.extend(entries),
+            AttributePage::Branch { children, .. } => {
+                pending.extend(children.into_iter().map(|(_, child)| child));
+            }
+        }
+    }
+    all.sort_by(|left, right| left.key.cmp(&right.key));
+    all
+}
+/// The complete key set of one inode: exactly one mode, exactly one mtime,
+/// and every other attribute with its value.
+fn extra(store: &Store, metadata_root: ObjectId, what: &str) -> Vec<Extra> {
+    let entries = attributes(store, metadata_root);
+    let (mut modes, mut mtimes, mut others) = (0, 0, Vec::new());
+    for entry in entries {
+        if entry.key.is_mode() {
+            modes += 1;
+        } else if entry.key.is_mtime() {
+            mtimes += 1;
+        } else {
+            let value = read_value(store, entry.value_root, VALUE_BYTES).unwrap();
+            others.push((
+                entry.key.domain().to_owned(),
+                entry.key.key().to_vec(),
+                value,
+            ));
+        }
+    }
+    assert_eq!((modes, mtimes), (1, 1), "{what}: portable keys");
+    others
 }
 pub fn walk(store: &Store, root: FilesystemRootId) -> Walked {
     let mut reader = FilesystemRead::new(store, root).unwrap();
@@ -386,7 +490,18 @@ pub fn walk(store: &Store, root: FilesystemRootId) -> Walked {
                         pending.push((join(&path, name.as_bytes()), *child));
                     }
                     match page.continuation {
-                        Some(next) => after = Some(next),
+                        Some(next) => {
+                            // A listing that does not advance fails here.
+                            assert!(
+                                after
+                                    .as_ref()
+                                    .is_none_or(|last| last.as_bytes() < next.as_bytes()),
+                                "{}: the listing did not advance past {:?}",
+                                short(&path),
+                                after
+                            );
+                            after = Some(next);
+                        }
                         None => break,
                     }
                 }
@@ -414,6 +529,7 @@ pub fn walk(store: &Store, root: FilesystemRootId) -> Walked {
             links: value.namespace_ref_count,
             payload,
             identity: Vec::new(),
+            extra: extra(store, value.metadata_root, &short(&path)),
         };
         rows.push((path, serial, seen));
     }
@@ -424,10 +540,22 @@ pub fn walk(store: &Store, root: FilesystemRootId) -> Walked {
             *entry = path.clone();
         }
     }
-    let serials = rows
+    let serials: BTreeMap<Vec<u8>, u64> = rows
         .iter()
         .map(|(path, serial, _)| (path.clone(), *serial))
         .collect();
+    // The inode table holds exactly what the walk reached: an inode that no
+    // name reaches is a difference, not something the walk cannot see.
+    let table = table(store, root);
+    let reached: BTreeSet<u64> = serials.values().copied().collect();
+    let stored: BTreeSet<u64> = table.keys().copied().collect();
+    assert_eq!(
+        stored,
+        reached,
+        "the inode table and the walk from the root differ: unreachable {:?}, missing {:?}",
+        stored.difference(&reached).collect::<Vec<_>>(),
+        reached.difference(&stored).collect::<Vec<_>>()
+    );
     let flat = rows
         .into_iter()
         .map(|(path, serial, mut seen)| {
@@ -439,6 +567,7 @@ pub fn walk(store: &Store, root: FilesystemRootId) -> Walked {
         flat,
         serials,
         files,
+        table,
     }
 }
 /// Reports the first differing paths instead of two whole trees.
@@ -467,21 +596,29 @@ pub fn assert_same(expected: &Flat, actual: &Flat, what: &str) {
         &wrong[..wrong.len().min(8)]
     );
 }
-/// Every name, kind, mode, time, link count, byte, target and alias class of
-/// the constructed root equals the model.
+/// Every name, kind, mode, time, link count, byte, target, alias class and
+/// attribute key of the constructed root equals the model, and its inode
+/// table holds no inode beyond the ones the model names.
 pub fn assert_tree(store: &Store, root: FilesystemRootId, model: &Model, what: &str) -> Walked {
     let walked = walk(store, root);
     assert_same(&model.flat(), &walked.flat, what);
     walked
 }
-/// Whether the root's inode table has no value at all for this serial.
+/// Whether the root's inode table has no value at all for this serial: both
+/// Content's point read and the decoded table say so.
 pub fn absent(store: &Store, root: FilesystemRootId, serial: u64) -> bool {
     let mut reader = FilesystemRead::new(store, root).unwrap();
-    match reader.resolve_inode(serial) {
+    let point = match reader.resolve_inode(serial) {
         Err(ContentError::PathNotFound) => true,
         Ok(_) => false,
         Err(error) => panic!("serial {serial}: {error:?}"),
-    }
+    };
+    assert_eq!(
+        point,
+        !table(store, root).contains_key(&serial),
+        "serial {serial}: the point read and the decoded table disagree"
+    );
+    point
 }
 /// The stored inode value of one serial, for root-identity comparisons.
 pub fn value(store: &Store, root: FilesystemRootId, serial: u64) -> InodeValue {

@@ -1,0 +1,24 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_order-a175b2447d8bd11b --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 2 tests
+test each_captured_page_is_applied_before_the_next_page_is_requested ... FAILED
+test mutations_published_between_producer_passes_do_not_reach_the_captured_root ... R4-1 later mutations: inode pages=2 parent pages=30 name points=150
+ok
+
+failures:
+
+---- each_captured_page_is_applied_before_the_next_page_is_requested stdout ----
+
+thread 'each_captured_page_is_applied_before_the_next_page_is_requested' panicked at crates/layerfs-workspace/tests/producer/mod.rs:756:17:
+kind 0x46530001 serial 1000 was applied twice
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    each_captured_page_is_applied_before_the_next_page_is_requested
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 101

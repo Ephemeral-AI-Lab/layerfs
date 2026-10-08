@@ -1,0 +1,14 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_perturbed-8a5a962b74dcddf1 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 4 tests
+test a_name_under_a_parent_created_and_removed_in_the_capture_is_dropped ... ok
+test a_second_binding_of_a_stored_directory_is_refused_as_multiple_parents ... R4-2 multiple parents: offered 17 objects, 2 after the seal with roles [DirectoryLeaf, DirectoryLeaf], parent pages of 7 = 7, points = 4
+ok
+test a_stored_directory_bound_only_below_itself_is_refused_as_a_cycle ... ok
+test a_whiteout_over_a_name_the_base_does_not_bind_changes_nothing ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

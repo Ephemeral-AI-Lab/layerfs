@@ -6,7 +6,14 @@ mod harness;
 mod oracle;
 mod producer;
 use harness::Bench;
-use oracle::{absent, assert_tree, value, Model};
+use layerfs_content::{
+    filesystem::{
+        inode::codec::{decode_inode_page, encode_inode_page, InodePage},
+        FilesystemRead, FilesystemRootId,
+    },
+    AuthenticatedObjects, ObjectId,
+};
+use oracle::{absent, assert_tree, value, walk, Model};
 use producer::{build_taken, take, Drive};
 
 #[test]
@@ -17,6 +24,37 @@ fn the_model_of_the_fixture_is_the_base_root() {
     assert_eq!(walked.serial(""), 1);
     assert_eq!(walked.serial("file"), walked.serial("alias"));
     assert_eq!(walked.serial(".git/index"), walked.serial("output/result"));
+}
+
+/// The walk is not blind to an inode no name reaches: the fixture's root with
+/// one more row in its inode table, encoded by Content's own page codec, fails
+/// the comparison that every helper of the oracle makes.
+#[test]
+#[should_panic(expected = "the inode table and the walk from the root differ: unreachable [99]")]
+fn the_walk_fails_on_an_inode_that_no_name_reaches() {
+    let b = Bench::new("cn-unreachable");
+    let store = &b.fixture.store;
+    let root = FilesystemRead::new(store, b.fixture.root).unwrap().root();
+    let page = store
+        .read_canonical_batch(&[root.inode_table()])
+        .unwrap()
+        .remove(0);
+    let InodePage::Leaf { mut entries } = decode_inode_page(&page).unwrap() else {
+        panic!("the fixture's inode table is one leaf page");
+    };
+    // The symlink's own value again under a serial nothing binds.
+    let unreachable = entries.iter().find(|row| row.0 == 3).unwrap().1;
+    entries.push((99, unreachable));
+    let table = encode_inode_page(&InodePage::Leaf { entries }).unwrap();
+    let table_id = ObjectId::for_bytes(&table);
+    let crafted = root.with_inode_table(table_id).encode().unwrap();
+    let crafted_id = ObjectId::for_bytes(&crafted);
+    {
+        let mut objects = store.objects.lock().unwrap();
+        objects.insert(table_id, table);
+        objects.insert(crafted_id, crafted);
+    }
+    walk(store, FilesystemRootId(crafted_id));
 }
 
 #[test]

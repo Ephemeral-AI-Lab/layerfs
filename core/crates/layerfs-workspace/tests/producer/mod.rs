@@ -1,10 +1,12 @@
 //! Shared drive of the captured namespace producer over the direct harness:
-//! paired model mutations, one capture and attempt, a recording and failing
-//! provider and rejecting consumers. Everything goes through the public API.
+//! paired model mutations, real open and lookup holds, one capture and
+//! attempt, a recording, failing, interleaving and row-perturbing provider and
+//! counting or rejecting consumers. Everything goes through the public API.
 #![allow(dead_code)]
 use crate::common::{name, Store};
 use crate::harness::Bench;
 use crate::oracle::{self, Model, Stamp, Walked};
+use layerfs_content::object::inode_leaf::InodeKind as CanonicalKind;
 use layerfs_content::{
     filesystem::{FilesystemRootId, FilesystemUpdateCounters, SymlinkTarget},
     ConstructionPolicy, ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId,
@@ -13,7 +15,8 @@ use layerfs_content::{
 use layerfs_overlay::{
     Capture, CapturedReader, CapturedRunCursor, CapturedRunReply, DirectoryEntry,
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope, Inode,
-    MaintenanceCursor, OperationOwner, Overlay, WRITE_WINDOW,
+    InodeKind, LookupOwner, MaintenanceCursor, OpenFile, OperationOwner, Overlay, PAGE_ROWS,
+    WRITE_WINDOW,
 };
 use layerfs_telemetry::timer::Timing;
 use layerfs_workspace::{
@@ -145,6 +148,49 @@ pub fn release(b: &Bench, taken: Taken, custody: CapturedNamespaceCustody) {
     b.overlay.release_captured_reader(taken.reader).unwrap();
     b.overlay.release_operation(taken.operation).unwrap();
 }
+/// The current fact of one inode: its local row, or its base record restated
+/// the way the Workspace restates it before a first local row exists.
+pub fn fact(b: &Bench, serial: u64) -> Inode {
+    if let Some(local) = b.overlay.inode(b.route(), serial).unwrap() {
+        return local;
+    }
+    let stat = b.stat(serial).unwrap();
+    let (kind, entries) = match stat.kind {
+        CanonicalKind::RegularFile => (InodeKind::File, 0),
+        CanonicalKind::Symlink => (InodeKind::Symlink, 0),
+        CanonicalKind::Directory => (InodeKind::Directory, b.list(serial).0.len() as u64),
+    };
+    Inode {
+        serial,
+        kind,
+        mode: u16::try_from(stat.metadata.mode).unwrap(),
+        mtime_seconds: stat.metadata.mtime_seconds,
+        mtime_nanoseconds: stat.metadata.mtime_nanoseconds,
+        nlink: stat.namespace_refs,
+        size: stat.logical_len,
+        inherited_cutoff: stat.logical_len,
+        born: 0,
+        entries,
+    }
+}
+/// A real writable descriptor of a file: the engine's own open custody.
+pub fn hold(b: &Bench, serial: u64) -> OpenFile {
+    let fact = fact(b, serial);
+    b.window(|view| {
+        b.overlay
+            .open_file(view.source(), request(), &fact, true)
+            .unwrap()
+    })
+}
+/// A real kernel-lookup hold of any inode: no descriptor, only the lookup.
+pub fn look(b: &Bench, serial: u64) -> LookupOwner {
+    let fact = fact(b, serial);
+    b.window(|view| {
+        b.overlay
+            .acquire_lookup(view.source(), request(), &fact, 1)
+            .unwrap()
+    })
+}
 /// Bounded maintenance until idle.
 pub fn drain(b: &Bench) {
     let mut cursor = MaintenanceCursor::default();
@@ -259,9 +305,13 @@ pub struct Drive<'b> {
 }
 impl<'b> Drive<'b> {
     pub fn new(b: &'b Bench) -> Self {
+        Self::with_model(b, Model::fixture(&b.fixture.bytes))
+    }
+    /// The same drive over another content-built root and its restated model.
+    pub fn with_model(b: &'b Bench, model: Model) -> Self {
         Self {
             b,
-            model: Model::fixture(&b.fixture.bytes),
+            model,
             clock: 1_800_000_000,
         }
     }
@@ -452,6 +502,59 @@ impl<'b> Drive<'b> {
         };
         self.run(operation, now, changed, path);
     }
+    /// A descriptor write to a file that still has the name `path`.
+    pub fn write_open(&mut self, file: OpenFile, path: &str, offset: u64, data: &[u8]) {
+        assert!(data.len() <= WRITE_WINDOW, "one write window per step");
+        assert_eq!(self.serial(path), file.serial());
+        let (now, stamp) = self.tick();
+        let changed = self.model.write(path, offset, data, stamp);
+        let operation = Operation::WriteOpen {
+            file,
+            position: Position::At(offset),
+            data: data.into(),
+        };
+        self.run(operation, now, changed, path);
+    }
+    /// A mapped store through a descriptor of the file named `path`.
+    pub fn store_open(&mut self, file: OpenFile, path: &str, offset: u64, data: &[u8]) {
+        assert!(data.len() <= WRITE_WINDOW, "one write window per step");
+        assert_eq!(self.serial(path), file.serial());
+        let (now, stamp) = self.tick();
+        let changed = self.model.store(path, offset, data, stamp);
+        let operation = Operation::StoreOpen {
+            file,
+            offset,
+            data: data.into(),
+        };
+        self.run(operation, now, changed, path);
+    }
+    /// ftruncate through a descriptor of the file named `path`.
+    pub fn resize_open(&mut self, file: OpenFile, path: &str, size: u64) {
+        assert_eq!(self.serial(path), file.serial());
+        let (now, stamp) = self.tick();
+        let changed = self.model.resize(path, size, stamp);
+        let operation = Operation::SetOpenAttributes {
+            file,
+            mode: None,
+            mtime: None,
+            size: Some(size),
+        };
+        self.run(operation, now, changed, path);
+    }
+    /// A descriptor write to a file no name reaches any more. It publishes,
+    /// and the model, which holds only what a name reaches, does not change.
+    pub fn orphan_write(&mut self, file: OpenFile, offset: u64, data: &[u8]) {
+        let (now, _) = self.tick();
+        let operation = Operation::WriteOpen {
+            file,
+            position: Position::At(offset),
+            data: data.into(),
+        };
+        assert!(
+            matches!(self.b.run(operation, now), Ok(Outcome::Applied { .. })),
+            "a descriptor write to a held orphan publishes"
+        );
+    }
     pub fn chmod(&mut self, path: &str, mode: u32) {
         self.attributes(path, Some(mode), None, None);
     }
@@ -559,8 +662,10 @@ pub struct KeyWindow {
     pub after: Option<[u8; 32]>,
     pub keys: Vec<[u8; 32]>,
 }
-/// One guarded record job: its file scope and ordered keys.
+/// One guarded record job: its file scope and ordered keys, with its place
+/// in the one global order of provider calls.
 pub struct Applied {
+    pub seq: u64,
     pub file_scope: u64,
     pub keys: Vec<IndexedOperationRecordKey>,
 }
@@ -568,6 +673,8 @@ pub struct Applied {
 #[derive(Default)]
 pub struct Log {
     pub counts: BTreeMap<Call, u64>,
+    /// The global sequence number of every call, in call order, per kind.
+    pub order: BTreeMap<Call, Vec<u64>>,
     pub inode_pages: Vec<(u64, Vec<Inode>)>,
     pub inode_points: Vec<(u64, Option<Inode>)>,
     pub name_pages: Vec<NamePage>,
@@ -588,15 +695,93 @@ impl Log {
     pub fn total(&self) -> u64 {
         self.counts.values().sum()
     }
+    /// The global sequence numbers of the calls of one kind, in call order.
+    pub fn sequence(&self, call: Call) -> &[u64] {
+        self.order.get(&call).map_or(&[], Vec::as_slice)
+    }
+    /// The captured inode row of one serial, if the capture returned one.
+    pub fn inode(&self, serial: u64) -> Option<Inode> {
+        self.inode_pages
+            .iter()
+            .flat_map(|(_, rows)| rows)
+            .find(|row| row.serial == serial)
+            .cloned()
+    }
+    /// The whole-capture answer for one name: not a row, a whiteout, a serial.
+    pub fn bound(&self, parent: u64, name: &str) -> Option<Option<u64>> {
+        self.name_pages
+            .iter()
+            .flat_map(|page| &page.rows)
+            .find(|row| row.parent == parent && row.name == name.as_bytes())
+            .map(|row| row.serial)
+    }
+    /// Every parent with at least one row in the whole-capture name sequence.
+    pub fn parents(&self) -> Vec<u64> {
+        let mut parents: Vec<u64> = self
+            .name_pages
+            .iter()
+            .flat_map(|page| &page.rows)
+            .map(|row| row.parent)
+            .collect();
+        parents.dedup();
+        parents
+    }
+    /// Calls only a file's own construction makes.
+    pub fn file_calls(&self) -> u64 {
+        self.count(Call::RunStep) + self.count(Call::FileApply) + self.count(Call::FileRead)
+    }
+    /// Guarded record jobs under one file's own scope.
+    pub fn scoped(&self, serial: u64) -> usize {
+        self.applies
+            .iter()
+            .filter(|job| job.file_scope == serial)
+            .count()
+    }
+    /// The sequence number of the job that sealed the namespace's context:
+    /// the second job of its own scope that writes the context key.
+    pub fn sealed_at(&self) -> Option<u64> {
+        self.applies
+            .iter()
+            .filter(|job| job.file_scope == 0 && job.keys.iter().any(|key| key.kind == CONTEXT))
+            .nth(1)
+            .map(|job| job.seq)
+    }
+    /// Where each header, value and fresh rank of the producer was applied,
+    /// by kind and serial. Content's own update records share the scope under
+    /// other kinds and are not the producer's rows. A producer key applied
+    /// twice is a failure of the proof.
+    pub fn applied(&self) -> BTreeMap<(u32, u64), u64> {
+        let mut all = BTreeMap::new();
+        for job in self.applies.iter().filter(|job| job.file_scope == 0) {
+            let own = |key: &&IndexedOperationRecordKey| {
+                PRODUCER_KINDS.contains(&key.kind) && key.kind != CONTEXT
+            };
+            for key in job.keys.iter().filter(own) {
+                let serial = u64::from_be_bytes(key.key[24..].try_into().unwrap());
+                assert!(
+                    all.insert((key.kind, serial), job.seq).is_none(),
+                    "kind {:#x} serial {serial} was applied twice",
+                    key.kind
+                );
+            }
+        }
+        all
+    }
 }
-/// Wraps the direct Overlay: records every row and answer and fails exactly
-/// the selected call once. It adds no behavior and never repeats a call.
+/// One real mutation run immediately before the selected provider call.
+type Hook<'a> = (Call, u64, Box<dyn FnOnce() + 'a>);
+/// Wraps the direct Overlay: records every row and answer with one global
+/// sequence number per call, fails exactly the selected call once, and runs a
+/// selected real mutation before a selected call. It never repeats a call.
 pub struct Recording<'a> {
     overlay: &'a Overlay,
     pub log: RefCell<Log>,
     fault: Cell<Option<(Call, u64)>>,
     /// Set by a rejecting consumer: later calls count as after the failure.
     halted: Rc<Cell<bool>>,
+    /// The number of provider calls made so far, shared with a consumer.
+    clock: Rc<Cell<u64>>,
+    hooks: RefCell<Vec<Hook<'a>>>,
 }
 impl<'a> Recording<'a> {
     pub fn new(overlay: &'a Overlay) -> Self {
@@ -605,7 +790,20 @@ impl<'a> Recording<'a> {
             log: RefCell::new(Log::default()),
             fault: Cell::new(None),
             halted: Rc::new(Cell::new(false)),
+            clock: Rc::new(Cell::new(0)),
+            hooks: RefCell::new(Vec::new()),
         }
+    }
+    /// Runs `mutation` once, immediately before the call of this kind with
+    /// zero-based index `nth` reaches the engine.
+    pub fn before(&self, call: Call, nth: u64, mutation: impl FnOnce() + 'a) {
+        self.hooks
+            .borrow_mut()
+            .push((call, nth, Box::new(mutation)));
+    }
+    /// Hooks that never ran: the selected call was never made.
+    pub fn pending_hooks(&self) -> usize {
+        self.hooks.borrow().len()
     }
     /// Fails the call of this kind with zero-based index `nth`.
     pub fn failing(overlay: &'a Overlay, call: Call, nth: u64) -> Self {
@@ -613,12 +811,27 @@ impl<'a> Recording<'a> {
         recording.fault.set(Some((call, nth)));
         recording
     }
-    fn enter(&self, call: Call) -> WorkspaceResult<()> {
+    /// Counts and orders one call; returns its global sequence number.
+    fn enter(&self, call: Call) -> WorkspaceResult<u64> {
+        let index = self.log.borrow().count(call);
+        let hook = {
+            let mut hooks = self.hooks.borrow_mut();
+            hooks
+                .iter()
+                .position(|hook| hook.0 == call && hook.1 == index)
+                .map(|found| hooks.remove(found).2)
+        };
+        if let Some(mutation) = hook {
+            mutation();
+        }
+        let seq = self.clock.get() + 1;
+        self.clock.set(seq);
         let mut log = self.log.borrow_mut();
         if log.failed.is_some() || self.halted.get() {
             log.after_failure += 1;
         }
         *log.counts.entry(call).or_default() += 1;
+        log.order.entry(call).or_default().push(seq);
         match self.fault.get() {
             Some((wanted, 0)) if wanted == call => {
                 self.fault.set(None);
@@ -627,9 +840,9 @@ impl<'a> Recording<'a> {
             }
             Some((wanted, left)) if wanted == call => {
                 self.fault.set(Some((wanted, left - 1)));
-                Ok(())
+                Ok(seq)
             }
-            _ => Ok(()),
+            _ => Ok(seq),
         }
     }
     fn page(&self, rows: usize) {
@@ -768,12 +981,13 @@ impl OverlayOperationRecords for Recording<'_> {
         scope: IndexedOperationRecordScope,
         changes: Vec<IndexedOperationRecordChange>,
     ) -> WorkspaceResult<OperationRecordReply<OperationRecordApply>> {
-        self.enter(if own(scope) {
+        let seq = self.enter(if own(scope) {
             Call::NamespaceApply
         } else {
             Call::FileApply
         })?;
         self.log.borrow_mut().applies.push(Applied {
+            seq,
             file_scope: scope.file_scope,
             keys: changes.iter().map(|change| change.key).collect(),
         });
@@ -817,6 +1031,210 @@ impl OverlayOperationRecords for Recording<'_> {
             });
         }
         Ok(reply)
+    }
+}
+
+/// Changes rows, not calls: name rows a Workspace never writes are added to
+/// what the capture really holds, consistently in the whole-capture sequence,
+/// in the parent's own sequence and in the name point. An injected row
+/// replaces the real row of the same parent and name. Every other call goes
+/// to the recording provider unchanged, and the log holds what was answered.
+pub struct Perturbed<'a> {
+    pub inner: Recording<'a>,
+    injected: Vec<DirectoryEntry>,
+}
+impl<'a> Perturbed<'a> {
+    pub fn new(overlay: &'a Overlay, injected: Vec<DirectoryEntry>) -> Self {
+        Self {
+            inner: Recording::new(overlay),
+            injected,
+        }
+    }
+    /// The capture's real name rows with the injected rows, in key order.
+    /// The real sequence is read to its end with a cursor that must advance.
+    fn merged(&self, reader: CapturedReader) -> WorkspaceResult<Vec<DirectoryEntry>> {
+        let mut rows = BTreeMap::<(u64, Vec<u8>), DirectoryEntry>::new();
+        let mut after: Option<(u64, Vec<u8>)> = None;
+        loop {
+            let page = OverlayCapturedNamespace::captured_directory_entry_page(
+                self.inner.overlay,
+                reader,
+                after.clone(),
+            )?;
+            let short = page.len() < PAGE_ROWS;
+            for row in page {
+                let key = (row.parent, row.name.clone());
+                assert!(
+                    after.as_ref().is_none_or(|last| *last < key),
+                    "the real name sequence did not advance"
+                );
+                after = Some(key.clone());
+                rows.insert(key, row);
+            }
+            if short {
+                break;
+            }
+        }
+        for row in &self.injected {
+            rows.insert((row.parent, row.name.clone()), row.clone());
+        }
+        Ok(rows.into_values().collect())
+    }
+}
+impl OverlayCapturedRuns for Perturbed<'_> {
+    fn captured_inode(
+        &self,
+        reader: CapturedReader,
+        serial: u64,
+    ) -> WorkspaceResult<Option<Inode>> {
+        self.inner.captured_inode(reader, serial)
+    }
+    fn captured_run_step(&self, cursor: CapturedRunCursor) -> WorkspaceResult<CapturedRunReply> {
+        self.inner.captured_run_step(cursor)
+    }
+}
+impl OverlayCapturedNamespace for Perturbed<'_> {
+    fn captured_inode_page(
+        &self,
+        reader: CapturedReader,
+        after: u64,
+    ) -> WorkspaceResult<Vec<Inode>> {
+        self.inner.captured_inode_page(reader, after)
+    }
+    fn captured_directory_entry_page(
+        &self,
+        reader: CapturedReader,
+        after: Option<(u64, Vec<u8>)>,
+    ) -> WorkspaceResult<Vec<DirectoryEntry>> {
+        self.inner.enter(Call::NamePage)?;
+        let rows: Vec<DirectoryEntry> = self
+            .merged(reader)?
+            .into_iter()
+            .filter(|row| {
+                after
+                    .as_ref()
+                    .is_none_or(|last| (last.0, last.1.as_slice()) < (row.parent, &row.name[..]))
+            })
+            .take(PAGE_ROWS)
+            .collect();
+        self.inner.page(rows.len());
+        self.inner.log.borrow_mut().name_pages.push(NamePage {
+            after,
+            rows: rows.clone(),
+        });
+        Ok(rows)
+    }
+    fn captured_directory_entries(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        after: Option<Vec<u8>>,
+    ) -> WorkspaceResult<Vec<DirectoryEntry>> {
+        self.inner.enter(Call::ParentPage)?;
+        let rows: Vec<DirectoryEntry> = self
+            .merged(reader)?
+            .into_iter()
+            .filter(|row| row.parent == parent)
+            .filter(|row| after.as_ref().is_none_or(|last| *last < row.name))
+            .take(PAGE_ROWS)
+            .collect();
+        self.inner.page(rows.len());
+        self.inner.log.borrow_mut().parent_pages.push(ParentPage {
+            parent,
+            after,
+            rows: rows.clone(),
+        });
+        Ok(rows)
+    }
+    fn captured_directory_entry(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        name: &[u8],
+    ) -> WorkspaceResult<Option<DirectoryEntry>> {
+        self.inner.enter(Call::NamePoint)?;
+        let answer = self
+            .merged(reader)?
+            .into_iter()
+            .find(|row| row.parent == parent && row.name == name);
+        self.inner.log.borrow_mut().points.push(Point {
+            parent,
+            name: name.to_vec(),
+            answer: answer.clone(),
+        });
+        Ok(answer)
+    }
+    fn captured_symlink(&self, reader: CapturedReader, serial: u64) -> WorkspaceResult<Vec<u8>> {
+        self.inner.captured_symlink(reader, serial)
+    }
+}
+impl OverlayOperationRecords for Perturbed<'_> {
+    fn operation_record_contains(
+        &self,
+        scope: IndexedOperationRecordScope,
+        key: IndexedOperationRecordKey,
+    ) -> WorkspaceResult<OperationRecordReply<bool>> {
+        self.inner.operation_record_contains(scope, key)
+    }
+    fn operation_record_get(
+        &self,
+        scope: IndexedOperationRecordScope,
+        key: IndexedOperationRecordKey,
+    ) -> WorkspaceResult<OperationRecordReply<Option<Vec<u8>>>> {
+        self.inner.operation_record_get(scope, key)
+    }
+    fn operation_record_apply(
+        &self,
+        scope: IndexedOperationRecordScope,
+        changes: Vec<IndexedOperationRecordChange>,
+    ) -> WorkspaceResult<OperationRecordReply<OperationRecordApply>> {
+        self.inner.operation_record_apply(scope, changes)
+    }
+    fn operation_record_keys(
+        &self,
+        scope: IndexedOperationRecordScope,
+        kind: u32,
+        excluded: Option<[u8; 32]>,
+    ) -> WorkspaceResult<OperationRecordReply<Vec<[u8; 32]>>> {
+        self.inner.operation_record_keys(scope, kind, excluded)
+    }
+    fn operation_record_keys_after(
+        &self,
+        scope: IndexedOperationRecordScope,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> WorkspaceResult<OperationRecordReply<Vec<[u8; 32]>>> {
+        self.inner.operation_record_keys_after(scope, kind, after)
+    }
+}
+
+/// Accepts everything and records each offered object's role with the number
+/// of provider calls made before it, so an offer can be placed in the order.
+pub struct Counting {
+    pub store: Store,
+    pub offered: Vec<(ObjectRole, u64)>,
+    clock: Rc<Cell<u64>>,
+}
+impl Counting {
+    pub fn new(store: &Store, provider: &Recording<'_>) -> Self {
+        Self {
+            store: store.clone(),
+            offered: Vec::new(),
+            clock: provider.clock.clone(),
+        }
+    }
+    pub fn of(&self, role: ObjectRole) -> usize {
+        self.offered.iter().filter(|row| row.0 == role).count()
+    }
+    /// Objects offered after the provider call with this sequence number.
+    pub fn after(&self, seq: u64) -> usize {
+        self.offered.iter().filter(|row| row.1 >= seq).count()
+    }
+}
+impl FinalizedConsumer for Counting {
+    fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        self.offered.push((object.role(), self.clock.get()));
+        self.store.accept(object)
     }
 }
 

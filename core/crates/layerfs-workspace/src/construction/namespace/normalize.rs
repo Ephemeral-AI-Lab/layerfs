@@ -15,7 +15,8 @@ use layerfs_overlay::{DirectoryEntry, Inode, InodeKind, PAGE_ROWS};
 use layerfs_telemetry::timer::{Active, TimingScope};
 
 /// The changes of one guarded job: at most PAGE_ROWS of them, flushed strictly
-/// ordered by kind and then serial. Never a namespace-sized collection.
+/// ordered by kind and then serial, and always before the next captured page
+/// is requested. Never a namespace-sized collection.
 #[derive(Default)]
 struct Writer {
     headers: Vec<EditRecordChange>,
@@ -144,6 +145,9 @@ pub(crate) fn names<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Siz
         if last {
             break;
         }
+        // Every header this page finished is applied before the next page is
+        // requested: nothing pending crosses a page boundary.
+        writer.flush(shared)?;
     }
     if let Some((current, changes)) = open {
         headers += header(provider, shared, facts, &mut writer, current, changes)?;
@@ -270,10 +274,12 @@ pub(crate) fn values<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Si
             totals.values += 1;
             add(&mut shared.borrow_mut().work.values_written, 1);
         }
+        // This page's values and ranks are applied before the next page is
+        // requested: one captured page and its records are resident at a time.
+        writer.flush(shared)?;
         if last {
             break;
         }
     }
-    writer.flush(shared)?;
     Ok(totals)
 }
