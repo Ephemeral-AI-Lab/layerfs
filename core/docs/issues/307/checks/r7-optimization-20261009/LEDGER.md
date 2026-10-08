@@ -96,3 +96,33 @@ P/cache cross-review fixes in progress: fsync/fsyncdir one-noop outcome, one chi
 Telemetry product source pending firstcompile/tests. Lead implements route-free allocated-domain read-only Cleanup in existing Overlay/owner/Service. Typed originalSuccess.native shrinks fatBox toconcreteBox for exact finalwork with no new retainedfact. Formatter max54+R (correction of earlier50), largest55numericvalues, bound4096B/64+R. All sourceclaims unverified runtime.
 
 Fresh-context review now available (temporarythreadlimit resolved); it found cross-channel diagnostic correlation ambiguity and13 originalMountWork fields inaccessible at post-drain Revoke/Close failure. Amendment20 plans caller-scoped transient metadata for correlation before sourcefix. Failed-prefix fields remain explicit UNAVAILABLE with exact originalcustody, no full-failure observationclaim.
+
+## Preparation after 78edb4748
+
+Committed LOC confirmation matches tree 7093045929a324c831bb0ef6e7636c9a9a68ea2b:
+combined 184297, core 118880, active 76006, delta 0. Product remains uncommitted.
+Build 022 failed missing public docs; 023 then found the lead's incorrect fixture
+field; 024 found that the corrected field requires BranchId decoding. Both test
+source mistakes were corrected from existing fixture/identity APIs. Build 025
+passed. Invocation 026 used an incorrect guessed executable suffix and failed
+before test execution; 027 uses the exact compiled path and passed. No failure
+receipt is relabelled.
+
+Proofs 027–030 passed: daemon cleanup 1 test, Overlay cleanup 2 tests, Bridge
+observations 4 tests, SDK observed facade 3 tests. The cleanup point query used
+one statement, 55 VM steps and zero full-scan steps beside both 64 and 256
+unrelated namespaces, with actual host profile and EXPLAIN retained. Cache proof
+031 passed 12 host tests with two platform skips; 032 passed all 12 on Linux.
+No mounted timing or real-binary changed Commit proof has run.
+
+P dependency resolution 033 failed because unfiltered metadata attempted an
+uncached Redox-only package under offline mode. Linux-filtered locked metadata
+034 passed; release build 035 is pending. This does not authorize a dependency
+change. A second fresh-context reviewer spawn again hit the thread limit; the
+earlier completed review remains evidence, with follow-up cross-review required.
+
+Source review identified zero delivered per-reader Storage and global Resources
+fields. Amendment 36 prospectively assigns their bounded observations, including
+the exact charged observer work, before edits. This is Stage 0 instrumentation,
+not an accepted optimization. Correction: inventory 000 established that node
+was absent from that shell PATH, not absent from the entire pinned image.
