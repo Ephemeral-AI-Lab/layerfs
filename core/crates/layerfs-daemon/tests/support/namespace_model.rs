@@ -2,7 +2,10 @@
 //! advanced by this file's own POSIX rules and never reads product output; the
 //! canonical walker reads a published root only to be compared against it.
 use layerfs_content::{
-    filesystem::{FilesystemRead, FilesystemRootId, PathName},
+    filesystem::{
+        inode::codec::{decode_inode_page, InodePage},
+        FilesystemRead, FilesystemRootId, PathName,
+    },
     object::inode_leaf::InodeKind,
     AuthenticatedObjects, ObjectId,
 };
@@ -383,7 +386,10 @@ pub fn canonical(objects: &dyn AuthenticatedObjects, root: ObjectId) -> Flat {
                         pending.push((join(&path, name.as_bytes()), *child));
                     }
                     match page.continuation {
-                        Some(next) => after = Some(next),
+                        Some(next) => {
+                            assert!(after.as_ref() < Some(&next), "listing did not advance");
+                            after = Some(next);
+                        }
                         None => break,
                     }
                 }
@@ -421,5 +427,25 @@ pub fn canonical(objects: &dyn AuthenticatedObjects, root: ObjectId) -> Flat {
             },
         });
     }
+    // Nothing may hide outside the tree: the inode table holds exactly the
+    // inodes the walk reached, so a released subtree left in it is seen.
+    let mut walked = rows.iter().map(|row| row.serial).collect::<Vec<_>>();
+    walked.sort_unstable();
+    walked.dedup();
+    let mut stored = Vec::new();
+    let mut pages = vec![reader.root().inode_table()];
+    while let Some(page) = pages.pop() {
+        match decode_inode_page(&objects.read_canonical(page).unwrap()).unwrap() {
+            InodePage::Leaf { entries } => stored.extend(entries.iter().map(|(serial, _)| *serial)),
+            InodePage::Branch { children, .. } => {
+                pages.extend(children.iter().map(|(_, child)| *child))
+            }
+        }
+    }
+    stored.sort_unstable();
+    assert_eq!(
+        stored, walked,
+        "inode table differs from the reachable tree"
+    );
     identified(rows)
 }

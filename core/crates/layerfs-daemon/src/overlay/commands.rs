@@ -382,8 +382,14 @@ impl Command {
                 after.as_ref().map_or(0, Vec::capacity),
                 PAGE_ROWS * (std::mem::size_of::<DirectoryEntry>() + 255),
             ),
-            // A target is at most one cell of locally decided bytes.
-            Self::ReaderSymlink { .. } => (0, CELL_BYTES),
+            // The job composes one captured cell window like any captured read
+            // and replies with at most that cell of locally decided bytes.
+            Self::ReaderSymlink { .. } => (
+                0,
+                CELL_BYTES
+                    + CELL_BYTES.div_ceil(8)
+                    + std::mem::size_of::<layerfs_overlay::LocalRead>(),
+            ),
             // Decided bytes plus one inherited bit per byte of the window.
             Self::SourceRead { length, .. }
             | Self::FileRead { length, .. }

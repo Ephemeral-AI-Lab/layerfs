@@ -13,9 +13,10 @@ use drive::{evidence, job, live, settled, Do, Rig, Session};
 use layerfs_content::{filesystem::validate::ValidationWork, ObjectId};
 use layerfs_daemon::{
     store::{BoundWorkspace, CommitError, CommitFailure, CommitPhase, CommitSuccess},
-    Command, Completion, OwnerWork, Response,
+    Command, Completion, OwnerError, OwnerWork, Response,
 };
 use layerfs_history::CommitStagedOutcome;
+use layerfs_overlay::OverlayError;
 use layerfs_telemetry::timer::Timing;
 use layerfs_workspace::{
     CapturedNamespace, CapturedNamespaceAttempt, CapturedNamespaceWork, WorkspaceError,
@@ -24,6 +25,7 @@ use std::{
     fs,
     os::unix::fs::{symlink, PermissionsExt},
     path::Path,
+    sync::Arc,
 };
 
 /// What one producer attempt left for its caller, read before any release.
@@ -123,13 +125,18 @@ fn commit(
         let (reader, owner) = (custody.reader, custody.operation);
         // The Content result of a failed attempt is only a label. The driver
         // must classify the first original cause, so the closure hands it that
-        // cause: namespace or reader first, else the failing file's, else the
-        // record scope's. An owner completion goes back as the completion.
+        // cause: namespace or reader first, else the failing file's own or its
+        // record scope's, else the namespace record scope's.
         let mut custody = custody;
         let original = custody
             .failure
             .take()
-            .or_else(|| custody.file.as_mut().and_then(|file| file.failure.take()))
+            .or_else(|| {
+                custody
+                    .file
+                    .as_mut()
+                    .and_then(|file| file.failure.take().or_else(|| file.records.failure.take()))
+            })
             .or_else(|| custody.records.failure.take());
         drop(custody);
         if fault != Fault::ReleasedReader {
@@ -140,16 +147,38 @@ fn commit(
         assert!(job(overlay, route, Command::ReleaseOperation(owner))
             .result()
             .is_ok());
+        // A base read that failed left its exact cause with the Store ports.
+        let provider = || {
+            operation
+                .ports()
+                .failure()
+                .unwrap_or_else(|error| Some(Arc::new(error)))
+        };
         match (result, original) {
-            (Ok(built), _) => Ok(built.root),
+            (Ok(built), original) => {
+                assert!(original.is_none(), "a result with a retained cause");
+                Ok(built.root)
+            }
+            // An owner job goes back as what it was: its completion, or the
+            // refusal that never admitted it.
             (Err(_), Some(WorkspaceError::Service(service))) => {
                 Err(match service.downcast::<Completion>() {
                     Ok(completion) => CommitError::Completion(completion),
-                    Err(other) => CommitError::Workspace(WorkspaceError::Service(other)),
+                    Err(other) => match other.downcast::<OwnerError>() {
+                        Ok(owner) => CommitError::Owner(*owner),
+                        Err(other) => CommitError::Workspace(WorkspaceError::Service(other)),
+                    },
                 })
             }
+            (Err(_), Some(WorkspaceError::Content(error))) => Err(CommitError::Content {
+                error,
+                provider: provider(),
+            }),
             (Err(_), Some(original)) => Err(CommitError::Workspace(original)),
-            (Err(label), None) => Err(CommitError::from(label)),
+            (Err(error), None) => Err(CommitError::Content {
+                error,
+                provider: provider(),
+            }),
         }
     });
     (result, produced)
@@ -419,7 +448,11 @@ fn a_failed_attempt_keeps_its_custody_publishes_nothing_and_a_later_commit_is_ex
     // The closure returned the original refused owner completion, which the
     // driver classifies as a definite local refusal and settles once.
     assert!(
-        matches!(failure.error, CommitError::Completion(_)),
+        matches!(
+            &failure.error,
+            CommitError::Completion(refused)
+                if matches!(refused.result(), Err(OwnerError::Overlay(OverlayError::Stale)))
+        ),
         "{:?}",
         failure.error
     );
@@ -446,6 +479,19 @@ fn a_failed_attempt_keeps_its_custody_publishes_nothing_and_a_later_commit_is_ex
     drop(failure);
     assert_eq!(first.snapshot().unwrap(), original);
     model::assert_same(&expected, &live(&first), "live view after the failure");
+    // The failed capture's rows are folded forward. Inodes born in it are then
+    // written, renamed, removed and added to before the next capture.
+    session.all(&[
+        Do::Write("a/one", 5, b"again after the failure"),
+        Do::Create("made/later", 0o600),
+        Do::Write("made/later", 0, b"born after the failed capture"),
+        Do::Rename("made/b", "a/b"),
+        Do::Mkdir("made/inner", 0o700),
+        Do::Rename("a/b/c", "made/inner/c"),
+        Do::Remove("keep/alias2"),
+    ]);
+    let expected = session.model.flat();
+    model::assert_same(&expected, &live(&first), "live view before the next Commit");
     let (result, produced) = commit(&rig, &first, 2, || {}, Fault::None);
     let root = committed(&result);
     drop(result);
@@ -509,6 +555,11 @@ fn cost(bulk: usize) -> Cost {
         Do::Link("top.txt", "keep/top-alias"),
         Do::Symlink("keep/ln", b"inner2"),
         Do::Chmod("empty", 0o700),
+        // Inside the part of the base that grows: one changed file, one
+        // removed name and one new name in the directory that widens.
+        Do::Write("bulk/d-000/f-00", 0, b"CHANGED"),
+        Do::Remove("bulk/d-001/f-01"),
+        Do::Create("bulk/new", 0o644),
     ]);
     let expected = session.model.flat();
     settled(&rig.owner.client(), 0);
@@ -623,4 +674,58 @@ fn a_fixed_small_change_costs_the_same_counted_work_as_the_base_grows() {
         assert_eq!(topology(&other.validation), topology(&small.validation));
     }
     assert!(small.work.largest_page <= 64 && small.validation.peak_window_rows <= 64);
+}
+
+#[test]
+fn two_workspaces_on_one_owner_capture_only_their_own_rows() {
+    let rig = Rig::new("captured-commit-two", |source| tree(source, 0));
+    let (first, second) = (rig.bind(1), rig.bind(2));
+    let mut one = Session::new(&first, rig.base.clone());
+    let mut two = Session::new(&second, rig.base.clone());
+    // The same parents, names and inodes, changed differently in each route of
+    // the one Overlay database.
+    one.all(&[
+        Do::Write("a/one", 0, b"first workspace"),
+        Do::Create("a/shared-name", 0o644),
+        Do::Rename("keep/inner", "keep/renamed-by-first"),
+        Do::Remove("gone/x"),
+        Do::Symlink("wide/link", b"first"),
+    ]);
+    two.all(&[
+        Do::Write("a/one", 0, b"second workspace!"),
+        Do::Mkdir("a/shared-name", 0o755),
+        Do::Rename("keep/inner", "a/shared-name/inner"),
+        Do::Write("gone/x", 0, b"kept by second"),
+        Do::Symlink("wide/link", b"second"),
+    ]);
+    let (expected_one, expected_two) = (one.model.flat(), two.model.flat());
+    assert_ne!(expected_one, expected_two);
+    let (result, _) = commit(&rig, &first, 1, || {}, Fault::None);
+    let root_one = committed(&result);
+    drop(result);
+    model::assert_same(&expected_one, &rebound(&rig, 3, root_one), "first root");
+    model::assert_same(
+        &expected_two,
+        &live(&second),
+        "second view after first install",
+    );
+    let (result, _) = commit(&rig, &second, 2, || {}, Fault::None);
+    let root_two = committed(&result);
+    drop(result);
+    model::assert_same(&expected_two, &rebound(&rig, 4, root_two), "second root");
+    model::assert_same(
+        &expected_one,
+        &live(&first),
+        "first view keeps its own state",
+    );
+    evidence(format_args!(
+        "CAPTURED_COMMIT_TWO routes=2 same_keys=true first_paths={} second_paths={} each_root=own_model",
+        expected_one.len(),
+        expected_two.len()
+    ));
+    settled(&rig.owner.client(), 0);
+    rig.close(&first);
+    rig.close(&second);
+    drop((first, second));
+    rig.finish();
 }

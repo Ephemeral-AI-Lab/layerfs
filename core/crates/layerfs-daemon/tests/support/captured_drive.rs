@@ -361,7 +361,10 @@ pub fn live(workspace: &BoundWorkspace) -> Flat {
                             pending.push((model::join(&path, name), *child));
                         }
                         match page.continuation {
-                            Some(next) => after = Some(next),
+                            Some(next) => {
+                                assert!(after.as_ref() < Some(&next), "listing did not advance");
+                                after = Some(next);
+                            }
                             None => break,
                         }
                     }
