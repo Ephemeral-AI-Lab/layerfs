@@ -1,0 +1,28 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD fc7fc7037, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_states-7a14351a5344cb60 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 19 tests
+test a_base_directory_and_symlink_keep_their_content_roots_under_new_metadata ... ok
+test a_base_directory_moves_under_a_fresh_directory_inside_a_base_directory ... ok
+test a_base_file_unlinked_while_held_is_absent_and_never_constructed ... ok
+test a_base_file_with_changed_content_gets_a_new_content_root ... ok
+test a_base_file_with_only_metadata_changes_keeps_its_content_root ... ok
+test a_fresh_file_is_constructed_from_its_captured_runs ... ok
+test a_fresh_symlink_takes_exactly_its_captured_target ... ok
+test a_moved_base_directory_has_no_row_and_no_value ... ok
+test a_moved_fresh_directory_keeps_its_serial_and_children ... ok
+test a_removed_base_directory_keeps_its_whiteouts_and_has_no_value ... ok
+test a_removed_name_and_a_rebound_name_are_exact_changes ... ok
+test a_stored_parent_and_child_directory_are_inverted ... ok
+test fresh_directories_get_headers_even_with_no_name ... ok
+test inodes_created_and_removed_inside_the_capture_are_never_constructed ... ok
+test link_count_changes_alone_keep_content_and_metadata_roots ... ok
+test names_under_a_fresh_removed_directory_never_reach_the_update ... ok
+test restated_bindings_and_removals_over_nothing_change_no_name ... ok
+test the_root_is_a_patched_metadata_value_and_never_fresh ... ok
+test two_base_directories_exchange_their_names ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

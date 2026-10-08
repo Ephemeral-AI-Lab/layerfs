@@ -1,0 +1,47 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD fc7fc7037, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_states-7a14351a5344cb60 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 19 tests
+test a_base_directory_and_symlink_keep_their_content_roots_under_new_metadata ... ok
+test a_base_directory_moves_under_a_fresh_directory_inside_a_base_directory ... R4-3 moved under fresh: validation ValidationWork { objects_read: 14, read_waves: 8, inode_demands: 11, inode_pages_read: 5, directory_pages_read: 3, entries_examined: 2, inode_pages_by_site: ValidationReadSites { allocation: 1, prefetch: 1, bindings: 0, aliases: 0, cycles: 3, reachability: 0 }, placements: 3, ancestry_steps: 6, territory_directories: 2, territory_entries: 3, peak_window_rows: 7, in_place_scans: 1, in_place_rows: 1, in_place_directories: 0 }
+ok
+test a_base_file_unlinked_while_held_is_absent_and_never_constructed ... ok
+test a_base_file_with_changed_content_gets_a_new_content_root ... ok
+test a_base_file_with_only_metadata_changes_keeps_its_content_root ... ok
+test a_fresh_file_is_constructed_from_its_captured_runs ... ok
+test a_fresh_symlink_takes_exactly_its_captured_target ... ok
+test a_moved_base_directory_has_no_row_and_no_value ... R4-3 moved base directory: validation ValidationWork { objects_read: 6, read_waves: 5, inode_demands: 4, inode_pages_read: 3, directory_pages_read: 2, entries_examined: 1, inode_pages_by_site: ValidationReadSites { allocation: 0, prefetch: 1, bindings: 0, aliases: 0, cycles: 2, reachability: 0 }, placements: 1, ancestry_steps: 2, territory_directories: 1, territory_entries: 1, peak_window_rows: 3, in_place_scans: 1, in_place_rows: 1, in_place_directories: 0 }
+ok
+test a_moved_fresh_directory_keeps_its_serial_and_children ... R4-3 moved fresh directory: validation ValidationWork { objects_read: 8, read_waves: 2, inode_demands: 8, inode_pages_read: 2, directory_pages_read: 0, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 1, prefetch: 1, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, placements: 2, ancestry_steps: 4, territory_directories: 0, territory_entries: 0, peak_window_rows: 7, in_place_scans: 0, in_place_rows: 0, in_place_directories: 0 }
+ok
+test a_removed_base_directory_keeps_its_whiteouts_and_has_no_value ... ok
+test a_removed_name_and_a_rebound_name_are_exact_changes ... ok
+test a_stored_parent_and_child_directory_are_inverted ... R4-3 inverted: validation ValidationWork { objects_read: 9, read_waves: 5, inode_demands: 6, inode_pages_read: 2, directory_pages_read: 3, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 0, prefetch: 1, bindings: 0, aliases: 0, cycles: 1, reachability: 0 }, placements: 2, ancestry_steps: 4, territory_directories: 0, territory_entries: 0, peak_window_rows: 5, in_place_scans: 2, in_place_rows: 3, in_place_directories: 0 }
+ok
+test fresh_directories_get_headers_even_with_no_name ... ok
+test inodes_created_and_removed_inside_the_capture_are_never_constructed ... ok
+test link_count_changes_alone_keep_content_and_metadata_roots ... ok
+test names_under_a_fresh_removed_directory_never_reach_the_update ... ok
+test restated_bindings_and_removals_over_nothing_change_no_name ... ok
+test the_root_is_a_patched_metadata_value_and_never_fresh ... ok
+test two_base_directories_exchange_their_names ... R4-3 swap: validation ValidationWork { objects_read: 4, read_waves: 2, inode_demands: 3, inode_pages_read: 1, directory_pages_read: 1, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 0, prefetch: 1, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, placements: 2, ancestry_steps: 4, territory_directories: 0, territory_entries: 0, peak_window_rows: 3, in_place_scans: 0, in_place_rows: 0, in_place_directories: 0 }
+FAILED
+
+failures:
+
+---- two_base_directories_exchange_their_names stdout ----
+
+thread 'two_base_directories_exchange_their_names' panicked at crates/layerfs-workspace/tests/captured_namespace_states.rs:609:5:
+assertion `left == right` failed
+  left: 0
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    two_base_directories_exchange_their_names
+
+test result: FAILED. 18 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 101

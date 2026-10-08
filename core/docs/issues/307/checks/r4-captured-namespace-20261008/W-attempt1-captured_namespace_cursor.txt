@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD fc7fc7037, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_cursor-93a11bb34eaad84e --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 3 tests
+test every_cursor_pass_and_point_answers_the_same_sealed_rows ... ok
+test work_follows_the_change_and_not_the_installed_base ... ok
+test work_grows_linearly_with_the_change_and_pages_stay_bounded ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 0

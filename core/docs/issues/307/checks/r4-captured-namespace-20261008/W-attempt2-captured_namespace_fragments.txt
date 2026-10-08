@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD fc7fc7037, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_fragments-2a87bce464916546 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 3 tests
+test a_hole_and_written_zeros_are_the_same_bytes ... ok
+test fragmented_writes_around_a_hole_of_a_new_file_give_one_root ... ok
+test fragmented_writes_of_a_base_file_give_one_root ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

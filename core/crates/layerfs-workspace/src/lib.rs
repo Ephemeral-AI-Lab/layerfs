@@ -36,6 +36,9 @@ pub use client::{CanonicalClient, ClientWork};
 pub use construction::{
     CapturedFileAttempt, CapturedFileCustody, CapturedFileEdits, CapturedFileWork,
 };
+pub use construction::{
+    CapturedNamespace, CapturedNamespaceAttempt, CapturedNamespaceCustody, CapturedNamespaceWork,
+};
 pub use construction::{EditBackingCustody, EditBackingWork, EditInputRefusal, IndexedEditRecords};
 pub use construction::{
     EditBackingCustody as ConstructionBackingCustody, EditBackingWork as ConstructionBackingWork,

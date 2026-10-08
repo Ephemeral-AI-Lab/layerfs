@@ -1,0 +1,61 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD fc7fc7037, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_custody-34c4ab61a8d6edfc --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 14 tests
+test a_consumer_that_rejects_a_file_root_leaves_the_file_custody ... ok
+test a_consumer_that_rejects_namespace_output_is_the_namespace_failure ... R4-9 reject FilesystemRoot: accepted=83 files_constructed=4 provider_calls=893
+R4-9 reject DirectoryLeaf: accepted=78 files_constructed=4 provider_calls=644
+R4-9 reject InodeLeaf: accepted=82 files_constructed=4 provider_calls=893
+R4-9 reject AttributeLeaf: accepted=6 files_constructed=0 provider_calls=7
+R4-9 reject FileState: accepted=2 files_constructed=0 provider_calls=7
+R4-9 reject Symlink: accepted=47 files_constructed=3 provider_calls=269
+ok
+test a_failed_captured_run_is_kept_as_the_whole_file_custody ... ok
+test a_failed_file_record_job_is_kept_inside_the_file_custody ... ok
+test a_failed_inode_page_is_the_namespace_failure_after_the_names ... ok
+test a_failed_name_page_is_the_namespace_failure_before_anything_is_sealed ... ok
+test a_failed_name_point_or_cursor_page_ends_the_sealed_update ... ok
+test a_failed_record_job_stays_in_the_record_custody ... ok
+test a_failed_symlink_target_read_is_the_namespace_failure ... ok
+test a_reader_of_another_operation_route_is_refused_before_any_request ... ok
+test a_released_reader_is_the_original_stale_refusal_of_the_engine ... ok
+test a_second_attempt_in_the_same_scope_is_refused_by_its_deciding_record ... ok
+test every_single_provider_failure_ends_the_attempt_with_one_original_in_one_slot ... R4-9 sweep InodePage #0 of 1: slot=Failure label="captured namespace original refusal" calls=7 after_failure=0
+R4-9 sweep InodePoint #0 of 7: slot=Failure label="captured namespace original refusal" calls=3 after_failure=0
+R4-9 sweep InodePoint #3 of 7: slot=File label="captured namespace file refusal" calls=8 after_failure=0
+R4-9 sweep InodePoint #6 of 7: slot=File label="captured namespace file refusal" calls=271 after_failure=0
+R4-9 sweep NamePage #0 of 1: slot=Failure label="captured namespace original refusal" calls=2 after_failure=0
+R4-9 sweep ParentPage #0 of 24: slot=Failure label="captured namespace original refusal" calls=283 after_failure=0
+R4-9 sweep ParentPage #12 of 24: slot=Failure label="captured namespace original refusal" calls=392 after_failure=0
+R4-9 sweep ParentPage #23 of 24: slot=Failure label="captured namespace original refusal" calls=660 after_failure=0
+R4-9 sweep NamePoint #0 of 16: slot=Failure label="captured namespace original refusal" calls=284 after_failure=0
+R4-9 sweep NamePoint #8 of 16: slot=Failure label="captured namespace original refusal" calls=356 after_failure=0
+R4-9 sweep NamePoint #15 of 16: slot=Failure label="captured namespace original refusal" calls=367 after_failure=0
+R4-9 sweep Symlink #0 of 1: slot=Failure label="captured namespace original refusal" calls=269 after_failure=0
+R4-9 sweep RunStep #0 of 128: slot=File label="captured namespace file refusal" calls=10 after_failure=0
+R4-9 sweep RunStep #64 of 128: slot=File label="captured namespace file refusal" calls=147 after_failure=0
+R4-9 sweep RunStep #127 of 128: slot=File label="captured file original refusal" calls=267 after_failure=0
+R4-9 sweep NamespaceApply #0 of 50: slot=Records label="indexed edit backing original refusal" calls=1 after_failure=0
+R4-9 sweep NamespaceApply #25 of 50: slot=Records label="indexed edit backing original refusal" calls=559 after_failure=0
+R4-9 sweep NamespaceApply #49 of 50: slot=Records label="indexed edit backing original refusal" calls=781 after_failure=0
+R4-9 sweep NamespaceGet #0 of 485: slot=Records label="indexed edit backing original refusal" calls=279 after_failure=0
+R4-9 sweep NamespaceGet #242 of 485: slot=Records label="indexed edit backing original refusal" calls=620 after_failure=0
+R4-9 sweep NamespaceGet #484 of 485: slot=Records label="indexed edit backing original refusal" calls=892 after_failure=0
+R4-9 sweep NamespaceContains #0 of 2: slot=Records label="indexed edit backing original refusal" calls=270 after_failure=0
+R4-9 sweep NamespaceContains #1 of 2: slot=Records label="indexed edit backing original refusal" calls=276 after_failure=0
+R4-9 sweep NamespaceKeys #0 of 44: slot=Records label="indexed edit backing original refusal" calls=281 after_failure=0
+R4-9 sweep NamespaceKeys #22 of 44: slot=Records label="indexed edit backing original refusal" calls=429 after_failure=0
+R4-9 sweep NamespaceKeys #43 of 44: slot=Records label="indexed edit backing original refusal" calls=893 after_failure=0
+R4-9 sweep FileApply #0 of 28: slot=File label="captured namespace file refusal" calls=9 after_failure=0
+R4-9 sweep FileApply #14 of 28: slot=File label="indexed edit backing original refusal" calls=78 after_failure=0
+R4-9 sweep FileApply #27 of 28: slot=File label="captured namespace file refusal" calls=273 after_failure=0
+R4-9 sweep FileRead #0 of 106: slot=File label="indexed edit backing original refusal" calls=12 after_failure=0
+R4-9 sweep FileRead #53 of 106: slot=File label="indexed edit backing original refusal" calls=168 after_failure=0
+R4-9 sweep FileRead #105 of 106: slot=File label="indexed edit backing original refusal" calls=275 after_failure=0
+ok
+test the_scenario_succeeds_and_uses_every_provider_call ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+
+R4_WALL seconds<=5 limit=100s lock_wait=0s
+EXIT 0

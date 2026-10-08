@@ -259,6 +259,16 @@ fn concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exac
     assert_eq!(service.lookup(1, "alias").unwrap().namespace_refs, 2);
     service.applied(rmdir(1, "shared"));
     assert_eq!(service.lookup(1, "shared"), None);
+    // The engine thread drops its own final credit after the consumer observes
+    // a completion: bound the wait for that release before the exact check.
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while service.client.diagnostics().unwrap().outstanding != 0 {
+        assert!(
+            std::time::Instant::now() < end,
+            "engine did not release its final credit"
+        );
+        thread::yield_now();
+    }
     let work = service.client.diagnostics().unwrap();
     assert!(
         work.completed[1] >= (2 * names.len()) as u64,

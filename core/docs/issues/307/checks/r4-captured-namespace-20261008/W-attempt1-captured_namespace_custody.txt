@@ -1,0 +1,37 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD fc7fc7037, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_custody-34c4ab61a8d6edfc --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 14 tests
+test a_consumer_that_rejects_a_file_root_leaves_the_file_custody ... FAILED
+test a_consumer_that_rejects_namespace_output_is_the_namespace_failure ... ok
+test a_failed_captured_run_is_kept_as_the_whole_file_custody ... ok
+test a_failed_file_record_job_is_kept_inside_the_file_custody ... ok
+test a_failed_inode_page_is_the_namespace_failure_after_the_names ... ok
+test a_failed_name_page_is_the_namespace_failure_before_anything_is_sealed ... ok
+test a_failed_name_point_or_cursor_page_ends_the_sealed_update ... ok
+test a_failed_record_job_stays_in_the_record_custody ... ok
+test a_failed_symlink_target_read_is_the_namespace_failure ... ok
+test a_reader_of_another_operation_route_is_refused_before_any_request ... ok
+test a_released_reader_is_the_original_stale_refusal_of_the_engine ... ok
+test a_second_attempt_in_the_same_scope_is_refused_by_its_deciding_record ... ok
+test every_single_provider_failure_ends_the_attempt_with_one_original_in_one_slot ... ok
+test the_scenario_succeeds_and_uses_every_provider_call ... ok
+
+failures:
+
+---- a_consumer_that_rejects_a_file_root_leaves_the_file_custody stdout ----
+
+thread 'a_consumer_that_rejects_a_file_root_leaves_the_file_custody' panicked at crates/layerfs-workspace/tests/captured_namespace_custody.rs:402:5:
+assertion `left == right` failed
+  left: [Failure]
+ right: [File]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_consumer_that_rejects_a_file_root_leaves_the_file_custody
+
+test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.29s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 101
