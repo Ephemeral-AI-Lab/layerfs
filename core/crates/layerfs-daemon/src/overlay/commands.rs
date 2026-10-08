@@ -109,6 +109,23 @@ pub enum Command {
         reader: CapturedReader,
         after: Option<(u64, Vec<u8>)>,
     },
+    /// One parent's sealed names after a binary name, whiteouts included.
+    ReaderParentDirectoryEntries {
+        reader: CapturedReader,
+        parent: u64,
+        after: Option<Vec<u8>>,
+    },
+    /// The exact sealed row of one name, never a lower or active row.
+    ReaderDirectoryEntry {
+        reader: CapturedReader,
+        parent: u64,
+        name: Vec<u8>,
+    },
+    /// The local target of a live symlink in the reader's sealed range.
+    ReaderSymlink {
+        reader: CapturedReader,
+        serial: u64,
+    },
     Resources {
         global: bool,
     },
@@ -242,6 +259,7 @@ pub enum Response {
     OperationRecord(Vec<OperationRecord>),
     Namespace(layerfs_workspace::JobOutcome),
     Read(Option<layerfs_overlay::LocalRead>),
+    Symlink(Vec<u8>),
     Done,
 }
 impl Command {
@@ -264,7 +282,10 @@ impl Command {
             | Self::CapturedRun(_)
             | Self::ReaderInodes { .. }
             | Self::ReaderInode { .. }
-            | Self::ReaderDirectoryEntries { .. } => ServiceClass::Read,
+            | Self::ReaderDirectoryEntries { .. }
+            | Self::ReaderParentDirectoryEntries { .. }
+            | Self::ReaderDirectoryEntry { .. }
+            | Self::ReaderSymlink { .. } => ServiceClass::Read,
             Self::OpenFile { .. }
             | Self::RetainedFile { .. }
             | Self::CloseFile(_)
@@ -357,6 +378,12 @@ impl Command {
                     + MASK_BYTES,
             ),
             Self::ReaderInode { .. } => (0, std::mem::size_of::<Inode>()),
+            Self::ReaderParentDirectoryEntries { after, .. } => (
+                after.as_ref().map_or(0, Vec::capacity),
+                PAGE_ROWS * (std::mem::size_of::<DirectoryEntry>() + 255),
+            ),
+            // A target is at most one cell of locally decided bytes.
+            Self::ReaderSymlink { .. } => (0, CELL_BYTES),
             // Decided bytes plus one inherited bit per byte of the window.
             Self::SourceRead { length, .. }
             | Self::FileRead { length, .. }
@@ -372,7 +399,7 @@ impl Command {
                 std::mem::size_of::<layerfs_workspace::NamespaceJob>() + job.charge(),
                 PAGE_ROWS * (std::mem::size_of::<layerfs_workspace::Need>() + 255),
             ),
-            Self::SourceDirectoryEntry { name, .. } => {
+            Self::SourceDirectoryEntry { name, .. } | Self::ReaderDirectoryEntry { name, .. } => {
                 (name.capacity(), std::mem::size_of::<DirectoryEntry>() + 255)
             }
             Self::SourceDirectoryEntries { after, .. } => (
@@ -461,6 +488,34 @@ impl Command {
                 }
                 db.reader_directory_entries(reader, after.as_ref().map(|(p, n)| (*p, n.as_slice())))
                     .map(Response::DirectoryEntries)
+            }
+            Self::ReaderParentDirectoryEntries {
+                reader,
+                parent,
+                after,
+            } => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.reader_parent_directory_entries(reader, parent, after.as_deref())
+                    .map(Response::DirectoryEntries)
+            }
+            Self::ReaderDirectoryEntry {
+                reader,
+                parent,
+                name,
+            } => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.reader_directory_entry(reader, parent, &name)
+                    .map(Response::DirectoryEntry)
+            }
+            Self::ReaderSymlink { reader, serial } => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.reader_symlink(reader, serial).map(Response::Symlink)
             }
             Self::AcquireLookup {
                 source,

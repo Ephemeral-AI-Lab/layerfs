@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 8dc5aa2a2, uncommitted product/test paths=15, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace-e5b58a877c39c78b --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 3 tests
+test direct_provider_pages_and_points_keep_the_exact_capture_after_install_and_close ... ok
+test owner_pages_preserve_original_failed_completion_and_unattempted_command ... ok
+test owner_parent_names_points_and_symlinks_keep_original_custody ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 0

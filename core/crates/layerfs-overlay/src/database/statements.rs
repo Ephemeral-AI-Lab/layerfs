@@ -55,6 +55,8 @@ pub(crate) const DIRECTORY_ENTRY_CAPTURE: &str = "SELECT parent,name,serial,inhe
 pub(crate) const SOURCE_NAMES: &str =
     "SELECT parent,name,serial,inherited FROM directory_entry INDEXED BY directory_entry_capture
     WHERE ns=?1 AND gen=?2 AND parent=?3 AND name>?4 ORDER BY name LIMIT 64";
+pub(crate) const CAPTURED_DIRECTORY_ENTRY: &str =
+    "SELECT serial,inherited FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
 pub(crate) const OPERATION_RECORD_PAGE: &str = "SELECT kind,key,value FROM operation_record
     WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64";
 pub(crate) const INODE_PUT: &str = "INSERT INTO inode

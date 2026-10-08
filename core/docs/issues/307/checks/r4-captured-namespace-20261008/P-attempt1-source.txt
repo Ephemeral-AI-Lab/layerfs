@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 8dc5aa2a2, uncommitted product/test paths=15, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/source-bbe134429b700afa --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 4 tests
+test ordered_source_directory_entry_windows_visit_only_parent_and_generation_with_runtime_evidence ... ok
+test source_changes_have_finite_plans_and_correlated_runtime_work ... ok
+test source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows ... ok
+test source_retains_selected_base_and_exact_close_custody_without_a_generation_pin ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

@@ -23,6 +23,23 @@ pub trait OverlayCapturedNamespace: OverlayCapturedRuns {
         reader: CapturedReader,
         after: Option<(u64, Vec<u8>)>,
     ) -> WorkspaceResult<Vec<DirectoryEntry>>;
+    /// At most PAGE_ROWS rows of exactly this parent, strictly after `after`
+    /// in binary name order, whiteouts included. Empty ends the sequence.
+    fn captured_directory_entries(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        after: Option<Vec<u8>>,
+    ) -> WorkspaceResult<Vec<DirectoryEntry>>;
+    /// The exact sealed row for this name, or None when the capture has none.
+    fn captured_directory_entry(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        name: &[u8],
+    ) -> WorkspaceResult<Option<DirectoryEntry>>;
+    /// The exact captured target of a live symlink in the reader's sealed range.
+    fn captured_symlink(&self, reader: CapturedReader, serial: u64) -> WorkspaceResult<Vec<u8>>;
 }
 
 impl OverlayCapturedNamespace for layerfs_overlay::Overlay {
@@ -46,5 +63,29 @@ impl OverlayCapturedNamespace for layerfs_overlay::Overlay {
                 .map(|(parent, name)| (*parent, name.as_slice())),
         )
         .map_err(Into::into)
+    }
+
+    fn captured_directory_entries(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        after: Option<Vec<u8>>,
+    ) -> WorkspaceResult<Vec<DirectoryEntry>> {
+        self.reader_parent_directory_entries(reader, parent, after.as_deref())
+            .map_err(Into::into)
+    }
+
+    fn captured_directory_entry(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        name: &[u8],
+    ) -> WorkspaceResult<Option<DirectoryEntry>> {
+        self.reader_directory_entry(reader, parent, name)
+            .map_err(Into::into)
+    }
+
+    fn captured_symlink(&self, reader: CapturedReader, serial: u64) -> WorkspaceResult<Vec<u8>> {
+        self.reader_symlink(reader, serial).map_err(Into::into)
     }
 }

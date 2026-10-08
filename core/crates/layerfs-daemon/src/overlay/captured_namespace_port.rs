@@ -51,4 +51,54 @@ impl OverlayCapturedNamespace for OwnerClient {
             _ => Err(WorkspaceError::Service(Box::new(done))),
         }
     }
+
+    fn captured_directory_entries(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        after: Option<Vec<u8>>,
+    ) -> WorkspaceResult<Vec<DirectoryEntry>> {
+        let done = self.captured_namespace_job(
+            reader,
+            Command::ReaderParentDirectoryEntries {
+                reader,
+                parent,
+                after,
+            },
+        )?;
+        match done.result() {
+            Ok(Response::DirectoryEntries(rows)) => Ok(rows.clone()),
+            _ => Err(WorkspaceError::Service(Box::new(done))),
+        }
+    }
+
+    fn captured_directory_entry(
+        &self,
+        reader: CapturedReader,
+        parent: u64,
+        name: &[u8],
+    ) -> WorkspaceResult<Option<DirectoryEntry>> {
+        // The command owns its name, so an unattempted job returns it intact.
+        let done = self.captured_namespace_job(
+            reader,
+            Command::ReaderDirectoryEntry {
+                reader,
+                parent,
+                name: name.to_vec(),
+            },
+        )?;
+        match done.result() {
+            Ok(Response::DirectoryEntry(row)) => Ok(row.clone()),
+            _ => Err(WorkspaceError::Service(Box::new(done))),
+        }
+    }
+
+    fn captured_symlink(&self, reader: CapturedReader, serial: u64) -> WorkspaceResult<Vec<u8>> {
+        let done =
+            self.captured_namespace_job(reader, Command::ReaderSymlink { reader, serial })?;
+        match done.result() {
+            Ok(Response::Symlink(target)) => Ok(target.clone()),
+            _ => Err(WorkspaceError::Service(Box::new(done))),
+        }
+    }
 }
