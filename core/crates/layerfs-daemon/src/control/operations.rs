@@ -50,10 +50,10 @@ impl Service {
             Request::Status(token) => self.status(*token),
             Request::Commit(token) => self.commit(*token, BoundWorkspace::commit_captured),
             Request::Unmount(token) => self.unmount(*token),
-            Request::ForceUnmount { .. } => Err(Failure::Rejected(
-                ControlCode::Invalid,
-                "forced unmount unavailable",
-            )),
+            Request::ForceUnmount {
+                token,
+                relinquish_unknown,
+            } => self.force_unmount(*token, *relinquish_unknown),
             Request::Attach(token) => self.attach(*token),
             Request::Locate(workspace) => self.locate(*workspace),
             Request::Fork(request) => self

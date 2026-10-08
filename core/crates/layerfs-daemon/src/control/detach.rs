@@ -3,11 +3,12 @@ use super::{
     native::Native,
     registry::bound_mut,
     serving::{stage, Attached, Kept, Leaving},
-    unmount::Departure,
     Failure, Service, Success,
 };
 use crate::{store::BoundWorkspace, Command, NativeJob, NativeReply, Response};
-use layerfs_bridge::control::{Activity, ControlCode, NativePhase, TeardownStage, WorkspaceToken};
+use layerfs_bridge::control::{
+    Activity, ControlCode, ForcedFacts, NativePhase, TeardownStage, WorkspaceToken,
+};
 use layerfs_fuse::session::{Detach, SessionObserver};
 use std::{fmt, sync::Arc};
 
@@ -16,8 +17,9 @@ use std::{fmt, sync::Arc};
 /// every blocked caller, descriptor, working directory and mapping holds a
 /// mount reference. Work the kernel does not count (asynchronous releases and
 /// lookup decrements, or a replied request's last bookkeeping) is waited out
-/// by the drain barrier after a known detach.
-pub(super) fn take(native: &mut Native) -> Result<Departure, Failure> {
+/// by the drain barrier after a known detach. Forced admission takes the
+/// session the same way, into its own first phase.
+pub(super) fn take(native: &mut Native, phase: NativePhase) -> Result<Box<Attached>, Failure> {
     match native {
         Native::Ready(_) => {}
         Native::Leaving(_) => {
@@ -37,9 +39,9 @@ pub(super) fn take(native: &mut Native) -> Result<Departure, Failure> {
     *native = Native::Leaving(Box::new(Leaving {
         ready: attached.ready.clone(),
         observer: attached.session.observer(),
-        phase: NativePhase::Probing,
+        phase,
     }));
-    Ok(Departure::Session(attached))
+    Ok(attached)
 }
 impl Service {
     /// The session is serviced normally throughout the probe. Only a known
@@ -75,6 +77,7 @@ impl Service {
                     format!("plain detach: {errno}"),
                     Some(observer),
                     Box::new(session),
+                    None,
                 ))
             }
         }
@@ -91,6 +94,7 @@ impl Service {
                     ),
                     Some(observer),
                     undrained,
+                    None,
                 ))
             }
         };
@@ -108,6 +112,7 @@ impl Service {
                     failure.wire().detail,
                     Some(observer),
                     Box::new((failure, drained)),
+                    None,
                 ));
             }
         };
@@ -142,6 +147,7 @@ impl Service {
         }
     }
     /// Stops a terminal operation after effects, keeping its owner in the entry.
+    /// A forced teardown's facts are stored with it, as they stood at the stop.
     pub(super) fn retain(
         &self,
         token: WorkspaceToken,
@@ -149,6 +155,7 @@ impl Service {
         detail: String,
         observer: Option<SessionObserver>,
         evidence: Box<dyn fmt::Debug + Send>,
+        forced: Option<ForcedFacts>,
     ) -> Failure {
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         let mut kept = Kept {
@@ -157,6 +164,7 @@ impl Service {
             detail,
             observer,
             evidence,
+            forced,
         };
         let custody = kept.custody(token);
         if let Ok(binding) = bound_mut(&mut entries, token) {

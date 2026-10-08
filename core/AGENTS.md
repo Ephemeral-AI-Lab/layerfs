@@ -96,8 +96,14 @@ product mental model or campaign-specific benchmark procedures.
   A control Commit runs the captured namespace producer through the unchanged
   driver, and waits for owner admission before each of its jobs; the mounted
   proofs and their limits are in the
-  [R5 record](docs/issues/307/R5-COMPLETION-20261009.md). Forced unmount and daemon-wide
-  drain are R6 work.
+  [R5 record](docs/issues/307/R5-COMPLETION-20261009.md). Forced unmount of one
+  Workspace is implemented as `ForceUnmount`: a before-effect guard, one abort
+  write on the connection's own control, the terminal fence, the local drain,
+  one plain detach, then Revoke and Close; see
+  [forced teardown](docs/architecture/80-forced-teardown.md). It is refused where
+  no abort control is bound, which includes the current Sandbox topology, and a
+  stop after an effect is `Retained` with no way back. No daemon-wide graceful
+  drain exists and none is planned.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,

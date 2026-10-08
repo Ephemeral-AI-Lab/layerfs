@@ -6,7 +6,9 @@ This record describes the implemented R2 composition: one Linux kernel
 connection per attached Workspace, its Ready evidence, the control records that
 carry it, and normal terminal unmount. R3 added ordinary mutation on the same
 connection; see [native mutation and kernel coherence](77-native-mutation-coherence.md).
-Mounted Commit, forced unmount and daemon-wide graceful drain are R5–R6 work.
+Mounted Commit is described in [product Commit](79-product-commit.md) and
+forced unmount in [forced teardown](80-forced-teardown.md). No daemon-wide
+graceful drain exists and none is planned.
 Scope and receipts are in the [R2](../issues/307/R2-COMPLETION-20261008.md) and
 [R3](../issues/307/R3-COMPLETION-20261008.md) completion records.
 
@@ -102,6 +104,10 @@ changing any existing byte encoding:
 
 - Requests `Attach(WorkspaceToken)` and `Locate(WorkspaceId)`.
 - Replies `Ready`, `Located` and `Retained`, and `Activity::Attaching`.
+- R6, in [`control_forced.rs`](../../crates/layerfs-bridge/src/control_forced.rs):
+  request `ForceUnmount`, reply `ForceUnmounted`, `NativePhase::Stopping`,
+  `TeardownStage::Abort` and `TeardownCustody.forced`; listed in
+  [native control](68-native-workspace-control.md#forced-unmount-records).
 - `WorkspaceStatus.native`. A status that carries the block uses its own reply
   tag, so the original status encoding is unchanged and no record is a valid
   prefix of another.
@@ -129,6 +135,7 @@ Each registry entry carries one native state alongside its control activity:
 | Attaching | One Attach owns the entry; other terminal operations are refused |
 | Ready | Serving session and its Ready record |
 | Probing / Draining | One unmount owns the session; an observer remains for status |
+| Stopping | One forced unmount owns the session, from admission until its drain and detach are known; then Draining |
 | Retained | A terminal step was not established; exact owners and stage are kept |
 
 Attach is admitted only from Unattached with idle control activity. A second
@@ -165,8 +172,21 @@ Any step that is not established leaves the entry `Retained` with its stage
 (`Detach`, `Join`, `Owner`, `Requests`, `Lane`, `Revoke`, `Close` or `Registry`),
 the observer and the original evidence. The reply is `Retained` with
 `TeardownCustody`; it is not reported as an uncertain mutation and nothing is
-replayed. Later Attach or Unmount on that entry returns the same custody.
-Abort authority is retained for R6 and is not used here.
+replayed. Later Attach, Unmount or ForceUnmount on that entry returns the same
+custody. The normal path never uses the abort control and never sets the
+terminal fence.
+
+## Forced unmount
+
+[`ForceUnmount`](80-forced-teardown.md) takes the session out of the entry the
+same way, into phase `Stopping`, after its own before-effect guard. It then
+uses the abort control bound at Attach for exactly one write, lets
+[`force_drain`](../../crates/layerfs-fuse/src/session/force.rs) establish the
+same drain predicate as step 3 and make the connection's one plain detach
+afterwards, and finishes with the same revocation and Close as steps 4 and 5.
+Its stops use the same stages plus `Abort`, and carry the forced facts. Once
+the abort write was made, a normal `detach()` of that session is refused
+before any syscall: the forced path owns its single detach.
 
 ### Revocation after detach
 
@@ -202,7 +222,8 @@ as the nonroot command identity with an empty effective capability set.
 - The native status block does not include engine open-handle or lookup counts,
   retirement debt or cleanup state.
 - Abort control binding depends on the fusectl filesystem being mounted in the
-  container; where it is not, `abort_bound` is false and R6 must establish it.
+  container; where it is not, `abort_bound` is false and forced unmount is
+  refused at `force:capability`. The Sandbox container does not mount it.
 - `Busy` at `unmount:admission` exists for a second concurrent terminal
   operation; it has no staged in-flight-request case.
 - Nothing here is a latency, storage or resident-memory measurement.

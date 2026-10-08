@@ -157,6 +157,8 @@ holds back later source acquisitions until it has run.
   failure also keeps the resolution's.
 - Admission waits are unordered and unbounded; fairness between a waiting
   Commit and filesystem requests is R6 work.
-- An unknown outcome has no resolver. Its custody stays until an owner ruling
-  or forced teardown.
+- An unknown outcome has no resolver. [Forced teardown](80-forced-teardown.md)
+  can close an attached Workspace that holds one, with `relinquish_unknown`:
+  the receipt still says `Unknown` and the engine custody stays held. An
+  Unattached Workspace has no such exit.
 - Durable: `NOT_RUN — disabled by owner until explicit reauthorization`.

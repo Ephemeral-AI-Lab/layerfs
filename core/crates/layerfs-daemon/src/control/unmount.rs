@@ -5,8 +5,11 @@ use super::{
     Failure, Service, Success,
 };
 use crate::{store::BoundWorkspace, Command, Completion, Response};
-use layerfs_bridge::control::{Activity, Reply, WorkspaceToken};
-use std::sync::Arc;
+use layerfs_bridge::control::{Activity, ForcedFacts, Reply, WorkspaceToken};
+use std::{fmt, sync::Arc};
+
+/// Original native connection receipt carried to Close.
+type Receipt = Option<Box<dyn fmt::Debug + Send>>;
 
 /// What terminal admission took out of the registry entry.
 pub(super) enum Departure {
@@ -52,7 +55,10 @@ impl Service {
                 ))
             }
             #[cfg(target_os = "linux")]
-            _ => super::detach::take(&mut value.native)?,
+            _ => Departure::Session(super::detach::take(
+                &mut value.native,
+                layerfs_bridge::control::NativePhase::Probing,
+            )?),
         };
         value.activity = Activity::Closing;
         value.epoch = value.epoch.saturating_add(1);
@@ -64,27 +70,48 @@ impl Service {
         token: WorkspaceToken,
         workspace: &BoundWorkspace,
         earlier: Vec<Completion>,
-        native: Option<Box<dyn std::fmt::Debug + Send>>,
+        native: Receipt,
     ) -> Result<Success, Failure> {
-        let result = self.job(workspace.route(), Command::Close);
-        let completion = match result {
-            Ok(done) if matches!(done.result(), Ok(Response::Done)) => done,
+        let (completion, earlier, native) = self.closed(token, workspace, earlier, native, None)?;
+        self.depart(
+            token,
+            Success {
+                reply: Reply::Unmounted(token),
+                completion: Some(completion),
+                earlier,
+                commit: None,
+                observation_failure: None,
+                native,
+            },
+        )
+    }
+    /// The one logical Close. Acknowledged, it hands back its completion with
+    /// the receipts it was given; otherwise the entry keeps them.
+    pub(super) fn closed(
+        &self,
+        token: WorkspaceToken,
+        workspace: &BoundWorkspace,
+        earlier: Vec<Completion>,
+        native: Receipt,
+        forced: Option<ForcedFacts>,
+    ) -> Result<(Completion, Vec<Completion>, Receipt), Failure> {
+        match self.job(workspace.route(), Command::Close) {
+            Ok(done) if matches!(done.result(), Ok(Response::Done)) => Ok((done, earlier, native)),
             other => {
                 let failure = match other {
                     Ok(done) => Failure::Completion(Box::new(done)),
                     Err(error) => error,
                 };
-                return Err(self.unclosed(token, failure, earlier, native));
+                Err(self.unclosed(token, failure, earlier, native, forced))
             }
-        };
-        let success = Success {
-            reply: Reply::Unmounted(token),
-            completion: Some(completion),
-            earlier,
-            commit: None,
-            observation_failure: None,
-            native,
-        };
+        }
+    }
+    /// Routing removal after an acknowledged Close; the reply is already known.
+    pub(super) fn depart(
+        &self,
+        token: WorkspaceToken,
+        success: Success,
+    ) -> Result<Success, Failure> {
         if self
             .entries
             .lock()
@@ -105,7 +132,8 @@ impl Service {
         token: WorkspaceToken,
         failure: Failure,
         earlier: Vec<Completion>,
-        native: Option<Box<dyn std::fmt::Debug + Send>>,
+        native: Receipt,
+        forced: Option<ForcedFacts>,
     ) -> Failure {
         #[cfg(target_os = "linux")]
         if native.is_some() || !earlier.is_empty() {
@@ -115,10 +143,11 @@ impl Service {
                 failure.wire().detail,
                 None,
                 Box::new((failure, earlier, native)),
+                forced,
             );
         }
         #[cfg(not(target_os = "linux"))]
-        let _ = (earlier, native);
+        let _ = (earlier, native, forced);
         if let Ok(mut entries) = self.entries.lock() {
             if let Ok(binding) = bound_mut(&mut entries, token) {
                 binding.activity = if failure.uncertain() {

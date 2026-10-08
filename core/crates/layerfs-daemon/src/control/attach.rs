@@ -169,6 +169,7 @@ impl Service {
                         detail: "serving session without negotiation receipt".into(),
                         observer: Some(session.observer()),
                         evidence: Box::new((session, created)),
+                        forced: None,
                     }))),
                 };
             }
@@ -189,6 +190,7 @@ impl Service {
                 detail,
                 observer,
                 evidence: Box::new((failure, created)),
+                forced: None,
             })));
         }
         let phase = if failure.mounted {
@@ -220,6 +222,7 @@ impl Service {
                 detail: failure.detail.clone(),
                 observer: None,
                 evidence: Box::new((failure, created, other)),
+                forced: None,
             })),
         }
     }

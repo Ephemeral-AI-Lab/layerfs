@@ -105,6 +105,16 @@ impl Failure {
                     code = ControlCode::Unknown;
                     detail = format!("captured namespace custody retained after: {detail}");
                 }
+                // A definite failure with no publication whose local
+                // resolution is not known done keeps the capture: the
+                // registry records it uncertain, and so must the reply.
+                if code != ControlCode::Unknown
+                    && failed.published.is_none()
+                    && !failed.locally_settled
+                {
+                    code = ControlCode::Unknown;
+                    detail = format!("Commit custody retained after: {detail}");
+                }
                 (
                     code,
                     moved,

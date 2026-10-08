@@ -1,0 +1,16 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 057d443a2, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/forced_smoke-64744aa7a39a3671 --test-threads=1 --nocapture
+
+running 1 test
+test an_idle_workspace_is_forced_with_one_abort_and_one_detach ... FORCED_SMOKE before: abort_bound=true minor=91 waiting=1 work=Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 2, queued: 0, running: 0, parked: 2, retained: 0, completed: 11, handoffs: 13, inline: 4, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 })
+FORCED_SMOKE outcome=ForcedOutcome { facts: ForcedFacts { abort: Written, detach: Detached, commit: Absent, fenced: 0 }, work: NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 2, loops_joined: 2, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 13, handoffs: 13, inline: 4, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }, cleanup: Held }
+FORCED_SMOKE receipt=Some(Drained { mount: NativeMount { route: Route { engine: 1, ns: 1, incarnation: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }, owner: 1, root: 1 }, directory: "/tmp/layerfs-installed-7-forced-smoke/mounts/1", outcome: Some(SessionOutcome { startup_error: None, receivers: [ReceiverOutcome { index: 0, result: Ok(()) }, ReceiverOutcome { index: 1, result: Ok(()) }], cleanup: Ok(()) }), work: MountWork { received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, owned_input_bytes: 0, future_bytes: 0, receive_units: 17, completed: 13, steps: 64, wakes: 51, terminal: true }, opcodes: OpcodeWork { opcodes: [1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 4, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], handoffs: 13, inline: 4, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0, store_units: 0 }, removed: Ok(()), forced: Some(Forced { abort: Written, detach: Detached, terminal_replies: 0 }) })
+FORCED_SMOKE completions: close=true earlier=0 cleanup_observation_failure=None
+FORCED_SMOKE after: mount_row=None directory=absent own_connection=absent token=Missing cleanup=Held fenced=0
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

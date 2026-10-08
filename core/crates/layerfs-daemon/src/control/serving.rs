@@ -1,8 +1,8 @@
 //! One shared dispatcher for every mount, and the exact owners an entry keeps.
 use super::native::{bounded, NativeConfig};
 use layerfs_bridge::control::{
-    NativePhase, NativeReceipt, NativeWork, ReadyMount, TeardownCustody, TeardownStage,
-    WorkspaceToken,
+    ForcedFacts, NativePhase, NativeReceipt, NativeWork, ReadyMount, TeardownCustody,
+    TeardownStage, WorkspaceToken,
 };
 use layerfs_fuse::{
     session::{DrainStage, NativeSession, SessionFacts, SessionObserver},
@@ -77,6 +77,9 @@ pub(super) struct Kept {
     /// The original owner: an undrained session, a drained receipt or a
     /// refused engine completion, exactly as the stopping boundary left it.
     pub evidence: Box<dyn fmt::Debug + Send>,
+    /// Effects of a forced teardown as recorded where it stopped; absent for
+    /// a normal unmount or an Attach.
+    pub forced: Option<ForcedFacts>,
 }
 impl fmt::Debug for Kept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -86,6 +89,7 @@ impl fmt::Debug for Kept {
             .field("detail", &self.detail)
             .field("observer", &self.observer)
             .field("evidence", &self.evidence)
+            .field("forced", &self.forced)
             .finish()
     }
 }
@@ -98,7 +102,7 @@ impl Kept {
             detached: facts.as_ref().is_some_and(|facts| facts.detached),
             work: facts.as_ref().map(work),
             detail: bounded(&self.detail),
-            forced: None,
+            forced: self.forced.clone(),
         }
     }
 }

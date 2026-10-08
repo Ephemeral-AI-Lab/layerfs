@@ -1,0 +1,17 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 057d443a2, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_mutation-c38a1a719dd23650 --test-threads=1 --nocapture
+
+running 2 tests
+test namespace_mutations_are_visible_at_once_and_refusals_stay_refused ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_NAMES work=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 283, handoffs: 283, inline: 36, refused: 5, terminal: 0, unadmitted: 0, forget_units: 7 }
+ok
+test write_append_and_truncate_are_exact_in_cache_and_daemon ... Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_WRITE work=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 169, handoffs: 169, inline: 35, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

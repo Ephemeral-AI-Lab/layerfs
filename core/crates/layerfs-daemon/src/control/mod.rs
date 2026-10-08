@@ -4,6 +4,7 @@ mod attach;
 #[cfg(target_os = "linux")]
 mod detach;
 mod failure;
+mod force;
 mod native;
 mod operations;
 mod registry;

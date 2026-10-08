@@ -583,3 +583,169 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
     f.service.execute_control(&Request::Unmount(token)).unwrap();
     f.cleanup();
 }
+#[test]
+fn forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect() {
+    use layerfs_daemon::control::Failure;
+    let f = fixture::Fixture::new("control-force-unattached");
+    let branch = f.native.project.branch.branch.id;
+    let last = identity(91);
+    let (mut client, worker) = serve(
+        f.service.clone(),
+        Arc::new(AtomicU8::new(b'F')),
+        last,
+        f.installed.opened.store.policy().construction(),
+    );
+    let (token, binding) = mount(&mut client, last, branch);
+    let before = status(&mut client, token);
+    // Over the wire, with and without the relinquish flag: the typed phase.
+    for relinquish_unknown in [false, true] {
+        match client
+            .call(Request::ForceUnmount {
+                token,
+                relinquish_unknown,
+            })
+            .unwrap()
+        {
+            Reply::Refused(value) => {
+                assert_eq!(value.code, ControlCode::Invalid);
+                assert_eq!(value.phase, "force:admission");
+                assert!(value.published.is_none());
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    // The SDK operation carries the same refusal.
+    assert!(
+        matches!(WorkspaceApi::new(&mut client).force_unmount(token, false).unwrap_err().cause, OperationCause::Remote(value) if value.code == ControlCode::Invalid && value.phase == "force:admission")
+    );
+    // At the control owner: the original typed failure, and the ordinary
+    // token refusals ahead of it.
+    let force = |token| {
+        f.service.execute_control(&Request::ForceUnmount {
+            token,
+            relinquish_unknown: false,
+        })
+    };
+    assert!(matches!(
+        force(token),
+        Err(Failure::Native(value)) if value.code == ControlCode::Invalid
+            && value.phase == "force:admission"
+            && value.completions.is_empty()
+    ));
+    assert!(matches!(
+        force(WorkspaceToken {
+            namespace: token.namespace + 1,
+            ..token
+        }),
+        Err(Failure::Rejected(ControlCode::Invalid, _))
+    ));
+    assert!(matches!(
+        force(WorkspaceToken {
+            workspace: identity(92),
+            ..token
+        }),
+        Err(Failure::Rejected(ControlCode::Missing, _))
+    ));
+    // No effect: the same idle binding at the same epoch, and a normal close.
+    let after = status(&mut client, token);
+    assert_eq!(after.activity, Activity::Idle);
+    assert_eq!(after.epoch, before.epoch);
+    assert_eq!(after.binding, binding);
+    println!(
+        "CONTROL_FORCE_UNATTACHED code=Invalid phase=force:admission relinquish_unknown=both stale_namespace=Invalid absent=Missing epoch_unchanged={} activity={:?}",
+        after.epoch == before.epoch,
+        after.activity
+    );
+    close(&mut client, token);
+    assert_eq!(worker.join(), 7);
+    f.cleanup();
+}
+#[test]
+fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
+    use layerfs_daemon::{
+        control::Failure,
+        store::{CommitError, CommitPhase},
+    };
+    let f = fixture::Fixture::new("control-unresolved");
+    let branch = f.native.project.branch.branch.id;
+    let service = f.service.clone();
+    let (send_entered, entered) = mpsc::sync_channel(1);
+    let (send_release, release) = mpsc::sync_channel(1);
+    let (channel, worker) = support::pair(move |connection| {
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        // A definite refusal by itself: it maps to Busy. The engine is gone
+        // when the driver makes its one local resolution of the capture.
+        let original = service
+            .serve_one(connection, |_, _, _| {
+                send_entered.send(()).unwrap();
+                release.recv_timeout(Duration::from_secs(3)).unwrap();
+                Err(CommitError::Storage(layerfs_storage::StorageError::Busy))
+            })
+            .unwrap();
+        for _ in 0..2 {
+            drop(
+                service
+                    .serve_one(connection, |_, _, _| {
+                        unreachable!("unresolved constructor cannot enter")
+                    })
+                    .unwrap(),
+            );
+        }
+        original
+    });
+    let mut client = Control::new(channel);
+    let (token, binding) = mount(&mut client, identity(93), branch);
+    fixture::write(&f.service, token, b'W');
+    let calling = std::thread::spawn(move || {
+        let reply = client.call(Request::Commit(token));
+        (client, reply)
+    });
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    f.owner.stop().unwrap();
+    send_release.send(()).unwrap();
+    let (mut client, reply) = calling.join().unwrap();
+    let refusal = match reply.unwrap() {
+        Reply::Refused(value) => value,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(refusal.code, ControlCode::Unknown, "{refusal:?}");
+    assert!(refusal.published.is_none() && refusal.moved.is_none());
+    assert_eq!(refusal.phase, "Commit Construct");
+    // The registry recorded the same thing the reply now says.
+    let observed = status(&mut client, token);
+    assert_eq!(observed.activity, Activity::Uncertain);
+    assert_eq!(observed.binding, binding);
+    assert!(observed.published.is_none());
+    // With no connection Force has no exit either, flag or not (plan D10).
+    assert!(
+        matches!(client.call(Request::ForceUnmount { token, relinquish_unknown: true }).unwrap(), Reply::Refused(value) if value.code == ControlCode::Invalid && value.phase == "force:admission")
+    );
+    let original = worker.join();
+    let failed = match &original.outcome {
+        Err(Failure::Commit(failed)) => failed,
+        other => panic!("{other:?}"),
+    };
+    assert!(matches!(
+        failed.error,
+        CommitError::Storage(layerfs_storage::StorageError::Busy)
+    ));
+    assert_eq!(failed.phase, CommitPhase::Construct);
+    assert!(!failed.locally_settled && failed.published.is_none());
+    assert!(failed.capture.is_some() && failed.namespace.is_none());
+    println!(
+        "CONTROL_UNRESOLVED original_error={:?} locally_settled={} local_done={} local_error={:?} published=None reply_code={:?} reply_phase={} registry={:?} force_unattached=Invalid",
+        failed.error,
+        failed.locally_settled,
+        failed.local.is_some(),
+        failed.local_error,
+        refusal.code,
+        refusal.phase,
+        observed.activity
+    );
+    drop((original, f.service, f.installed));
+    f.native.cleanup();
+}

@@ -1,0 +1,33 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 057d443a2, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_control-8af8303c5679864b --test-threads=1 --nocapture
+
+running 9 tests
+test a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown ... CONTROL_UNRESOLVED original_error=Storage(Busy) locally_settled=false local_done=false local_error=Some(Unattempted { cause: Stopped, command: ResolveFailed(Capture { route: Route { engine: 1, ns: 1, incarnation: [93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93] }, generation: Generation(1), revision: 1, base_root: [165, 118, 241, 63, 99, 78, 182, 38, 193, 228, 215, 57, 201, 83, 46, 14, 228, 48, 69, 40, 36, 170, 249, 153, 117, 87, 60, 186, 156, 25, 45, 44] }) }) published=None reply_code=Unknown reply_phase=Commit Construct registry=Uncertain force_unattached=Invalid
+ok
+test an_original_unknown_blocks_another_commit_and_normal_unmount ... CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true
+ok
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed
+ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+ok
+test forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect ... CONTROL_FORCE_UNATTACHED code=Invalid phase=force:admission relinquish_unknown=both stale_namespace=Invalid absent=Missing epoch_unchanged=true activity=Idle
+ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_FLOW overwrite_last_effect=true captured_parent_preserved=true calls=20 Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true
+ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... CONTROL_LOST_ORIGINAL client=ControlFailure { call: Call { id: 2, request: Commit(WorkspaceToken { workspace: WorkspaceId(5555555555555555555555555555555555555555555555555555555555555555), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(Io(Kind(UnexpectedEof))), fence_error: None } daemon_reply=Committed(Committed(CommitRecord { id: CommitId(12b0d5499a8f82f27b53edaa23d0811cb3f371a37ed2f171eb36cd41c5e0ebb2a7), stack: LayerStackId(3136363636363636363636363636363636), root: ObjectId("4e4b9a36d4b9f95045a910eb30e0079c7c0ebef9ed4cd4268f82877fac524232"), parent: None, base_layer: LayerId(32745a5b68c7c624632ae484d07f0ec2e204b0f5ac83b24517e200ab4cc352c4ce) })) capture=Capture { route: Route { engine: 7, ns: 1, incarnation: [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85] }, generation: Generation(1), revision: 1, base_root: [222, 206, 152, 155, 123, 215, 178, 134, 99, 65, 220, 153, 150, 56, 145, 138, 79, 141, 29, 190, 99, 172, 197, 133, 2, 34, 160, 4, 167, 168, 88, 45] }
+CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true
+ok
+test product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_up_to_date ... PRODUCT_COMMIT inode_rows=1 entry_rows=0 files=1 record_jobs=42 released=2
+ok
+test status_retains_known_publication_when_the_engine_is_unavailable ... CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown
+ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+R4_WALL seconds<=1 limit=115s lock_wait=10s
+EXIT 0

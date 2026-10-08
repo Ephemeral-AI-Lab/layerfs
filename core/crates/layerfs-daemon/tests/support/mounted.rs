@@ -110,6 +110,17 @@ impl Harness {
     pub fn try_unmount(&self, token: WorkspaceToken) -> Result<Success, Failure> {
         self.service.execute_control(&Request::Unmount(token))
     }
+    /// One forced terminal unmount, attempted once.
+    pub fn try_force(
+        &self,
+        token: WorkspaceToken,
+        relinquish_unknown: bool,
+    ) -> Result<Success, Failure> {
+        self.service.execute_control(&Request::ForceUnmount {
+            token,
+            relinquish_unknown,
+        })
+    }
     /// Terminal success with its complete receipts checked.
     pub fn unmount(&self, ready: &ReadyMount) -> Success {
         let done = self.try_unmount(ready.token).unwrap();

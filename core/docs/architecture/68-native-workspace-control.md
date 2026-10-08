@@ -56,8 +56,9 @@ existing engine owns automatic bounded cleanup. The result does not claim that
 all physical rows are gone or that the overlay file shrank. It never deletes
 shared history. For an attached Workspace the same unmount first runs the
 reversible kernel probe, connection drain and revocation described in
-[native mount session](76-native-mount-session.md#normal-unmount). An explicit
-force policy remains later work, not a silent success path.
+[native mount session](76-native-mount-session.md#normal-unmount). The explicit
+force policy is a separate request, `ForceUnmount`, described in
+[forced teardown](80-forced-teardown.md); normal unmount never falls back to it.
 
 serve_one executes one authenticated request and sends one result. Served keeps
 the original product outcome; ServeFailure retains it when encoding/delivery
@@ -85,7 +86,35 @@ assigns the full native connection/request service to Fuse and leaves this daemo
 registry/control owner responsible for overall Ready/terminal unmount and existing
 Commit admission. Attach, Locate, Ready and per-Workspace normal drain are now
 implemented in that owner; see [native mount session](76-native-mount-session.md).
-Daemon-wide aggregate drain remains unproved.
+No daemon-wide aggregate drain exists.
+
+## Forced unmount records
+
+R6 adds these control records. Every earlier request and reply keeps its tag
+and bytes; an unknown tag, value or boolean is refused as before.
+
+| Record | Encoding | Sent when |
+| --- | --- | --- |
+| `Request::ForceUnmount { token, relinquish_unknown }` | request tag 11: token, one strict boolean byte | the caller forces one attached Workspace |
+| `Reply::ForceUnmounted { token, outcome }` | reply tag 14: token, forced facts, `NativeWork`, cleanup byte | the forced teardown completed and the entry left routing |
+| `Reply::Retained` with `forced: Some(ForcedFacts)` | reply tag 15: the tag 12 body, then the facts | a forced teardown stopped after an effect, or a later Unmount, ForceUnmount or Attach met that stored custody |
+| `Reply::Retained` with `forced: None` | reply tag 12, unchanged | a normal unmount or an Attach stopped after an effect |
+| `ForcedFacts { abort, detach, commit, fenced }` | abort byte, detach byte, Commit knowledge (`Absent`; `Published` with the existing outcome encoding; `Unknown`), `u64` | inside tags 14 and 15 |
+| `NativePhase::Stopping` | value 7 in the native status block | status while a forced unmount owns the session |
+| `TeardownStage::Abort` | value 9, valid only with forced facts | the abort write was short or failed |
+
+A refusal before any effect is the existing `Reply::Refused` with phase
+`force:admission`, `force:custody` or `force:capability`. The daemon routes
+the request in [`control/operations.rs`](../../crates/layerfs-daemon/src/control/operations.rs)
+to [`control/force.rs`](../../crates/layerfs-daemon/src/control/force.rs); the
+SDK operation is `WorkspaceApi::force_unmount(token, relinquish_unknown)`.
+
+A Commit failure that leaves the registry `Uncertain` always answers `Unknown`:
+besides an unreleased reader or owner, that now includes a definite failure
+with no publication whose one local resolution of the capture is not known
+done (for example `Busy` when the Save begins, then a resolution that could
+not be submitted). A failed install after a known publication (`LocalFailure`)
+keeps answering its own code with the publication attached.
 
 R5, after `bb5b3c220`: `execute_control` no longer refuses Commit. It runs the
 captured namespace producer through the unchanged driver
