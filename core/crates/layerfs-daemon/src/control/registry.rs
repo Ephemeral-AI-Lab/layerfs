@@ -80,18 +80,6 @@ impl Service {
         value.epoch = value.epoch.saturating_add(1);
         Ok(value.workspace.clone())
     }
-    pub(super) fn unavailable_commit(
-        &self,
-        token: WorkspaceToken,
-    ) -> Result<super::Success, Failure> {
-        let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
-        let value = bound(&entries, token)?;
-        idle(value)?;
-        Err(Failure::Rejected(
-            ControlCode::Invalid,
-            "live namespace constructor unavailable",
-        ))
-    }
 }
 pub(super) fn bound(
     entries: &BTreeMap<WorkspaceId, Entry>,

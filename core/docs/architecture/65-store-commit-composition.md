@@ -98,5 +98,6 @@ root/floor, release and original error custody. This boundary is implemented.
 The sealed StreamedRowSource adapter, complete files/names/metadata construction
 and Content backed validation/topology are implemented by R4
 ([captured namespace construction](78-captured-namespace-construction.md)) and reach this
-driver only in a daemon test; product wiring and mounted Commit remain R5.
-Existing Store-half composition is unchanged.
+driver through the product constructor `BoundWorkspace::commit_captured`
+([product Commit](79-product-commit.md), R5). The driver itself is unchanged;
+`CommitSuccess` and `CommitFailure` gained the `namespace` receipt.

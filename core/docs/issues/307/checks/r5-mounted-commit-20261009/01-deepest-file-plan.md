@@ -248,3 +248,16 @@ with the scope at which they are proven and the reason.
   If a proof cannot fit 100 s, R4 item 10 is brought forward with counts.
 - The stat source flips from the Overlay row to the base at install. Any
   field the producer does not reproduce exactly will show in R5-5.
+
+## Amendment 1, with track S
+
+Section 3 planned to make `layerfs-telemetry` a production dependency of
+`layerfs-daemon`. The product boundary guard refuses that edge, and the guard
+is not weakened. Instead `layerfs-workspace`, which already owns the
+dependency, gained `CapturedNamespace::construct_untimed`
+(`construction/driver.rs`, 174 production lines before), and the daemon
+manifest is unchanged. `store/operation.rs` and `store/settle.rs` needed no
+change. The host-and-Linux product test without a mount is a rewritten case in
+the existing `native_control.rs`; the fuller model test moves to track K as
+`product_commit.rs`, which calls `BoundWorkspace::commit_captured` directly
+because the registry does not expose its bound Workspace to a test.

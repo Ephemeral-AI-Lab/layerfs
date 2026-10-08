@@ -1,13 +1,15 @@
 //! Original Commit knowledge, publication outcome and local ownership receipts.
 use super::PortError;
 use crate::{Completion, OwnerError};
-use layerfs_content::ContentError;
+use layerfs_content::{filesystem::FilesystemUpdateCounters, ContentError};
 use layerfs_history::{
     BranchSnapshot, CommitStagedOutcome, HistoryError, StageRequest, WorkspaceId,
 };
-use layerfs_overlay::{Capture, Route};
+use layerfs_overlay::{Capture, CapturedReader, OperationOwner, Route};
 use layerfs_storage::{Diagnostics, StorageError, WriteOutcome};
-use layerfs_workspace::{PreparedBase, WorkspaceError};
+use layerfs_workspace::{
+    CapturedNamespaceCustody, CapturedNamespaceWork, PreparedBase, WorkspaceError,
+};
 use std::{fmt, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,6 +41,30 @@ pub enum CommitError {
     Owner(OwnerError),
     Completion(Box<Completion>),
 }
+/// What the product constructor's one namespace attempt acquired, counted and
+/// released. A named reader or owner here was acquired and is not known
+/// released: it is the caller's exact custody, never released on Drop.
+#[derive(Debug, Default)]
+pub struct CapturedConstruction {
+    /// The producer's counted adapter work, once it has run.
+    pub work: Option<CapturedNamespaceWork>,
+    /// Content's filesystem work of a successful update.
+    pub counters: Option<FilesystemUpdateCounters>,
+    pub reader: Option<CapturedReader>,
+    pub operation: Option<OperationOwner>,
+    /// A failed attempt's record and file custody while its owners are kept.
+    pub custody: Option<Box<CapturedNamespaceCustody>>,
+    /// Original release completions in attempt order: reader, then owner.
+    pub released: Vec<Completion>,
+    /// The submission failure that ended the release sequence.
+    pub release_error: Option<OwnerError>,
+}
+impl CapturedConstruction {
+    /// True while an acquired reader or operation owner is not known released.
+    pub const fn retained(&self) -> bool {
+        self.reader.is_some() || self.operation.is_some()
+    }
+}
 /// Known history publication followed by a known paired local base install.
 #[derive(Debug)]
 pub struct CommitSuccess {
@@ -48,6 +74,8 @@ pub struct CommitSuccess {
     pub capture: Capture,
     pub captured: Completion,
     pub installed: Completion,
+    /// The product constructor's receipt; None under a caller's constructor.
+    pub namespace: Option<CapturedConstruction>,
 }
 /// No part of an original failed attempt is inferred from a subsequent read.
 #[derive(Debug)]
@@ -70,6 +98,8 @@ pub struct CommitFailure {
     pub local_error: Option<OwnerError>,
     /// False means capture/unknown custody remains; another Commit is refused.
     pub locally_settled: bool,
+    /// The product constructor's receipt, when its closure ran.
+    pub namespace: Option<CapturedConstruction>,
 }
 impl CommitFailure {
     pub(super) fn new(error: CommitError, workspace: WorkspaceId, route: Route) -> Self {
@@ -89,6 +119,7 @@ impl CommitFailure {
             local: None,
             local_error: None,
             locally_settled: false,
+            namespace: None,
         }
     }
 }

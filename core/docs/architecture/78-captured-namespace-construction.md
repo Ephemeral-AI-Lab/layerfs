@@ -183,8 +183,8 @@ On failure the Content `result` is only a label (for example
 `ProviderFailure { what: "captured namespace original refusal" }`). The
 unchanged Commit driver classifies that label as an unknown outcome. A caller
 that wants a definite refusal settled must hand the driver the original cause
-from custody; the daemon test's closure does this, and the product wiring is
-R5.
+from custody; the product constructor does this
+([product Commit](79-product-commit.md)).
 
 ## Counted work
 
@@ -229,6 +229,7 @@ address before a large Commit is timed.
 
 ## Not part of this record
 
-No timing, cold-cache, storage or resident-memory claim. No product caller of
-the producer, no mounted Commit, no change to the Commit driver, and no Durable
+No timing, cold-cache, storage or resident-memory claim. At R4 there was no
+product caller of the producer; R5 added one without changing the producer
+([product Commit](79-product-commit.md)). No change to the Commit driver, and no Durable
 execution (`NOT_RUN — disabled by owner until explicit reauthorization`).

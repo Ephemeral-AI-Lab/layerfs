@@ -1,5 +1,6 @@
 //! In-process Store ports shared by one daemon's Workspaces.
 mod bind;
+mod captured;
 mod commit;
 mod commit_types;
 mod open;
@@ -13,7 +14,9 @@ mod settle;
 mod types;
 pub(crate) use bind::checked_base;
 
-pub use commit_types::{CommitError, CommitFailure, CommitPhase, CommitSuccess};
+pub use commit_types::{
+    CapturedConstruction, CommitError, CommitFailure, CommitPhase, CommitSuccess,
+};
 pub use open::{Store, StoreWork};
 pub use operation::{BoundWorkspace, StoreOperation};
 pub use ports::{PortError, StorePorts};

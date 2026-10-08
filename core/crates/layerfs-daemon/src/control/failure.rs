@@ -98,7 +98,7 @@ impl Failure {
                     code,
                     moved,
                     format!("Commit {:?}", failed.phase),
-                    detail,
+                    super::native::bounded(&detail),
                     failed.published.clone(),
                 )
             }

@@ -484,8 +484,8 @@ fn status_retains_known_publication_when_the_engine_is_unavailable() {
 }
 
 #[test]
-fn control_without_constructor_refuses_before_capture_save_or_registry_epoch() {
-    let f = fixture::Fixture::new("unavailable-producer");
+fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_up_to_date() {
+    let f = fixture::Fixture::new("product-producer");
     let branch = f.native.project.branch.branch.id;
     let success = f
         .service
@@ -494,13 +494,13 @@ fn control_without_constructor_refuses_before_capture_save_or_registry_epoch() {
             branch,
         })
         .unwrap();
-    let token = match &success.reply {
-        Reply::Bound { token, .. } => *token,
+    let (token, bound) = match &success.reply {
+        Reply::Bound { token, binding } => (*token, binding.clone()),
         other => panic!("{other:?}"),
     };
     drop(success);
     fixture::write(&f.service, token, b'Q');
-    let before = match f
+    let status = |token| match f
         .service
         .execute_control(&Request::Status(token))
         .unwrap()
@@ -509,33 +509,9 @@ fn control_without_constructor_refuses_before_capture_save_or_registry_epoch() {
         Reply::Status(v) => v,
         other => panic!("{other:?}"),
     };
-    let storage = f.installed.opened.store.work();
+    let before = status(token);
+    // A stale namespace is refused before admission, capture or Save.
     let sql = f.statements();
-    assert!(matches!(
-        f.service.execute_control(&Request::Commit(token)),
-        Err(layerfs_daemon::control::Failure::Rejected(
-            ControlCode::Invalid,
-            _
-        ))
-    ));
-    let after = match f
-        .service
-        .execute_control(&Request::Status(token))
-        .unwrap()
-        .reply
-    {
-        Reply::Status(v) => v,
-        other => panic!("{other:?}"),
-    };
-    assert_eq!(before, after, "no epoch/admission/capture/install effects");
-    assert_eq!(f.statements(), sql, "no Store SQL/Save/refill/publication");
-    let after_storage = f.installed.opened.store.work();
-    assert_eq!(
-        storage.serial_reservations,
-        after_storage.serial_reservations
-    );
-    assert_eq!(storage.object_batches, after_storage.object_batches);
-    assert_eq!(storage.length_batches, after_storage.length_batches);
     assert!(matches!(
         f.service.execute_control(&Request::Commit(WorkspaceToken {
             namespace: token.namespace + 1,
@@ -546,6 +522,63 @@ fn control_without_constructor_refuses_before_capture_save_or_registry_epoch() {
             _
         ))
     ));
+    assert_eq!(status(token), before, "no epoch, capture or install effect");
+    assert_eq!(f.statements(), sql, "no Store SQL for a refused token");
+    // The product route: no caller constructor exists on this path.
+    let done = f.service.execute_control(&Request::Commit(token)).unwrap();
+    let record = match &done.reply {
+        Reply::Committed(CommitStagedOutcome::Committed(record)) => record.clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_ne!(record.root, bound.effective_root);
+    assert_eq!(record.parent, bound.branch.head_commit);
+    let commit = done.commit.as_ref().expect("original Commit receipt");
+    let namespace = commit.namespace.as_ref().expect("product constructor ran");
+    assert!(!namespace.retained(), "{namespace:?}");
+    assert_eq!(namespace.released.len(), 2, "reader, then operation owner");
+    assert!(namespace.release_error.is_none() && namespace.custody.is_none());
+    let work = namespace.work.expect("producer work");
+    assert!(
+        work.inode_rows > 0 && work.files_constructed > 0,
+        "{work:?}"
+    );
+    assert!(namespace.counters.is_some());
+    println!(
+        "PRODUCT_COMMIT inode_rows={} entry_rows={} files={} record_jobs={} released=2",
+        work.inode_rows, work.entry_rows, work.files_constructed, work.record_jobs
+    );
+    drop(done);
+    let after = status(token);
+    assert_eq!(after.activity, Activity::Idle);
+    assert_eq!(after.binding.effective_root, record.root);
+    assert_eq!(after.binding.branch.head_commit, Some(record.id));
+    // Unchanged: the same head and root, no new Commit record.
+    let again = f.service.execute_control(&Request::Commit(token)).unwrap();
+    assert!(
+        matches!(&again.reply, Reply::Committed(CommitStagedOutcome::UpToDate { head: Some(head), root }) if *head == record.id && *root == record.root),
+        "{:?}",
+        again.reply
+    );
+    let unchanged = again.commit.as_ref().unwrap().namespace.as_ref().unwrap();
+    assert!(!unchanged.retained() && unchanged.released.len() == 2);
+    drop(again);
+    // A new Workspace binds the published root and reads the committed byte.
+    let other = match f
+        .service
+        .execute_control(&Request::Mount {
+            workspace: identity(88),
+            branch,
+        })
+        .unwrap()
+        .reply
+    {
+        Reply::Bound { token, binding } => {
+            assert_eq!(binding.effective_root, record.root);
+            token
+        }
+        other => panic!("{other:?}"),
+    };
+    f.service.execute_control(&Request::Unmount(other)).unwrap();
     f.service.execute_control(&Request::Unmount(token)).unwrap();
     f.cleanup();
 }

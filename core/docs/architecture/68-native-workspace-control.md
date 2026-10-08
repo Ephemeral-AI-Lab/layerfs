@@ -85,4 +85,9 @@ assigns the full native connection/request service to Fuse and leaves this daemo
 registry/control owner responsible for overall Ready/terminal unmount and existing
 Commit admission. Attach, Locate, Ready and per-Workspace normal drain are now
 implemented in that owner; see [native mount session](76-native-mount-session.md).
-Daemon-wide aggregate drain and mounted Commit remain unproved.
+Daemon-wide aggregate drain remains unproved.
+
+R5, after `bb5b3c220`: `execute_control` no longer refuses Commit. It runs the
+captured namespace producer through the unchanged driver
+([product Commit](79-product-commit.md)). The paragraph above that says no
+product constructor exists describes the earlier source.

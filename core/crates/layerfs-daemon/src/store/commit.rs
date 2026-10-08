@@ -170,6 +170,7 @@ impl BoundWorkspace {
             capture: retained.capture.expect("known capture"),
             captured: retained.captured.expect("original capture completion"),
             installed: retained.local.expect("known local install"),
+            namespace: None,
         })
     }
 }

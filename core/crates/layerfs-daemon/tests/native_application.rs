@@ -141,13 +141,14 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
         )
         .unwrap();
     let before = WorkspaceApi::new(&mut control).status(bound.token).unwrap();
+    // The real binary's Commit of an unchanged Workspace: the same root, no
+    // new Commit record.
     assert!(
-        matches!(control.call(Request::Commit(bound.token)).unwrap(), Reply::Refused(v) if v.code == ControlCode::Invalid)
+        matches!(control.call(Request::Commit(bound.token)).unwrap(), Reply::Committed(layerfs_history::CommitStagedOutcome::UpToDate { head: None, root }) if root == bound.binding.effective_root)
     );
-    assert_eq!(
-        WorkspaceApi::new(&mut control).status(bound.token).unwrap(),
-        before
-    );
+    let after = WorkspaceApi::new(&mut control).status(bound.token).unwrap();
+    assert_eq!(after.binding, before.binding);
+    assert_eq!(after.activity, before.activity);
     let history = ProjectApi::new()
         .history(
             &mut control,

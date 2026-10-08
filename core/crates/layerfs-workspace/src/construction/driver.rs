@@ -18,7 +18,7 @@ use layerfs_content::{
 use layerfs_overlay::{
     CapturedReader, IndexedOperationRecordScope, OperationOwner, OverlayError, Route,
 };
-use layerfs_telemetry::timer::{Active, TimingScope};
+use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 
 /// One complete canonical filesystem root from one exact captured reader.
 /// Every read goes through that reader, this attempt's sealed records or the
@@ -119,6 +119,31 @@ impl<'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Capture
                 failure: state.failure,
                 work: state.work,
             },
+        }
+    }
+}
+impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> CapturedNamespace<'_, P> {
+    /// The same one attempt with no clocks, nodes or timing output, for a
+    /// caller that records none.
+    pub fn construct_untimed(
+        self,
+        policy: ConstructionPolicy,
+        capacities: &ConstructionCapacities,
+        objects: &dyn AuthenticatedObjects,
+        consumer: &mut dyn FinalizedConsumer,
+    ) -> CapturedNamespaceAttempt {
+        let (attempt, _) = Timing::disabled("captured.namespace", |scope| {
+            Ok::<_, std::convert::Infallible>(self.construct(
+                policy,
+                capacities,
+                objects,
+                consumer,
+                scope.child("construct"),
+            ))
+        });
+        match attempt {
+            Ok(attempt) => attempt,
+            Err(never) => match never {},
         }
     }
 }

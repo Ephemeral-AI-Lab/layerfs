@@ -4,7 +4,10 @@ use super::{
     Failure, Service, Success,
 };
 use crate::{
-    store::{BindPhase, BindRequest, CommitError},
+    store::{
+        BindPhase, BindRequest, BoundWorkspace, CapturedConstruction, CommitError, CommitFailure,
+        CommitSuccess,
+    },
     Command, OwnerError,
 };
 use layerfs_bridge::control::{
@@ -16,8 +19,9 @@ use layerfs_overlay::Capture;
 use layerfs_storage::Save;
 use std::sync::Arc;
 impl Service {
-    /// Runs one explicit command. Commit forwards the normal caller's Content
-    /// producer over the original capture; S10 supplies live normalization.
+    /// Runs one explicit command with a caller-owned Content producer for
+    /// Commit, over the original capture. The product route is
+    /// `execute_control`, whose Commit uses the captured namespace producer.
     pub fn execute(
         &self,
         request: &Request,
@@ -28,13 +32,13 @@ impl Service {
         ) -> Result<FilesystemRootId, CommitError>,
     ) -> Result<Success, Failure> {
         match request {
-            Request::Commit(token) => self.commit(*token, construct),
+            Request::Commit(token) => self.commit(*token, |workspace| workspace.commit(construct)),
             other => self.execute_control(other),
         }
     }
-    /// Runs a control operation without a namespace construction producer.
-    /// Commit is refused before lifecycle admission/capture/Save; retained
-    /// original token and publication custody still takes precedence.
+    /// Runs one control operation. Commit captures the shared published
+    /// frontier and constructs it with the captured namespace producer on
+    /// this caller's thread; retained original custody refuses it first.
     pub fn execute_control(&self, request: &Request) -> Result<Success, Failure> {
         match request {
             Request::EndSession => Ok(Success::reply(Reply::SessionEnded)),
@@ -44,7 +48,7 @@ impl Service {
             )),
             Request::Mount { workspace, branch } => self.mount(*workspace, *branch),
             Request::Status(token) => self.status(*token),
-            Request::Commit(token) => self.unavailable_commit(*token),
+            Request::Commit(token) => self.commit(*token, BoundWorkspace::commit_captured),
             Request::Unmount(token) => self.unmount(*token),
             Request::Attach(token) => self.attach(*token),
             Request::Locate(workspace) => self.locate(*workspace),
@@ -148,23 +152,32 @@ impl Service {
     fn commit(
         &self,
         token: WorkspaceToken,
-        construct: impl FnOnce(
-            &Save<'_>,
-            Capture,
-            &BranchSnapshot,
-        ) -> Result<FilesystemRootId, CommitError>,
+        run: impl FnOnce(&BoundWorkspace) -> Result<CommitSuccess, Box<CommitFailure>>,
     ) -> Result<Success, Failure> {
         let workspace = self.admit(token, Activity::Committing)?;
-        let result = workspace.commit(construct);
+        let result = run(&workspace);
+        // A known Commit whose reader or operation owner could not be
+        // released keeps that custody: it is published, and nothing later is
+        // admitted past it.
+        let unreleased = result.as_ref().is_ok_and(|commit| {
+            commit
+                .namespace
+                .as_ref()
+                .is_some_and(CapturedConstruction::retained)
+        });
         let update = (|| {
             let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             let binding = bound_mut(&mut entries, token)?;
             binding.epoch = binding.epoch.saturating_add(1);
             match &result {
-                Ok(_) => {
+                Ok(commit) => {
                     binding.snapshot = workspace.snapshot().map_err(Failure::Workspace)?;
-                    binding.activity = Activity::Idle;
-                    binding.published = None;
+                    binding.activity = if unreleased {
+                        Activity::LocalFailure
+                    } else {
+                        Activity::Idle
+                    };
+                    binding.published = unreleased.then(|| commit.history.clone());
                 }
                 Err(failed) => {
                     binding.published = failed.published.clone();
@@ -186,6 +199,15 @@ impl Service {
                 if let Err(cause) = update {
                     return Err(Failure::After {
                         cause: Box::new(cause),
+                        original: Box::new(success),
+                    });
+                }
+                if unreleased {
+                    return Err(Failure::After {
+                        cause: Box::new(Failure::Rejected(
+                            ControlCode::Unknown,
+                            "captured namespace custody retained after Commit",
+                        )),
                         original: Box::new(success),
                     });
                 }

@@ -52,8 +52,8 @@ product mental model or campaign-specific benchmark procedures.
   guarded FIFO/cursor transitions. Captured namespace normalization is the
   `CapturedNamespace` producer
   ([captured namespace construction](docs/architecture/78-captured-namespace-construction.md));
-  no product code calls it yet, and live namespace normalization remains
-  unfinished. The Store
+  the product Commit constructor calls it
+  ([product Commit](docs/architecture/79-product-commit.md)). The Store
   half of Commit is implemented with exact original failure/unknown custody;
   see [Store Commit](docs/architecture/65-store-commit-composition.md).
   The external E01 example records original startup work, diagnostics and Stop
@@ -93,7 +93,9 @@ product mental model or campaign-specific benchmark procedures.
   Ordinary native mutation is served through the existing Workspace plan and
   one publishing Overlay job, with no notification and no writeback cache; see
   [native mutation and kernel coherence](docs/architecture/77-native-mutation-coherence.md).
-  Mounted Commit, forced unmount and daemon-wide drain are R5–R6 work.
+  A control Commit runs the captured namespace producer through the unchanged
+  driver; mounted proofs are recorded with R5. Forced unmount and daemon-wide
+  drain are R6 work.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,
@@ -196,7 +198,8 @@ per-Workspace normal drain are implemented ([R2 record](docs/issues/307/R2-COMPL
 as is ordinary native mutation ([R3 record](docs/issues/307/R3-COMPLETION-20261008.md));
 as is the captured namespace producer with its bounded validation
 ([R4 record](docs/issues/307/R4-COMPLETION-20261008.md)), which the Commit
-driver reaches only in a daemon test. R5 integration remains unfinished. See the
+driver reaches through the product constructor
+([product Commit](docs/architecture/79-product-commit.md)). See the
 [reviewed ownership](docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
 Moving blocking OwnerClient calls behind a port does not establish deferred service.
 
@@ -233,12 +236,13 @@ Current source has captured-file normalization and the Store half of Commit.
 Content constructor, finishes the Save, publishes through History and installs
 the known root locally. Full captured namespace assembly, including names,
 links, metadata and changed file roots, is
-[`CapturedNamespace`](crates/layerfs-workspace/src/construction/driver.rs). It
-is not wired into a product Commit: a daemon test's closure acquires the
-captured reader and operation owner, runs it and hands the driver the original
-cause on failure. That wiring, mounted Commit and its failure classification
-are R5. S8 FUSE/Exec and direct-Content Store-half proofs do not establish that
-integration.
+[`CapturedNamespace`](crates/layerfs-workspace/src/construction/driver.rs).
+The product constructor `BoundWorkspace::commit_captured` runs it inside that
+driver: it acquires the captured reader and one operation owner, hands the
+driver the original cause on failure, and releases both owners only after the
+driver's outcome is known, keeping them with the failure when it is not
+([product Commit](docs/architecture/79-product-commit.md)). A control Commit
+uses it; `Service::execute` still takes a caller's constructor for driver tests.
 See [captured-file construction](crates/layerfs-workspace/src/construction/captured/owner.rs),
 [the shared Save sink](crates/layerfs-storage/src/save/operation.rs) and
 [Store Commit composition](docs/architecture/65-store-commit-composition.md).

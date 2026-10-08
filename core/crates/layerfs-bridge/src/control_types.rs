@@ -27,7 +27,7 @@ pub enum Request {
         /// Selected Branch.
         branch: BranchId,
     },
-    /// Capture and run the daemon-supplied Content producer, Save and conditional publish.
+    /// Capture the published frontier, construct it in the daemon, Save and publish.
     Commit(WorkspaceToken),
     /// Observe maintained local state without reading or refreshing the Store.
     Status(WorkspaceToken),

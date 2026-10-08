@@ -6,8 +6,8 @@ use layerfs_history::CommitStagedOutcome;
 
 impl WorkspaceApi<'_> {
     /// Requests one Commit and returns its original known publication/install result.
-    /// The configured daemon constructor defines the input route; this facade does
-    /// not implement live namespace normalization or infer it from binding.
+    /// The daemon captures the Workspace's shared published frontier and constructs
+    /// it; this facade sends one request and infers nothing from the binding.
     pub fn commit(
         &mut self,
         token: WorkspaceToken,

@@ -1,5 +1,5 @@
-//! Cached pages of an open file. Base install continuity belongs to the
-//! mounted Commit; nothing here changes a mounted view.
+//! Cached pages of an open file. A known base install changes no name, byte,
+//! link, attribute or serial of the mounted view, so nothing here acts on it.
 use layerfs_workspace::Refusal;
 
 /// How the kernel treats cached pages of one opened file.
