@@ -101,7 +101,7 @@ def validate(path):
     require(summary.get("closed_namespaces") == 4, "acknowledged terminal drain missing")
     require(owner["counters"]["maintenance_data_bytes"] == 4 * 32 * 128, "operation-record drain bytes")
     require(owner["counters"]["peak_credited_bytes"] <= 8 * 1024 * 1024, "explicit credit budget")
-    require(integer(summary.get("peak_queued")) and summary["peak_queued"] <= 4 * 18,
+    require(integer(summary.get("peak_queued")) and summary["peak_queued"] <= 4 * 34,
             "configured queue bound")
     return {"schema": "cluster-two-engine-validation-v1", "functional_count_status": "PASS",
             "jobs": count, "phases": phases, "classes": classes, "wave_counts": waves,

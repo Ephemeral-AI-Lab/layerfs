@@ -46,7 +46,11 @@ def main():
                 for p in sorted(args.output.iterdir()) if p.is_file()}
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(record, indent=2))
-    print((args.output / "stdout.txt").read_text(errors="replace"))
+    raw_stdout = (args.output / "stdout.txt").read_text(errors="replace")
+    if args.kind != "test" and len(raw_stdout) > 20000:
+        print(f"stdout retained in {args.output / 'stdout.txt'} ({len(raw_stdout)} characters)")
+    else:
+        print(raw_stdout)
     print((args.output / "stderr.txt").read_text(errors="replace"))
     raise SystemExit(result.returncode)
 

@@ -40,6 +40,18 @@ class EngineReceipts(unittest.TestCase):
     def test_missing_job(self):
         self.rejected(lambda rows: rows.pop(9), "job index")
 
+    def test_current_source_and_lifecycle_lane_queue_bound(self):
+        rows = copy.deepcopy(self.original)
+        rows[-1]["peak_queued"] = 4 * 34
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "current-lanes.jsonl"
+            path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+            self.assertEqual(engine.validate(path)["functional_count_status"], "PASS")
+
+    def test_above_current_lane_queue_bound(self):
+        self.rejected(lambda rows: rows[-1].__setitem__("peak_queued", 4 * 34 + 1),
+                      "configured queue bound")
+
     def test_duplicate_job(self):
         self.rejected(lambda rows: rows.insert(9, copy.deepcopy(rows[9])), "job index")
 

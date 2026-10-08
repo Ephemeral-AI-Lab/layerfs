@@ -1,0 +1,16 @@
+[package]
+name = "layerfs-r7-passthrough"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[workspace]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fuser = { version = "=0.18.0", default-features = false }
+libc = "=0.2.189"
+nix = { version = "=0.31.3", features = ["fs", "mount", "feature"] }
+
+[patch.crates-io]
+fuser = { version = "=0.18.0", path = "../../vendor/fuser-0.18.0" }

@@ -1,0 +1,4680 @@
+{
+  "admission_eligible": false,
+  "arm_order": [
+    "N",
+    "P",
+    "L"
+  ],
+  "cache_classes": {
+    "A": {
+      "arms": [
+        "L",
+        "N",
+        "P"
+      ],
+      "definition": "fresh mount; empty daemon immutable cache; new Store connections and overlay; fresh kernel connection",
+      "requirements": [
+        "per-file eviction hint then mincore residency observation of all Store files and sidecars before attempt",
+        "nonzero resident pages: INELIGIBLE, attempted_operation_count=0",
+        "native/passthrough fixture file data residency also enforced; no VM-wide drop"
+      ]
+    },
+    "B": {
+      "arms": [
+        "L"
+      ],
+      "definition": "fresh mount, same daemon after untimed identical earlier-mount call and terminal unmount; fresh kernel connection",
+      "requirements": [
+        "measured-phase object demands are zero",
+        "Store residency for paid history read declared",
+        "earlier warm-up mount and terminal outcome recorded; no N/P analogue"
+      ]
+    },
+    "C": {
+      "arms": [
+        "L",
+        "N",
+        "P"
+      ],
+      "definition": "same mount after declared untimed identical call; warm native caches",
+      "requirements": [
+        "warm-up end to measured start < 60000000000 ns",
+        "opcode receipts",
+        "natural own-write effects and all file/SQL/reader/immutable/kernel cache scopes declared"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case_id": "E01",
+      "classes": [
+        "A",
+        "B"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E01",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "fixed-cost",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "true"
+        ],
+        "command_sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "ownership: Ready, unregistered external process, complete terminal drain",
+        "oracle_argv": null,
+        "oracle_unavailable_reason": "ownership oracle is original SDK/daemon lifecycle receipt, not a tree observer",
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E02",
+      "classes": [
+        "A",
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E02",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "read-metadata",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "find . | wc -l"
+        ],
+        "command_sha256": "dea92a5bfe0ee1728d8a7e88e3993eea2e571947a64bbc5b31d7d9dec3e3b809",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full names and inode-kind manifest",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E02",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E03",
+      "classes": [
+        "A",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 120000000000,
+      "fixture": "full",
+      "label": "E03",
+      "not_run_reason": null,
+      "numeric_budget_verdict": false,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "priced-diagnostic",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "tar -cf - . | wc -c"
+        ],
+        "command_sha256": "d0a2bc9976eb3ccbe2c2bcfbcde4f1b8b2b71317ed7257b274d2267c14686841",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "content digest of tar stream; separate verifier, never byte count alone",
+        "oracle_argv": null,
+        "oracle_unavailable_reason": "wc-only body does not expose the timed tar stream; independent tree/content observer cannot attest that exact stream",
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E04",
+      "classes": [
+        "A",
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E04",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "read-metadata",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "git -c core.fsmonitor=false status --porcelain=v1"
+        ],
+        "command_sha256": "7f7f833e537d6db60f08a2cc610d27100ee892f9e59393c8413c1e9253323e7d",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "scoped .git tree, stdout and exact exit; index rewrite retained",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E04",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E05",
+      "classes": [
+        "A",
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E05",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "read-metadata",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "git log -20 --stat && git diff --stat HEAD~1"
+        ],
+        "command_sha256": "298b82f1de7f6248719da5fae087430afc05eb578b0182bd264a46a4ace7db03",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "stdout digest and exact exit",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "stdout",
+          "--expected",
+          "{sealed_stdout_oracle}",
+          "--actual",
+          "{original_stdout}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E06",
+      "classes": [
+        "A",
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E06",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "read-metadata",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "git grep -n tool -- packages | wc -l"
+        ],
+        "command_sha256": "46ba9f4c8f7e2e32a46b615a43e245d14fe195f7afcca134dd4b14c406777d5c",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "stdout digest and exact exit",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "stdout",
+          "--expected",
+          "{sealed_stdout_oracle}",
+          "--actual",
+          "{original_stdout}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E07",
+      "classes": [
+        "A",
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E07",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "read-metadata",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "node -e \"require('typescript')\""
+        ],
+        "command_sha256": "0e3b586da9afb28598ad54b8b61b82fea57c932667310014ac49a46724cbcb7a",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "stdout digest and exact exit",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "stdout",
+          "--expected",
+          "{sealed_stdout_oracle}",
+          "--actual",
+          "{original_stdout}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E08",
+      "classes": [
+        null
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E08",
+      "not_run_reason": "owner excluded TypeScript build",
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "not-run",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "node node_modules/typescript/bin/tsc -b tsconfig.client.json"
+        ],
+        "command_sha256": "ad75944348d4db63e7744c1c80ad2e480fbcb578e2d065b082670d219e2e8a46",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "NOT_RUN: owner excluded TypeScript build",
+        "oracle_argv": null,
+        "oracle_unavailable_reason": "owner NOT_RUN",
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E09",
+      "classes": [
+        null
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E09",
+      "not_run_reason": "no authorized normalized oracle",
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "not-run",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "node --test .github/review-ownership/*.test.mjs"
+        ],
+        "command_sha256": "3299888073d462fbd72cbfeae84ade076228f6337db94bf475e7b53f35715aa8",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "NOT_RUN: no authorized normalized oracle",
+        "oracle_argv": null,
+        "oracle_unavailable_reason": "owner NOT_RUN: no normalized oracle",
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E10",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E10",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "sed -i '1i// experiment 305' packages/acp/acp/src/codec.ts && git add -A && git commit -m 'experiment 305'"
+        ],
+        "command_sha256": "f53a1462b725dfc5c1cfddb659bf8d020aed1dc4846bbb0c0e14281ce021b8c4",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "scoped .git and codec.ts tree; survival through selected Commit",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E10",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E11",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E11",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "git checkout -q HEAD~100 && git checkout -q -"
+        ],
+        "command_sha256": "f1216606d5048a0308c35700b5ff5702793914042147d09b81c248699ab085a7",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "scoped .git and tracked-file tree",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E11",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}",
+          "--tracked",
+          "/code/tracked-paths.json"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E12",
+      "classes": [
+        "A",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 120000000000,
+      "fixture": "full-minus-dependencies",
+      "label": "E12",
+      "not_run_reason": null,
+      "numeric_budget_verdict": false,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "sealed /replay/F and /replay/master.json, /code/node-roots.json; no network",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "priced-diagnostic",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "python3 /code/workload.py copy"
+        ],
+        "command_sha256": "799fea9318ad2355d1b3fb1404699ac884185c2d280c6e9cdb40bbacf759e466",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "scoped node_modules tree: full payload digests and metadata",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E12",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E13",
+      "classes": [
+        "A",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 120000000000,
+      "fixture": "full-minus-dependencies",
+      "label": "E13",
+      "not_run_reason": null,
+      "numeric_budget_verdict": false,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "sealed /replay/F and /replay/master.json, /code/node-roots.json; no network",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "priced-diagnostic",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "python3 /code/workload.py link"
+        ],
+        "command_sha256": "01a9d24c0563938611b8a9928a5033ef5502a54b3719194029d0b1a620fbd075",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "E12 plus device/inode/nlink equivalence classes, including .experiment-store",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E13",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E14",
+      "classes": [
+        "A",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 120000000000,
+      "fixture": "full",
+      "label": "E14",
+      "not_run_reason": null,
+      "numeric_budget_verdict": false,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "sealed /replay/F and /replay/master.json, /code/node-roots.json; no network",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "priced-diagnostic",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "python3 /code/workload.py remove"
+        ],
+        "command_sha256": "8c44c170dfc2d65aed6519e7966c0ae0cca0798b4c4710afa11606e564a8ce99",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "scoped removed-dependency tree",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E14",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E15",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E15",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "sealed /code/largest-path, matching owned fixture file",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "cp \"$(cat /code/largest-path)\" experiment-large && cmp \"$(cat /code/largest-path)\" experiment-large"
+        ],
+        "command_sha256": "aac579f8edd1e02356505e61605f2c65151ecbc5bf89e9af3522530067b0bc46",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full bytes of experiment-large, matching sealed largest source file",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E15",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E16",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E16",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "python3 /code/workload.py append"
+        ],
+        "command_sha256": "0fc1cd482b48731bb27e614dd7b18f70dabdde5b7cb30784cc91fa30575c69ec",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "experiment.log exactly (x*99 + newline)*10000, 1000000 bytes",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E16",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E17",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E17",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "python3 /code/workload.py churn"
+        ],
+        "command_sha256": "0c00cd5f39f78b2df058b7e2c028253f2b012c616c3857deeed250b2981d646f",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "no experiment-temp-* names remain; scoped tree and exact exit",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E17",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E18",
+      "classes": [
+        "A",
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "unrefreshed index",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "unrefreshed index only; no refreshed-index fast-path claim",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "read-metadata",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "git -c core.fsmonitor=false status --porcelain=v1"
+        ],
+        "command_sha256": "7f7f833e537d6db60f08a2cc610d27100ee892f9e59393c8413c1e9253323e7d",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "scoped .git tree and stdout; labelled unrefreshed index",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E18",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "E19",
+      "classes": [
+        "A",
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "label": "E19",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "282 of 14090 tracked files changed via mounted operations and Commit, or two declared host-prepared related roots; expected stdout rederived",
+        "full fixture or explicitly declared reduced cut in every receipt"
+      ],
+      "set": "read-metadata",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "git -c core.fsmonitor=false status --porcelain=v1"
+        ],
+        "command_sha256": "7f7f833e537d6db60f08a2cc610d27100ee892f9e59393c8413c1e9253323e7d",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "scoped .git and tracked tree; derive expected output after 282 changes",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "E19",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}",
+          "--tracked",
+          "/code/tracked-paths.json"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": [
+          "python3",
+          "/code/changes.py",
+          "--root",
+          "{owned_root_or_mount}",
+          "--tracked",
+          "/code/tracked-paths.json"
+        ],
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C01",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C01",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ for i in $(seq 1 1000); do echo $i > f$i; done; } >/dev/null"
+        ],
+        "command_sha256": "eb02a56c9a3fdc7955ab9bd7c5b4383dad120d3a926f76a6c51e712bcee2a85a",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C01",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C02",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C02",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ for i in $(seq 1 1000); do echo $i > f$i; done; for i in $(seq 1 1000); do stat f$i; done; } >/dev/null"
+        ],
+        "command_sha256": "f1708450d58b34975627f5a620fa69cb9df17a0437235feaf302843f81dece18",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C02",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C03",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C03",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ for i in $(seq 1 1000); do echo $i > f$i; done; rm f*; } >/dev/null"
+        ],
+        "command_sha256": "f5b32c4a764970421c6d7a7363759df0b5dcce3bfdb63a92ebbb1e1f0872f6e2",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C03",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C04",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C04",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done; } >/dev/null"
+        ],
+        "command_sha256": "fe4b426dbf768ac606bb1d197278d66e441846bb00425c1f5979386745a0612e",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C04",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C05",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C05",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done; find . -type f | wc -l; } >/dev/null"
+        ],
+        "command_sha256": "cf432b9ee6dce623884758b85bd3fca7dd972828a668661c815313c8b402199d",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C05",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C06",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C06",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ dd if=/dev/zero of=big bs=1M count=64 status=none; } >/dev/null"
+        ],
+        "command_sha256": "d6b326be0d11aa8b375a561c8bbad779165d5b0e0b1e9df26d6b782c3459bc73",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C06",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C07",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C07",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ dd if=/dev/zero of=big bs=1M count=64 status=none; cp big big2; } >/dev/null"
+        ],
+        "command_sha256": "429f5a14d6ed51762e2ee2453ad2081d320b49371e35edd533bfc34840a582a4",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C07",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C08",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C08",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ dd if=/dev/zero of=big bs=1M count=64 status=none; cat big > /dev/null; } >/dev/null"
+        ],
+        "command_sha256": "d039d9afc57fd431e702c0b4a3f6eb23675d6baf61d92a2b2f1ece3a677d9882",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C08",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C09",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C09",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "64 MiB big precondition from empty root; survives fresh mount via setup Commit/Init; enforce phase's cache class, never own-write cold credit"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ cat big > /dev/null; } >/dev/null"
+        ],
+        "command_sha256": "1017cbd4cd0a42bc4cd14f23c24adf54e47518ad58d7564b0eecf8badb1c6dae",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C09",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C10",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C10",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "64 MiB big precondition from empty root; survives fresh mount via setup Commit/Init; enforce phase's cache class, never own-write cold credit"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ cp big big2; } >/dev/null"
+        ],
+        "command_sha256": "a4c2ff11f48eb28acd3cb6c1881a5376261e34f1e74c73887008a8885d5ed84f",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C10",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C11",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C11",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store",
+        "64 MiB big precondition from empty root; survives fresh mount via setup Commit/Init; enforce phase's cache class, never own-write cold credit"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ dd if=/dev/zero of=big bs=1M count=64 status=none conv=notrunc; } >/dev/null"
+        ],
+        "command_sha256": "53077030326a1386f2cf2523f5a850b35feaba2d8fcb1b36e9f40a742be40a0d",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C11",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "C12",
+      "classes": [
+        "B",
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "empty",
+      "label": "C12",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "complete-declared-root",
+      "prerequisites": [
+        "release binary and pinned image",
+        "closed independently writable setup clone or qualified shared Store"
+      ],
+      "set": "write-churn",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "argv": [
+          "/bin/bash",
+          "-o",
+          "pipefail",
+          "-c",
+          "{ git init -q; for i in $(seq 1 100); do echo $i > f$i; done; git add -A; git -c user.email=a@b -c user.name=a commit -qm init; } >/dev/null"
+        ],
+        "command_sha256": "837c1465ba0066de602ad01f51efe880f08ab2ae4cbbbb65901bdbae9a48559b",
+        "environment": {
+          "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+          "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+          "GIT_AUTHOR_NAME": "Experiment",
+          "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+          "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+          "GIT_COMMITTER_NAME": "Experiment",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "HOME": "/tmp",
+          "LANG": "C",
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LC_ALL": "C",
+          "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+        },
+        "gid": "declared fixture owner",
+        "historical_gid": 1000,
+        "historical_source": {
+          "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+          "path": "core/experiment/real-tree/runner.py"
+        },
+        "historical_uid": 1000,
+        "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+        "oracle_argv": [
+          "python3",
+          "/code/oracle.py",
+          "observe",
+          "--case",
+          "C12",
+          "--root",
+          "{verification_root}",
+          "--output",
+          "{fresh_oracle_output}"
+        ],
+        "oracle_unavailable_reason": null,
+        "preparation_command": "",
+        "related_root_preparation_argv": null,
+        "uid": "declared fixture owner"
+      }
+    },
+    {
+      "case_id": "K01",
+      "classes": [
+        null
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "independent expected manifests sealed from declared native command/schedule before selection",
+        "Commit construction workers=1; command is never registered with daemon"
+      ],
+      "scenario": "small change Commit",
+      "set": "commit",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "commands": [
+          "mkdir r7-small; for i in $(seq 1 24); do printf 'r7-%s\\n' \"$i\" > r7-small/f$i; done"
+        ],
+        "commit_count": 1,
+        "fresh_mount_oracle": false,
+        "oracle": "exact r7-small names, metadata and all 24 payloads; scoped, fresh mount when selected"
+      }
+    },
+    {
+      "case_id": "K02",
+      "classes": [
+        null
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full-minus-dependencies",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "independent expected manifests sealed from declared native command/schedule before selection",
+        "Commit construction workers=1; command is never registered with daemon"
+      ],
+      "scenario": "large change Commit after E12",
+      "set": "commit",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "commands": [
+          [
+            "/bin/bash",
+            "-o",
+            "pipefail",
+            "-c",
+            "python3 /code/workload.py copy"
+          ]
+        ],
+        "commit_count": 1,
+        "fixture": "full-minus-dependencies",
+        "fresh_mount_oracle": true,
+        "oracle": "scoped node_modules tree: full payload digests and metadata"
+      }
+    },
+    {
+      "case_id": "K03",
+      "classes": [
+        null
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full-minus-dependencies",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "independent expected manifests sealed from declared native command/schedule before selection",
+        "Commit construction workers=1; command is never registered with daemon"
+      ],
+      "scenario": "large change Commit after E13",
+      "set": "commit",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "commands": [
+          [
+            "/bin/bash",
+            "-o",
+            "pipefail",
+            "-c",
+            "python3 /code/workload.py link"
+          ]
+        ],
+        "commit_count": 1,
+        "fixture": "full-minus-dependencies",
+        "fresh_mount_oracle": true,
+        "oracle": "E12 plus device/inode/nlink equivalence classes, including .experiment-store"
+      }
+    },
+    {
+      "case_id": "K04",
+      "classes": [
+        null
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "independent expected manifests sealed from declared native command/schedule before selection",
+        "Commit construction workers=1; command is never registered with daemon"
+      ],
+      "scenario": "five incremental Commits on one mount",
+      "set": "commit",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "commands": [
+          "printf 'r7-increment-%s\\n' '1' > r7-increment-1",
+          "printf 'r7-increment-%s\\n' '2' > r7-increment-2",
+          "printf 'r7-increment-%s\\n' '3' > r7-increment-3",
+          "printf 'r7-increment-%s\\n' '4' > r7-increment-4",
+          "printf 'r7-increment-%s\\n' '5' > r7-increment-5"
+        ],
+        "commit_count": 5,
+        "fresh_mount_oracle": true,
+        "oracle": "five exact files and full payloads after each known Commit; same mount and final fresh mount",
+        "schedule": "same mount; command i then Commit i; no overlap"
+      }
+    },
+    {
+      "case_id": "K05",
+      "classes": [
+        null
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "independent expected manifests sealed from declared native command/schedule before selection",
+        "Commit construction workers=1; command is never registered with daemon"
+      ],
+      "scenario": "Commit then fresh-mount survival",
+      "set": "commit",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "commands": [
+          "mkdir r7-small; for i in $(seq 1 24); do printf 'r7-%s\\n' \"$i\" > r7-small/f$i; done"
+        ],
+        "commit_count": 1,
+        "fresh_mount_oracle": true,
+        "oracle": "exact r7-small names, metadata and all 24 payloads; scoped, fresh mount when selected"
+      }
+    },
+    {
+      "case_id": "W01",
+      "classes": [
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "independent expected manifests sealed from declared native command/schedule before selection",
+        "Commit construction workers=1; command is never registered with daemon"
+      ],
+      "scenario": "two Workspaces: one scanning and one writing",
+      "set": "concurrency",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "commands": [
+          {
+            "argv": [
+              "/bin/bash",
+              "-o",
+              "pipefail",
+              "-c",
+              "find . | wc -l"
+            ],
+            "workspace": "scan"
+          },
+          {
+            "argv": [
+              "/bin/bash",
+              "-o",
+              "pipefail",
+              "-c",
+              "python3 /code/workload.py append"
+            ],
+            "workspace": "write"
+          }
+        ],
+        "commit_count": 0,
+        "oracle": "scan full name/kind manifest and exact stdout; writer log exactly1000000 bytes; per-Workspace progress",
+        "schedule": "two ready Workspaces over same closed full root, external commands launched concurrently"
+      }
+    },
+    {
+      "case_id": "W02",
+      "classes": [
+        "C"
+      ],
+      "complete_command_wall_stop_ns": 15000000000,
+      "fixture": "full",
+      "not_run_reason": null,
+      "numeric_budget_verdict": true,
+      "oracle_scope": "scoped",
+      "prerequisites": [
+        "independent expected manifests sealed from declared native command/schedule before selection",
+        "Commit construction workers=1; command is never registered with daemon"
+      ],
+      "scenario": "several sequential and concurrent external commands on one Workspace",
+      "set": "concurrency",
+      "verifier_wall_stop_ns": 9500000000,
+      "workload": {
+        "commands": [
+          {
+            "argv": [
+              "/bin/bash",
+              "-o",
+              "pipefail",
+              "-c",
+              "true"
+            ],
+            "stage": 0,
+            "workspace": "shared"
+          },
+          {
+            "argv": [
+              "/bin/bash",
+              "-o",
+              "pipefail",
+              "-c",
+              "git grep -n tool -- packages | wc -l"
+            ],
+            "stage": 1,
+            "workspace": "shared"
+          },
+          {
+            "argv": [
+              "/bin/bash",
+              "-o",
+              "pipefail",
+              "-c",
+              "python3 /code/workload.py append"
+            ],
+            "stage": 1,
+            "workspace": "shared"
+          }
+        ],
+        "commit_count": 0,
+        "oracle": "E06 exact stdout; E16 exact1000000 byte log; complete command results and per-request progress",
+        "schedule": "one retained mount; stage0 completes, then both stage1 external commands run concurrently"
+      }
+    }
+  ],
+  "control_reuse": "once per exact N/P identity; no product-change resampling",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "family_id": "r7-optimization",
+  "fixture": {
+    "commit": "639ed01539",
+    "exact_bytes": null,
+    "historical_files": 103108,
+    "historical_size_label": "3.237 GiB",
+    "policy": "owned byte copy only; never execute in or write to source checkout"
+  },
+  "full_matrix_schedule": "baseline, when loop set stops improving, final",
+  "image_id": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "loop_set": "lead selects after baseline, weighted gap; at least mount/unmount, read/metadata, write, cold read, small/large Commit",
+  "mode": "exploratory",
+  "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+  "phases": {
+    "cleanup": {
+      "end": "Gone observed or exact failure",
+      "product_time": false,
+      "reported_separately": true,
+      "start": "Unmounted reply"
+    },
+    "command": {
+      "end": "actual exit/status",
+      "product_time": true,
+      "start": "external bash launch"
+    },
+    "commit": {
+      "end": "original known success/failure/unknown reply",
+      "product_time": true,
+      "start": "SDK Commit invocation"
+    },
+    "mount": {
+      "end": "Attach acknowledged Ready",
+      "product_time": true,
+      "start": "SDK Mount invocation"
+    },
+    "setup": {
+      "end": "closed setup ready",
+      "product_time": false,
+      "start": "clone/reuse begins"
+    },
+    "streams": {
+      "end": "stdout/stderr EOF, failure or disposal",
+      "overlaps": "command",
+      "product_time": true,
+      "start": "external bash launch"
+    },
+    "unmount": {
+      "end": "original terminal reply",
+      "product_time": true,
+      "start": "explicit SDK Unmount invocation"
+    },
+    "verifier": {
+      "end": "verifier exit",
+      "product_time": false,
+      "start": "independent verifier launch"
+    }
+  },
+  "priced_stop_decision": "120 s prospective bounded diagnostic stop; no pass/fail latency budget; no inherited 60/600 s scope",
+  "registry_identity": "1092d2dc5b7c6dca3bd27e5594e8d406ada34c945e87ec93993f7f23a4dd9dad",
+  "required_counters": [
+    "opcode_work",
+    "native_work",
+    "dispatch_work",
+    "mount_work",
+    "owner_work",
+    "statement_work",
+    "store_work",
+    "reader_work",
+    "construction_work",
+    "storage_diagnostics",
+    "global_sql_work",
+    "stored_counts",
+    "scheduler_bytes",
+    "peak_credited_bytes",
+    "immutable_cache_allowance_bytes",
+    "daemon_vmhwm_bytes",
+    "store_logical_bytes",
+    "store_allocated_bytes",
+    "overlay_logical_bytes",
+    "overlay_allocated_bytes",
+    "cleanup_debt"
+  ],
+  "sample_count_per_identity": 1,
+  "scaling": {
+    "dimensions": [
+      "base size with fixed change",
+      "changed rows",
+      "changed files",
+      "changed bytes",
+      "huge directory",
+      "deep tree",
+      "hard-link aliases",
+      "file fragmentation",
+      "tiny appends",
+      "truncate and regrow",
+      "incremental Commit history",
+      "mount/unmount cycles",
+      "concurrent Workspaces",
+      "concurrent processes",
+      "lookups outstanding at unmount",
+      "cleanup debt"
+    ],
+    "factors": [
+      1,
+      2,
+      4
+    ],
+    "mode": "counts-only; never timing resampling",
+    "required_evidence": "per-unit counts and growth operands at 1x/2x/4x; each measured/changed path has bounded count test at two sizes"
+  },
+  "scenario_version": 1,
+  "schema": "r7-optimization-registry-v1",
+  "selections": [
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E01:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E01:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E01:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E01:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E01",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E01:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E01",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E01:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E02:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E02:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E02:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E02:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E02",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E02:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E02",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E02:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E02:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E02:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E02:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E03:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E03:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E03:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E03:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E03:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E03:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E04:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E04:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E04:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E04:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E04",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E04:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E04",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E04:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E04:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E04:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E04:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E05:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E05:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E05:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E05:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E05",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E05:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E05",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E05:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E05:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E05:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E05:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E06:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E06:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E06:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E06:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E06",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E06:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E06",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E06:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E06:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E06:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E06:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E07:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E07:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E07:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E07:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E07",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E07:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E07",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E07:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E07:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E07:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E07:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": null,
+      "case_id": "E08",
+      "reason": "owner excluded TypeScript build",
+      "sample_count": 0,
+      "selection_id": "E08:none:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": null,
+      "case_id": "E08",
+      "reason": "owner excluded TypeScript build",
+      "sample_count": 0,
+      "selection_id": "E08:none:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": null,
+      "case_id": "E08",
+      "reason": "owner excluded TypeScript build",
+      "sample_count": 0,
+      "selection_id": "E08:none:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": null,
+      "case_id": "E09",
+      "reason": "no authorized normalized oracle",
+      "sample_count": 0,
+      "selection_id": "E09:none:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": null,
+      "case_id": "E09",
+      "reason": "no authorized normalized oracle",
+      "sample_count": 0,
+      "selection_id": "E09:none:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": null,
+      "case_id": "E09",
+      "reason": "no authorized normalized oracle",
+      "sample_count": 0,
+      "selection_id": "E09:none:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E10:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E10",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E10:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E10",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E10:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E10:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E10:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E10:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E11:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E11",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E11:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E11",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E11:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E11:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E11:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E11:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E12",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E12:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E12",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E12:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E12",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E12:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E12",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "E12:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E12",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "E12:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E12",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "E12:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E13",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E13:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E13",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E13:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E13",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E13:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E13",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "E13:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E13",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "E13:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E13",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "E13:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E14",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E14:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E14",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E14:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E14",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E14:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E14",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E14:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E14",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E14:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E14",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E14:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E15",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E15:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E15",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E15:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E15",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E15:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E15",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E15:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E15",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E15:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E15",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E15:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E16",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E16:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E16",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E16:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E16",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E16:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E16",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E16:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E16",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E16:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E16",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E16:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E17",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E17:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E17",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E17:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E17",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E17:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E17",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E17:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E17",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E17:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E17",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E17:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E18",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E18:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E18",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E18:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E18",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E18:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E18",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E18:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E18",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E18:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E18",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E18:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E18",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E18:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E18",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E18:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E18",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E18:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "A",
+      "case_id": "E19",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E19:A:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "A",
+      "case_id": "E19",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E19:A:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "A",
+      "case_id": "E19",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E19:A:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "E19",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E19:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "E19",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E19:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "E19",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "E19:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "E19",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E19:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "E19",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E19:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "E19",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "E19:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C01:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C01",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C01:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C01",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C01:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C01:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C01:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C01:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C02:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C02",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C02:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C02",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C02:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C02:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C02:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C02:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C03:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C03",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C03:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C03",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C03:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C03:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C03:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C03:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C04:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C04",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C04:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C04",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C04:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C04:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C04:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C04:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C05:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C05",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C05:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C05",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C05:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C05:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C05:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C05:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C06:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C06",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C06:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C06",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C06:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C06:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C06:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C06",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C06:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C07:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C07",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C07:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C07",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C07:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C07:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C07:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C07",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C07:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C08",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C08:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C08",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C08:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C08",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C08:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C08",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C08:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C08",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C08:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C08",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C08:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C09",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C09:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C09",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C09:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C09",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C09:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C09",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C09:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C09",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C09:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C09",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C09:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C10:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C10",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C10:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C10",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C10:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C10:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C10:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C10",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C10:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C11:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C11",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C11:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C11",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C11:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C11:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C11:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C11",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C11:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "B",
+      "case_id": "C12",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "C12:B:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "B",
+      "case_id": "C12",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C12:B:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "B",
+      "case_id": "C12",
+      "reason": "cache class B is L-only; native/passthrough has no analogue",
+      "sample_count": 0,
+      "selection_id": "C12:B:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "C12",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "C12:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "C12",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "C12:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "C12",
+      "reason": "strict identical-call same-mount warm-up changes non-repeatable input: existing symlinks/.experiment-store or no new Git commit; retain conflict, no guessed preconditioning",
+      "sample_count": 0,
+      "selection_id": "C12:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": null,
+      "case_id": "K01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "K01:none:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": null,
+      "case_id": "K01",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K01:none:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": null,
+      "case_id": "K01",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K01:none:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": null,
+      "case_id": "K02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "K02:none:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": null,
+      "case_id": "K02",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K02:none:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": null,
+      "case_id": "K02",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K02:none:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": null,
+      "case_id": "K03",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "K03:none:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": null,
+      "case_id": "K03",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K03:none:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": null,
+      "case_id": "K03",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K03:none:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": null,
+      "case_id": "K04",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "K04:none:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": null,
+      "case_id": "K04",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K04:none:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": null,
+      "case_id": "K04",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K04:none:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": null,
+      "case_id": "K05",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "K05:none:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": null,
+      "case_id": "K05",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K05:none:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": null,
+      "case_id": "K05",
+      "reason": "native/passthrough has no canonical Store Commit; command-only control can be separately recorded",
+      "sample_count": 0,
+      "selection_id": "K05:none:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "W01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "W01:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "W01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "W01:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "W01",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "W01:C:P",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "L",
+      "cache_class": "C",
+      "case_id": "W02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "W02:C:L",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "N",
+      "cache_class": "C",
+      "case_id": "W02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "W02:C:N",
+      "status": "NOT_RUN"
+    },
+    {
+      "admission_eligible": false,
+      "arm": "P",
+      "cache_class": "C",
+      "case_id": "W02",
+      "reason": "prospectively registered; not attempted",
+      "sample_count": 0,
+      "selection_id": "W02:C:P",
+      "status": "NOT_RUN"
+    }
+  ],
+  "store_profile": "Disposable/WAL/OFF",
+  "workload_identity": "e3bdfada4401077e0603d92f0340c5134f8e0448d0f3411a9ca4aeaf5d97fb14"
+}

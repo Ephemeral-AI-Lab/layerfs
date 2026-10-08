@@ -1,0 +1,20 @@
+{
+  "schema": "layerfs-r7-fixture-copy-v1",
+  "source": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-harness",
+  "destination": "/tmp/layerfs-r7-full-fixture-20261009",
+  "copied_commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+  "expected_commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+  "counts": {
+    "files": 103108,
+    "directories": 16867,
+    "symlinks": 10070,
+    "regular_bytes": 3475776149,
+    "linked_aliases": 0
+  },
+  "shape_sha256": "da64c84c624ce49bca22fbfe03aa101551ae10d996d175216d62a3a25ada242e",
+  "copy_ns": 53757295500,
+  "clone_method": "independent byte copy; symlinks and destination-only hard links",
+  "complete_fixture": true,
+  "admission_eligible": false,
+  "status": "PASS"
+}

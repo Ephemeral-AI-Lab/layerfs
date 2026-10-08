@@ -1,0 +1,18 @@
+[package]
+name = "layerfs-r7-runtime"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+# Independent harness workspace: no active product membership or new external dependency.
+[workspace]
+
+[dependencies]
+layerfs-sdk = { path = "../../crates/layerfs-api/sdk" }
+layerfs-bridge = { path = "../../crates/layerfs-bridge" }
+layerfs-history = { path = "../../crates/layerfs-history" }
+layerfs-persistence = { path = "../../crates/layerfs-persistence" }
+layerfs-storage = { path = "../../crates/layerfs-storage" }
+layerfs-sandbox = { path = "../../crates/layerfs-sandbox" }
+layerfs-telemetry = { path = "../../crates/layerfs-telemetry" }
