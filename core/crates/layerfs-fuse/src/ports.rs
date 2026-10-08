@@ -1,9 +1,12 @@
 //! External engine/Store boundaries; all waiting returns to the native pool.
 use layerfs_overlay::{
     BaseSource, FileRead, LocalRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
-    NativeDirectoryRead, NativeMount,
+    NativeDirectoryRead, NativeMount, OpenFile, Publication,
 };
-use layerfs_workspace::{NativeReadJob, NativeReadOutcome, SourceView};
+use layerfs_workspace::{
+    MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome, NativeReadJob,
+    NativeReadOutcome, Operation, SourceView, Time,
+};
 use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 
 pub type ServiceError = Box<dyn Error + Send + Sync>;
@@ -121,4 +124,34 @@ pub trait RequestServices: Send + Sync {
         serial: u64,
         count: u64,
     ) -> ServiceFuture<'_, ServiceReply<()>>;
+    /// The exact descriptor and an independent request source in one job,
+    /// for a mutation the kernel addressed through a handle.
+    fn open_source(
+        &self,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        handle: u64,
+    ) -> ServiceFuture<'_, ServiceReply<(BaseSource, OpenFile)>>;
+    /// One unused inode serial for a creating mutation. Local while the bound
+    /// Workspace's reserved range lasts; a refill is one bounded allocator
+    /// write that never waits. `None` is that allocator's exact contended
+    /// refusal: nothing was reserved and no mutation was attempted.
+    fn reserve_serial(&self) -> Result<Option<u64>, ServiceError>;
+    /// Workspace preparation of one mutation: no SQL, provider I/O or effect.
+    fn prepare(
+        &self,
+        view: &SourceView,
+        operation: Operation,
+        now: Time,
+        serial: Option<u64>,
+    ) -> Result<MutationPlan, Box<MutationInputFailure>>;
+    /// One owner round of a prepared mutation. The original outcome carries
+    /// the exact failure of an attempted job; it is never resubmitted.
+    fn mutate(
+        &self,
+        job: NativeMutationJob,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>>;
+    /// Releases one publication ticket after its single reply attempt.
+    fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>>;
 }

@@ -1,5 +1,9 @@
 //! Original kernel inputs retained even when request service creation fails.
-use crate::{operations::ReadDataInput, ports::ServiceError, RequestDisposition};
+use crate::{
+    operations::{MutationInput, ReadDataInput},
+    ports::ServiceError,
+    RequestDisposition,
+};
 use layerfs_overlay::NativeMount;
 use layerfs_workspace::NativeReadOperation;
 use std::fmt;
@@ -25,6 +29,12 @@ pub enum KernelInput {
     Forget {
         inode: u64,
         count: u64,
+    },
+    /// A mutation that never reached the engine; nothing was published.
+    Mutation {
+        protected: u64,
+        handle: Option<u64>,
+        input: MutationInput,
     },
 }
 #[derive(Debug)]

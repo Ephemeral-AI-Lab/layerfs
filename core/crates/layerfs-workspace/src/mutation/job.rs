@@ -7,7 +7,7 @@ use crate::rename::{self, Move};
 use crate::write;
 use crate::{BaseFacts, Need, Operation, Refusal, Time, WorkspaceError, WorkspaceResult};
 use layerfs_content::ContentError;
-use layerfs_overlay::{BaseSource, Changes, Inode, InodeKind, Overlay, Publication};
+use layerfs_overlay::{BaseSource, Changes, Inode, InodeKind, NativeMount, Overlay, Publication};
 
 /// A complete operation input for the SQL owner. It carries data only: the
 /// owner performs no provider, content or kernel work while evaluating it.
@@ -35,6 +35,14 @@ pub enum JobOutcome {
     Refused(Refusal),
 }
 type Planned = Option<(Option<Changes>, Option<Inode>)>;
+/// One evaluated round, before its single publication attempt.
+pub(crate) enum Decided {
+    Final(JobOutcome),
+    Publish {
+        changes: Changes,
+        inode: Option<Inode>,
+    },
+}
 impl NamespaceJob {
     pub const fn source(&self) -> BaseSource {
         self.source
@@ -51,7 +59,9 @@ impl NamespaceJob {
             _ => 0,
         };
         let data = match &self.operation {
-            Operation::Write { data, .. } | Operation::WriteOpen { data, .. } => data.len(),
+            Operation::Write { data, .. }
+            | Operation::WriteOpen { data, .. }
+            | Operation::StoreOpen { data, .. } => data.len(),
             _ => 0,
         };
         // Operation names and one symlink target are bounded by their grammar.
@@ -60,8 +70,25 @@ impl NamespaceJob {
     /// Runs inside one owner job. A refusal or a need publishes nothing; the
     /// single `apply` is the operation's only attempt and is never replayed.
     pub fn perform(&self, db: &Overlay) -> WorkspaceResult<JobOutcome> {
+        match self.decide(db, None)? {
+            Decided::Final(outcome) => Ok(outcome),
+            Decided::Publish { changes, inode } => Ok(JobOutcome::Applied {
+                publication: db.apply(self.source, &changes)?,
+                inode,
+            }),
+        }
+    }
+    /// The evaluation half of one owner round: current rows over supplied
+    /// facts, ending in a final answer or the complete values to publish.
+    /// Nothing is written here. `native` selects that connection's retained
+    /// parent index as the cycle evidence of a directory move.
+    pub(crate) fn decide(
+        &self,
+        db: &Overlay,
+        native: Option<NativeMount>,
+    ) -> WorkspaceResult<Decided> {
         if self.now.nanoseconds >= 1_000_000_000 {
-            return Ok(JobOutcome::Refused(Refusal::Invalid));
+            return Ok(Decided::Final(JobOutcome::Refused(Refusal::Invalid)));
         }
         let open = self.operation.file();
         if let Some(file) = open {
@@ -75,30 +102,34 @@ impl NamespaceJob {
             facts: &self.facts,
             root: self.root,
             open_serial: open.map(|file| file.serial()),
+            native: native.map(|mount| (db, mount)),
             needs: Vec::new(),
         };
         let planned = match self.plan(&mut eval) {
             Ok(planned) => planned,
-            Err(WorkspaceError::Refused(refusal)) => return Ok(JobOutcome::Refused(refusal)),
+            Err(WorkspaceError::Refused(refusal)) => {
+                return Ok(Decided::Final(JobOutcome::Refused(refusal)))
+            }
             Err(error) => return Err(error),
         };
+        let final_ = |outcome| Ok(Decided::Final(outcome));
         match planned {
             None if eval.needs.is_empty() => {
                 Err(ContentError::InvalidRecord("undecided namespace job").into())
             }
-            None => Ok(JobOutcome::Needs(eval.needs)),
-            Some((None, inode)) => Ok(JobOutcome::Unchanged { inode }),
+            None => final_(JobOutcome::Needs(eval.needs)),
+            Some((None, inode)) => final_(JobOutcome::Unchanged { inode }),
             Some((Some(mut changes), inode)) => {
                 for change in &mut changes.directory_entries {
                     let name = layerfs_content::filesystem::PathName::from_bytes(&change.name)?;
                     let Some(parent) = eval.inode(change.parent)? else {
-                        return Ok(JobOutcome::Needs(eval.needs));
+                        return final_(JobOutcome::Needs(eval.needs));
                     };
                     let layers = eval.layers(change.parent, &name)?;
                     let Some(inherited) =
                         eval.inherited(change.parent, parent.as_ref(), &name, layers)
                     else {
-                        return Ok(JobOutcome::Needs(eval.needs));
+                        return final_(JobOutcome::Needs(eval.needs));
                     };
                     change.binding = match change.binding {
                         layerfs_overlay::Binding::Bound { serial, .. } => {
@@ -120,10 +151,7 @@ impl NamespaceJob {
                         .find(|i| i.nlink == 0 && i.serial != self.root)
                         .map(|i| i.serial);
                 }
-                Ok(JobOutcome::Applied {
-                    publication: db.apply(self.source, &changes)?,
-                    inode,
-                })
+                Ok(Decided::Publish { changes, inode })
             }
         }
     }
@@ -208,8 +236,17 @@ impl NamespaceJob {
                 file,
                 position,
                 data,
-            } => write::write(eval, file.serial(), *position, data, now)?
+            } => write::write(eval, file.serial(), *position, data, now, false)?
                 .map(|(changes, inode)| (changes, Some(inode))),
+            Operation::StoreOpen { file, offset, data } => write::write(
+                eval,
+                file.serial(),
+                crate::Position::At(*offset),
+                data,
+                now,
+                true,
+            )?
+            .map(|(changes, inode)| (changes, Some(inode))),
             Operation::SetOpenAttributes {
                 file,
                 mode,
@@ -228,7 +265,7 @@ impl NamespaceJob {
                 serial,
                 position,
                 data,
-            } => write::write(eval, *serial, *position, data, now)?
+            } => write::write(eval, *serial, *position, data, now, false)?
                 .map(|(changes, inode)| (changes, Some(inode))),
         })
     }

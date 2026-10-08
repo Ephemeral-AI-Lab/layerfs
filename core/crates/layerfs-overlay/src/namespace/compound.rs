@@ -16,6 +16,11 @@ pub struct SourceRows<'a> {
     source: BaseSource,
     state: WorkspaceState,
 }
+/// Validated name keys of one compound job, computed before its transaction.
+pub(crate) struct CheckedChanges {
+    keys: Vec<(i64, Option<i64>)>,
+    moved_directory: Option<(i64, i64)>,
+}
 impl Overlay {
     /// Checks source custody once for the bounded point reads of one job.
     pub fn source_rows(&self, source: BaseSource) -> OverlayResult<SourceRows<'_>> {
@@ -31,6 +36,11 @@ impl Overlay {
     /// same owner job. A closed Workspace refuses; a failed job changes nothing
     /// and leaves no ticket. Exactly one reply-attempt ticket covers the job.
     pub fn apply(&self, source: BaseSource, changes: &Changes) -> OverlayResult<Publication> {
+        let checked = self.check_changes(changes)?;
+        self.atomic(|| self.apply_checked(source, changes, &checked))
+    }
+    /// Window and grammar checks of one compound job, before any transaction.
+    pub(crate) fn check_changes(&self, changes: &Changes) -> OverlayResult<CheckedChanges> {
         if changes.inodes.len() > COMPOUND_INODES
             || changes.directory_entries.len() > COMPOUND_DIRECTORY_ENTRIES
             || (changes.inodes.is_empty() && changes.directory_entries.is_empty())
@@ -100,88 +110,106 @@ impl Overlay {
                 return Err(OverlayError::Invalid("compound write window"));
             }
         }
-        self.atomic(|| {
-            let state = self.source_state(source)?;
-            if state.closed {
-                return Err(OverlayError::Closed);
-            }
-            let route = source.route;
-            if let Some(file) = changes.open {
-                if file.route() != route
-                    || changes.inodes.len() != 1
-                    || changes.inodes[0].serial != file.serial()
-                    || !changes.directory_entries.is_empty()
-                {
-                    return Err(OverlayError::Invalid("descriptor mutation domain"));
-                }
-                self.check_file(file, true)?;
-            }
-            let mut inodes = 0_i64;
-            let mut layers = Vec::with_capacity(changes.inodes.len());
-            for inode in &changes.inodes {
-                let (added, layer) =
-                    self.put_inode_domain(route, &state, inode, changes.open.is_some())?;
-                inodes += i64::from(added);
-                layers.push((inode.serial, layer));
-            }
-            let layer = |serial: u64| {
-                layers
-                    .iter()
-                    .find(|(owner, _)| *owner == serial)
-                    .map(|(_, layer)| layer)
-                    .ok_or(OverlayError::Invalid("compound payload owner"))
-            };
-            let mut directory_entries = 0_i64;
-            for (change, (parent, target)) in changes.directory_entries.iter().zip(&keys) {
-                let inherited = match change.binding {
-                    Binding::Bound { inherited, .. } | Binding::Removed { inherited } => inherited,
-                };
-                let (_, cutoff) =
-                    self.name_inheritance(&state, route.ns, *parent, &change.name, inherited)?;
-                let whiteout = target.is_some() || cutoff;
-                if whiteout {
-                    directory_entries += i64::from(self.put_directory_entry(
-                        route,
-                        &state,
-                        *parent,
-                        &change.name,
-                        *target,
-                        inherited,
-                    )?);
-                } else {
-                    // Nothing below binds this name: no row is the final state.
-                    directory_entries -= self.execute(
-                        StatementKind::DirectoryEntry,
-                        sql::DIRECTORY_ENTRY_DROP,
-                        &[&route.ns, parent, &change.name, &state.active.0],
-                        24 + change.name.len() as u64,
-                    )? as i64;
-                }
-            }
-            if let Some((serial, parent)) = moved_directory {
-                self.execute(StatementKind::Lease,
-                    "UPDATE native_parent SET parent=?3 WHERE ns=?1 AND serial=?2 AND serial<>parent",
-                    &[&route.ns, &serial, &parent], 24)?;
-            }
-            if let Some((serial, cell)) = &changes.cell {
-                self.put_cell(route, integer(*serial)?, layer(*serial)?, cell)?;
-            }
-            if let Some(write) = &changes.write {
-                self.write_cells(
-                    route.ns,
-                    integer(write.serial)?,
-                    layer(write.serial)?,
-                    write.offset,
-                    &write.data,
-                )?;
-            }
-            for inode in &changes.inodes {
-                if inode.kind == crate::InodeKind::File || changes.detached == Some(inode.serial) {
-                    self.detach_orphan(route, &state, inode)?;
-                }
-            }
-            self.settle(route, &state, inodes, directory_entries)
+        Ok(CheckedChanges {
+            keys,
+            moved_directory,
         })
+    }
+    /// The transaction body of one checked compound job. The caller owns the
+    /// transaction, so native kernel custody can commit with the publication.
+    pub(crate) fn apply_checked(
+        &self,
+        source: BaseSource,
+        changes: &Changes,
+        checked: &CheckedChanges,
+    ) -> OverlayResult<Publication> {
+        let CheckedChanges {
+            keys,
+            moved_directory,
+        } = checked;
+        let state = self.source_state(source)?;
+        if state.closed {
+            return Err(OverlayError::Closed);
+        }
+        let route = source.route;
+        if let Some(file) = changes.open {
+            if file.route() != route
+                || changes.inodes.len() != 1
+                || changes.inodes[0].serial != file.serial()
+                || !changes.directory_entries.is_empty()
+            {
+                return Err(OverlayError::Invalid("descriptor mutation domain"));
+            }
+            self.check_file(file, true)?;
+        }
+        let mut inodes = 0_i64;
+        let mut layers = Vec::with_capacity(changes.inodes.len());
+        for inode in &changes.inodes {
+            let (added, layer) =
+                self.put_inode_domain(route, &state, inode, changes.open.is_some())?;
+            inodes += i64::from(added);
+            layers.push((inode.serial, layer));
+        }
+        let layer = |serial: u64| {
+            layers
+                .iter()
+                .find(|(owner, _)| *owner == serial)
+                .map(|(_, layer)| layer)
+                .ok_or(OverlayError::Invalid("compound payload owner"))
+        };
+        let mut directory_entries = 0_i64;
+        for (change, (parent, target)) in changes.directory_entries.iter().zip(keys) {
+            let inherited = match change.binding {
+                Binding::Bound { inherited, .. } | Binding::Removed { inherited } => inherited,
+            };
+            let (_, cutoff) =
+                self.name_inheritance(&state, route.ns, *parent, &change.name, inherited)?;
+            let whiteout = target.is_some() || cutoff;
+            if whiteout {
+                directory_entries += i64::from(self.put_directory_entry(
+                    route,
+                    &state,
+                    *parent,
+                    &change.name,
+                    *target,
+                    inherited,
+                )?);
+            } else {
+                // Nothing below binds this name: no row is the final state.
+                directory_entries -= self.execute(
+                    StatementKind::DirectoryEntry,
+                    sql::DIRECTORY_ENTRY_DROP,
+                    &[&route.ns, parent, &change.name, &state.active.0],
+                    24 + change.name.len() as u64,
+                )? as i64;
+            }
+        }
+        if let Some((serial, parent)) = moved_directory {
+            self.execute(
+                StatementKind::Lease,
+                "UPDATE native_parent SET parent=?3 WHERE ns=?1 AND serial=?2 AND serial<>parent",
+                &[&route.ns, &serial, &parent],
+                24,
+            )?;
+        }
+        if let Some((serial, cell)) = &changes.cell {
+            self.put_cell(route, integer(*serial)?, layer(*serial)?, cell)?;
+        }
+        if let Some(write) = &changes.write {
+            self.write_cells(
+                route.ns,
+                integer(write.serial)?,
+                layer(write.serial)?,
+                write.offset,
+                &write.data,
+            )?;
+        }
+        for inode in &changes.inodes {
+            if inode.kind == crate::InodeKind::File || changes.detached == Some(inode.serial) {
+                self.detach_orphan(route, &state, inode)?;
+            }
+        }
+        self.settle(route, &state, inodes, directory_entries)
     }
     fn lower_name(
         &self,

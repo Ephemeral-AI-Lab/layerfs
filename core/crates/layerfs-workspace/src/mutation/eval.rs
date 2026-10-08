@@ -2,7 +2,7 @@
 use crate::{BaseFacts, Need, Refusal, Time, WorkspaceError, WorkspaceResult};
 use layerfs_content::filesystem::PathName;
 use layerfs_content::ContentError;
-use layerfs_overlay::{Inode, InodeKind, NameLayers, SourceRows};
+use layerfs_overlay::{Inode, InodeKind, NameLayers, NativeMount, Overlay, SourceRows};
 
 /// One evaluation inside a single owner job. Every answer comes from rows read
 /// in this job or from base facts that cannot change while the source is owned.
@@ -12,6 +12,8 @@ pub(crate) struct Eval<'a> {
     pub facts: &'a BaseFacts,
     pub root: u64,
     pub open_serial: Option<u64>,
+    /// The native connection whose retained parent index this job may read.
+    pub native: Option<(&'a Overlay, NativeMount)>,
     pub needs: Vec<Need>,
 }
 pub(crate) fn refuse<T>(refusal: Refusal) -> WorkspaceResult<T> {

@@ -7,11 +7,15 @@ use crate::{
 use layerfs_fuse::ports::{
     MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
 };
+use layerfs_history::HistoryError;
 use layerfs_overlay::{
     BaseSource, FileRead, LocalRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
-    NativeDirectoryRead, NativeMount,
+    NativeDirectoryRead, NativeMount, OpenFile, Publication,
 };
-use layerfs_workspace::{NativeReadJob, NativeReadOutcome, SourceView};
+use layerfs_workspace::{
+    MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome, NativeReadJob,
+    NativeReadOutcome, Operation, SourceView, Time, WorkspaceError,
+};
 use std::sync::Arc;
 
 struct FilesystemPort(StoreOperation);
@@ -260,6 +264,71 @@ impl RequestServices for FilesystemPort {
             |response| matches!(response, Response::Native(NativeReply::Done)).then_some(()),
         )
     }
+    fn open_source(
+        &self,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        handle: u64,
+    ) -> ServiceFuture<'_, ServiceReply<(BaseSource, OpenFile)>> {
+        self.job(
+            Command::Native(NativeJob::OpenSource {
+                mount,
+                request,
+                serial,
+                handle,
+            }),
+            |response| match response {
+                Response::Native(NativeReply::OpenSource(source, file)) => Some((*source, *file)),
+                _ => None,
+            },
+        )
+    }
+    fn reserve_serial(&self) -> Result<Option<u64>, ServiceError> {
+        match self.0.workspace().next_serial(self.0.ports()) {
+            Ok(serial) => Ok(Some(serial)),
+            Err(error) if writer_contended(&error) => Ok(None),
+            Err(error) => Err(Box::new(error)),
+        }
+    }
+    fn prepare(
+        &self,
+        view: &SourceView,
+        operation: Operation,
+        now: Time,
+        serial: Option<u64>,
+    ) -> Result<MutationPlan, Box<MutationInputFailure>> {
+        self.0
+            .workspace()
+            .prepare_mutation(view, operation, now, serial)
+    }
+    fn mutate(
+        &self,
+        job: NativeMutationJob,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>> {
+        self.job(
+            Command::Native(NativeJob::Mutate(Box::new(job))),
+            |response| match response {
+                Response::Native(NativeReply::Mutated(value)) => Some(value.clone()),
+                _ => None,
+            },
+        )
+    }
+    fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>> {
+        self.job(Command::ReplyAttempted(publication), done)
+    }
+}
+/// The allocator's immediate admission refusal: nothing was reserved.
+fn writer_contended(error: &WorkspaceError) -> bool {
+    let WorkspaceError::Service(error) = error else {
+        return false;
+    };
+    matches!(
+        error
+            .downcast_ref::<Arc<crate::store::PortError>>()
+            .map(Arc::as_ref),
+        Some(crate::store::PortError::History(HistoryError::Busy))
+    )
 }
 fn done(response: &Response) -> Option<()> {
     matches!(response, Response::Done).then_some(())

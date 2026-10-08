@@ -69,6 +69,7 @@ pub struct Accounting {
     opcodes: [AtomicU64; OPCODES],
     disposals: [AtomicU64; DISPOSALS],
     forget_units: AtomicU64,
+    store_units: AtomicU64,
 }
 /// Monotonic counters copied without a lock; fields are individually exact.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -81,6 +82,9 @@ pub struct OpcodeWork {
     pub unadmitted: u64,
     /// Independently bounded ownership units, distinct from FORGET frames.
     pub forget_units: u64,
+    /// WRITE units that carried the per-request page-cache flag: stores from
+    /// a shared mapping, counted among the WRITE opcode's frames.
+    pub store_units: u64,
 }
 impl OpcodeWork {
     pub fn count(&self, opcode: Opcode) -> u64 {
@@ -96,6 +100,7 @@ impl Default for Accounting {
             opcodes: std::array::from_fn(|_| AtomicU64::new(0)),
             disposals: std::array::from_fn(|_| AtomicU64::new(0)),
             forget_units: AtomicU64::new(0),
+            store_units: AtomicU64::new(0),
         }
     }
 }
@@ -109,6 +114,9 @@ impl Accounting {
     pub(super) fn forget_unit(&self) {
         self.forget_units.fetch_add(1, Ordering::Relaxed);
     }
+    pub(super) fn store_unit(&self) {
+        self.store_units.fetch_add(1, Ordering::Relaxed);
+    }
     pub fn observe(&self) -> OpcodeWork {
         let disposal = |value: Disposal| self.disposals[value as usize].load(Ordering::Relaxed);
         OpcodeWork {
@@ -119,6 +127,7 @@ impl Accounting {
             terminal: disposal(Disposal::Terminal),
             unadmitted: disposal(Disposal::Unadmitted),
             forget_units: self.forget_units.load(Ordering::Relaxed),
+            store_units: self.store_units.load(Ordering::Relaxed),
         }
     }
 }

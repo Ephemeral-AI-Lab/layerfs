@@ -48,6 +48,7 @@ pub use list::ViewListing;
 pub use mutation::plan::{MutationInputFailure, MutationPlan, MutationStage};
 pub use operation::{Operation, Outcome, Position, Refusal, Time, WriteData};
 pub use operations::native_directory::{NativeDirectoryEntry, NativeDirectoryListing};
+pub use operations::native_mutation::{NativeMutationJob, NativeMutationOutcome};
 pub use operations::native_read::{
     NativeReadDecision, NativeReadFailure, NativeReadJob, NativeReadOperation, NativeReadOutcome,
     NativeReadPlan, NativeReadStage, NativeReadValue,

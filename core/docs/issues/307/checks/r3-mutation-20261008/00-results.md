@@ -86,3 +86,100 @@ This executes one `Retained` stage (`Revoke`). The `Detach`, `Join`, `Owner`,
 A Workspace that reaches `Retained` has no path back to service or to terminal
 success in the current product; that recovery is R6 work and is restated in the
 completion record.
+
+## Steps 2–4: writable OPEN, WRITE, SETATTR and namespace mutation
+
+Product identity: the working tree committed with this section. Test binary
+`layerfs-daemon/tests/native_mutation.rs`: in-process daemon Service, real
+Overlay Owner and Store, real kernel mount, ordinary syscalls only.
+
+| Binary | Attempt | Result | Receipt |
+| --- | --- | --- | --- |
+| native_mutation | 1 | PASS 2/2 | [output](step2-4-attempt1-native_mutation.txt) |
+| native_mount | 1 | PASS 3/3 | [output](step2-4-attempt1-native_mount.txt) |
+| native_custody | 1 | PASS 2/2 | [output](step2-4-attempt1-native_custody.txt) |
+
+`native_mount` no longer asserts `EROFS`: its refusal block is now the shared
+set of refusals that remain (below), and the unregistered nonroot `touch` that
+R2 asserted was denied is now asserted to create an empty file owned by the
+command identity. `native_custody` was changed by one Clippy rewrite
+(`matches!(.., Ok(_))` to `.is_ok()`) after these runs; the binaries were not
+rerun for that or for the rustfmt pass that followed.
+
+What the two mutation cases executed, each checked three ways where it is file
+content (cached read, `O_DIRECT` read served by the daemon, reported size):
+
+- create with `O_EXCL` and mode, write, overwrite inside, sparse extension;
+  two interleaved `O_APPEND` descriptors; a 300 000 byte write split by the
+  kernel into 128 KiB requests; overwrite of a file inherited from the
+  committed root with the uncovered bytes still inherited.
+- the other name of that inherited inode reads the changed bytes from the
+  shared page cache and from the daemon (FP-14 for a write).
+- `ftruncate` shrink then regrow with a zero tail, write after regrow,
+  `truncate` by path, `O_TRUNC` of a previously cached inherited file followed
+  by a write.
+- negative name then create, unlink then recreate; `mkdir`, `rmdir` with exact
+  `ENOTEMPTY`; replacement rename with the replaced file still readable through
+  its descriptor at link count 0; `RENAME_NOREPLACE`; a directory moved across
+  parents three times; a move beneath itself refused `EINVAL`; replacing a
+  nonempty directory refused; removal of an inherited file and directory.
+- hard link with exact link count through both names and unchanged time;
+  write through one name read through the other; rename of one name onto the
+  inode's other name.
+- symlink round trip, a 4095-byte target accepted, a 4096-byte target refused
+  `ENAMETOOLONG` with no name created.
+- chmod to 000 denies a nonroot reader at once although the pages are cached,
+  and re-allows at once; explicit modification time with nanoseconds; chmod and
+  rename leave the one stored time; change time is always reported equal to
+  modification time.
+- a shell script run as the nonroot command identity, never registered with
+  anything, doing create, append, rename, link, mkdir, symlink, unlink, chmod
+  and truncate through the same mount.
+
+Refusals that remain, each with no effect: name over 255 bytes
+`ENAMETOOLONG`; FIFO and socket `mknod` `EPERM`; set-user-id, set-group-id and
+a sticky bit on a regular file `EPERM`; `chown` to another owner or group
+`EPERM` (naming the projected identity succeeds and changes nothing); hard link
+to a symlink `EPERM`; `RENAME_EXCHANGE` `EINVAL`; `setxattr`, `getxattr` and
+`fallocate` `EOPNOTSUPP` (the daemon answers `ENOSYS` once); `fsync`,
+`fdatasync` and directory `fsync` succeed with no engine work.
+
+Both cases ended with `retained: 0`, `terminal: 0`, `unadmitted: 0` and a
+normal unmount with a complete drain.
+
+### Package suites at this identity
+
+Every test binary of the four changed packages, built with `--no-run`, one run
+per binary under a 100 s limit.
+
+| Side | Binaries | Exit 0 | Other | Receipt |
+| --- | --- | --- | --- | --- |
+| Linux | 70 | 68 | 2 | [summary](increment1-linux-suite.txt) |
+| Host (macOS, 1.85.1) | 70 | 66 | 4 | [summary](increment1-host-suite.txt) |
+
+| Binary | Side | Result | Disposition |
+| --- | --- | --- | --- |
+| complete_installed_roots | both | FAILED 3/4 ([Linux](increment1-linux-suite-complete_installed_roots-b8a4f28c1707b846.txt), [host](increment1-host-suite-complete_installed_roots-e76bd78a0eded4e2.txt)) | `huge_native_namespace_is_complete_after_install`: explicit closed preparation not supplied. **NOT_RUN**, not repaired |
+| shared_processes | Linux | [FAILED 0/1](increment1-linux-suite-shared_processes-498c7928b7fbb8cc.txt) | explicit named-volume placement not supplied. **NOT_RUN**, not repaired |
+| host_handoff | host | [FAILED 0/1](increment1-host-suite-host_handoff-a4c4b3d19848e0be.txt) | explicit build-listed Linux binary not supplied. **NOT_RUN**, not repaired |
+| captured_file_edits (workspace) | host | [FAILED 13/14](increment1-host-suite-captured_file_edits-c95644d018d26b22.txt) | `credited_bytes` read 2000 immediately after the last release. PASS 14/14 on Linux at this source. Not rerun, not repaired |
+| root_qualification (daemon) | host | [FAILED 0/1](increment1-host-suite-root_qualification-b7ecf092dd1d0f90.txt) | `outstanding` read one higher immediately after the last job. PASS on Linux at this source. Not rerun, not repaired |
+
+The last two are **failures at this identity** and stay failures. Diagnosis
+from source: both counters are decremented together in the drop of the owner's
+completion credit (`layerfs-daemon/src/overlay/credits.rs`), which the engine
+thread can perform after the caller has already received the result; each test
+reads diagnostics immediately. That is the race R2 recorded for
+`captured_runs` on the host with the same value 2000. Neither test file, nor
+`credits.rs`, `owner.rs` or `queue.rs`, is changed by R3. They were not rerun
+to look for a pass.
+
+The first host invocation ran no test: the runner's lock path was relative and
+every binary exited 2 before starting
+([record](increment1-host-suite-runner-error.txt)). The runner was corrected
+and the table above is the single execution that followed.
+
+Static checks: `cargo fmt --all --check`; warning-denying Clippy for all
+targets on Linux (four changed packages) and on the host (whole core
+workspace, pinned 1.85.1); the product boundary guard (834 production files);
+the fuser provenance check before the native builds.

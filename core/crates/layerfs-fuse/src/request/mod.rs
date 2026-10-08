@@ -4,6 +4,7 @@ mod callbacks;
 mod directory;
 mod failure;
 mod inline;
+mod mutate;
 mod reply;
 mod state;
 

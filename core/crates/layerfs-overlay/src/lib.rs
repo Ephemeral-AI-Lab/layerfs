@@ -35,7 +35,9 @@ pub use contract::indexed_operation_record::{
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
     OperationRecordExpectedValue,
 };
-pub use contract::native::{NativeDecision, NativeMount, NativeMountState, NativeObservation};
+pub use contract::native::{
+    NativeApplied, NativeDecision, NativeEffect, NativeMount, NativeMountState, NativeObservation,
+};
 pub use contract::native_directory::{
     NativeCookie, NativeCookiePlan, NativeDirectory, NativeDirectoryCursor, NativeDirectoryPage,
     NativeDirectoryRead,

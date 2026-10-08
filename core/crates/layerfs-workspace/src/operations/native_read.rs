@@ -114,6 +114,7 @@ impl NativeReadJob {
             facts: &self.facts,
             root: self.mount.root_serial(),
             open_serial: None,
+            native: None,
             needs: Vec::new(),
         };
         let decision = match self.decide(&mut eval) {

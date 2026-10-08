@@ -12,7 +12,9 @@ use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_overlay::NativeMount;
 use layerfs_workspace::NativeReadOperation;
 use std::{sync::Arc, time::Duration};
-const TTL: Duration = Duration::from_secs(60);
+/// Entry and attribute lifetime of every reply. It bounds how long the kernel
+/// may answer without asking; it is never what makes an answer correct.
+pub(super) const TTL: Duration = Duration::from_secs(60);
 
 pub(super) enum ReadReply {
     Entry(ReplyEntry),
@@ -100,7 +102,7 @@ impl ReadReply {
                         std::io::Error::other("successful native open has no handle"),
                     ))));
                 };
-                reply.opened(FileHandle(handle), FopenFlags::FOPEN_KEEP_CACHE);
+                reply.opened(FileHandle(handle), open_flags());
             }
             reply => {
                 let attributes = match identity.attributes(&value.stat) {
@@ -148,4 +150,12 @@ async fn data(
             RequestDisposition::Retained(Box::new(error))
         }
     }
+}
+/// The declared page-cache treatment of every opened or created file.
+pub(super) fn open_flags() -> FopenFlags {
+    let cache = crate::coherence::pages::open_cache();
+    let mut flags = FopenFlags::empty();
+    flags.set(FopenFlags::FOPEN_KEEP_CACHE, cache.keep);
+    flags.set(FopenFlags::FOPEN_DIRECT_IO, cache.direct);
+    flags
 }

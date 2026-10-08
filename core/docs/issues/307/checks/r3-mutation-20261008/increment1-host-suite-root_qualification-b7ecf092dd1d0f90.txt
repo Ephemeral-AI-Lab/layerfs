@@ -1,0 +1,23 @@
+
+running 1 test
+test a_real_root_qualifies_through_short_original_operation_record_jobs ... FAILED
+
+failures:
+
+---- a_real_root_qualifies_through_short_original_operation_record_jobs stdout ----
+
+thread 'a_real_root_qualifies_through_short_original_operation_record_jobs' panicked at crates/layerfs-daemon/tests/root_qualification.rs:214:5:
+assertion `left == right` failed
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_real_root_qualifies_through_short_original_operation_record_jobs
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+R3_WALL seconds<=1 limit=100s
+
+EXIT 101

@@ -4,7 +4,9 @@ use layerfs_overlay::{
     BaseSource, FileRead, NativeMount, NativeMountState, OpenFile, Overlay, OverlayError,
     OverlayResult, Route,
 };
-use layerfs_workspace::{NativeReadJob, NativeReadOutcome};
+use layerfs_workspace::{
+    NativeMutationJob, NativeMutationOutcome, NativeReadJob, NativeReadOutcome,
+};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -53,6 +55,15 @@ pub enum NativeJob {
         handle: u64,
     },
     Observe(Box<NativeReadJob>),
+    /// A handle-addressed mutation's descriptor and request source.
+    OpenSource {
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        handle: u64,
+    },
+    /// One owner round of a native mutation; publishes at most once.
+    Mutate(Box<NativeMutationJob>),
     Directory(Box<NativeDirectoryJob>),
     Forget {
         mount: NativeMount,
@@ -72,6 +83,8 @@ pub enum NativeReply {
     RetainedFile(Option<OpenFile>),
     File(OpenFile),
     Observed(Arc<NativeReadOutcome>),
+    OpenSource(BaseSource, OpenFile),
+    Mutated(Arc<NativeMutationOutcome>),
     Directory(NativeDirectoryReply),
     State(NativeMountState),
     Done,
@@ -79,10 +92,12 @@ pub enum NativeReply {
 impl NativeJob {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
-            Self::Source { .. } | Self::FileSource { .. } | Self::HandleSource { .. } => {
-                ServiceClass::Source
-            }
+            Self::Source { .. }
+            | Self::FileSource { .. }
+            | Self::HandleSource { .. }
+            | Self::OpenSource { .. } => ServiceClass::Source,
             Self::Observe(_) => ServiceClass::Read,
+            Self::Mutate(_) => ServiceClass::Mutation,
             Self::Directory(job) => job.class(),
             _ => ServiceClass::Lifecycle,
         }
@@ -94,6 +109,14 @@ impl NativeJob {
                 std::mem::size_of::<NativeReadOutcome>()
                     + 4 * (std::mem::size_of::<layerfs_workspace::Need>() + 255)
                     + 2 * std::mem::size_of::<usize>(),
+            ),
+            // The boxed job with its bounded facts, names and write window,
+            // and at most one reply of needed names or one changed inode.
+            Self::Mutate(job) => (
+                std::mem::size_of::<NativeMutationJob>() + job.charge(),
+                std::mem::size_of::<NativeMutationOutcome>()
+                    + layerfs_overlay::PAGE_ROWS
+                        * (std::mem::size_of::<layerfs_workspace::Need>() + 255),
             ),
             Self::Directory(job) => job.charge(),
             _ => (0, 256),
@@ -109,10 +132,12 @@ impl NativeJob {
             | Self::RetainedFile { mount, .. }
             | Self::File { mount, .. }
             | Self::CloseFile { mount, .. }
+            | Self::OpenSource { mount, .. }
             | Self::Forget { mount, .. }
             | Self::State(mount)
             | Self::Revoke(mount) => Some(mount.route()),
             Self::Observe(job) => Some(job.source().route()),
+            Self::Mutate(job) => Some(job.source().route()),
             Self::Directory(job) => Some(job.route()),
             Self::Mount { .. } | Self::RetainedMount => None,
         };
@@ -169,6 +194,15 @@ impl NativeJob {
                 .close_native_file(mount, serial, handle)
                 .map(|()| NativeReply::Done),
             Self::Observe(job) => Ok(NativeReply::Observed(Arc::new(job.perform(db)))),
+            Self::OpenSource {
+                mount,
+                request,
+                serial,
+                handle,
+            } => db
+                .acquire_native_open_source(mount, request, serial, handle)
+                .map(|(source, file)| NativeReply::OpenSource(source, file)),
+            Self::Mutate(job) => Ok(NativeReply::Mutated(Arc::new(job.perform(db)))),
             Self::Directory(job) => job.perform(db).map(NativeReply::Directory),
             Self::Forget {
                 mount,

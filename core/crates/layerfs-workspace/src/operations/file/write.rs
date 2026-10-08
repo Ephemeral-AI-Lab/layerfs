@@ -5,12 +5,15 @@ use layerfs_overlay::{Changes, Inode, InodeKind, PayloadWrite, WRITE_WINDOW};
 
 /// Outer None: undecided this round. An empty write changes nothing. A file
 /// that lost its last name but still has a row accepts descriptor writes.
+/// `clip` is the mapped-store rule: bytes at or beyond the current size are
+/// dropped, so the size is never changed by the store.
 pub(crate) fn write(
     eval: &mut Eval<'_>,
     serial: u64,
     position: Position,
     data: &WriteData,
     now: Time,
+    clip: bool,
 ) -> WorkspaceResult<Option<(Option<Changes>, Inode)>> {
     if data.len() > WRITE_WINDOW {
         return refuse(Refusal::Invalid);
@@ -35,8 +38,22 @@ pub(crate) fn write(
         Position::At(offset) => offset,
         Position::End => old.size,
     };
+    // A mapped store never changes the size: only its bytes below it land.
+    let kept = if clip {
+        old.size.saturating_sub(offset).min(data.len() as u64) as usize
+    } else {
+        data.len()
+    };
+    if kept == 0 {
+        return Ok(Some((None, old)));
+    }
+    let bytes = if kept == data.len() {
+        data.0.clone()
+    } else {
+        data.0[..kept].into()
+    };
     let Some(end) = offset
-        .checked_add(data.len() as u64)
+        .checked_add(kept as u64)
         .filter(|end| *end <= i64::MAX as u64)
     else {
         return refuse(Refusal::TooLarge);
@@ -54,7 +71,7 @@ pub(crate) fn write(
         write: Some(PayloadWrite {
             serial,
             offset,
-            data: data.0.clone(),
+            data: bytes,
         }),
         ..Changes::default()
     };

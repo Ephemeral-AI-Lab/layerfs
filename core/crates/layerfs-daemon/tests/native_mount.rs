@@ -1,5 +1,5 @@
 //! Real kernel mounts: Ready evidence, complete-root reads through ordinary
-//! filesystem calls, declared refusals, reversible Busy and full normal drain.
+//! filesystem calls, remaining refusals, reversible Busy and full normal drain.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
 #[path = "support/complete_bytes.rs"]
@@ -11,13 +11,16 @@ mod fixture;
 #[path = "support/mounted.rs"]
 mod mounted;
 #[allow(dead_code)]
+#[path = "support/mutating.rs"]
+mod mutating;
+#[allow(dead_code)]
 #[path = "support/native_install.rs"]
 mod support;
 use layerfs_bridge::control::{Activity, ControlCode, NativePhase, Reply, Request};
 use layerfs_daemon::control::{Failure, Service};
 use layerfs_history::BranchId;
 use mounted::{mount_entry, until, Harness, COMMAND};
-use nix::{errno::Errno, fcntl::OFlag, sys::statvfs::statvfs};
+use nix::{errno::Errno, fcntl::OFlag};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsString,
@@ -118,58 +121,6 @@ fn complete_root(f: &fixture::Fixture, root: &Path) -> (usize, u64) {
     }
     (f.metadata.len(), regular)
 }
-fn refusals(root: &Path) {
-    let long = "n".repeat(256);
-    assert_eq!(
-        errno(&fs::symlink_metadata(root.join(&long)).unwrap_err()),
-        Errno::ENAMETOOLONG
-    );
-    let rofs = |result: io::Result<()>, what: &str| {
-        assert_eq!(errno(&result.unwrap_err()), Errno::EROFS, "{what}");
-    };
-    rofs(File::create(root.join("new")).map(drop), "create");
-    rofs(fs::create_dir(root.join("newdir")), "mkdir");
-    rofs(fs::remove_file(root.join("empty-file")), "unlink");
-    rofs(fs::remove_dir(root.join("empty")), "rmdir");
-    rofs(
-        fs::rename(root.join("empty-file"), root.join("moved")),
-        "rename",
-    );
-    rofs(
-        std::os::unix::fs::symlink("x", root.join("newlink")),
-        "symlink",
-    );
-    rofs(
-        fs::hard_link(root.join("empty-file"), root.join("newalias")),
-        "link",
-    );
-    rofs(
-        OpenOptions::new()
-            .write(true)
-            .open(root.join("empty-file"))
-            .map(drop),
-        "writable open",
-    );
-    rofs(
-        fs::set_permissions(
-            root.join("empty-file"),
-            std::os::unix::fs::PermissionsExt::from_mode(0o600),
-        ),
-        "setattr",
-    );
-    // FLUSH/FSYNC/FSYNCDIR succeed with no engine or durability work.
-    let file = File::open(root.join(".git/index")).unwrap();
-    file.sync_all().unwrap();
-    file.sync_data().unwrap();
-    File::open(root.join(".git")).unwrap().sync_all().unwrap();
-    drop(file);
-    let statistics = statvfs(root).unwrap();
-    assert_eq!(statistics.block_size(), 4096);
-    assert_eq!(statistics.fragment_size(), 4096);
-    assert_eq!(statistics.name_max(), 255);
-    assert!(statistics.blocks_free() > 0 && statistics.blocks_available() > 0);
-    assert!(statistics.files_free() > 0);
-}
 /// An ordinary process that was never registered with the daemon: launched
 /// here, under the runtime's nonroot command identity, by plain exec.
 fn command(identity: u32, program: &str, argument: &Path) -> std::process::Output {
@@ -234,7 +185,7 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
     assert_eq!((work.received, work.admitted, work.retained), (0, 0, 0));
 
     let (paths, regular) = complete_root(&f, root);
-    refusals(root);
+    mutating::refusals(root);
     // External access needs no Exec registration: a separate nonroot process
     // reads by ordinary syscalls; kernel permission checks decide access.
     let listed = command(COMMAND, "ls", &root.join("node_modules/pkg"));
@@ -244,14 +195,19 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
     assert_eq!(read.stdout, b"git-object", "{read:?}");
     let other = command(COMMAND - 1, "cat", &root.join(".git/index"));
     assert!(!other.status.success(), "mode 0640 is kernel-enforced");
-    let denied = command(COMMAND, "touch", &root.join("created-by-command"));
-    assert!(!denied.status.success());
+    // The same unregistered process mutates through the same mount.
+    let created = command(COMMAND, "touch", &root.join("created-by-command"));
+    assert!(created.status.success(), "{created:?}");
+    let made = fs::metadata(root.join("created-by-command")).unwrap();
+    assert_eq!((made.uid(), made.len()), (COMMAND, 0));
+    let removed = command(COMMAND, "rm", &root.join("created-by-command"));
+    assert!(removed.status.success(), "{removed:?}");
     // The command identity cannot reach the daemon's backing files.
     let backing = command(COMMAND, "cat", &f.directory.join("overlay.sqlite"));
     println!("BACKING_READ_BY_COMMAND status={:?}", backing.status.code());
 
     let served = h.status(token).native.unwrap().work.unwrap();
-    assert!(served.handoffs > 0 && served.inline >= 4 && served.refused >= 10);
+    assert!(served.handoffs > 0 && served.inline >= 4 && served.refused >= 3);
     assert_eq!(
         (served.terminal, served.unadmitted, served.retained),
         (0, 0, 0)

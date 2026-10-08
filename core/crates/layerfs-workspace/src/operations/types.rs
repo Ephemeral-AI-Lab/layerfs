@@ -110,6 +110,15 @@ pub enum Operation {
         mtime: Option<Time>,
         size: Option<u64>,
     },
+    /// A shared-mapping store reaching the daemon after the fact. Its bytes
+    /// land at their own offset, clipped to the size current in the publishing
+    /// job: a store never extends the file, and one wholly beyond the size
+    /// changes nothing. Only a live descriptor of the inode is required.
+    StoreOpen {
+        file: OpenFile,
+        offset: u64,
+        data: WriteData,
+    },
     Write {
         serial: u64,
         position: Position,
@@ -119,7 +128,9 @@ pub enum Operation {
 impl Operation {
     pub(crate) const fn file(&self) -> Option<OpenFile> {
         match self {
-            Self::WriteOpen { file, .. } | Self::SetOpenAttributes { file, .. } => Some(*file),
+            Self::WriteOpen { file, .. }
+            | Self::SetOpenAttributes { file, .. }
+            | Self::StoreOpen { file, .. } => Some(*file),
             _ => None,
         }
     }

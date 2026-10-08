@@ -1,6 +1,7 @@
 //! Native connection/request ownership over existing Workspace semantics.
 #![forbid(unsafe_code)]
 
+pub mod coherence;
 mod dispatch;
 pub mod operations;
 pub mod ports;

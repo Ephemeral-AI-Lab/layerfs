@@ -244,10 +244,10 @@ fn an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it() {
             other => panic!("{request:?}: {other:?}"),
         }
     }
-    assert!(matches!(
-        h.service.execute_control(&Request::Locate(token.workspace)),
-        Ok(_)
-    ));
+    assert!(h
+        .service
+        .execute_control(&Request::Locate(token.workspace))
+        .is_ok());
     // Releasing the consumer settles nothing by itself: no hidden retry runs.
     let released = job(&h, route, Command::ReleaseBaseSource(held));
     assert!(matches!(released.result(), Ok(Response::Done)));

@@ -1,4 +1,5 @@
 //! Stable kernel identities and checked projection of portable attributes.
+use crate::operations::Declined;
 use fuser::{Errno, FileAttr, FileType, INodeNo};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_workspace::{Refusal, ViewStat};
@@ -95,5 +96,14 @@ pub(crate) fn refusal(value: Refusal) -> Errno {
         Refusal::Invalid | Refusal::AncestryRequired | Refusal::AncestryMismatch => Errno::EINVAL,
         Refusal::TooManyLinks => Errno::EMLINK,
         Refusal::TooLarge => Errno::EFBIG,
+    }
+}
+/// A definite no-effect answer of a mutation as the errno the caller sees.
+pub(crate) fn declined(value: Declined) -> Errno {
+    match value {
+        Declined::Refused(reason) => refusal(reason),
+        Declined::NoSpace => Errno::ENOSPC,
+        Declined::Contended => Errno::EAGAIN,
+        Declined::TargetTooLong => Errno::ENAMETOOLONG,
     }
 }
