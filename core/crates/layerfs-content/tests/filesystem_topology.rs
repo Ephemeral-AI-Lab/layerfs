@@ -178,7 +178,10 @@ fn a_directory_or_symlink_cannot_have_two_parents() {
 #[test]
 fn a_cycle_formed_by_moving_a_directory_below_itself_is_refused() {
     let (mut session, d, e, _f) = nested();
-    // `e` moves under `d/e`: a two-part cycle the old tree cannot show.
+    let before = session.store.len();
+    // `d` is bound again under its own child `e`, with both base bindings
+    // restated: the only placement is `d` under `e`, `e` lies in `d`'s
+    // territory, and the upward walk from `d` returns to `d`.
     let outcome = session.apply(
         &[
             DirectoryUpdate {
@@ -206,16 +209,20 @@ fn a_cycle_formed_by_moving_a_directory_below_itself_is_refused() {
         ],
         &[],
     );
-    assert!(matches!(
-        outcome,
-        Err(ContentError::InvalidRecord("multiple parents"))
-            | Err(ContentError::InvalidRecord("effective tree cycle"))
-    ));
+    // The proof refuses before the derived count of two could: one label.
+    assert_eq!(
+        outcome.err(),
+        Some(ContentError::InvalidRecord("effective tree cycle"))
+    );
+    assert_eq!(session.store.len(), before, "nothing is offered");
 }
 
 #[test]
 fn a_self_binding_is_refused() {
     let (mut session, d, _e, _f) = nested();
+    let before = session.store.len();
+    // `d` keeps `/d` and is bound inside itself: its one placement names
+    // itself, so the walk from `d` never leaves `d`.
     let outcome = session.apply(
         &[DirectoryUpdate {
             parent: d,
@@ -224,11 +231,11 @@ fn a_self_binding_is_refused() {
         &[],
         &[],
     );
-    assert!(matches!(
-        outcome,
-        Err(ContentError::InvalidRecord("multiple parents"))
-            | Err(ContentError::InvalidRecord("effective tree cycle"))
-    ));
+    assert_eq!(
+        outcome.err(),
+        Some(ContentError::InvalidRecord("effective tree cycle"))
+    );
+    assert_eq!(session.store.len(), before, "nothing is offered");
 }
 
 #[test]
@@ -479,6 +486,7 @@ fn a_build_with_a_disconnected_directory_cycle_is_refused() {
     let mut session = Session::new(1).expect("empty");
     let a = session.allocate();
     let b = session.allocate();
+    let before = session.store.len();
     let outcome = session.apply(
         &[
             DirectoryUpdate {
@@ -506,12 +514,13 @@ fn a_build_with_a_disconnected_directory_cycle_is_refused() {
         ],
         &[a, b],
     );
-    assert!(matches!(
-        outcome,
-        Err(ContentError::InvalidRecord("effective tree cycle"))
-            | Err(ContentError::InvalidRecord("new inode removal"))
-            | Err(ContentError::InvalidRecord("new inode without binding"))
-    ));
+    // Both directories are bound, so neither new-inode rule applies: the proof
+    // is the only check that answers, and it answers before anything is built.
+    assert_eq!(
+        outcome.err(),
+        Some(ContentError::InvalidRecord("effective tree cycle"))
+    );
+    assert_eq!(session.store.len(), before, "nothing is offered");
 }
 
 #[test]
@@ -657,6 +666,7 @@ fn an_update_cycling_two_declared_new_directories_is_refused() {
     let (mut session, d, _e, _f) = nested();
     let a = session.allocate();
     let b = session.allocate();
+    let before = session.store.len();
     // `a` is bound under `d` first, then the third update makes `a` hold `b`
     // which holds `a`: the cycle is created entirely by this batch.
     let outcome = session.apply(
@@ -686,14 +696,13 @@ fn an_update_cycling_two_declared_new_directories_is_refused() {
         ],
         &[a, b],
     );
-    assert!(
-        matches!(
-            outcome,
-            Err(ContentError::InvalidRecord("effective tree cycle"))
-                | Err(ContentError::InvalidRecord("multiple parents"))
-        ),
-        "a cycle between two declared-new directories must be refused: {outcome:?}"
+    // `a` is bound under `d` and under `b`: two placements of one directory
+    // meet in classification, before the proof would walk the cycle.
+    assert_eq!(
+        outcome.err(),
+        Some(ContentError::InvalidRecord("multiple parents"))
     );
+    assert_eq!(session.store.len(), before, "nothing is offered");
 }
 
 #[test]
@@ -824,19 +833,43 @@ fn a_permutation_of_65_directory_bindings_is_one_linear_walk() {
             })
             .collect(),
     };
-    session.apply(&[rotated], &[], &[]).expect("permutation");
+    let result = session.apply(&[rotated], &[], &[]).expect("permutation");
+    let work = result.counters.validation;
+    // 65 stored directories each take a name another one had: 65 placements
+    // under the root, one header and 65 names classified.
+    assert_eq!((work.placements, work.peak_window_rows), (65, 66));
+    // Every placement names the root, so each walk is one step, taken once to
+    // prove it and once to mark it: twice the placements, not their square.
+    assert_eq!(work.ancestry_steps, 130);
+    // No placement lands under a stored directory other than the root, so no
+    // parent is scanned and no base directory is listed.
+    assert_eq!(
+        (
+            work.in_place_scans,
+            work.in_place_rows,
+            work.in_place_directories
+        ),
+        (0, 0, 0)
+    );
+    assert_eq!(
+        (
+            work.territory_directories,
+            work.territory_entries,
+            work.entries_examined
+        ),
+        (0, 0, 0)
+    );
 }
 
 #[test]
 fn a_build_cycle_that_the_root_holds_is_refused() {
     // The root binds `a`, and `a` holds `b` and `b` holds `a`. Every declared
-    // directory has a binding, so the disconnected-record rule cannot see it and
-    // only reachability from the root can: the walk never reaches `a`'s second
-    // edge into `b`, and `b` is bound once but not held by the tree the root
-    // reaches.
+    // directory has a binding, so the disconnected-record rule cannot see it;
+    // `a` has two of them.
     let mut session = Session::new(1).expect("empty");
     let a = session.allocate();
     let b = session.allocate();
+    let before = session.store.len();
     let outcome = session.apply(
         &[
             DirectoryUpdate {
@@ -864,17 +897,13 @@ fn a_build_cycle_that_the_root_holds_is_refused() {
         ],
         &[a, b],
     );
-    // The walk reaches `a` from the root, then `b`, then `a` again: a directory
-    // held by two bindings is refused as a second parent, and a declared
-    // directory the root never reaches is refused as a cycle.
-    assert!(
-        matches!(
-            outcome,
-            Err(ContentError::InvalidRecord("effective tree cycle"))
-                | Err(ContentError::InvalidRecord("multiple parents"))
-        ),
-        "a cycle the root reaches through one edge must be refused: {outcome:?}"
+    // `a` is bound under the root and under `b`: two placements of one
+    // directory meet in classification, before the proof would walk the cycle.
+    assert_eq!(
+        outcome.err(),
+        Some(ContentError::InvalidRecord("multiple parents"))
     );
+    assert_eq!(session.store.len(), before, "nothing is offered");
 }
 
 #[test]

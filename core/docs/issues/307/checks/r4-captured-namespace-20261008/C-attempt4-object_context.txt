@@ -1,0 +1,22 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/object_context-546585297a15e2b8 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 13 tests
+test a_hundred_large_inode_roots_do_not_form_one_oversized_provider_batch ... ok
+test all_thirteen_roles_validate_with_direct_children_and_scoped_one_id_demands ... ok
+test attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test attribute_values_require_extent_roots_and_refuse_oversized_lengths_before_mapping_demand ... ok
+test directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test extent_branches_check_nonroot_fill_level_and_exact_cumulative_summaries ... ok
+test extent_payload_kind_slice_and_file_state_actual_summaries_are_checked ... ok
+test failures_and_cardinality_end_the_original_demand_without_retry ... ok
+test filesystem_root_requires_the_expected_zero_count_directory_record ... ok
+test inode_branches_check_fill_level_maximum_count_and_leaf_ranges ... ok
+test inode_placement_content_kind_and_portable_metadata_are_contextual ... ok
+test local_reference_and_identity_context_refusals_precede_all_demands ... ok
+test regular_roots_obey_whole_file_capacity_and_retain_small_file_states ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

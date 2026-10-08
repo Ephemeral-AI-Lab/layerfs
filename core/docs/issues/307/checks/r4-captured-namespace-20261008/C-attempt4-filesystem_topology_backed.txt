@@ -1,0 +1,57 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_topology_backed-1086ade2ba1534eb --test-threads=1 --nocapture (cwd core/crates/layerfs-content)
+
+running 45 tests
+test a_build_cycle_is_refused_and_a_deep_build_is_one_linear_proof ... ok
+test a_build_refuses_a_fresh_directory_bound_only_inside_a_dropped_directory_on_both_routes ... ok
+test a_cycle_of_fresh_directories_is_a_cycle ... ok
+test a_cycle_through_a_directory_renamed_in_place_is_still_a_cycle ... ok
+test a_cycle_through_a_directory_renamed_over_a_recreated_name_is_still_a_cycle ... ok
+test a_cycle_through_a_fresh_directory_inside_the_moved_directory_is_a_cycle ... ok
+test a_deep_chain_of_fresh_directories_is_one_linear_proof_in_either_serial_order ... ok
+test a_deep_directory_renamed_in_place_under_a_stored_parent_walks_nothing ... ok
+test a_directory_bound_inside_itself_is_a_cycle ... ok
+test a_directory_moved_below_its_own_stored_child_is_a_cycle ... ok
+test a_directory_placed_twice_in_one_batch_is_refused_before_anything_is_offered ... ok
+test a_directory_value_keeps_its_supplied_root_without_a_header_and_is_rebuilt_with_one ... ok
+test a_fresh_directory_bound_only_inside_a_dropped_directory_is_refused ... ok
+test a_fresh_directory_with_an_empty_header_gets_a_real_empty_page ... ok
+test a_header_under_a_removed_base_directory_is_accepted_and_the_directory_released ... ok
+test a_legal_walk_as_long_as_the_step_bound_allows_is_accepted_and_linear ... ok
+test a_move_deep_inside_a_stored_chain_lists_only_the_moved_subtree ... ok
+test a_move_that_unbinds_first_is_accepted_and_a_restated_binding_is_no_placement ... ok
+test a_name_swap_of_two_stored_directories_in_one_parent_is_in_place ... ok
+test a_rename_in_place_beside_a_real_move_walks_only_the_moved_subtree ... ok
+test a_rename_in_place_with_a_second_binding_elsewhere_has_two_parents ... ok
+test a_rename_in_the_root_beside_a_placement_under_a_stored_directory_walks_nothing ... ok
+test a_rename_whose_directory_is_also_bound_elsewhere_still_has_two_parents ... ok
+test a_rename_with_the_old_name_recreated_walks_nothing ... ok
+test a_ring_of_seventy_fresh_and_stored_directories_is_a_cycle ... ok
+test a_ring_of_seventy_moves_through_territory_is_a_cycle ... ok
+test a_rotation_of_two_stored_directories_in_one_parent_walks_nothing ... ok
+test a_stored_directory_bound_again_is_refused_by_its_derived_count_after_directory_pages ... ok
+test a_stored_directory_bound_or_moved_inside_a_dropped_directory_is_refused ... ok
+test a_stored_symlink_bound_again_inside_a_dropped_directory_has_two_parents ... ok
+test a_symlink_bound_twice_is_refused_by_its_derived_count ... ok
+test a_wide_directory_change_is_classified_in_bounded_windows ... ok
+test an_update_with_no_row_returns_the_base_root ... ok
+test consecutive_windows_sharing_stored_children_read_them_once ... ok
+test inverting_a_parent_and_its_child_is_a_legal_move_without_a_base_walk ... ok
+test many_renames_in_one_parent_scan_that_parent_once ... in-place renames 8: validation ValidationWork { objects_read: 12, read_waves: 6, inode_demands: 10, inode_pages_read: 4, directory_pages_read: 2, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 0, prefetch: 2, bindings: 0, aliases: 0, cycles: 2, reachability: 0 }, placements: 8, ancestry_steps: 0, territory_directories: 0, territory_entries: 0, peak_window_rows: 9, in_place_scans: 1, in_place_rows: 16, in_place_directories: 8 }; topology (reads, batches, enumerations) (72, 3, 4)
+in-place renames 64: validation ValidationWork { objects_read: 70, read_waves: 10, inode_demands: 66, inode_pages_read: 7, directory_pages_read: 4, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 0, prefetch: 5, bindings: 0, aliases: 0, cycles: 2, reachability: 0 }, placements: 64, ancestry_steps: 0, territory_directories: 0, territory_entries: 0, peak_window_rows: 64, in_place_scans: 1, in_place_rows: 128, in_place_directories: 64 }; topology (reads, batches, enumerations) (576, 4, 4)
+ok
+test no_backed_refusal_depends_on_the_ordering_budget_and_state_stays_one_window ... bounded-state: validation ValidationWork { objects_read: 490, read_waves: 233, inode_demands: 416, inode_pages_read: 160, directory_pages_read: 74, entries_examined: 140, inode_pages_by_site: ValidationReadSites { allocation: 5, prefetch: 6, bindings: 0, aliases: 0, cycles: 149, reachability: 0 }, placements: 72, ancestry_steps: 144, territory_directories: 71, territory_entries: 140, peak_window_rows: 64, in_place_scans: 1, in_place_rows: 1, in_place_directories: 0 }; records calls 7554 maximum_job 8256 maximum_keys 64 maximum_changes 64 topology (reads, batches, enumerations) (929, 78, 10)
+ok
+test one_moved_directory_under_another_ones_stored_child_is_accepted ... ok
+test removing_a_name_the_base_does_not_bind_changes_nothing ... ok
+test restating_base_bindings_changes_nothing_and_walks_nothing ... ok
+test sparse_changes_across_many_directories_match_the_resident_route ... ok
+test supplied_link_counts_are_ignored ... ok
+test the_refusal_labels_pinned_on_the_resident_route_hold_on_the_backed_route ... ok
+test two_moved_directories_each_under_the_others_stored_child_are_a_cycle ... ok
+test two_stored_directories_swapped_under_each_other_are_a_cycle ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

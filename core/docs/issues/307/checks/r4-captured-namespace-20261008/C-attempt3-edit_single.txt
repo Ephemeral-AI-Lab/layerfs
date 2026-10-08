@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_single-2e1bf09b8a6a0405 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 11 tests
+test a_chunked_base_reads_and_edits_without_a_full_pass ... ok
+test a_declared_length_that_does_not_match_its_bytes_fails ... ok
+test an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once ... ok
+test an_edit_reads_and_decodes_the_base_root_once ... ok
+test an_inapplicable_range_is_rejected_before_any_work ... ok
+test append_at_end_of_file ... ok
+test complete_deletion_returns_the_empty_representation ... ok
+test insert_and_delete_change_the_length_exactly ... ok
+test overwrite_at_the_head_and_the_tail ... ok
+test overwrite_in_the_middle ... ok
+test the_base_objects_are_never_rewritten ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

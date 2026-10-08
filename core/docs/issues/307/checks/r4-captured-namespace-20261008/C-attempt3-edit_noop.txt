@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_noop-8d66936deb28d310 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test an_out_of_range_replacement_length_is_an_error ... ok
+test several_equal_replacements_are_all_recognised ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

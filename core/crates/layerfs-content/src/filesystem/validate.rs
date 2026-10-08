@@ -9,11 +9,15 @@
 //! assertion: new identities are rechecked against the base they claim to be
 //! absent from, and every final count is derived from checked retained bindings.
 //!
-//! One algorithm serves every route; only its containers differ. Without a
-//! backing the input is resident by declaration, so the batch's base records
-//! are one grouped demand and the topology evidence lives in maps held under the
-//! caller's ordering budget. With backed serial state the same classification
-//! runs in bounded windows and the same evidence is indexed records, so nothing
+//! One algorithm serves every route; only its containers differ.
+//! Classification runs in windows of [`CLASSIFICATION_WINDOW_ROWS`] rows on
+//! every route: one grouped restated-name lookup per stored parent and one
+//! batch of placements a window. Without a backing the input is resident by
+//! declaration, so one grouped demand reads the base records of the whole
+//! input before the first window, into a memo held under the caller's ordering
+//! budget, and the topology evidence lives in maps held under the same budget.
+//! With backed serial state each window makes its own grouped demand into a
+//! memo of two windows and the same evidence is indexed records, so nothing
 //! resident grows with the base or with the whole change and no total is
 //! refused.
 //!
@@ -80,8 +84,11 @@ pub struct ValidationWork {
     pub territory_directories: u64,
     /// Effective entries a territory walk examined.
     pub territory_entries: u64,
-    /// Most rows one classification window held: headers and bound names.
-    /// Without a backing the whole input is one window.
+    /// Most rows one grouped base-record demand of classification covered:
+    /// headers and bound names. With a backing that is one window, at most
+    /// [`CLASSIFICATION_WINDOW_ROWS`]. Without one it is every row of the
+    /// input: the rows are still classified a window at a time, but one demand
+    /// read the whole input's base records first.
     pub peak_window_rows: u64,
     /// Stored parents whose change rows the in-place pass read, each once.
     pub in_place_scans: u64,
@@ -335,7 +342,8 @@ pub(crate) fn check_operation(
     let (classified, window_pages) = (classifier.rows, classifier.prefetched_pages);
     drop(classifier);
     if resident {
-        // One grouped demand covered every row, whatever the processing chunks.
+        // One grouped demand covered every row; the windows above only bound
+        // the restated-name lookups and the placement batches.
         work.peak_window_rows = classified;
     }
     let prefetched = prefetched.saturating_add(window_pages);
@@ -399,20 +407,26 @@ impl ValidationState {
         serials: impl IntoIterator<Item = u64>,
         work: &mut ValidationWork,
     ) -> ContentResult<()> {
-        let mut missing: Vec<u64> = serials
-            .into_iter()
+        let mut demanded: Vec<u64> = serials.into_iter().collect();
+        demanded.sort_unstable();
+        demanded.dedup();
+        let missing: Vec<u64> = demanded
+            .iter()
+            .copied()
             .filter(|serial| !self.records.contains_key(serial) && !self.absent.contains(serial))
             .collect();
-        missing.sort_unstable();
-        missing.dedup();
         if missing.is_empty() {
             return Ok(());
         }
         // A demand that fits is kept whole: room is made once, before its
-        // answers arrive, so the window that asked reads every one of them back.
+        // answers arrive, and only for what this demand does not name. Answers
+        // an earlier demand already holds for these serials stay, so the window
+        // that asked reads every one of its records back from the memo.
         if self.records.len() + self.absent.len() + missing.len() > self.limit {
-            self.records.clear();
-            self.absent.clear();
+            self.records
+                .retain(|serial, _| demanded.binary_search(serial).is_ok());
+            self.absent
+                .retain(|serial| demanded.binary_search(serial).is_ok());
         }
         let mut inode = InodeReadWork::default();
         let found = lookup_many(reader, table, &missing, &mut inode)?;

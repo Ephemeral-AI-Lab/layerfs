@@ -8,15 +8,19 @@
 //!
 //! The evidence is the change itself. For each parent that holds a stored
 //! directory's placement, the parent's change rows are read once through the
-//! input's own cursor; the names they remove are resolved in the parent's base
-//! listing, one grouped lookup per window; and a removed base binding whose
-//! directory is placed under the same parent marks that placement in place. A
-//! scanned parent is recorded, so several renames in one parent cost one scan.
-//! The work is the change rows of those parents and one placement point per
-//! removed base binding; nothing resident outlives one window of names.
+//! input's own cursor and every changed name is resolved in the parent's base
+//! listing, one grouped lookup per window. A row displaces a base binding when
+//! the base bound that name to a serial the row no longer states: the name is
+//! removed, or it is bound to another inode - `mv p/d p/d.old; mkdir p/d`, a
+//! rotation, a swap of two names. A displaced base binding whose directory is
+//! placed under the same parent marks that placement in place. A scanned parent
+//! is recorded, so several renames in one parent cost one scan. The work is the
+//! change rows of those parents and one placement point per displaced base
+//! binding; nothing resident outlives one window of rows.
 //!
-//! A name rebound to another inode in the same row is not a removed name here:
-//! a directory displaced that way keeps its placement and its walk.
+//! A name the row restates is not displaced: a directory that keeps its base
+//! name and gains another in the same parent has two bindings, keeps its
+//! placement and its walk, and is refused by its derived count.
 
 use super::backed::{TopologyRecords, RECORD_WINDOW};
 use super::{charge_directory, charge_inode, ValidationWork};
@@ -66,7 +70,7 @@ struct Scan<'a, 'r, 's, 'b> {
     reader: &'a dyn AuthenticatedObjects,
     table: InodeTable,
     parent: u64,
-    /// The parent's base listing root, read when the first removed name needs it.
+    /// The parent's base listing root, read for the first window of names.
     listing: Option<ObjectId>,
     records: &'r mut TopologyRecords<'s, 'b>,
     work: &'r mut ValidationWork,
@@ -80,19 +84,20 @@ impl Scan<'_, '_, '_, '_> {
             .directory_for(self.parent)?
             .ok_or(ContentError::InvalidRecord("directory parent"))?;
         let mut changes = row.changes()?;
-        let mut removed = Vec::with_capacity(RECORD_WINDOW);
+        let mut names = Vec::with_capacity(RECORD_WINDOW);
+        let mut stated = Vec::with_capacity(RECORD_WINDOW);
         loop {
             let next = changes.next().transpose()?;
             let done = next.is_none();
             if let Some((name, binding)) = next {
                 self.work.in_place_rows = self.work.in_place_rows.saturating_add(1);
-                if binding.is_none() {
-                    removed.push(name);
-                }
+                names.push(name);
+                stated.push(binding);
             }
-            if removed.len() == RECORD_WINDOW || (done && !removed.is_empty()) {
-                let window = std::mem::replace(&mut removed, Vec::with_capacity(RECORD_WINDOW));
-                self.resolve(window)?;
+            if names.len() == RECORD_WINDOW || (done && !names.is_empty()) {
+                let window = std::mem::replace(&mut names, Vec::with_capacity(RECORD_WINDOW));
+                self.resolve(window, &stated)?;
+                stated.clear();
             }
             if done {
                 return Ok(());
@@ -100,8 +105,8 @@ impl Scan<'_, '_, '_, '_> {
         }
     }
 
-    /// Resolves one window of removed names in the parent's base listing.
-    fn resolve(&mut self, names: Vec<PathName>) -> ContentResult<()> {
+    /// Resolves one window of changed names in the parent's base listing.
+    fn resolve(&mut self, names: Vec<PathName>, stated: &[Option<u64>]) -> ContentResult<()> {
         let listing = match self.listing {
             Some(listing) => listing,
             None => {
@@ -122,9 +127,13 @@ impl Scan<'_, '_, '_, '_> {
         let base = lookup_names(self.reader, DirectoryRoot(listing), &names, &mut directory)?;
         charge_directory(self.work, directory);
         let mut kept = Vec::new();
-        for serial in base.into_iter().flatten() {
-            // The base bound this serial here and the change removes that name:
-            // a placement of it under this same parent is a rename.
+        for (base, stated) in base.into_iter().zip(stated) {
+            // The base bound this serial here and the row no longer does: the
+            // name is removed or names another inode. A placement of the
+            // displaced serial under this same parent is a rename.
+            let Some(serial) = base.filter(|serial| *stated != Some(*serial)) else {
+                continue;
+            };
             if let Some(placement) = self.records.placed(serial)? {
                 if placement.parent == self.parent && !placement.in_place {
                     kept.push((serial, placement));

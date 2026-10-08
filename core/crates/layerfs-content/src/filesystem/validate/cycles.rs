@@ -52,11 +52,12 @@
 //! territory pass enters only stored unplaced directories, and such a
 //! directory's effective binding in a listed parent is a binding in its base
 //! parent - its base binding, or the one placement that replaced a base
-//! binding the same header removes - so the pass follows edges of the base
-//! tree and lists each directory at most once; the rooted walk is bounded by
-//! its step count whatever the records say. An aliased directory can make the
-//! proof report a cycle one binding too early or accept a batch the reducer
-//! then refuses; it cannot make it loop or accept a cycle.
+//! binding the same header displaces by removing the name or giving it to
+//! another inode - so the pass follows edges of the base tree and lists each
+//! directory at most once; the rooted walk is bounded by its step count
+//! whatever the records say. An aliased directory can make the proof report a
+//! cycle one binding too early or accept a batch the reducer then refuses; it
+//! cannot make it loop or accept a cycle.
 //!
 //! **Dropped ends.** A walk that ends at a directory this operation allocates
 //! and nothing binds reaches neither the root nor a base position, so it is

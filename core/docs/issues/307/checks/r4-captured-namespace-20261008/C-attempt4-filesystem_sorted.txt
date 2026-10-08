@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_sorted-cafa159be4f47f29 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test a_genuinely_empty_directory_is_emitted_once ... ok
+test a_late_source_error_propagates_and_publishes_nothing ... ok
+test a_tiny_supported_budget_works_or_refuses_before_allocating ... ok
+test an_unsorted_duplicate_or_repeating_change_is_refused_once ... ok
+test initial_construction_needs_no_provisional_seed ... ok
+test leaf_and_branch_boundaries_are_partitioned_canonically ... ok
+test page_widths_running_total_matches_the_recorded_partition ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

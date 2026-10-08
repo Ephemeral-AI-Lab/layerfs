@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/timing-8bf5d5cf2f8c6324 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test a_construction_failure_keeps_its_completed_timing ... ok
+test a_discarding_consumer_still_runs_the_real_constructor ... ok
+test a_read_reports_its_own_scopes_without_storage ... ok
+test chunked_construction_reports_the_chunk_scope ... ok
+test recording_and_disabled_execution_produce_identical_results ... ok
+test repeated_labels_stay_distinct_and_ordered ... ok
+test small_construction_reports_its_real_scopes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

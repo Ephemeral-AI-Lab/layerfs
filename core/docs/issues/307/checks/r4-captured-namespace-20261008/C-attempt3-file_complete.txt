@@ -1,0 +1,23 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/file_complete-83b4b0b40ff0edea --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 14 tests
+test at_and_above_cutoff_uses_a_chunked_tree ... ok
+test below_cutoff_uses_one_whole_file_object_and_reads_back_exactly ... ok
+test chunk_partition_is_frozen_for_the_reference_input ... ok
+test chunks_respect_the_frozen_size_window ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test construction_is_deterministic_for_the_same_input ... ok
+test empty_file_uses_the_defined_file_state_form ... ok
+test known_length_and_streaming_inputs_agree_exactly ... ok
+test late_input_failure_after_early_output_is_returned_once ... ok
+test one_byte_file_is_a_whole_file_object ... ok
+test representation_boundaries_are_exact_and_exclusive ... ok
+test streamed_source_requests_stay_bounded ... ok
+test unsupported_policy_values_are_rejected_before_work ... ok
+test whole_file_payload_is_classified_without_a_db ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

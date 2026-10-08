@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_runs-8aff89bca0f00722 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 11 tests
+test a_large_zero_no_op_proves_real_repeated_pages_without_backing_or_byte_loops ... ok
+test a_partial_zero_payload_never_certifies_its_nonzero_repeated_slice ... ok
+test a_zero_replacement_above_four_gib_keeps_bounded_calls_and_exact_boundary_bytes ... ok
+test equal_length_comparison_end_is_one_invalid_replacement_without_output_or_backing ... ok
+test malformed_runs_and_original_late_source_failure_preserve_one_attempt ... ok
+test mixed_runs_keep_the_byte_route_root_across_localized_and_representation_transitions ... ok
+test original_zero_evidence_refusal_and_absence_end_without_construction_or_fallback ... ok
+test sparse_emission_preserves_predecessor_and_refuses_occupied_scope_before_acceptance ... ok
+test zero_evidence_eviction_handles_more_than_sixty_four_distinct_payloads ... ok
+test zero_payload_identity_role_and_shape_failures_end_on_the_original_demand ... ok
+test zero_witness_reuse_rejects_changed_summary_and_underfilled_child_context ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

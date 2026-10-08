@@ -8,10 +8,13 @@
 //! topology record traffic. What the canonical trees add by their own height
 //! and fan-out - validation's inode page reads and the sorted merges' page
 //! reads - is printed as observed and asserted only where the inode table has
-//! the same height at every size. A second set of larger bases, whose inode
-//! table has several branches under its root, shows where the sorted merge's
-//! reads stop following the base. No product operation is timed; the one wall
-//! figure printed is how long this file took to build its own larger bases.
+//! the same height at every size. The directories a change rebuilds have the
+//! same entries at every size, so the directory merge's page reads are asserted
+//! equal; the inode merge's are asserted only against the branch fan-out, per
+//! level and per touched branch, because they are not flat. A second set of
+//! larger bases, whose inode table has several branches under its root, shows
+//! where the sorted merge's reads stop following the base. Nothing here is
+//! timed.
 
 mod support;
 
@@ -113,16 +116,7 @@ fn bases() -> &'static [Grown] {
 
 fn large_bases() -> &'static [Grown] {
     static BASES: OnceLock<Vec<Grown>> = OnceLock::new();
-    BASES.get_or_init(|| {
-        let started = std::time::Instant::now();
-        let bases: Vec<Grown> = LARGE_SIZES.iter().map(|bulk| grown(*bulk)).collect();
-        eprintln!(
-            "larger bases: inodes {:?} built by this test file in {:?} (fixture wall time, debug build)",
-            bases.iter().map(|base| base.inodes).collect::<Vec<_>>(),
-            started.elapsed()
-        );
-        bases
-    })
+    BASES.get_or_init(|| LARGE_SIZES.iter().map(|bulk| grown(*bulk)).collect())
 }
 
 /// The validation counters that do not depend on the height of a base tree.
@@ -178,7 +172,8 @@ fn counted_over(
              in place (scans, rows, directories) ({}, {}, {}) | inode pages {} \
              waves {} sites {:?} | topology records (reads, batches, enumerations) {traffic:?} \
              record calls {} max keys {} max job {} | sorted merge pages read: directories {} \
-             inodes {} | release {:?}",
+             inodes {} | operation objects read {} in {} waves | base records read: counts {} \
+             reduction {} | release {:?}",
             base.inodes,
             base.height,
             base.spine,
@@ -202,7 +197,22 @@ fn counted_over(
             run.records.maximum_job,
             result.counters.directories.pages_read,
             result.counters.inodes.pages_read,
+            result.counters.objects.objects_read,
+            result.counters.objects.read_waves,
+            result.counters.base_records_read,
+            result.counters.references.base_records_read,
             result.counters.release,
+        );
+        // Every serial a change names lives in the table's leftmost leaf, and
+        // an allocation appends to its rightmost: one or two touched branches,
+        // each of which can supply at most one branch page's children a level.
+        let branches = if rows.allocates() { 2 } else { 1 };
+        assert!(
+            result.counters.inodes.pages_read
+                <= MAXIMUM_INODE_BRANCH_CHILDREN * base.height * branches,
+            "{label}: {} inode pages over {} levels and {branches} branches",
+            result.counters.inodes.pages_read,
+            base.height
         );
         assert!(work.peak_window_rows <= WINDOW, "{label}");
         assert!(run.records.maximum_keys <= 64, "{label}");
@@ -229,6 +239,13 @@ fn counted_over(
                 assert_eq!(
                     result.counters.release, smallest.counters.release,
                     "{label}: release work grew with the base"
+                );
+                // The directories this change rebuilds hold the same entries
+                // at every size, so the merge reads the same pages of them.
+                assert_eq!(
+                    result.counters.directories.pages_read,
+                    smallest.counters.directories.pages_read,
+                    "{label}: directory pages read grew with the base"
                 );
                 if same_height {
                     // Equal table heights leave no height term: every counter
@@ -483,6 +500,37 @@ fn one_directory_renamed_in_place_under_a_stored_directory_walks_nothing() {
         (1, 2, 1)
     );
     assert_eq!((work.placements, work.ancestry_steps), (1, 0));
+    assert_eq!(
+        (
+            work.territory_directories,
+            work.territory_entries,
+            work.entries_examined
+        ),
+        (0, 0, 0)
+    );
+}
+
+#[test]
+fn one_directory_renamed_with_its_old_name_recreated_walks_nothing() {
+    // `mv work/sub work/sub.old; mkdir work/sub`.
+    let result = counted("directory renamed and its old name recreated", |base| {
+        Rowset::new()
+            .bind(base.work, "sub.old", base.sub)
+            .mkdir(base.work, "sub", FRESH)
+    });
+    let work = result.counters.validation;
+    // No name is removed: the row for `sub` names the fresh directory, which
+    // displaces the base binding of the stored one, placed under `work` again.
+    assert_eq!(
+        (
+            work.in_place_scans,
+            work.in_place_rows,
+            work.in_place_directories
+        ),
+        (1, 2, 1)
+    );
+    // The renamed directory takes no step; the fresh one climbs one, twice.
+    assert_eq!((work.placements, work.ancestry_steps), (2, 2));
     assert_eq!(
         (
             work.territory_directories,

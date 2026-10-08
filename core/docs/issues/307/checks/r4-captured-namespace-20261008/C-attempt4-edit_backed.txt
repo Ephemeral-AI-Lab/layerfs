@@ -1,0 +1,18 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_backed-54e9dde5e2f41af8 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 9 tests
+test backed_and_memory_routes_share_canonical_result_and_end_with_acknowledged_state ... ok
+test file_state_refusal_and_post_accept_ack_refusal_retain_one_pending_attempt ... ok
+test malformed_mapping_record_and_reused_file_scope_never_fall_back_to_stored_objects ... ok
+test no_op_and_whole_file_transition_keep_the_existing_dispatch_without_backing_effects ... ok
+test original_backing_discard_settle_and_post_accept_failure_end_without_another_job ... ok
+test original_consumer_refusal_leaves_attempt_marker_and_no_file_state_or_acknowledgement ... ok
+test repeated_page_dag_reuses_real_stored_identity_without_conflating_private_drafts ... ok
+test resolved_repeated_child_cannot_hide_a_shifted_interior_mapping_boundary ... ok
+test three_repeated_replacement_pages_survive_both_boundary_joins_and_a_later_split ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

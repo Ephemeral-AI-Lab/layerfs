@@ -79,7 +79,7 @@ fn versioned(serial: u64) -> Vec<u8> {
 }
 
 /// Placements, territory marks, rooted marks, the territory queue and the
-/// parents whose removed names were already resolved.
+/// parents whose changed names were already resolved.
 pub(super) struct TopologyRecords<'s, 'b> {
     state: &'s SerialState<'b>,
     limit: usize,
@@ -227,7 +227,7 @@ impl<'s, 'b> TopologyRecords<'s, 'b> {
         Ok(())
     }
 
-    /// True when this parent's removed names were already resolved.
+    /// True when this parent's changed names were already resolved.
     pub fn scanned(&self, parent: u64) -> ContentResult<bool> {
         if !self.state.backed() {
             return Ok(self.scanned.contains(&parent));
@@ -239,7 +239,7 @@ impl<'s, 'b> TopologyRecords<'s, 'b> {
         }
     }
 
-    /// Records that this parent's removed names were resolved, guarded on absence.
+    /// Records that this parent's changed names were resolved, guarded on absence.
     pub fn mark_scanned(&mut self, parent: u64) -> ContentResult<()> {
         if self.state.backed() {
             self.state

@@ -1100,16 +1100,442 @@ fn a_rename_in_the_root_beside_a_placement_under_a_stored_directory_walks_nothin
 }
 
 #[test]
-fn a_name_swap_of_two_stored_directories_is_not_seen_as_in_place_and_still_agrees() {
+fn a_name_swap_of_two_stored_directories_in_one_parent_is_in_place() {
     let base = mixed();
-    // `m` and `s` exchange names inside `a`: no name is removed, each is
-    // rebound, so neither is recognised as in place and both are listed.
+    // `m` and `s` exchange names inside `a`: no name is removed, each row
+    // displaces the other's base binding, and both stay under `a`.
     let rows = Rowset::new()
         .bind(base.a, "m", base.s)
         .bind(base.a, "s", base.m);
     let run = update_backed(&base.tree, &rows, resources());
     let result = accepted(&run);
-    assert_eq!(in_place(&result), (1, 2, 0));
-    assert!(result.counters.validation.territory_directories > 0);
+    assert_eq!(in_place(&result), (1, 2, 2));
+    assert_eq!(walked(&result), (0, 0, 0));
+    assert_eq!(result.counters.validation.ancestry_steps, 0);
+    let resident = resident_root(&base.tree, &rows);
+    assert_eq!(resident.root, result.root);
+    assert_eq!(in_place(&resident), (1, 2, 2));
+    let store = run.folded(&base.tree);
+    assert_eq!(
+        listing(&store, result.root, base.a),
+        vec![("m".to_owned(), base.s), ("s".to_owned(), base.m)]
+    );
+}
+
+#[test]
+fn a_rename_with_the_old_name_recreated_walks_nothing() {
+    // `mv c c.old; mkdir c` under `links[4]`: the old name is not removed, it
+    // is bound to a fresh directory. `links[5]` keeps its 34 nested
+    // directories and its base parent.
+    let (tree, links, _h) = chain(40);
+    let fresh = tree.next;
+    let rows = Rowset::new()
+        .bind(links[4], "c.old", links[5])
+        .mkdir(links[4], "c", fresh);
+    let run = update_backed(&tree, &rows, resources());
+    let result = accepted(&run);
+    assert_eq!(in_place(&result), (1, 2, 1));
+    assert_eq!(walked(&result), (0, 0, 0));
+    // The renamed directory takes no step; the fresh one climbs one, twice.
+    let work = result.counters.validation;
+    assert_eq!((work.placements, work.ancestry_steps), (2, 2));
+    let resident = resident_root(&tree, &rows);
+    assert_eq!(resident.root, result.root);
+    assert_eq!(in_place(&resident), (1, 2, 1));
+    assert_eq!(walked(&resident), (0, 0, 0));
+    let store = run.folded(&tree);
+    assert_eq!(
+        listing(&store, result.root, links[4]),
+        vec![("c".to_owned(), fresh), ("c.old".to_owned(), links[5])]
+    );
+    assert_eq!(
+        inode(&store, result.root, links[5])
+            .expect("renamed directory")
+            .namespace_ref_count,
+        1
+    );
+}
+
+#[test]
+fn a_rotation_of_two_stored_directories_in_one_parent_walks_nothing() {
+    // `mv m previous; mv s m` inside `a`: `m`'s old name goes to `s`, and
+    // `s`'s old name is removed. Neither directory leaves `a`.
+    let base = mixed();
+    let rows = Rowset::new()
+        .bind(base.a, "previous", base.m)
+        .bind(base.a, "m", base.s)
+        .unbind(base.a, "s");
+    let run = update_backed(&base.tree, &rows, resources());
+    let result = accepted(&run);
+    assert_eq!(in_place(&result), (1, 3, 2));
+    assert_eq!(walked(&result), (0, 0, 0));
+    let work = result.counters.validation;
+    assert_eq!((work.placements, work.ancestry_steps), (2, 0));
+    let resident = resident_root(&base.tree, &rows);
+    assert_eq!(resident.root, result.root);
+    assert_eq!(in_place(&resident), (1, 3, 2));
+    assert_eq!(walked(&resident), (0, 0, 0));
+    let store = run.folded(&base.tree);
+    assert_eq!(
+        listing(&store, result.root, base.a),
+        vec![("m".to_owned(), base.s), ("previous".to_owned(), base.m)]
+    );
+}
+
+#[test]
+fn a_cycle_through_a_directory_renamed_over_a_recreated_name_is_still_a_cycle() {
+    let base = mixed();
+    let fresh = base.tree.next;
+    // `mv x x.old; mkdir x` inside `m`, and `m` moves under the renamed `x`.
+    cycle(
+        &base.tree,
+        &Rowset::new()
+            .bind(base.m, "x.old", base.x)
+            .mkdir(base.m, "x", fresh)
+            .unbind(base.a, "m")
+            .bind(base.x, "m", base.m),
+    );
+    // The same rename, and `m` moves under `deep`, below the renamed directory.
+    cycle(
+        &base.tree,
+        &Rowset::new()
+            .bind(base.m, "x.old", base.x)
+            .mkdir(base.m, "x", fresh)
+            .unbind(base.a, "m")
+            .bind(base.deep, "m", base.m),
+    );
+    // A swap of `m` and `s` inside `a`, and `a` moves under the swapped `s`.
+    cycle(
+        &base.tree,
+        &Rowset::new()
+            .bind(base.a, "m", base.s)
+            .bind(base.a, "s", base.m)
+            .unbind(ROOT, "a")
+            .bind(base.s, "a", base.a),
+    );
+}
+
+#[test]
+fn a_rename_whose_directory_is_also_bound_elsewhere_still_has_two_parents() {
+    let base = mixed();
+    let fresh = base.tree.next;
+    // Renamed over a recreated name inside `m` and bound again under `h`: two
+    // placements of one directory meet in classification.
+    let rows = Rowset::new()
+        .bind(base.m, "x.old", base.x)
+        .mkdir(base.m, "x", fresh)
+        .bind(base.h, "also", base.x);
+    let run = update_backed(&base.tree, &rows, resources());
+    refused(&run, "multiple parents");
+    assert!(run.emitted.is_empty());
+    let (resident, emitted) = update_resident(&base.tree, &rows, resources());
+    assert_eq!(
+        resident.err(),
+        Some(ContentError::InvalidRecord("multiple parents"))
+    );
+    assert!(emitted.is_empty());
+
+    // The old name restated and a second name in the same parent: the base
+    // binding is not displaced, so the directory is not in place, its subtree
+    // is listed, and its derived count of two refuses it after `m`'s page.
+    let rows = Rowset::new()
+        .bind(base.m, "x", base.x)
+        .bind(base.m, "x.old", base.x);
+    let run = update_backed(&base.tree, &rows, resources());
+    refused(&run, "multiple parents");
+    assert!(run.records.values.contains_key(&key(PLACED, base.x)));
+    assert_eq!(run.offered(), vec![ObjectRole::DirectoryLeaf]);
+    assert_eq!(
+        update_resident(&base.tree, &rows, resources()).0.err(),
+        Some(ContentError::InvalidRecord("multiple parents"))
+    );
+}
+
+// ---- the memo keeps what a window demands ----
+
+#[test]
+fn consecutive_windows_sharing_stored_children_read_them_once() {
+    // `/w/` holds 40 files. Six rounds each add one more name to every file
+    // and 30 new files, so every window of 64 rows names stored files an
+    // earlier window already demanded together with serials no window has
+    // seen: 420 bound names over seven windows.
+    let mut shape = Shape::new();
+    let w = shape.dir(ROOT, "w");
+    let files: Vec<u64> = (0..40)
+        .map(|index| shape.file(w, &format!("g{index:02}")))
+        .collect();
+    let tree = shape.build();
+    let mut rows = Rowset::new();
+    let mut next = tree.next;
+    for round in 0..6 {
+        for (index, file) in files.iter().enumerate() {
+            rows = rows.bind(w, &format!("r{round}a{index:02}"), *file);
+        }
+        for index in 0..30 {
+            rows = rows.fresh(next, InodeKind::RegularFile).bind(
+                w,
+                &format!("r{round}z{index:02}"),
+                next,
+            );
+            next += 1;
+        }
+    }
+    let run = update_backed(&tree, &rows, resources());
+    let result = accepted(&run);
+    let work = result.counters.validation;
+    assert_eq!(work.peak_window_rows, WINDOW);
+    // Every record classification asks for comes from its window's grouped
+    // demand: no single-serial descent re-reads a record the memo dropped.
+    assert_eq!(work.inode_pages_by_site.bindings, 0, "{work:?}");
+    assert!(work.inode_pages_by_site.prefetch > 0);
+    assert_eq!(
+        work.inode_pages_read,
+        work.inode_pages_by_site.allocation + work.inode_pages_by_site.prefetch
+    );
+    assert_eq!(resident_root(&tree, &rows).root, result.root);
+    let store = run.folded(&tree);
+    assert_eq!(
+        inode(&store, result.root, files[0])
+            .expect("linked file")
+            .namespace_ref_count,
+        7
+    );
+}
+
+// ---- cycle shapes a random stream does not reach ----
+
+/// `/m1/d1/`, `/top/m2/d2/`: two movers, each with one stored child.
+struct Pair {
+    tree: Tree,
+    m1: u64,
+    d1: u64,
+    top: u64,
+    m2: u64,
+    d2: u64,
+}
+
+fn pair() -> Pair {
+    let mut shape = Shape::new();
+    let m1 = shape.dir(ROOT, "m1");
+    let d1 = shape.dir(m1, "d1");
+    let top = shape.dir(ROOT, "top");
+    let m2 = shape.dir(top, "m2");
+    let d2 = shape.dir(m2, "d2");
+    Pair {
+        tree: shape.build(),
+        m1,
+        d1,
+        top,
+        m2,
+        d2,
+    }
+}
+
+#[test]
+fn two_moved_directories_each_under_the_others_stored_child_are_a_cycle() {
+    // m1 -> d2 -> m2 -> d1 -> m1. Each placement lands in a stored directory
+    // that kept its base parent, so no placed edge joins two placed
+    // directories: only the territory marks on `d1` and `d2` close the walk.
+    let base = pair();
+    cycle(
+        &base.tree,
+        &Rowset::new()
+            .unbind(ROOT, "m1")
+            .unbind(base.top, "m2")
+            .bind(base.d2, "m1", base.m1)
+            .bind(base.d1, "m2", base.m2),
+    );
+}
+
+#[test]
+fn one_moved_directory_under_another_ones_stored_child_is_accepted() {
+    let base = pair();
+    // `m1` moves under `d2` while `m2` stays where it is.
+    let rows = Rowset::new()
+        .unbind(ROOT, "m1")
+        .bind(base.d2, "m1", base.m1);
+    let run = update_backed(&base.tree, &rows, resources());
+    let result = accepted(&run);
+    let work = result.counters.validation;
+    assert_eq!((work.placements, work.ancestry_steps), (1, 2));
+    // `m1` and `d1` are listed; `d2` kept its base position and ends the walk.
+    assert_eq!((work.territory_directories, work.territory_entries), (2, 1));
     assert_eq!(resident_root(&base.tree, &rows).root, result.root);
+
+    // `m1` moves under `d2` and `m2` itself moves to the root: `d2` now lies
+    // in `m2`'s territory and the walk continues through it to the root.
+    let rows = Rowset::new()
+        .unbind(ROOT, "m1")
+        .bind(base.d2, "m1", base.m1)
+        .unbind(base.top, "m2")
+        .bind(ROOT, "m2", base.m2);
+    let run = update_backed(&base.tree, &rows, resources());
+    let result = accepted(&run);
+    let work = result.counters.validation;
+    assert_eq!(work.placements, 2);
+    // `m1` climbs `d2`, `m2` and the root: three steps walked and three marked.
+    assert_eq!(work.ancestry_steps, 6);
+    // `m1`, `d1`, `m2` and `d2` are listed; `d2` now also lists `m1`.
+    assert_eq!((work.territory_directories, work.territory_entries), (4, 3));
+    assert_eq!(resident_root(&base.tree, &rows).root, result.root);
+    let store = run.folded(&base.tree);
+    assert_eq!(
+        listing(&store, result.root, base.d2),
+        vec![("m1".to_owned(), base.m1)]
+    );
+    assert_eq!(listing(&store, result.root, base.top), Vec::new());
+}
+
+#[test]
+fn a_ring_of_seventy_fresh_and_stored_directories_is_a_cycle() {
+    // s0 -> f0 -> s1 -> f1 -> ... -> s34 -> f34 -> s0: 70 placements, more
+    // than one classification window and more than one record window.
+    let mut shape = Shape::new();
+    let stored: Vec<u64> = (0..35)
+        .map(|index| shape.dir(ROOT, &format!("s{index:02}")))
+        .collect();
+    let tree = shape.build();
+    let mut rows = Rowset::new();
+    for (index, directory) in stored.iter().enumerate() {
+        let fresh = tree.next + index as u64;
+        rows = rows
+            .unbind(ROOT, &format!("s{index:02}"))
+            .fresh(fresh, InodeKind::Directory)
+            .bind(fresh, "s", *directory)
+            .bind(stored[(index + 1) % 35], "f", fresh);
+    }
+    cycle(&tree, &rows);
+    // One more stored directory cut out of the ring makes it a chain to the
+    // root, and the same 70 placements are accepted.
+    let rows = rows.unbind(stored[0], "f").bind(ROOT, "f", tree.next + 34);
+    let run = update_backed(&tree, &rows, resources());
+    let result = accepted(&run);
+    let work = result.counters.validation;
+    assert_eq!(work.placements, 70);
+    assert_eq!(work.ancestry_steps, 140);
+    assert_eq!(work.peak_window_rows, WINDOW);
+    assert_eq!(resident_root(&tree, &rows).root, result.root);
+}
+
+/// `count` stored movers under the root, each with one stored child `c`, and
+/// `/h/`. Movers are allocated in ascending or descending ring order.
+fn movers(count: usize, descending: bool) -> (Tree, Vec<u64>, Vec<u64>, u64) {
+    let mut shape = Shape::new();
+    let mut movers = vec![0; count];
+    let mut children = vec![0; count];
+    for step in 0..count {
+        let index = if descending { count - 1 - step } else { step };
+        movers[index] = shape.dir(ROOT, &format!("m{index:03}"));
+        children[index] = shape.dir(movers[index], "c");
+    }
+    let h = shape.dir(ROOT, "h");
+    (shape.build(), movers, children, h)
+}
+
+#[test]
+fn a_ring_of_seventy_moves_through_territory_is_a_cycle() {
+    // m0 -> c1 -> m1 -> c2 -> ... -> m69 -> c0 -> m0: every mover lands in the
+    // stored child of the next, so the ring alternates one placed edge and one
+    // territory step, 140 edges for 70 placements.
+    let (tree, movers, children, _h) = movers(70, false);
+    let mut rows = Rowset::new();
+    for (index, mover) in movers.iter().enumerate() {
+        rows = rows.unbind(ROOT, &format!("m{index:03}")).bind(
+            children[(index + 1) % 70],
+            "m",
+            *mover,
+        );
+    }
+    cycle(&tree, &rows);
+}
+
+#[test]
+fn a_legal_walk_as_long_as_the_step_bound_allows_is_accepted_and_linear() {
+    // m0 under c1, m1 under c2, ..., and the last mover under `/h`: one upward
+    // walk of P placed edges and P - 1 territory steps, against a bound of
+    // 2P + 2. Whichever end the serial order starts from, every edge is walked
+    // once and marked once.
+    for count in [70_usize, 140] {
+        for descending in [false, true] {
+            let (tree, movers, children, h) = movers(count, descending);
+            let mut rows = Rowset::new();
+            for (index, mover) in movers.iter().enumerate() {
+                let under = if index + 1 == count {
+                    h
+                } else {
+                    children[index + 1]
+                };
+                rows = rows
+                    .unbind(ROOT, &format!("m{index:03}"))
+                    .bind(under, "m", *mover);
+            }
+            let run = update_backed(&tree, &rows, resources());
+            let result = accepted(&run);
+            let work = result.counters.validation;
+            let placed = count as u64;
+            assert_eq!(work.placements, placed);
+            assert_eq!(
+                work.ancestry_steps,
+                4 * placed - 2,
+                "count {count} descending {descending}"
+            );
+            // Every mover and its child are listed once: one name in each
+            // mover, and the mover placed in each child but the first.
+            assert_eq!(
+                (work.territory_directories, work.territory_entries),
+                (2 * placed, 2 * placed - 1)
+            );
+            assert_eq!(work.peak_window_rows, WINDOW);
+            assert!(run.records.maximum_keys <= 64 && run.records.maximum_job <= 65_536);
+            let resident = resident_root(&tree, &rows);
+            assert_eq!(resident.root, result.root);
+            assert_eq!(resident.counters.validation.ancestry_steps, 4 * placed - 2);
+        }
+    }
+}
+
+#[test]
+fn the_refusal_labels_pinned_on_the_resident_route_hold_on_the_backed_route() {
+    let base = small();
+    let a = base.tree.next;
+    let b = a + 1;
+    // A stored directory moved below its own child, its base binding restated.
+    cycle(
+        &base.tree,
+        &Rowset::new()
+            .bind(ROOT, "d", base.d)
+            .bind(base.d, "e", base.e)
+            .bind(base.e, "d", base.d),
+    );
+    // A stored directory bound inside itself, its base binding kept.
+    cycle(&base.tree, &Rowset::new().bind(base.d, "self", base.d));
+    // Two fresh directories holding each other, with nothing under the root.
+    cycle(
+        &base.tree,
+        &Rowset::new()
+            .header(ROOT)
+            .fresh(a, InodeKind::Directory)
+            .fresh(b, InodeKind::Directory)
+            .bind(a, "b", b)
+            .bind(b, "a", a),
+    );
+    // A fresh directory bound under a stored one and again under its own
+    // fresh child: two placements, refused in classification.
+    for under in [base.d, ROOT] {
+        let rows = Rowset::new()
+            .fresh(a, InodeKind::Directory)
+            .fresh(b, InodeKind::Directory)
+            .bind(under, "a", a)
+            .bind(a, "b", b)
+            .bind(b, "a", a);
+        let run = update_backed(&base.tree, &rows, resources());
+        refused(&run, "multiple parents");
+        assert!(run.emitted.is_empty());
+        let (resident, emitted) = update_resident(&base.tree, &rows, resources());
+        assert_eq!(
+            resident.err(),
+            Some(ContentError::InvalidRecord("multiple parents"))
+        );
+        assert!(emitted.is_empty());
+    }
 }

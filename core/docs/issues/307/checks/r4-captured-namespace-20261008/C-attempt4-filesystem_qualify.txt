@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_qualify-be1ee350ebdb2178 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 11 tests
+test a_binding_to_a_serial_outside_the_table_is_refused ... ok
+test a_built_multi_page_root_qualifies_within_bounded_windows ... ok
+test a_directory_bound_twice_is_refused_in_one_parent_or_two ... ok
+test a_proof_admits_only_its_own_root_and_context ... ok
+test a_root_of_another_context_is_refused_before_any_record ... ok
+test an_inode_leaf_overlapping_its_left_sibling_is_refused ... ok
+test every_cycle_is_refused ... ok
+test incoming_work_cannot_supply_missing_topology_or_inflate_a_proof ... ok
+test invalid_inode_rows_and_a_missing_root_inode_are_refused ... ok
+test provider_and_record_failures_return_no_proof ... ok
+test unreachable_and_miscounted_inodes_are_refused ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

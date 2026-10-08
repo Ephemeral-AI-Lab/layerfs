@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=21, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_profile-cbc923fe4ac3c992 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 2 tests
+test a_foreign_profile_is_refused_before_a_root_exists ... ok
+test the_profile_text_names_the_bounds_it_is_hashed_with ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

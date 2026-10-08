@@ -1,0 +1,19 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_transitions-56d063218fea32c7 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 10 tests
+test a_whole_file_result_reports_no_counters_and_that_is_recorded ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+test exact_boundaries_at_every_accepted_cutoff ... ok
+test known_and_streamed_complete_lengths_agree ... ok
+test retained_segments_share_one_descent ... ok
+test straddling_payload_demanded_once_across_segments ... ok
+test the_transition_reads_only_what_it_keeps_and_charges_it ... ok
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+test whole_file_edit_emits_the_reference_bytes ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

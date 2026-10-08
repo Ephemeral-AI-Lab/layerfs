@@ -87,6 +87,10 @@ impl Rowset {
             .header(serial)
             .bind(parent, name, serial)
     }
+    /// True when the rows declare a fresh serial.
+    pub fn allocates(&self) -> bool {
+        !self.new.is_empty()
+    }
     /// Changed names over every header.
     pub fn names(&self) -> usize {
         self.directories.values().map(BTreeMap::len).sum()
@@ -370,7 +374,14 @@ pub fn listing(store: &TreeStore, root: FilesystemRootId, directory: u64) -> Vec
                 .map(|(name, serial)| (name.as_str().to_owned(), *serial)),
         );
         match page.continuation {
-            Some(next) => after = Some(next),
+            Some(next) => {
+                // A cursor that does not advance fails here instead of spinning.
+                assert!(
+                    !page.entries.is_empty() && after.as_ref().is_none_or(|last| *last < next),
+                    "the listing cursor must advance"
+                );
+                after = Some(next);
+            }
             None => return entries,
         }
     }

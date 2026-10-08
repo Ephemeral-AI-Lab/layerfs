@@ -1,0 +1,25 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=21, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_topology_model-c55fafcebc6f01bf --test-threads=1 --nocapture (cwd core/crates/layerfs-content)
+
+running 1 test
+test random_directory_batches_agree_with_an_independent_parent_model ... model: 400 batches, (accepted, refused) by shape:
+  binds a vacated name to another directory: (90, 61)
+  every batch: (276, 124)
+  finds a rename in place: (131, 0)
+  finds a rename in place and walks nothing: (38, 0)
+  large, any parent: (7, 18)
+  large, smaller-serial parents: (25, 0)
+  removes a directory: (87, 45)
+  removes a directory after moving its children out: (49, 29)
+  renames in place and binds the old name again: (79, 42)
+  small: (244, 106)
+  states more than 64 new bindings: (14, 7)
+  swaps two names in one parent: (51, 21)
+  walks a territory: (179, 0)
+model: most new bindings in one accepted batch 102, in one refused batch 74
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

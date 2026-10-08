@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/object_admission-e13c0d130e69f13b --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 4 tests
+test all_thirteen_roles_derive_exact_references_and_move_the_canonical_allocation ... ok
+test domain_identity_scope_and_selected_store_policy_are_required ... ok
+test rehashed_impossible_counts_summaries_flags_and_values_are_refused ... ok
+test role_confusion_truncation_and_generic_envelopes_are_refused ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

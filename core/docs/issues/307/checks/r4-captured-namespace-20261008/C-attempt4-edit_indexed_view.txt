@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 758f4594d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_indexed_view-a18390da71f95a16 --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 7 tests
+test borrowed_view_configuration_and_base_length_refuse_before_effects ... ok
+test borrowed_view_consumer_refusal_keeps_original_object_and_hint_without_later_work ... ok
+test late_indexed_run_failure_retains_accepted_chunks_and_does_no_cleanup_job ... ok
+test original_indexed_comparison_read_refusal_is_not_flattened_or_replayed ... ok
+test original_indexed_length_refusals_stop_before_reads_backing_or_output ... ok
+test retained_view_and_fallible_runs_keep_memory_backed_and_transition_roots ... ok
+test retained_view_no_ops_precede_occupied_backing_and_empty_edits_request_no_source ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0
