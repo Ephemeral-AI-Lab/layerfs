@@ -1,0 +1,9 @@
+
+running 1 test
+test live_heap_of_held_parked_and_unattempted_jobs_stays_within_their_credit ... S7_COMPLETION_STORAGE stage=held-lifecycle jobs=32 live_heap_bytes=20736 credited_bytes=63744 live_per_job=648 credited_per_job=1992
+S7_COMPLETION_STORAGE stage=parked-capture jobs=15 live_heap_bytes=14528 credited_bytes=50400 live_per_job=968 credited_per_job=3360
+S7_COMPLETION_STORAGE stage=unattempted-stop jobs=16 live_heap_bytes=18816 credited_bytes=53760 live_per_job=1176 credited_per_job=3360
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

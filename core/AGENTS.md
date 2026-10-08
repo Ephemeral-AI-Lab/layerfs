@@ -386,6 +386,15 @@ cache states and budgets are evidence contracts, not product runtime limits.
 
 ### Fuser provenance and authorized-patch checks
 
+Additional owner authorization2026-10-08: the [scoped receive-loop lifecycle
+extension](docs/issues/307/FUSER-LIFECYCLE-DECISION-20261008.md) may extend the
+pinned fuser0.18.0 package beyond time.rs to establish loop entry/exit, retained
+startup/join ownership and the proposed explicit lifecycle API. This narrowly
+supersedes the timestamp-only file restriction below. Preserve the original
+timestamp provenance unchanged; record and verify the lifecycle delta separately.
+No other dependency change or general unsafe exception is authorized. Permission
+does not establish implementation or native Ready/drain qualification.
+
 Latest owner direction2026-10-06: "use fuser 0.18.0 from crates io and apply patch".
 This supersedes the earlier registry-only/no-patch ruling for this one correction.
 Keep the dependency version exactly0.18.0; use the checked-in copy of its official

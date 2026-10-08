@@ -1,0 +1,56 @@
+{
+  "scope": "R2 dispatch inspection; source evidence only; no native execution or acceptance",
+  "date": "2026-10-08",
+  "timezone": "Asia/Singapore",
+  "head": "4236225ee70da89a264308167549f95e660c5dcb",
+  "branch": "main",
+  "product_trees": {
+    "core/crates": "e3a61dfd814a579b58f56b63754ec3dbce83d67e",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "sha256": {
+    "core/Cargo.toml": "1e7491027ba16b0f7e6fc0d12e7e2b292369d652dbaac6d1be1b7e23a366a29c",
+    "core/Cargo.lock": "05d0c98c3fef6bdd46d33ed161ac913fad5a4406a50445fdb835dfe3a3eee159",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "tools/production_loc.py": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+    "core/vendor/fuser-0.18.0/src/session.rs": "1311a037e94d8c874b0df47e1a268ded85a7c57872235e730791ece253b6005f",
+    "core/vendor/fuser-0.18.0/src/lib.rs": "1d61b8ac9709047acadba0126ca655d0e38f5a836b3a1a95fd7c6d7361abc3c1",
+    "core/vendor/fuser-0.18.0/src/time.rs": "a333dba1c186c022eb55b950ec8895fb767c63e8ca156150b605d31d6876287d",
+    "core/patches/fuser-0.18.0/provenance.json": "0b31522ec62aff6bc87def615e19386598b63f1ce6d9acedf0fc2d0e26ad1643",
+    "core/crates/layerfs-daemon/src/service/completion.rs": "01e7ee86e22a8fc036c28923b87479fb320716bf7c40150400b62c9fdaf5c12c",
+    "core/crates/layerfs-daemon/src/overlay/credits.rs": "2ea28ae4b8ea9ff281c0104d94a4e88cb5f4b04fad8365d80dd78d7baa10a0b3",
+    "core/crates/layerfs-daemon/src/overlay/owner.rs": "16ae3a0c6f440147672a3706c419e8bfda2f73fd0bdd1abd922c430ca084ab16",
+    "core/target/debug/examples/sandbox_lifecycle": "c5c57c8b94768cd24a235fc2ef7aaea8553951d45bee3bfeece04b0654ce82cf",
+    "core/target/debug/examples/engine_streams": "1054faaa5efcbf89a9c5fa27f3a6f9e807bc7b5fb3efbeee2805964bd3e38e73",
+    "core/target/r1-completion/layerfs-daemon": "74e8bf3c055a3bdbcefd563648d840e8e2cbf7163900d5925c797c260195f6f6"
+  },
+  "protected_untracked_sha256": {
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+    "core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json": "ce32660c1ab3bcd67518b3018982b2e48552259e5903cb1ef65de2d02dcebb97"
+  },
+  "observed_environment": {
+    "docker_client": "29.5.2",
+    "docker_server": "29.5.2",
+    "docker_api": "1.54",
+    "docker_desktop": "4.76.0 (228118)",
+    "kernel": "6.12.76-linuxkit",
+    "architecture": "arm64",
+    "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "device_mount_profile": "NOT_RUN; no new container or mount created"
+  },
+  "protected_containers_observed_running": [
+    "9cf2fe345496b45d79ff272e6c698552948f1e92ea106926826a770592623b24",
+    "ce75ac504df9d0e58cedcdd0df93fe7ef39c3b66ef3c13b0bb6b580def64516c",
+    "d2433851ea5990e273b0673fdbd5c180917f1216f3c81bdfb4517da0207e2c2a",
+    "d2550144998b4b71de98cb9ecf6448f87c7b99a3c2f69ea778a29413fffa5ffb"
+  ],
+  "inherited_process_inspection": "ps found no Cargo, daemon, sandbox_lifecycle or engine_streams process except the inspection command itself",
+  "goal_observation": "get_goal returned goal=null; no goal created",
+  "new_runtime_resources": [],
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "r1_evidence": "Input core/crates, reference, manifest, lock, ARM config and all three inspected binary hashes match the handoff; no R1 tests resampled",
+  "native_status": "NOT_RUN",
+  "r2_r5_completion": false
+}

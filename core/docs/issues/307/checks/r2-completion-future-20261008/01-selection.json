@@ -1,0 +1,28 @@
+{
+  "scope": "R2 component Pending Future, not native/R2 acceptance or performance",
+  "source_parent": "4236225ee70da89a264308167549f95e660c5dcb",
+  "product_files": [
+    "core/crates/layerfs-daemon/src/service/completion.rs"
+  ],
+  "public_tests": [
+    "completion_future",
+    "completion_ownership",
+    "completion_storage",
+    "owner"
+  ],
+  "test_wall_stop_seconds": 100,
+  "test_inner_notification_deadline_seconds": 5,
+  "build": "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-daemon --all-targets --no-run",
+  "checks": [
+    "scoped all-target clippy -D warnings",
+    "fmt",
+    "product-boundary guard",
+    "guard self-tests"
+  ],
+  "profile": "Overlay MEMORY/OFF/EXCLUSIVE only; no global Store in selected tests",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "cache": "natural, functional only; no latency, storage or residency acceptance",
+  "construction_workers": 1,
+  "changes": "Future<Output=Result<Completion,OwnerError>> on the existing Pending. One fixed Waker slot, publication/register race ordering, replacement/drop outside the lock, original one-shot outcome and credit lifetime. No async executor or new dependency. Admission-credit/native dispatch integration remains separate.",
+  "linux_component_proof": "same public tests using pinned existing ARM64 image, after host checks; no Store volume, FUSE mount or privileged deployment"
+}

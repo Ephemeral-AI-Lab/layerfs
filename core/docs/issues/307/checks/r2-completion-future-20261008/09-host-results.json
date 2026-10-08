@@ -1,0 +1,50 @@
+[
+  {
+    "command": [
+      "core/target/debug/deps/completion_future-b2cc04239443606d",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "binary_sha256": "bbf317e953094904879324e40da40c21d27bbc0d8f3c6f382db0a644f708b39a",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 1575815583,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/debug/deps/completion_ownership-41a80abdf2599e43",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "binary_sha256": "a3b1ea032e65d51378b725f264d0617ea1dd18bf6a10e996315536b658a04ac6",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 723377458,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/debug/deps/completion_storage-2597ed3843afc4c1",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "binary_sha256": "02d07cc5a96f101f5559f34235a76c615922a876243acb5e70ac036920187604",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 678068250,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/debug/deps/owner-7a7301fc46dcf1ed",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "binary_sha256": "904abf5ef097e026f3445910a1725098d54f7ca934b5f18e2272eb9e1222f330",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 888641583,
+    "wall_stop_seconds": 100
+  }
+]

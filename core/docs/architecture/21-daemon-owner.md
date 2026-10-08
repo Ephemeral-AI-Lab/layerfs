@@ -162,8 +162,40 @@ the owner's single publisher. The cell carries the job's credit, so the credit
 lasts exactly as long as anything can still reach the result. A publication is
 handed out once; later takes report `Disconnected`, and a job lost without an
 outcome disconnects its waiter. A blocked `wait` registers its thread before
-the transition the publisher observes and is unparked by that publication; no
-per-job channel, lock or condition variable is allocated.
+the transition the publisher observes and is unparked by that publication.
+The later R2 future extension below adds one fixed notification mutex; no
+per-job channel or condition variable is allocated.
+
+### R2 event-driven pending completion, 2026-10-08
+
+Source extension after4236225ee: `Pending` now implements the standard
+`Future<Output = Result<Completion, OwnerError>>`. A native service can register
+its task and relinquish its worker until publication or publisher loss wakes it.
+The existing synchronous `wait` and nonblocking `try_complete` remain available.
+The [selected component receipts](../issues/307/checks/r2-completion-future-20261008/01-selection.json)
+identify this source/verification scope separately from native acceptance.
+
+Each completion cell contains one fixed `Mutex<Option<Waker>>` slot. Poll checks
+and consumes the original atomic result state while holding that registration
+lock. If pending, it installs the latest task's waker before releasing the lock.
+Publication/loss changes the atomic state, takes the registered waker under the
+same lock, then wakes outside it. Thus completion before registration is returned
+directly; a racing pending return receives an event. Re-poll replaces the earlier
+task's registration. Waker clone/drop/callback behavior runs outside the lock.
+Notification never submits, retries or consumes the original command itself.
+
+The slot is charged through the existing `size_of<Cell>()` admission formula.
+Executor task/queue storage is the executor's separate resource domain; a Waker
+is not evidence that that domain is bounded. Original outcome, family receipts
+and credit remain owned by the cell until Publisher/Pending/Completion disposal.
+Terminal notification removes the slot's reference to the task. A dropped future
+does not cancel an admitted job or revoke backed filesystem ownership.
+
+This is the completion event primitive only. Admission-credit events, the Fuse
+dispatcher, Store reader admission and resumable filesystem semantics still need
+their own implementation. A native worker must use this event path rather than
+calling wait or repeatedly polling try_complete. No runtime, dependency, SQL
+algorithm, request scheduler or native readiness claim is added by this change.
 
 A job's storage is one of three stages which never coexist: the boxed queued
 job, the boxed outcome (result plus receipt) allocated when the job finishes,

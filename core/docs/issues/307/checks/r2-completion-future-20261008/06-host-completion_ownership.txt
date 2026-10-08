@@ -1,0 +1,51 @@
+
+running 3 tests
+test a_completion_is_handed_out_once_and_wakes_its_blocked_waiter ... ok
+test every_configured_lifecycle_slot_is_admitted_while_ordinary_credit_is_saturated ... S7_COMPLETION_CREDIT bytes=8388608 lifecycle_reserve=65536 scheduler_bytes=18784 lifecycle_charge=2000 lifecycle_slots=32 lifecycle_slot_bytes=64000 ordinary_default_charge=3368 ordinary_held=132 ordinary_credited=8303283 peak_credited=8367283
+ok
+test original_family_receipts_equal_the_foreground_aggregate_on_every_path ... S7_JOB_FAMILIES command=Open lifecycle=true families=4 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=State lifecycle=true families=1 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=CleanupState lifecycle=true families=1 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=MaintenanceIdle lifecycle=true families=2 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=RetainedCapture lifecycle=true families=1 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=RetainedBaseSource lifecycle=true families=2 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=RetainedFile lifecycle=true families=2 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=RetainedFileRead lifecycle=true families=2 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=RetainedCapturedReader lifecycle=true families=2 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=RetainedLookup lifecycle=true families=2 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=RetainedOperation lifecycle=true families=2 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Acquire lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Release lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=AcquireOperation lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseOperation lifecycle=true families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Publish lifecycle=false families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReplyAttempted lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReplyAttempted-again lifecycle=true families=5 parked_turns=0 ok=false
+S7_JOB_FAMILIES command=AcquireBaseSource lifecycle=false families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=OpenFile lifecycle=true families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=AcquireFileRead lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=AcquireLookup lifecycle=true families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=AcquireLookupRead lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseFileRead lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseLookup lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseFileRead lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=CloseFile lifecycle=true families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseBaseSource lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Publish lifecycle=false families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=State lifecycle=true families=1 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReplyAttempted lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Capture lifecycle=false families=6 parked_turns=2 ok=true
+S7_JOB_FAMILIES command=AcquireCapturedReader lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseCapturedReader lifecycle=true families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ResolveFailed lifecycle=true families=7 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Publish lifecycle=false families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReplyAttempted lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Capture lifecycle=false families=6 parked_turns=1 ok=true
+S7_JOB_FAMILIES command=Close lifecycle=true families=4 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseClosedCapture lifecycle=true families=7 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=CleanupState lifecycle=true families=1 parked_turns=0 ok=true
+S7_FAMILY_LEDGER lifecycle_max_families=7 parked_turns=3 foreground_attempts=288
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

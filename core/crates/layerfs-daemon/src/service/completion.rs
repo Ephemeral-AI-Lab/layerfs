@@ -10,11 +10,14 @@ use crate::{
 use layerfs_overlay::StatementWork;
 use std::{
     fmt,
+    future::Future,
     mem::size_of,
+    pin::Pin,
     sync::{
         atomic::{AtomicU8, Ordering},
-        Arc, OnceLock,
+        Arc, Mutex, OnceLock,
     },
+    task::{Context, Poll, Waker},
     thread::{self, Thread},
 };
 
@@ -37,6 +40,7 @@ pub(crate) struct Cell {
     state: AtomicU8,
     outcome: OnceLock<Box<Outcome>>,
     waiter: OnceLock<Thread>,
+    notifier: Mutex<Option<Waker>>,
     credit: Credit,
 }
 /// The owner's single right to finish one job.
@@ -74,6 +78,7 @@ pub(crate) fn admit(credit: Credit) -> (Publisher, Pending) {
         state: AtomicU8::new(EMPTY),
         outcome: OnceLock::new(),
         waiter: OnceLock::new(),
+        notifier: Mutex::new(None),
         credit,
     });
     (Publisher(Some(cell.clone())), Pending { cell })
@@ -84,6 +89,16 @@ impl Cell {
             if let Some(waiter) = self.waiter.get() {
                 waiter.unpark();
             }
+        }
+        // Take under the registration lock, but invoke user-supplied wake/drop
+        // behavior outside it. The outcome/state already precedes this event.
+        let notifier = self
+            .notifier
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .take();
+        if let Some(notifier) = notifier {
+            notifier.wake();
         }
     }
 }
@@ -110,8 +125,9 @@ impl Drop for Publisher {
     }
 }
 
-/// A pending original operation. Waiting never occupies a native dispatch worker
-/// unless its caller chooses to wait synchronously there.
+/// A pending original operation. Its Future implementation registers the current
+/// task's wakeup without waiting for the owner. Synchronous callers may use wait.
+/// Dropping either form never cancels or replays the admitted operation.
 pub struct Pending {
     cell: Arc<Cell>,
 }
@@ -150,6 +166,38 @@ impl Pending {
             })),
             Err(EMPTY | WAITING) => Ok(None),
             Err(_) => Err(OwnerError::Disconnected),
+        }
+    }
+}
+impl Future for Pending {
+    type Output = Result<Completion, OwnerError>;
+
+    /// Registers and checks publication under one notification lock. Publication
+    /// before registration is observed immediately; publication racing a Pending
+    /// return takes the registered waker. A later poll replaces the earlier task.
+    /// Poll again only in response to scheduling/wakeup, never as a busy loop.
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // Even clone/drop can invoke a caller's RawWaker, so neither runs under
+        // this lock. A waker's task storage is owned/charged by its executor;
+        // the completion cell charges the fixed registration slot itself.
+        let mut replacement = Some(cx.waker().clone());
+        let mut slot = self
+            .cell
+            .notifier
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let previous = slot.take();
+        let result = self.take();
+        if matches!(result, Ok(None)) {
+            *slot = replacement.take();
+        }
+        drop(slot);
+        drop(previous);
+        drop(replacement);
+        match result {
+            Ok(Some(completion)) => Poll::Ready(Ok(completion)),
+            Ok(None) => Poll::Pending,
+            Err(error) => Poll::Ready(Err(error)),
         }
     }
 }

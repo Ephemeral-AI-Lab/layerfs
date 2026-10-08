@@ -1,0 +1,7 @@
+{
+  "container_id": "84b555e2b375fab974458ffed9a8683cc35fb43a11eeda26400db31f961543b5",
+  "exit_code": 0,
+  "wall_ns": 36328410750,
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "cleanup": "RETAINED until exact exit inspected"
+}

@@ -1,0 +1,7 @@
+{
+  "local_markdown_targets": 115,
+  "missing": [],
+  "whitespace_exit_code": 2,
+  "whitespace_output": "core/docs/issues/307/checks/r2-completion-future-20261008/05-host-completion_future.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-completion-future-20261008/06-host-completion_ownership.txt:51: new blank line at EOF.\ncore/docs/issues/307/checks/r2-completion-future-20261008/07-host-completion_storage.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-completion-future-20261008/08-host-owner.txt:16: new blank line at EOF.\ncore/docs/issues/307/checks/r2-completion-future-20261008/linux-completion_future.txt:10: new blank line at EOF.\ncore/docs/issues/307/checks/r2-completion-future-20261008/linux-completion_ownership.txt:51: new blank line at EOF.\ncore/docs/issues/307/checks/r2-completion-future-20261008/linux-completion_storage.txt:9: new blank line at EOF.\ncore/docs/issues/307/checks/r2-completion-future-20261008/linux-owner.txt:16: new blank line at EOF.\n",
+  "protected_notes_preserved": true
+}

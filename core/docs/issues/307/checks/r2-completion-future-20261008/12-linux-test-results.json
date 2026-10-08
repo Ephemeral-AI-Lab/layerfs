@@ -1,0 +1,50 @@
+[
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_future-01a38d32a7e5336a",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "be9d25e3d0b8812a568023aa5d6a942fff7d59f7e313616de2d971d6f54538e2",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 173548792,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "c92bfcf8d9eebbb1c904e44628819c201a5728be749f0d738ebe53d417e685b9",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 155463958,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "ac7936d767bcadcc45afa7c329eaa4879dfbd3770237614f4808d29d9bae3779",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 137364083,
+    "wall_stop_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "10255b5fd2400783d2518451e10467063ccef2522eee7fa2d2caeca0b4ab0a92",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 342696834,
+    "wall_stop_seconds": 100
+  }
+]

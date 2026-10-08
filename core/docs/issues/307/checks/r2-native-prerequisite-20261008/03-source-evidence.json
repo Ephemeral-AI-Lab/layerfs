@@ -1,0 +1,81 @@
+{
+  "fuser_source": "core/vendor/fuser-0.18.0/src/session.rs",
+  "fuser_sha256": "1311a037e94d8c874b0df47e1a268ded85a7c57872235e730791ece253b6005f",
+  "facts": [
+    {
+      "lines": [
+        198,
+        221
+      ],
+      "fact": "from_fd performs handshake then returns; it starts no receiver loops."
+    },
+    {
+      "lines": [
+        291,
+        307
+      ],
+      "fact": "run owns private Vec<JoinHandle>; spawn uses ?, so partial creation can return while earlier loops remain detached."
+    },
+    {
+      "lines": [
+        309,
+        332
+      ],
+      "fact": "Normal iteration joins every handle; first join panic returns early and drops remaining handles. Err alone does not identify whether every loop joined."
+    },
+    {
+      "lines": [
+        514,
+        555
+      ],
+      "fact": "SessionEventLoop is crate-private and event_loop is private. No public loop-entry/loop-exit notification surrounds its receive loop."
+    },
+    {
+      "lines": [
+        558,
+        594
+      ],
+      "fact": "BackgroundSession exposes only the outer run thread handle."
+    }
+  ],
+  "nix_source": "/Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.31.3/src",
+  "nix_pidfd_hits": [
+    {
+      "path": "sys/fanotify.rs",
+      "line": 117,
+      "text": "/// Make `FanotifyEvent::pid` return pidfd. Since Linux 5.15."
+    },
+    {
+      "path": "sys/fanotify.rs",
+      "line": 118,
+      "text": "FAN_REPORT_PIDFD;"
+    },
+    {
+      "path": "sys/socket/sockopt.rs",
+      "line": 686,
+      "text": "/// Return the pidfd of the foreign process connected to this socket."
+    },
+    {
+      "path": "sys/socket/sockopt.rs",
+      "line": 687,
+      "text": "PeerPidfd,"
+    },
+    {
+      "path": "sys/socket/sockopt.rs",
+      "line": 690,
+      "text": "libc::SO_PEERPIDFD,"
+    },
+    {
+      "path": "sys/wait.rs",
+      "line": 344,
+      "text": "PIDFd(BorrowedFd<'fd>),"
+    },
+    {
+      "path": "sys/wait.rs",
+      "line": 366,
+      "text": "Id::PIDFd(fd) => (libc::P_PIDFD, fd.as_raw_fd() as libc::id_t),"
+    }
+  ],
+  "nix_conclusion": "No pidfd_open/thread-pidfd safe wrapper found in pinned nix 0.31.3; socket peer process/fanotify pidfd support is not an owned receiver-loop lifecycle interface.",
+  "limits": "Source inspection establishes missing public interfaces. It is not a native liveness/failure test, a proof about all conceivable OS techniques, or a runtime prerequisite waiver."
+}

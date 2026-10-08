@@ -1,0 +1,102 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 30.61s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-77c9832298339be7)
+  Executable unittests src/bin/layerfs-daemon.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-cb13d83b54484162)
+  Executable tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-eb66ab7f963249de)
+  Executable tests/complete_installed_roots.rs (core/target/cluster2-linux/debug/deps/complete_installed_roots-16464fe442a967ed)
+  Executable tests/completion_future.rs (core/target/cluster2-linux/debug/deps/completion_future-01a38d32a7e5336a)
+  Executable tests/completion_ownership.rs (core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c)
+  Executable tests/completion_storage.rs (core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b)
+  Executable tests/construction_cursor.rs (core/target/cluster2-linux/debug/deps/construction_cursor-07de2b18561b362d)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-429c3690851e8b2c)
+  Executable tests/e2_startup_receipts.rs (core/target/cluster2-linux/debug/deps/e2_startup_receipts-9c92e0224dade04c)
+  Executable tests/edit_backing.rs (core/target/cluster2-linux/debug/deps/edit_backing-24e3ad85e8e9d52b)
+  Executable tests/finite_service.rs (core/target/cluster2-linux/debug/deps/finite_service-7919da4c90c994e0)
+  Executable tests/host_handoff.rs (core/target/cluster2-linux/debug/deps/host_handoff-4cdc6cae8d18612d)
+  Executable tests/indexed_operation_record.rs (core/target/cluster2-linux/debug/deps/indexed_operation_record-f7132d37f46cf1cf)
+  Executable tests/installed_qualification.rs (core/target/cluster2-linux/debug/deps/installed_qualification-633d7c5f52039959)
+  Executable tests/installed_store.rs (core/target/cluster2-linux/debug/deps/installed_store-08f9c29a011e4e8b)
+  Executable tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-97b0619943df4135)
+  Executable tests/native_application.rs (core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029)
+  Executable tests/native_control.rs (core/target/cluster2-linux/debug/deps/native_control-83467c0a8be9b56b)
+  Executable tests/native_install.rs (core/target/cluster2-linux/debug/deps/native_install-035242047b6cc903)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77)
+  Executable tests/root_qualification.rs (core/target/cluster2-linux/debug/deps/root_qualification-f04f6db36b728ea2)
+  Executable tests/shared_processes.rs (core/target/cluster2-linux/debug/deps/shared_processes-19348c8a37ad0fa6)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-6022c7bd339d8d01)
+  Executable tests/store_commit.rs (core/target/cluster2-linux/debug/deps/store_commit-60421539b87a7735)
+  Executable unittests examples/e2_startup.rs (core/target/cluster2-linux/debug/examples/e2_startup-764e95f467052da9)
+  Executable unittests examples/engine_finite.rs (core/target/cluster2-linux/debug/examples/engine_finite-b4194296b8df16f9)
+  Executable unittests examples/resource_growth.rs (core/target/cluster2-linux/debug/examples/resource_growth-3ee8bc1eb229e503)
+  Executable unittests examples/resource_prepare.rs (core/target/cluster2-linux/debug/examples/resource_prepare-6727760423608d12)
+  Executable unittests examples/store_accounting.rs (core/target/cluster2-linux/debug/examples/store_accounting-8271dac67dde7a86)
+
+{"command": ["core/target/cluster2-linux/debug/deps/completion_future-01a38d32a7e5336a", "--test-threads=1", "--nocapture"], "sha256": "be9d25e3d0b8812a568023aa5d6a942fff7d59f7e313616de2d971d6f54538e2", "exit_code": 0, "timeout": false, "wall_ns": 173548792, "wall_stop_seconds": 100}
+
+running 5 tests
+test concurrent_publication_and_registration_never_require_polling_for_progress ... ok
+test publication_before_registration_is_ready_without_another_event ... ok
+test publication_wakes_the_parked_future_and_keeps_credit_until_disposal ... ok
+test repoll_replaces_the_task_and_publication_releases_the_registration ... ok
+test stop_wakes_a_future_with_its_original_unattempted_command ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c", "--test-threads=1", "--nocapture"], "sha256": "c92bfcf8d9eebbb1c904e44628819c201a5728be749f0d738ebe53d417e685b9", "exit_code": 0, "timeout": false, "wall_ns": 155463958, "wall_stop_seconds": 100}
+
+S7_JOB_FAMILIES command=Publish lifecycle=false families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=State lifecycle=true families=1 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReplyAttempted lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Capture lifecycle=false families=6 parked_turns=2 ok=true
+S7_JOB_FAMILIES command=AcquireCapturedReader lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseCapturedReader lifecycle=true families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ResolveFailed lifecycle=true families=7 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Publish lifecycle=false families=6 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReplyAttempted lifecycle=true families=5 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=Capture lifecycle=false families=6 parked_turns=1 ok=true
+S7_JOB_FAMILIES command=Close lifecycle=true families=4 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=ReleaseClosedCapture lifecycle=true families=7 parked_turns=0 ok=true
+S7_JOB_FAMILIES command=CleanupState lifecycle=true families=1 parked_turns=0 ok=true
+S7_FAMILY_LEDGER lifecycle_max_families=7 parked_turns=3 foreground_attempts=288
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/completion_storage-5e6e585bc0e4b67b", "--test-threads=1", "--nocapture"], "sha256": "ac7936d767bcadcc45afa7c329eaa4879dfbd3770237614f4808d29d9bae3779", "exit_code": 0, "timeout": false, "wall_ns": 137364083, "wall_stop_seconds": 100}
+
+running 1 test
+test live_heap_of_held_parked_and_unattempted_jobs_stays_within_their_credit ... S7_COMPLETION_STORAGE stage=held-lifecycle jobs=32 live_heap_bytes=20736 credited_bytes=63744 live_per_job=648 credited_per_job=1992
+S7_COMPLETION_STORAGE stage=parked-capture jobs=15 live_heap_bytes=14528 credited_bytes=50400 live_per_job=968 credited_per_job=3360
+S7_COMPLETION_STORAGE stage=unattempted-stop jobs=16 live_heap_bytes=18816 credited_bytes=53760 live_per_job=1176 credited_per_job=3360
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+{"command": ["core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77", "--test-threads=1", "--nocapture"], "sha256": "10255b5fd2400783d2518451e10467063ccef2522eee7fa2d2caeca0b4ab0a92", "exit_code": 0, "timeout": false, "wall_ns": 342696834, "wall_stop_seconds": 100}
+: 0 }, allocation_foreground: AllocationWork { attempts: 1029, requested_bytes: 207232172032, admitted_jobs: 1029, refusals: 0, observations: 4116, freelist_queries: 1029 }, allocation_maintenance: AllocationWork { attempts: 22, requested_bytes: 2952462336, admitted_jobs: 22, refusals: 0, observations: 88, freelist_queries: 22 }, admitted: 1051, completed: [0, 512, 0, 539, 0, 0], queue_wait_ns: [0, 7453114, 0, 9903955, 0, 0], service_ns: [0, 19279652, 0, 12723130, 0, 0], credited_bytes: 0, peak_credited_bytes: 3336, outstanding: 0, scheduler_bytes: 18768, queued: 0, peak_queued: 1, receipt_overruns: 0, receipt_overrun_bytes: 0, maintenance_jobs: 21, maintenance_rows: 514, closed_namespaces: 1, maintenance_data_bytes: 0, maintenance_ns: 2680789 }
+ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.73s
+clippy_exit=0

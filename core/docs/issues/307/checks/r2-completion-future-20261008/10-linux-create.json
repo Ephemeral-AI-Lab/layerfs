@@ -1,0 +1,25 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r2-completion-1fee8143e67c44f9a87a980b75b5581a",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "-c",
+    "import hashlib,json,subprocess,re,sys,os,time,signal\nfrom pathlib import Path\nout=Path('core/docs/issues/307/checks/r2-completion-future-20261008')\npins=json.loads((out/'02-source-identity.json').read_text())\nassert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in pins.items()), 'source mismatch'\nbase=['--manifest-path','core/Cargo.toml','--locked','-p','layerfs-daemon','--all-targets']\nstart=time.monotonic_ns()\nbuild=subprocess.run(['cargo','test',*base,'--no-run'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=300)\nprint(build.stdout,flush=True)\nif build.returncode:sys.exit(build.returncode)\nresults=[]\nfor name in ['completion_future','completion_ownership','completion_storage','owner']:\n    binary=re.search(r'Executable tests/'+name+r'\\.rs \\(([^)]+)\\)',build.stdout)[1]\n    cmd=[binary,'--test-threads=1','--nocapture']\n    start=time.monotonic_ns()\n    with (out/('linux-'+name+'.txt')).open('x') as output:\n        child=subprocess.Popen(cmd,stdout=output,stderr=subprocess.STDOUT,start_new_session=True)\n        timeout=False\n        try:code=child.wait(timeout=100)\n        except subprocess.TimeoutExpired:\n            timeout=True;os.killpg(child.pid,signal.SIGKILL);code=child.wait()\n    result={'command':cmd,'sha256':hashlib.sha256(Path(binary).read_bytes()).hexdigest(),'exit_code':code,'timeout':timeout,'wall_ns':time.monotonic_ns()-start,'wall_stop_seconds':100}\n    results.append(result);print(json.dumps(result),flush=True)\n    print((out/('linux-'+name+'.txt')).read_text()[-1300:],flush=True)\n    if code:break\n(out/'12-linux-test-results.json').write_text(json.dumps(results,indent=2)+'\\n')\nif any(r['exit_code'] for r in results):sys.exit(1)\nclippy=subprocess.run(['cargo','clippy',*base,'--','-D','warnings'],timeout=300)\nprint('clippy_exit='+str(clippy.returncode),flush=True)\nsys.exit(clippy.returncode)\n"
+  ],
+  "exit_code": 0,
+  "stdout": "84b555e2b375fab974458ffed9a8683cc35fb43a11eeda26400db31f961543b5\n",
+  "stderr": ""
+}

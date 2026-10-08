@@ -1,0 +1,11 @@
+{
+  "command": "python3 -B core/tools/check_fuser_integrity.py",
+  "exit_code": 0,
+  "result": {
+    "checked_manifests_locks_configs": 103,
+    "errors": [],
+    "authorized_patch_verified": true,
+    "registry_package_verified": false
+  },
+  "scope": "provenance only; not a native capability proof"
+}
