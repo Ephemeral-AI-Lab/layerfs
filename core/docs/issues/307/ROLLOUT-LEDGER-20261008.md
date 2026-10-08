@@ -212,3 +212,11 @@ cookies and file/directory GETATTR handle association are wired and covered by
 Native callback output is bounded to128KiB; actual kernel buffers, mount/Ready,
 permissions and complete normal drain remain unqualified. The owner requests a
 verified checkpoint/handoff and pause here; full R2 is not complete.
+
+The production checkpoint is `edeb8b35024823f905252efd8333089ac0610168`.
+[The R2 handoff](HANDOFF-R2-NATIVE-CONSUMERS-20261008.md) records exact identities,
+unresolved native integration/proof work and retained resources. Its subsequent
+documentation-only closure keeps production LOC176905→176905 (delta0), with
+core111488/active68614/reference65417/predecessors38878/integration3996 unchanged.
+The current agent stops and pauses its Goal after this closure on the owner's
+explicit request. R2 must not be marked complete from these component receipts.

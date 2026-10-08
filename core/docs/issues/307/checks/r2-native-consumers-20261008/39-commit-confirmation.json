@@ -1,0 +1,47 @@
+{
+  "commit": "edeb8b35024823f905252efd8333089ac0610168",
+  "tree": "4d12c9285d21ef242db0ee3933fcae7611974859",
+  "first_parent": "8431b6ba9fd2703b74d92905e3a7b3108586b6bd",
+  "before": {
+    "combined": 176088,
+    "core": 110671,
+    "subtotals": {
+      "active": 67797,
+      "excluded_predecessors": 38878,
+      "excluded_integration": 3996,
+      "reference": 65417
+    },
+    "product_trees": {
+      "core/crates": "dd92e12aec22df5d15f33f64f142ea5bc53cb9ce",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "after": {
+    "combined": 176905,
+    "core": 111488,
+    "subtotals": {
+      "active": 68614,
+      "excluded_predecessors": 38878,
+      "excluded_integration": 3996,
+      "reference": 65417
+    },
+    "product_trees": {
+      "core/crates": "d20bfd96156d3f3a873bbf53a25f008aaa7317aa",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "delta": 817,
+  "final_source_identity_unchanged": true,
+  "current_component_binaries": {
+    "core/target/debug/deps/filesystem_port-9a367c3ce80975d4": {
+      "bytes": 7709744,
+      "sha256": "c3ae651dd12cadbed4dad97d38b7a3a0a8135ee2bdc54355f025ec744a103ebb"
+    },
+    "core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb": {
+      "bytes": 116324816,
+      "sha256": "111ad36736c77d8eda2cf55172717b309aca87e9324ab4bdec9bbcb53007daa0"
+    }
+  },
+  "binary_scope": "Host selected directory pressure case ran this binary; Linux latest binary was rebuilt after callback-only reply-size cap and compilation/clippy passed; semantic run hash is recorded separately in linux-results.json. No native application binary at this source is qualified.",
+  "status": "verified component checkpoint; full R2 incomplete; owner requested handoff and pause"
+}

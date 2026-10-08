@@ -1,0 +1,37 @@
+{
+  "first_parent": "edeb8b35024823f905252efd8333089ac0610168",
+  "counted_staged_tree": "8e40ae0fe5916a5cad8137d1705e8525450a6df6",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "Independent exact parent/staged git archive extractions with pinned production_loc.py scan/per_file; first-party Rust/runtime SQL, exact Cargo member classification; tests/docs/tooling/third-party/generated excluded",
+  "before": {
+    "combined": 176905,
+    "core": 111488,
+    "subtotals": {
+      "active": 68614,
+      "excluded_predecessors": 38878,
+      "excluded_integration": 3996,
+      "reference": 65417
+    },
+    "product_trees": {
+      "core/crates": "d20bfd96156d3f3a873bbf53a25f008aaa7317aa",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "after": {
+    "combined": 176905,
+    "core": 111488,
+    "subtotals": {
+      "active": 68614,
+      "excluded_predecessors": 38878,
+      "excluded_integration": 3996,
+      "reference": 65417
+    },
+    "product_trees": {
+      "core/crates": "d20bfd96156d3f3a873bbf53a25f008aaa7317aa",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "delta": 0,
+  "per_file_scope": "Identical before/after classifications; reuse35-per-file-production-loc.json after snapshot",
+  "validation": "Changed local links resolve. Rust/runtime rerun inapplicable to documentation-only closure; product trees exactly unchanged."
+}
