@@ -1,0 +1,34 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 057d443a2, uncommitted product/test paths=4, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_failure_scope-81d2baa09c7ec6f5 --test-threads=1 --nocapture
+
+running 2 tests
+test a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_effect ... P_1 held writer: touch status=Some(1) stderr="touch: cannot touch 'contended.txt': Resource temporarily unavailable" | reservation attempts=[Err(Busy)] store_serial_reservations=1 | writer session statements 35 -> 36 write_transactions 0 -> 0 | name lookup=Err(NotFound) names=["README.md", "cold-0.bin", "cold-1.bin", "cold-2.bin", "cold-3.bin", "cold-4.bin", "cold-5.bin", "cold-6.bin", "cold-7.bin"] | engine (revision, dirty_inodes) Some((0, 0)) -> Some((0, 0)) | native_work=Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 13, handoffs: 14, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 })
+P_1 released: touch status=Some(0) stderr="" | reservation attempts=[Err(Busy), Ok(start=11 count=1024)] | second create status=Some(0) attempts=2 store_serial_reservations=2 | writer session write_transactions 0 -> 1 | names=["README.md", "another.txt", "cold-0.bin", "cold-1.bin", "cold-2.bin", "cold-3.bin", "cold-4.bin", "cold-5.bin", "cold-6.bin", "cold-7.bin", "contended.txt"]
+P2_UNMOUNT P-1: quiet_before=true unmounted=true answer=Unmounted(WorkspaceToken { workspace: WorkspaceId(0101010101010101010101010101010101010101010101010101010101010101), namespace: 1 })
+P2_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=1
+ok
+test a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_later_read ... FP_27 staged: reader=0 statements_before_staging=77 after_staging=82 | observing read of cold-0.bin: Failed { step: "open", errno: Some(EIO) } | quarantined_observed=true pool=ReadServiceWork { stopping: false, poisoned: false, readers: 2, quarantined: 1, waiting: 0, assigned: 0, leased: 1, outstanding: 1, peak_outstanding: 2, grants: 14, queue_wait_ns: 1710, maximum_queue_wait_ns: 375, scheduler_bytes: 33944 } reader_statements_at_retirement=Ok(82)
+FP_27 reader_failures=[(0, Storage(UnknownOutcome { original: Io(Custom { kind: Other, error: Uncertain }) }))] store_demands_before=StoreWork { object_batches: 10, object_ids: 10, length_batches: 0, length_ids: 0, serial_reservations: 0 } after=StoreWork { object_batches: 11, object_ids: 11, length_batches: 0, length_ids: 0, serial_reservations: 0 } native_work_after_observing_read=Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 1, handoffs: 2, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 })
+FP_27 later reads: exact=0 of 8 attempted (8 planned): [("cold-1.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-2.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-3.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-4.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-5.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-6.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-7.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-0.bin", Failed { step: "open", errno: Some(ENOTCONN) })]
+P2_DEVIATION 8 of 8 later reads were not exact: [("cold-1.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-2.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-3.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-4.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-5.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-6.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-7.bin", Failed { step: "open", errno: Some(ENOTCONN) }), ("cold-0.bin", Failed { step: "open", errno: Some(ENOTCONN) })]
+FP_27 end: reader_statements=Ok(82) (at retirement Ok(82)) pool=ReadServiceWork { stopping: false, poisoned: false, readers: 2, quarantined: 1, waiting: 0, assigned: 0, leased: 0, outstanding: 0, peak_outstanding: 2, grants: 14, queue_wait_ns: 1710, maximum_queue_wait_ns: 375, scheduler_bytes: 33944 } later_read_saw_ENOTCONN=true activity=Idle phase=Some(Ready) native_work=Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 1, handoffs: 2, inline: 0, refused: 0, terminal: 8, unadmitted: 0, forget_units: 0 })
+P2_UNMOUNT FP-27: quiet_before=false unmounted=false answer=Retained(TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(0101010101010101010101010101010101010101010101010101010101010101), namespace: 1 }, stage: Requests, detached: true, work: Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 2, loops_joined: 2, received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 1, handoffs: 2, inline: 0, refused: 0, terminal: 8, unadmitted: 0, forget_units: 0 }), detail: "connection dr
+P2_RIG owner stopped without a clean drain: Ok(())
+P2_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=false handles_after_stop=1
+
+thread 'a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_later_read' panicked at crates/layerfs-daemon/tests/mounted_failure_scope.rs:154:9:
+FP-27 at mount scope: 1 product expectations did not hold: [
+    "8 of 8 later reads were not exact: [(\"cold-1.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) }), (\"cold-2.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) }), (\"cold-3.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) }), (\"cold-4.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) }), (\"cold-5.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) }), (\"cold-6.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) }), (\"cold-7.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) }), (\"cold-0.bin\", Failed { step: \"open\", errno: Some(ENOTCONN) })]",
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_later_read
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.14s
+
+R4_WALL seconds<=10 limit=115s lock_wait=0s
+EXIT 101
