@@ -102,6 +102,11 @@ impl Harness {
     pub fn phase(&self, token: WorkspaceToken) -> NativePhase {
         self.status(token).native.unwrap().phase
     }
+    /// One product control Commit: the captured namespace producer through
+    /// `execute_control`, attempted once on the caller's thread.
+    pub fn try_commit(&self, token: WorkspaceToken) -> Result<Success, Failure> {
+        self.service.execute_control(&Request::Commit(token))
+    }
     pub fn try_unmount(&self, token: WorkspaceToken) -> Result<Success, Failure> {
         self.service.execute_control(&Request::Unmount(token))
     }
