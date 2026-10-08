@@ -126,3 +126,142 @@ fields. Amendment 36 prospectively assigns their bounded observations, including
 the exact charged observer work, before edits. This is Stage 0 instrumentation,
 not an accepted optimization. Correction: inventory 000 established that node
 was absent from that shell PATH, not absent from the entire pinned image.
+
+## Preparation after 2ac7cc762
+
+LOC confirmation matches its staged tree 85248cd89e2ce23b438413e118102383c2a0c861,
+with unchanged combined/core/active/reference totals and delta 0. The resource
+observation amendment was committed before its assigned implementation.
+An explicit separate observer-cost section 30 preserves section 0; this makes
+the complete schema 56+2R records, still below its declared 64+2R cap. It reports
+original admitted/completion state and actual JobWork, preserving unavailable
+observations and dropping the completed observer credit before owner snapshots.
+
+P build 035 failed because fuser's ForgetOne type is private. The harness now
+uses fuser's standard individual-forget fallback, preserving lookup release
+without a third-party change. Actual batch kernel requests and unimplemented
+callback counts remain UNAVAILABLE, distinct from the callback-indexed array.
+Build 037 passed; dependency comparison 038 found 43 registry packages and zero
+new/changed version/checksum pins. Format 039 and Linux Clippy 040 passed.
+Metadata resolution 034 used a Linux-musl filter solely to exclude an uncached
+Redox package; inventory 041 confirms the actual build host is Linux-gnu. Builds
+use that actual host and repository ARM flags. The lock pins are unchanged.
+
+Inventory 041 found no executable node at any registered candidate path:
+/opt/node/bin/node, /usr/local/bin/node or /usr/bin/node. E07's prerequisite is
+unavailable in the pinned environment; no silent workload substitution is made.
+Harness owning tests 042 failed to import runner due to a dedented assignment
+inside try. The matrix agent fixed that source error; 044 passed all 48 tests.
+Host runtime release build 043 passed; format 045 passed. No real mounted timing
+or changed Commit survival proof has run. A further reviewer follow-up was
+refused by the agent thread limit; preserve that limitation and cross-review.
+
+Independent cross-review found R36-1: dropping the caller's resource Completion
+does not guarantee immediate credit release, because the original publisher may
+still own its Arc after waking the caller. Source/comments/docs and the external
+test now state and bound that transient ownership, with no wait, retry or hidden
+zero. Receipt 051 passed the earlier assertion but does not disprove the race.
+R36-2: resource observation discarded exact admission/wait/failed-completion
+causes. Overlay keeps only quarantine state, so the original error could be lost
+after completion release. The telemetry agent is correcting this violation of
+the existing 11/36 first-failure plan using the existing bounded diagnostic error
+carrier; original control outcome and one reply remain separate. No integration
+or blanket failure-coverage claim is made before proof/review.
+
+Full fixture seal 048 passed in 69.678559875 seconds of external setup wall:
+103108 regular files, 16868 directories including root, 10070 symlinks,
+130046 entries, 3475776149 regular bytes. Every regular byte and supported
+metadata matched; both set seals are
+39893a14dbaa44cb6f3e657f466cd1d63c87f9de6378bb41da4c23175a3d8eb6.
+Raw inventory /tmp/layerfs-r7-full-fixture-seal-20261009.jsonl has SHA-256
+90cde1a4647d26ae3ad4971eb91c7bde0f68cda156025520a9fbc21fbc711840.
+No alias database was needed, no source/copy write or Git invocation occurred.
+This is setup verification under source quiescence, not a native snapshot or
+cold-residency claim. Host resource build 050 passed, and reader proof 052 passed
+all 10 tests. Runtime Clippy 046 failed three format_collect findings; the lead
+replaced per-byte formatting with one hex buffer, and 047 passed.
+
+P release 053 passed, and owned container 054
+e9847e604207558c250d7e05585e18662452c18c0a63fba95bbe6dbb1d74db7e
+passed lifecycle proof 055: mutation, fresh remount, 64/128/256 long-name
+directories, one plain detach per session and exact two-loop joins. Each drain
+reported zero held handles; residual lookup associations were reported, then
+released by destruction, without a fabricated FORGET claim. This is functional
+proof, not a P performance sample. Raw artifacts were copied by 056; 057
+explicitly stopped only this owned container. No protected resources changed.
+
+Setup 058 prepared separate empty and 64 MiB big roots. Empty master volume 059
+and Init/install 060 succeeded: one root entry, sealed Store 172032 logical and
+allocated bytes, setup Init 16658667 ns and install 6495584 ns. Its installed
+manifest is /tmp/layerfs-r7-empty-installed-20261009.manifest, volume
+layerfs-r7-empty-master-20261009-2ac7cc762, and setup container
+b16ac5af97bc4f0767a2360374b5c8bbfcf2d0af1de57dc41a02b8aa698681cd was
+explicitly stopped by the harness. Full Init/install are never repeated.
+Inspection found output-name collision risk when provision receipts share /tmp;
+Events now creates an exclusive receipt-derived artifact directory before any
+product effects. Old /tmp artifacts remain untouched; final runtime rebuild and
+validation are pending.
+
+R36-2 now retains exact resource admission cause/command, wait cause or original
+failed Completion, plus a separate output failure in the existing diagnostic
+error field. Failed completion credit stays charged; successful caller disposal
+does not claim publisher credit has returned. Independent re-review found both
+R36-1/2 corrected, with source-only limits for Await/unexpected response, reader
+lock contention/poison and SQL corruption. Host build 062 and Linux build 064
+passed; 063 passed two host custody tests; 065 passed three Linux custody tests;
+066 passed all four real-binary Application tests, including distinct equal-call
+scopes and simultaneous resource/output failure without hiding the original
+Status result. Reader proof 067 passed all ten Linux tests.
+
+Host Clippy 068 failed an InitialRecord layout warning reporting Control and
+the whole enum as zero bytes despite an inline 208-byte Install variant. The
+telemetry agent added an external actual-layout diagnostic before any lint
+expectation or allocation change; build 069 is pending. No blind boxing or
+third-party/toolchain change is authorized. No product instrumentation commit,
+mounted L performance baseline or accepted optimization yet.
+
+Actual-layout diagnostic build 069 passed. Invocation 070 mistakenly reused the
+old feature-unified Bridge executable, selected zero tests and establishes no
+layout proof despite exit zero. Lead corrected the binary from the exact build
+receipt: 071 passed all five tests and printed Request112/Call120/StoreManifest208/
+InitialRecord208, variant gap88. The pinned Clippy recursive-layout inference is
+therefore a false positive. A narrow expectation on InitialRecord, with the
+external layout guard, preserves its inline layout and introduces no allocation.
+Host Clippy 073 passed. Linux Clippy 074 found a test-only equivalent comparison
+lint; lead changed len+1<=4096 to len<4096, preserving the newline bound. The
+scoped rerun 076 is pending. Boundary guard 075 passed 857 production Rust/SQL
+files; that scan is no semantic or integrated qualification claim.
+
+Counter extraction 072 passed all 17 owning tests. It retains original arrays,
+subtracts only exact resource observer job/Startup work, and never subtracts
+memory gauges, lifetime peaks or elapsed spans. Original Status State jobs are
+separately charged; a new typed local-presence event will allow a known one-job
+count view without inventing its SQL VM cost. Instrumented SDK spans include
+acquisition/formatting/transport; an ordinary-control latency is not claimed.
+N/P concurrency peers are being implemented under the owner's direction with
+independent prepared roots, exact registered children, matched P sessions and
+separate terminal joins. New resource/count/peer harness checks and final source,
+binary, fixture, dependency and oracle seals remain before the baseline.
+
+Linux Clippy 076 passed after the test-only bound expression correction. Current
+harness suite 077 passed all 73 tests; runtime format 078 and host release build
+079 passed. Release daemon 080 passed. These builds remain functional Stage0
+source, not sealed performance arms; product instrumentation is not committed yet.
+
+A new fresh-context reviewer became available after the temporary thread limit.
+It found no semantic defect in the final scoped wire, one-effect/one-reply,
+resource first-cause custody, reader snapshots or route-free cleanup/resource
+admission. One adjacent Cleanup comment repeated the false immediate-credit
+claim; lead corrected it to caller-reference disposal and possible publisher
+transient. No behavior, wait, retry, allocation or allowance changed. Review
+retains source-only limits for Await/unexpected responses, reader lock poison/
+contention and engine corruption. Linux actual-layout runtime proof remains
+pending. Review does not establish memory/disk equality, speed or complete Stage0.
+
+The real-daemon lifecycle helper passed import check 081. It uses a separate
+already-installed writable clone, new Workspace identities, ordinary unregistered
+Bash, independent 9.5s verifiers, actual typed Committed, normal unmount, distinct
+read-only Gone observations, fresh-mount byte/metadata/link survival, and explicit
+EndSession/owned container stop. Its 60s functional scope is not performance.
+The helper retains original attempted IDs and bounds a host-only failure fence;
+container stop after failure belongs to the lead. Clone setup 082 is pending.
