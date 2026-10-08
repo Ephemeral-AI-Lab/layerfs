@@ -13,6 +13,10 @@ Both workstreams implement in `core/`; root `crates/` is the v0.1.6 reference
 until cluster two completes. Historical plans and experiments do not select a new
 algorithm, dependency, persistence profile or performance gate.
 
+The [optimization handbook](optimization-handbook.md) is the working procedure
+built on these rules: which counters exist, how to tell which layer amplifies
+work, and which direction each finding points to. These rules govern it.
+
 ## 1. Mandatory scope and acceptance
 
 Apply this guide when introducing/changing a hot path, query, index, payload

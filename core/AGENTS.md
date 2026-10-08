@@ -278,6 +278,9 @@ canonical formats and public APIs; use count-driven evidence and the existing
 measurement policy. SQLite debugging/optimization claims require both database
 EXPLAIN and correlated runtime database profiling; overall wall time or a plan
 alone is insufficient. An unrelated/docs-only change does not require a campaign.
+The [optimization handbook](../docs/general/optimization-handbook.md) is the
+working procedure on top of those rules: the counters that already exist, the
+diagnostic groups, the scaling checks and the current candidate list.
 
 ## Product source and external verification
 

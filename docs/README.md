@@ -52,6 +52,8 @@
 - [Sandbox cache design](general/sandbox-cache-design.md): cluster-two ownership, branch sharing, source structure and remaining qualification
 - [Workspace filesystem view](general/workspace-filesystem-view.md): global Store base, daemon overlay, lazy FUSE read path and ASCII diagrams
 - [Workspace queue scheduling](general/workspace-queue-scheduling.md): bounded fair service, capture ordering and concurrent workload tradeoffs
+- [Optimization guide](general/optimization-guide.md): binding performance-engineering rules
+- [Optimization handbook](general/optimization-handbook.md): diagnostic groups, existing counters, scaling checks, procedure and the current candidate list
 - [Benchmark rules](general/benchmark_rules.md)
 - [Release policy](general/release-policy.md)
 - [Documentation policy](general/documentation-policy.md)
