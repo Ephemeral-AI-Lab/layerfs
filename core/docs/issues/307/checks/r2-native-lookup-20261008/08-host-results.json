@@ -1,0 +1,111 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "--test",
+      "native_lookup"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 15867218292
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--test",
+      "native_read_plan"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 13444279208
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "--test",
+      "engine"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 3090892666
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "--test",
+      "lifetimes"
+    ],
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1542176708
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "--test",
+      "source"
+    ],
+    "exit_code": 101,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 2057334250
+  }
+]

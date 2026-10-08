@@ -1,0 +1,25 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.22s
+     Running tests/engine.rs (core/target/debug/deps/engine-b4fac0808988bc6c)
+
+running 12 tests
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test closed_capture_retains_its_existing_rows_until_explicit_known_release ... ok
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+test terminal_cleanup_waits_for_exact_owners_and_reply_attempts ... ok
+test backed_owner_and_operation_record_pages_have_no_total_record_limit ... ok
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+test reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_operation_record_values ... ok
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+test payload_name_operation_record_and_owner_access_keep_indexed_scope ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+

@@ -1,0 +1,16 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+error[E0599]: no method named `family` found for struct `DatabaseWork` in the current scope
+   --> crates/layerfs-overlay/tests/native_lookup.rs:209:21
+    |
+209 |     assert_eq!(work.family(StatementKind::Rollback).unwrap().executions, 1);
+    |                     ^^^^^^ method not found in `DatabaseWork`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-overlay` (test "native_lookup") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

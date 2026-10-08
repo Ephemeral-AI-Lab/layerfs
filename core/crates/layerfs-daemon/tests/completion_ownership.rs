@@ -59,6 +59,23 @@ fn finish(pending: &Pending) -> Completion {
         std::thread::yield_now();
     }
 }
+/// Publication makes the result visible before the publisher drops its own
+/// original cell. Observe final release instead of assuming the caller wins
+/// after that drop. This issues no new job and retains a bounded deadline.
+fn credit_count(client: &OwnerClient, expected: usize) -> OwnerWork {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let work = client.diagnostics().unwrap();
+        if work.outstanding == expected {
+            return work;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "credit release deadline: {work:?}"
+        );
+        std::thread::yield_now();
+    }
+}
 /// Waits until the one job submitted after `before` has run a readiness turn
 /// and is queued again: its turn is published before it is requeued.
 fn parked(client: &OwnerClient, before: &OwnerWork) {
@@ -524,7 +541,7 @@ fn every_configured_lifecycle_slot_is_admitted_while_ordinary_credit_is_saturate
             }
         })
         .collect();
-    let idle = client.diagnostics().unwrap();
+    let idle = credit_count(&client, 0);
     assert_eq!((idle.outstanding, idle.credited_bytes), (0, 0));
     let scheduler = idle.scheduler_bytes;
     assert!(scheduler > 0);
@@ -533,9 +550,11 @@ fn every_configured_lifecycle_slot_is_admitted_while_ordinary_credit_is_saturate
     let held = finish(&submit(&client, Some(routes[0]), Command::State));
     let lifecycle_charge = client.diagnostics().unwrap().credited_bytes;
     drop(held);
+    assert_eq!(credit_count(&client, 0).credited_bytes, 0);
     let held = finish(&submit(&client, Some(routes[0]), Command::Inode(2)));
     let ordinary_charge = client.diagnostics().unwrap().credited_bytes;
     drop(held);
+    assert_eq!(credit_count(&client, 0).credited_bytes, 0);
     let slots = config.namespaces * config.lifecycle_jobs_per_namespace;
     assert_eq!(slots, 32);
     assert!(slots * lifecycle_charge <= config.lifecycle_reserve);
@@ -615,7 +634,7 @@ fn every_configured_lifecycle_slot_is_admitted_while_ordinary_credit_is_saturate
     );
     drop(lifecycle);
     drop(ordinary);
-    let released = client.diagnostics().unwrap();
+    let released = credit_count(&client, 0);
     assert_eq!((released.outstanding, released.credited_bytes), (0, 0));
     owner.stop().unwrap();
 }
@@ -649,9 +668,9 @@ fn a_completion_is_handed_out_once_and_wakes_its_blocked_waiter() {
     ));
     assert!(matches!(done.result(), Ok(Response::State(_))));
     assert!(matches!(pending.wait(), Err(OwnerError::Disconnected)));
-    assert_eq!(client.diagnostics().unwrap().outstanding, 1);
+    assert_eq!(credit_count(&client, 1).outstanding, 1);
     drop(done);
-    assert_eq!(client.diagnostics().unwrap().outstanding, 0);
+    assert_eq!(credit_count(&client, 0).outstanding, 0);
 
     // A waiter blocked on a parked capture is woken by its publication. If this
     // thread fails first, dropping the owner returns the capture unattempted.

@@ -1,4 +1,4 @@
--- Disposable overlay schema v16. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v17. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -83,7 +83,7 @@ CREATE TABLE lease (
 ) STRICT, WITHOUT ROWID;
 CREATE TABLE base_source (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL DEFAULT 0 CHECK(kind IN(0,1)),
+    kind INTEGER NOT NULL DEFAULT 0 CHECK(kind BETWEEN 0 AND 2),
     owner INTEGER NOT NULL CHECK(owner>0),
     base_root BLOB NOT NULL CHECK(length(base_root)=32),
     PRIMARY KEY(ns,kind,owner)
@@ -108,7 +108,7 @@ CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
 CREATE INDEX lease_resource ON lease(ns,kind,resource,owner);
 CREATE TABLE maintenance (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7,8,9)),
+    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7,8,9,10)),
     resource INTEGER NOT NULL CHECK(resource>=0),
     target INTEGER NOT NULL CHECK(target<>0),
     phase INTEGER NOT NULL DEFAULT 0 CHECK(phase>=0),
@@ -140,7 +140,7 @@ CREATE TABLE file_handle (
 ) STRICT, WITHOUT ROWID;
 CREATE TABLE file_read (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    request INTEGER NOT NULL CHECK(request>0),
+    request INTEGER NOT NULL CHECK(request<>0),
     owner INTEGER NOT NULL CHECK(owner>0),
     serial INTEGER NOT NULL CHECK(serial>0),
     PRIMARY KEY(ns,owner), UNIQUE(ns,request)
@@ -200,4 +200,37 @@ CREATE TABLE orphan_wait (
     serial INTEGER NOT NULL CHECK(serial>0),
     PRIMARY KEY(ns,gen,serial)
 ) STRICT, WITHOUT ROWID;
-PRAGMA user_version=16;
+CREATE TABLE native_mount (
+    ns INTEGER PRIMARY KEY REFERENCES workspace(ns),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    root INTEGER NOT NULL CHECK(root>0),
+    revoked INTEGER NOT NULL CHECK(revoked IN(0,1)),
+    UNIQUE(ns,owner)
+) STRICT;
+CREATE TABLE native_lookup (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    mount INTEGER NOT NULL CHECK(mount>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    nlookup INTEGER NOT NULL CHECK(nlookup>=0),
+    implicit INTEGER NOT NULL CHECK(implicit IN(0,1)),
+    CHECK(nlookup>0 OR implicit=1),
+    PRIMARY KEY(ns,mount,serial), UNIQUE(ns,owner)
+) STRICT, WITHOUT ROWID;
+CREATE TABLE native_source (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    mount INTEGER NOT NULL CHECK(mount>0),
+    request BLOB NOT NULL CHECK(length(request)=8),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    decided INTEGER NOT NULL CHECK(decided IN(0,1)),
+    PRIMARY KEY(ns,mount,request), UNIQUE(ns,owner)
+) STRICT, WITHOUT ROWID;
+CREATE TABLE native_read (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    mount INTEGER NOT NULL CHECK(mount>0),
+    request BLOB NOT NULL CHECK(length(request)=8),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    PRIMARY KEY(ns,mount,request), UNIQUE(ns,owner)
+) STRICT, WITHOUT ROWID;
+PRAGMA user_version=17;

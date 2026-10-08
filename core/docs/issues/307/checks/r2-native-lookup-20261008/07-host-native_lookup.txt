@@ -1,0 +1,18 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.71s
+     Running tests/native_lookup.rs (core/target/debug/deps/native_lookup-ca40178972058807)
+
+running 5 tests
+test need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence ... ok
+test source_and_read_fence_revocation_and_request_keys_keep_all_u64_bits ... ok
+test foreign_engine_or_mount_cannot_consume_ownership ... ok
+test aggregate_forget_is_checked_and_implicit_root_is_independent ... ok
+test revoked_lookup_retirement_is_bounded_indexed_and_allows_closed_cleanup ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

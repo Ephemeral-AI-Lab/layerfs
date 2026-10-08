@@ -1,0 +1,58 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "wall_ns": 2208192667
+  },
+  {
+    "command": [
+      "core/target/debug/deps/owner-7a7301fc46dcf1ed",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "8eb31a0904acb62826c4f5ecbf7598230e2118d908d8f2c2c38d4ea2209450e2",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 2067903042,
+    "timeout_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/debug/deps/job_cost-fd2d3e5aadb233ea",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "cef4791cda41af179bd628cd2aaaf3114f745c5861f241a5f068f7215a6c28a2",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 771971500,
+    "timeout_seconds": 100
+  },
+  {
+    "command": [
+      "core/target/debug/deps/completion_ownership-41a80abdf2599e43",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "55e27f0bff31533d2dad29a4b7124d57de7bd75081abf40fa1e59469ef797f5d",
+    "exit_code": 101,
+    "timeout": false,
+    "wall_ns": 837687166,
+    "timeout_seconds": 100
+  }
+]

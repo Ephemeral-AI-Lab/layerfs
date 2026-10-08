@@ -315,32 +315,39 @@ impl Overlay {
         .map(|mut rows| rows.pop())
     }
     pub(crate) fn check_file_read(&self, read: FileRead) -> OverlayResult<()> {
+        self.file_read_request(read).map(|_| ())
+    }
+    fn file_read_request(&self, read: FileRead) -> OverlayResult<i64> {
         self.source_state(read.source)?;
-        if self
-            .query(
-                StatementKind::Lease,
-                "SELECT 1 FROM file_read WHERE ns=?1 AND owner=?2 AND serial=?3",
-                &[
-                    &read.source.route.ns,
-                    &integer(read.source.owner)?,
-                    &integer(read.serial)?,
-                ],
-                24,
-                |_| Ok(()),
-            )?
-            .is_empty()
-        {
-            return Err(OverlayError::Stale);
-        }
-        Ok(())
+        self.query(
+            StatementKind::Lease,
+            "SELECT request FROM file_read WHERE ns=?1 AND owner=?2 AND serial=?3",
+            &[
+                &read.source.route.ns,
+                &integer(read.source.owner)?,
+                &integer(read.serial)?,
+            ],
+            24,
+            |r| r.get(0),
+        )?
+        .pop()
+        .ok_or(OverlayError::Stale)
     }
     /// Releases only this read window after the last consumer/base demand is fenced.
     pub fn release_file_read(&self, read: FileRead) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
-            self.check_file_read(read)?;
+            let native = self.file_read_request(read)? < 0;
             let ns = read.source.route.ns;
             let owner = integer(read.source.owner)?;
             let serial = integer(read.serial)?;
+            if native {
+                self.execute(
+                    StatementKind::Lease,
+                    "DELETE FROM native_read WHERE ns=?1 AND owner=?2",
+                    &[&ns, &owner],
+                    16,
+                )?;
+            }
             self.execute(
                 StatementKind::Lease,
                 "DELETE FROM file_read WHERE ns=?1 AND owner=?2",

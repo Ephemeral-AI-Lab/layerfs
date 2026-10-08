@@ -22,6 +22,7 @@ pub use overlay::admission::Admission;
 pub use overlay::indexed_operation_record::{
     IndexedOperationRecordJob, IndexedOperationRecordReply,
 };
+pub use overlay::native_job::{NativeJob, NativeReply};
 pub use owner::{Owner, OwnerClient, OwnerConfig, OwnerError};
 pub use queue::OwnerWork;
 pub use service::completion::{Completion, Pending};

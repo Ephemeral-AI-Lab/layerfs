@@ -1,0 +1,9 @@
+{
+  "changes": {
+    "core/crates/layerfs-daemon/tests/completion_ownership.rs": {
+      "before": "81ee365a2cb43fddf1cae0fdd4adc94309c1100b968be359113c8230d4e1e991",
+      "after": "009ed3a7fbb9085fc5569518a96ec1d0431aaa445a2524088a95e36fa5cb9705"
+    }
+  },
+  "reason": "rustfmt-only line wrapping of test assertion; production bytes identical; reuse functional host/Linux test results without unchanged rerun"
+}

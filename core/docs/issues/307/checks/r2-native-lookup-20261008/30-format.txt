@@ -1,0 +1,12 @@
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon/tests/completion_ownership.rs:69:
+         if work.outstanding == expected {
+             return work;
+         }
+-        assert!(Instant::now() < deadline, "credit release deadline: {work:?}");
++        assert!(
++            Instant::now() < deadline,
++            "credit release deadline: {work:?}"
++        );
+         std::thread::yield_now();
+     }
+ }

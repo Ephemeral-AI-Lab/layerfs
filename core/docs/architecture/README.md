@@ -431,3 +431,4 @@ Its actual Engine proof does not close Sandbox lifecycle/readiness/access or
 process-specific cancellation, and it supplies no filesystem drain evidence.
 
 - [Owned Sandbox lifecycle and authenticated SDK startup](72-owned-sandbox-lifecycle.md): actual R1d source/proof, original failure custody and remaining native/cancellation/drain scope.
+- [Native read observation and lookup custody](73-native-read-custody.md): atomic Workspace answer/count/read ownership, exact source association and bounded retirement; native Fuse integration remains R2.

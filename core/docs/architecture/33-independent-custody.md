@@ -87,3 +87,9 @@ See [shared physical capacity](35-shared-physical-capacity.md) and the
 [S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
 checkpoint limitations and numbers above retain their original source identity.
 Native/runtime/kernel and integrated qualification remain later milestones.
+
+R2 component update2026-10-08: schema17 adds native mount/source associations,
+atomic lookup/count/read observations and bounded revoked-lookup retirement.
+See [native read custody](73-native-read-custody.md). Native handles/directories,
+kernel service and full R2 acceptance remain unfinished; earlier receipts above
+retain their source/schema identities.

@@ -1,0 +1,198 @@
+[
+  {
+    "package": "layerfs-overlay",
+    "test": "native_lookup",
+    "command": [
+      "core/target/debug/deps/native_lookup-c3a8c6eab76f3974",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "0b744e2b8a2212ac1f93c2aa348d3cfef1ea87d546e930c033a91f66c99b0e29",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 2057172375
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "engine",
+    "command": [
+      "core/target/debug/deps/engine-31ef5a26acdeed4a",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "78cddf4c8ab36945874e47eb162d4d07fab003d3b6ea80b287f819d0fd162c1e",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 2557497416
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "lifetimes",
+    "command": [
+      "core/target/debug/deps/lifetimes-92a4b3cb30ffe3b7",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "b6cc205e6b88c5f050f467e37667e39b684740152b17600b10a7ffb02cb2c0bc",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 998313083
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "source",
+    "command": [
+      "core/target/debug/deps/source-d308c41190d7d1c0",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "c653032a1c379b6e9e315ca9488091ccdd3a448905c39a442b56b6520596a966",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1371034833
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "orphans",
+    "command": [
+      "core/target/debug/deps/orphans-ac39fc227e494246",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "2cd56fa358a76e4aafbc27e1243867dcddf7fcc504ee7a3bb1440ec1d50ac8bd",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1157545250
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "resources",
+    "command": [
+      "core/target/debug/deps/resources-d5629cf95337a133",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "4ab95c4b6ca3d2c6a82c1b77a849d51445ca262970d97e1a9516c84e4a50df29",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 2231187208
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "startup_cost",
+    "command": [
+      "core/target/debug/deps/startup_cost-0425104fb12c0702",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "be3d537fb843c38c9405dded5555bc8074510bd5a528425a24ca171ef0b707e5",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 728383042
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "costs",
+    "command": [
+      "core/target/debug/deps/costs-349e2bf53982389c",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "b28d84963ddb9c5645e10761f4f7c3d957c725f34411183ff246584921cf8ba9",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 835806208
+  },
+  {
+    "package": "layerfs-overlay",
+    "test": "compound",
+    "command": [
+      "core/target/debug/deps/compound-015a16aad54419dc",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "693d87d9434c0eef6e647f2716467dcac8bb8f958c0d617c7d71bd00b4328498",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1741471959
+  },
+  {
+    "package": "layerfs-workspace",
+    "test": "native_read_plan",
+    "command": [
+      "core/target/debug/deps/native_read_plan-65f8e2c046be7435",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "b7590f6d4c32d1638a3e1c6f6f966203367e13662ba5536cfb6a637524372920",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 778332416
+  },
+  {
+    "package": "layerfs-workspace",
+    "test": "nonfile",
+    "command": [
+      "core/target/debug/deps/nonfile-f4088d6159f094d3",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "acc5337f9f56d282b8e0eff8cbc563f3648b7a0b4111037826a7f1db81819716",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 886164917
+  },
+  {
+    "package": "layerfs-workspace",
+    "test": "payload",
+    "command": [
+      "core/target/debug/deps/payload-2fde78705c15b398",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "e1c012f16430dd934751914538713ffd558799a037d8c0194ae848e41fc10cc8",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 1329791500
+  },
+  {
+    "package": "layerfs-daemon",
+    "test": "native_jobs",
+    "command": [
+      "core/target/debug/deps/native_jobs-296ccdda6ee0193f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "1bbd530cea91c63ebb64c3aae51497b2d8f5689f664f12ad11169012e19de6ec",
+    "exit_code": 0,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 836108625
+  },
+  {
+    "package": "layerfs-daemon",
+    "test": "owner",
+    "command": [
+      "core/target/debug/deps/owner-7a7301fc46dcf1ed",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "85a600a7be463ea779922cad40ee12a81ca433aa8bf44bdebf9a5fb60556417a",
+    "exit_code": 101,
+    "timeout": false,
+    "limit_seconds": 100,
+    "wall_ns": 939745792
+  }
+]

@@ -208,3 +208,39 @@ CREATE TRIGGER file_custody_account_delete AFTER DELETE ON file_custody BEGIN
     UPDATE accounting SET owner_details=owner_details-1 WHERE ns=0;
     UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
 END;
+
+CREATE TRIGGER native_mount_account_insert AFTER INSERT ON native_mount BEGIN
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;
+END;
+CREATE TRIGGER native_mount_account_delete AFTER DELETE ON native_mount BEGIN
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
+END;
+
+CREATE TRIGGER native_lookup_account_insert AFTER INSERT ON native_lookup BEGIN
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;
+END;
+CREATE TRIGGER native_lookup_account_delete AFTER DELETE ON native_lookup BEGIN
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
+END;
+
+CREATE TRIGGER native_source_account_insert AFTER INSERT ON native_source BEGIN
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;
+END;
+CREATE TRIGGER native_source_account_delete AFTER DELETE ON native_source BEGIN
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
+END;
+
+CREATE TRIGGER native_read_account_insert AFTER INSERT ON native_read BEGIN
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;
+END;
+CREATE TRIGGER native_read_account_delete AFTER DELETE ON native_read BEGIN
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=0;
+    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
+END;

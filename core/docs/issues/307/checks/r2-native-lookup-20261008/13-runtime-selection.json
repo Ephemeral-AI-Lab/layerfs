@@ -1,0 +1,29 @@
+{
+  "selected": {
+    "layerfs-overlay": [
+      "native_lookup",
+      "engine",
+      "lifetimes",
+      "source",
+      "orphans",
+      "resources",
+      "startup_cost",
+      "costs",
+      "compound"
+    ],
+    "layerfs-workspace": [
+      "native_read_plan",
+      "nonfile",
+      "payload"
+    ],
+    "layerfs-daemon": [
+      "native_jobs",
+      "owner",
+      "job_cost",
+      "completion_ownership"
+    ]
+  },
+  "timeout_seconds": 100,
+  "cache": "natural functional component checks; SQL plans paired with actual DatabaseWork in native_lookup",
+  "profiles": "Overlay MEMORY/OFF/EXCLUSIVE; native_jobs explicitly Disposable/WAL/OFF Store; Durable NOT_RUN disabled by owner"
+}

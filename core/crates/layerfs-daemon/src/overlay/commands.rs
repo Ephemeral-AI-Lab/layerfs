@@ -21,6 +21,7 @@ pub enum ServiceClass {
 /// One fixed SQL window, never a whole Exec or content-construction operation.
 #[derive(Debug)]
 pub enum Command {
+    Native(crate::NativeJob),
     IndexedOperationRecord(Box<crate::IndexedOperationRecordJob>),
     Open {
         incarnation: [u8; 32],
@@ -210,6 +211,7 @@ pub enum Command {
 }
 #[derive(Debug)]
 pub enum Response {
+    Native(crate::NativeReply),
     CapturedRun(Box<layerfs_overlay::CapturedRunReply>),
     IndexedOperationRecord(crate::IndexedOperationRecordReply),
     Lookup(Option<LookupOwner>),
@@ -245,6 +247,7 @@ pub enum Response {
 impl Command {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
+            Self::Native(job) => job.class(),
             Self::IndexedOperationRecord(_) => ServiceClass::OperationRecord,
             Self::AcquireLookup { .. }
             | Self::RetainedLookup { .. }
@@ -315,6 +318,7 @@ impl Command {
     }
     pub(crate) fn charge(&self) -> Option<usize> {
         let (input, reply) = match self {
+            Self::Native(job) => job.charge(),
             Self::IndexedOperationRecord(job) => (job.charge()?, 0),
             Self::Resources { .. } => (0, std::mem::size_of::<layerfs_overlay::Resources>()),
             Self::DatabaseWork => (0, std::mem::size_of::<layerfs_overlay::DatabaseWork>()),
@@ -433,6 +437,7 @@ impl Command {
         }
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
+            Self::Native(job) => job.perform(db, route).map(Response::Native),
             Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => {
                 unreachable!()
             }

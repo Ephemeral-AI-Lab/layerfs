@@ -1,0 +1,25 @@
+{
+  "commit": "78374ced665f62ddd502fda00013ee7703b84609",
+  "first_parent": "0bd4e28e191a2d00cb2f64d6e666b1140f980019",
+  "committed_tree": "39b1085a187b58c1a0263ae87560a2c4bf8cb660",
+  "matches_final_staged_tree": true,
+  "committed_count_recomputed": true,
+  "production_loc": {
+    "before": 171080,
+    "after": 171783,
+    "delta": 703
+  },
+  "subtotals": {
+    "active": 63492,
+    "excluded_predecessors": 37431,
+    "excluded_integration": 5443,
+    "reference": 65417
+  },
+  "owned_containers_removed": [
+    "c1b0d87fb060bf04db6ac0cd60d8b42349ff9d35019f311ca2d9ec5bcd53c125",
+    "06dc77e0c8dd6236ebb6b05004038ed4e0b633bc8fb135ea6e3e10b2e6c7c7df"
+  ],
+  "r2_goal": "ACTIVE; full native R2 remains unfinished; continue without user reconfirmation",
+  "remaining": "native per-demand orchestration, consistent reads/atomic native lookup counts, directory cookies, replacement Fuse service, Attach/Ready/security and complete normal drain with owning proofs",
+  "approval_pending": false
+}

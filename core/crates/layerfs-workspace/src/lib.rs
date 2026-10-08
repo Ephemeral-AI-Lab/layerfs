@@ -47,6 +47,10 @@ pub use job::{JobOutcome, NamespaceJob};
 pub use list::ViewListing;
 pub use mutation::plan::{MutationInputFailure, MutationPlan, MutationStage};
 pub use operation::{Operation, Outcome, Position, Refusal, Time, WriteData};
+pub use operations::native_read::{
+    NativeReadDecision, NativeReadFailure, NativeReadJob, NativeReadOperation, NativeReadOutcome,
+    NativeReadPlan, NativeReadStage, NativeReadValue,
+};
 pub use port::OverlayCapturedNamespace;
 pub use port::{FileLengths, OverlayCapturedRuns, OverlayFileRead, OverlayJobs, OverlayRead};
 pub use port::{

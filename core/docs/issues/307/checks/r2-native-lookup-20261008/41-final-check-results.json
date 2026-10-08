@@ -1,0 +1,46 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "fmt",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "wall_ns": 2230096208,
+    "timeout_seconds": 100,
+    "timeout": false
+  },
+  {
+    "command": [
+      "python3",
+      "-B",
+      "core/tools/check_product_boundary.py"
+    ],
+    "exit_code": 0,
+    "wall_ns": 512093500,
+    "timeout_seconds": 100,
+    "timeout": false
+  },
+  {
+    "command": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "core/tools",
+      "-p",
+      "test_*.py"
+    ],
+    "exit_code": 0,
+    "wall_ns": 398161125,
+    "timeout_seconds": 100,
+    "timeout": false
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "parent": "78374ced665f62ddd502fda00013ee7703b84609",
+  "scope": "R2 native mount/source/lookup/read ownership with one atomic observation and bounded revocation, then Workspace/Daemon integration",
+  "files": {
+    "overlay/contract/native.rs": "NativeMount identity, generic atomic decision/attempt carrier preserving semantic observation even on transaction failure. Reuse BaseSource/FileRead rather than copied custody types.",
+    "overlay/lifetime/native.rs": "One native mount per Workspace; implicit root lookup lease; exact source association using class2; checked aggregate nlookup and native read acquisition.",
+    "overlay/lifetime/native_observation.rs": "Caller semantic decision over SourceRows inside one owner transaction; positive lookup count plus independent FileRead in that same transaction; first original outcome retained.",
+    "overlay/maintenance/native.rs": "After explicit source/read drain and logical revocation, bounded lookup-lease retirement; existing orphan/close machinery remains authoritative.",
+    "overlay/sql/schema.sql and accounting.sql": "Schema17 native mount/lookup/source/read relations and accounting; source class2; negative internal FileRead request keys distinct from public positive keys.",
+    "workspace/operations/native_read.rs": "Stat/lookup fact rounds use existing Eval/BaseFacts semantics; no provider call in owner decision; retained source/custody through a resumable plan.",
+    "daemon/overlay/commands.rs": "Typed native jobs through existing fair owner with bounded original completion charging; no alternate SQL service."
+  },
+  "invariants": [
+    "full mount/route identity and positive checked counts",
+    "implicit root reference survives count-zero FORGET",
+    "lookup answer/count/read ownership same transaction",
+    "no unobservable reply compensation",
+    "native source/read associations fence revocation",
+    "automatic bounded retirement after logical revocation, including closed namespaces",
+    "no new total inode/namespace/lookup cap or resident ownership map",
+    "no actual mount/Ready proof claimed by component"
+  ],
+  "profiles": "Overlay MEMORY/OFF/EXCLUSIVE only; Durable NOT_RUN disabled by owner",
+  "test_timeout_seconds": 100,
+  "measurement": "functional/paired SQL work evidence only, no performance claim"
+}

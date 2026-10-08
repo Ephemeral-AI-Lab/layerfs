@@ -35,6 +35,7 @@ pub use contract::indexed_operation_record::{
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
     OperationRecordExpectedValue,
 };
+pub use contract::native::{NativeDecision, NativeMount, NativeMountState, NativeObservation};
 pub use database::accounting::{Resources, StoredCounts};
 pub use database::allocation::{
     AllocationState, AllocationWork, CLEANUP_HEADROOM, MUTATION_GROWTH,

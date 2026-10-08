@@ -1,0 +1,263 @@
+[
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--no-run"
+    ],
+    "exit_code": 0,
+    "wall_ns": 63331316696
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_lookup-08fdcc6c9bdf1e26",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "1b6bf08a131b142e6f6124667e5770d0df3d55f10ead0ce81698d319d92043ed",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 164473083,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-native_lookup.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/engine-3ad4f57997c62f3d",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "02a71e5304a626ee0082bb1ad9d8f4e0e766a78b276d67a772e061c4f39b4b4b",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 888868750,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-engine.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/lifetimes-33902dd338d18eba",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "3c20924aedfd4b8724ae0dbaf983b76e9b1744968944853b7c97b6ece279eec4",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 268086500,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-lifetimes.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/source-5eb03fbb39a12de3",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "9bc6de0ec27cb33b3ab6536541fe31a7fa2b906babed919501f5b7cc5ddd44ea",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 363666167,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-source.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/orphans-4d9837370c7ad6a9",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "0d5a54768838ad1e5768a77ad321f4facf2f76c31088ab9910288498d746e96c",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 259836917,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-orphans.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/resources-9f7688179b1fe461",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "f6cb63d0405bbc2568837ec68ff6f74bf1527c2f83d170fd3208fd1ae9a83f7b",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 716704833,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-resources.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/startup_cost-4a5c6472441ea45d",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "ba732e2ae77e9cd5fd2c8385c1adf492c6943f65eb5bfa33304edb66f636f9d5",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 54261208,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-startup_cost.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/costs-61bbad9ab702a1b5",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "490e319a31975b18db4b76463d378c2b6e188b03a7df30470f15bb840fbc0a99",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 54748417,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-costs.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/compound-596352e4ccec617f",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "e06e932405b3b64536df4549ac79f5112a4d73ba1af906e22929989d5fbf3a5d",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 514428458,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-overlay-compound.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_read_plan-412c625f9564c095",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "a8b9a2c2110260b02f0820cc3281ed31c3033675383bff585306ebac97ed5181",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 135533708,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-workspace-native_read_plan.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/nonfile-f0a2713533387e02",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "0348ba9b1aafcb2be3b633137451cf6f3c4d9255fb55e9c229730753a8c71b61",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 133583000,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-workspace-nonfile.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/payload-aec2b3c179845f78",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "42c8af3ef49ef3df2fef1967a5b38e51fa419a60be7a9af3924f2cba93f4394a",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 341888251,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-workspace-payload.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_jobs-a48cb6353cd68702",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "b8e991bf1d2057621ccabfc31f89a903442769537ab28f8691ee2fc094497502",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 261735583,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-daemon-native_jobs.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/owner-de5b012fe14d1f77",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "ab943dbe683993d9097389b81774ffb0c04932a716fb48ad35baaef7fa6457a3",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 338434584,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-daemon-owner.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/job_cost-97b0619943df4135",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "aec1b53b3a88515f9c666f82510f54450c8f0eb0631a3937b65ffe571e5bfead",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 140152292,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-daemon-job_cost.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/completion_ownership-99a1c7944a773d7c",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "0465ac82ed5fc6a47e2f0fca30d212696e22b400132365ff88c1f842e9c3944c",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 158894708,
+    "timeout_seconds": 100,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-daemon-completion_ownership.txt"
+  },
+  {
+    "command": [
+      "core/target/cluster2-linux/debug/deps/native_application-56f120e15791f029",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "sha256": "62ce11c07632f53242dd3a948e5c445e6055e9b48555cad5004c48fedad7b80b",
+    "exit_code": 0,
+    "timeout": false,
+    "wall_ns": 256804750,
+    "timeout_seconds": 9,
+    "output": "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-layerfs-daemon-native_application.txt"
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "-p",
+      "layerfs-workspace",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "wall_ns": 9947059005
+  }
+]

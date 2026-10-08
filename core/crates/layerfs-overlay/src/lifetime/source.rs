@@ -94,7 +94,7 @@ impl Overlay {
     /// One exact release after the request/provider continuation is fenced.
     /// Original errors leave this source in custody; no hidden Drop SQL/retry.
     pub fn release_base_source(&self, source: BaseSource) -> OverlayResult<()> {
-        if source.class != 0 {
+        if !matches!(source.class, 0 | 2) {
             return Err(OverlayError::Invalid(
                 "file read source requires file-read release",
             ));
@@ -103,6 +103,9 @@ impl Overlay {
     }
     pub(crate) fn release_source_inner(&self, source: BaseSource) -> OverlayResult<()> {
         self.source_state(source)?;
+        if source.class == 2 {
+            self.release_native_source(source)?;
+        }
         let changed = self.execute(
             StatementKind::Lease,
             sql::BASE_SOURCE_DELETE,

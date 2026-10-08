@@ -1,0 +1,24 @@
+{
+  "command": [
+    "docker",
+    "create",
+    "--name",
+    "layerfs-r2-lookup-26813c05a8dd49d8b53975de640aa77d",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "python3",
+    "core/docs/issues/307/checks/r2-native-lookup-20261008/linux-check.py"
+  ],
+  "exit_code": 0,
+  "stdout": "f50ccc88c0d6f8a3c1502ce00bb7ee5921b64dc80f99977d1029523a1bb2fc48\n",
+  "stderr": ""
+}

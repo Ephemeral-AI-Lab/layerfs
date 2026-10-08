@@ -2,4 +2,5 @@
 pub(crate) mod attributes;
 pub(crate) mod file;
 pub(crate) mod namespace;
+pub(crate) mod native_read;
 pub(crate) mod types;
