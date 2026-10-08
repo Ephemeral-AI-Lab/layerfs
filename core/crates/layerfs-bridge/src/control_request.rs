@@ -65,6 +65,14 @@ impl Call {
                 out.byte(10)?;
                 out.put(&workspace.to_bytes())?;
             }
+            Request::ForceUnmount {
+                token,
+                relinquish_unknown,
+            } => {
+                out.byte(11)?;
+                put_token(&mut out, *token)?;
+                out.byte(u8::from(*relinquish_unknown))?;
+            }
             Request::History(value) => {
                 window(value.limit)?;
                 out.byte(6)?;
@@ -95,6 +103,10 @@ impl Call {
             4 => Request::Unmount(token(&mut input)?),
             9 => Request::Attach(token(&mut input)?),
             10 => Request::Locate(history(WorkspaceId::from_authority(input.array()?))?),
+            11 => Request::ForceUnmount {
+                token: token(&mut input)?,
+                relinquish_unknown: boolean(&mut input)?,
+            },
             5 => {
                 let stack = history(LayerStackId::from_bytes(input.array()?))?;
                 let branch = history(BranchId::from_bytes(input.array()?))?;

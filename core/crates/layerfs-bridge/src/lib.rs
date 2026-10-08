@@ -8,6 +8,7 @@ pub mod provision;
 mod provision_wire;
 mod wire;
 
+mod control_forced;
 mod control_history;
 mod control_native;
 mod control_reply;

@@ -4,6 +4,7 @@ use crate::{
         Activity, Answer, ControlCode, ControlError, ControlRefusal, LocalObservation, Reply,
         WorkspaceStatus, HISTORY_WINDOW,
     },
+    control_forced::{facts, forced, put_facts, put_forced},
     control_history::*,
     control_native::{custody, native, put_custody, put_native, put_ready, ready},
     wire::{Reader, Writer},
@@ -78,8 +79,17 @@ impl Answer {
                 }
             }
             Reply::Retained(value) => {
-                out.byte(12)?;
+                // As for status: the original record keeps its tag and bytes,
+                // and forced facts follow the same body under their own tag.
+                out.byte(if value.forced.is_some() { 15 } else { 12 })?;
                 put_custody(&mut out, value)?;
+                if let Some(facts) = &value.forced {
+                    put_facts(&mut out, facts)?;
+                }
+            }
+            Reply::ForceUnmounted(value) => {
+                out.byte(14)?;
+                put_forced(&mut out, value)?;
             }
         }
         Ok(out.0)
@@ -130,7 +140,13 @@ impl Answer {
                 }
                 Reply::Located(Box::new(value))
             }
-            12 => Reply::Retained(Box::new(custody(&mut input)?)),
+            12 => Reply::Retained(Box::new(custody(&mut input, false)?)),
+            14 => Reply::ForceUnmounted(Box::new(forced(&mut input)?)),
+            15 => {
+                let mut value = custody(&mut input, true)?;
+                value.forced = Some(facts(&mut input)?);
+                Reply::Retained(Box::new(value))
+            }
             _ => return Err(ControlError("control reply")),
         };
         input.finish()?;

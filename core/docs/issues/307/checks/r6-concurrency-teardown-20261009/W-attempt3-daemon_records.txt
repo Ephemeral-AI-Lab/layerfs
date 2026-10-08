@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 803d05b46, uncommitted product/test paths=35, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/daemon_records-ecfc5f8c48264a7b --test-threads=1  (cwd core/crates/layerfs-bridge)
+
+running 2 tests
+test private_setup_is_exact_bounded_and_redacts_secret ... ok
+test startup_and_session_end_preserve_correlation_and_require_actual_ready_facts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

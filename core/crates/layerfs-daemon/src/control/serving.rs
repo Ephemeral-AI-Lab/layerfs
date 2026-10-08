@@ -98,6 +98,7 @@ impl Kept {
             detached: facts.as_ref().is_some_and(|facts| facts.detached),
             work: facts.as_ref().map(work),
             detail: bounded(&self.detail),
+            forced: None,
         }
     }
 }

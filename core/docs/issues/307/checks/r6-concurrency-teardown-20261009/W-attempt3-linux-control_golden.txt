@@ -1,0 +1,14 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 803d05b46, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-bridge IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/control_golden-9ff01a7583c46f7d --test-threads=1 --nocapture
+
+running 5 tests
+test binding_commit_history_and_session_replies_keep_their_bytes ... ok
+test every_refusal_code_keeps_its_bytes ... ok
+test every_request_tag_keeps_its_bytes ... ok
+test ready_located_and_retained_keep_their_bytes ... ok
+test status_keeps_its_bytes_at_every_activity_and_native_phase ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

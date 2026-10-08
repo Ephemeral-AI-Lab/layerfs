@@ -41,6 +41,13 @@ pub enum Request {
     Attach(WorkspaceToken),
     /// Observe one incarnation by identity alone; settles no original unknown.
     Locate(WorkspaceId),
+    /// Abort the owned connection and close terminally; no caller process is signalled.
+    ForceUnmount {
+        /// Exact incarnation to tear down.
+        token: WorkspaceToken,
+        /// Permit local disposal of stopped unknown Commit custody; it stays unknown.
+        relinquish_unknown: bool,
+    },
 }
 /// Correlation for one attempted request on an authenticated connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -174,6 +181,8 @@ pub enum Reply {
     Located(Box<WorkspaceStatus>),
     /// A terminal operation stopped after effects with its custody retained.
     Retained(Box<crate::control_native::TeardownCustody>),
+    /// Forced terminal close acknowledged with its dispositions and cleanup state.
+    ForceUnmounted(Box<crate::control_forced::ForceUnmounted>),
 }
 /// Correlated original reply; transport failure does not reverse its effects.
 #[derive(Clone, Debug, Eq, PartialEq)]

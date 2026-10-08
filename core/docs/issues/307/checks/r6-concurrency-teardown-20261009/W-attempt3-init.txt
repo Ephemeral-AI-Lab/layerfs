@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 803d05b46, uncommitted product/test paths=36, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/init-1747edcdf337bbd9 --test-threads=1  (cwd core/crates/layerfs-api/sdk)
+
+running 2 tests
+test init_seals_complete_root_and_first_branch_without_retained_handles ... ok
+test refusal_preserves_existing_output_and_original_request ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

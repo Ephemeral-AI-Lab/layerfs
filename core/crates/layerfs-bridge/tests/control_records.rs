@@ -271,6 +271,7 @@ fn native_replies(binding: &BranchSnapshot, token: WorkspaceToken) -> Vec<Reply>
             detached: true,
             work: Some(work),
             detail: "z".repeat(2048),
+            forced: None,
         })),
     ]
 }

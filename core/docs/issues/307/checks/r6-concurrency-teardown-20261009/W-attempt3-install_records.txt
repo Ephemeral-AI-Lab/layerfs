@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 803d05b46, uncommitted product/test paths=36, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/install_records-dafaa7e6f090bdc4 --test-threads=1  (cwd core/crates/layerfs-bridge)
+
+running 2 tests
+test bounded_manifest_is_exact_and_does_not_cap_stream_length ... ok
+test installed_and_refused_keep_original_publication_knowledge ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

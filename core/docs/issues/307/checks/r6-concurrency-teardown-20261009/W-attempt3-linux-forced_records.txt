@@ -1,0 +1,14 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 803d05b46, uncommitted product/test paths=37, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-bridge IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/forced_records-52070127ea8a83e1 --test-threads=1 --nocapture
+
+running 5 tests
+test retained_facts_travel_under_tag_15_and_tag_12_keeps_its_bytes ... ok
+test stopping_is_phase_7_in_every_native_block ... ok
+test the_force_request_is_tag_11_with_one_strict_flag ... ok
+test the_forced_receipt_is_tag_14_and_pins_every_value ... ok
+test the_largest_forced_records_stay_under_the_record_limit ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

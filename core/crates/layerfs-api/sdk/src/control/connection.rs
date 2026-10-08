@@ -188,9 +188,13 @@ fn matches_reply(request: &Request, reply: &Reply) -> bool {
         (Request::Status(token), Reply::Status(status)) => *token == status.token,
         (Request::Unmount(token), Reply::Unmounted(closed)) => token == closed,
         (Request::Attach(token), Reply::Ready(ready)) => *token == ready.token,
-        (Request::Attach(token) | Request::Unmount(token), Reply::Retained(custody)) => {
-            *token == custody.token
+        (Request::ForceUnmount { token, .. }, Reply::ForceUnmounted(closed)) => {
+            *token == closed.token
         }
+        (
+            Request::Attach(token) | Request::Unmount(token) | Request::ForceUnmount { token, .. },
+            Reply::Retained(custody),
+        ) => *token == custody.token,
         (Request::Locate(workspace), Reply::Located(status)) => {
             *workspace == status.token.workspace
         }

@@ -22,6 +22,8 @@ pub enum NativePhase {
     Draining = 5,
     /// A detach, join, drain, revocation or Close outcome was not established.
     Retained = 6,
+    /// Forced teardown is admitted; abort, drain and detach are in progress.
+    Stopping = 7,
 }
 /// Kernel connection identity and the profile actually negotiated.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -139,6 +141,8 @@ pub enum TeardownStage {
     Close = 7,
     /// The registry could not record the terminal transition.
     Registry = 8,
+    /// The forced abort write was short or failed; carried only with forced facts.
+    Abort = 9,
 }
 /// Terminal operation stopped after effects; nothing here is a retry token.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -153,6 +157,8 @@ pub struct TeardownCustody {
     pub work: Option<NativeWork>,
     /// Bounded original cause description; never parsed to decide custody.
     pub detail: String,
+    /// Forced-teardown effects; absent from a normal unmount or Attach custody.
+    pub forced: Option<crate::control_forced::ForcedFacts>,
 }
 fn put_receipt(out: &mut Writer, value: &NativeReceipt) -> Result<(), ControlError> {
     out.put(&value.mount.to_be_bytes())?;
@@ -219,7 +225,7 @@ pub(crate) fn ready(input: &mut Reader<'_>) -> Result<ReadyMount, ControlError> 
     }
     Ok(value)
 }
-fn put_work(out: &mut Writer, value: &NativeWork) -> Result<(), ControlError> {
+pub(crate) fn put_work(out: &mut Writer, value: &NativeWork) -> Result<(), ControlError> {
     for field in [
         value.loops_configured,
         value.loops_entered,
@@ -251,7 +257,7 @@ fn put_work(out: &mut Writer, value: &NativeWork) -> Result<(), ControlError> {
     }
     Ok(())
 }
-fn work(input: &mut Reader<'_>) -> Result<NativeWork, ControlError> {
+pub(crate) fn work(input: &mut Reader<'_>) -> Result<NativeWork, ControlError> {
     Ok(NativeWork {
         loops_configured: u16::from_be_bytes(input.array()?),
         loops_entered: u16::from_be_bytes(input.array()?),
@@ -303,6 +309,7 @@ pub(crate) fn native(input: &mut Reader<'_>) -> Result<NativeStatus, ControlErro
         4 => NativePhase::Probing,
         5 => NativePhase::Draining,
         6 => NativePhase::Retained,
+        7 => NativePhase::Stopping,
         _ => return Err(ControlError("native phase")),
     };
     let ready = if boolean(input)? {
@@ -317,9 +324,13 @@ pub(crate) fn native(input: &mut Reader<'_>) -> Result<NativeStatus, ControlErro
         work: optional_work(input)?,
     })
 }
+/// The original custody body; forced facts follow it under their own reply tag.
 pub(crate) fn put_custody(out: &mut Writer, value: &TeardownCustody) -> Result<(), ControlError> {
     if value.detail.len() > 2048 {
         return Err(ControlError("teardown detail limit"));
+    }
+    if value.stage == TeardownStage::Abort && value.forced.is_none() {
+        return Err(ControlError("teardown stage"));
     }
     put_token(out, value.token)?;
     out.byte(value.stage as u8)?;
@@ -327,7 +338,12 @@ pub(crate) fn put_custody(out: &mut Writer, value: &TeardownCustody) -> Result<(
     put_optional_work(out, &value.work)?;
     out.blob(value.detail.as_bytes())
 }
-pub(crate) fn custody(input: &mut Reader<'_>) -> Result<TeardownCustody, ControlError> {
+/// Reads the custody body. `forced` says the record carries forced facts after
+/// it, which alone admits the Abort stage; the caller attaches those facts.
+pub(crate) fn custody(
+    input: &mut Reader<'_>,
+    forced: bool,
+) -> Result<TeardownCustody, ControlError> {
     let token = token(input)?;
     let stage = match input.byte()? {
         1 => TeardownStage::Detach,
@@ -338,6 +354,7 @@ pub(crate) fn custody(input: &mut Reader<'_>) -> Result<TeardownCustody, Control
         6 => TeardownStage::Revoke,
         7 => TeardownStage::Close,
         8 => TeardownStage::Registry,
+        9 if forced => TeardownStage::Abort,
         _ => return Err(ControlError("teardown stage")),
     };
     Ok(TeardownCustody {
@@ -346,5 +363,6 @@ pub(crate) fn custody(input: &mut Reader<'_>) -> Result<TeardownCustody, Control
         detached: boolean(input)?,
         work: optional_work(input)?,
         detail: input.text(2048)?,
+        forced: None,
     })
 }
