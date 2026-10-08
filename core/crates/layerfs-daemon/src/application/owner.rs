@@ -40,6 +40,8 @@ pub struct Application {
     pub(super) setup: DaemonSetup,
     pub(super) instance: [u8; 32],
     pub(super) owner: Owner,
+    /// Fixed shared native workers, entered before control readiness.
+    pub(super) native: Option<Arc<crate::control::NativeServing>>,
     pub(super) state: Mutex<State>,
     pub(super) changed: Condvar,
     pub(super) workers: Mutex<Vec<Option<JoinHandle<()>>>>,
@@ -112,9 +114,18 @@ impl Application {
             },
             None => None,
         };
-        let service = existing
-            .as_ref()
-            .map(|opened| Arc::new(Service::new(opened.store.clone(), &owner)));
+        let native = match super::filesystem::assemble(&setup) {
+            Ok(native) => native,
+            Err(cause) => {
+                return Err(ApplicationError::AfterOverlay {
+                    owner: Box::new(owner),
+                    cause: Box::new(ApplicationError::Io(cause)),
+                })
+            }
+        };
+        let service = existing.as_ref().map(|opened| {
+            super::filesystem::service(opened.store.clone(), &owner, native.as_ref())
+        });
         let phase = if service.is_some() {
             DaemonPhase::ControlReady
         } else {
@@ -125,6 +136,7 @@ impl Application {
             setup,
             instance,
             owner,
+            native,
             state: Mutex::new(State {
                 startup: Startup {
                     phase,

@@ -5,6 +5,7 @@ use crate::{
         WorkspaceStatus, HISTORY_WINDOW,
     },
     control_history::*,
+    control_native::{custody, native, put_custody, put_native, put_ready, ready},
     wire::{Reader, Writer},
 };
 use layerfs_history::PageResult;
@@ -33,8 +34,13 @@ impl Answer {
                 put_outcome(&mut out, value)?;
             }
             Reply::Status(value) => {
-                out.byte(3)?;
+                // The original record keeps its tag and bytes; a native block
+                // travels under its own tag, so no prefix of it is a valid record.
+                out.byte(if value.native.is_some() { 13 } else { 3 })?;
                 put_status(&mut out, value)?;
+                if let Some(native) = &value.native {
+                    put_native(&mut out, native)?;
+                }
             }
             Reply::Unmounted(token) => {
                 out.byte(4)?;
@@ -59,6 +65,22 @@ impl Answer {
                 out.byte(7)?;
                 put_refusal(&mut out, value)?;
             }
+            Reply::Ready(value) => {
+                out.byte(10)?;
+                put_ready(&mut out, value)?;
+            }
+            Reply::Located(value) => {
+                out.byte(11)?;
+                put_status(&mut out, value)?;
+                out.byte(u8::from(value.native.is_some()))?;
+                if let Some(native) = &value.native {
+                    put_native(&mut out, native)?;
+                }
+            }
+            Reply::Retained(value) => {
+                out.byte(12)?;
+                put_custody(&mut out, value)?;
+            }
         }
         Ok(out.0)
     }
@@ -78,6 +100,11 @@ impl Answer {
             },
             2 => Reply::Committed(outcome(&mut input)?),
             3 => Reply::Status(Box::new(status(&mut input)?)),
+            13 => {
+                let mut value = status(&mut input)?;
+                value.native = Some(native(&mut input)?);
+                Reply::Status(Box::new(value))
+            }
             4 => Reply::Unmounted(token(&mut input)?),
             5 => Reply::Forked(binding(&mut input)?),
             6 => {
@@ -95,6 +122,15 @@ impl Answer {
                 })
             }
             7 => Reply::Refused(refusal(&mut input)?),
+            10 => Reply::Ready(Box::new(ready(&mut input)?)),
+            11 => {
+                let mut value = status(&mut input)?;
+                if boolean(&mut input)? {
+                    value.native = Some(native(&mut input)?);
+                }
+                Reply::Located(Box::new(value))
+            }
+            12 => Reply::Retained(Box::new(custody(&mut input)?)),
             _ => return Err(ControlError("control reply")),
         };
         input.finish()?;
@@ -162,6 +198,7 @@ fn put_status(out: &mut Writer, value: &WorkspaceStatus) -> Result<(), ControlEr
         Activity::Closing => 3,
         Activity::Uncertain => 4,
         Activity::LocalFailure => 5,
+        Activity::Attaching => 6,
     })?;
     out.put(&value.epoch.to_be_bytes())?;
     out.byte(u8::from(value.epoch_saturated))?;
@@ -170,24 +207,22 @@ fn put_status(out: &mut Writer, value: &WorkspaceStatus) -> Result<(), ControlEr
         return Err(ControlError("engine observation disposition"));
     }
     out.byte(u8::from(value.local.is_some()))?;
-    let Some(local) = &value.local else {
-        return put_refusal(
-            out,
-            value
-                .local_failure
-                .as_ref()
-                .expect("checked engine refusal"),
-        );
-    };
-    out.put(&local.revision.to_be_bytes())?;
-    out.put(&local.active.to_be_bytes())?;
-    put_generation(out, local.captured)?;
-    put_generation(out, local.captured_revision)?;
-    out.put(&local.base_root)?;
-    out.put(&local.dirty_inodes.to_be_bytes())?;
-    out.put(&local.dirty_directory_entries.to_be_bytes())?;
-    out.byte(u8::from(local.closed))?;
-    out.put(&local.base_readers.to_be_bytes())
+    match (&value.local, &value.local_failure) {
+        (Some(local), _) => {
+            out.put(&local.revision.to_be_bytes())?;
+            out.put(&local.active.to_be_bytes())?;
+            put_generation(out, local.captured)?;
+            put_generation(out, local.captured_revision)?;
+            out.put(&local.base_root)?;
+            out.put(&local.dirty_inodes.to_be_bytes())?;
+            out.put(&local.dirty_directory_entries.to_be_bytes())?;
+            out.byte(u8::from(local.closed))?;
+            out.put(&local.base_readers.to_be_bytes())?;
+        }
+        (None, Some(failure)) => put_refusal(out, failure)?,
+        (None, None) => unreachable!("checked engine observation disposition"),
+    }
+    Ok(())
 }
 fn status(input: &mut Reader<'_>) -> Result<WorkspaceStatus, ControlError> {
     let token = token(input)?;
@@ -198,6 +233,7 @@ fn status(input: &mut Reader<'_>) -> Result<WorkspaceStatus, ControlError> {
         3 => Activity::Closing,
         4 => Activity::Uncertain,
         5 => Activity::LocalFailure,
+        6 => Activity::Attaching,
         _ => return Err(ControlError("control activity")),
     };
     let epoch = u64::from_be_bytes(input.array()?);
@@ -230,6 +266,7 @@ fn status(input: &mut Reader<'_>) -> Result<WorkspaceStatus, ControlError> {
         published,
         local,
         local_failure,
+        native: None,
     })
 }
 fn put_generation(out: &mut Writer, value: Option<i64>) -> Result<(), ControlError> {

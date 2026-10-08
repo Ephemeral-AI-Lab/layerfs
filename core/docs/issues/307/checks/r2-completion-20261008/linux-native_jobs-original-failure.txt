@@ -1,0 +1,19 @@
+
+running 1 test
+test native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal ... FAILED
+
+failures:
+
+---- native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal stdout ----
+
+thread 'native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal' panicked at crates/layerfs-daemon/tests/native_jobs.rs:269:5:
+assertion failed: job(&client, route,
+            Command::Native(NativeJob::Revoke(mount))).result().is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

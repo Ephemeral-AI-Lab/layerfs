@@ -44,7 +44,7 @@ fn binary(label: &str) -> (std::path::PathBuf, File) {
     (path.clone(), File::open(path).unwrap())
 }
 fn endpoint() -> Vec<u8> {
-    fixed(200,format!(r#"{{"Id":"{CID}","Image":"{IMAGE}","State":{{"Running":true,"Paused":false,"Restarting":false,"Dead":false}},"Config":{{"User":"0:0","Tty":false,"Entrypoint":["/usr/local/bin/layerfs-daemon"],"Cmd":["--config","/layerfs-local/config/daemon.setup"]}},"HostConfig":{{"Privileged":false,"SecurityOpt":["no-new-privileges=true"],"RestartPolicy":{{"Name":"no"}},"LogConfig":{{"Type":"json-file"}}}},"Mounts":[{{"Type":"volume","Name":"lfs-test-borrowed","Destination":"/layerfs-store","RW":true,"Driver":"local"}}],"NetworkSettings":{{"Ports":{{"30421/tcp":[{{"HostIp":"127.0.0.1","HostPort":"54321"}}]}}}}}}"#).as_bytes())
+    fixed(200,format!(r#"{{"Id":"{CID}","Image":"{IMAGE}","State":{{"Running":true,"Paused":false,"Restarting":false,"Dead":false}},"Config":{{"User":"0:0","Tty":false,"Entrypoint":["/usr/local/bin/layerfs-daemon"],"Cmd":["--config","/layerfs-local/config/daemon.setup"]}},"HostConfig":{{"Privileged":false,"CapAdd":["CAP_SYS_ADMIN"],"Devices":[{{"PathOnHost":"/dev/fuse","PathInContainer":"/dev/fuse","CgroupPermissions":"rwm"}}],"SecurityOpt":["no-new-privileges=true","apparmor=unconfined"],"RestartPolicy":{{"Name":"no"}},"LogConfig":{{"Type":"json-file"}}}},"Mounts":[{{"Type":"volume","Name":"lfs-test-borrowed","Destination":"/layerfs-store","RW":true,"Driver":"local"}}],"NetworkSettings":{{"Ports":{{"30421/tcp":[{{"HostIp":"127.0.0.1","HostPort":"54321"}}]}}}}}}"#).as_bytes())
 }
 #[test]
 fn streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup() {
@@ -115,7 +115,66 @@ fn streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup() {
     assert!(std::str::from_utf8(&calls[7])
         .unwrap()
         .contains("force=false&v=false"));
+    // Native mounting is granted by exactly one capability and one device;
+    // the container itself stays unprivileged with no-new-privileges.
+    let create = String::from_utf8_lossy(&calls[1]);
+    for field in [
+        r#""Privileged":false"#,
+        r#""CapAdd":["CAP_SYS_ADMIN"]"#,
+        r#""Devices":[{"PathOnHost":"/dev/fuse","PathInContainer":"/dev/fuse","CgroupPermissions":"rwm"}]"#,
+        r#""SecurityOpt":["no-new-privileges=true","apparmor=unconfined"]"#,
+        r#""User":"0:0""#,
+    ] {
+        assert!(create.contains(field), "{field}");
+    }
+    assert_eq!(create.matches("CAP_").count(), 1);
+    assert_eq!(create.matches("PathOnHost").count(), 1);
     fs::remove_file(path).unwrap();
+}
+#[test]
+fn widened_or_missing_native_access_is_never_reported_as_the_endpoint() {
+    let exact = String::from_utf8(endpoint()).unwrap();
+    for (from, to) in [
+        (r#""Privileged":false"#, r#""Privileged":true"#),
+        (
+            r#""CapAdd":["CAP_SYS_ADMIN"]"#,
+            r#""CapAdd":["CAP_SYS_ADMIN","CAP_SYS_PTRACE"]"#,
+        ),
+        (r#""CapAdd":["CAP_SYS_ADMIN"],"#, ""),
+        (r#""PathOnHost":"/dev/fuse""#, r#""PathOnHost":"/dev/kmsg""#),
+        (
+            r#""CgroupPermissions":"rwm"}]"#,
+            r#""CgroupPermissions":"rwm"},{"PathOnHost":"/dev/fuse","PathInContainer":"/dev/fuse2","CgroupPermissions":"rwm"}]"#,
+        ),
+        (
+            r#""no-new-privileges=true","apparmor=unconfined""#,
+            r#""apparmor=unconfined""#,
+        ),
+    ] {
+        assert!(exact.contains(from), "{from}");
+        let altered = exact.replacen(from, to, 1);
+        // Keep the fixed response framing consistent with the altered body.
+        let body = altered.split_once("\r\n\r\n").unwrap().1;
+        let (docker, peer) = Peer::new(
+            vec![
+                volume(),
+                created(),
+                fixed(200, b""),
+                fixed(204, b""),
+                logs(&frame(1, b"LAYERFS_DAEMON_LISTEN 0.0.0.0:30421\n")),
+                fixed(200, body.as_bytes()),
+            ],
+            8192,
+        );
+        let mut sandbox = docker.create_sandbox(request()).unwrap();
+        let (path, mut file) = binary(&format!("topology-{}", to.len()));
+        sandbox.upload(&mut file, b"private").unwrap();
+        sandbox.start().unwrap();
+        sandbox.wait_listener(Duration::from_secs(2)).unwrap();
+        assert!(sandbox.endpoint().is_err(), "{to}");
+        drop(peer.finish());
+        fs::remove_file(path).unwrap();
+    }
 }
 #[test]
 fn partial_create_identity_and_nonlocal_volume_are_not_adopted() {

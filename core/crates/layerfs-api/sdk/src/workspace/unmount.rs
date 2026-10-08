@@ -4,9 +4,11 @@ use crate::{operation::exchange, OperationFailure};
 use layerfs_bridge::control::{Reply, Request, WorkspaceToken};
 
 impl WorkspaceApi<'_> {
-    /// Requests one explicit terminal unmount. The daemon must establish its
-    /// actual native/engine lifetime fences; this facade adds no teardown shortcut.
-    /// Current pre-S8 service supplies logical Close only, never native Ready.
+    /// Requests one explicit normal terminal unmount. The daemon probes the
+    /// kernel reversibly: Busy leaves the Workspace Ready and usable. Success is
+    /// acknowledged only after detach, every loop join, daemon-work drain,
+    /// native-owner revocation and logical Close. Retained custody is returned
+    /// as its own typed cause; this facade adds no teardown shortcut.
     pub fn unmount(&mut self, token: WorkspaceToken) -> Result<(), Box<OperationFailure>> {
         let request = Request::Unmount(token);
         match exchange(self.control, request.clone())? {

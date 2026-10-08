@@ -65,8 +65,9 @@ new reads. Existing directory sources continue. Once the last source releases,
 [automatic maintenance](../../crates/layerfs-overlay/src/maintenance/native_directory.rs)
 deletes at most64cookie rows per turn, then the header. This runs during a live
 mount and idle activity. A partial open-header index makes native revocation's
-open check independent of closed headers awaiting cleanup. Revocation refuses
-live directories and request sources; closed cookie/header rows can outlast
+open selection independent of closed headers awaiting cleanup. Revocation refuses
+live request sources. Directories still open at a drained detach are closed by
+bounded maintenance through that index; closed cookie/header rows can outlast
 logical revocation. They fence physical namespace deletion until cleanup ends.
 Parent rows cascade only when existing file_custody is finally removed.
 

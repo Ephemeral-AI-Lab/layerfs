@@ -99,8 +99,14 @@ fn fixed(file: &File) {
 }
 impl Fixture {
     pub fn new(shape: Shape) -> Self {
-        let directory =
-            std::env::temp_dir().join(format!("layerfs-q1-{}-{shape:?}", std::process::id()));
+        Self::labeled(shape, "")
+    }
+    /// Distinct roots for proofs that share one test process.
+    pub fn labeled(shape: Shape, label: &str) -> Self {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-q1-{}-{shape:?}{label}",
+            std::process::id()
+        ));
         fs::create_dir(&directory).unwrap();
         let source = directory.join("source");
         fs::create_dir(&source).unwrap();

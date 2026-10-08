@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     store::{BindPhase, BindRequest, CommitError},
-    Command, OwnerError, Response,
+    Command, OwnerError,
 };
 use layerfs_bridge::control::{
     Activity, ControlCode, Reply, Request, WorkspaceToken, HISTORY_WINDOW,
@@ -46,6 +46,8 @@ impl Service {
             Request::Status(token) => self.status(*token),
             Request::Commit(token) => self.unavailable_commit(*token),
             Request::Unmount(token) => self.unmount(*token),
+            Request::Attach(token) => self.attach(*token),
+            Request::Locate(workspace) => self.locate(*workspace),
             Request::Fork(request) => self
                 .store
                 .history()
@@ -117,13 +119,16 @@ impl Service {
                 binding: snapshot.clone(),
             },
             completion: Some(bound.open),
+            earlier: Vec::new(),
             commit: None,
             observation_failure: None,
+            native: None,
         };
         let installed = self.entries.lock().map(|mut entries| {
             entries.insert(
                 workspace,
                 Entry::Bound(Box::new(Binding {
+                    native: super::native::Native::Unattached,
                     workspace: Arc::new(bound.workspace),
                     snapshot,
                     activity: Activity::Idle,
@@ -176,12 +181,8 @@ impl Service {
         })();
         match result {
             Ok(commit) => {
-                let success = Success {
-                    reply: Reply::Committed(commit.history.clone()),
-                    completion: None,
-                    commit: Some(commit),
-                    observation_failure: None,
-                };
+                let mut success = Success::reply(Reply::Committed(commit.history.clone()));
+                success.commit = Some(commit);
                 if let Err(cause) = update {
                     return Err(Failure::After {
                         cause: Box::new(cause),
@@ -192,48 +193,6 @@ impl Service {
             }
             Err(failed) => Err(Failure::Commit(failed)),
         }
-    }
-    fn unmount(&self, token: WorkspaceToken) -> Result<Success, Failure> {
-        let workspace = self.admit(token, Activity::Closing)?;
-        let result = self.job(workspace.route(), Command::Close);
-        let completion = match result {
-            Ok(done) if matches!(done.result(), Ok(Response::Done)) => done,
-            other => {
-                let failure = match other {
-                    Ok(done) => Failure::Completion(Box::new(done)),
-                    Err(error) => error,
-                };
-                if let Ok(mut entries) = self.entries.lock() {
-                    if let Ok(binding) = bound_mut(&mut entries, token) {
-                        binding.activity = if failure.uncertain() {
-                            Activity::Uncertain
-                        } else {
-                            Activity::Idle
-                        };
-                        binding.epoch = binding.epoch.saturating_add(1);
-                    }
-                }
-                return Err(failure);
-            }
-        };
-        let success = Success {
-            reply: Reply::Unmounted(token),
-            completion: Some(completion),
-            commit: None,
-            observation_failure: None,
-        };
-        if self
-            .entries
-            .lock()
-            .map(|mut entries| entries.remove(&token.workspace))
-            .is_err()
-        {
-            return Err(Failure::After {
-                cause: Box::new(Failure::Poisoned),
-                original: Box::new(success),
-            });
-        }
-        Ok(success)
     }
     pub(super) fn job(
         &self,

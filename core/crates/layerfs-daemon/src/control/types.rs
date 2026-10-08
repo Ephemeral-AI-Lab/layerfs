@@ -11,8 +11,24 @@ use layerfs_workspace::WorkspaceError;
 pub struct Success {
     pub reply: Reply,
     pub completion: Option<Completion>,
+    /// Earlier engine completions of the same operation, in attempt order.
+    pub earlier: Vec<Completion>,
     pub commit: Option<CommitSuccess>,
     pub observation_failure: Option<Box<Failure>>,
+    /// Original native connection receipt of a terminal unmount.
+    pub native: Option<Box<dyn std::fmt::Debug + Send>>,
+}
+/// A native attach or unmount refusal with its original evidence.
+#[derive(Debug)]
+pub struct NativeFailure {
+    pub code: ControlCode,
+    /// Stable phase such as `attach:mount` or `unmount:kernel`.
+    pub phase: &'static str,
+    pub detail: String,
+    /// Engine completions this operation attempted, in order.
+    pub completions: Vec<Completion>,
+    /// Original connection evidence, when the failing boundary produced one.
+    pub evidence: Option<Box<dyn std::fmt::Debug + Send>>,
 }
 /// Original deciding failure; publication/unknown custody stays in its typed carrier.
 #[derive(Debug)]
@@ -25,6 +41,10 @@ pub enum Failure {
     Completion(Box<Completion>),
     History(HistoryError),
     Workspace(WorkspaceError),
+    Native(Box<NativeFailure>),
+    /// A terminal operation stopped after effects. The registry entry keeps
+    /// the exact owners; this is the bounded summary sent to the caller.
+    Retained(Box<layerfs_bridge::control::TeardownCustody>),
     Poisoned,
     After {
         cause: Box<Failure>,
@@ -36,8 +56,26 @@ impl Success {
         Self {
             reply,
             completion: None,
+            earlier: Vec::new(),
             commit: None,
             observation_failure: None,
+            native: None,
         }
+    }
+}
+impl Failure {
+    #[cfg(target_os = "linux")]
+    pub(super) fn native(
+        code: ControlCode,
+        phase: &'static str,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self::Native(Box::new(NativeFailure {
+            code,
+            phase,
+            detail: detail.into(),
+            completions: Vec::new(),
+            evidence: None,
+        }))
     }
 }

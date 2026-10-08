@@ -11,7 +11,7 @@ use std::{
         mpsc, Arc,
     },
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use support::{finish, until, Event, Fixture};
 
@@ -381,4 +381,46 @@ fn handoff_after_pool_shutdown_retains_original_and_returns_terminal_error() {
         .unwrap();
     drop(queue);
     assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn quiescence_wait_is_event_driven_and_expiry_disposes_nothing() {
+    let fixture = Fixture::new();
+    let mut pool = fixture.pool(1);
+    let queue = pool.register(fixture.mount(1)).unwrap();
+    let event = Arc::new(Event::default());
+    queue
+        .receive()
+        .unwrap()
+        .admit(0)
+        .unwrap()
+        .handoff(Box::pin(event.future()))
+        .unwrap();
+    until(|| queue.work().unwrap().parked == 1);
+    let held = queue.receive().unwrap();
+    let expired = queue
+        .wait_quiescent(Instant::now() + Duration::from_millis(20))
+        .unwrap();
+    assert_eq!(
+        (expired.received, expired.admitted, expired.parked),
+        (1, 1, 1)
+    );
+    assert_eq!(queue.finish(), Err(DispatchError::Busy));
+    // The waiter owns its own deadline: it returns without this thread's help.
+    let waiter = {
+        let queue = queue.clone();
+        std::thread::spawn(move || queue.wait_quiescent(Instant::now() + Duration::from_secs(3)))
+    };
+    drop(held);
+    event.fire();
+    let drained = waiter.join().unwrap().unwrap();
+    assert_eq!((drained.received, drained.admitted), (0, 0));
+    assert_eq!(drained.completed, 1);
+    queue.stop_admission().unwrap();
+    queue.finish().unwrap();
+    assert_eq!(
+        queue.wait_quiescent(Instant::now()),
+        Err(DispatchError::Stale)
+    );
+    assert!(pool.stop().unwrap().clean());
 }

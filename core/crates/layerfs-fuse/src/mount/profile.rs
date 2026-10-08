@@ -16,6 +16,18 @@ pub struct Negotiation {
     pub congestion_threshold: u16,
     pub page_size: u32,
 }
+impl Negotiation {
+    /// Plain protocol version for receipts that carry no adapter type.
+    pub const fn abi_version(&self) -> (u32, u32) {
+        (self.abi.0, self.abi.1)
+    }
+    pub const fn offered_bits(&self) -> u64 {
+        self.offered.bits()
+    }
+    pub const fn selected_bits(&self) -> u64 {
+        self.selected.bits()
+    }
+}
 pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
     let offered = config.capabilities();
     let defaults = InitFlags::FUSE_ASYNC_READ | InitFlags::FUSE_BIG_WRITES;

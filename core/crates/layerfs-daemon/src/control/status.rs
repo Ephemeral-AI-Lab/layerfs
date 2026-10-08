@@ -1,10 +1,41 @@
 //! Coherent control metadata and a separately scoped indexed engine observation.
-use super::{registry::bound, Failure, Service, Success};
+use super::{
+    registry::{bound, Entry},
+    Failure, Service, Success,
+};
 use crate::{Command, Response};
-use layerfs_bridge::control::{LocalObservation, Reply, WorkspaceStatus, WorkspaceToken};
+use layerfs_bridge::control::{
+    ControlCode, LocalObservation, Reply, WorkspaceStatus, WorkspaceToken,
+};
+use layerfs_history::WorkspaceId;
 impl Service {
+    /// Observation by incarnation for a caller that holds no namespace. The
+    /// registry supplies the token; nothing is replayed, bound or settled.
+    pub(super) fn locate(&self, workspace: WorkspaceId) -> Result<Success, Failure> {
+        let token = {
+            let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+            match entries.get(&workspace) {
+                Some(Entry::Bound(value)) => WorkspaceToken {
+                    workspace,
+                    namespace: value.workspace.route().namespace(),
+                },
+                Some(Entry::Binding) => {
+                    return Err(Failure::Rejected(
+                        ControlCode::Busy,
+                        "Workspace binding retained",
+                    ))
+                }
+                None => return Err(Failure::Rejected(ControlCode::Missing, "Workspace absent")),
+            }
+        };
+        let mut success = self.status(token)?;
+        if let Reply::Status(status) = success.reply {
+            success.reply = Reply::Located(status);
+        }
+        Ok(success)
+    }
     pub(super) fn status(&self, token: WorkspaceToken) -> Result<Success, Failure> {
-        let (workspace, binding, activity, epoch, published) = {
+        let (workspace, binding, activity, epoch, published, native) = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             let value = bound(&entries, token)?;
             (
@@ -13,6 +44,8 @@ impl Service {
                 value.activity,
                 value.epoch,
                 value.published.clone(),
+                // Copied with the control fields: maintained counters only.
+                self.native.as_ref().map(|_| value.native.block()),
             )
         };
         let observed = self.job(workspace.route(), Command::State);
@@ -51,10 +84,13 @@ impl Service {
                 published,
                 local,
                 local_failure,
+                native,
             })),
             completion,
+            earlier: Vec::new(),
             commit: None,
             observation_failure,
+            native: None,
         })
     }
 }

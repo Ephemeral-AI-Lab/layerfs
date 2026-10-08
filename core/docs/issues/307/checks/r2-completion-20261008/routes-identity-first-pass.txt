@@ -1,0 +1,9 @@
+
+running 2 tests
+NATIVE_ROUTES served=17
+test lost_bind_and_attach_acknowledgements_are_located_without_replay ... ok
+NATIVE_SUSTAINED fresh=8 rounds=300 requests=3885 before=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 29, handoffs: 29, inline: 2, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 } after=NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 3914, handoffs: 3914, inline: 302, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }
+test fresh_mounts_repeat_and_one_mount_sustains_uncached_work ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.43s
+

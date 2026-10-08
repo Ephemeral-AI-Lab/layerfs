@@ -3,6 +3,9 @@ pub(crate) mod garbage;
 pub(crate) mod orphan;
 pub(crate) mod ready;
 pub(crate) mod reclaim;
+pub(crate) use native::{
+    DIRECTORY_WINDOW as NATIVE_DIRECTORY_WINDOW, FILE_WINDOW as NATIVE_FILE_WINDOW,
+};
 pub(crate) use ready::{
     Item, FOLD, NATIVE, NATIVE_DIRECTORY, OPERATION_RECORD, ORPHAN, RETIRE, SERIAL_RETIRE, STALE,
     STEPS,

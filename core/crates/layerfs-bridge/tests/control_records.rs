@@ -51,6 +51,8 @@ fn commands_are_bounded_exact_and_reject_every_truncated_prefix() {
         Request::Commit(token),
         Request::Status(token),
         Request::Unmount(token),
+        Request::Attach(token),
+        Request::Locate(token.workspace),
         Request::Fork(ForkRequest {
             stack: binding.branch.stack,
             branch: BranchId::from_authority([4; 16]),
@@ -133,6 +135,7 @@ fn replies_preserve_scoped_status_conflict_and_known_publication() {
                 base_readers: 1,
             }),
             local_failure: None,
+            native: None,
         })),
         Reply::Unmounted(token),
         Reply::Forked(binding.clone()),
@@ -160,7 +163,8 @@ fn replies_preserve_scoped_status_conflict_and_known_publication() {
             detail: "known history, uncertain local completion".into(),
         }),
     ];
-    for (index, reply) in replies.into_iter().enumerate() {
+    let replies = replies.into_iter().chain(native_replies(&binding, token));
+    for (index, reply) in replies.enumerate() {
         let answer = Answer {
             id: index as u64 + 1,
             reply,
@@ -174,5 +178,179 @@ fn replies_preserve_scoped_status_conflict_and_known_publication() {
         let mut extra = bytes;
         extra.push(0);
         assert!(Answer::decode(&extra).is_err());
+    }
+}
+fn native_replies(binding: &BranchSnapshot, token: WorkspaceToken) -> Vec<Reply> {
+    let ready = ReadyMount {
+        token,
+        directory: "/mnt/layerfs/".to_owned() + &"d".repeat(MOUNT_DIRECTORY_LIMIT - 13),
+        receipt: NativeReceipt {
+            mount: u64::MAX,
+            root: 7,
+            mount_id: 911,
+            device_major: 0,
+            device_minor: 64,
+            abi_major: 7,
+            abi_minor: 41,
+            offered: u64::MAX - 1,
+            selected: (1 << 22) | 1,
+            max_write: 131072,
+            max_readahead: 131072,
+            max_background: 1,
+            congestion_threshold: 1,
+            page_size: 4096,
+            loops: 2,
+            abort_bound: true,
+        },
+    };
+    let work = NativeWork {
+        loops_configured: 2,
+        loops_entered: 2,
+        loops_exited: 1,
+        loops_joined: 0,
+        received: 2,
+        admitted: 16,
+        queued: 3,
+        running: 4,
+        parked: 9,
+        retained: 1,
+        completed: u64::MAX,
+        handoffs: 12,
+        inline: 5,
+        refused: 6,
+        terminal: 7,
+        unadmitted: 8,
+        forget_units: 9,
+    };
+    let status = |activity, native| WorkspaceStatus {
+        token,
+        binding: binding.clone(),
+        activity,
+        epoch: 3,
+        epoch_saturated: false,
+        published: None,
+        local: None,
+        local_failure: Some(ControlRefusal {
+            code: ControlCode::Failed,
+            phase: "x".repeat(64),
+            moved: None,
+            published: None,
+            detail: "y".repeat(2048),
+        }),
+        native,
+    };
+    let native = |phase, ready, detached, work| NativeStatus {
+        phase,
+        ready,
+        detached,
+        work,
+    };
+    vec![
+        Reply::Ready(Box::new(ready.clone())),
+        Reply::Status(Box::new(status(
+            Activity::Attaching,
+            Some(native(NativePhase::Attaching, None, false, None)),
+        ))),
+        Reply::Status(Box::new(status(
+            Activity::Idle,
+            Some(native(
+                NativePhase::Ready,
+                Some(ready.clone()),
+                false,
+                Some(work),
+            )),
+        ))),
+        Reply::Located(Box::new(status(Activity::Idle, None))),
+        Reply::Located(Box::new(status(
+            Activity::Closing,
+            Some(native(NativePhase::Draining, Some(ready), true, Some(work))),
+        ))),
+        Reply::Retained(Box::new(TeardownCustody {
+            token,
+            stage: TeardownStage::Requests,
+            detached: true,
+            work: Some(work),
+            detail: "z".repeat(2048),
+        })),
+    ]
+}
+#[test]
+fn native_block_is_additive_and_bounded_fields_are_refused_before_send() {
+    let binding = binding();
+    let token = token();
+    let plain = WorkspaceStatus {
+        token,
+        binding: binding.clone(),
+        activity: Activity::Idle,
+        epoch: 1,
+        epoch_saturated: false,
+        published: None,
+        local: Some(LocalObservation {
+            revision: 1,
+            active: 1,
+            captured: None,
+            captured_revision: None,
+            base_root: binding.effective_root.to_bytes(),
+            dirty_inodes: 0,
+            dirty_directory_entries: 0,
+            closed: false,
+            base_readers: 0,
+        }),
+        local_failure: None,
+        native: None,
+    };
+    let original = Answer {
+        id: 9,
+        reply: Reply::Status(Box::new(plain.clone())),
+    }
+    .encode()
+    .unwrap();
+    let mut extended = plain;
+    extended.native = Some(NativeStatus {
+        phase: NativePhase::Unattached,
+        ready: None,
+        detached: false,
+        work: None,
+    });
+    let additive = Answer {
+        id: 9,
+        reply: Reply::Status(Box::new(extended)),
+    }
+    .encode()
+    .unwrap();
+    // Same fields under a distinct tag: the original record is unchanged and
+    // is not a decodable prefix of the extended one.
+    // Five magic bytes and the eight-byte correlation precede the reply tag.
+    let tag = 13;
+    assert_eq!(original[tag], 3);
+    assert_eq!(additive[tag], 13);
+    assert_eq!(original[tag + 1..], additive[tag + 1..original.len()]);
+    assert!(Answer::decode(&additive[..original.len()]).is_err());
+    let Reply::Ready(ready) = native_replies(&binding, token).remove(0) else {
+        panic!("Ready fixture")
+    };
+    for invalid in [
+        ReadyMount {
+            directory: String::new(),
+            ..(*ready).clone()
+        },
+        ReadyMount {
+            directory: "d".repeat(MOUNT_DIRECTORY_LIMIT + 1),
+            ..(*ready).clone()
+        },
+        ReadyMount {
+            receipt: NativeReceipt {
+                mount: 0,
+                ..ready.receipt
+            },
+            ..(*ready).clone()
+        },
+    ] {
+        assert!(Answer {
+            id: 1,
+            reply: Reply::Ready(Box::new(invalid))
+        }
+        .encode()
+        .is_err());
     }
 }

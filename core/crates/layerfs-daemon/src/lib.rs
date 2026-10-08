@@ -2,7 +2,8 @@
 //!
 //! Initial service runs bounded typed jobs fairly and retains queue/reply credits.
 //! Direct Store ports provide immutable data and conditional history transitions.
-//! Native FUSE and process/control remain separate integration slices.
+//! Control composes native Attach/Ready/unmount over the Fuse session owner;
+//! command launch and supervision stay with the Sandbox or external executor.
 #![forbid(unsafe_code)]
 
 pub mod bootstrap;

@@ -54,8 +54,10 @@ Normal unmount refuses active or unresolved Commit custody. Otherwise it submits
 one terminal Close and removes routing only after original known success. The
 existing engine owns automatic bounded cleanup. The result does not claim that
 all physical rows are gone or that the overlay file shrank. It never deletes
-shared history. Native activity/FUSE fences and any explicit force policy are S8
-integration work, not a silent success path in this pre-S8 binding service.
+shared history. For an attached Workspace the same unmount first runs the
+reversible kernel probe, connection drain and revocation described in
+[native mount session](76-native-mount-session.md#normal-unmount). An explicit
+force policy remains later work, not a silent success path.
 
 serve_one executes one authenticated request and sends one result. Served keeps
 the original product outcome; ServeFailure retains it when encoding/delivery
@@ -81,5 +83,6 @@ service still supplies logical Bound and the Store-half Commit composition. The
 [reviewed R2–R5 target](../issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md)
 assigns the full native connection/request service to Fuse and leaves this daemon
 registry/control owner responsible for overall Ready/terminal unmount and existing
-Commit admission. It adds no implemented native capability to this architecture
-record. Concrete serving/aggregate drain and mounted Commit remain unproved.
+Commit admission. Attach, Locate, Ready and per-Workspace normal drain are now
+implemented in that owner; see [native mount session](76-native-mount-session.md).
+Daemon-wide aggregate drain and mounted Commit remain unproved.

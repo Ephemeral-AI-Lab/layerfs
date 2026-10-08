@@ -1,0 +1,142 @@
+//! Normal terminal unmount: reversible probe, complete drain, then Close.
+use super::{
+    native::Native,
+    registry::{bound_mut, idle},
+    Failure, Service, Success,
+};
+use crate::{store::BoundWorkspace, Command, Completion, Response};
+use layerfs_bridge::control::{Activity, Reply, WorkspaceToken};
+use std::sync::Arc;
+
+/// What terminal admission took out of the registry entry.
+pub(super) enum Departure {
+    /// No kernel mount is owned: logical Close is the whole operation.
+    Unattached,
+    #[cfg(target_os = "linux")]
+    Session(Box<super::serving::Attached>),
+}
+impl Service {
+    pub(super) fn unmount(&self, token: WorkspaceToken) -> Result<Success, Failure> {
+        let (workspace, departure) = self.admit_unmount(token)?;
+        let earlier = match departure {
+            Departure::Unattached => Vec::new(),
+            #[cfg(target_os = "linux")]
+            Departure::Session(attached) => {
+                return self.unmount_native(token, workspace, *attached)
+            }
+        };
+        self.close(token, &workspace, earlier, None)
+    }
+    /// One short registry step: no effect unless the entry is idle and its
+    /// native half is either absent or a serving connection with no request.
+    fn admit_unmount(
+        &self,
+        token: WorkspaceToken,
+    ) -> Result<(Arc<BoundWorkspace>, Departure), Failure> {
+        let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+        let value = bound_mut(&mut entries, token)?;
+        // Retained custody answers before ordinary activity admission.
+        #[cfg(target_os = "linux")]
+        if let Native::Retained(kept) = &value.native {
+            return Err(Failure::Retained(Box::new(kept.custody(token))));
+        }
+        idle(value)?;
+        let departure = match value.native {
+            Native::Unattached => Departure::Unattached,
+            #[cfg(target_os = "linux")]
+            Native::Attaching => {
+                return Err(Failure::native(
+                    layerfs_bridge::control::ControlCode::Unknown,
+                    "unmount:admission",
+                    "original Attach outcome retained",
+                ))
+            }
+            #[cfg(target_os = "linux")]
+            _ => super::detach::take(&mut value.native)?,
+        };
+        value.activity = Activity::Closing;
+        value.epoch = value.epoch.saturating_add(1);
+        Ok((value.workspace.clone(), departure))
+    }
+    /// Logical Close and routing removal, after every native owner is revoked.
+    pub(super) fn close(
+        &self,
+        token: WorkspaceToken,
+        workspace: &BoundWorkspace,
+        earlier: Vec<Completion>,
+        native: Option<Box<dyn std::fmt::Debug + Send>>,
+    ) -> Result<Success, Failure> {
+        let result = self.job(workspace.route(), Command::Close);
+        let completion = match result {
+            Ok(done) if matches!(done.result(), Ok(Response::Done)) => done,
+            other => {
+                let failure = match other {
+                    Ok(done) => Failure::Completion(Box::new(done)),
+                    Err(error) => error,
+                };
+                return Err(self.unclosed(token, failure, earlier, native));
+            }
+        };
+        let success = Success {
+            reply: Reply::Unmounted(token),
+            completion: Some(completion),
+            earlier,
+            commit: None,
+            observation_failure: None,
+            native,
+        };
+        if self
+            .entries
+            .lock()
+            .map(|mut entries| entries.remove(&token.workspace))
+            .is_err()
+        {
+            return Err(Failure::After {
+                cause: Box::new(Failure::Poisoned),
+                original: Box::new(success),
+            });
+        }
+        Ok(success)
+    }
+    /// Close was not acknowledged. Without a connection the entry returns to
+    /// its prior usable state; after a detach it keeps the exact custody.
+    fn unclosed(
+        &self,
+        token: WorkspaceToken,
+        failure: Failure,
+        earlier: Vec<Completion>,
+        native: Option<Box<dyn std::fmt::Debug + Send>>,
+    ) -> Failure {
+        #[cfg(target_os = "linux")]
+        if native.is_some() || !earlier.is_empty() {
+            return self.retain(
+                token,
+                layerfs_bridge::control::TeardownStage::Close,
+                failure.wire().detail,
+                None,
+                Box::new((failure, earlier, native)),
+            );
+        }
+        #[cfg(not(target_os = "linux"))]
+        let _ = (earlier, native);
+        if let Ok(mut entries) = self.entries.lock() {
+            if let Ok(binding) = bound_mut(&mut entries, token) {
+                binding.activity = if failure.uncertain() {
+                    Activity::Uncertain
+                } else {
+                    Activity::Idle
+                };
+                binding.epoch = binding.epoch.saturating_add(1);
+            }
+        }
+        failure
+    }
+    /// Attach is a Linux capability; elsewhere it is refused before effects.
+    #[cfg(not(target_os = "linux"))]
+    pub(super) fn attach(&self, _token: WorkspaceToken) -> Result<Success, Failure> {
+        Err(Failure::Rejected(
+            layerfs_bridge::control::ControlCode::Invalid,
+            "native serving requires Linux",
+        ))
+    }
+}

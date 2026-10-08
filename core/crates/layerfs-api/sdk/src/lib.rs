@@ -17,4 +17,4 @@ pub use project::{
 pub use sandbox::{
     ManagedSandbox, SandboxApi, SandboxCause, SandboxCreate, SandboxFailure, SandboxPhase,
 };
-pub use workspace::{BoundWorkspace, WorkspaceApi};
+pub use workspace::{BoundWorkspace, MountFailure, MountedWorkspace, WorkspaceApi};

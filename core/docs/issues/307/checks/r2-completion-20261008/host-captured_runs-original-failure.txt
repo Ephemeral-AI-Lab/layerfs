@@ -1,0 +1,22 @@
+
+running 3 tests
+test actual_owner_returns_bounded_window_with_original_root_after_install_and_close ... FAILED
+test original_attempted_and_unattempted_run_errors_keep_custody_and_other_scope_progress ... ok
+test captured_inode_point_retains_old_metadata_and_forward_seek_bounds ... ok
+
+failures:
+
+---- actual_owner_returns_bounded_window_with_original_root_after_install_and_close stdout ----
+
+thread 'actual_owner_returns_bounded_window_with_original_root_after_install_and_close' panicked at crates/layerfs-daemon/tests/captured_runs.rs:151:5:
+assertion `left == right` failed
+  left: 2000
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    actual_owner_returns_bounded_window_with_original_root_after_install_and_close
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

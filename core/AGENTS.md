@@ -80,10 +80,14 @@ product mental model or campaign-specific benchmark procedures.
   owned lifecycle and authenticated SDK/daemon startup. Optional privileged
   command cancellation/client provenance is outside the current owner scope.
   The replacement Fuse is now active with a fixed shared dispatcher, actual
-  deferred Owner/Store ports and an initial native read callback adapter.
-  Its intact predecessor is excluded under `layerfs-fuse-legacy`. Application
-  mount/Ready, complete callback accounting, permissions and complete normal drain remain
-  R2 work; see [native request service](docs/architecture/75-native-request-service.md).
+  deferred Owner/Store ports, a read-path callback adapter with complete opcode
+  accounting, direct mount/session ownership and connection drain.
+  Its intact predecessor is excluded under `layerfs-fuse-legacy`. The daemon
+  composes Attach/Locate/Ready and reversible normal unmount; see
+  [native request service](docs/architecture/75-native-request-service.md) and
+  [native mount session](docs/architecture/76-native-mount-session.md). Native
+  mutation, mounted Commit, forced unmount and daemon-wide drain are R3–R6 work;
+  every mutating operation is a declared refusal until then.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,
@@ -181,8 +185,9 @@ its complete native connection/request service, including bounded dispatch,
 parking/resumption, kernel handlers/replies and coherence. Daemon assembles one
 shared Fuse service with its existing SQL/Store services, retaining registry,
 overall Ready/unmount and Commit composition. Dependency is daemon -> fuse ->
-workspace, never Fuse -> daemon. Request dispatch/read ports are now implemented;
-complete mount/Ready/drain and R3–R5 integration remain unfinished. See the
+workspace, never Fuse -> daemon. Request dispatch/read ports, mount/Ready and
+per-Workspace normal drain are implemented ([R2 record](docs/issues/307/R2-COMPLETION-20261008.md));
+R3–R5 integration remains unfinished. See the
 [reviewed ownership](docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
 Moving blocking OwnerClient calls behind a port does not establish deferred service.
 

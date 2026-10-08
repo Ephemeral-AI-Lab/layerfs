@@ -57,6 +57,14 @@ impl Call {
                     }
                 }
             }
+            Request::Attach(token) => {
+                out.byte(9)?;
+                put_token(&mut out, *token)?;
+            }
+            Request::Locate(workspace) => {
+                out.byte(10)?;
+                out.put(&workspace.to_bytes())?;
+            }
             Request::History(value) => {
                 window(value.limit)?;
                 out.byte(6)?;
@@ -85,6 +93,8 @@ impl Call {
             2 => Request::Commit(token(&mut input)?),
             3 => Request::Status(token(&mut input)?),
             4 => Request::Unmount(token(&mut input)?),
+            9 => Request::Attach(token(&mut input)?),
+            10 => Request::Locate(history(WorkspaceId::from_authority(input.array()?))?),
             5 => {
                 let stack = history(LayerStackId::from_bytes(input.array()?))?;
                 let branch = history(BranchId::from_bytes(input.array()?))?;

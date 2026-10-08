@@ -1,0 +1,7 @@
+
+running 2 tests
+test lost_bind_and_attach_acknowledgements_are_located_without_replay ... ok
+test fresh_mounts_repeat_and_one_mount_sustains_uncached_work ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.40s
+

@@ -58,7 +58,9 @@ success. Received-byte counts include paid read-ahead. The original log fence is
 attempted once; its failure keeps marker and exact HTTP transfer attribution.
 
 One container inspection checks exact ID/image, Running/not Paused/Restarting/Dead,
-daemon User/command/non-TTY, NNP/not Privileged/no restart/logging, one exact shared
+daemon User/command/non-TTY, NNP/not Privileged/no restart/logging, exactly the
+SYS_ADMIN capability, one `/dev/fuse` device and the two declared security options
+([native access](76-native-mount-session.md#sandbox-access)), one exact shared
 volume mount and the selected port's single loopback mapping. Other Ports members
 are skipped; no whole-map exclusivity claim follows. The SDK connects once and
 authenticates the explicit expected daemon peer. Original handshake work and
@@ -105,4 +107,5 @@ are retained outside the active build. Engine per-Exec cancellation remains type
 Unsupported before effects; no additional privilege is needed for ordinary Bash.
 Native FUSE,
 mounted mutation/Commit, sustained drain/reclamation and conditional reference
-retirement are not established by this checkpoint.
+retirement are not established by this checkpoint. The later read-path mount is
+recorded in [native mount session](76-native-mount-session.md).

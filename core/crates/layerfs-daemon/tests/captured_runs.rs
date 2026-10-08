@@ -148,6 +148,16 @@ fn actual_owner_returns_bounded_window_with_original_root_after_install_and_clos
             .result()
             .is_ok()
     );
+    // The publisher drops its own final credit after the consumer observes the
+    // completion: bound the wait for that release before the exact check.
+    let end = Instant::now() + Duration::from_secs(3);
+    while client.diagnostics().unwrap().outstanding != 0 {
+        assert!(
+            Instant::now() < end,
+            "publisher did not release final credit"
+        );
+        std::thread::yield_now();
+    }
     assert_eq!(client.diagnostics().unwrap().credited_bytes, 0);
     owner.stop().unwrap();
 }

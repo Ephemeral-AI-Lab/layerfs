@@ -20,7 +20,7 @@ pub enum Request {
     EndSession,
     /// Observe/wait for actual daemon startup, separate from a native mount.
     Hello(crate::daemon_types::HelloRequest),
-    /// Prepare the Store/engine binding. FUSE attachment/readiness is a later S8 step.
+    /// Prepare the Store/engine binding. Kernel attachment is the separate Attach.
     Mount {
         /// New authority incarnation.
         workspace: WorkspaceId,
@@ -37,6 +37,10 @@ pub enum Request {
     Fork(ForkRequest),
     /// Read one bounded anchored ancestry page through the daemon.
     History(CommitHistoryRequest),
+    /// Mount the bound Workspace natively; acknowledged only when it is Ready.
+    Attach(WorkspaceToken),
+    /// Observe one incarnation by identity alone; settles no original unknown.
+    Locate(WorkspaceId),
 }
 /// Correlation for one attempted request on an authenticated connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,6 +63,8 @@ pub enum Activity {
     Uncertain,
     /// Publication is known but local installation did not complete normally.
     LocalFailure,
+    /// One native Attach is admitted; its outcome is not yet known.
+    Attaching,
 }
 /// One indexed engine state-row observation, with its own revision scope.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -101,6 +107,8 @@ pub struct WorkspaceStatus {
     pub local: Option<LocalObservation>,
     /// Original engine observation refusal when local fields are unavailable.
     pub local_failure: Option<ControlRefusal>,
+    /// Native attachment block; absent from a daemon without native serving.
+    pub native: Option<crate::control_native::NativeStatus>,
 }
 /// Typed refusal knowledge; the daemon retains its original detailed cause.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -134,7 +142,7 @@ pub struct ControlRefusal {
     /// Original bounded cause description; never parsed to infer the category.
     pub detail: String,
 }
-/// Original command result. Bound means engine/Store preparation, not kernel readiness.
+/// Original command result. Bound is engine/Store preparation; Ready is kernel readiness.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Reply {
     /// Original control-session end acknowledgment; filesystem ownership is unchanged.
@@ -160,6 +168,12 @@ pub enum Reply {
     History(PageResult<CommitRecord>),
     /// Original typed refusal.
     Refused(ControlRefusal),
+    /// Mounted, handshake complete and every receive loop serving.
+    Ready(Box<crate::control_native::ReadyMount>),
+    /// Registry observation for Locate; never a replayed Mount or Attach.
+    Located(Box<WorkspaceStatus>),
+    /// A terminal operation stopped after effects with its custody retained.
+    Retained(Box<crate::control_native::TeardownCustody>),
 }
 /// Correlated original reply; transport failure does not reverse its effects.
 #[derive(Clone, Debug, Eq, PartialEq)]

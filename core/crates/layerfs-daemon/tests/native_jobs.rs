@@ -266,11 +266,8 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     )
     .result()
     .is_ok());
-    assert!(
-        job(&client, route, Command::Native(NativeJob::Revoke(mount)))
-            .result()
-            .is_err()
-    );
+    // An open handle alone no longer fences revocation (its release may be
+    // lost at detach); request processing over it, acquired next, still does.
     let done = job(
         &client,
         route,

@@ -88,6 +88,7 @@ pub(crate) fn answer_call(
     let result = (|| {
         let reply = match &original.outcome {
             Ok(success) => success.reply.clone(),
+            Err(Failure::Retained(custody)) => Reply::Retained(custody.clone()),
             Err(failure) => Reply::Refused(failure.wire()),
         };
         let answer = Answer {

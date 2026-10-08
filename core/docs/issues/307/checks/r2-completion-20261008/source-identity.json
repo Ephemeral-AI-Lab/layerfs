@@ -1,0 +1,37 @@
+{
+  "first_parent": "a6f90cf0feae9b2336dcb6dd84e1ec2d942af285",
+  "product_trees": {
+    "core/crates": "d0f378aecf394b6e63727027584324500a09e8ff",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+    "core/Cargo.lock": "99a74df602029b16c4016bbde1ee94711ba73428"
+  },
+  "store_profile": "Disposable/WAL/synchronous=OFF, selected explicitly; Durable NOT_RUN - disabled by owner until explicit reauthorization",
+  "construction_workers": 1,
+  "linux_image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "kernel": "6.12.76-linuxkit",
+  "toolchain": {
+    "linux": "cargo 1.85.1 (locked)",
+    "host": "cargo +1.85.1 (locked); machine default 1.96.0 not used for receipts"
+  },
+  "full_topology": {
+    "daemon_binary_sha256": "bf5abfae79e04cd6f14afae56dbc73558e14884e55a1ed97aec1a7cf67a00f7b",
+    "daemon_build": "linux image, cargo build --locked -p layerfs-daemon --bin layerfs-daemon (dev profile)",
+    "daemon_identity_note": "Attempt 4 ran this exact binary. Rebuilt at the final source after a comment-only edit to layerfs-daemon/src/lib.rs: byte-identical.",
+    "host_example_sha256_at_final_source": "3d2477a911e7a3b5662f6bc1cbcd0af7611231ff84f26649c3724f197d5e2d93",
+    "host_example_note": "Example source unchanged since before attempt 4; the binary attempt 4 executed was not hashed at the time."
+  },
+  "final_linux_test_binaries_sha256": {
+    "admission_future-cf744dc70e1aeb7f": "443482d1b292ad615a666bca8264625e0459f319833377a49957a554246e3565",
+    "captured_runs-16c06c4b1009b1f7": "2f1615110af96aa4c096da02e59367879fc8688ec317d15dbb91c08a737a2d9c",
+    "native_jobs-5709a5c452daccb6": "99ff0d515df9e0b08e337632290f8d8b3316d4d21735ec0593c1788fabeeeaff",
+    "native_mount-cfafdd4a617043fd": "010b689a4e1b48071bb023abd1801027a8d71f0898ac44bdadeab851cfe2b566",
+    "native_mount_routes-b54e81012a18d4aa": "6ba4755655cb34148afcf430864ecbf1cfd371571e26d29000f77f5f2c901ecd",
+    "dispatch-56540bb50131b36a": "b01b67af943103d148f83adccc1b032711046a6b49f736e6c8cd00325935b729",
+    "native_revocation-7a2f0bacfc937c7b": "0e468240e15421b422a48a2e97c3b0963d7fa8df98e3d252d944e8ea601e98f5"
+  },
+  "wall_limits_seconds": {
+    "test_binary": 100,
+    "full_topology_attempts_1_to_3": 9,
+    "full_topology_attempt_4": 15
+  }
+}

@@ -1,0 +1,16 @@
+VOLUME layerfs-r2-lifecycle-store-003ca3ad8e5a4658a8d4043f3e2fe28e
+HOST /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r2-lifecycle-host-003ca3ad8e5a4658a8d4043f3e2fe28e
+WALL_LIMIT_SECONDS 15
+OWNED_FIRST_CONTAINER 353a81b9ad77bda0192cd1228b9557d3ebe37affb4969de39a264e84c9bc50d1 phase=InstallPending
+DIRECT_STORE host_sqlite=3.51.0 daemon_sqlite=Some("3.53.2") incarnation=[69, 164, 199, 201, 99, 237, 190, 27, 59, 113, 247, 182, 248, 216, 2, 143, 101, 107, 220, 147, 220, 70, 23, 26, 3, 71, 237, 35, 225, 228, 89, 60] profile=Disposable
+OWNED_SECOND_CONTAINER bf8d348c22cb961f3311959be8e430e5018858a47ed389b03c9e464d4678d797 phase=ControlReady
+ORDINARY_ACCESS uid=501 gid=20 groups=20 CapEff=0 CapAmb=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_control_denied
+ORDINARY_RESULT OutputProgress { stdout: 135, stderr: 0, wire_payload: 135, saturated: false } ExecInspection { container: ContainerId("353a81b9ad77bda0192cd1228b9557d3ebe37affb4969de39a264e84c9bc50d1"), exec: ExecId("8a284fb250c07addd4e7b1ff71b25ed58d227a8a4bcde131802b4faede61e46f"), running: false, exit_code: Some(0), pid: Some(91111) }
+OWNED_CLEANUP container=353a81b9ad77bda0192cd1228b9557d3ebe37affb4969de39a264e84c9bc50d1 disposition=SandboxDisposition { uploaded: true, started: true, stopped: true, deleted: true }
+ORDINARY_ACCESS uid=501 gid=20 groups=20 CapEff=0 CapAmb=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_control_denied
+ORDINARY_RESULT OutputProgress { stdout: 135, stderr: 0, wire_payload: 135, saturated: false } ExecInspection { container: ContainerId("bf8d348c22cb961f3311959be8e430e5018858a47ed389b03c9e464d4678d797"), exec: ExecId("3bf1b03e34a4628fd70c372889fdb08cd31f4989c3db3657e135da7243a518d3"), running: false, exit_code: Some(0), pid: Some(91182) }
+OWNED_CLEANUP container=bf8d348c22cb961f3311959be8e430e5018858a47ed389b03c9e464d4678d797 disposition=SandboxDisposition { uploaded: true, started: true, stopped: true, deleted: true }
+OWNED_REOPEN_CONTAINER ae464729642c96d222911ae86dba8c41db7af00572af09243117c70aa9e080bc phase=ControlReady
+SHARED_STORE_REOPEN_AFTER_BOTH_DELETIONS root=ObjectId("1940b7876bb5c30e8839e85aaa7554a52a3175aa17d672aa2a84fad80a47eb76") container=ae464729642c96d222911ae86dba8c41db7af00572af09243117c70aa9e080bc cleanup=SandboxDisposition { uploaded: true, started: true, stopped: true, deleted: true }
+TWO_DAEMONS_SHARED_STORE separate_overlay=true root=ObjectId("1940b7876bb5c30e8839e85aaa7554a52a3175aa17d672aa2a84fad80a47eb76") native_fuse=NOT_RUN graceful_daemon_drain=NOT_RUN
+EXIT 0

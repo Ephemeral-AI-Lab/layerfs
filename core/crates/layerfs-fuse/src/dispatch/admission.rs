@@ -6,7 +6,7 @@ use super::{
     DispatchError, MountWork, RequestFuture,
 };
 use layerfs_overlay::NativeMount;
-use std::{fmt, mem::size_of_val, sync::Arc};
+use std::{fmt, mem::size_of_val, sync::Arc, time::Instant};
 
 #[derive(Clone)]
 pub struct MountQueue {
@@ -75,6 +75,20 @@ impl MountQueue {
             .terminal = true;
         self.shared.changed.notify_all();
         Ok(())
+    }
+    /// Observation wait for request drain. Returns once no unit is received,
+    /// reserved, queued, running or parked, or at the caller's deadline. Retained
+    /// failures remain admitted and are reported, never disposed here.
+    pub fn wait_quiescent(&self, deadline: Instant) -> Result<MountWork, DispatchError> {
+        let mut state = self.shared.lock();
+        loop {
+            let work = state.lane(self.index, self.mount, &self.token)?.observe();
+            if (work.received == 0 && work.admitted == work.retained) || Instant::now() >= deadline
+            {
+                return Ok(work);
+            }
+            state = self.shared.wait_until(state, deadline);
+        }
     }
     /// After actual connection detach/join and all consumer disposal, release
     /// the fixed mount slot. A nonzero received/admitted count refuses unchanged.

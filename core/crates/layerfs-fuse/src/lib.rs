@@ -11,6 +11,8 @@ pub mod attributes;
 pub mod mount;
 #[cfg(target_os = "linux")]
 pub mod request;
+#[cfg(target_os = "linux")]
+pub mod session;
 
 pub use dispatch::{
     AdmissionFailure, Dispatch, DispatchConfig, DispatchError, DispatchWork, FailureView,

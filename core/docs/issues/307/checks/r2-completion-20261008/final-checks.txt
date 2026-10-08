@@ -1,0 +1,50 @@
+# Static checks at the final source (2026-10-08). One command each; outcomes as observed.
+
+$ (cd core && cargo fmt --all --check)
+FMT_EXIT 0
+
+$ [linux image 378b799e, cargo 1.85.1] cargo clippy --locked --manifest-path core/Cargo.toml -p layerfs-bridge -p layerfs-daemon -p layerfs-fuse -p layerfs-overlay -p layerfs-sandbox -p layerfs-sdk --all-targets --all-features -- -D warnings
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.84s
+CLIPPY_LINUX_EXIT 0
+
+$ (cd core && cargo +1.85.1 clippy --locked --workspace --all-targets --all-features -- -D warnings)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.79s
+CLIPPY_HOST_EXIT 0
+
+$ (cd core && cargo clippy --locked --workspace --all-targets --all-features -- -D warnings)   # machine default toolchain rustc 1.96.0, not the pinned one
+error: this `repeat().take()` can be written more concisely
+   --> crates/layerfs-content/src/file/mapping/repeated.rs:115:32
+    |
+error: this `repeat().take()` can be written more concisely
+   --> crates/layerfs-content/src/file/mapping/repeated.rs:118:32
+    |
+error: using `contains()` instead of `iter().any()` is more efficient
+   --> crates/layerfs-content/src/object/inode_leaf.rs:394:54
+    |
+error: could not compile `layerfs-content` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-content` (lib test) due to 3 previous errors
+CLIPPY_HOST_DEFAULT_TOOLCHAIN_EXIT 101 (untouched layerfs-content; newer lints; not fixed)
+
+$ python3 -B core/tools/check_product_boundary.py
+PASS: scanned 819 production Rust/SQL files; semantic review still required
+BOUNDARY_EXIT 0
+
+$ python3 -B core/tools/check_fuser_integrity.py
+{
+  "checked_manifests_locks_configs": 104,
+  "errors": [],
+  "authorized_patch_verified": true,
+  "registry_package_verified": false
+}
+INTEGRITY_EXIT 0
+
+$ python3 -B -m unittest discover -s core/tools -p 'test_*.py'   # 100 s limit
+.................................................
+----------------------------------------------------------------------
+Ran 49 tests in 0.201s
+
+OK
+TOOLING_EXIT 0

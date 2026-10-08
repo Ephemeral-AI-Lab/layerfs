@@ -9,6 +9,7 @@ mod provision_wire;
 mod wire;
 
 mod control_history;
+mod control_native;
 mod control_reply;
 mod control_request;
 mod control_types;

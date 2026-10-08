@@ -1,0 +1,26 @@
+VOLUME layerfs-r2-native-store-f8b1447f63d340b8a5b717db82c1026e
+HOST /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r2-native-host-f8b1447f63d340b8a5b717db82c1026e
+WALL_LIMIT_SECONDS 15
+OWNED_CONTAINER 4232ae7220163e3ee65012a124be98588d55dc13ecf4a056db2743aa0e05c59b
+ELAPSED_MS sandbox_started=1143
+DIRECT_STORE host_sqlite=3.51.0 daemon_sqlite=Some("3.53.2") profile=Disposable volume=layerfs-r2-native-store-f8b1447f63d340b8a5b717db82c1026e
+NATIVE_READY ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(4747474747474747474747474747474747474747474747474747474747474747), namespace: 1 }, directory: "/workspaces/1", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 124, device_major: 0, device_minor: 80, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 2, abort_bound: false } }
+ELAPSED_MS ready=1207
+KERNEL 6.12.76-linuxkit
+DEVICE character special file 600 0:0 a:e5
+MOUNT 124 260 0:80 / /workspaces/1 rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072
+ORDINARY_ACCESS uid=501 gid=20 CapEff=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_device_denied mutation_refused
+ELAPSED_MS protection_facts=1272
+ELAPSED_MS complete_root=1582
+COMPLETE_ROOT paths=10 regular_bytes=400106 hardlink=true symlink=true ignored_and_dependencies=true
+ELAPSED_MS sustained=5196
+UNMOUNT_BUSY phase=unmount:kernel workspace_ready=true command_untouched=true
+ELAPSED_MS busy=6472
+UNMOUNTED directory_removed=true mount_table_entry=absent routing=Missing
+ELAPSED_MS unmounted=6529
+FRESH_MOUNTS count=3 each_ready_read_unmounted=true
+ELAPSED_MS fresh_mounts=6764
+ELAPSED_MS container_deleted=8039
+OWNED_CLEANUP container=4232ae7220163e3ee65012a124be98588d55dc13ecf4a056db2743aa0e05c59b disposition=SandboxDisposition { uploaded: true, started: true, stopped: true, deleted: true }
+NATIVE_FULL_TOPOLOGY host_init=true host_data_path=false named_volume=layerfs-r2-native-store-f8b1447f63d340b8a5b717db82c1026e root=ObjectId("48fd8c5311b28551849298d63c23b2a6dbf7081c6f0152507dcad2f796f03608") native_fuse=READ_PATH mutation=NOT_RUN commit=NOT_RUN force_unmount=NOT_RUN durable=NOT_RUN
+EXIT 0

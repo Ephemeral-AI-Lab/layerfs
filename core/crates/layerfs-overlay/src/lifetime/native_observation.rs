@@ -189,6 +189,21 @@ impl Overlay {
                 &[&mount.route.ns, &integer(mount.owner)?, &0_i64], 24,
                 |r| Ok(format!("{name}: {}", r.get::<_, String>(3)?)))?);
         }
+        for (name, sql) in [
+            ("retire-files", crate::maintenance::NATIVE_FILE_WINDOW),
+            (
+                "retire-directories",
+                crate::maintenance::NATIVE_DIRECTORY_WINDOW,
+            ),
+        ] {
+            plans.extend(self.query(
+                StatementKind::Explain,
+                &format!("EXPLAIN QUERY PLAN {sql}"),
+                &[&mount.route.ns, &integer(mount.owner)?],
+                16,
+                |r| Ok(format!("{name}: {}", r.get::<_, String>(3)?)),
+            )?);
+        }
         Ok(plans)
     }
 }

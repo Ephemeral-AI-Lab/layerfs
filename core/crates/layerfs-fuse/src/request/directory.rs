@@ -1,5 +1,6 @@
 //! Deferred native enumeration and exact descriptor release.
 use super::{
+    accounting::Opcode,
     failure::{failed, KernelInput},
     NativeFilesystem,
 };
@@ -22,37 +23,42 @@ impl NativeFilesystem {
         offset: u64,
         reply: ReplyDirectory,
     ) {
-        let Some((permit, reply)) = self.admit_reply(0, reply, ReplyDirectory::error) else {
+        let Some((permit, reply)) =
+            self.admit_reply(Opcode::Readdir, 0, reply, ReplyDirectory::error)
+        else {
             return;
         };
         let mount = self.queue.identity();
         let services = self.services.clone();
         let identity = self.identity;
         let request = req.unique().0;
-        let _ = permit.handoff(Box::pin(async move {
-            let input = KernelInput::Directory {
-                inode: inode.0,
-                handle: handle.0,
-                offset,
-            };
-            let prepared = async {
-                let serial = identity
-                    .serial(inode)
-                    .map_err(|error| io::Error::from_raw_os_error(error.code()))?;
-                let services = services.request()?;
-                DirectoryStream::prepare(services, mount, request, serial, handle.0, offset)
-                    .await
-                    .map_err(|error| Box::new(error) as ServiceError)
-            }
-            .await;
-            match prepared {
-                Ok(stream) => enumerate(reply, stream, identity).await,
-                Err(error) => {
-                    reply.error(Errno::EIO);
-                    failed(request, mount, input, error)
+        self.handoff(
+            permit,
+            Box::pin(async move {
+                let input = KernelInput::Directory {
+                    inode: inode.0,
+                    handle: handle.0,
+                    offset,
+                };
+                let prepared = async {
+                    let serial = identity
+                        .serial(inode)
+                        .map_err(|error| io::Error::from_raw_os_error(error.code()))?;
+                    let services = services.request()?;
+                    DirectoryStream::prepare(services, mount, request, serial, handle.0, offset)
+                        .await
+                        .map_err(|error| Box::new(error) as ServiceError)
                 }
-            }
-        }));
+                .await;
+                match prepared {
+                    Ok(stream) => enumerate(reply, stream, identity).await,
+                    Err(error) => {
+                        reply.error(Errno::EIO);
+                        failed(request, mount, input, error)
+                    }
+                }
+            }),
+        );
     }
     pub(super) fn release_directory(
         &self,
@@ -61,44 +67,50 @@ impl NativeFilesystem {
         handle: FileHandle,
         reply: ReplyEmpty,
     ) {
-        let Some((permit, reply)) = self.admit_reply(0, reply, ReplyEmpty::error) else {
+        let Some((permit, reply)) =
+            self.admit_reply(Opcode::Releasedir, 0, reply, ReplyEmpty::error)
+        else {
             return;
         };
         let mount = self.queue.identity();
         let services = self.services.clone();
         let serial = self.identity.serial(inode);
         let request = req.unique().0;
-        let _ = permit.handoff(Box::pin(async move {
-            let outcome = async {
-                let serial = serial.map_err(|error| io::Error::from_raw_os_error(error.code()))?;
-                let services = services.request()?;
-                let receipt = services.directory(mount, serial, handle.0).await?;
-                let directory = *receipt.get();
-                drop(receipt);
-                drop(services.close_directory(directory).await?);
-                Ok::<_, ServiceError>(())
-            }
-            .await;
-            match outcome {
-                Ok(()) => {
-                    reply.ok();
-                    RequestDisposition::Complete
+        self.handoff(
+            permit,
+            Box::pin(async move {
+                let outcome = async {
+                    let serial =
+                        serial.map_err(|error| io::Error::from_raw_os_error(error.code()))?;
+                    let services = services.request()?;
+                    let receipt = services.directory(mount, serial, handle.0).await?;
+                    let directory = *receipt.get();
+                    drop(receipt);
+                    drop(services.close_directory(directory).await?);
+                    Ok::<_, ServiceError>(())
                 }
-                Err(error) => {
-                    reply.error(Errno::EIO);
-                    failed(
-                        request,
-                        mount,
-                        KernelInput::Release {
-                            inode: inode.0,
-                            handle: handle.0,
-                            directory: true,
-                        },
-                        error,
-                    )
+                .await;
+                match outcome {
+                    Ok(()) => {
+                        reply.ok();
+                        RequestDisposition::Complete
+                    }
+                    Err(error) => {
+                        reply.error(Errno::EIO);
+                        failed(
+                            request,
+                            mount,
+                            KernelInput::Release {
+                                inode: inode.0,
+                                handle: handle.0,
+                                directory: true,
+                            },
+                            error,
+                        )
+                    }
                 }
-            }
-        }));
+            }),
+        );
     }
 }
 async fn enumerate(

@@ -181,6 +181,10 @@ fn release_before_first_poll_is_observed_without_future_event() {
     let held = fixture.hold();
     let mut waiting = fixture.waiting(Command::Inode(555));
     drop(held);
+    // The publisher drops its own final credit after the waiter observes the
+    // completion; the release this test is about must be complete before the
+    // first poll, with no later event to deliver it.
+    idle(&fixture.client);
     let (event, _) = event(None);
     let pending = match poll(&mut waiting, &event) {
         Poll::Ready(Ok(pending)) => pending,

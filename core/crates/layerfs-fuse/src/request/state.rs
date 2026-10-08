@@ -1,11 +1,12 @@
 //! Per-mount callback state; the request worker pool remains daemon-wide.
+use super::accounting::{Accounting, Disposal, Opcode};
 use super::failure::{failed, KernelInput};
 use super::reply::ReadReply;
 use crate::{
     attributes::Identity, mount::Negotiation, ports::MountServices, DispatchError, MountQueue,
-    Permit,
+    Permit, RequestFuture,
 };
-use fuser::Errno;
+use fuser::{Errno, INodeNo};
 use layerfs_workspace::NativeReadOperation;
 use std::sync::{Arc, OnceLock};
 
@@ -14,6 +15,7 @@ pub struct NativeFilesystem {
     pub(super) services: Arc<dyn MountServices>,
     pub(super) identity: Identity,
     pub(super) negotiation: Arc<OnceLock<Negotiation>>,
+    pub(super) accounting: Arc<Accounting>,
 }
 impl NativeFilesystem {
     pub fn new(
@@ -29,24 +31,38 @@ impl NativeFilesystem {
             services,
             identity,
             negotiation: Arc::new(OnceLock::new()),
+            accounting: Arc::new(Accounting::default()),
         })
     }
     pub fn negotiation(&self) -> Arc<OnceLock<Negotiation>> {
         self.negotiation.clone()
     }
-    pub(super) fn admit(&self, reply: ReadReply, bytes: usize) -> Option<(Permit, ReadReply)> {
-        self.admit_reply(bytes, reply, ReadReply::error)
+    pub fn accounting(&self) -> Arc<Accounting> {
+        self.accounting.clone()
     }
+    pub(super) fn admit(
+        &self,
+        opcode: Opcode,
+        reply: ReadReply,
+        bytes: usize,
+    ) -> Option<(Permit, ReadReply)> {
+        self.admit_reply(opcode, bytes, reply, ReadReply::error)
+    }
+    /// Only this handoff-capacity wait may occupy a receive loop. A refusal
+    /// makes exactly one error attempt on the still-borrowed reply.
     pub(super) fn admit_reply<R>(
         &self,
+        opcode: Opcode,
         bytes: usize,
         reply: R,
         error: fn(R, Errno),
     ) -> Option<(Permit, R)> {
+        self.accounting.opcode(opcode);
         let received = match self.queue.receive() {
             Ok(received) => received,
             Err(_) => {
                 error(reply, Errno::EIO);
+                self.accounting.disposed(Disposal::Terminal);
                 return None;
             }
         };
@@ -54,8 +70,68 @@ impl NativeFilesystem {
             Ok(permit) => Some((permit, reply)),
             Err(failure) => {
                 error(reply, Errno::ENOTCONN);
+                self.accounting.disposed(Disposal::Terminal);
                 drop(failure);
                 None
+            }
+        }
+    }
+    /// Even a shutdown-racing handoff retains this exact future and reply.
+    pub(super) fn handoff(&self, permit: Permit, future: RequestFuture) {
+        let _ = permit.handoff(future);
+        self.accounting.disposed(Disposal::Handoff);
+    }
+    /// An admitted unit decided on the loop: its permit returns unused.
+    pub(super) fn serial<R>(
+        &self,
+        inode: INodeNo,
+        reply: R,
+        error: fn(R, Errno),
+    ) -> Option<(u64, R)> {
+        match self.identity.serial(inode) {
+            Ok(serial) => Some((serial, reply)),
+            Err(errno) => {
+                self.refused(reply, error, errno);
+                None
+            }
+        }
+    }
+    pub(super) fn refused<R>(&self, reply: R, error: fn(R, Errno), errno: Errno) {
+        error(reply, errno);
+        self.accounting.disposed(Disposal::Refused);
+    }
+    /// Complete inline reply with no engine job; holds one receive unit only.
+    pub(super) fn inline<R>(
+        &self,
+        opcode: Opcode,
+        reply: R,
+        error: fn(R, Errno),
+        respond: impl FnOnce(R),
+    ) {
+        self.accounting.opcode(opcode);
+        match self.queue.receive() {
+            Ok(received) => {
+                respond(reply);
+                self.accounting.disposed(Disposal::Inline);
+                drop(received);
+            }
+            Err(_) => {
+                error(reply, Errno::EIO);
+                self.accounting.disposed(Disposal::Terminal);
+            }
+        }
+    }
+    /// Declared refusal: one explicit errno, never the library's default path.
+    pub(super) fn refuse<R>(&self, opcode: Opcode, reply: R, error: fn(R, Errno), errno: Errno) {
+        self.accounting.opcode(opcode);
+        match self.queue.receive() {
+            Ok(received) => {
+                self.refused(reply, error, errno);
+                drop(received);
+            }
+            Err(_) => {
+                error(reply, Errno::EIO);
+                self.accounting.disposed(Disposal::Terminal);
             }
         }
     }
@@ -71,31 +147,33 @@ impl NativeFilesystem {
         let services = self.services.clone();
         let mount = self.queue.identity();
         let identity = self.identity;
-        // Even a shutdown-racing handoff retains this exact future and reply.
-        let _ = permit.handoff(Box::pin(async move {
-            let services = match services.request() {
-                Ok(services) => services,
-                Err(error) => {
-                    let data = reply.data_input();
-                    reply.error(Errno::EIO);
-                    return failed(
-                        request,
-                        mount,
-                        KernelInput::Read {
-                            protected,
-                            handle,
-                            operation,
-                            data,
-                        },
-                        error,
-                    );
-                }
-            };
-            reply
-                .serve(
-                    services, mount, request, protected, handle, operation, identity,
-                )
-                .await
-        }));
+        self.handoff(
+            permit,
+            Box::pin(async move {
+                let services = match services.request() {
+                    Ok(services) => services,
+                    Err(error) => {
+                        let data = reply.data_input();
+                        reply.error(Errno::EIO);
+                        return failed(
+                            request,
+                            mount,
+                            KernelInput::Read {
+                                protected,
+                                handle,
+                                operation,
+                                data,
+                            },
+                            error,
+                        );
+                    }
+                };
+                reply
+                    .serve(
+                        services, mount, request, protected, handle, operation, identity,
+                    )
+                    .await
+            }),
+        );
     }
 }

@@ -15,6 +15,20 @@ impl Failure {
             Self::Rejected(code, detail) => {
                 (*code, None, "admission".into(), (*detail).into(), None)
             }
+            Self::Native(failed) => (
+                failed.code,
+                None,
+                failed.phase.into(),
+                super::native::bounded(&failed.detail),
+                None,
+            ),
+            Self::Retained(custody) => (
+                ControlCode::Unknown,
+                None,
+                "native teardown".into(),
+                custody.detail.clone(),
+                None,
+            ),
             Self::Poisoned => (
                 ControlCode::Unknown,
                 None,
@@ -107,8 +121,10 @@ impl Failure {
             published,
         }
     }
+    /// True when this failure itself carries unresolved custody. Retained
+    /// native custody stays in the registry entry, not in the reply's carrier.
     pub(crate) fn uncertain(&self) -> bool {
-        self.wire().code == ControlCode::Unknown
+        !matches!(self, Self::Retained(_)) && self.wire().code == ControlCode::Unknown
     }
 }
 fn history(error: &HistoryError) -> (ControlCode, Option<MovedState>) {

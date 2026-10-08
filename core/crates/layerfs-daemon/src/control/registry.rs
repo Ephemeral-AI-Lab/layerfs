@@ -1,5 +1,8 @@
 //! Short control admission over bounded daemon-owned Workspace routes.
-use super::Failure;
+use super::{
+    native::{Native, NativeServing},
+    Failure,
+};
 use crate::{
     store::{BoundWorkspace, Store},
     Owner, OwnerClient,
@@ -11,6 +14,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 pub(super) struct Binding {
+    pub native: Native,
     pub workspace: Arc<BoundWorkspace>,
     pub snapshot: BranchSnapshot,
     pub activity: Activity,
@@ -27,6 +31,8 @@ pub struct Service {
     pub(super) owner: OwnerClient,
     pub(super) capacity: usize,
     pub(super) entries: Mutex<BTreeMap<WorkspaceId, Entry>>,
+    /// Absent for a control-only Service: Attach is then refused before effects.
+    pub(super) native: Option<Arc<NativeServing>>,
 }
 impl Service {
     /// Binds control to the already initialized owner and its configured capacity.
@@ -36,6 +42,14 @@ impl Service {
             owner: owner.client(),
             capacity: owner.configuration().namespaces,
             entries: Mutex::new(BTreeMap::new()),
+            native: None,
+        }
+    }
+    /// Binds control and native serving to the same Store and overlay owner.
+    pub fn with_native(store: Arc<Store>, owner: &Owner, native: Arc<NativeServing>) -> Self {
+        Self {
+            native: Some(native),
+            ..Self::new(store, owner)
         }
     }
     /// Retains the selected binding for ordinary local projection/operations.
@@ -123,7 +137,7 @@ fn check(value: &Binding, token: WorkspaceToken) -> Result<(), Failure> {
     Ok(())
 }
 
-fn idle(value: &Binding) -> Result<(), Failure> {
+pub(super) fn idle(value: &Binding) -> Result<(), Failure> {
     match value.activity {
         Activity::Idle => Ok(()),
         Activity::Uncertain | Activity::LocalFailure => Err(Failure::Custody(Box::new(

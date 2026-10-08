@@ -50,7 +50,9 @@ onto its future worker pool.
 
 After acknowledged detach and complete consumer drain, revoke_native_mount
 refuses any remaining native source/read association before effect, then revokes
-admission and schedules indexed retirement. Automatic maintenance removes at most
+admission and schedules indexed retirement. Automatic maintenance first retires
+file and directory handles the aborted connection never released, at most 64 per
+turn, then removes at most
 64lookup groups per turn, including the root group, using an ordered serial
 cursor. Existing orphan and closed-Workspace cleanup follows exact last release.
 The mount row itself fences whole-namespace cleanup until retirement ends. Open
@@ -86,9 +88,12 @@ through either public path deletes the association atomically through a foreign
 key cascade; its owner index prevents a namespace scan on ordinary file close.
 Native file request keys occupy the negative internal engine-owner domain while
 full64bit original kernel request keys remain in native_file. Public caller
-open request IDs remain positive. Mount revocation now also refuses remaining
-native file owners. Directory ownership and complete detached-connection drain
-still require their own implementation; an empty source/read set is insufficient.
+open request IDs remain positive. Mount revocation no longer refuses remaining
+native file owners: a detached connection may never deliver their RELEASE, so
+they are retired in bounded indexed turns after revocation. The qualifying
+precondition is complete connection drain, described in
+[native mount session](76-native-mount-session.md#revocation-after-detach);
+an empty source/read set alone is insufficient.
 
 The [native-open component receipts](../issues/307/checks/r2-native-open-20261008/25-results.md)
 extend the public engine, canonical Workspace and actual Daemon tests for these

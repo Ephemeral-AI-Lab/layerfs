@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod connection;
 mod failure;
+mod filesystem;
 mod owner;
 mod serve;
 pub use cli::main;

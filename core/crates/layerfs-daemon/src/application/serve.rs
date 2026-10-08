@@ -1,13 +1,13 @@
 //! Exact one-time installation admission and original Store-to-Service transfer.
 use super::{Application, ApplicationError, ConnectionFailure};
-use crate::{control::Service, install_types::StoreSettings};
+use crate::install_types::StoreSettings;
 use layerfs_bridge::{
     control::{DaemonPhase, InstallPhase, InstallRefusal, InstallReply, RefusalKind},
     native::Connection,
     provision::StoreManifest,
 };
 use layerfs_storage::ReservationBlocks;
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 impl Application {
     pub(super) fn install(
@@ -93,10 +93,11 @@ impl Application {
         };
         match result {
             Ok(installed) => {
-                state.startup.service = Some(Arc::new(Service::new(
+                state.startup.service = Some(super::filesystem::service(
                     installed.opened.store.clone(),
                     &self.owner,
-                )));
+                    self.native.as_ref(),
+                ));
                 state.startup.installed = Some(installed);
                 state.startup.phase = DaemonPhase::ControlReady;
                 self.changed.notify_all();
@@ -114,8 +115,11 @@ impl Application {
                     && failure.opened.is_some();
                 if ready {
                     let opened = failure.opened.as_ref().expect("validated original Store");
-                    state.startup.service =
-                        Some(Arc::new(Service::new(opened.store.clone(), &self.owner)));
+                    state.startup.service = Some(super::filesystem::service(
+                        opened.store.clone(),
+                        &self.owner,
+                        self.native.as_ref(),
+                    ));
                     state.startup.phase = DaemonPhase::ControlReady;
                 } else {
                     state.startup.phase = DaemonPhase::Retained;

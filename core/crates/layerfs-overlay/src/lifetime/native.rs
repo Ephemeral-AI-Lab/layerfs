@@ -356,13 +356,15 @@ impl Overlay {
             self.queue_closed(mount.route)
         })
     }
-    /// Call only after detach and complete native/service consumer drain.
-    /// Backed source/read associations provide an additional before-effect fence.
+    /// Call only after detach and complete native/service consumer drain. The
+    /// fixed logical mark is fenced by request source/read processing only. An
+    /// open file or directory handle whose kernel RELEASE can no longer arrive
+    /// stops representing a consumer here; bounded maintenance retires it.
     pub fn revoke_native_mount(&self, mount: NativeMount) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
             self.check_native_attached(mount)?;
             let held = self.query(StatementKind::Lease,
-                "SELECT EXISTS(SELECT 1 FROM native_source WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_file WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_directory WHERE ns=?1 AND mount=?2 AND closed=0)",
+                "SELECT EXISTS(SELECT 1 FROM native_source WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2)",
                 &[&mount.route.ns, &integer(mount.owner)?], 16, |r| r.get::<_, bool>(0))?[0];
             if held { return Err(OverlayError::BaseSourcesPending); }
             self.execute(StatementKind::Lease, "UPDATE native_mount SET revoked=1 WHERE ns=?1 AND owner=?2",

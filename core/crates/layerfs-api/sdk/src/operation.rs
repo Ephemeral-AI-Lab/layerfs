@@ -18,6 +18,8 @@ pub enum OperationCause {
     Exchange(Box<ControlFailure>),
     /// Original correlated daemon refusal; the channel may remain usable.
     Remote(ControlRefusal),
+    /// A terminal operation stopped after effects; the daemon keeps its custody.
+    Retained(Box<layerfs_bridge::control::TeardownCustody>),
     /// Original correlated reply that cannot supply the selected typed result.
     Unexpected(Reply),
 }
@@ -35,6 +37,10 @@ pub(crate) fn exchange(
         Reply::Refused(cause) => Err(Box::new(OperationFailure {
             request,
             cause: OperationCause::Remote(cause),
+        })),
+        Reply::Retained(custody) => Err(Box::new(OperationFailure {
+            request,
+            cause: OperationCause::Retained(custody),
         })),
         other => Ok(other),
     }

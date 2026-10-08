@@ -1,9 +1,16 @@
 //! Bounded disposal after native admission and its consumers are revoked.
 use crate::{
-    db::unsigned, maintenance::Item, NativeMount, Overlay, OverlayError, OverlayResult,
-    StatementKind,
+    db::unsigned, maintenance::Item, NativeDirectory, NativeMount, OpenFile, Overlay, OverlayError,
+    OverlayResult, StatementKind,
 };
+/// Unreleased handle windows: at most 64 small ownership rows per turn.
+pub(crate) const FILE_WINDOW: &str = "SELECT f.owner,f.serial,f.writable FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 ORDER BY n.owner LIMIT 64";
+pub(crate) const DIRECTORY_WINDOW: &str = "SELECT owner,serial FROM native_directory INDEXED BY native_directory_open WHERE ns=?1 AND mount=?2 AND closed=0 ORDER BY owner LIMIT 64";
 impl Overlay {
+    /// One turn retires one bounded page of one ownership class: unreleased
+    /// file handles, then unreleased directory handles, then lookup counts,
+    /// then the mount row. Retired handle rows leave their own predicate, so
+    /// only the lookup page needs the persisted cursor.
     pub(crate) fn retire_native(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
         let route = self.route_for_ns(item.ns)?;
         let root = self
@@ -21,6 +28,47 @@ impl Overlay {
             owner: item.resource as u64,
             root,
         };
+        let files = self.query(
+            StatementKind::Lease,
+            FILE_WINDOW,
+            &[&item.ns, &item.resource],
+            16,
+            |r| {
+                Ok(OpenFile {
+                    route,
+                    owner: unsigned(r, 0)?,
+                    serial: unsigned(r, 1)?,
+                    writable: r.get(2)?,
+                })
+            },
+        )?;
+        if !files.is_empty() {
+            for file in &files {
+                // Deleting the exact handle cascades its native association.
+                self.close_file_inner(*file)?;
+            }
+            return Ok((files.len() as u64, 0, false));
+        }
+        let directories = self.query(
+            StatementKind::Lease,
+            DIRECTORY_WINDOW,
+            &[&item.ns, &item.resource],
+            16,
+            |r| {
+                Ok(NativeDirectory {
+                    mount,
+                    owner: unsigned(r, 0)?,
+                    serial: unsigned(r, 1)?,
+                })
+            },
+        )?;
+        if !directories.is_empty() {
+            for directory in &directories {
+                // Its cookies are swept by the directory's own bounded item.
+                self.close_native_directory_inner(*directory)?;
+            }
+            return Ok((directories.len() as u64, 0, false));
+        }
         let rows = self.query(StatementKind::Lease,
             "SELECT serial,owner FROM native_lookup WHERE ns=?1 AND mount=?2 AND serial>?3 ORDER BY serial LIMIT 64",
             &[&item.ns, &item.resource, &item.cursor], 24,

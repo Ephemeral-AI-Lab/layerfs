@@ -111,23 +111,30 @@ impl Overlay {
     pub fn close_native_directory(&self, directory: NativeDirectory) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
             self.native_directory(directory.mount, directory.serial, directory.owner)?;
-            let ns = directory.mount.route.ns;
-            self.execute(
-                StatementKind::Lease,
-                "UPDATE native_directory SET closed=1 WHERE ns=?1 AND owner=?2",
-                &[&ns, &integer(directory.owner)?],
-                16,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
-                &[&ns, &integer(directory.owner)?, &integer(directory.serial)?],
-                24,
-            )?;
-            self.file_ref(ns, integer(directory.serial)?, LeaseKind::FileHandle, false)?;
-            self.queue_native_directory(ns, integer(directory.owner)?)?;
-            self.queue_closed(directory.mount.route)
+            self.close_native_directory_inner(directory)
         })
+    }
+    /// The caller established that this exact handle row is still open.
+    pub(crate) fn close_native_directory_inner(
+        &self,
+        directory: NativeDirectory,
+    ) -> OverlayResult<()> {
+        let ns = directory.mount.route.ns;
+        self.execute(
+            StatementKind::Lease,
+            "UPDATE native_directory SET closed=1 WHERE ns=?1 AND owner=?2",
+            &[&ns, &integer(directory.owner)?],
+            16,
+        )?;
+        self.execute(
+            StatementKind::Lease,
+            "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
+            &[&ns, &integer(directory.owner)?, &integer(directory.serial)?],
+            24,
+        )?;
+        self.file_ref(ns, integer(directory.serial)?, LeaseKind::FileHandle, false)?;
+        self.queue_native_directory(ns, integer(directory.owner)?)?;
+        self.queue_closed(directory.mount.route)
     }
     pub(crate) fn queue_native_directory(&self, ns: i64, owner: i64) -> OverlayResult<()> {
         let ready = self.query(StatementKind::Lease,

@@ -1,4 +1,4 @@
-//! Exact observed daemon identity, security settings and shared-volume placement.
+//! Exact observed daemon identity, security and native-access settings, and volume placement.
 use super::{
     json::{once, Json},
     SandboxRequest,
@@ -37,7 +37,13 @@ pub(super) fn host<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
             valid &= !j.boolean()?;
         } else if key.equals("SecurityOpt") {
             once(&mut bits, 2)?;
-            valid &= strings(j, &["no-new-privileges=true"])?;
+            valid &= strings(j, &["no-new-privileges=true", "apparmor=unconfined"])?;
+        } else if key.equals("CapAdd") {
+            once(&mut bits, 16)?;
+            valid &= strings(j, &["CAP_SYS_ADMIN"])?;
+        } else if key.equals("Devices") {
+            once(&mut bits, 32)?;
+            valid &= fuse_device(j)?;
         } else if key.equals("RestartPolicy") {
             once(&mut bits, 4)?;
             let mut seen = 0;
@@ -69,7 +75,34 @@ pub(super) fn host<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
         }
         Ok(())
     })?;
-    Ok(bits == 15 && valid)
+    Ok(bits == 63 && valid)
+}
+/// Exactly the one FUSE character device, under its own path.
+fn fuse_device<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
+    let mut count = 0;
+    let mut valid = true;
+    j.array(|j| {
+        count += 1;
+        let mut bits = 0;
+        j.object(|j, key| {
+            if key.equals("PathOnHost") {
+                once(&mut bits, 1)?;
+                valid &= j.string_equals("/dev/fuse")?;
+            } else if key.equals("PathInContainer") {
+                once(&mut bits, 2)?;
+                valid &= j.string_equals("/dev/fuse")?;
+            } else if key.equals("CgroupPermissions") {
+                once(&mut bits, 4)?;
+                valid &= j.string_equals("rwm")?;
+            } else {
+                j.skip(3)?;
+            }
+            Ok(())
+        })?;
+        valid &= bits == 7;
+        Ok(())
+    })?;
+    Ok(count == 1 && valid)
 }
 pub(super) fn mounts<R: Read>(
     j: &mut Json<R>,

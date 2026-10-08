@@ -125,7 +125,6 @@ fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
     assert_ne!(files[0].owner_id(), files[1].owner_id());
     f.db.forget_native(f.mount, 2, 1).unwrap();
     assert!(f.db.acquire_native_source(f.mount, 3, 2).is_err());
-    assert!(f.db.revoke_native_mount(f.mount).is_err());
     let other = Fixture::new();
     assert!(f
         .db

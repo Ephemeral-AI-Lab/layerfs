@@ -4,6 +4,7 @@ use layerfs_overlay::NativeMount;
 use std::{
     collections::VecDeque,
     sync::{Arc, Condvar, Mutex, MutexGuard},
+    time::Instant,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -87,6 +88,24 @@ impl Shared {
             Ok(state) => state,
             Err(poison) => {
                 let mut state = poison.into_inner();
+                state.failed = true;
+                state.stopping = true;
+                self.changed.notify_all();
+                state
+            }
+        }
+    }
+    /// One bounded observation wait; expiry changes no request or lane state.
+    pub fn wait_until<'a>(
+        &self,
+        guard: MutexGuard<'a, State>,
+        deadline: Instant,
+    ) -> MutexGuard<'a, State> {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match self.changed.wait_timeout(guard, remaining) {
+            Ok((state, _)) => state,
+            Err(poison) => {
+                let mut state = poison.into_inner().0;
                 state.failed = true;
                 state.stopping = true;
                 self.changed.notify_all();

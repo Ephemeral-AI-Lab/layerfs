@@ -8,12 +8,12 @@ The former excluded Fuse is preserved byte-for-byte in `layerfs-fuse-legacy`;
 its 1447 production lines are reclassified as a predecessor, not retired.
 
 This component implements the shared dispatcher, actual asynchronous engine and
-admitted Store adapters, native read continuations and an initial Linux callback
-adapter. READDIR/RELEASEDIR and directory-handle GETATTR are now wired as well.
-It does not yet mount the application: complete callback accounting, session
-ownership, Attach/Locate/Ready and normal unmount
-composition remain required R2 work. R1 ControlReady remains distinct from native
-Ready. These interfaces are implementation documentation, not mounted acceptance.
+admitted Store adapters, native read continuations and the Linux callback
+adapter with a declared disposition and count for every operation. Session
+ownership, Attach/Locate/Ready and normal unmount are composed on top of it and
+described in [native mount session](76-native-mount-session.md). R1 ControlReady
+remains distinct from native Ready. The native surface is the read path;
+mutation, mounted Commit and forced unmount are later rollout steps.
 
 ## Dispatch and ownership
 
@@ -102,11 +102,13 @@ reader returns before the data reply is consumed. Reply data is disposed before
 FileRead and source release. Open and kernel lookup owners remain independent;
 the integration test reads an open file after all its lookup references vanish.
 
-[Linux callbacks](../../crates/layerfs-fuse/src/request/callbacks.rs) currently
-wire LOOKUP, GETATTR, OPEN, OPENDIR, READ, READLINK, READDIR, RELEASEDIR, RELEASE and FORGET into that
-service. The default batch-forget callback invokes the counted single-unit path.
-Remaining callback families and complete opcode/unit observations still need
-integration before native qualification. GETATTR classifies file/directory handles
+[Linux callbacks](../../crates/layerfs-fuse/src/request/callbacks.rs)
+wire LOOKUP, GETATTR, read-only OPEN, OPENDIR, READ, READLINK, READDIR, RELEASEDIR,
+RELEASE and FORGET into that service. The default batch-forget callback invokes
+the counted single-unit path. Every other operation has a declared inline answer
+or refusal, and each received unit is counted once by opcode and disposal; the
+table is in [native mount session](76-native-mount-session.md#callback-dispositions-and-accounting).
+GETATTR classifies file/directory handles
 through one indexed union in an atomic source acquisition, without failed-kind
 fallback. Closed, foreign or mismatched handles cannot acquire a new source.
 
@@ -143,6 +145,8 @@ remain unchanged by these attribute conversion tests.
 [Negotiation](../../crates/layerfs-fuse/src/mount/profile.rs) records the actual
 offered flags separately from pinned fuser defaults selected by this adapter.
 It requests128KiB windows, background/congestion1 and1ns granularity. It adds no
-optional capability; writeback stays absent. The current compilation/attribute
-tests do not prove a kernel-negotiated receipt, serving loops, mount flags,
-permission isolation, reversible EBUSY or complete normal drain.
+optional capability; writeback stays absent. The kernel-negotiated receipt,
+serving loops, mount flags, permission isolation, reversible EBUSY and normal
+drain are exercised by real mounts whose scope and receipts are listed in the
+[R2 completion record](../issues/307/R2-COMPLETION-20261008.md). That record
+also lists what remains unrun; none of it is a resource or timing measurement.

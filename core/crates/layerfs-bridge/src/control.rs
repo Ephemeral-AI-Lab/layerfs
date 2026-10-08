@@ -164,6 +164,10 @@ fn boolean(value: u8) -> Result<bool, ControlError> {
     }
 }
 
+pub use crate::control_native::{
+    NativePhase, NativeReceipt, NativeStatus, NativeWork, ReadyMount, TeardownCustody,
+    TeardownStage, MOUNT_DIRECTORY_LIMIT,
+};
 pub use crate::control_types::{
     Activity, Answer, Call, ControlCode, ControlRefusal, LocalObservation, Reply, Request,
     WorkspaceStatus, WorkspaceToken, HISTORY_WINDOW,
