@@ -1,0 +1,35 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 067d226d2, uncommitted product/test paths=2, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_drain-5c15ce76d3942f4a --test-threads=1 --nocapture
+
+running 5 tests
+test fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window ... FP-21 staged: lifecycle_credits_held=2 owner_outstanding=2 release(handoffs=4->5 admitted=1 parked=1 completed=4) engine(namespaces=2 owner_rows=3) mount_state=Live cleanup=Live
+FP-21 released: phase=Draining detached=true loops_joined=2 steady_observations=50 admitted=1 parked=1 completed=4->4 mount_row=None
+FP-21 released: reply=Unmounted revocation_receipts=1 close_receipt=true receipt_opcodes(open=1 read=1 release=1) receipt=Some(Drained { mount: NativeMount { route: Route { engine: 1, ns: 2, incarnation: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] }, owner: 1, root: 1 }, directory: "/tmp/layerfs-installed-7-fp21-released/mounts/2", outcome: Some(SessionOutcome { startup_error: None, receivers: [ReceiverOutcome { index: 0, result: Ok(()) }, ReceiverOutcome { index: 1, result: Ok(()) }], cleanup: Ok(()) }), work: MountWork { received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, owned_input_bytes: 0, future_bytes: 0, receive_units: 6, completed: 5, steps: 39, wakes: 34, terminal: true }, opcodes: OpcodeWork { opcodes: [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], handoffs: 5, inline: 1, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0, store_units: 0 }, removed: Ok(()), forced: None })
+FP-21 released: cleanup_states=[Queued, Gone] counts_equal_baseline=true baseline=StoredCounts { wait_refs: 0, namespaces: 1, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 0, owner_details: 0, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 } closed_namespaces=0->1 maintenance_jobs=0->17 maintenance_rows=0->5 engine_mount_before=NativeMount { route: Route { engine: 1, ns: 2, incarnation: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] }, owner: 1, root: 1 }
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+test fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount ... FP-21 staged: lifecycle_credits_held=2 owner_outstanding=2 release(handoffs=4->5 admitted=1 parked=1 completed=4) engine(namespaces=2 owner_rows=3) mount_state=Live cleanup=Live
+FP-21 retained: custody=TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(0202020202020202020202020202020202020202020202020202020202020202), namespace: 2 }, stage: Requests, detached: true, work: Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 2, loops_joined: 2, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 4, handoffs: 5, inline: 1, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }), detail: "connection drain stopped at Requests: loops Some(SessionSnapshot { phase: Joined, revision: 11, configured: 2, created: 2, entered: 2, exited: 2, joined: 2 }), work Some(MountWork { received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, owned_input_bytes: 0, future_bytes: 232, receive_units: 6, completed: 4, steps: 31, wakes: 26, terminal: true })", forced: None }
+FP-21 retained: later_replies_equal=2 reply_after_an_owner_job(identical=false queued=0 running=1 parked=0)
+FP-21 retained: stage=Requests detached=true loops_joined=2 admitted_at_stop=1 mount_row=None phase=Retained activity=Closing engine_mount=Live cleanup=Live namespaces=2(baseline 1) owner_rows=2 closed_namespaces=0->0 after_release(completed=4->5 phase=Retained lane_kept=1) store_consumer_half=NOT_STAGED
+ok
+test fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_its_name ... FP-29 hold: leases_held=2 read(handoffs=13->14 parked=1 read_admissions_waiting=1) sibling_release(handoffs=14->15 completed=13->14) engine_owner_rows(two_handles_quiescent=6 one_handle_and_parked_read=7) unlink_while_held=Some(Ok(())) after_unlink(handoffs=16 completed=15 parked=1 admitted=1) read_still_parked=true read_admissions_waiting=1 reader_grants=22->22
+FP-29 after release: read_bytes_exact=70000 kept_descriptor(inode=4 links=0 size=70000) name=ENOENT second_read_exact=true receipt_opcodes(read=2 release=2 unlink=1 rename=1 setattr=1 getattr=6)
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+test fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder ... FP-31 reclaim scope: membership="0::/" file=/sys/fs/cgroup/memory.reclaim
+FP-31 partial hold: reclaim_requests=1 forget_units=1 parked_forget=1 second_lookup=Some(Ok(3)) handoffs=3->4 parked=2 admitted=2 owner_rows(baseline=1 looked=2 while_parked=4)
+FP-31 partial: count 1 -> 2 (second lookup) -> 1 (unit of 1, row kept: owner_rows=2) -> 0 (unit of 1, row returned: owner_rows=1) forget_units=2 reclaim_requests=1+2+1 retained=0 receipt_opcodes(lookup=2 forget_frames=2 batch_frames=0)
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+test fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_after_detach ... FP-31 reclaim scope: membership="0::/" file=/sys/fs/cgroup/memory.reclaim
+FP-31 wide: names=2022 inodes=2021 pinned_files=50 reclaim_requests=181+1 forget_units=1969 owner_rows(baseline=1 looked=2022 after_reclaim=53) engine_decrement=1969
+FP-31 wide: second_reclaim_requests=6 forget_units_total=2021 forget_frames=7 frames_with_several_units=7 lookup_frames=3034 unadmitted=0 outstanding_at_detach(names=1012 rows=1011)
+FP-31 retire: outstanding_rows=1011 maintenance_jobs=1042 maintenance_rows=1015 samples=1040 single_turn_samples=1036 largest_single_turn_rows=64 intervals_over_64_per_turn=0 lease_statements(executions=10202 rows_returned=2041 rows_changed=10159 vm_steps=406956 fullscan_steps=0) all_maintenance_fullscan_steps=0 cleanup_states=[Held, Gone] closed_namespaces=0->1 counts_equal_baseline=true
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.98s
+
+R4_WALL seconds<=22 limit=115s lock_wait=0s
+EXIT 0
