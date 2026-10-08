@@ -123,7 +123,10 @@ job. An offered cookie plan is copied into bounded request storage before its
 original completion is consumed, leaving ordinary SQL credit for publication.
 Sixteen offered batches can therefore publish prefixes at the unchanged limits.
 The consuming `DirectoryBatch::accept` permits one attempt for the exact prefix
-that fit, including zero; unused reservations do not become positions. Empty
+that fit, including zero; unused reservations do not become positions. One
+published window ends the reply: a directory read owns one cookie plan, so a
+full 64-name window with names remaining is answered short and the kernel's
+next READDIR resumes after its last cookie. Empty
 whiteout pages continue with a yielded turn. Existing sources and cookie plans
 survive descriptor close; new handle acquisitions fail. Failure retains original
 page/cookie responses, source, input offset and requested publication prefix.

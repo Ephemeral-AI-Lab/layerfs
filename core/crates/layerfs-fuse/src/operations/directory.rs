@@ -319,7 +319,10 @@ impl DirectoryBatch {
         match result {
             Ok(reply) => {
                 drop(reply);
-                stream.ended = accepted != listing.entries.len() || listing.continuation.is_none();
+                // A directory read owns one cookie plan, so one published
+                // window ends this reply even when names remain; the next
+                // native read resumes after the last published cookie.
+                stream.ended = true;
                 stream.after = listing.continuation;
                 drop(plan);
                 NextTurn::default().await;

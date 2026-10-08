@@ -1,0 +1,24 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 6e8cb6ede, uncommitted product/test paths=2, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_install-b9263bb8ea32cca1 --test-threads=1 a_directory_of_more_than_one_name_window_is_listed --nocapture
+
+running 1 test
+test a_directory_of_more_than_one_name_window_is_listed ... LISTING long-65: expected=65 observed=Ok(65) work=Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 787, handoffs: 788, inline: 388, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 })
+LISTING short-64: expected=64 observed=Ok(64) work=Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 792, handoffs: 793, inline: 388, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 })
+LISTING short-65: expected=65 observed=Err("Input/output error (os error 5)") work=Some(NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 1, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 796, handoffs: 797, inline: 388, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 })
+
+thread 'a_directory_of_more_than_one_name_window_is_listed' panicked at crates/layerfs-daemon/tests/mounted_install.rs:1272:9:
+assertion `left == right` failed: short-65
+  left: Err("Input/output error (os error 5)")
+ right: Ok(65)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    a_directory_of_more_than_one_name_window_is_listed
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.49s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 101
