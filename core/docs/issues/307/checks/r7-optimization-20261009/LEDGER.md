@@ -265,3 +265,143 @@ read-only Gone observations, fresh-mount byte/metadata/link survival, and explic
 EndSession/owned container stop. Its 60s functional scope is not performance.
 The helper retains original attempted IDs and bounds a host-only failure fence;
 container stop after failure belongs to the lead. Clone setup 082 is pending.
+
+## Preparation after e19110099
+
+Staged LOC tree d9629b4e10f9a77d16c7ed5ad254259a09c343ff has unchanged
+combined184297/core118880/active76006/reference65417 and delta0; committed-tree
+confirmation is pending. Only the staging plan and ledger were committed.
+All product instrumentation remains unstaged, awaiting final affected checks.
+
+Independent clone 083 copied the empty master without reflinks or sparse copy,
+verified byte equality and identical 172032 logical/allocated bytes. Both hashes
+were 0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c.
+Real release lifecycle proof 084 passed: unregistered ordinary Bash, 24 regular
+payloads plus hardlink/symlink, typed Committed, normal unmount and Gone,
+fresh-mount identical semantic oracle, normal unmount/Gone, explicit container
+stop. Owned container 287df310723500649b2b1069d54420a451a3f5b44789ca695f07a9a1f177601c
+is stopped and retained; the lifecycle clone is mutated and is never reused as
+measurement input. The full fixture master is unchanged.
+
+Proof 084 is functional, not a performance sample or cold claim. Its release
+seals are runtime28044ca491920b4583cf24a9004b0904c9a4985dc49d588a5b1ccb555928bd21
+and daemon3485df1b1a93e54ca36b3b1a0f3d74029035b7c9069b431944ed281046d52d2a.
+Daemon logs 085 retained numeric groups. Lead argument-order mistake 086 failed
+before correlation; corrected readonly check 087 mapped all10 groups to8
+successful SDK events. Artifact retention 088 copied the complete proof and
+numeric validation without rerunning any operation. Source/receipt controls
+retain actual root exit and observer Exec-ID limits.
+
+Linux layout build089 and proof092 passed all5 tests, with the same actual
+112/120/208/208-byte layouts and gap88. Runtime Clippy090 passed. Source review
+identified the real fresh-container helper/native staging gap; plan91 commits
+its precise correction before harness edits. Matrix agent now implements it;
+setup/native manifests must be actual and sealed before baseline predicates.
+
+## Stage 0 instrumentation checkpoint b8d76c0a3
+
+The scoped observation/cleanup/resource implementation is committed locally at
+b8d76c0a3. Exact production LOC comparison: 184297 ->185857 (delta+1560), core
+118880->120440, active76006->77566; predecessors38878/integration3996/reference65417
+unchanged. The pinned counter compared exact e19110099 first-parent and staged
+tree f657795b72ab1b095ad2c778cb19da99dff5b7b6; committed confirmation is pending.
+This is required instrumentation, not an accepted speed optimization or migration.
+No matrix timing or optimization iteration has run; candidate floors remain open.
+
+Ordinary wire golden proofs093/094 passed5tests each. Linux cleanup proof095
+passed2tests at64/256rows: one query,47VMsteps,zero full scans with actual
+SQLite3.53.2 profile/plan (host028 was55VMsteps). SDK Linux097 passed3tests.
+Final format check096 caught the newly added layout test's formatting;098 fixed
+only formatting and099 passed. Clippy73/76, boundary75, actual layout71/92,
+resource63/65, observedApplication66, readers52/67, cleanup27/28/95 and release
+lifecycle84 supply affected scope. Full active suites and final matrix/scaling
+remain later R7 obligations; no CI or qualification claim is made.
+
+Committed-tree confirmations are now complete: e19110099 matched
+ d9629b4e10f9a77d16c7ed5ad254259a09c343ff at delta0; b8d76c0a3 matched
+ f657795b72ab1b095ad2c778cb19da99dff5b7b6 at combined185857/core120440/
+ active77566, delta+1560. Product tree6a03560dfecd7e322c5592a3ef0673ff190aef2a.
+
+Big master setup100/101 succeeded once: volume
+layerfs-r7-big-master-20261009-b8d76c0a3; sealed
+/tmp/layerfs-r7-big-sealed-20261009.sqlite and manifest
+/tmp/layerfs-r7-big-installed-20261009.manifest. Two entries, 64MiB zero payload,
+root5f36ba23d25f15667438edc437beddb728669e0e66d8450ebf2b8e9486812521;
+172032 logical and allocated sealed bytes. HostInit121042250ns,
+SDKinstall7062667ns, complete setup1701441792ns. Compression of this zero
+payload is an input fact, not representative large-file storage evidence.
+Owned setup containerc7977fcc74272540e0e67b79a90ac3f02c979425108745757809d720b8206429
+was explicitly stopped by the harness. No performance selection occurred.
+
+Taken under owner direction: recursively assign the completed product-arm
+agent a disjoint harness-only prepared-input author; the matrix agent owns
+container deployment and runner integration. Lead owns all actual setup,
+source/metadata seals, executions and acceptance. No product optimization,
+new dependency or allowance is introduced by this setup work.
+
+Tracked preparation102 failed beforeoutput: lead incorrectly equated alltracked
+paths with regularfiles. Actual kind classification103 passed:14104trackedpaths,
+14090regular+14symlinks; owned-copy-only Git ls-files, nooriginalcheckoutcommand.
+Sealed list/tmp/layerfs-r7-tracked-paths-20261009.json SHA
+181cfc8309081511265659215075d6fc8731fc2bd59b8708fc7f2834cddfa07c.
+
+Host all-active --all-targets --no-run104 passed263binaries at62261925375ns
+buildwall. Targetcore/target/r7-host-proof is worktree-local. First24binaries
+105-host-suite-000 through023 eachpassed once under100s wall bound; host-cfg
+zero-testbinaries remain explicitlyzero, notLinuxcoverage. Suiteinventory
+/tmp/layerfs-r7-host-test-binaries-20261009.json remains exactbuildlisted.
+Known notsupplied preconditions will be listed byexacttestname: Q1 closedhuge
+rootpreparation and macOS handoff explicitLinuxchildbinary. Current source
+DEVELOPMENT_PROFILES useDisposable only; noDurable executed.
+
+Frozen deployment source independentreviewfoundno semanticdefect atits declared
+scope. Its anticipated untimed actioncount is2+3A+5N (asset/native roots), with
+mandatory actualcontainer fullbyteverification before anymount/warmup/cache.
+Retainedfixtureprojection doesnot reread hostpayload; same-size/restoredmtime
+rewrite is notcaught there butactualcontainer hash gate rejectsit before sample.
+Owningtest106 passed11. Actualstaging remains pending. Reviewfoundmissingactual
+sourcebyteinventory/untracked gate inrunner; matrixagent nowimplementsit plus
+phaseendpoint/countercompletion. No boolean sourcecleanproof or missing B/C
+predicate may becomeeligible. E01 must useactuallifecycle/Goneownershipproof.
+
+Preparedauthor independentreview found noselectedfixture defect but identified
+unsupported futurehardlinked-symlink fidelity. Leadadded a pre-output refusal
+ofsymlink nlink>1; selected048 haszeroaliases. Preparation107 passed once,
+46999462459ns external setupwall. It reads/hashes all3475776149fixturebytes into
+disjoint dependencyreplay+fullminus roots. NoStoreexecution, sourcewrite orGit.
+Seals108 passed once,38146335541ns setupwall, writing sixexactroot inventories:
+/code12entries/11files1908782bytes; /replay95429entries/71894files2169235378bytes;
+fullminus35025entries/31215files1349267039bytes; full130046entries/103108files
+3475776149bytes; empty1entry; big2entries/67108864bytes. Completepins at
+/tmp/layerfs-r7-input-root-seals-20261009.json. Rootsealsetupmemory is itsown
+processlifetimepeak only; fullprojection reuses048 byteswith currentmetadata,
+mandatory actualcontainerhash remains. No cold claim or measurement sample.
+
+Prospective actualSDKstagingproof uses isolatedemptyStoreclone109/110,
+172032logical/allocatedbytes andequal0c3de5...hash. Fixedstagingstop300s per91;
+overallsetupstop360s covers distinctstartup/ordinarynonroot9.5s/readonlybacking
+snapshot9.5s/EndSession-stop phases, not a longerperformance/proof budget.
+Config/plan at/tmp/layerfs-r7-staging-proof-{config,plan}-20261009.json select
+/code andfull/native, zeroWorkspaceMounts/cachetreatments/performance samples.
+
+Actualstaging111 FAILED_SETUP atoriginal8thaction verify-1 after53388568750ns
+complete setup. /code fullbyte+metadata/aliasverification passed12entries;
+/native refuses firstmacOS0755symlink becauseLinuxnative lstatreports0777.
+Originalpath native/system/node_modules/@types/node. All10070fixture symlinks
+have0755, including28fullminus and14tracked; no silentnormalization orverifier
+weakening isauthorized. Nativecopy itself completedonce in50917594375ns and
+partialmetadata reconciliation remains inits originalcontainer. NoMount,
+cachepredicate, measuredcommand orperformance selection occurred. Exactowned
+containerbaf6e1bb841d78d9b118200a27b439c16d1502616d6daf54177255afbb4d63c8
+wasretained and112 explicitstopattempt issued bylead. Failedrawinputs/receipts
+remain/tmp/layerfs-r7-staging-proof-20261009; no operation replay.
+
+Taken underowner2026-10-09 strictreading: fullN/P exactnativeinput modes are
+notrepresentable inthis pinnedLinuxfilesystem. Keep fullN/P selections NOT_RUN
+withzero measurementattempts, retain111FAILED_SETUP. FullL Store remains intact
+and canmeasured standalone/counts; empty/big controls remainrepresentable. A
+separate prospectivelydeclared matchedsymlink-free reducedcut may beprepared
+forallL/N/P, alwayslabelledcut withits ownStore/fixture/oracles. Neverpair reduced
+controls withfullL orclaim fullE19 tracked/mutationcounts froman alteredcut.
+Thisplatformlimit doesnotcloseR7 orreplaceindependentfullL work; allnondependent
+work andallowedoptimizations remain required.

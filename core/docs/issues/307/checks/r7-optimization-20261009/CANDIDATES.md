@@ -30,3 +30,28 @@ Candidate details use the handbook template: cause sentence with measured units,
 counter start/floor/end, growing variables, actual EXPLAIN and runtime profile,
 proof binaries/count tests, memory/disk gates and immutable receipts. An
 unavailable instrument must be named before diagnosis is closed.
+
+## New count evidence during Stage0 (not a timing baseline)
+
+Host debug/optimized-test captured_commit atcurrentproductb8d76c0a3,
+105-host-suite-013-captured_commit, reports a fixed14inode/10entry change over
+base310/1738/13162entries. Ownerjobs538/566/538 andstatements2286/2370/2286 are
+nearconstant, but Content inodepages8/36/206 andbytesread30513/148953/837817
+followunrelatedbase size. Peak scratch103646/320972/667280 also rises.
+H05 remains an open countedscalingcandidate; noactualmountedperformance claim,
+noedit/acceptance beforeStage0matrix. Need locateunrelatedsiblingread source and
+writtenfloor accountingcanonical searchpages before planning afix.
+
+105-host-suite-018-captured_namespace_cursor reports freshfilechanges40/160/640:
+recordjobs204/3151/12358, NamespaceGet854/5698/22498. The40-to160 transition is
+15.446x jobs for4xfiles;160-to640 is3.922x. It requires source diagnosis of
+existing admitted-memory/backing transition versus a badfactor, not an immediate
+superlinearalgorithmclaim. Exactraw counters andlimitation retained.
+
+Correction of preliminary speculation above: read-only subagent source diagnosis
+finds the cursor cliff is fixed64-entry Memo thrashing with backedrecords atall
+sizes, ratherthan an in-memory-to-backed transition. Exactcountcause and bounded
+alternative are being refined; noallowedcandidate isclosed onthis preliminary
+finding. H05 diagnosis likewise mustdistinguish structurallyrequired authenticated
+siblingheaders from repeated demands/decode/scratch; an assumedzero siblingfloor
+wouldweaken existingvalidation unless sourceestablishes trustedexistingevidence.
