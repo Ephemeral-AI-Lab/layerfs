@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD e88dee6e4, uncommitted product/test paths=4, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_commit-c468159080794d7a --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 4 tests
+test a_failed_attempt_keeps_its_custody_publishes_nothing_and_a_later_commit_is_exact ... ok
+test a_fixed_small_change_costs_the_same_counted_work_as_the_base_grows ... ok
+test every_kind_of_change_commits_through_the_driver_and_reads_back_from_a_fresh_bind ... ok
+test mutations_after_the_capture_stay_out_of_its_root_and_survive_install ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.81s
+
+R4_WALL seconds<=15 limit=100s lock_wait=0s
+EXIT 0

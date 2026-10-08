@@ -24,14 +24,22 @@ pub struct Fixture {
 }
 impl Fixture {
     pub fn new(count: usize, label: &str) -> Self {
+        Self::built(label, |source| {
+            for n in 0..count {
+                std::fs::write(source.join(format!("file-{n:06}")), bytes(n)).unwrap();
+            }
+            count
+        })
+    }
+    /// `build` fills the native source and returns its entry count below the
+    /// root; it may read the finished tree before the source is removed.
+    pub fn built(label: &str, build: impl FnOnce(&std::path::Path) -> usize) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
         std::fs::create_dir(&directory).unwrap();
         let source = directory.join("source");
         std::fs::create_dir(&source).unwrap();
-        for n in 0..count {
-            std::fs::write(source.join(format!("file-{n:06}")), bytes(n)).unwrap();
-        }
+        let count = build(&source);
         let sealed = directory.join("sealed.sqlite");
         let config = PersistenceConfig::sqlite(&sealed)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
