@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD aef00b084, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-fuse IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/attributes-cda65470391d418c --test-threads=1 
+
+running 2 tests
+test attributes_preserve_signed_fraction_identity_mode_and_link_count ... ok
+test root_projection_is_bijective_and_does_not_assume_serial_one ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

@@ -4,6 +4,7 @@ use super::{
     failure::{failed, KernelInput},
     reply::{open_flags, TTL},
     state::NativeFilesystem,
+    terminal,
 };
 use crate::{
     attributes::{declined, Identity},
@@ -11,7 +12,7 @@ use crate::{
     operations::{
         write::time, Declined, MutationInput, MutationRequest, NativeMutation, Published,
     },
-    ports::{RequestServices, ServiceError},
+    ports::{Fence, RequestServices, ServiceError},
     Permit, RequestDisposition,
 };
 use fuser::{
@@ -81,12 +82,17 @@ impl MutationReply {
     async fn serve(
         self,
         services: Arc<dyn RequestServices>,
+        fence: Fence,
         request: MutationRequest,
         identity: Identity,
     ) -> RequestDisposition {
         let generation = Generation(request.mount.owner_id());
         let mutation = match NativeMutation::perform(services, request).await {
             Ok(mutation) => mutation,
+            Err(failure) if failure.fenced() => {
+                self.error(terminal::STOPPED);
+                return terminal::mutation(&fence, failure).await;
+            }
             Err(failure) => {
                 self.error(Errno::EIO);
                 return reply_order::retained(failure);
@@ -145,6 +151,7 @@ impl NativeFilesystem {
         build: Build,
     ) {
         let services = self.services.clone();
+        let fence = self.fence.clone();
         let mount: NativeMount = self.queue.identity();
         let identity = self.identity;
         self.handoff(
@@ -161,7 +168,7 @@ impl NativeFilesystem {
                         return RequestDisposition::Complete;
                     }
                 };
-                let services = match services.request() {
+                let services = match services.request(&fence) {
                     Ok(services) => services,
                     Err(error) => {
                         reply.error(Errno::EIO);
@@ -186,7 +193,7 @@ impl NativeFilesystem {
                     open,
                     now,
                 };
-                reply.serve(services, request, identity).await
+                reply.serve(services, fence, request, identity).await
             }),
         );
     }

@@ -2,12 +2,12 @@
 use super::{
     accounting::Opcode,
     failure::{failed, KernelInput},
-    NativeFilesystem,
+    terminal, NativeFilesystem,
 };
 use crate::{
     attributes::Identity,
     operations::{DirectoryStep, DirectoryStream},
-    ports::ServiceError,
+    ports::{Fence, ServiceError},
     RequestDisposition,
 };
 use fuser::{Errno, FileHandle, FileType, INodeNo, ReplyDirectory, ReplyEmpty, Request};
@@ -30,6 +30,7 @@ impl NativeFilesystem {
         };
         let mount = self.queue.identity();
         let services = self.services.clone();
+        let fence = self.fence.clone();
         let identity = self.identity;
         let request = req.unique().0;
         self.handoff(
@@ -44,14 +45,26 @@ impl NativeFilesystem {
                     let serial = identity
                         .serial(inode)
                         .map_err(|error| io::Error::from_raw_os_error(error.code()))?;
-                    let services = services.request()?;
-                    DirectoryStream::prepare(services, mount, request, serial, handle.0, offset)
-                        .await
-                        .map_err(|error| Box::new(error) as ServiceError)
+                    let services = services.request(&fence)?;
+                    Ok::<_, ServiceError>(
+                        DirectoryStream::prepare(
+                            services, mount, request, serial, handle.0, offset,
+                        )
+                        .await,
+                    )
                 }
                 .await;
                 match prepared {
-                    Ok(stream) => enumerate(reply, stream, identity).await,
+                    Ok(Ok(stream)) => enumerate(reply, stream, identity, &fence).await,
+                    // The typed failure still owns whatever was acquired.
+                    Ok(Err(failure)) if failure.fenced() => {
+                        reply.error(terminal::STOPPED);
+                        terminal::directory(&fence, failure).await
+                    }
+                    Ok(Err(failure)) => {
+                        reply.error(Errno::EIO);
+                        failed(request, mount, input, Box::new(failure))
+                    }
                     Err(error) => {
                         reply.error(Errno::EIO);
                         failed(request, mount, input, error)
@@ -74,6 +87,7 @@ impl NativeFilesystem {
         };
         let mount = self.queue.identity();
         let services = self.services.clone();
+        let fence = self.fence.clone();
         let serial = self.identity.serial(inode);
         let request = req.unique().0;
         self.handoff(
@@ -82,7 +96,7 @@ impl NativeFilesystem {
                 let outcome = async {
                     let serial =
                         serial.map_err(|error| io::Error::from_raw_os_error(error.code()))?;
-                    let services = services.request()?;
+                    let services = services.request(&fence)?;
                     let receipt = services.directory(mount, serial, handle.0).await?;
                     let directory = *receipt.get();
                     drop(receipt);
@@ -94,6 +108,12 @@ impl NativeFilesystem {
                     Ok(()) => {
                         reply.ok();
                         RequestDisposition::Complete
+                    }
+                    // Finding the handle is an acquiring step: stopped before
+                    // it, the handle row stays for revocation to retire.
+                    Err(error) if terminal::fenced(&error) => {
+                        reply.error(terminal::STOPPED);
+                        terminal::unowned(&fence)
                     }
                     Err(error) => {
                         reply.error(Errno::EIO);
@@ -117,6 +137,7 @@ async fn enumerate(
     mut reply: ReplyDirectory,
     mut stream: DirectoryStream,
     identity: Identity,
+    fence: &Fence,
 ) -> RequestDisposition {
     let mut reply_bytes = 0;
     for (name, serial, cookie) in stream.dots() {
@@ -148,6 +169,10 @@ async fn enumerate(
                 return dispose(stream).await;
             }
             Ok(DirectoryStep::Batch(batch)) => batch,
+            Err(error) if error.fenced() => {
+                reply.error(terminal::STOPPED);
+                return terminal::directory(fence, error).await;
+            }
             Err(error) => {
                 reply.error(Errno::EIO);
                 return RequestDisposition::Retained(Box::new(error));
@@ -188,6 +213,11 @@ async fn enumerate(
         }
         stream = match batch.accept(accepted).await {
             Ok(stream) => stream,
+            // Nothing was published: the offered entries are never sent.
+            Err(error) if error.fenced() => {
+                reply.error(terminal::STOPPED);
+                return terminal::directory(fence, error).await;
+            }
             Err(error) => {
                 reply.error(Errno::EIO);
                 return RequestDisposition::Retained(Box::new(error));

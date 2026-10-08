@@ -58,13 +58,14 @@ impl NativeFilesystem {
         let mount = self.queue.identity();
         let serial = self.identity.serial(inode);
         let services = self.services.clone();
+        let fence = self.fence.clone();
         self.handoff(
             permit,
             Box::pin(async move {
                 let outcome = async {
                     let serial =
                         serial.map_err(|error| io::Error::from_raw_os_error(error.code()))?;
-                    let services = services.request()?;
+                    let services = services.request(&fence)?;
                     drop(services.forget(mount, serial, count).await?);
                     Ok::<_, crate::ports::ServiceError>(())
                 }

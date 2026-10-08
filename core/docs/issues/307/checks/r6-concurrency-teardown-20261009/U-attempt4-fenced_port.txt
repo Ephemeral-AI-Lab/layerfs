@@ -1,0 +1,17 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD aef00b084, uncommitted product/test paths=27, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/fenced_port-47a98c1a1fe5e978 --test-threads=1 --nocapture (cwd core/crates/layerfs-daemon)
+
+running 4 tests
+test a_job_submitted_before_the_stop_is_awaited_to_its_original_result ... FENCED-SUBMITTED held_job=Mutation result_after_stop=Published(changed) late_mutation=Fenced(no source, no ticket)
+ok
+test a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call ... FENCED-CALLS refused=13 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 disposal_jobs_after_stop=9
+ok
+test a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted ... FENCED-WAITS admission_wait=Fenced reader_wait=Fenced parked_request=(fenced,source_held,no_read)->Complete owner_jobs_after_stop=1 source_jobs_after_stop=0 reader_grants_after_stop=0
+ok
+test fenced_mutation_and_directory_requests_give_back_the_source_they_hold ... FENCED-DRIVERS mutation=(fenced,source_held,no_ticket)->released directory=(fenced,source_held)->released late_directory=(fenced,nothing) owner_jobs_after_stop=2
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

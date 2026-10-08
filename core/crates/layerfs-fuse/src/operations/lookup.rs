@@ -1,6 +1,6 @@
 //! LOOKUP/GETATTR/OPEN/OPENDIR share the existing atomic semantic plan.
 use crate::{
-    ports::{RequestServices, ServiceError, ServiceReply},
+    ports::{Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
 use layerfs_overlay::{BaseSource, FileRead, NativeMount};
@@ -108,6 +108,19 @@ impl ReadFailure {
             .receipt
             .as_ref()
             .map(|receipt| receipt.get().as_ref())
+    }
+    /// The mount's stopped fence refused the failed step before its attempt.
+    pub fn fenced(&self) -> bool {
+        self.reason.is::<Fenced>()
+    }
+    /// Ends a fenced request: its read and source are released once through
+    /// the disposal calls, which the fence never refuses. Any other failure is
+    /// returned unchanged, and a failed release keeps what remains.
+    pub async fn relinquish(self) -> Result<(), ReadFailure> {
+        if !self.fenced() {
+            return Err(self);
+        }
+        self.custody.dispose().await
     }
 }
 impl NativeRead {

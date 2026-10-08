@@ -7,10 +7,58 @@ use layerfs_workspace::{
     MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome, NativeReadJob,
     NativeReadOutcome, Operation, SourceView, Time,
 };
-use std::{error::Error, future::Future, pin::Pin, sync::Arc};
+use std::{
+    error::Error,
+    fmt,
+    future::Future,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc,
+    },
+};
 
 pub type ServiceError = Box<dyn Error + Send + Sync>;
 pub type ServiceFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send + 'a>>;
+
+/// One mount's terminal stop, shared by its lane, its requests and their
+/// service ports. Only forced teardown sets it, once; nothing clears it. A
+/// default fence is never stopped. It carries no request, job or lease.
+#[derive(Clone, Debug, Default)]
+pub struct Fence(Arc<FenceState>);
+#[derive(Debug, Default)]
+struct FenceState {
+    stopped: AtomicBool,
+    terminal_replies: AtomicU64,
+}
+impl Fence {
+    pub fn stopped(&self) -> bool {
+        self.0.stopped.load(Ordering::Acquire)
+    }
+    /// Admitted requests that made their one terminal reply attempt because
+    /// this fence refused them before an attempt.
+    pub fn terminal_replies(&self) -> u64 {
+        self.0.terminal_replies.load(Ordering::Acquire)
+    }
+    pub(crate) fn stop(&self) {
+        self.0.stopped.store(true, Ordering::Release);
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn replied(&self) {
+        self.0.terminal_replies.fetch_add(1, Ordering::AcqRel);
+    }
+}
+/// A stopped fence refused this acquisition before any attempt: no job was
+/// submitted and no provider demand was made. It is never the result of an
+/// attempted operation.
+#[derive(Clone, Copy, Debug)]
+pub struct Fenced;
+impl fmt::Display for Fenced {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("native mount stopped before the attempt")
+    }
+}
+impl Error for Fenced {}
 
 /// A projection and its original service completion. Field order drops the
 /// projection before its credit owner. Keep this receipt through every consumer
@@ -52,12 +100,22 @@ impl<T> ServiceReply<T> {
 }
 
 /// One shared mounted Workspace; starting a request creates fresh failure
-/// custody without provider I/O, a new cache or a whole-Workspace lock.
+/// custody without provider I/O, a new cache or a whole-Workspace lock. The
+/// request's services observe its mount's fence.
 pub trait MountServices: Send + Sync {
-    fn request(&self) -> Result<Arc<dyn RequestServices>, ServiceError>;
+    fn request(&self, fence: &Fence) -> Result<Arc<dyn RequestServices>, ServiceError>;
 }
 /// One kernel request's original operations. No concrete daemon command,
 /// completion, registry or application configuration crosses this boundary.
+///
+/// Once the fence is stopped, every acquiring call returns [`Fenced`] before
+/// its attempt, also from a wait it was already in: `source`, `open_source`,
+/// `observe`, `mutate`, `local_read`, `immutable`, `reserve_serial`,
+/// `directory`, `directory_read`, `directory_page`, `directory_cookies` and
+/// `publish_cookies`. A job already submitted is awaited to its original
+/// result. The disposal calls are never refused by the fence:
+/// `release_read`, `release_source`, `reply_attempted`, `close_file`,
+/// `close_directory` and `forget`.
 pub trait RequestServices: Send + Sync {
     fn directory(
         &self,

@@ -3,8 +3,10 @@ use super::accounting::{Accounting, Disposal, Opcode};
 use super::failure::{failed, KernelInput};
 use super::reply::ReadReply;
 use crate::{
-    attributes::Identity, mount::Negotiation, ports::MountServices, DispatchError, MountQueue,
-    Permit, RequestFuture,
+    attributes::Identity,
+    mount::Negotiation,
+    ports::{Fence, MountServices},
+    DispatchError, MountQueue, Permit, RequestFuture,
 };
 use fuser::{Errno, INodeNo};
 use layerfs_workspace::NativeReadOperation;
@@ -12,6 +14,8 @@ use std::sync::{Arc, OnceLock};
 
 pub struct NativeFilesystem {
     pub(super) queue: MountQueue,
+    /// The lane's terminal stop, handed to every request's services.
+    pub(super) fence: Fence,
     pub(super) services: Arc<dyn MountServices>,
     pub(super) identity: Identity,
     pub(super) negotiation: Arc<OnceLock<Negotiation>>,
@@ -27,6 +31,7 @@ impl NativeFilesystem {
             return Err(DispatchError::Stale);
         }
         Ok(Self {
+            fence: queue.fence(),
             queue,
             services,
             identity,
@@ -145,12 +150,13 @@ impl NativeFilesystem {
         reply: ReadReply,
     ) {
         let services = self.services.clone();
+        let fence = self.fence.clone();
         let mount = self.queue.identity();
         let identity = self.identity;
         self.handoff(
             permit,
             Box::pin(async move {
-                let services = match services.request() {
+                let services = match services.request(&fence) {
                     Ok(services) => services,
                     Err(error) => {
                         let data = reply.data_input();
@@ -170,7 +176,7 @@ impl NativeFilesystem {
                 };
                 reply
                     .serve(
-                        services, mount, request, protected, handle, operation, identity,
+                        services, fence, mount, request, protected, handle, operation, identity,
                     )
                     .await
             }),

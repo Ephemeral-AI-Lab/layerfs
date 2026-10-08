@@ -7,6 +7,7 @@ mod inline;
 mod mutate;
 mod reply;
 mod state;
+mod terminal;
 
 pub use accounting::{Accounting, Disposal, Opcode, OpcodeWork, OPCODES};
 pub use failure::{KernelInput, RequestFailure};

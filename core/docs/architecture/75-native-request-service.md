@@ -13,7 +13,12 @@ adapter with a declared disposition and count for every operation. Session
 ownership, Attach/Locate/Ready and normal unmount are composed on top of it and
 described in [native mount session](76-native-mount-session.md). R1 ControlReady
 remains distinct from native Ready. The native surface is the read path;
-mutation, mounted Commit and forced unmount are later rollout steps.
+mutation and mounted Commit are later rollout steps. R6 adds the terminal fence
+and the gated ports described [below](#terminal-fence-and-gated-ports). The
+connection's one abort write and forced drain are implemented in
+[`session/force.rs`](../../crates/layerfs-fuse/src/session/force.rs); the
+daemon's forced unmount operation that calls them, and its description in
+[native mount session](76-native-mount-session.md), belong to a later R6 track.
 
 ## Dispatch and ownership
 
@@ -28,7 +33,9 @@ two borrowed receive guards. A receiver enters accounting before copying names
 or data. Only the wait for one of the sixteen slots can block it; that condition
 wait releases the scheduler mutex. An admission refusal retains its receive
 guard until the caller attempts its terminal reply or no-reply disposal. Already
-admitted requests retain their original continuations through terminal fencing.
+admitted requests retain their original continuations through terminal fencing:
+`stop_admission`, the fence of the normal path, revokes new handoff and wakes
+receive waiters and does nothing else to an admitted request.
 
 Workers select one bounded continuation step in round-robin mount order. They
 poll outside scheduler and future-storage locks. Pending work parks with a
@@ -78,6 +85,80 @@ is an explicit ConcurrentDemand error, never a blocking admission wait. Store
 pool locks do not span provider work. All clones of the admitted client/view must
 be disposed before parking for another engine job. Provider failure remains in
 the original per-request scope and the reader's quarantine custody.
+
+## Terminal fence and gated ports
+
+Forced teardown needs one thing the normal path does not: a request parked
+before an attempt must end without waiting for a resource that may never free.
+Each lane owns a [`Fence`](../../crates/layerfs-fuse/src/ports.rs): a stop flag
+and a count of terminal replies, shared by the lane, its requests and their
+service ports. Nothing sets it on the normal path, so the gates below never
+refuse there. A lane already released yields a fence that reads stopped.
+
+[`MountQueue::stop_service`](../../crates/layerfs-fuse/src/dispatch/admission.rs)
+is called once, after a written abort. Under one scheduler lock it makes the
+lane terminal, stops the fence, moves every parked request to the runnable
+queue and marks every running request notified; then it wakes workers and
+receive waiters. A receive waiter answers `ENOTCONN` once, as it does after
+`stop_admission`. Each parked request gets exactly one extra turn. Every
+awaited future registers its wakeup again on each poll, so a request that is
+waiting on a job it already submitted simply parks on that job again.
+`stop_service` cancels, drops and replays nothing.
+
+`MountServices::request` takes the fence, and the
+[daemon adapter](../../crates/layerfs-daemon/src/service/filesystem_port.rs)
+consults it only before an attempt, at three kinds of point:
+
+| Gate | Where | A stopped fence |
+| --- | --- | --- |
+| Owner admission | on entry, and on every poll of the admission wait | returns `Fenced`; the unsubmitted command and its notification slot are dropped |
+| Store reader | on entry, and on every poll of the ticket wait | returns `Fenced`; the unstarted ticket is cancelled |
+| Entry check | `reserve_serial`, the one synchronous acquiring call | returns `Fenced` before the allocator is asked |
+
+Acquiring calls are gated: `source`, `open_source`, `observe`, `mutate`,
+`local_read`, `immutable`, `reserve_serial`, `directory`, `directory_read`,
+`directory_page`, `directory_cookies` and `publish_cookies`. Disposal calls are
+never gated: `release_read`, `release_source`, `reply_attempted`, `close_file`,
+`close_directory` and `forget`. A stopped mount starts nothing new and still
+gives back what it holds. `Fenced` is produced only before submission: once a
+job is admitted its `Pending` is awaited to the original result, and the
+request continues from that result until its next acquiring call.
+
+A request whose failure is `Fenced` takes the
+[terminal path](../../crates/layerfs-fuse/src/request/terminal.rs): one
+`ENOTCONN` reply attempt, one count on the fence, then release of what it holds
+through the ungated calls, and `Complete`. A failed release ends `Retained` with
+what remains, exactly as a failed release does on the normal path; the reply
+was attempted and is counted either way. What can be held at a fenced step:
+
+| Request | Held when fenced | Released |
+| --- | --- | --- |
+| LOOKUP, GETATTR, OPEN, OPENDIR | nothing, or its source (a fact round acquires no read) | source |
+| READ, READLINK | source and, after the deciding job, its read | read, then source |
+| Mutation | nothing, or its source; never a publication ticket | source |
+| READDIR | nothing, or its source with a page or an unpublished cookie plan | page, listing and plan dropped, then source |
+| RELEASEDIR | nothing | — |
+
+No gated call follows a publishing mutation job or a deciding OPEN, LOOKUP or
+CREATE job before its reply, so a fenced request never owes a reply for an
+effect. A fenced mutation that nevertheless held a ticket would end `Retained`
+with it; nothing releases a ticket on this path. An unpublished cookie plan
+made no offset valid, and its read row goes with the source. FORGET and RELEASE
+use only disposal calls and are never fenced. RELEASEDIR differs from RELEASE:
+it first finds its handle through the gated `directory` call, so under a
+stopped fence it replies `ENOTCONN` and leaves the handle row for revocation to
+retire, while RELEASE still closes its file.
+
+The fence is not a drain. A request waiting for admission of a disposal call,
+or on a submitted job, stays admitted until that completes, and the connection
+drain observes it. [`fence.rs`](../../crates/layerfs-fuse/tests/fence.rs) covers
+the dispatcher half and
+[`fenced_port.rs`](../../crates/layerfs-daemon/tests/fenced_port.rs) the port's
+gates, the disposal calls and a submitted job, with a real owner and Store and
+no kernel mount; receipts are in the
+[R6 checks](../issues/307/checks/r6-concurrency-teardown-20261009/). The
+callback-level terminal reply on a real aborted mount is proven by the later
+forced-unmount rows, not here.
 
 ## Native semantic and reply flow
 

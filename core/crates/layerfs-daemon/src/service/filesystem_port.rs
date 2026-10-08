@@ -5,7 +5,7 @@ use crate::{
     OwnerError, Response,
 };
 use layerfs_fuse::ports::{
-    MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
+    Fence, Fenced, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
 };
 use layerfs_history::HistoryError;
 use layerfs_overlay::{
@@ -16,16 +16,38 @@ use layerfs_workspace::{
     MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome, NativeReadJob,
     NativeReadOutcome, Operation, SourceView, Time, WorkspaceError,
 };
-use std::sync::Arc;
+use std::{
+    future::{poll_fn, Future},
+    pin::Pin,
+    sync::Arc,
+    task::Poll,
+};
 
-struct FilesystemPort(StoreOperation);
+/// One request's operation scope and its mount's fence.
+///
+/// The fence is consulted only before an attempt, at three kinds of point: on
+/// entry to and on every poll of the wait for owner admission; on entry to and
+/// on every poll of the wait for a Store reader; and on entry to the one
+/// synchronous acquiring call, `reserve_serial`. A stopped fence there returns
+/// `Fenced` and drops the unattempted wait. A job that was admitted is always
+/// awaited to its original result, and the disposal calls never consult the
+/// fence: a stopped mount starts nothing new and still gives back what it
+/// holds.
+struct FilesystemPort(StoreOperation, Fence);
 impl MountServices for BoundWorkspace {
-    fn request(&self) -> Result<Arc<dyn RequestServices>, ServiceError> {
-        Ok(Arc::new(FilesystemPort(self.operation()?)))
+    fn request(&self, fence: &Fence) -> Result<Arc<dyn RequestServices>, ServiceError> {
+        Ok(Arc::new(FilesystemPort(self.operation()?, fence.clone())))
     }
 }
 impl FilesystemPort {
-    fn complete(&self, command: Command) -> ServiceFuture<'_, Completion> {
+    fn fenced(&self, gated: bool) -> Result<(), ServiceError> {
+        if gated && self.1.stopped() {
+            Err(Box::new(Fenced))
+        } else {
+            Ok(())
+        }
+    }
+    fn complete(&self, command: Command, gated: bool) -> ServiceFuture<'_, Completion> {
         Box::pin(async move {
             let unattempted = |(cause, command)| -> ServiceError {
                 Box::new(OwnerError::Unattempted {
@@ -33,28 +55,54 @@ impl FilesystemPort {
                     command: Box::new(command),
                 })
             };
-            let admission = self
-                .0
-                .overlay()
-                .submit_when_available(Some(self.0.workspace().route()), command)
-                .map_err(unattempted)?;
-            let pending = admission.await.map_err(unattempted)?;
+            self.fenced(gated)?;
+            let pending = {
+                let mut admission = self
+                    .0
+                    .overlay()
+                    .submit_when_available(Some(self.0.workspace().route()), command)
+                    .map_err(unattempted)?;
+                // Leaving this block on a stop drops the admission and with
+                // it the command, which was never submitted.
+                poll_fn(|cx| match self.fenced(gated) {
+                    Ok(()) => Pin::new(&mut admission).poll(cx).map_err(unattempted),
+                    Err(fenced) => Poll::Ready(Err(fenced)),
+                })
+                .await?
+            };
             Ok(pending.await?)
         })
     }
     fn job<T: Send + 'static>(
         &self,
         command: Command,
+        gated: bool,
         project: fn(&Response) -> Option<T>,
     ) -> ServiceFuture<'_, ServiceReply<T>> {
         Box::pin(async move {
-            let original = self.complete(command).await?;
+            let original = self.complete(command, gated).await?;
             let value = original.result().as_ref().ok().and_then(project);
             match value {
                 Some(value) => Ok(ServiceReply::new(value, original)),
                 None => Err(Box::new(original) as ServiceError),
             }
         })
+    }
+    /// A call that acquires: refused by a stopped fence before its attempt.
+    fn acquire<T: Send + 'static>(
+        &self,
+        command: Command,
+        project: fn(&Response) -> Option<T>,
+    ) -> ServiceFuture<'_, ServiceReply<T>> {
+        self.job(command, true, project)
+    }
+    /// A call that only gives back: never refused by the fence.
+    fn dispose<T: Send + 'static>(
+        &self,
+        command: Command,
+        project: fn(&Response) -> Option<T>,
+    ) -> ServiceFuture<'_, ServiceReply<T>> {
+        self.job(command, false, project)
     }
 }
 impl RequestServices for FilesystemPort {
@@ -64,7 +112,7 @@ impl RequestServices for FilesystemPort {
         serial: u64,
         handle: u64,
     ) -> ServiceFuture<'_, ServiceReply<NativeDirectory>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Handle {
                 mount,
                 serial,
@@ -84,7 +132,7 @@ impl RequestServices for FilesystemPort {
         request: u64,
         offset: u64,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryRead>>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Read {
                 directory,
                 request,
@@ -103,7 +151,7 @@ impl RequestServices for FilesystemPort {
         read: Arc<NativeDirectoryRead>,
         after: Option<Vec<u8>>,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryPage>>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Page {
                 read,
                 after,
@@ -121,7 +169,7 @@ impl RequestServices for FilesystemPort {
         read: Arc<NativeDirectoryRead>,
         names: Vec<Vec<u8>>,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeCookiePlan>>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::Directory(Box::new(
                 NativeDirectoryJob::PrepareCookies { read, names },
             ))),
@@ -138,7 +186,7 @@ impl RequestServices for FilesystemPort {
         plan: Arc<NativeCookiePlan>,
         accepted: usize,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::Directory(Box::new(
                 NativeDirectoryJob::PublishCookies { plan, accepted },
             ))),
@@ -146,7 +194,7 @@ impl RequestServices for FilesystemPort {
         )
     }
     fn close_directory(&self, directory: NativeDirectory) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.job(
+        self.dispose(
             Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Close(
                 directory,
             )))),
@@ -161,11 +209,14 @@ impl RequestServices for FilesystemPort {
     ) -> ServiceFuture<'_, ServiceReply<Option<LocalRead>>> {
         Box::pin(async move {
             let original = self
-                .complete(Command::FileRead {
-                    read,
-                    offset,
-                    length,
-                })
+                .complete(
+                    Command::FileRead {
+                        read,
+                        offset,
+                        length,
+                    },
+                    true,
+                )
                 .await?;
             if matches!(original.result(), Ok(Response::Read(_))) {
                 Ok(ServiceReply::borrowed(LocalWindow(original)))
@@ -180,7 +231,7 @@ impl RequestServices for FilesystemPort {
         serial: u64,
         handle: u64,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.job(
+        self.dispose(
             Command::Native(NativeJob::CloseFile {
                 mount,
                 serial,
@@ -216,7 +267,7 @@ impl RequestServices for FilesystemPort {
                 serial,
             },
         };
-        self.job(Command::Native(command), |response| match response {
+        self.acquire(Command::Native(command), |response| match response {
             Response::Native(NativeReply::Source(source)) => Some(*source),
             _ => None,
         })
@@ -226,8 +277,18 @@ impl RequestServices for FilesystemPort {
     }
     fn immutable<'a>(&'a self, view: &'a SourceView) -> ServiceFuture<'a, SourceView> {
         Box::pin(async move {
-            let ticket = self.0.ports().read_ticket()?;
-            let lease = ticket.await?;
+            self.fenced(true)?;
+            let lease = {
+                let mut ticket = self.0.ports().read_ticket()?;
+                // Leaving this block on a stop cancels the unstarted ticket.
+                poll_fn(|cx| match self.fenced(true) {
+                    Ok(()) => Pin::new(&mut ticket)
+                        .poll(cx)
+                        .map_err(|error| Box::new(error) as ServiceError),
+                    Err(fenced) => Poll::Ready(Err(fenced)),
+                })
+                .await?
+            };
             Ok(view.with_client(self.0.admitted_client(lease)?))
         })
     }
@@ -235,7 +296,7 @@ impl RequestServices for FilesystemPort {
         &self,
         job: NativeReadJob,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::Observe(Box::new(job))),
             |response| match response {
                 Response::Native(NativeReply::Observed(value)) => Some(value.clone()),
@@ -244,10 +305,10 @@ impl RequestServices for FilesystemPort {
         )
     }
     fn release_read(&self, read: FileRead) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.job(Command::ReleaseFileRead(read), done)
+        self.dispose(Command::ReleaseFileRead(read), done)
     }
     fn release_source(&self, source: BaseSource) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.job(Command::ReleaseBaseSource(source), done)
+        self.dispose(Command::ReleaseBaseSource(source), done)
     }
     fn forget(
         &self,
@@ -255,7 +316,7 @@ impl RequestServices for FilesystemPort {
         serial: u64,
         count: u64,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.job(
+        self.dispose(
             Command::Native(NativeJob::Forget {
                 mount,
                 serial,
@@ -271,7 +332,7 @@ impl RequestServices for FilesystemPort {
         serial: u64,
         handle: u64,
     ) -> ServiceFuture<'_, ServiceReply<(BaseSource, OpenFile)>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::OpenSource {
                 mount,
                 request,
@@ -285,6 +346,7 @@ impl RequestServices for FilesystemPort {
         )
     }
     fn reserve_serial(&self) -> Result<Option<u64>, ServiceError> {
+        self.fenced(true)?;
         match self.0.workspace().next_serial(self.0.ports()) {
             Ok(serial) => Ok(Some(serial)),
             Err(error) if writer_contended(&error) => Ok(None),
@@ -306,7 +368,7 @@ impl RequestServices for FilesystemPort {
         &self,
         job: NativeMutationJob,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>> {
-        self.job(
+        self.acquire(
             Command::Native(NativeJob::Mutate(Box::new(job))),
             |response| match response {
                 Response::Native(NativeReply::Mutated(value)) => Some(value.clone()),
@@ -315,7 +377,7 @@ impl RequestServices for FilesystemPort {
         )
     }
     fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.job(Command::ReplyAttempted(publication), done)
+        self.dispose(Command::ReplyAttempted(publication), done)
     }
 }
 /// The allocator's immediate admission refusal: nothing was reserved.

@@ -1,11 +1,13 @@
 //! Exact per-connection custody: mount, receive loops, their owner and receipts.
 use crate::{
-    mount::{MountEntry, Negotiation},
+    mount::{AbortWrite, MountEntry, Negotiation},
+    ports::Fence,
     request::{Accounting, OpcodeWork},
     DispatchError, MountQueue, MountWork,
 };
 use fuser::{SessionMonitor, SessionOutcome, SessionPhase, SessionSnapshot};
 use layerfs_overlay::NativeMount;
+use nix::errno::Errno;
 use std::{
     any::Any,
     fmt,
@@ -14,7 +16,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, OnceLock,
     },
     thread::JoinHandle,
     time::Duration,
@@ -42,10 +44,17 @@ pub struct NativeSession {
     pub(super) mount: NativeMount,
     pub(super) directory: PathBuf,
     pub(super) queue: MountQueue,
+    /// The lane's fence, kept so its count outlives the lane's release.
+    pub(super) fence: Fence,
     pub(super) accounting: Arc<Accounting>,
     pub(super) negotiation: Option<Negotiation>,
     pub(super) entry: Option<MountEntry>,
+    /// Taken by the one abort write; never reopened.
     pub(super) abort: Option<File>,
+    /// That write's original result, readable by observers.
+    pub(super) aborted: Arc<OnceLock<AbortWrite>>,
+    /// The one plain detach of forced teardown.
+    pub(super) forced_detach: DetachAttempt,
     pub(super) monitor: Option<SessionMonitor>,
     pub(super) owner: Option<JoinHandle<SessionOutcome>>,
     pub(super) watcher: Option<JoinHandle<()>>,
@@ -65,6 +74,33 @@ pub struct SessionFacts {
     pub opcodes: OpcodeWork,
     /// A connection-specific abort control was bound at attach.
     pub abort_bound: bool,
+    /// The one abort write of forced teardown, once it was made.
+    pub aborted: Option<AbortWrite>,
+}
+/// Forced teardown refused before any effect.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ForceRefusal {
+    /// No abort control was bound to this connection at attach.
+    AbortUnavailable,
+    /// Already detached, or its one abort write was already made.
+    NotServing,
+}
+/// The one plain detach attempt of forced teardown; none follows it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DetachAttempt {
+    NotAttempted,
+    Detached,
+    /// The original errno. `EBUSY` here is aborted and still mounted, never
+    /// the reversible answer of a normal probe.
+    Failed(Errno),
+}
+/// The effects forced teardown had on this connection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Forced {
+    pub abort: AbortWrite,
+    pub detach: DetachAttempt,
+    /// Admitted requests ended by one terminal reply; see `Fence`.
+    pub terminal_replies: u64,
 }
 impl NativeSession {
     pub const fn mount(&self) -> NativeMount {
@@ -92,11 +128,20 @@ impl NativeSession {
             accounting: self.accounting.clone(),
             monitor: self.monitor.clone(),
             detached: self.detached.clone(),
-            abort_bound: self.abort.is_some(),
+            abort_bound: self.abort.is_some() || self.aborted.get().is_some(),
+            aborted: self.aborted.clone(),
         }
     }
     pub(super) fn is_detached(&self) -> bool {
         self.detached.load(Ordering::Acquire)
+    }
+    /// Present once the abort write was made, whatever it returned.
+    pub(super) fn forced(&self) -> Option<Forced> {
+        self.aborted.get().map(|abort| Forced {
+            abort: *abort,
+            detach: self.forced_detach,
+            terminal_replies: self.fence.terminal_replies(),
+        })
     }
 }
 /// Maintained observations of one connection, independent of who owns it.
@@ -108,6 +153,7 @@ pub struct SessionObserver {
     monitor: Option<SessionMonitor>,
     detached: Arc<AtomicBool>,
     abort_bound: bool,
+    aborted: Arc<OnceLock<AbortWrite>>,
 }
 impl SessionObserver {
     pub fn facts(&self) -> SessionFacts {
@@ -124,6 +170,7 @@ impl SessionObserver {
             work: self.queue.work(),
             opcodes: self.accounting.observe(),
             abort_bound: self.abort_bound,
+            aborted: self.aborted.get().copied(),
         }
     }
 }
@@ -212,6 +259,8 @@ pub struct Undrained {
     pub lane: Option<DispatchError>,
     /// Original panic payload of the owner or watcher thread.
     pub panic: Option<Box<dyn Any + Send>>,
+    /// Present once forced teardown made its abort write.
+    pub forced: Option<Forced>,
 }
 impl fmt::Debug for Undrained {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -221,6 +270,7 @@ impl fmt::Debug for Undrained {
             .field("work", &self.work)
             .field("lane", &self.lane)
             .field("panicked", &self.panic.is_some())
+            .field("forced", &self.forced)
             .field("session", &self.session)
             .finish()
     }
@@ -238,6 +288,8 @@ pub struct Drained {
     pub opcodes: OpcodeWork,
     /// The one removal attempt of the now unmounted directory.
     pub removed: io::Result<()>,
+    /// Present when forced teardown drained this connection.
+    pub forced: Option<Forced>,
 }
 impl Drained {
     /// Joined is disposal; clean additionally requires successful loops.

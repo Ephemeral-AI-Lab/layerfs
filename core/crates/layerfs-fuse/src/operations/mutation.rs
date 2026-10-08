@@ -1,7 +1,7 @@
 //! One native mutation over Workspace's resumable plan: source, fact rounds,
 //! a single publishing owner job, then exact post-reply ticket/source release.
 use crate::{
-    ports::{RequestServices, ServiceError, ServiceReply},
+    ports::{Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
 use layerfs_overlay::{BaseSource, NativeMount, OpenFile, OverlayError, Publication};
@@ -154,6 +154,27 @@ impl MutationFailure {
             .receipt
             .as_ref()
             .map(|receipt| receipt.get().as_ref())
+    }
+    /// The mount's stopped fence refused the failed step before its attempt.
+    pub fn fenced(&self) -> bool {
+        self.reason.is::<Fenced>()
+    }
+    /// Ends a fenced mutation: its source is released once through the
+    /// disposal call, which the fence never refuses. A fenced step precedes
+    /// the publishing job, so no ticket can be owed; a failure that holds one
+    /// anyway, or that was not fenced, is returned unchanged.
+    pub async fn relinquish(self) -> Result<(), MutationFailure> {
+        if !self.fenced() || self.custody.publication.is_some() {
+            return Err(self);
+        }
+        let Self { mut custody, .. } = self;
+        custody.plan = None;
+        custody.view = None;
+        custody.receipt = None;
+        match custody.release().await {
+            Ok(()) => Ok(()),
+            Err(reason) => Err(MutationFailure::new(reason, custody)),
+        }
     }
 }
 impl NativeMutation {

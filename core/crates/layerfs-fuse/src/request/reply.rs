@@ -1,8 +1,9 @@
 //! Pinned fuser consumes replies once; send/delivery outcomes are unavailable.
+use super::terminal;
 use crate::{
     attributes::{refusal, Identity},
     operations::NativeRead,
-    ports::RequestServices,
+    ports::{Fence, RequestServices},
     RequestDisposition,
 };
 use fuser::{
@@ -47,6 +48,7 @@ impl ReadReply {
     pub async fn serve(
         self,
         services: Arc<dyn RequestServices>,
+        fence: Fence,
         mount: NativeMount,
         request: u64,
         protected: u64,
@@ -60,6 +62,10 @@ impl ReadReply {
                 Ok(answer) => answer,
                 Err(error) => {
                     let error = error.with_data_input(self.data_input());
+                    if error.fenced() {
+                        self.error(terminal::STOPPED);
+                        return terminal::read(&fence, error).await;
+                    }
                     self.error(Errno::EIO);
                     return RequestDisposition::Retained(Box::new(error));
                 }
@@ -81,14 +87,14 @@ impl ReadReply {
                     });
                     return dispose(answer).await;
                 }
-                return data(reply, answer.read_file(offset, length).await).await;
+                return data(reply, &fence, answer.read_file(offset, length).await).await;
             }
             Self::Link(reply) => {
                 if value.stat.kind != InodeKind::Symlink {
                     reply.error(Errno::EINVAL);
                     return dispose(answer).await;
                 }
-                return data(reply, answer.readlink().await).await;
+                return data(reply, &fence, answer.readlink().await).await;
             }
             Self::Open(reply, directory) => {
                 let handle = if directory {
@@ -135,6 +141,7 @@ async fn dispose(answer: NativeRead) -> RequestDisposition {
 }
 async fn data(
     reply: ReplyData,
+    fence: &Fence,
     result: Result<crate::operations::NativeData, crate::operations::ReadFailure>,
 ) -> RequestDisposition {
     match result {
@@ -144,6 +151,10 @@ async fn data(
                 Ok(()) => RequestDisposition::Complete,
                 Err(error) => RequestDisposition::Retained(Box::new(error)),
             }
+        }
+        Err(error) if error.fenced() => {
+            reply.error(terminal::STOPPED);
+            terminal::read(fence, error).await
         }
         Err(error) => {
             reply.error(Errno::EIO);

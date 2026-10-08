@@ -1,7 +1,9 @@
-//! First-party device, direct mount and one plain detach; no helper or lazy path.
+//! First-party device, direct mount, one plain detach and one abort write; no
+//! helper or lazy path.
 use nix::{
     errno::Errno,
     mount::{mount, umount2, MntFlags, MsFlags},
+    unistd::write,
 };
 use std::{
     ffi::OsStr,
@@ -17,6 +19,20 @@ use std::{
 const DEVICE: &str = "/dev/fuse";
 const MOUNT_TABLE: &str = "/proc/self/mountinfo";
 const CONTROL: &str = "/sys/fs/fuse/connections";
+/// The type and source this product mounts with, and the only mount-table row
+/// whose connection it will ever bind an abort control for.
+const FILESYSTEM: &str = "fuse";
+const SOURCE: &str = "layerfs";
+
+/// The original result of the one abort write. Only `Written` says the
+/// kernel accepted the byte; it is not loop-exit or detach evidence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AbortWrite {
+    Written,
+    /// The call returned without error and without the one byte.
+    Short(usize),
+    Failed(Errno),
+}
 
 /// The kernel's own record of this mount; nothing here is inferred from the
 /// requested options or from an image/deployment identity.
@@ -51,9 +67,9 @@ pub(crate) fn attach(device: &OwnedFd, target: &Path, uid: u32, gid: u32) -> Res
         layerfs_overlay::READ_WINDOW
     );
     mount(
-        Some("layerfs"),
+        Some(SOURCE),
         target,
-        Some("fuse"),
+        Some(FILESYSTEM),
         MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOATIME,
         Some(data.as_str()),
     )
@@ -77,7 +93,14 @@ pub(crate) fn mount_entry(target: &Path) -> io::Result<MountEntry> {
 }
 /// Bound to this exact connection at attach. Absence is reported, and forced
 /// teardown later refuses before effects rather than reopening a guessed path.
+/// The control tree lists every connection of the kernel, so only this
+/// product's own row names one: an anonymous device (major 0, whose minor is
+/// the connection number) of type `fuse` with this product's source. Any
+/// other row binds nothing and opens nothing.
 pub(crate) fn abort_control(entry: &MountEntry) -> io::Result<Option<File>> {
+    if entry.device.0 != 0 || entry.filesystem != FILESYSTEM || entry.source != SOURCE {
+        return Ok(None);
+    }
     let path = Path::new(CONTROL)
         .join(entry.device.1.to_string())
         .join("abort");
@@ -85,6 +108,15 @@ pub(crate) fn abort_control(entry: &MountEntry) -> io::Result<Option<File>> {
         Ok(file) => Ok(Some(file)),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error),
+    }
+}
+/// Exactly one `write(2)` of one byte on the bound control: no second call
+/// after a short count, an interruption or any other error.
+pub(crate) fn abort(control: &File) -> AbortWrite {
+    match write(control, b"1") {
+        Ok(1) => AbortWrite::Written,
+        Ok(count) => AbortWrite::Short(count),
+        Err(errno) => AbortWrite::Failed(errno),
     }
 }
 fn parse(line: &[u8], target: &Path) -> Option<MountEntry> {

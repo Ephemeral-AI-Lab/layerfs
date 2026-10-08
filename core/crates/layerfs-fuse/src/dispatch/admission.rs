@@ -5,6 +5,7 @@ use super::{
     types::{Failure, HANDOFFS, MAX_INPUT_BYTES, RECEIVE_SLOTS},
     DispatchError, MountWork, RequestFuture,
 };
+use crate::ports::Fence;
 use layerfs_overlay::NativeMount;
 use std::{fmt, mem::size_of_val, sync::Arc, time::Instant};
 
@@ -73,6 +74,43 @@ impl MountQueue {
             .lane_mut(self.index, self.mount, &self.token)?
             .work
             .terminal = true;
+        self.shared.changed.notify_all();
+        Ok(())
+    }
+    /// This mount's terminal stop flag. A lane already released is terminal:
+    /// its fence reads stopped and counts nothing.
+    pub fn fence(&self) -> Fence {
+        match self.shared.lock().lane(self.index, self.mount, &self.token) {
+            Ok(lane) => lane.fence.clone(),
+            Err(_) => {
+                let fence = Fence::default();
+                fence.stop();
+                fence
+            }
+        }
+    }
+    /// The terminal fence of forced teardown: revokes new handoff, stops the
+    /// fence and gives every parked request one more turn, so a request
+    /// waiting before an attempt observes the stop and ends itself. A request
+    /// waiting on a job it already submitted parks again on that job. Nothing
+    /// is cancelled, dropped or replayed here.
+    pub fn stop_service(&self) -> Result<(), DispatchError> {
+        let mut state = self.shared.lock();
+        let lane = state.lane_mut(self.index, self.mount, &self.token)?;
+        lane.work.terminal = true;
+        lane.fence.stop();
+        for (slot, entry) in lane.tasks.iter_mut().enumerate() {
+            let Some(entry) = entry else { continue };
+            match entry.phase {
+                Phase::Parked => {
+                    entry.phase = Phase::Queued;
+                    lane.ready.push_back(slot);
+                }
+                Phase::Running(ref mut notified) => *notified = true,
+                Phase::Reserved | Phase::Queued | Phase::Retained => {}
+            }
+        }
+        drop(state);
         self.shared.changed.notify_all();
         Ok(())
     }

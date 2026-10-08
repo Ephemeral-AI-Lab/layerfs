@@ -8,7 +8,7 @@ use layerfs_daemon::{
 };
 use layerfs_fuse::{
     operations::{DirectoryStep, DirectoryStream, NativeRead, ReadFailure},
-    ports::MountServices,
+    ports::{Fence, MountServices},
     Dispatch, DispatchConfig, FailureView, RequestDisposition,
 };
 use layerfs_history::WorkspaceId;
@@ -114,7 +114,7 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     let held = wait(store.read_ticket(Some(identity)).unwrap()).unwrap();
     let (send, recv) = mpsc::channel();
     for request in 1..=3 {
-        let services = bound.request().unwrap();
+        let services = bound.request(&Fence::default()).unwrap();
         let send = send.clone();
         queue
             .receive()
@@ -169,10 +169,10 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     until(|| queue.work().unwrap().admitted == 0);
     assert_eq!(store.read_work().outstanding, 0);
     assert_eq!(client.diagnostics().unwrap().outstanding, 0);
-    let services = bound.request().unwrap();
+    let services = bound.request(&Fence::default()).unwrap();
     let serial = values[0].0;
     let opened = wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         5,
         serial,
@@ -187,7 +187,7 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     wait(opened.dispose()).unwrap();
     drop(wait(services.forget(mount, values[0].0, 3)).unwrap());
     let read = wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         6,
         serial,
@@ -262,7 +262,7 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     assert!(released.result().is_ok());
     drop(released);
     let read = wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         7,
         serial,
@@ -281,7 +281,7 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     // A definite missing-name refusal still owns its source until the caller
     // disposes the reply; it is not confused with an uncertain SQL failure.
     let missing = wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         4,
         root,
@@ -379,7 +379,7 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
     })
     .unwrap();
     let queue = pool.register(mount).unwrap();
-    let services = bound.request().unwrap();
+    let services = bound.request(&Fence::default()).unwrap();
     owner.stop().unwrap();
     let before = client.diagnostics().unwrap().admitted;
     queue
@@ -511,7 +511,7 @@ fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credi
     };
     drop(done);
     let lookup = wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         1,
         root,
@@ -535,7 +535,7 @@ fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credi
     let (prepared, ready) = mpsc::channel();
     let (done, completed) = mpsc::channel();
     for index in 0..count {
-        let services = bound.request().unwrap();
+        let services = bound.request(&Fence::default()).unwrap();
         let prepared = prepared.clone();
         let done = done.clone();
         let gate = gate.clone();
@@ -588,7 +588,7 @@ fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credi
     }
     until(|| queue.work().unwrap().admitted == 0);
     assert_eq!(client.diagnostics().unwrap().outstanding, 0);
-    let services = bound.request().unwrap();
+    let services = bound.request(&Fence::default()).unwrap();
     drop(wait(services.forget(mount, serial, 1)).unwrap());
     let done = wait(
         client
@@ -665,7 +665,7 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
     };
     drop(done);
     let open = wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         10,
         root,
@@ -676,7 +676,7 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
     let directory = open.value().unwrap().directory.unwrap();
     wait(open.dispose()).unwrap();
     let attributes = wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         11,
         root,
@@ -690,7 +690,7 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
     );
     wait(attributes.dispose()).unwrap();
 
-    let services = bound.request().unwrap();
+    let services = bound.request(&Fence::default()).unwrap();
     // Keep every admitted request's offered page alive at once. Their original
     // SQL replies must already be consumed, so publishing any prefix still has
     // admission capacity without raising the owner's16-slot configuration.
@@ -785,7 +785,7 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
     // RELEASEDIR cannot invalidate an already acquired read/cookie source.
     drop(wait(services.close_directory(directory)).unwrap());
     let closed = match wait(NativeRead::prepare(
-        bound.request().unwrap(),
+        bound.request(&Fence::default()).unwrap(),
         mount,
         15,
         root,

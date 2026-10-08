@@ -4,4 +4,4 @@ pub(crate) mod syscalls;
 
 pub(crate) use profile::negotiate;
 pub use profile::Negotiation;
-pub use syscalls::MountEntry;
+pub use syscalls::{AbortWrite, MountEntry};

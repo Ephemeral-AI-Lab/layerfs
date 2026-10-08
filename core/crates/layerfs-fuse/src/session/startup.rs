@@ -1,6 +1,7 @@
 //! One attach attempt: direct mount, handshake and all-loop serving evidence.
 use super::state::{
-    AttachFailure, AttachPhase, AttachRemainder, NativeSession, SessionConfig, RECEIVE_LOOPS,
+    AttachFailure, AttachPhase, AttachRemainder, DetachAttempt, NativeSession, SessionConfig,
+    RECEIVE_LOOPS,
 };
 use crate::{
     attributes::Identity, mount::syscalls, ports::MountServices, request::NativeFilesystem,
@@ -67,10 +68,13 @@ impl NativeSession {
             mount: queue.identity(),
             directory: config.directory.clone(),
             accounting: filesystem.accounting(),
+            fence: queue.fence(),
             queue,
             negotiation: None,
             entry: None,
             abort: None,
+            aborted: Arc::default(),
+            forced_detach: DetachAttempt::NotAttempted,
             monitor: None,
             owner: None,
             watcher: None,
@@ -148,6 +152,7 @@ impl NativeSession {
                     work: None,
                     lane: None,
                     panic: None,
+                    forced: None,
                 }))
             }
         };

@@ -1,5 +1,6 @@
 //! Fixed mount slots and per-mount FIFO, with one step per round-robin turn.
 use super::{diagnostics::MountWork, task::Task, types::HANDOFFS, DispatchError};
+use crate::ports::Fence;
 use layerfs_overlay::NativeMount;
 use std::{
     collections::VecDeque,
@@ -25,6 +26,8 @@ pub(crate) struct Lane {
     pub mount: NativeMount,
     pub token: Arc<()>,
     pub work: MountWork,
+    /// Stopped only by forced teardown; `work.terminal` alone is not a stop.
+    pub fence: Fence,
     pub tasks: Vec<Option<Slot>>,
     pub ready: VecDeque<usize>,
 }
@@ -34,6 +37,7 @@ impl Lane {
             mount,
             token: Arc::new(()),
             work: MountWork::default(),
+            fence: Fence::default(),
             tasks: (0..HANDOFFS).map(|_| None).collect(),
             ready: VecDeque::with_capacity(HANDOFFS),
         }

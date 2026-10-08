@@ -1,6 +1,6 @@
 //! One native enumeration request, bounded pages and exact accepted cookies.
 use crate::{
-    ports::{RequestServices, ServiceError, ServiceReply},
+    ports::{Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
 use layerfs_overlay::{
@@ -96,6 +96,39 @@ impl DirectoryFailure {
     fn with_prefix(mut self, accepted: usize, attempted: bool) -> Self {
         self.prefix = Some((accepted, attempted));
         self
+    }
+    /// The mount's stopped fence refused the failed step before its attempt.
+    pub fn fenced(&self) -> bool {
+        self.reason.is::<Fenced>()
+    }
+    /// Ends a fenced enumeration. Its page, listing and unpublished cookie
+    /// plan are dropped first: a prepared plan made no offset valid, and its
+    /// read row goes with the source. The source, when one was acquired, is
+    /// then released once through the disposal call the fence never refuses.
+    /// Any other failure is returned unchanged.
+    pub async fn relinquish(self) -> Result<(), DirectoryFailure> {
+        if !self.fenced() {
+            return Err(self);
+        }
+        let Self {
+            mut stream, batch, ..
+        } = self;
+        drop(batch);
+        stream.page = None;
+        stream.listing = None;
+        stream.cookies = None;
+        stream.view = None;
+        let Some(source) = stream.source else {
+            return Ok(());
+        };
+        stream.read = None;
+        match stream.services.release_source(source).await {
+            Ok(reply) => {
+                drop(reply);
+                Ok(())
+            }
+            Err(reason) => Err(DirectoryFailure::new(reason, stream, None)),
+        }
     }
 }
 impl fmt::Debug for DirectoryFailure {
