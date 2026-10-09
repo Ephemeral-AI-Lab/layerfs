@@ -25,6 +25,9 @@ pub struct ClientWork {
     /// Child-directory counts currently remembered; at most
     /// [`crate::DIRECTORY_COUNT_CAPACITY`].
     pub directory_counts: usize,
+    /// File lengths currently remembered. Each is charged to the cache
+    /// allowance and counted in `charged_cache_bytes`, not in `cached_objects`.
+    pub file_lengths: usize,
 }
 /// A runtime-backed authenticated object provider with bounded immutable caching.
 /// Upstream implements its public demand-window/authority contract; allocation
@@ -48,7 +51,8 @@ const NOT_RESIDENT: ContentError = ContentError::ProviderFailure {
 };
 impl CanonicalClient {
     /// A client over objects already in `cache`, with no provider and no
-    /// length provider. A demand for anything else fails without I/O, and
+    /// length provider: it answers a file length only when the cache
+    /// remembers it. A demand for anything else fails without I/O, and
     /// without counting a miss: the ordinary demand that follows counts it.
     pub fn resident(cache: Arc<CanonicalCache>) -> Self {
         Self {
@@ -93,7 +97,10 @@ impl CanonicalClient {
             resident: false,
         }
     }
-    pub(crate) fn file_length(&self, id: ObjectId) -> crate::WorkspaceResult<u64> {
+    /// The length provider's own answer, asked every time: nothing is
+    /// remembered and nothing remembered is used. Commit construction checks
+    /// a captured file against it.
+    pub(crate) fn provided_length(&self, id: ObjectId) -> crate::WorkspaceResult<u64> {
         self.lengths
             .as_ref()
             .ok_or(crate::WorkspaceError::MissingLengthProvider)?
@@ -226,7 +233,20 @@ impl AuthenticatedObjects for CanonicalClient {
 }
 
 impl crate::FileLengths for CanonicalClient {
+    /// The length of one regular file's content root, for its attributes.
+    /// It is a pure function of that immutable root, so an answer the
+    /// provider gave once is remembered in the cache's own allowance and
+    /// returned from memory afterwards, with no provider demand. A
+    /// memory-only client answers nothing else. An evicted answer costs one
+    /// more provider demand and nothing else.
     fn file_length(&self, id: ObjectId) -> crate::WorkspaceResult<u64> {
-        CanonicalClient::file_length(self, id)
+        if let Some(length) = self.state()?.cache.length(id) {
+            return Ok(length);
+        }
+        let length = self.provided_length(id)?;
+        let mut state = self.state()?;
+        let evictions = state.cache.remember_length(id, length);
+        state.work.evictions = state.work.evictions.saturating_add(evictions);
+        Ok(length)
     }
 }

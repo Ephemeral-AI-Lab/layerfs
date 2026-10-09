@@ -556,6 +556,7 @@ fn a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_lat
     // The same cold files through the sibling's mount: its own kernel cache
     // holds none of them and no read of the first mount cached one.
     let demands_before_sibling = fx.store.work();
+    let grants_before_sibling = fx.store.read_work().grants;
     // The later reads on the first mount were real cold demands, served by
     // the readers that are left.
     expect!(
@@ -576,12 +577,13 @@ fn a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_lat
         }
     }
     let demands_after_sibling = fx.store.work();
+    let grants_after_sibling = fx.store.read_work().grants;
     let exact_beside = beside
         .iter()
         .filter(|(_, answer)| *answer == Seen::Exact)
         .count();
     println!(
-        "FP_27 sibling mount: exact={exact_beside} of {} attempted ({} planned), Store object demands {} -> {}, length demands {} -> {}, quarantined reader statements {:?}: {:?}",
+        "FP_27 sibling mount: exact={exact_beside} of {} attempted ({} planned), Store object demands {} -> {}, length demands {} -> {}, reader grants {grants_before_sibling} -> {grants_after_sibling}, quarantined reader statements {:?}: {:?}",
         beside.len(),
         COLD.len(),
         demands_before_sibling.object_batches,
@@ -602,15 +604,19 @@ fn a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_lat
         COLD.len()
     );
     // Since the first mount keeps serving after its one failed demand, its
-    // own later reads have already put these objects in the cache both
-    // Workspaces of the Branch share. The sibling's real Store demand is then
-    // its length demands; object demands need not rise (`U-attempt8` is the
-    // receipt of the earlier object-only expectation failing).
+    // own later reads have already put these objects, and the lengths of
+    // these files, in the cache both Workspaces of the Branch share. Neither
+    // object nor length demands need rise for the sibling (`U-attempt8` is
+    // the receipt of the earlier object-only expectation failing, and
+    // `341-read-s2-linux-daemon` that of the length one). What its reads
+    // still take is a Store reader for every window of base bytes, from the
+    // readers that are left.
     expect!(
         checks,
-        demands_after_sibling.object_batches > demands_before_sibling.object_batches
-            || demands_after_sibling.length_batches > demands_before_sibling.length_batches,
-        "the sibling's reads made no Store demand: {demands_before_sibling:?} then {demands_after_sibling:?}"
+        grants_after_sibling - grants_before_sibling >= COLD.len() as u64,
+        "the sibling's {} reads took {} Store readers: {demands_before_sibling:?} then {demands_after_sibling:?}",
+        COLD.len(),
+        grants_after_sibling - grants_before_sibling
     );
     let at_end = demand(&fx);
     let pool = fx.store.read_work();

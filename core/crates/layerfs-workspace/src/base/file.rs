@@ -18,7 +18,7 @@ impl BaseView {
         if value.kind != InodeKind::RegularFile {
             return Err(ContentError::WrongLogicalRole.into());
         }
-        let length = self.client().file_length(value.content_root)?;
+        let length = self.client().provided_length(value.content_root)?;
         let view = self.file(value)?;
         if view.logical_len() != length {
             return Err(WorkspaceError::Content(ContentError::LengthMismatch {

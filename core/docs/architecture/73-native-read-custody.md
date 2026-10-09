@@ -53,6 +53,15 @@ undecided and unchanged, the request derives the count outside the owner and
 carries the complete inode fact to its next visit, so an eviction between the
 two visits cannot make it ask again. An empty directory needs no count.
 
+R7 update, 2026-10-09 (file lengths): the length of a base regular file is
+one more such fact. The memory-only client has no length port and answers it
+only when the canonical cache remembers the Store's answer for the file's
+content root ([file lengths](24-file-lengths.md)). The first LOOKUP or GETATTR
+of a base file in a daemon is therefore undecided once, reads the length in
+the one reader grant of its fact round and visits again; every later one is
+one visit with no reader grant. An evicted answer costs that second visit
+again and nothing else.
+
 Overlay schema17 adds one engine-minted NativeMount per Workspace and indexed
 native_lookup, native_source and native_read associations in the existing Overlay.
 The mount retains its authenticated root serial. Its implicit root lookup owner

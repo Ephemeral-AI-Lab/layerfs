@@ -216,12 +216,14 @@ fn a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_n
         (read.cache_misses, read.upstream_batches),
         (work.cache_misses, work.upstream_batches)
     );
-    // Every canonical object of the regular file is made resident too: a
-    // second stat through the Workspace's own client asks the provider nothing.
-    b.stat(2).unwrap();
+    // Every canonical object of the regular file is made resident too, with
+    // its length answered by an explicit port and therefore not remembered:
+    // a second such stat asks the object provider nothing.
+    base.stat_with_lengths(2, &b.fixture.store).unwrap();
     let demand = b.demand();
-    b.stat(2).unwrap();
+    base.stat_with_lengths(2, &b.fixture.store).unwrap();
     assert_eq!(b.demand(), demand);
+    assert_eq!(b.cache.diagnostics().unwrap().file_lengths, 0);
     // GETATTR of the inode the kernel now holds, and a negative LOOKUP in the
     // same directory: one visit each, and neither writes.
     let before = snapshot(&b);
@@ -249,8 +251,8 @@ fn a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_n
     );
     assert_eq!(snapshot(&b), before);
     // A regular file's length is not a canonical object: the resident client
-    // has no length provider, so that fact is left to the caller even though
-    // every object of the file is resident.
+    // has no length provider, so while no answer is remembered that fact is
+    // left to the caller even though every object of the file is resident.
     assert_eq!(
         observe(
             &b,
@@ -263,6 +265,28 @@ fn a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_n
         Seen::Needs(vec![Need::Inode(1), Need::Name(1, name("file"))])
     );
     assert_eq!(snapshot(&b), before);
+    // The Workspace's own client asks its length provider once and remembers
+    // the answer under the file's content root. From then on the visit reads
+    // it from memory and decides in its one job, with no provider demand.
+    assert_eq!(b.stat(2).unwrap().logical_len, 10);
+    assert_eq!(b.cache.diagnostics().unwrap().file_lengths, 1);
+    let Seen::Value(file) = observe(
+        &b,
+        resident(&b),
+        mount,
+        1,
+        lookup(1, "file"),
+        &VisitFacts::default(),
+    ) else {
+        panic!("the remembered length did not decide the lookup")
+    };
+    assert_eq!(
+        (file.serial, file.kind, file.size),
+        (2, InodeKind::File, 10)
+    );
+    assert_eq!(b.overlay.native_lookup_count(mount, 2).unwrap(), Some(1));
+    b.overlay.forget_native(mount, 2, 1).unwrap();
+    let before = snapshot(&b);
 
     // Only LOOKUP and GETATTR are visits; the kernel's reference is required.
     for operation in [

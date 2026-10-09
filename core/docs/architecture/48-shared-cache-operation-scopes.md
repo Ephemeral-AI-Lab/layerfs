@@ -33,6 +33,11 @@ counter meanings are unchanged. Diagnostics on clients sharing that owner report
 the same cumulative owner observations and current charge; simultaneous clients'
 work is not automatically attributable to one operation through snapshot deltas.
 
+R7 update, 2026-10-09: `ClientWork` gained `file_lengths`, and the cache owner
+also remembers file lengths in its one allowance; see
+[file lengths](24-file-lengths.md). The sentence above about an unchanged
+public layout describes the R4 checkpoint.
+
 [CanonicalCache](../../crates/layerfs-workspace/src/base/cache.rs) owns the existing
 bounded immutable-object map/recency state and counters behind one mutex. Each
 [CanonicalClient](../../crates/layerfs-workspace/src/base/client.rs) retains its own

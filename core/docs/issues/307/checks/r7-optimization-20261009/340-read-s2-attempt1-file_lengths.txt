@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD de4789299, uncommitted product/test paths=5, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/file_lengths-22d031136954b659 --test-threads=1 --nocapture (cwd core/crates/layerfs-workspace)
+
+running 3 tests
+test a_file_length_is_asked_once_and_then_answered_from_memory ... FILE_LENGTHS asked=2 for 2 files and 9 stats; remembered=2 charged=4234 objects=9
+ok
+test an_allowance_that_holds_no_answer_asks_every_time_and_refuses_nothing ... ok
+test an_evicted_length_is_asked_again_and_the_allowance_is_never_exceeded ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

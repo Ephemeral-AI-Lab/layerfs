@@ -704,6 +704,41 @@ fn read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_row
     rig.stop();
 }
 
+#[test]
+fn a_base_file_length_is_one_store_answer_per_daemon_and_costs_a_visit_when_not_remembered() {
+    // With the cache: the first touch asks the Store once, inside the one
+    // reader grant of its second visit; every later touch is one visit.
+    let rig = Rig::new("read-cost-first", 172, CACHE);
+    let ((serial, length), cost) = rig.measured(|| rig.lookup("small"));
+    assert_eq!(length, SMALL as u64);
+    assert_eq!(cost.jobs, jobs(2, 0, 0));
+    assert_eq!((cost.grants, cost.length_batches), (1, 1));
+    assert_eq!(rig.store.cache_work().unwrap().file_lengths, 1);
+    let ((again, length), cost) = rig.measured(|| rig.lookup("small"));
+    assert_eq!((again, length), (serial, SMALL as u64));
+    assert_eq!(cost, LOOKUP_BASE.cost());
+    let (length, cost) = rig.measured(|| rig.getattr(serial));
+    assert_eq!(length, SMALL as u64);
+    assert_eq!(cost, GETATTR_BASE.cost());
+    rig.stop();
+
+    // Without an allowance nothing is remembered: every touch is the
+    // indexed path of the first one, with the same answer. Nothing fails.
+    let rig = Rig::new("read-cost-uncached", 173, 0);
+    let (serial, _) = rig.lookup("small");
+    for _ in 0..3 {
+        let ((again, length), cost) = rig.measured(|| rig.lookup("small"));
+        assert_eq!((again, length), (serial, SMALL as u64));
+        assert_eq!(cost, LOOKUP_UNSEEN.cost());
+        let (length, cost) = rig.measured(|| rig.getattr(serial));
+        assert_eq!(length, SMALL as u64);
+        assert_eq!(cost.jobs, jobs(2, 0, 0));
+        assert_eq!((cost.grants, cost.length_batches), (1, 1));
+    }
+    assert_eq!(rig.store.cache_work().unwrap().file_lengths, 0);
+    rig.stop();
+}
+
 /// A pinned cost: jobs (Read, Lifecycle, Source), reader grants, length
 /// batches and the statement families.
 struct Pinned {
@@ -724,11 +759,34 @@ impl Pinned {
         cost
     }
 }
-/// LOOKUP of a base regular file the kernel already references. Two visits:
-/// the first is undecided because the file's length is not a canonical
-/// object, the request takes a reader and one length batch, and the second
-/// decides and adds one to the kernel's count in one transaction.
+/// LOOKUP of a base regular file this daemon has seen: one visit. Its
+/// length is remembered, so the visit decides over resident facts and adds
+/// one to the kernel's count in one transaction. No reader, no length batch.
 const LOOKUP_BASE: Pinned = Pinned {
+    jobs: (1, 0, 0),
+    grants: 0,
+    length_batches: 0,
+    sql: &[
+        ("Startup", 1, 1),
+        ("Begin", 1, 1),
+        ("Commit", 1, 1),
+        ("Workspace", 1, 1),
+        ("Inode", 3, 3),
+        ("DirectoryEntry", 2, 2),
+        ("Lease", 2, 2),
+    ],
+};
+/// GETATTR of the same file: one visit, and nothing written.
+const GETATTR_BASE: Pinned = Pinned {
+    jobs: (1, 0, 0),
+    grants: 0,
+    length_batches: 0,
+    sql: &[("Workspace", 1, 1), ("Inode", 2, 2)],
+};
+/// The first LOOKUP of a base regular file in a daemon, and every one where
+/// no length can be remembered: two visits around one reader, whose one
+/// length batch is the Store's answer.
+const LOOKUP_UNSEEN: Pinned = Pinned {
     jobs: (2, 0, 0),
     grants: 1,
     length_batches: 1,
@@ -742,20 +800,14 @@ const LOOKUP_BASE: Pinned = Pinned {
         ("Lease", 2, 2),
     ],
 };
-/// GETATTR of the same file: the same two visits, and nothing written.
-const GETATTR_BASE: Pinned = Pinned {
-    jobs: (2, 0, 0),
-    grants: 1,
-    length_batches: 1,
-    sql: &[("Workspace", 2, 2), ("Inode", 2, 2)],
-};
-/// READ of base bytes: a source, two observations around one reader and
-/// one length batch, the local window, a second reader for the bytes, and
-/// the release of the read and of the source. Four write transactions.
+/// READ of base bytes: a source, two observations around one reader (the
+/// file's length is remembered: no length batch), the local window, a second
+/// reader for the bytes, and the release of the read and of the source. Four
+/// write transactions.
 const READ_BASE: Pinned = Pinned {
     jobs: (3, 2, 1),
     grants: 2,
-    length_batches: 1,
+    length_batches: 0,
     sql: &[
         ("Startup", 4, 4),
         ("Begin", 4, 4),
@@ -797,12 +849,12 @@ const READ_MIXED: Pinned = Pinned {
         ("Lease", 35, 50),
     ],
 };
-/// OPEN of a base file: a source, two observations around one reader and
-/// one length batch, and the release of the processing read and source.
+/// OPEN of a base file: a source, two observations around one reader (no
+/// length batch), and the release of the processing read and source.
 const OPEN_BASE: Pinned = Pinned {
     jobs: (2, 2, 1),
     grants: 1,
-    length_batches: 1,
+    length_batches: 0,
     sql: &[
         ("Startup", 4, 4),
         ("Begin", 4, 4),

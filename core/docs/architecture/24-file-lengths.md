@@ -60,3 +60,51 @@ owning SDK stat lengths. See [effective base view](29-effective-base-view.md) an
 [S3 exit audit](../issues/307/S3-EXIT-AUDIT.md). Earlier limitations/evidence above
 retain their source scope; native/logical runtime transport, mutable byte semantics
 and aggregate resource acceptance remain unfinished.
+
+## R7 update, 2026-10-09: a length answered once is remembered
+
+Implemented in [the canonical client](../../crates/layerfs-workspace/src/base/client.rs)
+and [its cache](../../crates/layerfs-workspace/src/base/cache.rs). The length of
+a regular file is a pure function of its immutable content root, so the
+client's `FileLengths` answer, which serves a base inode's attributes
+(`BaseView::stat`), is remembered under that content root the first time the
+length port gives it and is returned from memory afterwards.
+
+- **Where it lives.** In the daemon's one `CanonicalCache`, in the same
+  allowance as the canonical objects (`cache_bytes`), under the same lock and
+  in the same least-recently-used order. One answer is charged 264 logical
+  bytes (its 8-byte value and the 256-byte bookkeeping allowance every cached
+  object is charged); what is stored for it is its 32-byte key, the length
+  and its age in one map and the age, kind and key in the other. No new
+  allowance and no new limit exists: the cache holds at most
+  `cache_bytes / 264` answers when it holds nothing else, and an object and an
+  answer evict one another by age alone. `ClientWork::file_lengths` reports
+  the number remembered; they are part of `charged_cache_bytes` and not of
+  `cached_objects`.
+- **Key.** The content root only. No serial, base root, Workspace or mutable
+  state is part of it, so every Workspace of a daemon and every base that
+  still contains the file shares one answer.
+- **Memory-only client.** `CanonicalClient::resident`, which reads inside an
+  owner job, has no length port. It answers a length only when it is
+  remembered; otherwise the fact is not resident, the owner visit is undecided
+  and unchanged, and the request reads it outside the owner
+  ([native read custody](73-native-read-custody.md)).
+- **Just past the allowance.** An evicted answer, or an allowance too small
+  for one answer (below 264 bytes, including the zero some tests use), costs
+  one more demand on the length port and, for a native request, the second
+  visit and its reader grant. Nothing is refused.
+- **Not used by Commit.** Captured-file construction checks a captured base
+  file against the length port's own answer every time
+  (`CanonicalClient::provided_length`); it neither reads nor fills the
+  remembered answers, and its Store length demands are unchanged.
+- **Explicit ports.** `BaseView::stat_with_lengths` with another `FileLengths`
+  port asks that port every time and remembers nothing.
+
+Counted through the daemon's Fuse port with the real owner and Store
+([`read_cost.rs`](../../crates/layerfs-daemon/tests/read_cost.rs)): the first
+LOOKUP of a base regular file in a daemon is two owner visits, one Store
+reader grant and one length batch; every later LOOKUP of it is one visit and
+every later GETATTR one visit, each with no reader grant and no length batch.
+With no allowance each one is the first again. The cache-level behaviour is in
+[`file_lengths.rs`](../../crates/layerfs-workspace/tests/file_lengths.rs).
+These are counts, not timings.

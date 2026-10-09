@@ -1,0 +1,11 @@
+===== mounted_failure_scope-81d2baa09c7ec6f5 (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_effect ... ok
+test a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_later_read ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
