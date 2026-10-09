@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "6c31302a56da07cb7290f7933f3a0a67d80da9e0",
+  "source_tree": "1ab1f4d4107499dbed586171f3b8c59af89b9476",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/1280-L-source-seal-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1281-runtime-release-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1282-daemon-release-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1283-build-provenance-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1284-C01-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1285-C01-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1286-C01-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1287-C01-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1288-C02-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1289-C02-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1290-C02-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1291-C02-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1292-C03-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1293-C03-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1294-C03-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1295-C03-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1296-C04-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1297-C04-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1298-C04-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1299-C04-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1300-C05-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1301-C05-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1302-C05-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1303-C05-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1304-C06-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1305-C06-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1306-C06-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1307-C06-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1308-C07-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1309-C07-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1310-C07-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1311-C07-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1312-C08-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1313-C08-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1314-C08-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1315-C08-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1316-C09-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1317-C09-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1318-C09-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1319-C09-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1320-C10-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1321-C10-L-clone-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1322-C10-L-configuration-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1323-C10-B-L-sample-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1324-C11-L-volume-6c31302a5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host-complete_installed_roots-e76bd78a0eded4e2.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host-full.log\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host-host_handoff-a4c4b3d19848e0be.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux-complete_installed_roots-b8a4f28c1707b846.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux-full.log\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux-shared_processes-498c7928b7fbb8cc.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux.txt",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r7-C11-L-copy-6c31302a5",
+    "--network",
+    "none",
+    "-v",
+    "layerfs-r7-big-master-20261009-b8d76c0a3:/source:ro",
+    "-v",
+    "layerfs-r7-C11-L-6c31302a5-20261009:/dest",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "/bin/bash",
+    "-euo",
+    "pipefail",
+    "-c",
+    "test ! -e /dest/global; test ! -s /source/global/store.sqlite-wal; test ! -s /source/global/store.sqlite-journal; mkdir -m 700 /dest/global; cp --reflink=never --sparse=never --preserve=mode,ownership,timestamps /source/global/store.sqlite /dest/global/store.sqlite; cmp /source/global/store.sqlite /dest/global/store.sqlite; chmod --reference=/source/global /dest/global; chown --reference=/source/global /dest/global; touch -r /source/global /dest/global; sha256sum /source/global/store.sqlite /dest/global/store.sqlite; stat -c \"%n %s %b %B %a %u %g\" /source/global/store.sqlite /dest/global/store.sqlite"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

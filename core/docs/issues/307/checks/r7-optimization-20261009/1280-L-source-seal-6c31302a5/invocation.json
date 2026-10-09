@@ -1,0 +1,24 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "6c31302a56da07cb7290f7933f3a0a67d80da9e0",
+  "source_tree": "1ab1f4d4107499dbed586171f3b8c59af89b9476",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host-complete_installed_roots-e76bd78a0eded4e2.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host-full.log\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host-host_handoff-a4c4b3d19848e0be.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-host.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux-complete_installed_roots-b8a4f28c1707b846.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux-full.log\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux-shared_processes-498c7928b7fbb8cc.txt\n?? core/docs/issues/307/checks/r7-optimization-20261009/365-gate-linux.txt",
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-m",
+    "r7.source_inventory",
+    "--arm",
+    "L",
+    "--output",
+    "/tmp/layerfs-r7-source-L-6c31302a5-20261009.json"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "docker",
+    "--host",
+    "unix:///Users/yifanxu/.docker/run/docker.sock",
+    "exec",
+    "--user",
+    "0:0",
+    "72950e4cb357790093b184464e915d0a758054b7583b0fafd145ab6affa8960a",
+    "sha256sum",
+    "/code/r7_deployment.py"
+  ],
+  "attempts": 1,
+  "container": "72950e4cb357790093b184464e915d0a758054b7583b0fafd145ab6affa8960a",
+  "duration_ns": 68900334,
+  "end_ns": 834920195858125,
+  "engine_operation_identity": "UNAVAILABLE through Docker CLI; no guessed Exec ID",
+  "exit_code": 0,
+  "label": "bootstrap-sha",
+  "sequence": 4,
+  "start_ns": 834920126957791
+}

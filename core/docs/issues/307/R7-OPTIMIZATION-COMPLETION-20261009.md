@@ -219,6 +219,52 @@ Each is a choice the lead made or left, with the alternative.
 5. **The dropped foreign key** from descriptor rows to `native_mount`
    (L4-7) and the constraints that went with the removed tables.
 
+### Applied after the hand-back (2026-10-09)
+
+The lead's recommendations on the five decisions were applied by a session
+with no owner authority beyond them: four commits on local main after
+`2d67670db`, nothing pushed. The table and text above describe the tip the
+run handed back and are left as written; details, pins and receipts are in
+the ledger's section "Owner decisions applied after the hand-back".
+
+1. **Fixed** (`590339e7b`). A READDIR at offset 0 on a handle with
+   published replies retires that handle's earlier reply rows, a few
+   inline in the publishing visit and the rest with the closed handle; an
+   offset taken before the rewind is answered `EINVAL`. A handle now
+   stores at most the replies published between two of its rewinds (11
+   rows after each of five rewinds of 640 names, where one rewind stored
+   21). Ordinary-listing pins are unchanged. Overlay schema 31 → 32.
+   Production LOC +134.
+2. **Accepted as it is**, and stated as a contract (`6c31302a5`):
+   architecture 73 and 28 say that an in-flight READ, READLINK, OPEN or
+   directory read holds no `base_readers` count and no SQL custody row,
+   and that anything collecting Store objects or releasing a base root
+   must fence through the mount's dispatcher drain.
+3. **Accepted as it is.** `RUN_BYTES` is unchanged.
+4. **The narrowed inode updates are removed** (`5e8cc4644`, production
+   LOC −65). Statements are equal with and without them in every pinned
+   job; the one measured cost is 62 more VM steps in the five jobs of a
+   created file (1571 → 1633), which no test pins. The in-place overwrite
+   branch and the general inline release are kept.
+5. **Accepted as it is.** No constraint was restored.
+
+From "Open items", now staged by tests (`961267a0f`), with no defect
+found: rollback of an inline release, the fenced halves of OPEN and
+READDIR, and Force when the held read is released inside the drain
+window. Still not staged: `accounting_reference` with reply rows and the
+hard-link alias under a visit LOOKUP.
+
+Gate at `6c31302a5`: host 127 of 129 binaries and Linux 127 of 129, the
+same known failures as above (`complete_installed_roots` and
+`host_handoff` on host, `complete_installed_roots` and `shared_processes`
+in Linux); `fmt --check`, Clippy on host and in Linux and the guard pass.
+One sample, receipts 1280–1331: statements are equal to 1220–1271 in
+eleven cells and four fewer in C03 (cause not established), overlay
+logical bytes are equal in every cell, and every row is DIAGNOSTIC with
+verifier PASS, custody KNOWN_STOP and cleanup Gone. Its times are one more
+sample inside the spread described above and change no verdict of the
+final table.
+
 ## What remains, and why it was not taken
 
 | Row | Predicted | Why not |

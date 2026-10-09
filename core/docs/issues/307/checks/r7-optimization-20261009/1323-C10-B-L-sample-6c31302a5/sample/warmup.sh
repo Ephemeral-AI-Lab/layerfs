@@ -1,0 +1,1 @@
+{ cp big big2; } >/dev/null

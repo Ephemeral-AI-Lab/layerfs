@@ -3088,3 +3088,138 @@ item. The run is handed back with
 [the completion document](../../R7-OPTIMIZATION-COMPLETION-20261009.md),
 which lists each cell above A2 with the measurement that shows why, the
 decisions left to the owner, and what remains.
+
+## Owner decisions applied after the hand-back (2026-10-09)
+
+A session started by the lead's session, with no owner authority beyond
+these items, applied the lead's recommendations on the five "Decisions for
+the owner" of the completion document: fix 1; accept 2, 3 and 5; in 4
+remove the narrowed inode updates and keep the other two. Four commits on
+local main after `2d67670db`, nothing pushed. Disposable profile only;
+Durable execution NOT_RUN — disabled by owner until explicit
+reauthorization.
+
+| Commit | What | Production LOC |
+| --- | --- | --- |
+| `590339e7b` | Decision 1 (L4-9): a READDIR at offset 0 on a handle with published replies retires that handle's earlier reply rows; an offset from before the rewind is answered `EINVAL`. Overlay schema 31 → 32 (`native_directory.floor`) | 187480 → 187614 (+134: overlay +93, workspace +14, fuse +27) |
+| `5e8cc4644` | Decision 4, third item: `INODE_RESIZE`, `INODE_RECOUNT` and the `Narrowed` choice removed | 187614 → 187549 (−65) |
+| `961267a0f` | Tests only: rollback of an inline orphan release; the fenced halves of OPEN and READDIR; Force released inside the drain window | 187549 → 187549 (0) |
+| `6c31302a5` | Decision 2, the contract line in architecture 73 and 28 | 187549 → 187549 (0) |
+
+Not changed, as decided: `RUN_BYTES` (decision 3), the in-place overwrite
+branch and the general inline release (decision 4, first two items), the
+dropped foreign key (decision 5), permission checks.
+
+### Decision 1: the rewound handle
+
+- Bound, by test: a handle stores at most the replies published between
+  two of its rewinds. Overlay `native_directory.rs`: 640 names, 11 rows
+  after each of five rewinds of a changing directory (the parent stored 21
+  after one). Daemon `directory_cost.rs` through the Fuse port: 21 rows
+  after each of five rewinds (the parent kept 20 + 5 × 21).
+- Mechanism: no statement is added to a reading visit; a publishing visit
+  on a handle whose floor is not 0 deletes at most `INLINE_PAGES` (8) rows
+  in one statement. No queue item, loop or timer for an open handle.
+- Pins unchanged, asserted by the same daemon test: `OPENDIR_LOCAL`,
+  `OPENDIR_BASE`, `READDIR_DATA` (10 attempts / 11 executions),
+  `READDIR_AGAIN` (5 / 5), `READDIR_END` (4 / 4), the cold pair, both
+  `RELEASEDIR` pins and the maintenance turns of a closed directory.
+- Pins new: `READDIR_REWIND` Lease (5, 14), `READDIR_AFTER_REWIND` Lease
+  (4, 13), each with 8 rows deleted.
+- Pins moved: overlay `native_directory.rs`, the offer at offset 0 over
+  published replies was a reuse (`existing = Some`) and is a rewind with no
+  reuse; the reuse is asserted at offset 2. Schema version 31 → 32 in
+  overlay `directory_links`, `engine`, `startup_cost` and daemon `owner`.
+- Limit, stated in architecture 74: a rewind whose reading finds no name
+  publishes nothing, so it retires nothing (and stores nothing).
+
+### Decision 4: the narrowed inode updates
+
+Measured before the removal with the existing count tests, on both trees
+(`362-narrowed-*`): statements are equal in the five jobs of a created
+file (37 attempts, 44 executions) and in the jobs of a removed file, and
+every pin of the overlay and workspace suites and of the daemon's count
+binaries holds on both. The one measured cost of the removal is the
+engine's VM-step counter for those five jobs, 1571 → 1633 (+62, +3.9 %),
+which no test asserts; bound bytes 1185 → 1321. By the assignment's rule
+(delete unless a pinned count rises) they are removed, 65 production
+lines. One assertion restaged: overlay `compound.rs` explain list, 10
+plans → 8.
+
+### Tests: the four cases the hand-back left unstaged
+
+No case showed a product defect.
+
+- **Rollback of an inline orphan release** (overlay `orphans.rs`). Staged
+  with the file's real page quota, no hook: the releasing job's only
+  growth is the queue row of a layer it parks, so the queue's last leaves
+  are filled by removals until one more row needs a page. The last release
+  of the engine's only orphan then deletes the orphan's rows and fails
+  with `SQLITE_FULL`. After it: every maintained count, the page counts
+  and the Workspace row are as before; the descriptor is open and reads
+  the file's bytes; the orphan-domain probe is on. Later the queue steps
+  the held orphan, the same release succeeds, and the capture's release
+  lets the queue drop the orphan's rows. With the restore of `orphan_seen`
+  removed by hand the test fails at the probe assertion (checked once,
+  reverted). The staging depends on the engine's page layout.
+- **Fenced OPEN** (daemon `store_read_drain.rs`): the drain stays behind
+  an OPEN inside its Store read; afterwards the deciding visit is refused
+  `Fenced` before it is submitted; no owner job, no reader, no row.
+- **Fenced READDIR** (same file): the window's names are read; the
+  publication of their offsets is refused `Fenced` before its attempt.
+- **Force released inside the drain window** (daemon
+  `mounted_store_read.rs`, Linux, real mount): `ForceUnmounted` with abort
+  Written, detach Detached, the READ completed, cleanup Gone and the
+  engine's counts at their baseline.
+
+Still not staged from the same list: `accounting_reference` with reply
+rows; a host test of a hard-link alias under a visit LOOKUP.
+
+### Gate at `6c31302a5`
+
+- Host, four packages, every suite: 127 of 129 binaries
+  (`365-gate-host.txt`); `complete_installed_roots` and `host_handoff`
+  fail on their known prerequisites.
+- Linux, four packages, every suite: 127 of 129 binaries
+  (`365-gate-linux.txt`); `complete_installed_roots` and
+  `shared_processes` fail as before this batch.
+- `fmt --check`, Clippy `-D warnings` on host and in Linux, boundary
+  guard: pass for the four packages at the same commit.
+- Every test command ran under a wall limit of at most 115 s; none
+  reached it. There is no CI; nothing here claims one.
+
+### Sample: receipts 1280–1331 at `6c31302a5`
+
+One sample of each cell, class B, arm L, Disposable profile, one
+construction producer, with the worktree locks held; host load average
+about 6 to 8. All twelve rows DIAGNOSTIC, verifier PASS, custody
+KNOWN_STOP, cleanup Gone. Compared with 1220–1271 at `ffea8f9d5`:
+
+| Cell | Receipt | Owner jobs | Statements, 1220–1271 → now | Overlay logical bytes, 1220–1271 → now | Store bytes | In-container ms, 1220–1271 → now | Ratio to A2 now | Regime now |
+| --- | --- | ---: | --- | --- | --- | --- | ---: | --- |
+| C01 | 1287 | 5002 | 44004 → 44004 | 430080 → 430080 | equal | 302.5 → 306.9 | 1.67 | SEPARATE |
+| C02 | 1291 | 6002 | 46004 → 46004 | 430080 → 430080 | equal | 962.4 → 818.3 | 0.85 | SEPARATE |
+| C03 | 1295 | 9038 | 102540 → 102536 | 430080 → 430080 | equal | 549.1 → 595.8 | 1.45 | SEPARATE |
+| C04 | 1299 | 5342 | 42644 → 42644 | 376832 → 376832 | equal | 853.5 → 812.7 | 0.85 | SEPARATE |
+| C05 | 1303 | 6000 | 46637 → 46637 | 376832 → 376832 | equal | 755.1 → 777.0 | 0.82 | SEPARATE |
+| C06 | 1307 | 518 | 9766 → 9766 | 68468736 → 68468736 | equal | 128.7 → 107.6 | 1.37 | SEPARATE |
+| C07 | 1311 | 1550 | 23133 → 23133 | 136708096 → 136708096 | equal | 262.4 → 244.4 | 1.42 | MIXED |
+| C08 | 1315 | 521 | 9783 → 9783 | 68468736 → 68468736 | equal | 126.5 → 91.8 | 0.86 | STACKED |
+| C09 | 1319 | 517 | 1055 → 1055 | 229376 → 229376 | equal | 62.2 → 57.5 | 0.54 | SEPARATE |
+| C10 | 1323 | 1546 | 14406 → 14406 | 68468736 → 68468736 | equal | 149.1 → 147.7 | 0.83 | SEPARATE |
+| C11 | 1327 | 517 | 9760 → 9760 | 68468736 → 68468736 | equal | 116.1 → 109.7 | 1.28 | SEPARATE |
+| C12 | 1331 | 3439 | 24146 → 24146 | 335872 → 335872 | equal | 205.1 → 235.2 | 1.24 | SEPARATE |
+
+- **Statements are not higher in any cell**: equal in eleven, four fewer
+  in C03 (102540 → 102536). The cause of those four is not established;
+  owner jobs are equal in every cell, C03 included.
+- **Overlay logical bytes are equal in every cell.** Allocated overlay
+  bytes are equal in eleven cells and one page lower in C09 (268668928 →
+  268664832). Store bytes are equal in every cell.
+- Times are one sample each beside one earlier sample of nearly identical
+  work; the differences (−15 % in C02, +9 % in C03, +15 % in C12, −27 % in
+  C08, whose regime was STACKED here and SEPARATE before) are inside the
+  spread the hand-back already recorded and establish nothing about the
+  four commits. The +62 VM steps per created file from the removal of the
+  narrowed updates are not visible as a time difference in C01, C02 or
+  C04 at this spread, and are not shown to be absent either.
