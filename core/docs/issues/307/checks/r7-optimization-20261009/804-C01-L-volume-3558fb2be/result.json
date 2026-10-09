@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "3558fb2be0bceecb0e55d4fdd0fd6b6845d3b45c",
+  "source_tree": "4f62eea5927a78059911ecb5092572449539e27d",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/800-L-source-seal-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/801-runtime-release-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/802-daemon-release-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/803-build-provenance-3558fb2be/",
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "layerfs-r7-C01-L-3558fb2be-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 47480917,
+  "status": "PASS"
+}

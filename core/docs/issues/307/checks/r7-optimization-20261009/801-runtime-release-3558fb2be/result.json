@@ -1,0 +1,27 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "build",
+  "source_commit": "3558fb2be0bceecb0e55d4fdd0fd6b6845d3b45c",
+  "source_tree": "4f62eea5927a78059911ecb5092572449539e27d",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/800-L-source-seal-3558fb2be/",
+  "command": [
+    "env",
+    "CARGO_TARGET_DIR=core/target/r7-host-release",
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/benchmark/r7-runtime/Cargo.toml",
+    "--locked",
+    "--offline",
+    "--release"
+  ],
+  "limit_seconds": 560,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 317626250,
+  "status": "PASS"
+}

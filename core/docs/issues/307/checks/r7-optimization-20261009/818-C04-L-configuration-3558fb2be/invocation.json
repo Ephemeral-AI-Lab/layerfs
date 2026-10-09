@@ -1,0 +1,22 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "3558fb2be0bceecb0e55d4fdd0fd6b6845d3b45c",
+  "source_tree": "4f62eea5927a78059911ecb5092572449539e27d",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/800-L-source-seal-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/801-runtime-release-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/802-daemon-release-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/803-build-provenance-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/804-C01-L-volume-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/805-C01-L-clone-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/806-C01-L-configuration-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/807-C01-B-L-sample-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/808-C02-L-volume-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/809-C02-L-clone-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/810-C02-L-configuration-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/811-C02-B-L-sample-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/812-C03-L-volume-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/813-C03-L-clone-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/814-C03-L-configuration-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/815-C03-B-L-sample-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/816-C04-L-volume-3558fb2be/\n?? core/docs/issues/307/checks/r7-optimization-20261009/817-C04-L-clone-3558fb2be/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-configure-cell.py",
+    "C04",
+    "/tmp/layerfs-r7-build-provenance-3558fb2be-20261009.json",
+    "/tmp/layerfs-r7-C04-L-inputs-3558fb2be-20261009",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/817-C04-L-clone-3558fb2be/result.json",
+    "layerfs-r7-C04-L-3558fb2be-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

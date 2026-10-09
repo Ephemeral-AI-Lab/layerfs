@@ -2393,3 +2393,56 @@ Open points carried by rows 1 and 2:
   failed once and passed on its single rerun in the implementer's Linux
   suite; no READ is involved. Not fixed; to be watched at the gate.
 
+### Exact `orphan_seen` (`3558fb2be`) sampled: receipts 800–851
+
+Row 3, first assignment (model item O5, decision U2), one commit in about
+11 minutes: the engine's orphan flag is cleared by the transaction that
+deletes the last orphan row (one read of `orphan_rows` in accounting
+namespace 0, which the orphan triggers already keep) and restored when a
+job fails. New count test `layerfs-workspace/tests/native_unlink_cost.rs`.
+Production LOC 187803 → 187825 (+22). Lead's reading of the diff: a failed
+COMMIT quarantines the connection, so a cleared flag cannot outlive a
+rolled-back delete; a missing accounting row reads as "orphans exist".
+
+| Cell | Receipt | Command ms before → after | A2 ms | Ratio | Owner jobs | Statement executions | Owner wait / service ms before → after |
+| --- | --- | --- | ---: | ---: | --- | --- | --- |
+| C01 | 807 | 392.2 → 422.8 | 183.4 | 2.31 | 5001 → 5001 | 61004 → 61004 | 1.7 / 165.1 → 2.0 / 177.1 |
+| C02 | 811 | 929.0 → 1101.5 | 965.0 | 1.14 | 6002 → 6002 | 63006 → 63006 | 2.2 / 173.9 → 2.7 / 202.8 |
+| C03 | 815 | 721.0 → 694.6 | 410.8 | 1.69 | 9108 → 9108 | 127399 → 116603 | 57.7 / 301.9 → 63.8 / 309.5 |
+| C04 | 819 | 847.7 → 890.3 | 952.6 | 0.93 | 5382 → 5382 | 59076 → 59076 | 3.0 / 179.4 → 2.7 / 179.9 |
+| C05 | 823 | 910.0 → 988.1 | 949.6 | 1.04 | 7264 → 7264 | 90226 → 90226 | 14.0 / 233.1 → 14.4 / 248.3 |
+| C06 | 827 | 233.7 → 252.0 | 78.6 | 3.21 | 517 → 517 | 36918 → 36918 | 0.1 / 150.7 → 0.2 / 157.4 |
+| C07 | 831 | 502.3 → 432.6 | 171.6 | 2.52 | 1549 → 1549 | 77958 → 77958 | 0.7 / 332.7 → 0.4 / 312.6 |
+| C08 | 835 | 269.9 → 274.9 | 106.1 | 2.59 | 521 → 521 | 36945 → 36945 | 0.3 / 164.2 → 0.3 / 163.8 |
+| C09 | 839 | 105.0 → 110.5 | 106.2 | 1.04 | 517 → 517 | 1068 → 1068 | 0.2 / 4.4 → 0.3 / 5.8 |
+| C10 | 843 | 293.7 → 314.9 | 178.2 | 1.77 | 1545 → 1545 | 42083 → 42083 | 0.5 / 172.0 → 0.6 / 188.3 |
+| C11 | 847 | 245.3 → 263.9 | 85.8 | 3.08 | 517 → 517 | 36911 → 36911 | 0.2 / 149.4 → 0.2 / 165.9 |
+| C12 | 851 | 325.7 → 244.8 | 189.3 | 1.29 | 3495 → 3495 | 36598 → 32358 | 3.0 / 112.5 → 2.3 / 81.4 |
+
+All twelve DIAGNOSTIC, verifier PASS. Verdict by counts: KEPT.
+
+- C03 statements −10796 and C12 −4240 (each follows a warm-up Workspace
+  that made orphans); no other cell's counts moved. The model's −14039 for
+  C03 is not reached by this commit alone: the flag is true from each
+  UNLINK until that file's last maintenance step, and each orphan deletion
+  adds one count read (+1000). Both go when the releasing job finishes the
+  orphan itself (next assignment).
+- **Host interference, declared.** The host's load average was 7.6 during
+  and after this run: macOS `ApplicationsStorageExtension` (102 % of a
+  core) and `StorageManagementService` (91 %) were scanning, outside this
+  work and not to be interrupted. Ten cells have identical counts in 740–791
+  and here, and their command times moved between −14 % (C07) and +19 %
+  (C02), with owner service for equal statements moving up to +17 % (C02).
+  The one-sample spread of this host today is therefore about 20 %, not
+  10 %, for process-heavy cells. C02, C05 and C09 are above A2 in this
+  sample (1.14, 1.04, 1.04) and were below it in the previous one with the
+  same counts; neither sample is preferred, and none of the three is
+  established either way.
+- C12's 244.8 ms equals its one floor sample (244.7 ms, receipt 722): the
+  floor numbers carry the same spread and are bounds of that size, not
+  exact values.
+- Storage: logical bytes equal everywhere. The one-block difference in
+  overlay allocated bytes moved to other cells (C03 +4096; C07, C08, C09
+  back to their baseline values) with no change in rows: host allocation,
+  not the product.
+
