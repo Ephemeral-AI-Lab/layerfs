@@ -1,0 +1,16 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 3ae26648f, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_coherence-fda1540299be402d --test-threads=1 
+
+running 6 tests
+test a_lookup_racing_create_unlink_and_rename_never_binds_a_stale_inode ... ok
+test map_close_store_exit_process ... ok
+test mutations_racing_the_unmount_probe_keep_normal_results_and_persist ... ok
+test removed_references_keep_exact_state_without_open_custody ... sh: 0: getcwd() failed: No such file or directory
+ok
+test shared_mapping_stores_are_published_and_never_change_size ... ok
+test size_never_shrinks_under_concurrent_append_and_refusals_stay_refused ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
+
+R4_WALL seconds<=3 limit=115s lock_wait=0s
+EXIT 0

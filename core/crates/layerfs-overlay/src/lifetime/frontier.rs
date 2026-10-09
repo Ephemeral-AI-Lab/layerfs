@@ -32,8 +32,8 @@ impl Overlay {
         .pop()
         .ok_or(OverlayError::Stale)
     }
-    /// Fixed keyset page of still-owned reply-send-attempt tickets. A lost
-    /// completion never deletes these records. The caller must perform/fence the
+    /// Fixed keyset page of still-owned reply-send-attempt tickets, read from
+    /// the engine's memory. A lost completion never removes these records. The caller must perform/fence the
     /// actual reply attempt before releasing a ticket; observation is no such fence.
     pub fn pending_publications(
         &self,
@@ -41,19 +41,7 @@ impl Overlay {
         after: u64,
     ) -> OverlayResult<Vec<Publication>> {
         self.state(route)?;
-        self.query(
-            StatementKind::Frontier,
-            sql::PUBLICATION_PAGE,
-            &[&route.ns, &integer(after)?],
-            16,
-            |row| {
-                Ok(Publication {
-                    route,
-                    revision: row.get(0)?,
-                    generation: Generation(row.get(1)?),
-                })
-            },
-        )
+        Ok(self.tickets.page(route, integer(after)?, 64))
     }
     /// Actual retained-capture point-query plan; paired runtime work is recorded
     /// in the Capture family, without loading changed membership or payload.
@@ -64,21 +52,6 @@ impl Overlay {
             &format!("EXPLAIN QUERY PLAN {}", sql::RETAINED_CAPTURE),
             &[&route.ns, &route.incarnation.as_slice()],
             40,
-            |row| row.get(3),
-        )
-    }
-    /// Actual keyset ticket-page plan. This is not a send/release operation.
-    pub fn explain_pending_publications(
-        &self,
-        route: Route,
-        after: u64,
-    ) -> OverlayResult<Vec<String>> {
-        self.state(route)?;
-        self.query(
-            StatementKind::Explain,
-            &format!("EXPLAIN QUERY PLAN {}", sql::PUBLICATION_PAGE),
-            &[&route.ns, &integer(after)?],
-            16,
             |row| row.get(3),
         )
     }

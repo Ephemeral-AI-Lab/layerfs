@@ -17,8 +17,9 @@
 //!   of the local owner and submits nothing, as case F4.
 //! - Attempted work past the loops' exit: both Lifecycle credits of the lane
 //!   are held by the test through the public owner client
-//!   (`support/holds.rs`), so the reply-ticket release of a published write
-//!   cannot be admitted.
+//!   (`support/holds.rs`), so the releases that follow an answered append
+//!   and read-back (the descriptor's close, the read sources) cannot be
+//!   admitted. The write's reply ticket needs no owner job and is returned.
 //!
 //! A failed Commit's `Failure` is dropped before any Force: it can hold
 //! Lifecycle completions, and the forced Revoke and Close do not wait for a
@@ -1302,9 +1303,10 @@ fn later(harness: &Harness, token: WorkspaceToken, stored: &TeardownCustody) -> 
 
 /// FP-32, attempted work past the loops' exit. Both Lifecycle credits of the
 /// lane are held by the test; an external append is published and answered,
-/// and its reply-ticket release cannot be admitted. Force aborts, the loops
-/// exit, and the drain stops at the requests that are still owned: no
-/// detach, no revocation, no Close, and the write's ticket is kept.
+/// and the releases that follow it cannot be admitted. Force aborts, the
+/// loops exit, and the drain stops at the requests that are still owned: no
+/// detach, no revocation, no Close. The write's reply ticket was returned
+/// from the replying thread, with no owner job, before the hold mattered.
 #[test]
 fn fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained() {
     let name = "FP-32 held credits";
@@ -1352,7 +1354,8 @@ fn fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained
 
     let credits = holds::Credits::lifecycle(&client, route, 2, WAIT);
     // The attempted work: an ordinary process appends and reads back. Its
-    // write is published and answered; its release cannot be admitted.
+    // write is published and answered; the releases after it (the close of
+    // its descriptor, the read sources) cannot be admitted.
     let wrote = bash(
         &mount,
         "set -eu; printf 'appended\\n' >> local/file.txt; cat local/file.txt",
@@ -1378,10 +1381,12 @@ fn fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained
         },
     );
     let parked = fx.status_work(token);
+    // The reply attempt of the published write is recorded in the engine's
+    // memory by the replying thread: no Lifecycle credit was needed for it.
     let held = tickets();
     assert!(
-        !held.is_empty(),
-        "{name}: staging: the write's publication ticket is still held"
+        held.is_empty() && parked.admitted != 0,
+        "{name}: staging: the write's ticket is returned and its releases are parked: {held:?} {parked:?}"
     );
     println!(
         "{name} before: lifecycle_credits_held={} owner_outstanding_idle={idle} append={:?} admitted={} parked={} completed={} pending_publication_revisions={held:?} engine_revision_before_append={:?}",
@@ -1450,7 +1455,7 @@ fn fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained
             )
         },
     );
-    // The attempted write keeps its result and its guard.
+    // The attempted write keeps its result; no ticket appeared or vanished.
     checks.that(kept == held, || {
         format!("{name}: the publication tickets changed: {held:?} -> {kept:?}")
     });

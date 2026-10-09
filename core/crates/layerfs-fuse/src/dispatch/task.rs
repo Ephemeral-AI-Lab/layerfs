@@ -82,8 +82,12 @@ impl Task {
         match entry.phase {
             Phase::Parked => {
                 entry.phase = Phase::Queued;
-                lane.ready.push_back(self.slot);
-                shared.wake_worker(&state);
+                // A step made runnable by a thread that is running another
+                // is that thread's next step: no worker is woken for it.
+                if !collect(self) {
+                    lane.ready.push_back(self.slot);
+                    shared.wake_worker(&state);
+                }
             }
             Phase::Running(ref mut notified) => *notified = true,
             Phase::Reserved | Phase::Queued | Phase::Retained => {}
@@ -110,6 +114,55 @@ thread_local! {
     /// Set while this thread runs a request's first step from its receive
     /// callback, so that step can leave the loop before provider I/O.
     static RECEIVING: Cell<bool> = const { Cell::new(false) };
+    /// The pool whose step this thread runs and after which it can run
+    /// another of the same pool; null otherwise.
+    static COLLECTING: Cell<*const Shared> = const { Cell::new(std::ptr::null()) };
+    /// The one queued step this thread made runnable during its own step.
+    /// It is in no ready queue; this thread claims it or queues it.
+    static WOKEN: Cell<Option<Arc<Task>>> = const { Cell::new(None) };
+}
+/// Keeps a step this thread made runnable for the thread itself. False when
+/// the thread runs no step of the same pool, may not continue with another,
+/// or already keeps one.
+fn collect(task: &Arc<Task>) -> bool {
+    if COLLECTING.get().is_null() || COLLECTING.get() != task.shared.as_ptr() {
+        return false;
+    }
+    WOKEN.with(|woken| match woken.take() {
+        Some(kept) => {
+            woken.set(Some(kept));
+            false
+        }
+        None => {
+            woken.set(Some(task.clone()));
+            true
+        }
+    })
+}
+/// The step this thread made runnable during its last step, if any.
+pub(crate) fn woken() -> Option<Arc<Task>> {
+    WOKEN.take()
+}
+/// Gives a kept step to the workers. Called with no scheduler lock.
+pub(crate) fn release_woken() {
+    if let Some(task) = woken() {
+        if let Some(shared) = task.shared.upgrade() {
+            let mut state = shared.lock();
+            state.requeue(&task);
+            shared.wake_worker(&state);
+        }
+    }
+}
+struct Collecting(*const Shared);
+impl Collecting {
+    fn enter(pool: Option<&Shared>) -> Self {
+        Self(COLLECTING.replace(pool.map_or(std::ptr::null(), std::ptr::from_ref)))
+    }
+}
+impl Drop for Collecting {
+    fn drop(&mut self) {
+        COLLECTING.set(self.0);
+    }
 }
 struct Receiving(bool);
 impl Receiving {
@@ -143,9 +196,11 @@ impl Drop for FirstStep<'_> {
         }
     }
 }
-/// One bounded step of a request. `receiving` is the first step, taken on
-/// the thread that received the request; every later step runs on a worker.
-pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
+/// One bounded step of a request. `receiving` is a step taken on a thread
+/// that receives requests: a request's first step, or the one step that
+/// thread made runnable while it ran a first step. Every other step runs on
+/// a worker. `collecting` lets the thread keep one step it makes runnable.
+pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool, collecting: bool) {
     let mut first = FirstStep(receiving.then_some(shared));
     let future = task
         .future
@@ -161,6 +216,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
     // No scheduler, future, provider or registry lock spans the user's step.
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         let _receiving = Receiving::enter(receiving);
+        let _collecting = Collecting::enter(collecting.then_some(shared));
         running
             .future
             .as_mut()
@@ -257,7 +313,7 @@ impl Future for NextTurn {
         }
     }
 }
-/// Ready at once on a pool worker. On the thread that received the request
+/// Ready at once on a pool worker. On a thread that receives requests
 /// it yields one turn, so the rest of the request continues on a worker and
 /// the receive loop returns to the kernel before any provider I/O.
 #[derive(Default)]
@@ -266,6 +322,9 @@ impl Future for LeaveReceiver {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         if self.0 || !RECEIVING.get() {
+            // Provider I/O may follow: a step this worker keeps for itself
+            // does not wait for it.
+            release_woken();
             Poll::Ready(())
         } else {
             self.0 = true;

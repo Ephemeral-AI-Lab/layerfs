@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_read_plan-e8a41b2cc818cfcb --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 4 tests
+test deciding_lookup_sees_mutation_after_missing_fact_round ... ok
+test native_open_retains_removed_metadata_after_last_lookup_and_handle_release ... ok
+test positive_lookup_preserves_alias_identity_and_exact_kernel_counts ... ok
+test processing_source_survives_forget_and_last_name_removal_before_getattr ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

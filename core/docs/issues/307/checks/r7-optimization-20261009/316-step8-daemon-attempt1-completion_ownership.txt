@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=35, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/completion_ownership-b5c6d457734a887b --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 3 tests
+test a_completion_is_handed_out_once_and_wakes_its_blocked_waiter ... ok
+test every_configured_lifecycle_slot_is_admitted_while_ordinary_credit_is_saturated ... ok
+test original_family_receipts_equal_the_foreground_aggregate_on_every_path ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 0

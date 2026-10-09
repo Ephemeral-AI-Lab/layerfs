@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_order-a175b2447d8bd11b --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 2 tests
+test each_captured_page_is_applied_before_the_next_page_is_requested ... R4-5 order: inode pages at [32, 321, 621, 921], name pages at [2, 10, 18, 27], sealed at 1076, 444 values and ranks and 22 of 22 headers checked page by page, record_jobs=4400
+ok
+test mutations_published_between_producer_passes_do_not_reach_the_captured_root ... R4-1 later mutations: inode pages=2 parent pages=30 name points=150
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

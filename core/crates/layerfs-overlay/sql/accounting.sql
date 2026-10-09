@@ -14,7 +14,6 @@ CREATE TABLE accounting (
     owner_rows INTEGER NOT NULL DEFAULT 0 CHECK(owner_rows>=0),
     source_rows INTEGER NOT NULL DEFAULT 0 CHECK(source_rows>=0),
     owner_details INTEGER NOT NULL DEFAULT 0 CHECK(owner_details>=0),
-    reply_tickets INTEGER NOT NULL DEFAULT 0 CHECK(reply_tickets>=0),
     retire_targets INTEGER NOT NULL DEFAULT 0 CHECK(retire_targets>=0),
     maintenance_targets INTEGER NOT NULL DEFAULT 0 CHECK(maintenance_targets>=0),
     ready_targets INTEGER NOT NULL DEFAULT 0 CHECK(ready_targets>=0)
@@ -147,14 +146,6 @@ END;
 CREATE TRIGGER lookup_owner_account_delete AFTER DELETE ON lookup_owner BEGIN
     UPDATE accounting SET owner_details=owner_details-1 WHERE ns=0;
     UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
-END;
-CREATE TRIGGER request_account_insert AFTER INSERT ON request BEGIN
-    UPDATE accounting SET reply_tickets=reply_tickets+1 WHERE ns=0;
-    UPDATE accounting SET reply_tickets=reply_tickets+1 WHERE ns=NEW.ns;
-END;
-CREATE TRIGGER request_account_delete AFTER DELETE ON request BEGIN
-    UPDATE accounting SET reply_tickets=reply_tickets-1 WHERE ns=0;
-    UPDATE accounting SET reply_tickets=reply_tickets-1 WHERE ns=OLD.ns;
 END;
 CREATE TRIGGER reclaim_account_insert AFTER INSERT ON reclaim BEGIN
     UPDATE accounting SET retire_targets=retire_targets+1 WHERE ns=0;

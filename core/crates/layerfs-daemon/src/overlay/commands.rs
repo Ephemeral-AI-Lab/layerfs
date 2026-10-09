@@ -198,6 +198,9 @@ pub enum Command {
         cell: Option<Cell>,
     },
     ReplyAttempted(Publication),
+    /// The owner turn owed after a namespace's last watched reply attempt,
+    /// which a replying thread recorded without one.
+    ReplySettled,
     /// A mutation's reply attempt and the release of its processing source.
     Replied {
         publication: Publication,
@@ -318,6 +321,7 @@ impl Command {
             | Self::ReleaseClosedCapture(_)
             | Self::ResolveFailed(_)
             | Self::ReplyAttempted(_)
+            | Self::ReplySettled
             | Self::Replied { .. }
             | Self::Acquire(_)
             | Self::Release(_) => ServiceClass::Lifecycle,
@@ -799,6 +803,7 @@ impl Command {
                 }
                 db.reply_attempted(publication).map(|_| Response::Done)
             }
+            Self::ReplySettled => db.reply_settled(route).map(|_| Response::Done),
             Self::Replied {
                 publication,
                 source,

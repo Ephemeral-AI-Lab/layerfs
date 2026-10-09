@@ -4,8 +4,8 @@ use layerfs_daemon::{
     Command, Completion, Owner, OwnerClient, OwnerConfig, OwnerError, OwnerWork, Pending, Response,
 };
 use layerfs_overlay::{
-    AllocationWork, DatabaseWork, Inode, InodeKind, Lease, LeaseKind, OperationRecord, PayloadWork,
-    ProfileConfig, Publication, Route, StatementKind,
+    AllocationWork, DatabaseWork, Inode, InodeKind, Lease, LeaseKind, OperationRecord,
+    OverlayError, PayloadWork, ProfileConfig, Publication, Route, StatementKind,
 };
 use std::{
     path::PathBuf,
@@ -273,8 +273,10 @@ fn original_family_receipts_equal_the_foreground_aggregate_on_every_path() {
         .result()
         .is_ok());
 
-    // A successful reply attempt, then the same attempt failing and rolling
-    // back: the failed original job keeps its own actual families.
+    // A reply attempt on the owner's turn, then the same attempt again. The
+    // ticket is held in the engine's memory, so neither job writes: the
+    // first finds a live Workspace with nothing to queue, and the second
+    // fails on a ticket that is no longer held, after its route's read.
     let publish = |ledger: &mut Ledger, serial: u64| -> Publication {
         let done = ledger.run(
             "Publish",
@@ -292,33 +294,37 @@ fn original_family_receipts_equal_the_foreground_aggregate_on_every_path() {
         }
     };
     let first = publish(&mut ledger, 2);
-    assert!(ledger
-        .run(
-            "ReplyAttempted",
-            true,
-            route,
-            Command::ReplyAttempted(first)
-        )
-        .result()
-        .is_ok());
+    let replied = ledger.run(
+        "ReplyAttempted",
+        true,
+        route,
+        Command::ReplyAttempted(first),
+    );
+    assert!(replied.result().is_ok());
     let failed = ledger.run(
         "ReplyAttempted-again",
         true,
         route,
         Command::ReplyAttempted(first),
     );
-    assert!(matches!(failed.result(), Err(OwnerError::Overlay(_))));
-    assert_eq!(
-        failed
-            .work()
-            .sql
-            .family(StatementKind::Rollback)
-            .unwrap()
-            .attempts,
-        1
-    );
-    assert!(failed.work().sql.family(StatementKind::Commit).is_none());
-    drop(failed);
+    assert!(matches!(
+        failed.result(),
+        Err(OwnerError::Overlay(OverlayError::Stale))
+    ));
+    for done in [&replied, &failed] {
+        for kind in [
+            StatementKind::Begin,
+            StatementKind::Commit,
+            StatementKind::Rollback,
+            StatementKind::Frontier,
+        ] {
+            assert!(done.work().sql.family(kind).is_none(), "{kind:?}");
+        }
+        assert_eq!(done.work().sql.total().rows_changed, 0);
+        // What each did run is in its own receipt: the route's point read.
+        assert!(done.work().sql.family(StatementKind::Workspace).is_some());
+    }
+    drop((replied, failed));
 
     let source = match ledger
         .run(
@@ -332,6 +338,35 @@ fn original_family_receipts_equal_the_foreground_aggregate_on_every_path() {
         Ok(Response::BaseSource(source)) => *source,
         other => panic!("source: {other:?}"),
     };
+    // A job that fails inside its transaction and rolls back keeps its own
+    // actual families: the same owner's second row is refused by its insert.
+    let failed = ledger.run(
+        "AcquireBaseSource-again",
+        false,
+        route,
+        Command::AcquireBaseSource { owner: 7 },
+    );
+    assert!(matches!(failed.result(), Err(OwnerError::Overlay(_))));
+    assert_eq!(
+        failed
+            .work()
+            .sql
+            .family(StatementKind::Rollback)
+            .unwrap()
+            .attempts,
+        1
+    );
+    assert_eq!(
+        failed
+            .work()
+            .sql
+            .family(StatementKind::Begin)
+            .unwrap()
+            .attempts,
+        1
+    );
+    assert!(failed.work().sql.family(StatementKind::Commit).is_none());
+    drop(failed);
     let file = match ledger
         .run(
             "OpenFile",

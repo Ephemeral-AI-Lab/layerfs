@@ -192,6 +192,42 @@ impl State {
             .map(|lane| lane.ready.len())
             .sum()
     }
+    /// Starts a queued step its thread kept out of the ready queue. None
+    /// when the request is no longer that queued step.
+    pub fn claim(&mut self, task: Arc<Task>) -> Option<Arc<Task>> {
+        if self.stopping {
+            return None;
+        }
+        let lane = self.lane_mut(task.lane, task.mount, &task.token).ok()?;
+        let entry = lane.tasks[task.slot].as_mut()?;
+        let kept = entry.phase == Phase::Queued
+            && entry
+                .task
+                .as_ref()
+                .is_some_and(|own| Arc::ptr_eq(own, &task));
+        if !kept {
+            return None;
+        }
+        entry.phase = Phase::Running(false);
+        lane.work.steps = lane.work.steps.saturating_add(1);
+        Some(task)
+    }
+    /// Queues a kept step for the workers.
+    pub fn requeue(&mut self, task: &Arc<Task>) {
+        let Ok(lane) = self.lane_mut(task.lane, task.mount, &task.token) else {
+            return;
+        };
+        let kept = lane.tasks[task.slot].as_ref().is_some_and(|entry| {
+            entry.phase == Phase::Queued
+                && entry
+                    .task
+                    .as_ref()
+                    .is_some_and(|own| Arc::ptr_eq(own, task))
+        });
+        if kept && !lane.ready.contains(&task.slot) {
+            lane.ready.push_back(task.slot);
+        }
+    }
     pub fn take(&mut self) -> Option<Arc<Task>> {
         let length = self.lanes.len();
         for offset in 0..length {

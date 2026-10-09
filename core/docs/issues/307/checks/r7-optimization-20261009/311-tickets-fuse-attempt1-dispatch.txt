@@ -1,0 +1,40 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/dispatch-90817d26534023de --test-threads=1  (cwd core/crates/layerfs-fuse)
+
+running 19 tests
+test a_kept_step_on_the_receiving_thread_still_leaves_it_before_provider_work ... ok
+test a_step_kept_while_the_dispatcher_stops_is_retained_and_not_run_again ... ok
+test a_step_made_runnable_inside_a_first_step_is_run_by_the_receiving_thread ... ok
+test a_step_woken_from_a_step_of_another_pool_is_not_lost ... FAILED
+test a_terminal_fence_raised_during_the_waking_step_runs_the_kept_step_exactly_once ... ok
+test a_wake_from_a_thread_that_runs_no_request_step_goes_to_a_pool_worker ... ok
+test a_worker_gives_a_kept_step_to_the_pool_before_provider_work ... ok
+test a_worker_runs_the_steps_it_makes_runnable_as_its_own_next_steps ... ok
+test completion_event_resumes_without_another_request_and_old_wakers_are_stale ... ok
+test fixed_workers_share_mounts_and_survive_zero_mounts ... ok
+test handoff_after_pool_shutdown_retains_original_and_returns_terminal_error ... ok
+test notification_registration_does_not_keep_a_disposed_request_alive ... ok
+test panic_and_failure_retain_original_future_and_do_not_stop_other_mounts ... ok
+test quiescence_wait_is_event_driven_and_expiry_disposes_nothing ... ok
+test rejected_copy_capacity_keeps_receive_ownership_and_permit_cancel_is_exact ... ok
+test repeated_collisions_complete_every_request_once_with_exact_step_counts ... ok
+test the_receiving_thread_keeps_one_step_and_its_kept_step_keeps_none ... ok
+test two_borrowed_waiters_wake_on_terminal_without_releasing_original_credit ... ok
+test wake_during_poll_is_coalesced_and_never_lost ... ok
+
+failures:
+
+---- a_step_woken_from_a_step_of_another_pool_is_not_lost stdout ----
+
+thread 'a_step_woken_from_a_step_of_another_pool_is_not_lost' panicked at crates/layerfs-fuse/tests/support/mod.rs:52:9:
+bounded observation expired
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_step_woken_from_a_step_of_another_pool_is_not_lost
+
+test result: FAILED. 18 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.40s
+
+R4_WALL seconds<=6 limit=100s lock_wait=0s
+EXIT 101

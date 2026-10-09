@@ -1,0 +1,26 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/complete_installed_roots-e76bd78a0eded4e2 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 5 tests
+test all_supported_native_paths_survive_install_with_full_oracles ... ok
+test dense_500000000_native_bytes_survive_install ... ok
+test huge_native_namespace_is_complete_after_install ... FAILED
+test prepare_huge_native_namespace ... ignored, explicit sealed preparation, not an independent proof or measurement
+test sparse_native_bytes_and_holes_survive_install ... ok
+
+failures:
+
+---- huge_native_namespace_is_complete_after_install stdout ----
+
+thread 'huge_native_namespace_is_complete_after_install' panicked at crates/layerfs-daemon/tests/complete_installed_roots.rs:79:10:
+explicit closed preparation for clone setup
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    huge_native_namespace_is_complete_after_install
+
+test result: FAILED. 3 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 11.30s
+
+R4_WALL seconds<=13 limit=100s lock_wait=0s
+EXIT 101

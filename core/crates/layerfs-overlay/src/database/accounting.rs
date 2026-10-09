@@ -15,6 +15,7 @@ pub struct StoredCounts {
     pub owner_rows: u64,
     pub source_rows: u64,
     pub owner_details: u64,
+    /// Pending reply tickets, held in the engine's memory.
     pub reply_tickets: u64,
     pub retire_targets: u64,
     pub maintenance_targets: u64,
@@ -41,9 +42,9 @@ impl Overlay {
             0
         };
         let counts=self.query(StatementKind::Startup,
-            "SELECT namespaces,inode_rows,directory_entry_rows,payload_cells,payload_bytes,shrink_rows,operation_record_rows,operation_record_bytes,orphan_rows,owner_rows,source_rows,owner_details,reply_tickets,retire_targets,maintenance_targets,ready_targets,wait_refs FROM accounting WHERE ns=?1",&[&ns],8,
+            "SELECT namespaces,inode_rows,directory_entry_rows,payload_cells,payload_bytes,shrink_rows,operation_record_rows,operation_record_bytes,orphan_rows,owner_rows,source_rows,owner_details,retire_targets,maintenance_targets,ready_targets,wait_refs FROM accounting WHERE ns=?1",&[&ns],8,
             |r|Ok(StoredCounts {
-                wait_refs:unsigned(r,16)?,
+                wait_refs:unsigned(r,15)?,
                 namespaces:unsigned(r,0)?,
                 inode_rows:unsigned(r,1)?,
                 directory_entry_rows:unsigned(r,2)?,
@@ -56,11 +57,16 @@ impl Overlay {
                 owner_rows:unsigned(r,9)?,
                 source_rows:unsigned(r,10)?,
                 owner_details:unsigned(r,11)?,
-                reply_tickets:unsigned(r,12)?,
-                retire_targets:unsigned(r,13)?,
-                maintenance_targets:unsigned(r,14)?,
-                ready_targets:unsigned(r,15)?,
+                reply_tickets:0,
+                retire_targets:unsigned(r,12)?,
+                maintenance_targets:unsigned(r,13)?,
+                ready_targets:unsigned(r,14)?,
             }))?.pop().unwrap_or_default();
+        // Reply tickets are held in the engine's memory, not in a row.
+        let counts = StoredCounts {
+            reply_tickets: self.tickets.count(route.map(|route| route.namespace())),
+            ..counts
+        };
         let (database_pages, free_pages) = self.pages()?;
         let metadata = counts
             .namespaces

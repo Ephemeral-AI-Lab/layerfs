@@ -7,6 +7,7 @@ use rusqlite::{Connection, ToSql};
 use std::{
     cell::{Cell, RefCell},
     path::Path,
+    sync::Arc,
 };
 
 /// Daemon-local engine. The daemon runs short jobs on it one exclusive turn
@@ -27,6 +28,11 @@ pub struct Overlay {
     /// Next owner identity of this engine. The database is created by this
     /// connection and never reopened, so the counter needs no stored row.
     pub(crate) next_owner: Cell<u64>,
+    /// Reply tickets of this engine's publications, shared with the threads
+    /// that attempt replies.
+    pub(crate) tickets: Arc<crate::ReplyTickets>,
+    /// Tickets issued by the running atomic job, withdrawn if it fails.
+    pub(crate) issued: RefCell<Vec<(i64, i64)>>,
     pub(super) profile: DatabaseProfile,
     pub(super) allocation: crate::database::allocation::Allocation,
 }
@@ -172,6 +178,19 @@ impl Overlay {
     ) -> OverlayResult<T> {
         self.transaction(true, job)
     }
+    /// The engine's reply tickets, for the threads that attempt replies.
+    pub fn reply_tickets(&self) -> Arc<crate::ReplyTickets> {
+        self.tickets.clone()
+    }
+    /// Issues the reply ticket of the running atomic job's publication.
+    pub(crate) fn issue(&self, publication: crate::Publication) {
+        self.tickets.issue(publication);
+        if self.transaction.get() != Transaction::None {
+            self.issued
+                .borrow_mut()
+                .push((publication.route.ns, publication.revision));
+        }
+    }
     /// Allocation-call counters without performing filesystem or SQL I/O.
     pub fn allocation_work(&self) -> crate::AllocationWork {
         self.allocation.work()
@@ -195,6 +214,13 @@ impl Overlay {
         }
         self.transaction.set(Transaction::Wanted { cleanup });
         let result = job();
+        // A ticket exists for its holder only once its job has succeeded.
+        let issued = std::mem::take(&mut *self.issued.borrow_mut());
+        if result.is_err() {
+            for (ns, revision) in issued {
+                self.tickets.withdraw(ns, revision);
+            }
+        }
         if self.transaction.replace(Transaction::None) != Transaction::Begun {
             return result;
         }

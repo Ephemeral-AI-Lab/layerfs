@@ -53,6 +53,19 @@ Provider reads never run there: every call that obtains a Store reader is
 preceded by `LeaveReceiver`, which is ready at once on a worker and yields one
 turn on a receive thread, so the continuation resumes on a worker first.
 
+R7 update, 2026-10-09 (a thread runs the step it made runnable): when a
+thread that is running a request step makes a parked step runnable — it
+served that request's owner job in its own turn and published the outcome —
+the step is kept by that thread instead of being queued for a worker
+(`dispatch::task`). A worker runs its kept step next. A receive thread runs
+it right after its own first step, as a receiving step, so `LeaveReceiver`
+still yields before provider I/O, and that second step keeps nothing: a
+receive loop runs at most one step besides the first step of the request it
+received. `LeaveReceiver` on a worker gives a kept step to the queue before
+provider I/O. A kept step is `Queued` like any other and is retained with the
+rest at a stop. Wakes from a thread that runs no request step, such as the
+owner thread, queue the step and wake a worker as before.
+
 The scheduler has two condition variables. `runnable` is for workers: one is
 woken per queued step, and only when one is idle. `changed` is for observers
 (a receive loop waiting for a slot, startup, drain and quiescence waits) and
@@ -283,8 +296,10 @@ the earlier flow. They, and every mutation, now take owner visits that record
 no source ([native read custody](73-native-read-custody.md)): a decided visit
 is the whole request in the owner, and an undecided one leaves the receive
 loop, reads its base facts through `RequestServices::base` and visits again.
-Nothing is released after these replies except a publication's ticket. The
-flow above still applies to OPEN, OPENDIR and data reads.
+Nothing is released after these replies except a publication's ticket, and
+that release is recorded from the replying thread without an owner job
+([owner](21-daemon-owner.md)). The flow above still applies to OPEN, OPENDIR
+and data reads.
 
 READ and READLINK consume their metadata answer before requesting a local window.
 The original metadata value/Arc and Completion are disposed; independent FileRead

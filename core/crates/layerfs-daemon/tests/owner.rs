@@ -324,7 +324,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 20);
+    assert_eq!(owner.profile().schema_version, 21);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);
@@ -786,4 +786,364 @@ fn lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanu
             .is_ok()
     );
     owner.stop().unwrap();
+}
+
+/// Bounded wait for one admitted job: a stalled owner fails the test instead
+/// of hanging it.
+fn done(pending: &Pending, what: &str) -> Completion {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        if let Some(done) = pending.try_complete().unwrap() {
+            return done;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{what}: no completion"
+        );
+        std::thread::yield_now();
+    }
+}
+fn run(client: &OwnerClient, route: Route, command: Command, what: &str) -> Completion {
+    done(&submit(client, Some(route), command), what)
+}
+/// Credits are returned after the result is visible: observe, bounded.
+fn settled(client: &OwnerClient, outstanding: usize) -> layerfs_daemon::OwnerWork {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let work = client.diagnostics().unwrap();
+        if work.outstanding == outstanding {
+            return work;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "credits: outstanding={} queued={} admitted={} completed={:?}",
+            work.outstanding,
+            work.queued,
+            work.admitted,
+            work.completed
+        );
+        std::thread::yield_now();
+    }
+}
+fn pending_publications(client: &OwnerClient, route: Route) -> Vec<Publication> {
+    let done = run(
+        client,
+        route,
+        Command::PendingPublications { after: 0 },
+        "pending publications",
+    );
+    match done.result() {
+        Ok(Response::Publications(pending)) => pending.clone(),
+        x => panic!("pending publications: {x:?}"),
+    }
+}
+fn cleanup_state(client: &OwnerClient, route: Route) -> layerfs_overlay::CleanupState {
+    let done = run(client, route, Command::CleanupState, "cleanup state");
+    match done.result() {
+        Ok(Response::CleanupState(state)) => *state,
+        x => panic!("cleanup state: {x:?}"),
+    }
+}
+/// `Owner::stop` joins the owner thread. The join runs on a helper thread
+/// whose exit depends on nothing of the test, and the test waits bounded.
+fn stop_bounded(owner: Owner) {
+    let (send, stopped) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = send.send(owner.stop());
+    });
+    match stopped.recv_timeout(std::time::Duration::from_secs(20)) {
+        Ok(result) => result.unwrap(),
+        Err(_) => panic!("the owner did not stop"),
+    }
+}
+
+#[test]
+fn a_reply_attempt_is_recorded_without_an_owner_job_and_a_parked_capture_is_owed_one() {
+    use layerfs_daemon::ServiceClass;
+    use layerfs_overlay::{OverlayError, Settled};
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("overlay"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let a = open(&client, 21);
+    let b = open(&client, 22);
+    let publish = |route: Route, serial: u64| {
+        let done = run(
+            &client,
+            route,
+            Command::Publish {
+                inode: value(serial),
+                name: None,
+                cell: None,
+            },
+            "publish",
+        );
+        publication(&done)
+    };
+    let first = publish(a, 2);
+    let second = publish(a, 3);
+    let other = publish(b, 2);
+    assert_eq!(pending_publications(&client, a), vec![first, second]);
+    assert_eq!(pending_publications(&client, b), vec![other]);
+
+    // No waiter: attempts are recorded from any thread and admit no job.
+    let before = settled(&client, 0);
+    assert_eq!(client.reply_attempted(other).unwrap(), Settled::Last);
+    assert!(matches!(
+        client.reply_attempted(other),
+        Err(OwnerError::Overlay(OverlayError::Stale))
+    ));
+    let replying = client.clone();
+    let from_thread = std::thread::spawn(move || replying.reply_attempted(first))
+        .join()
+        .unwrap();
+    assert_eq!(from_thread.unwrap(), Settled::Pending);
+    let work = client.diagnostics().unwrap();
+    assert_eq!(
+        (work.admitted, work.completed, work.outstanding, work.queued),
+        (before.admitted, before.completed, 0, 0)
+    );
+    // The owner sees what the threads recorded.
+    assert_eq!(pending_publications(&client, a), vec![second]);
+    assert!(pending_publications(&client, b).is_empty());
+
+    // A capture parks behind the last ticket: its readiness turn's read is
+    // published before the job is requeued.
+    let before = settled(&client, 0);
+    let capture = submit(&client, Some(a), Command::Capture);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let work = client.diagnostics().unwrap();
+        if work.queued == 1
+            && work.sql_foreground.total().attempts > before.sql_foreground.total().attempts
+        {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "capture never parked");
+        std::thread::yield_now();
+    }
+    assert!(capture.try_complete().unwrap().is_none());
+    // Another Workspace's ticket traffic neither settles nor wakes it.
+    let unrelated = publish(b, 3);
+    assert_eq!(client.reply_attempted(unrelated).unwrap(), Settled::Last);
+    assert!(capture.try_complete().unwrap().is_none());
+
+    // The last attempt is told that an owner job waited. Recording it is
+    // still no owner job, so the capture stays parked until the one
+    // settling job the caller now owes has run.
+    let parked = settled(&client, 1);
+    assert_eq!(client.reply_attempted(second).unwrap(), Settled::Watched);
+    let work = client.diagnostics().unwrap();
+    assert_eq!(
+        (work.admitted, work.completed, work.queued),
+        (parked.admitted, parked.completed, 1)
+    );
+    assert!(capture.try_complete().unwrap().is_none());
+    let settling = run(&client, a, Command::ReplySettled, "reply settled");
+    assert!(matches!(settling.result(), Ok(Response::Done)));
+    // A live Workspace has nothing to queue: the job wrote nothing.
+    assert_eq!(settling.work().sql.total().rows_changed, 0);
+    drop(settling);
+    let captured = done(&capture, "parked capture");
+    let sealed = match captured.result() {
+        Ok(Response::Captured(capture)) => *capture,
+        x => panic!("capture: {x:?}"),
+    };
+    assert!(captured.work().parked_turns >= 1);
+    assert_eq!(sealed.revision, second.revision());
+    // The result's credit is held by its completion and by its handle.
+    drop((captured, capture));
+    let work = settled(&client, 0);
+    let mut completed = parked.completed;
+    completed[ServiceClass::Lifecycle as usize] += 1;
+    completed[ServiceClass::Capture as usize] += 1;
+    assert_eq!(
+        (work.admitted, work.completed, work.queued),
+        (parked.admitted + 1, completed, 0)
+    );
+    stop_bounded(owner);
+}
+
+#[test]
+fn a_closed_workspace_is_reclaimed_only_after_the_settling_job_of_its_last_reply_attempt() {
+    use layerfs_overlay::{CleanupState, Settled};
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("overlay"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let route = open(&client, 31);
+    let published = write(&client, route, 2);
+    let ticket = publication(&published);
+    drop(published);
+    assert!(matches!(
+        run(&client, route, Command::Close, "close").result(),
+        Ok(Response::Done)
+    ));
+    // The pending ticket holds the closed Workspace. Idle maintenance and
+    // further owner turns have nothing queued to reclaim.
+    for _ in 0..16 {
+        assert_eq!(cleanup_state(&client, route), CleanupState::Held);
+    }
+    assert_eq!(client.diagnostics().unwrap().closed_namespaces, 0);
+    // The close observed the ticket pending, so its attempt owes a turn.
+    assert_eq!(client.reply_attempted(ticket).unwrap(), Settled::Watched);
+    // The attempt alone queued nothing.
+    for _ in 0..16 {
+        assert_eq!(cleanup_state(&client, route), CleanupState::Held);
+    }
+    assert_eq!(client.diagnostics().unwrap().closed_namespaces, 0);
+    assert!(matches!(
+        run(&client, route, Command::ReplySettled, "reply settled").result(),
+        Ok(Response::Done)
+    ));
+    // Queued by the settling job, then reclaimed by automatic maintenance.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        match cleanup_state(&client, route) {
+            CleanupState::Gone => break,
+            CleanupState::Queued => {}
+            state => panic!("after the settling job: {state:?}"),
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "automatic cleanup did not finish"
+        );
+        std::thread::yield_now();
+    }
+    assert_eq!(client.diagnostics().unwrap().closed_namespaces, 1);
+    assert!(client.maintenance_failure().unwrap().is_none());
+    stop_bounded(owner);
+}
+
+#[test]
+fn concurrent_submitters_get_every_job_done_exactly_once_with_its_own_result() {
+    use layerfs_daemon::ServiceClass;
+    use layerfs_overlay::Settled;
+    const THREADS: u64 = 4;
+    const ROUNDS: u64 = 300;
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("overlay"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    // Two namespaces, each shared by two submitting threads, so that turns
+    // collide both inside a lane and across the rotation.
+    let routes = [open(&client, 41), open(&client, 42)];
+    let before = settled(&client, 0);
+
+    // Each thread makes its own bounded waits and never waits for another
+    // thread: one that fails ends by itself and the scope reports it.
+    let published: Vec<Vec<Publication>> = std::thread::scope(|scope| {
+        let threads: Vec<_> = (0..THREADS)
+            .map(|thread| {
+                let client = client.clone();
+                let route = routes[(thread % 2) as usize];
+                scope.spawn(move || {
+                    let mut published = Vec::with_capacity(ROUNDS as usize);
+                    for round in 0..ROUNDS {
+                        // A serial no other thread or round uses.
+                        let serial = 2 + thread * ROUNDS + round;
+                        let wrote = run(
+                            &client,
+                            route,
+                            Command::Publish {
+                                inode: value(serial),
+                                name: None,
+                                cell: None,
+                            },
+                            "publish",
+                        );
+                        let ticket = publication(&wrote);
+                        drop(wrote);
+                        assert_eq!(ticket.route(), route);
+                        // Its own result: the row this thread just wrote.
+                        let read = run(&client, route, Command::Inode(serial), "inode");
+                        assert!(
+                            matches!(read.result(), Ok(Response::Inode(Some(row))) if *row == value(serial)),
+                            "thread {thread} round {round}: {:?}",
+                            read.result()
+                        );
+                        drop(read);
+                        // The reply attempt is recorded from this thread
+                        // and nothing waits for it.
+                        let attempt = client.reply_attempted(ticket).unwrap();
+                        assert_ne!(attempt, Settled::Watched);
+                        published.push(ticket);
+                    }
+                    published
+                })
+            })
+            .collect();
+        threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
+            .collect()
+    });
+
+    // Every publishing job ran exactly once: each namespace's revisions are
+    // the dense sequence of its jobs, and each thread saw its own ascend.
+    for (index, route) in routes.iter().enumerate() {
+        let mut revisions = Vec::new();
+        for (thread, tickets) in published.iter().enumerate() {
+            if thread % 2 != index {
+                continue;
+            }
+            assert_eq!(tickets.len(), ROUNDS as usize);
+            assert!(tickets
+                .windows(2)
+                .all(|pair| pair[0].revision() < pair[1].revision()));
+            revisions.extend(tickets.iter().map(|ticket| ticket.revision()));
+        }
+        revisions.sort_unstable();
+        let expected: Vec<i64> = (1..=(THREADS / 2 * ROUNDS) as i64).collect();
+        assert_eq!(revisions, expected, "namespace {index}");
+        let state = run(&client, *route, Command::State, "state");
+        assert!(
+            matches!(state.result(), Ok(Response::State(state)) if state.revision == expected.len() as i64)
+        );
+        drop(state);
+        assert!(pending_publications(&client, *route).is_empty());
+    }
+
+    // The owner's totals match what was submitted: every admitted job
+    // completed, in its own class, and no reply attempt was a job.
+    let jobs = THREADS * ROUNDS;
+    let after = settled(&client, 0);
+    // The two State and two PendingPublications observations above.
+    assert_eq!(after.admitted, before.admitted + 2 * jobs + 4);
+    assert_eq!(
+        after.completed.iter().sum::<u64>(),
+        before.completed.iter().sum::<u64>() + 2 * jobs + 4
+    );
+    let class =
+        |class: ServiceClass| after.completed[class as usize] - before.completed[class as usize];
+    assert_eq!(class(ServiceClass::Mutation), jobs);
+    assert_eq!(class(ServiceClass::Read), jobs + 2);
+    assert_eq!(class(ServiceClass::Lifecycle), 2);
+    assert_eq!(after.admitted, after.completed.iter().sum::<u64>());
+    assert_eq!((after.queued, after.credited_bytes), (0, 0));
+    assert!(client.maintenance_failure().unwrap().is_none());
+    println!(
+        "OWNER-CONTENTION threads={THREADS} namespaces=2 jobs={} admitted==completed=true peak_queued={} reply_attempt_jobs=0",
+        2 * jobs,
+        after.peak_queued
+    );
+
+    // The owner stops cleanly and admits nothing afterwards.
+    stop_bounded(owner);
+    assert!(matches!(
+        client.try_submit(Some(routes[0]), Command::State),
+        Err((OwnerError::Stopped, _))
+    ));
 }

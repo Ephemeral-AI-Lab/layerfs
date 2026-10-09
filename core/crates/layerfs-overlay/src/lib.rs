@@ -50,6 +50,7 @@ pub use database::startup::{Creation, CreationWork};
 pub use db::Overlay;
 pub use diagnostics::payload::PayloadWork;
 pub use error::{OverlayError, OverlayResult};
+pub use lifetime::tickets::{ReplyTickets, Settled};
 pub use maintenance::{MaintenanceCursor, MaintenanceStep};
 pub use metrics::{DatabaseWork, StatementKind, StatementWork};
 pub use payload::captured_types::{

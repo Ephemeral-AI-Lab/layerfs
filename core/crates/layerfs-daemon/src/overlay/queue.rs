@@ -9,7 +9,7 @@ use std::{
     any::Any,
     collections::VecDeque,
     mem::size_of,
-    sync::{Arc, Condvar, Mutex, MutexGuard},
+    sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock},
     time::Instant,
 };
 
@@ -233,6 +233,8 @@ pub(crate) struct Shared {
     pub connection: Mutex<Option<Box<Overlay>>>,
     /// The panic of a turn taken by a submitting thread.
     pub panic: Mutex<Option<Box<dyn Any + Send>>>,
+    /// The engine's reply tickets, set once with the connection.
+    pub tickets: OnceLock<Arc<layerfs_overlay::ReplyTickets>>,
 }
 impl Shared {
     pub fn job_capacity(&self, class: ServiceClass, work: &OwnerWork) -> usize {
@@ -312,6 +314,7 @@ impl Shared {
             admission,
             connection: Mutex::new(None),
             panic: Mutex::new(None),
+            tickets: OnceLock::new(),
         }
     }
     pub fn scheduler_bytes(&self) -> usize {
@@ -361,6 +364,28 @@ impl Shared {
         if wanted && !owner {
             self.wake.notify_all();
         }
+    }
+    /// Ends a submitting thread's job. While `combine` allows it, the turn
+    /// passes to the next runnable job queued meanwhile and stays with that
+    /// thread; otherwise the turn ends as `idle` ends it. Maintenance that
+    /// is due is never held back by a combined job.
+    pub fn pass(&self, maintenance: bool, combine: bool) -> Option<Box<Job>> {
+        let Ok(mut state) = self.state.lock() else {
+            return None;
+        };
+        state.maintenance |= maintenance && state.maintenance_error.is_none();
+        if combine && !state.stopping && !state.maintenance_due() {
+            if let Some(job) = state.take() {
+                return Some(job);
+            }
+        }
+        state.busy = false;
+        let wanted = state.work.queued != 0 || state.maintenance;
+        drop(state);
+        if wanted {
+            self.wake.notify_all();
+        }
+        None
     }
     pub fn wait(&self, event: u64) {
         let Ok(mut state) = self.state.lock() else {

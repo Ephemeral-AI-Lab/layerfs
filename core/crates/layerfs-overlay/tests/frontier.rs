@@ -148,10 +148,9 @@ fn exact_frontier_observations_visit_only_their_fixed_domain() {
     for serial in 1..=193 {
         db.publish(route, &inode(serial), None, None).unwrap();
     }
-    let plans = [
-        db.explain_retained_capture(route).unwrap(),
-        db.explain_pending_publications(route, 128).unwrap(),
-    ];
+    // Reply tickets are held in the engine's memory; only the retained
+    // capture is a stored point query.
+    let plans = [db.explain_retained_capture(route).unwrap()];
     assert!(
         plans
             .iter()
@@ -186,14 +185,14 @@ fn exact_frontier_observations_visit_only_their_fixed_domain() {
             assert_eq!(current, prior);
         }
         counts = Some(current);
-        for (before, after, rows) in [(c_before, c_after, 1), (f_before, f_after, 64)] {
-            assert_eq!(after.attempts - before.attempts, 1);
-            assert_eq!(after.rows_returned - before.rows_returned, rows);
-            assert_eq!(after.fullscan_steps - before.fullscan_steps, 0);
-            assert_eq!(after.sorts - before.sorts, 0);
-            assert_eq!(after.autoindex_rows - before.autoindex_rows, 0);
-            assert_eq!(after.reprepares - before.reprepares, 0);
-        }
+        // The ticket page is read from memory: no Frontier statement runs.
+        assert_eq!(f_after, f_before);
+        assert_eq!(c_after.attempts - c_before.attempts, 1);
+        assert_eq!(c_after.rows_returned - c_before.rows_returned, 1);
+        assert_eq!(c_after.fullscan_steps - c_before.fullscan_steps, 0);
+        assert_eq!(c_after.sorts - c_before.sorts, 0);
+        assert_eq!(c_after.autoindex_rows - c_before.autoindex_rows, 0);
+        assert_eq!(c_after.reprepares - c_before.reprepares, 0);
         println!("S2_FRONTIER other_rows={population} capture_vm={} ticket_page_vm={} returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans={plans:?}",current.0,current.1);
     }
     let mut after = 0;

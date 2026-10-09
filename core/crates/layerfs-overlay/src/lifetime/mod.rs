@@ -8,6 +8,7 @@ pub(crate) mod generation;
 pub(crate) mod operation_record;
 pub(crate) mod orphan;
 pub(crate) mod source;
+pub(crate) mod tickets;
 pub(crate) mod workspace;
 
 mod indexed_operation_record;

@@ -173,16 +173,34 @@ fn a_failure_after_the_first_write_rolls_back_and_one_before_it_has_nothing_to_r
     let temp = Temp::new();
     let db = temp.db();
     let route = db.open_workspace([5; 32], [6; 32]).unwrap();
+    let mount = db.create_native_mount(route, 1).unwrap();
     let released = db.acquire_base_source(route, 7).unwrap();
     db.release_base_source(released).unwrap();
     let ticket = db.publish(route, &file(), None, None).unwrap();
+    let revision = db.state(route).unwrap().revision;
     let sql = db.diagnostics();
     let physical = db.allocation_work();
-    // The reply attempt is deleted first; the source that is no longer held
-    // then fails the job, and the deletion is rolled back with it.
+    // A publishing visit writes its inode and advances the frontier. The
+    // kernel custody it then claims names an inode that is not among its
+    // finals, so the job fails after its writes and they are rolled back.
     assert!(matches!(
-        db.reply_attempted_and_release(ticket, released),
-        Err(OverlayError::Stale)
+        db.mutate_native_visit(mount, 9, 1, None, |_, _| {
+            Ok(Some((
+                Changes {
+                    inodes: vec![Inode {
+                        serial: 3,
+                        ..file()
+                    }],
+                    ..Changes::default()
+                },
+                NativeEffect::Entry {
+                    serial: 4,
+                    parent: 1,
+                    directory: false,
+                },
+            )))
+        }),
+        Err(OverlayError::Invalid("native entry final"))
     ));
     let work = db.diagnostics().since(&sql);
     let executions = |kind: StatementKind| work.statements[kind as usize].executions;
@@ -194,10 +212,51 @@ fn a_failure_after_the_first_write_rolls_back_and_one_before_it_has_nothing_to_r
     assert_eq!(admission.admitted_jobs, 1);
     // Admission, an allocation's readback, and the one after the rollback.
     assert_eq!(admission.observations, 2 + admission.attempts);
+    // Neither the inode nor the frontier advance survived, and the ticket
+    // the failed job issued in memory went with them: only the earlier
+    // publication is still owed.
+    assert_eq!(db.inode(route, 3).unwrap(), None);
+    assert_eq!(db.state(route).unwrap().revision, revision);
+    assert_eq!(db.pending_publications(route, 0).unwrap(), vec![ticket]);
+
+    let sql = db.diagnostics();
+    let physical = db.allocation_work();
+    // The reply attempt takes its ticket from the engine's memory, which is
+    // no statement. The source that is no longer held then fails the job in
+    // its reads, before any write, and the ticket is issued again.
+    assert!(matches!(
+        db.reply_attempted_and_release(ticket, released),
+        Err(OverlayError::Stale)
+    ));
+    let work = db.diagnostics().since(&sql);
+    for kind in CONTROL {
+        assert_eq!(
+            work.statements[kind as usize],
+            StatementWork::default(),
+            "{kind:?}"
+        );
+    }
+    assert!(work.total().executions > 0);
+    assert_eq!(work.total().rows_changed, 0);
+    assert_eq!(
+        db.allocation_work().since(physical),
+        AllocationWork::default()
+    );
     // The ticket is still owed and settles exactly once afterwards.
+    assert_eq!(db.pending_publications(route, 0).unwrap(), vec![ticket]);
+    assert_eq!(db.resources(Some(route)).unwrap().counts.reply_tickets, 1);
+    assert!(matches!(
+        db.capture(route),
+        Err(OverlayError::ReplyAttemptsPending)
+    ));
     assert!(!db.capture_ready(route).unwrap());
     db.reply_attempted(ticket).unwrap();
+    assert!(db.pending_publications(route, 0).unwrap().is_empty());
     assert!(db.capture_ready(route).unwrap());
+    assert!(matches!(
+        db.reply_attempted(ticket),
+        Err(OverlayError::Stale)
+    ));
 
     let scope = IndexedOperationRecordScope {
         owner: db.acquire_operation(route, 1).unwrap(),

@@ -485,8 +485,19 @@ impl RequestServices for FilesystemPort {
             },
         )
     }
+    /// The attempt is recorded from this thread, with no owner turn. Only
+    /// the last attempt of a Workspace that an owner job waits for owes one.
     fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.dispose(Command::ReplyAttempted(publication), done)
+        let settled = if publication.route() == self.0.workspace().route() {
+            self.0.overlay().reply_attempted(publication)
+        } else {
+            Err(OwnerError::Overlay(layerfs_overlay::OverlayError::Stale))
+        };
+        match settled {
+            Ok(layerfs_overlay::Settled::Watched) => self.dispose(Command::ReplySettled, done),
+            Ok(_) => Box::pin(std::future::ready(Ok(ServiceReply::new((), ())))),
+            Err(error) => Box::pin(std::future::ready(Err(Box::new(error) as ServiceError))),
+        }
     }
     fn replied(
         &self,

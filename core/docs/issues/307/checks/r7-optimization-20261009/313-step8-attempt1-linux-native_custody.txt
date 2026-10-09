@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 3ae26648f, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_custody-5748f62babb0e016 --test-threads=1 
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... ok
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

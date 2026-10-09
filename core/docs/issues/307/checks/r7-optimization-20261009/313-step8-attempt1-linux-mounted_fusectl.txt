@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 3ae26648f, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_fusectl-fcf789a6910cf56b --test-threads=1 
+
+running 2 tests
+test fp2_the_own_connection_agrees_with_the_ready_receipt_and_its_abort_control_is_bound ... ok
+test fp9_a_second_cold_cached_read_queues_in_the_kernel_behind_a_parked_readahead_read ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

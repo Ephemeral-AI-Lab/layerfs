@@ -165,6 +165,7 @@ impl Owner {
                     // reported: the first submitted job may take its turn on
                     // the submitting thread.
                     let profile = db.profile().clone();
+                    let _ = owner_shared.tickets.set(db.reply_tickets());
                     *owner_shared.connection() = Some(Box::new(db));
                     if ready.send((Ok(profile), startup)).is_ok() {
                         run(&owner_shared);
@@ -351,7 +352,8 @@ impl OwnerClient {
         // takes the turn itself: the same selection, readiness and service
         // as the owner thread's, without a hand-off to it and back.
         // Pending maintenance is never held back by more than eight turns.
-        let turn = if !state.busy && state.work.queued == 1 && !state.maintenance_due() {
+        let held = state.busy;
+        let turn = if !held && state.work.queued == 1 && !state.maintenance_due() {
             state.take()
         } else {
             None
@@ -362,12 +364,32 @@ impl OwnerClient {
                 drop(state);
                 serve_submitted(&self.shared, job);
             }
+            // Whoever holds the turn looks at the queue when it ends: a
+            // submitting thread passes it on or wakes the owner thread, and
+            // the owner thread polls again. Only a free connection whose
+            // turn this thread did not take needs the owner thread woken.
             None => {
                 drop(state);
-                self.shared.wake.notify_all();
+                if !held {
+                    self.shared.wake.notify_all();
+                }
             }
         }
         Ok(pending)
+    }
+    /// Records one reply attempt of a publication from the replying thread,
+    /// with no owner turn. `Watched` says an owner job waited for it: the
+    /// caller then owes one `Command::ReplySettled`.
+    pub fn reply_attempted(
+        &self,
+        publication: layerfs_overlay::Publication,
+    ) -> Result<layerfs_overlay::Settled, OwnerError> {
+        self.shared
+            .tickets
+            .get()
+            .ok_or(OwnerError::Stopped)?
+            .attempted(publication)
+            .map_err(OwnerError::Overlay)
     }
     pub fn diagnostics(&self) -> Result<OwnerWork, OwnerError> {
         self.shared
@@ -441,6 +463,12 @@ fn ready(db: &Overlay, job: &mut Job) -> Result<bool, OverlayError> {
     }
     Ok(true)
 }
+/// Jobs queued during a submitting thread's turn that the same turn serves
+/// before the connection goes back: the fair selection's next job, with no
+/// hand-off to the owner thread. A fixed bound of the turn, not of any
+/// operation; whatever is queued beyond it is the owner thread's.
+const COMBINED: usize = 1;
+
 /// A turn taken by the submitting thread. A panic in the job leaves the
 /// connection in an unknown state: admission closes, queued jobs get their
 /// commands back unattempted, the turn is never returned and the panic is
@@ -448,23 +476,25 @@ fn ready(db: &Overlay, job: &mut Job) -> Result<bool, OverlayError> {
 fn serve_submitted(shared: &Shared, job: Box<Job>) {
     let served = catch_unwind(AssertUnwindSafe(|| {
         let connection = shared.connection();
-        match connection.as_deref() {
-            Some(db) => {
-                serve(shared, db, job);
-                db.maintenance_pending()
+        let Some(db) = connection.as_deref() else {
+            job.refuse(OwnerError::Stopped);
+            shared.idle(false, false);
+            return;
+        };
+        let mut job = job;
+        let mut combined = 0;
+        loop {
+            serve(shared, db, job);
+            match shared.pass(db.maintenance_pending(), combined < COMBINED) {
+                Some(next) => job = next,
+                None => return,
             }
-            None => {
-                job.refuse(OwnerError::Stopped);
-                false
-            }
+            combined += 1;
         }
     }));
-    match served {
-        Ok(maintenance) => shared.idle(maintenance, false),
-        Err(payload) => {
-            shared.stop();
-            shared.panic(payload);
-        }
+    if let Err(payload) = served {
+        shared.stop();
+        shared.panic(payload);
     }
 }
 /// One job on the connection, from its readiness check to its published

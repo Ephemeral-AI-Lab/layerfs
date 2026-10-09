@@ -283,7 +283,18 @@ impl Permit {
             lane.work.steps = lane.work.steps.saturating_add(1);
             state.receiving += 1;
             drop(state);
-            super::task::advance(task, &self.mount.shared, true);
+            let shared = &self.mount.shared;
+            super::task::advance(task, shared, true, true);
+            // One step that first step made runnable runs here as well, as
+            // a receiving step; that one keeps nothing for this thread.
+            if let Some(kept) = super::task::woken() {
+                let mut state = shared.lock();
+                if let Some(next) = state.claim(kept) {
+                    state.receiving += 1;
+                    drop(state);
+                    super::task::advance(next, shared, true, false);
+                }
+            }
             Ok(())
         }
     }

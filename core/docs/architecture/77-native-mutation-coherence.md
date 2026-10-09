@@ -18,7 +18,8 @@ with base facts read from resident objects, and publishes with the reply's
 kernel custody in one transaction. An undecided visit changes nothing; the
 request reads the needed facts outside the owner and visits again, holding
 nothing in between. After the reply only the publication's ticket is
-released (`ReplyAttempted`). The serial of a creating operation is reserved
+released, in the engine's memory and without an owner job; a capture or a
+terminal cleanup that waited for it gets one `ReplySettled` job. The serial of a creating operation is reserved
 before the first visit. See
 [native read custody](73-native-read-custody.md) for the visit rules.
 

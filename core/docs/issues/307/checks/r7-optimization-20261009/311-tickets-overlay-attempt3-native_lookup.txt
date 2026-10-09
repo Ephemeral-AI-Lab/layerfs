@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_lookup-ca40178972058807 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 11 tests
+test a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source ... ok
+test a_read_visit_records_no_source_and_writes_only_a_positive_lookup_reference ... ok
+test a_visit_source_names_no_row_and_is_stale_once_the_base_or_frontier_moves ... ok
+test aggregate_forget_is_checked_and_implicit_root_is_independent ... ok
+test attribute_only_decision_counts_the_lookup_and_retains_no_read ... ok
+test foreign_engine_or_mount_cannot_consume_ownership ... ok
+test native_file_keys_retain_exact_open_owners_and_independent_processing ... ok
+test native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody ... ok
+test need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence ... ok
+test revoked_lookup_retirement_is_bounded_indexed_and_allows_closed_cleanup ... ok
+test source_and_read_fence_revocation_and_request_keys_keep_all_u64_bits ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

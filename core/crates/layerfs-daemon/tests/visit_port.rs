@@ -1,16 +1,19 @@
 //! LOOKUP, GETATTR and mutations through the daemon's Fuse port, counted as
 //! owner jobs and Store reader grants: the real owner and the real Store with
 //! its shared canonical cache, without a kernel mount. These requests are
-//! served by owner visits that record no request source. Public API only;
-//! every wait is bounded and no thread is spawned by the test.
+//! served by owner visits that record no request source, and a published
+//! mutation's reply attempt is recorded in the engine's memory from the
+//! replying thread: it is an owner job only when a capture waited for it.
+//! Public API only; every wait is bounded and no thread is spawned by the
+//! test.
 #[path = "support/installed_store.rs"]
 mod support;
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::{
     bootstrap::open_store,
     store::{BindRequest, BoundWorkspace, Store},
-    Command, Completion, NativeJob, NativeReply, Owner, OwnerClient, OwnerConfig, Response,
-    ServiceClass,
+    Command, Completion, NativeJob, NativeReply, Owner, OwnerClient, OwnerConfig, OwnerError,
+    Response, ServiceClass,
 };
 use layerfs_fuse::{
     operations::{
@@ -276,6 +279,29 @@ impl Rig {
             done.result()
         );
     }
+    /// Reply tickets still owed in the Workspace: one Read-class owner job.
+    fn pending_publications(&self) -> Vec<layerfs_overlay::Publication> {
+        let done = finish(
+            &self.client,
+            self.bound.route(),
+            Command::PendingPublications { after: 0 },
+        );
+        match done.result() {
+            Ok(Response::Publications(pending)) => pending.clone(),
+            other => panic!("pending publications: {other:?}"),
+        }
+    }
+    fn make_directory(&self, request: u64, name: &str) -> MutationRequest {
+        MutationRequest {
+            mount: self.mount,
+            request,
+            protected: self.root,
+            handle: None,
+            input: MutationInput::Named(mkdir(self.root, PathName::new(name).unwrap(), 0o755)),
+            open: None,
+            now: NOW,
+        }
+    }
     fn revision(&self) -> i64 {
         let done = finish(&self.client, self.bound.route(), Command::State);
         match done.result() {
@@ -370,13 +396,14 @@ fn a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant() {
 }
 
 #[test]
-fn a_create_is_one_mutation_job_and_one_reply_attempt_job() {
+fn a_create_is_one_mutation_job_and_its_reply_attempt_is_no_owner_job() {
     let rig = Rig::new("visit-port-create", 162);
     let (mount, root) = (rig.mount, rig.root);
     // Make the parent directory's objects resident.
     let warm = rig.lookup(1, "absent-warm");
     assert!(matches!(warm.value(), Err(Refusal::Missing)));
     wait(warm.dispose()).unwrap();
+    assert!(rig.pending_publications().is_empty());
 
     // CREATE with an open descriptor: decided and published by one owner job
     // of class Mutation, with no source acquisition and no reader grant.
@@ -407,12 +434,32 @@ fn a_create_is_one_mutation_job_and_one_reply_attempt_job() {
         (work.completed, work.admitted, rig.store.read_work().grants),
         (expected.completed, expected.admitted, expected.grants)
     );
+    // Its one reply ticket is owed. This observation is the test's own
+    // Read job.
+    let owed = rig.pending_publications();
+    assert_eq!(owed.len(), 1);
+    assert_eq!(owed[0].revision(), rig.revision());
+    expected = expected.and(&[(ServiceClass::Read, 1), (ServiceClass::Lifecycle, 1)], 0);
+    until("the observations' results returned", || {
+        rig.client.diagnostics().unwrap().outstanding == 1
+    });
+    let work = rig.client.diagnostics().unwrap();
+    assert_eq!(
+        (work.completed, work.admitted),
+        (expected.completed, expected.admitted)
+    );
 
-    // After the one reply attempt the only release is the ticket's: one
-    // Lifecycle job.
+    // The one reply attempt returns the ticket from this thread. Nothing
+    // waits for this Workspace's tickets, so it is no owner job: nothing is
+    // admitted and nothing completes, of class Lifecycle or any other.
     wait(created.replied()).unwrap();
-    expected = expected.and(&[(ServiceClass::Lifecycle, 1)], 0);
     assert_eq!(rig.counted(), expected);
+    // The ticket was returned, and exactly once.
+    assert!(rig.pending_publications().is_empty());
+    assert!(matches!(
+        rig.client.reply_attempted(owed[0]),
+        Err(OwnerError::Overlay(OverlayError::Stale))
+    ));
     assert_eq!(rig.recorded(2), (0, 0, false));
 
     // The published file is found by one visit over its local row.
@@ -424,11 +471,124 @@ fn a_create_is_one_mutation_job_and_one_reply_attempt_job() {
     assert_eq!(rig.recorded(3), (0, 0, false));
 
     println!(
-        "VISIT-CREATE jobs=(1 Mutation, 1 Lifecycle reply attempt) sources=0 reader_grants=0 base_readers=0"
+        "VISIT-CREATE jobs=(1 Mutation, 0 for its reply attempt) sources=0 reader_grants=0 base_readers=0"
     );
     drop(wait(rig.services.close_file(mount, serial, file.owner_id())).unwrap());
     // The create's reply and the lookup each handed the kernel one reference.
     drop(wait(rig.services.forget(mount, serial, 2)).unwrap());
+    rig.revoke_and_stop();
+}
+
+#[test]
+fn a_capture_parked_behind_the_ticket_is_owed_exactly_one_settling_job() {
+    let rig = Rig::new("visit-port-settled", 164);
+    let (mount, route) = (rig.mount, rig.bound.route());
+    let warm = rig.lookup(1, "absent-warm");
+    assert!(matches!(warm.value(), Err(Refusal::Missing)));
+    wait(warm.dispose()).unwrap();
+
+    // Two published mutations whose reply attempts are owed.
+    let first = wait(NativeMutation::perform(
+        rig.services.clone(),
+        rig.make_directory(2, "first"),
+    ))
+    .unwrap_or_else(|failure| panic!("first: {failure:?}"));
+    let second = wait(NativeMutation::perform(
+        rig.services.clone(),
+        rig.make_directory(3, "second"),
+    ))
+    .unwrap_or_else(|failure| panic!("second: {failure:?}"));
+    let made: Vec<u64> = [&first, &second]
+        .map(|done| done.value().unwrap().stat.as_ref().unwrap().serial)
+        .to_vec();
+    let owed = rig.pending_publications();
+    assert_eq!(owed.len(), 2);
+    let revision = rig.revision();
+    assert_eq!(owed[1].revision(), revision);
+    until("the observations' results returned", || {
+        rig.client.diagnostics().unwrap().outstanding == 2
+    });
+
+    // A Capture is admitted and parks: its readiness turn observes the
+    // tickets pending, which is published before the job is requeued.
+    let unparked = rig.client.diagnostics().unwrap();
+    let mut capture = Box::pin(
+        rig.client
+            .try_submit(Some(route), Command::Capture)
+            .unwrap(),
+    );
+    until("capture parked behind the tickets", || {
+        let work = rig.client.diagnostics().unwrap();
+        work.queued == 1
+            && work.sql_foreground.total().attempts > unparked.sql_foreground.total().attempts
+    });
+    let stepper = Stepper::new();
+    assert!(stepper.poll(capture.as_mut()).is_pending());
+    let parked = rig.client.diagnostics().unwrap();
+    assert_eq!(parked.admitted, unparked.admitted + 1);
+    assert_eq!(parked.completed, unparked.completed);
+    // Both mutation results and the capture's admission are still held.
+    assert_eq!((parked.queued, parked.outstanding), (1, 3));
+
+    // The first reply attempt leaves a ticket pending: no owner job, and
+    // the capture stays parked.
+    wait(first.replied()).unwrap();
+    let work = rig.client.diagnostics().unwrap();
+    assert_eq!(
+        (work.admitted, work.completed, work.queued),
+        (parked.admitted, parked.completed, 1)
+    );
+    assert!(stepper.poll(capture.as_mut()).is_pending());
+
+    // The last one is what the capture waited for: exactly one settling
+    // job of class Lifecycle, after which the capture runs and completes.
+    wait(second.replied()).unwrap();
+    let captured = stepper.finish(capture.as_mut(), "parked capture").unwrap();
+    let sealed = match captured.result() {
+        Ok(Response::Captured(capture)) => *capture,
+        other => panic!("capture: {other:?}"),
+    };
+    assert!(captured.work().parked_turns >= 1);
+    // The result's credit is held by its completion and by its handle.
+    drop((captured, capture));
+    until("owner results returned", || {
+        rig.client.diagnostics().unwrap().outstanding == 0
+    });
+    let work = rig.client.diagnostics().unwrap();
+    let mut completed = parked.completed;
+    completed[ServiceClass::Lifecycle as usize] += 1;
+    completed[ServiceClass::Capture as usize] += 1;
+    assert_eq!(
+        (work.admitted, work.completed, work.queued),
+        (parked.admitted + 1, completed, 0)
+    );
+    // It sealed both publications, and no ticket is owed.
+    assert_eq!(sealed.revision, revision);
+    assert!(rig.pending_publications().is_empty());
+
+    // With the capture retained and nothing waiting, a third mutation's
+    // reply attempt is again no owner job.
+    let third = wait(NativeMutation::perform(
+        rig.services.clone(),
+        rig.make_directory(4, "third"),
+    ))
+    .unwrap_or_else(|failure| panic!("third: {failure:?}"));
+    let last = third.value().unwrap().stat.as_ref().unwrap().serial;
+    let before = rig.client.diagnostics().unwrap();
+    wait(third.replied()).unwrap();
+    let work = rig.client.diagnostics().unwrap();
+    assert_eq!(
+        (work.admitted, work.completed),
+        (before.admitted, before.completed)
+    );
+    assert!(rig.pending_publications().is_empty());
+
+    println!(
+        "VISIT-SETTLED parked_capture=(2 tickets owed) first_attempt=(0 jobs, capture parked) last_attempt=(1 Lifecycle ReplySettled, capture completes) later_attempt=(0 jobs)"
+    );
+    for serial in made.into_iter().chain([last]) {
+        drop(wait(rig.services.forget(mount, serial, 1)).unwrap());
+    }
     rig.revoke_and_stop();
 }
 

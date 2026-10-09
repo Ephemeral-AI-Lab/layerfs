@@ -1,0 +1,24 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/reply_tickets-e01139f6076113b3 --test-threads=1 a_publication_of_another_engine (cwd core/crates/layerfs-overlay)
+
+running 1 test
+test a_publication_of_another_engine_holds_no_ticket_here ... FAILED
+
+failures:
+
+---- a_publication_of_another_engine_holds_no_ticket_here stdout ----
+
+thread 'a_publication_of_another_engine_holds_no_ticket_here' panicked at crates/layerfs-overlay/tests/reply_tickets.rs:665:5:
+assertion `left == right` failed
+  left: Some(Last)
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_publication_of_another_engine_holds_no_ticket_here
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 101

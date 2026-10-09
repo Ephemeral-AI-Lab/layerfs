@@ -219,6 +219,22 @@ impl Rig {
     fn owner_work(&self) -> layerfs_daemon::OwnerWork {
         self.client.diagnostics().unwrap()
     }
+    /// Reply tickets still owed in the Workspace: one Read-class owner job
+    /// of the test, submitted beside the port and not through its fence.
+    fn pending_publications(
+        &self,
+        route: layerfs_overlay::Route,
+    ) -> Vec<layerfs_overlay::Publication> {
+        let done = finish(
+            &self.client,
+            route,
+            Command::PendingPublications { after: 0 },
+        );
+        match done.result() {
+            Ok(Response::Publications(pending)) => pending.clone(),
+            other => panic!("pending publications: {other:?}"),
+        }
+    }
     /// Revocation refuses while any request source or read row remains, so
     /// its success shows that every request gave back what it held.
     fn revoke_and_stop(mut self) {
@@ -395,20 +411,27 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     assert_eq!(rig.store.read_work().outstanding, 0);
 
     // Every disposal call still runs: ticket, reads, sources, handles, lookup.
-    // A replied mutation holds no source: its one job gives back its ticket.
+    // A replied mutation holds no source, and its reply attempt gives back a
+    // ticket held in the engine's memory: nothing waits for this Workspace's
+    // tickets, so the attempt is recorded with no owner job at all.
+    let route = rig.bound.route();
+    assert_eq!(rig.pending_publications(route).len(), 1);
+    let admitted = rig.owner_work().admitted;
     wait(published.replied()).unwrap();
-    assert_eq!(rig.owner_work().admitted, admitted + 1);
+    assert_eq!(rig.owner_work().admitted, admitted);
     wait(held.dispose()).unwrap();
     drop(wait(services.release_source(source)).unwrap());
     drop(wait(services.release_source(directory_read.source())).unwrap());
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
     drop(wait(services.close_directory(directory)).unwrap());
     drop(wait(services.forget(mount, serial, 1)).unwrap());
-    assert_eq!(rig.owner_work().admitted, admitted + 8);
+    assert_eq!(rig.owner_work().admitted, admitted + 7);
+    // The stopped fence did not keep the ticket: it was returned.
+    assert!(rig.pending_publications(route).is_empty());
     // The port itself replies to nothing.
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "FENCED-CALLS refused=16 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 disposal_jobs_after_stop=8"
+        "FENCED-CALLS refused=16 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=7"
     );
     drop((view, services));
     rig.revoke_and_stop();
@@ -591,11 +614,17 @@ fn a_job_submitted_before_the_stop_is_awaited_to_its_original_result() {
     ))
     .unwrap();
     let parent = first.value().unwrap().stat.as_ref().unwrap().serial;
+    let unparked = rig.owner_work().sql_foreground.total().attempts;
     let capture = rig
         .client
         .try_submit(Some(route), Command::Capture)
         .unwrap();
-    until("capture queued", || rig.owner_work().queued == 1);
+    // Queued again after its readiness turn, which observed the ticket
+    // pending: that turn's read is published before the job is requeued.
+    until("capture parked behind the ticket", || {
+        let work = rig.owner_work();
+        work.queued == 1 && work.sql_foreground.total().attempts > unparked
+    });
     let sources = rig.owner_work().completed[ServiceClass::Source as usize];
     let mutations = rig.owner_work().completed[ServiceClass::Mutation as usize];
     // Inside the new local directory nothing has to be read from the base, so
@@ -643,11 +672,22 @@ fn a_job_submitted_before_the_stop_is_awaited_to_its_original_result() {
     wait(late.relinquish()).unwrap();
     assert_eq!(rig.owner_work().admitted, admitted);
 
-    // The owed reply attempt is a disposal call: it runs after the stop, the
-    // capture then completes and the held-back job runs to its own result.
+    // The owed reply attempt is a disposal call: it runs after the stop.
+    // The attempt itself is recorded with no owner job; because the parked
+    // capture observed this last ticket pending, it owes the owner exactly
+    // one settling job. The capture then completes and the held-back job
+    // runs to its own result.
+    let lifecycle = rig.owner_work().completed[ServiceClass::Lifecycle as usize];
     wait(first.replied()).unwrap();
+    let work = rig.owner_work();
+    assert_eq!(work.admitted, admitted + 1);
+    assert_eq!(
+        work.completed[ServiceClass::Lifecycle as usize],
+        lifecycle + 1
+    );
     let captured = wait(capture).unwrap();
     assert!(matches!(captured.result(), Ok(Response::Captured(_))));
+    assert!(captured.work().parked_turns >= 1);
     drop(captured);
     let second = stepper
         .finish(second.as_mut(), "submitted mutation")
@@ -655,7 +695,14 @@ fn a_job_submitted_before_the_stop_is_awaited_to_its_original_result() {
     let made = second.value().unwrap();
     assert!(made.changed);
     let serial = made.stat.as_ref().unwrap().serial;
+    // Nothing waits for the second publication's ticket: no owner job.
     wait(second.replied()).unwrap();
+    let work = rig.owner_work();
+    assert_eq!(work.admitted, admitted + 1);
+    assert_eq!(
+        work.completed[ServiceClass::Lifecycle as usize],
+        lifecycle + 1
+    );
     assert_eq!(fence.terminal_replies(), 0);
 
     // Read back through a fence that was never stopped: the second directory

@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=33, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/owner-dff6c9b96cdb7d0c --test-threads=1 concurrent_submitters --nocapture (cwd core/crates/layerfs-daemon)
+
+running 1 test
+test concurrent_submitters_get_every_job_done_exactly_once_with_its_own_result ... OWNER-CONTENTION threads=4 namespaces=2 jobs=2400 admitted==completed=true peak_queued=4 reply_attempt_jobs=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.11s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

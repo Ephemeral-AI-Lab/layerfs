@@ -125,23 +125,22 @@ impl Overlay {
         if state.consolidating.is_some() {
             return Ok(false);
         }
-        Ok(self
-            .query(
-                StatementKind::Frontier,
-                "SELECT revision FROM request WHERE ns=?1 ORDER BY revision LIMIT 1",
-                &[&route.ns],
-                8,
-                |row| row.get::<_, i64>(0),
-            )?
-            .is_empty())
+        // The last reply attempt of the namespace owes this waiter a turn.
+        Ok(!self.tickets.watch(route.ns))
     }
-    /// Records a send attempt, including a lost reply. It never removes published
-    /// inode/name/byte state and never claims kernel delivery.
+    /// Records a send attempt, including a lost reply, on the owner's turn.
+    /// It never removes published inode/name/byte state and never claims
+    /// kernel delivery. A replying thread records its attempt through
+    /// `reply_tickets` instead and owes `reply_settled` only when told so.
     pub fn reply_attempted(&self, publication: Publication) -> OverlayResult<()> {
-        self.atomic_cleanup(|| {
-            self.reply_attempted_inner(publication)?;
-            self.queue_closed(publication.route)
-        })
+        self.state(publication.route)?;
+        self.tickets.attempted(publication)?;
+        self.reply_settled(publication.route)
+    }
+    /// The owner turn owed after a namespace's last watched reply attempt:
+    /// a terminal cleanup that waited for it is queued.
+    pub fn reply_settled(&self, route: Route) -> OverlayResult<()> {
+        self.atomic_cleanup(|| self.queue_closed(route))
     }
     /// The reply attempt and the release of the same request's processing
     /// source, in one transaction: both are recorded or neither is, so a
@@ -156,26 +155,18 @@ impl Overlay {
         }
         self.release_class(source)?;
         self.atomic_cleanup(|| {
-            self.reply_attempted_inner(publication)?;
-            self.release_source_inner(source)
+            self.state(publication.route)?;
+            // The source's release queues a terminal cleanup that waited
+            // for this ticket, so the ticket goes first and comes back,
+            // with its waiter, if the release fails.
+            let settled = self.tickets.attempted(publication)?;
+            self.release_source_inner(source).inspect_err(|_| {
+                self.tickets.issue(publication);
+                if settled == crate::Settled::Watched {
+                    self.tickets.watch(publication.route.ns);
+                }
+            })
         })
-    }
-    fn reply_attempted_inner(&self, publication: Publication) -> OverlayResult<()> {
-        self.state(publication.route)?;
-        let changed = self.execute(
-            StatementKind::Frontier,
-            "DELETE FROM request WHERE ns=?1 AND revision=?2 AND gen=?3",
-            &[
-                &publication.route.ns,
-                &publication.revision,
-                &publication.generation.0,
-            ],
-            24,
-        )?;
-        if changed != 1 {
-            return Err(OverlayError::Stale);
-        }
-        Ok(())
     }
     /// Seals existing rows without copying them. The daemon parks capture until
     /// earlier reply attempts settle; this method does not block a SQL owner.
@@ -184,9 +175,7 @@ impl Overlay {
             let state=self.live(route)?;
             if state.captured.is_some() {return Err(OverlayError::CaptureInFlight);}
             if state.consolidating.is_some() {return Err(OverlayError::Consolidating);}
-            if !self.query(StatementKind::Frontier,
-                "SELECT revision FROM request WHERE ns=?1 ORDER BY revision LIMIT 1",
-                &[&route.ns],8,|r|r.get::<_,i64>(0))?.is_empty() {
+            if self.tickets.pending(route.ns) {
                 return Err(OverlayError::ReplyAttemptsPending);
             }
             let next=state.active.0.checked_add(1).ok_or(OverlayError::Invalid("generation exhausted"))?;

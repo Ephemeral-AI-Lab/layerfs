@@ -1,0 +1,16 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 3ae26648f, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/admission_future-cf744dc70e1aeb7f --test-threads=1 
+
+running 7 tests
+test a_command_larger_than_the_entire_budget_is_refused_without_waiting ... ok
+test credit_release_races_registration_without_a_polling_fallback ... ok
+test fixed_registrations_replace_wakers_and_cancel_without_losing_input ... ok
+test held_completion_release_wakes_and_admits_original_once ... ok
+test release_before_first_poll_is_observed_without_future_event ... ok
+test stopped_waiter_returns_the_same_unattempted_input ... ok
+test worker_loss_fences_admission_and_retains_the_original_join_failure ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

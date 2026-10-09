@@ -252,22 +252,18 @@ impl Overlay {
             .checked_add(1)
             .ok_or(OverlayError::Invalid("revision exhausted"))?;
         self.execute(
-            StatementKind::Frontier,
-            sql::TICKET_PUT,
-            &[&route.ns, &revision, &state.active.0],
-            24,
-        )?;
-        self.execute(
             StatementKind::Workspace,
             sql::FRONTIER_ADVANCE,
             &[&route.ns, &revision, &inodes, &directory_entries],
             32,
         )?;
-        Ok(Publication {
+        let publication = Publication {
             route,
             revision,
             generation: state.active,
-        })
+        };
+        self.issue(publication);
+        Ok(publication)
     }
     /// Publishes a bounded first-path job and returns retained reply-attempt custody.
     /// The caller supplies semantically checked final values. Atomic namespace

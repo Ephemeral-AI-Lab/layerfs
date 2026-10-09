@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/resources_observation-cfff9454e2fa8457 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test global_resources_is_read_only_before_bind_and_after_terminal_cleanup ... ok
+test stopped_operator_observation_retains_the_exact_unattempted_command ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

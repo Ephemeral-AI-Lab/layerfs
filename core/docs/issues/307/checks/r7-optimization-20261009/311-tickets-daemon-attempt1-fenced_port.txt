@@ -1,0 +1,27 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/fenced_port-47a98c1a1fe5e978 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 4 tests
+test a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_they_hold ... ok
+test a_job_submitted_before_the_stop_is_awaited_to_its_original_result ... ok
+test a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call ... FAILED
+test a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted ... ok
+
+failures:
+
+---- a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call stdout ----
+
+thread 'a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call' panicked at crates/layerfs-daemon/tests/fenced_port.rs:400:5:
+assertion `left == right` failed
+  left: 22
+ right: 23
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 101

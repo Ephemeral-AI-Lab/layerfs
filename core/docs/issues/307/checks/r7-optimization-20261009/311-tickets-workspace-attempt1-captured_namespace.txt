@@ -1,0 +1,19 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace-4f86093c4cbabf63 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 10 tests
+test a_deep_fresh_chain_ends_in_aliases_and_a_moved_base_directory ... ok
+test an_empty_capture_returns_the_base_root_identity ... ok
+test changed_content_mode_and_time_of_each_kind ... ok
+test deleted_files_directories_and_symlinks_leave_the_result ... ok
+test mutations_after_the_capture_are_absent_from_its_root_and_present_in_the_next ... ok
+test new_files_directories_and_symlinks_are_constructed ... ok
+test renamed_and_moved_names_of_each_kind_keep_their_inodes ... ok
+test replacing_renames_and_fresh_moves_compose_in_one_capture ... ok
+test the_model_of_the_fixture_is_the_base_root ... ok
+test the_walk_fails_on_an_inode_that_no_name_reaches - should panic ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

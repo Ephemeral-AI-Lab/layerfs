@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 3ae26648f, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/indexed_operation_record-86840f5f93b1cd6b --test-threads=1 
+
+running 2 tests
+test original_atomic_refusal_and_credits_survive_independent_owner_jobs ... ok
+test released_indexed_rows_reclaim_automatically_and_close_preserves_actual_owner ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

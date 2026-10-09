@@ -495,8 +495,9 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
         totals.windows(2).all(|pair| pair[0] == pair[1]),
         "work must not grow with unrelated rows: {totals:?}"
     );
-    // Three inodes, one dropped name, one rebound name, one ticket, one state
-    // row and the targeted unlinked-payload cleanup item introduced in S6.
-    // Dropped name, new cleanup item and ticket each update two counts.
-    assert_eq!(totals[0].2, 14);
+    // Three inodes, one dropped name, one rebound name, one state row and
+    // the targeted unlinked-payload cleanup item introduced in S6. The
+    // dropped name and the new cleanup item each update two counts. The
+    // job's reply ticket is issued in the engine's memory: no row, no count.
+    assert_eq!(totals[0].2, 11);
 }

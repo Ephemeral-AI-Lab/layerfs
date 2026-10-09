@@ -130,8 +130,10 @@ impl Overlay {
         if !state.closed || state.captured.is_some() || state.base_readers != 0 {
             return Ok(());
         }
-        let held=self.query(StatementKind::Reclaim,
-            "SELECT EXISTS(SELECT 1 FROM lease WHERE ns=?1) OR EXISTS(SELECT 1 FROM request WHERE ns=?1) OR EXISTS(SELECT 1 FROM native_mount WHERE ns=?1) OR EXISTS(SELECT 1 FROM native_directory WHERE ns=?1)",
+        // A pending reply holds the namespace; its last attempt owes the
+        // owner turn that comes back here.
+        let held=self.tickets.watch(route.ns)||self.query(StatementKind::Reclaim,
+            "SELECT EXISTS(SELECT 1 FROM lease WHERE ns=?1) OR EXISTS(SELECT 1 FROM native_mount WHERE ns=?1) OR EXISTS(SELECT 1 FROM native_directory WHERE ns=?1)",
             &[&route.ns],8,|row|row.get::<_,i64>(0))?[0]!=0;
         if !held {
             self.execute(StatementKind::Reclaim,

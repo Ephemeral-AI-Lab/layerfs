@@ -268,18 +268,22 @@ fn worker(shared: Arc<Shared>) {
         shared.announce(&state);
     }
     let _exit = Exit(shared.clone());
+    // The step this worker made runnable during its last one runs next.
+    let mut kept = None;
     loop {
         let mut state = shared.lock();
         let task = loop {
             if state.stopping {
                 return;
             }
-            if let Some(task) = state.take() {
+            let own = kept.take().and_then(|task| state.claim(task));
+            if let Some(task) = own.or_else(|| state.take()) {
                 break task;
             }
             state = shared.wait_runnable(state);
         };
         drop(state);
-        task::advance(task, &shared, false);
+        task::advance(task, &shared, false, true);
+        kept = task::woken();
     }
 }

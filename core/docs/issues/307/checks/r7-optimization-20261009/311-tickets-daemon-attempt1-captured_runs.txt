@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_runs-46f1d8c9926e66aa --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 3 tests
+test actual_owner_returns_bounded_window_with_original_root_after_install_and_close ... ok
+test captured_inode_point_retains_old_metadata_and_forward_seek_bounds ... ok
+test original_attempted_and_unattempted_run_errors_keep_custody_and_other_scope_progress ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

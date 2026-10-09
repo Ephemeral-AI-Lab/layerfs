@@ -37,8 +37,6 @@ pub(crate) const LEASE_LOOKUP: &str =
     "SELECT 1 FROM lease WHERE ns=?1 AND kind=?2 AND owner=?3 AND resource=?4";
 pub(crate) const RETAINED_CAPTURE: &str = "SELECT captured,captured_revision,base_root
     FROM workspace WHERE ns=?1 AND incarnation=?2";
-pub(crate) const PUBLICATION_PAGE: &str = "SELECT revision,gen FROM request
-    WHERE ns=?1 AND revision>?2 ORDER BY revision LIMIT 64";
 pub(crate) const BASE_SOURCE_LOOKUP: &str =
     "SELECT base_root FROM base_source WHERE ns=?1 AND owner=?2 AND kind=?3";
 pub(crate) const BASE_SOURCE_INSERT: &str =
@@ -71,7 +69,6 @@ pub(crate) const DIRECTORY_ENTRY_PUT: &str = "INSERT INTO directory_entry VALUES
     ON CONFLICT(ns,parent,name,gen) DO UPDATE SET serial=excluded.serial,inherited=excluded.inherited";
 pub(crate) const DIRECTORY_ENTRY_DROP: &str =
     "DELETE FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
-pub(crate) const TICKET_PUT: &str = "INSERT INTO request(ns,revision,gen) VALUES(?1,?2,?3)";
 pub(crate) const FRONTIER_ADVANCE: &str = "UPDATE workspace SET revision=?2,
     dirty_inodes=dirty_inodes+?3,dirty_directory_entries=dirty_directory_entries+?4 WHERE ns=?1";
 

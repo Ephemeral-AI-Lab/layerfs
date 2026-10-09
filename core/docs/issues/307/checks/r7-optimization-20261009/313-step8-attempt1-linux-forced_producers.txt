@@ -1,0 +1,28 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 3ae26648f, uncommitted product/test paths=34, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/forced_producers-d87c1e70a582dd8a --test-threads=1 
+
+running 6 tests
+test fp32_a_known_publication_is_forced_with_its_original_outcome ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_its_local_install ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_publication ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_save_finish ... ok
+test fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained ... FAILED
+test fp32_unknown_commit_custody_is_forced_only_when_relinquished_and_stays_unknown ... ok
+
+failures:
+
+---- fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained stdout ----
+
+thread 'fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained' panicked at crates/layerfs-daemon/tests/forced_producers.rs:1382:5:
+FP-32 held credits: staging: the write's publication ticket is still held
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FORCED_GUARD lazy umount of /tmp/layerfs-installed-7-fp32-credits/mounts/1 by the test: Ok(ExitStatus(unix_wait_status(0)))
+
+
+failures:
+    fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.14s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 101

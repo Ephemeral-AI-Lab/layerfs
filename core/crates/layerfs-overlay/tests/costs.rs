@@ -23,15 +23,28 @@ fn complete_mutation_reports_triggers_blob_delivery_and_physical_reservation() {
     assert_eq!(copies.write_input_bytes, CELL_BYTES as u64);
     assert_eq!(copies.cell_copy_bytes, CELL_BYTES as u64);
     assert_eq!(copies.cell_zeroed_bytes, 0);
-    // File::write includes mutation and its exact reply-attempt release. Both
-    // transactions pay admission, and count-trigger changes remain visible.
-    assert_eq!(admission.freelist_queries, 2);
-    assert_eq!(admission.admitted_jobs, 2);
+    // File::write includes the mutation and its reply attempt. Only the
+    // mutation writes: the attempt returns a ticket held in the engine's
+    // memory, and its owner turn finds a live Workspace with nothing to
+    // queue, so it begins no transaction and pays no admission.
+    // Count-trigger changes of the mutation remain visible.
+    assert_eq!(admission.freelist_queries, 1);
+    assert_eq!(admission.admitted_jobs, 1);
     assert_eq!(admission.refusals, 0);
     // The file has not grown since its range was last established, so
-    // neither admission allocates, on Linux as on macOS.
+    // the admission does not allocate, on Linux as on macOS.
     assert_eq!(admission.attempts, 0);
-    assert_eq!(admission.observations, 2);
+    assert_eq!(admission.observations, 1);
+    let work = db.diagnostics().since(&sql);
+    assert_eq!(work.statements[StatementKind::Begin as usize].executions, 1);
+    assert_eq!(
+        work.statements[StatementKind::Commit as usize].executions,
+        1
+    );
+    assert_eq!(
+        work.statements[StatementKind::Rollback as usize].executions,
+        0
+    );
     assert!(mutation.rows_changed > mutation.direct_rows_changed);
     assert_eq!(
         mutation.fullscan_steps + mutation.sorts + mutation.reprepares,

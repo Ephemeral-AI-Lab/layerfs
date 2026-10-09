@@ -1,0 +1,15 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/indexed_operation_record-726459102335d352 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 6 tests
+test complete_keys_and_full_file_scopes_never_alias_other_custody ... ok
+test exact_plans_correlate_with_bounded_executed_point_and_window_work ... ok
+test first_detached_window_finds_children_inserted_below_consumed_candidates ... ok
+test guarded_batches_are_atomic_capacity_bounded_and_allow_a_128_child_node_shape ... ok
+test optional_exclusion_keeps_zero_identity_and_finds_new_lower_keys ... ok
+test state_exceeding_eight_mib_reclaims_in_windows_without_reusing_a_released_owner ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

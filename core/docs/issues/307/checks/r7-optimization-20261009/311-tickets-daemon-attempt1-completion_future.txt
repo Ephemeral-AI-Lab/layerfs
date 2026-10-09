@@ -1,0 +1,14 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/completion_future-0eadb18f59d86397 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 5 tests
+test concurrent_publication_and_registration_never_require_polling_for_progress ... ok
+test publication_before_registration_is_ready_without_another_event ... ok
+test publication_wakes_the_parked_future_and_keeps_credit_until_disposal ... ok
+test repoll_replaces_the_task_and_publication_releases_the_registration ... ok
+test stop_wakes_a_future_with_its_original_unattempted_command ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

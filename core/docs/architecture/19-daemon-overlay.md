@@ -6,6 +6,23 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (overlay schema 21): **reply tickets are held in the
+engine's memory**, not in a `request` row
+([`ReplyTickets`](../../crates/layerfs-overlay/src/lifetime/tickets.rs)). The
+job that advances the frontier issues the ticket; a job that fails takes its
+ticket back. The one reply attempt returns it through
+`ReplyTickets::attempted`, callable from any thread and without an owner
+turn; a ticket that is not held is `Stale` and changes nothing, so exact
+ticket identity (namespace, revision, generation) is kept. `capture_ready`,
+`capture` and the terminal-cleanup hold read the pending set; a job that
+finds a namespace's tickets pending marks it watched, and the attempt that
+empties a watched namespace reports `Watched`: its caller owes one owner
+turn, `Overlay::reply_settled`, which queues a cleanup that waited. The
+database is created by its engine and never reopened, so the stored row
+outlived nothing this record does not; the set is bounded by the
+publications whose replies are in flight. `pending_publications` and the
+`reply_tickets` count read the same set.
+
 R7 update, 2026-10-09 (overlay schema 20): an atomic job starts its SQLite
 transaction at its first writing statement. Reads before it run in
 autocommit, which is the same state here: the connection is the only one,

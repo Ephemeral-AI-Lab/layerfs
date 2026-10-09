@@ -800,6 +800,12 @@ fn a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source() {
     assert_eq!(f.db.state(route).unwrap().revision, before.revision);
     assert_eq!(f.db.inode(route, 51).unwrap(), None);
     assert_eq!(f.db.native_lookup_count(f.mount, 51).unwrap(), None);
+    // The ticket the failed visit issued in memory at its frontier advance
+    // is withdrawn with it: only the earlier publication is still owed.
+    assert_eq!(
+        f.db.pending_publications(route, 0).unwrap(),
+        vec![applied.publication]
+    );
 
     // The reply attempt is the only release a publishing visit owes.
     f.db.reply_attempted(applied.publication).unwrap();

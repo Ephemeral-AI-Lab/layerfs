@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/payload-380151c238c09f96 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 3 tests
+test fragmented_inherited_bytes_are_read_as_one_base_range ... ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

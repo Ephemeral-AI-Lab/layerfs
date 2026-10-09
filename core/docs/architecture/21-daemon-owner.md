@@ -29,6 +29,20 @@ profile readback. Clients submit typed short SQL windows. A command cannot conta
 a closure or hold the database across construction, transport or an entire Exec.
 No dependency or route invokes the retired server or old daemon implementation.
 
+R7 update, 2026-10-09 (combined turns, reply attempts): a submitting
+thread's turn does not end at a collision. When its job is done and another
+runnable job was queued meanwhile, the same thread serves that one too
+(`Shared::pass`): the next job of the same fair selection, at most one per
+turn (`COMBINED`), and never ahead of maintenance that is due. Only then is
+the turn returned, and the owner thread is woken only if work remains. A
+request that arrives while another thread holds the turn is therefore served
+without waking the owner thread. A published mutation's reply attempt is no
+longer an owner job: `OwnerClient::reply_attempted` records it in the
+engine's memory from the replying thread
+([overlay](19-daemon-overlay.md)). A parked capture is still released by a
+Lifecycle job: the attempt that empties a watched namespace submits
+`Command::ReplySettled`.
+
 R7 update, 2026-10-09: the connection is no longer confined to that thread.
 It lives in the owner's shared state and is used one exclusive **turn** at a
 time (`State::busy`). A turn is one job or one maintenance step. The owner

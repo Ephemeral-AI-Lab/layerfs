@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 3ae26648f, uncommitted product/test paths=30, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/frontier-0725703cc71f2a91 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 3 tests
+test equal_local_routing_keys_never_cross_engine_owners ... ok
+test exact_frontier_observations_visit_only_their_fixed_domain ... ok
+test frozen_capture_and_tickets_reject_changed_identity_and_survive_close ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0
