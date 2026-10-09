@@ -1,0 +1,401 @@
+{
+  "calls": [
+    {
+      "after_records": 3,
+      "before_records": 1,
+      "event": "mount",
+      "event_sequence": 7,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          2
+        ],
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          3
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 4,
+      "before_records": 3,
+      "event": "unmount",
+      "event_sequence": 15,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          4
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 5,
+      "before_records": 4,
+      "event": "cleanup",
+      "event_sequence": 16,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          5
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 6,
+      "before_records": 5,
+      "event": "cleanup",
+      "event_sequence": 17,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          6
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 7,
+      "before_records": 6,
+      "event": "cleanup",
+      "event_sequence": 18,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          7
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 8,
+      "before_records": 7,
+      "event": "cleanup",
+      "event_sequence": 19,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          8
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 9,
+      "before_records": 8,
+      "event": "cleanup",
+      "event_sequence": 20,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          9
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 10,
+      "before_records": 9,
+      "event": "cleanup",
+      "event_sequence": 21,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          10
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 11,
+      "before_records": 10,
+      "event": "cleanup",
+      "event_sequence": 22,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          11
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 12,
+      "before_records": 11,
+      "event": "cleanup",
+      "event_sequence": 23,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          12
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 14,
+      "before_records": 12,
+      "event": "mount",
+      "event_sequence": 24,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          13
+        ],
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          14
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 15,
+      "before_records": 14,
+      "event": "workspace_status",
+      "event_sequence": 35,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          15
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included",
+      "status_state": {
+        "Lifecycle_jobs": 1,
+        "provenance": "original typed Status.local Some; actual State SQL VM work unavailable",
+        "status": "AVAILABLE"
+      }
+    },
+    {
+      "after_records": 16,
+      "before_records": 15,
+      "event": "unmount",
+      "event_sequence": 46,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          16
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 17,
+      "before_records": 16,
+      "event": "cleanup",
+      "event_sequence": 47,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          17
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 18,
+      "before_records": 17,
+      "event": "cleanup",
+      "event_sequence": 48,
+      "identities": [
+        [
+          [
+            9555455598949276814,
+            14631811924996509833,
+            9461985003744049285,
+            8095921714832768866
+          ],
+          [
+            9955190829401929187,
+            8476836280454777999,
+            11781834012658458361,
+            3882684376218258673
+          ],
+          18
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    }
+  ],
+  "schema": "r7-original-control-correlation-v1",
+  "scope": "successful original numeric send ranges; failed calls are never inferred successful"
+}

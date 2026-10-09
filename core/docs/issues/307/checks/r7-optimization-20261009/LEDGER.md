@@ -2843,3 +2843,57 @@ Left by the batch for a cleanup commit: the `native_read` table has no
 writer but three readers; `observe_native_attributes` with its plan and
 several ports are reached only by component tests.
 
+### Every batch merged, on A2's clock: receipts 1160–1211 at `1166e7a4b`
+
+First sample with the in-container clock (decision L4-8) and with batch
+3b in main. All twelve rows DIAGNOSTIC, verifier PASS; the sample held the
+worktree locks; host load average 7. "Baseline" is 652–703 at `63c48d8dc`,
+this run's first sample of every cell (host clock only; that harness had
+no in-container clock). The A2 ratio is in-container time over A2.
+
+| Cell | Receipt | In-container ms | A2 ms | Ratio | Regime (receive thread vol : invol) | Host-clock ms, baseline → now | Owner jobs | Statement executions | Owner service ms | Overlay logical bytes |
+| --- | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- |
+| C01 | 1167 | 299.4 | 183.4 | 1.63 | SEPARATE (4002 : 1) | 379.7 → 349.7 | 5001 → 5002 | 61004 → 44004 | 162.9 → 116.9 | 557056 → 462848 |
+| **C02** | 1171 | 822.1 | 965.0 | **0.85** | SEPARATE (5004 : 1) | 914.8 → 865.7 | 6002 → 6002 | 63006 → 46004 | 175.4 → 130.6 | 557056 → 462848 |
+| C03 | 1175 | 422.1 | 410.8 | 1.03 | MIXED (4034 : 2655) | 715.9 → 465.0 | 9108 → 9038 | 127399 → 102540 | 300.4 → 216.8 | 557056 → 462848 |
+| **C04** | 1179 | 695.9 | 952.6 | **0.73** | SEPARATE (5330 : 1) | 823.4 → 747.1 | 5382 → 5342 | 59076 → 42644 | 170.9 → 117.5 | 458752 → 397312 |
+| **C05** | 1183 | 765.2 | 949.6 | **0.81** | SEPARATE (5753 : 2) | 880.5 → 809.4 | 7264 → 6000 | 90226 → 46637 | 230.5 → 133.9 | 458752 → 397312 |
+| C06 | 1187 | 113.5 | 78.6 | 1.44 | SEPARATE (518 : 0) | 226.8 → 158.2 | 517 → 518 | 36918 → 9766 | 147.9 → 62.7 | 76685312 → 68517888 |
+| C07 | 1191 | 256.3 | 171.6 | 1.49 | SEPARATE (1550 : 1) | 499.4 → 303.2 | 1552 → 1550 | 78022 → 23133 | 320.2 → 136.6 | 153100288 → 136785920 |
+| C08 | 1195 | 117.6 | 106.1 | 1.11 | SEPARATE (521 : 0) | 261.8 → 168.1 | 524 → 521 | 37009 → 9783 | 151.7 → 59.9 | 76685312 → 68517888 |
+| **C09** | 1199 | 49.7 | 106.2 | **0.47** | SEPARATE (517 : 0) | 167.1 → 90.3 | 3082 → 517 | 42610 → 1055 | 74.8 → 3.6 | 278528 → 249856 |
+| **C10** | 1203 | 175.5 | 178.2 | **0.98** | SEPARATE (1038 : 0) | 400.2 → 231.3 | 4110 → 1546 | 83625 → 14406 | 262.6 → 91.6 | 76685312 → 68517888 |
+| C11 | 1207 | 114.5 | 85.8 | 1.33 | SEPARATE (516 : 0) | 242.4 → 160.0 | 523 → 517 | 36982 → 9760 | 147.3 → 65.0 | 76652544 → 68517888 |
+| C12 | 1211 | 214.3 | 189.3 | 1.13 | SEPARATE (2951 : 0) | 317.7 → 259.4 | 4622 → 3439 | 59504 → 24146 | 133.7 → 66.9 | 405504 → 356352 |
+
+Reading, on one clock:
+
+- **Below A2 in this sample: C02, C04, C05, C09, C10** (C10 by 2.7 ms,
+  inside the spread: at the target, not established below it). C03 is
+  11.3 ms above in a MIXED sample. One sample per cell; nothing here is a
+  repeated measurement.
+- **Above A2: C08 1.11, C12 1.13, C11 1.33, C06 1.44, C07 1.49, C01 1.63**,
+  all in the SEPARATE regime. For C01 the time outside the owner is
+  182.5 ms for 5002 requests (36.5 µs each, the cross-CPU round trip):
+  that alone equals A2's 183.4 ms, whose record costs 21.7 µs per request
+  above native and was probably a same-CPU sample. In this run's one
+  STACKED C01 sample (1047) the host clock was 183.8 ms, about 139 ms on
+  A2's clock.
+- **What batch 3b did** (against 1100–1151): C05 owner jobs 6776 → 6000,
+  statements 65516 → 46637, reader grants 222 → 0, owner wait 12.0 →
+  2.5 ms, service 186.0 → 133.9 ms; C03 statements −7094, grants 17 → 0;
+  C12 jobs 3475 → 3439, grants 11 → 0.
+- The measured command now has one request more in some cells (C01 5002,
+  C06 518): the child Bash of the in-container clock stats its working
+  directory. It is inside the interval, as A2's `Popen` child was.
+- **Storage is lower in every cell** than at the start of the run: −16.9 %
+  for 1000 small files (557056 → 462848), −10.7 % for 64 MiB of data,
+  −10.3 % for C09. Store bytes are unchanged.
+- **Every cell's owner service fell**: by 28 % (C01) to 95 % (C09); by
+  57 to 65 % in the large-file cells.
+
+Where the remaining time is, for the cells above A2 (C06, 1187, per
+128 KiB WRITE of 122 µs service): COMMIT 42.4 µs, Payload 62.9 µs for 8
+statements (four 32 KiB rows), Workspace and Inode 9.2 µs. For C01 per
+created file (117 µs service): three transactions and 37 statements.
+

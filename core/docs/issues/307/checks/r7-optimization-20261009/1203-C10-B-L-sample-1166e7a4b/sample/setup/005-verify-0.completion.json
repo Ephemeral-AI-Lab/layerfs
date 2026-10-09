@@ -1,0 +1,29 @@
+{
+  "argv": [
+    "docker",
+    "--host",
+    "unix:///Users/yifanxu/.docker/run/docker.sock",
+    "exec",
+    "--user",
+    "0:0",
+    "5ffa58f0e0ba6c6623cf3442c5ad6f7d8a6b84d39e3f463a90658f0220ea1c86",
+    "python3",
+    "-B",
+    "/code/r7_deployment.py",
+    "verify-tree",
+    "--root",
+    "/code",
+    "--inventory",
+    "/tmp/layerfs-r7-setup-40b55a11ab8bbf62ef347ed882776d0c/expected-0.jsonl",
+    "--reconcile-metadata"
+  ],
+  "attempts": 1,
+  "container": "5ffa58f0e0ba6c6623cf3442c5ad6f7d8a6b84d39e3f463a90658f0220ea1c86",
+  "duration_ns": 125597417,
+  "end_ns": 826989433767750,
+  "engine_operation_identity": "UNAVAILABLE through Docker CLI; no guessed Exec ID",
+  "exit_code": 0,
+  "label": "verify-0",
+  "sequence": 5,
+  "start_ns": 826989308170333
+}

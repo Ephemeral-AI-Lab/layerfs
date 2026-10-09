@@ -1,0 +1,1 @@
+__r7_a=$(date +%s%N); /bin/bash -o pipefail -c '{ for i in $(seq 1 1000); do echo $i > f$i; done; rm f*; } >/dev/null'; __r7_s=$?; __r7_b=$(date +%s%N); printf 'R7_IN_CONTAINER_CLOCK_NS %s %s\n' "$__r7_a" "$__r7_b" >&2; exit $__r7_s
