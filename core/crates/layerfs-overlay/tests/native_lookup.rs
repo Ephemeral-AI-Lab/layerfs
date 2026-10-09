@@ -209,7 +209,15 @@ fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody(
 fn attribute_only_decision_counts_the_lookup_and_retains_no_read() {
     let f = Fixture::new();
     let attributes = |request: u64, lookup: bool| {
+        let before = f.db.diagnostics();
         let source = f.db.acquire_native_source(f.mount, request, 1).unwrap();
+        // The acquiring transaction reads the Workspace row once and updates
+        // its reader count once.
+        let acquired = f.db.diagnostics().since(&before);
+        assert_eq!(
+            acquired.statements[StatementKind::Workspace as usize].executions,
+            2
+        );
         let before = f.db.diagnostics();
         let outcome =
             f.db.observe_native_attributes(f.mount, source, lookup, |_, protected| {
@@ -219,7 +227,13 @@ fn attribute_only_decision_counts_the_lookup_and_retains_no_read() {
                     value: (),
                 })
             });
-        let work = f.db.diagnostics().since(&before).total();
+        let work = f.db.diagnostics().since(&before);
+        // One Workspace row read serves the mount, source and row checks.
+        assert_eq!(
+            work.statements[StatementKind::Workspace as usize].executions,
+            1
+        );
+        let work = work.total();
         assert_eq!(outcome.result.unwrap(), None);
         assert_eq!(outcome.candidate, None);
         assert_eq!(f.db.retained_native_read(f.mount, request).unwrap(), None);

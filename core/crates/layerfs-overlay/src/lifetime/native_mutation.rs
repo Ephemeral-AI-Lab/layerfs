@@ -25,7 +25,7 @@ impl Overlay {
     ) -> OverlayResult<NativeApplied> {
         let checked = self.check_changes(changes)?;
         self.atomic(|| {
-            let (request, _) = self.check_native_source(mount, source)?;
+            let (request, _, _) = self.check_native_source(mount, source)?;
             let publication = self.apply_checked(source, changes, &checked)?;
             self.execute(
                 StatementKind::Lease,
@@ -111,9 +111,12 @@ impl Overlay {
         handle: u64,
     ) -> OverlayResult<(BaseSource, OpenFile)> {
         self.atomic(|| {
-            self.check_native_mount(mount)?;
+            let state = self.check_native_mount(mount)?;
             let file = self.native_file(mount, serial, handle)?;
-            Ok((self.retain_native_source(mount, request, serial)?, file))
+            Ok((
+                self.retain_native_source(mount, state, request, serial)?,
+                file,
+            ))
         })
     }
 }

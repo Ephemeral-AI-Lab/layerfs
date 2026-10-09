@@ -38,11 +38,11 @@ impl Overlay {
         offset: u64,
     ) -> OverlayResult<NativeDirectoryRead> {
         self.atomic(|| {
-            self.check_native_mount(directory.mount)?;
+            let state = self.check_native_mount(directory.mount)?;
             self.native_directory(directory.mount, directory.serial, directory.owner)?;
             let cursor = self.native_directory_cursor(directory, offset)?;
             let parent = self.native_parent(directory.mount, directory.serial)?;
-            let source = self.retain_native_source(directory.mount, request, directory.serial)?;
+            let source = self.retain_native_source(directory.mount, state, request, directory.serial)?;
             self.execute(StatementKind::Lease,
                 "INSERT INTO native_directory_read(ns,owner,directory,offset,parent) VALUES(?1,?2,?3,?4,?5)",
                 &[&directory.mount.route.ns, &integer(source.owner)?, &integer(directory.owner)?, &integer(offset)?, &integer(parent)?], 40)?;

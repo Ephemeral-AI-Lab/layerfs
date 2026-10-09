@@ -2,7 +2,7 @@
 use crate::{
     db::{integer, unsigned},
     BaseSource, LeaseKind, NativeMount, NativeMountState, Overlay, OverlayError, OverlayResult,
-    Route, StatementKind,
+    Route, StatementKind, WorkspaceState,
 };
 
 impl Overlay {
@@ -69,12 +69,18 @@ impl Overlay {
             Some(_) => Err(OverlayError::Stale),
         }
     }
-    pub(crate) fn check_native_mount(&self, mount: NativeMount) -> OverlayResult<()> {
-        self.live(mount.route)?;
-        self.check_native_attached(mount)
+    /// A live Workspace with this mount attached. The state it read is
+    /// returned so the same transaction does not read the row again.
+    pub(crate) fn check_native_mount(&self, mount: NativeMount) -> OverlayResult<WorkspaceState> {
+        let state = self.live(mount.route)?;
+        self.require_native_live(mount)?;
+        Ok(state)
     }
     pub(crate) fn check_native_attached(&self, mount: NativeMount) -> OverlayResult<()> {
         self.state(mount.route)?;
+        self.require_native_live(mount)
+    }
+    fn require_native_live(&self, mount: NativeMount) -> OverlayResult<()> {
         if self.native_mount_state(mount)? != NativeMountState::Live {
             return Err(OverlayError::Stale);
         }
@@ -89,20 +95,21 @@ impl Overlay {
         serial: u64,
     ) -> OverlayResult<BaseSource> {
         self.atomic(|| {
-            self.check_native_mount(mount)?;
+            let state = self.check_native_mount(mount)?;
             if self.native_lookup_row(mount, serial)?.is_none() {
                 return Err(OverlayError::Stale);
             }
-            self.retain_native_source(mount, request, serial)
+            self.retain_native_source(mount, state, request, serial)
         })
     }
+    /// `state` is the Workspace row this transaction already read.
     pub(crate) fn retain_native_source(
         &self,
         mount: NativeMount,
+        state: WorkspaceState,
         request: u64,
         serial: u64,
     ) -> OverlayResult<BaseSource> {
-        let state = self.state(mount.route)?;
         let owner = self.mint_owner(mount.route)?;
         self.execute(
             StatementKind::Lease,
@@ -172,17 +179,18 @@ impl Overlay {
         &self,
         mount: NativeMount,
         source: BaseSource,
-    ) -> OverlayResult<([u8; 8], u64)> {
-        self.check_native_mount(mount)?;
+    ) -> OverlayResult<([u8; 8], u64, WorkspaceState)> {
+        let state = self.check_native_mount(mount)?;
         if source.route != mount.route || source.class != 2 {
             return Err(OverlayError::Stale);
         }
-        self.source_state(source)?;
-        self.query(StatementKind::Lease,
+        self.source_held(source, state)?;
+        let (request, serial) = self.query(StatementKind::Lease,
             "SELECT request,serial FROM native_source WHERE ns=?1 AND mount=?2 AND owner=?3 AND decided=0",
             &[&mount.route.ns, &integer(mount.owner)?, &integer(source.owner)?], 24,
             |r| Ok((r.get::<_, Vec<u8>>(0)?.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?, unsigned(r, 1)?)))?
-            .pop().ok_or(OverlayError::Stale)
+            .pop().ok_or(OverlayError::Stale)?;
+        Ok((request, serial, state))
     }
     pub(crate) fn release_native_source(&self, source: BaseSource) -> OverlayResult<()> {
         let (serial, directory) = self

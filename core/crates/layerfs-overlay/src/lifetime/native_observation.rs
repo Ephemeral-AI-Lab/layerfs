@@ -84,7 +84,7 @@ impl Overlay {
         let mut directory_candidate = None;
         let result = self
             .atomic(|| {
-                let (request, protected) = self.check_native_source(mount, source)?;
+                let (request, protected, state) = self.check_native_source(mount, source)?;
                 let exists = self.query(
                     StatementKind::Lease,
                     "SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2 AND request=?3",
@@ -95,10 +95,11 @@ impl Overlay {
                 if !exists.is_empty() {
                     return Err(OverlayError::Stale);
                 }
-                let (inode, value, finished) = match decide(self.source_rows(source)?, protected)? {
-                    NativeDecision::Needs(value) => (None, value, false),
-                    NativeDecision::Finished { inode, value } => (inode, value, true),
-                };
+                let (inode, value, finished) =
+                    match decide(self.source_rows_at(source, state), protected)? {
+                        NativeDecision::Needs(value) => (None, value, false),
+                        NativeDecision::Finished { inode, value } => (inode, value, true),
+                    };
                 decision = Some(value);
                 if !finished {
                     return Ok(());

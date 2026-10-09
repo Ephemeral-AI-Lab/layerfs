@@ -73,6 +73,14 @@ impl Overlay {
     }
     pub(crate) fn source_state(&self, source: BaseSource) -> OverlayResult<WorkspaceState> {
         let state = self.state(source.route)?;
+        self.source_held(source, state)
+    }
+    /// The same check against a Workspace row this transaction already read.
+    pub(crate) fn source_held(
+        &self,
+        source: BaseSource,
+        state: WorkspaceState,
+    ) -> OverlayResult<WorkspaceState> {
         if state.base_root != source.root
             || self.base_source_by_owner(
                 source.route,

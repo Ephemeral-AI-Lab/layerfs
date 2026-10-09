@@ -1351,3 +1351,36 @@ case for fewer jobs per request and is recorded as candidate D04.
 
 Ratios after step 2: 15 owner jobs per created file, 2.14 per FUSE request,
 3.0 per handed-off request; 302 statements per created file.
+
+## Step 3 — C03a: one Workspace state read per native check transaction
+
+Cause, from source: inside one owner transaction the Workspace row was read
+repeatedly with identical parameters. `check_native_mount` read it in
+`live()` and again in `check_native_attached`; `retain_native_source` read it
+a third time; `check_native_source` added the read of `source_state`; and a
+deciding observation read it once more, with a second `base_source` point
+read, in `source_rows`. No statement between those reads writes the fields
+they use.
+
+Change: `check_native_mount` returns the state it read;
+`retain_native_source` and `check_native_source` take or return that state;
+`source_held` and `source_rows_at` check and build against it. No behaviour
+or error order changes: `live()` still refuses a closed Workspace first, then
+the mount check, then the source check.
+
+Expected count on C01 per created file: about 8 fewer Workspace statements in
+the four source acquisitions, 9 fewer Workspace and 3 fewer Lease statements
+in the three observations, and about 6 fewer in the three publishing jobs.
+Engine count test (`242-step3-attempt1-native_lookup.txt`): an acquiring
+transaction executes 2 Workspace statements (one read, one reader-count
+update) and an attribute observation executes 1.
+
+Gates: no state, row or file added; fewer reads only.
+
+Checks, one attempt each, all PASS: all 22 host overlay test binaries
+(`242-step3-attempt1-*.txt`); host daemon `native_jobs` 1, `fenced_port` 4,
+`filesystem_port` 4, `cold_failure_scope` 2; Linux real-mount
+`mounted_install` 5, `mounted_parking` 4, `native_coherence` 6,
+`native_custody` 2, `native_mutation` 2. Host Clippy `-D warnings` for the
+four crates, `fmt --check` and the boundary guard passed. Not run: the full
+suites and Linux Clippy.

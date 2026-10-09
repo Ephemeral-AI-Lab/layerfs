@@ -25,11 +25,20 @@ impl Overlay {
     /// Checks source custody once for the bounded point reads of one job.
     pub fn source_rows(&self, source: BaseSource) -> OverlayResult<SourceRows<'_>> {
         let state = self.source_state(source)?;
-        Ok(SourceRows {
+        Ok(self.source_rows_at(source, state))
+    }
+    /// Rows of a source whose custody this transaction has already checked
+    /// against `state`.
+    pub(crate) fn source_rows_at(
+        &self,
+        source: BaseSource,
+        state: WorkspaceState,
+    ) -> SourceRows<'_> {
+        SourceRows {
             db: self,
             source,
             state,
-        })
+        }
     }
     /// Publishes every final value of one namespace operation or none of them.
     /// Values are semantically checked by Workspace against rows read in this
