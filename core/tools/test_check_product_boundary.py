@@ -2,7 +2,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from check_product_boundary import production_files, unsafe_violations, violations, dependency_violations
+from check_product_boundary import (RETIRED_PACKAGES, dependency_violations, production_files,
+                                    unsafe_violations, violations)
 
 
 class ProductBoundaryTests(unittest.TestCase):
@@ -61,6 +62,13 @@ class ProductBoundaryTests(unittest.TestCase):
                          "layerfs-api/core/src/lib.rs"):
             findings = violations(Path("core/crates") / relative, "pub use std::io::Read;")
             self.assertTrue(any("retired host-mediated" in message for _, message in findings), relative)
+
+    def test_retired_packages_cannot_return(self):
+        self.assertIn("layerfs-server", RETIRED_PACKAGES)
+        for name in RETIRED_PACKAGES:
+            findings = violations(Path("core/crates") / name / "src/lib.rs", "pub use std::io::Read;")
+            self.assertTrue(any("retired package" in message for _, message in findings), name)
+            self.assertTrue(dependency_violations(f'[package]\nname="{name}"\n'), name)
 
     def test_sdk_source_edges_and_unsafe_boundary(self):
         path = Path("core/crates/layerfs-api/sdk/src/init.rs")

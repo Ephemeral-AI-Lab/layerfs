@@ -31,7 +31,6 @@ exclude = [
     "crates/layerfs-fuse-legacy",
     "crates/layerfs-workspace-legacy",
     "crates/layerfs-bridge-legacy",
-    "crates/layerfs-server",
 ]
 
 [workspace.package]

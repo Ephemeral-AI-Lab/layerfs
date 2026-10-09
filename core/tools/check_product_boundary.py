@@ -67,10 +67,18 @@ ENGINES_AND_CLUSTER2 = {
 }
 
 
+# Package directories under core/crates that R7-retire removed. Their source
+# stays in Git history; a directory or manifest that returns fails the scan.
+RETIRED_PACKAGES = ("layerfs-server",)
+RETIRED_PACKAGE = "retired package; its directory was removed and is not restored"
+
+
 def dependency_violations(source):
     """Check production/build edges, including target tables and aliases."""
     manifest = tomllib.loads(source)
     name = manifest.get("package", {}).get("name")
+    if name in RETIRED_PACKAGES:
+        return [(1, f"{RETIRED_PACKAGE}: {name}")]
     if name not in ALLOWED_DEPENDENCIES:
         return []
     sections = [manifest.get(key, {}) for key in ("dependencies", "build-dependencies")]
@@ -97,6 +105,8 @@ def dependency_violations(source):
 def component_violations(path, source):
     """Reject forbidden crate references in domain code and first-party imports."""
     name = crate_name(path)
+    if name in RETIRED_PACKAGES:
+        return [(1, f"{RETIRED_PACKAGE}: {name}")]
     retired = {
         "layerfs-sdk": ("/src/client/", "/src/runtime/"),
         "layerfs-daemon": ("/src/upstream/",),
@@ -230,6 +240,10 @@ def main():
     for path in files:
         for line, reason in violations(path, path.read_text()):
             print(f"{path.relative_to(core)}:{line}: {reason}")
+            failures += 1
+    for name in RETIRED_PACKAGES:
+        if (core / "crates" / name).exists():
+            print(f"crates/{name}: {RETIRED_PACKAGE}")
             failures += 1
     manifests = set((core / "crates").glob("*/Cargo.toml"))
     manifests.update((core / "crates" / "layerfs-api").glob("*/Cargo.toml"))

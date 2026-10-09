@@ -4,6 +4,12 @@
 > not a product contract. This paper selects no architecture, freezes no scope and
 > decides no open ruling.
 
+> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+> from the tree as retirement by owner direction, not as a rewrite. Its last
+> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+> text below keeps its original source pin and scope. See the
+> [coverage audit](../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+
 **Atomic publication update,2026-10-07 (parent `e2f2e62c7`):** current
 HistoryCatalog adds one required `stage_and_commit` operation. The combined
 Persistence provider stages and publishes in one short transaction; a definite

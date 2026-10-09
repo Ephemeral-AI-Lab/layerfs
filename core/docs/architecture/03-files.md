@@ -2,6 +2,12 @@
 
 > **Status:** Research; informative and not a product contract.
 
+> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+> from the tree as retirement by owner direction, not as a rewrite. Its last
+> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+> text below keeps its original source pin and scope. See the
+> [coverage audit](../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+
 API addition after `f5558fc22`: content provides `construct_runs` over the
 bounded `FileRuns` data/zero/EOF source. It preserves the ordinary streamed root
 while reusing complete zero subtrees in logarithmic hole work. See

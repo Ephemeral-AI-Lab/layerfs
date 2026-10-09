@@ -5,6 +5,12 @@
 This document defines the agent-facing vocabulary. `init_project` is a current
 SDK export. Workspace and exec signatures describe future behavior.
 
+> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+> from the tree as retirement by owner direction, not as a rewrite. Its last
+> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+> text below keeps its original source pin and scope. See the
+> [coverage audit](../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+
 ## `init_project(project_name, path)` — first implementation
 
 Inputs are an authority-local project name and one host-visible directory.
@@ -22,7 +28,7 @@ The implementation is the production native-directory importer. The current
 `HistoryCommand::ImportNativeDirectory`, and it is the only
 namespace-initialization route: the pathless `InitLayerStack` command and its
 manifest are retired, and history-command tag 1 is unassigned. The current
-[Service](../../crates/layerfs-server/src/service/handler.rs) has a
+Service (`layerfs-server/src/service/handler.rs`, removed by R7-retire; last at `a7ba85d3b`) has a
 single startup-bound `import_root`; the host-direct SDK passes a validated
 source binding to one authorized call without changing that field. Source
 scan, file reads, construction, saves and C5 publication stay inside the
