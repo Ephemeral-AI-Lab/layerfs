@@ -361,6 +361,8 @@ impl Custody {
                 Err(error) => return Err(Box::new(error)),
             }
             self.receipt = None;
+            // Provider reads never run on the loop that received the request.
+            crate::LeaveReceiver::default().await;
             let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
             let result = self.plan.as_mut().unwrap().supply(&immutable);
             drop(immutable); // Return the actual reader before another SQL wait.

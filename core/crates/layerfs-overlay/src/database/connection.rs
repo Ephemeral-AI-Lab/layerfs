@@ -43,6 +43,12 @@ impl Overlay {
     pub fn diagnostics(&self) -> DatabaseWork {
         *self.work.borrow()
     }
+    /// Whether a maintenance turn may find work: the connection-local hints
+    /// that `maintain` and `reclaim_closed` consult. False is exact; true can
+    /// be a false positive that the next turn clears.
+    pub fn maintenance_pending(&self) -> bool {
+        self.maintenance_ready.get() || self.closed_ready.get()
+    }
     /// Codec/composed-window copies from the same exclusive owner scope.
     pub fn payload_work(&self) -> crate::PayloadWork {
         self.payload_work.get()

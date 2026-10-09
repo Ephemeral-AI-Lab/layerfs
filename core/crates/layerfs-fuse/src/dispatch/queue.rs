@@ -65,10 +65,18 @@ pub(crate) struct State {
     pub failed: bool,
     pub entered: usize,
     pub live: usize,
+    /// Workers waiting for a runnable step.
+    pub idle: usize,
+    /// Receive, start and drain observers waiting for a state change.
+    pub observers: usize,
 }
 pub(crate) struct Shared {
     pub state: Mutex<State>,
+    /// State changes for observers: a freed slot, a returned receive unit, a
+    /// terminal lane, a worker's entry or exit.
     pub changed: Condvar,
+    /// Runnable steps, for workers only.
+    pub runnable: Condvar,
     pub workers: usize,
 }
 impl Shared {
@@ -83,39 +91,69 @@ impl Shared {
                     lane.work.terminal = true;
                 }
                 self.changed.notify_all();
+                self.runnable.notify_all();
                 state
             }
         }
     }
-    pub fn wait<'a>(&self, guard: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
-        match self.changed.wait(guard) {
+    fn poisoned<'a>(&self, mut state: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
+        state.failed = true;
+        state.stopping = true;
+        self.changed.notify_all();
+        self.runnable.notify_all();
+        state
+    }
+    /// An observer's wait for the next announced change.
+    pub fn wait<'a>(&self, mut guard: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
+        guard.observers += 1;
+        let mut state = match self.changed.wait(guard) {
             Ok(state) => state,
-            Err(poison) => {
-                let mut state = poison.into_inner();
-                state.failed = true;
-                state.stopping = true;
-                self.changed.notify_all();
-                state
-            }
+            Err(poison) => self.poisoned(poison.into_inner()),
+        };
+        state.observers -= 1;
+        state
+    }
+    /// A worker's wait for a runnable step or a stop.
+    pub fn wait_runnable<'a>(&self, mut guard: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
+        guard.idle += 1;
+        let mut state = match self.runnable.wait(guard) {
+            Ok(state) => state,
+            Err(poison) => self.poisoned(poison.into_inner()),
+        };
+        state.idle -= 1;
+        state
+    }
+    /// Tells observers of a change they can wait for. Called with the lock.
+    pub fn announce(&self, state: &State) {
+        if state.observers != 0 {
+            self.changed.notify_all();
         }
+    }
+    /// One runnable step was queued. Called with the lock.
+    pub fn wake_worker(&self, state: &State) {
+        if state.idle != 0 {
+            self.runnable.notify_one();
+        }
+    }
+    /// A stop or a terminal fence: every waiter looks again.
+    pub fn wake_all(&self) {
+        self.changed.notify_all();
+        self.runnable.notify_all();
     }
     /// One bounded observation wait; expiry changes no request or lane state.
     pub fn wait_until<'a>(
         &self,
-        guard: MutexGuard<'a, State>,
+        mut guard: MutexGuard<'a, State>,
         deadline: Instant,
     ) -> MutexGuard<'a, State> {
         let remaining = deadline.saturating_duration_since(Instant::now());
-        match self.changed.wait_timeout(guard, remaining) {
+        guard.observers += 1;
+        let mut state = match self.changed.wait_timeout(guard, remaining) {
             Ok((state, _)) => state,
-            Err(poison) => {
-                let mut state = poison.into_inner().0;
-                state.failed = true;
-                state.stopping = true;
-                self.changed.notify_all();
-                state
-            }
-        }
+            Err(poison) => self.poisoned(poison.into_inner().0),
+        };
+        state.observers -= 1;
+        state
     }
 }
 impl State {
@@ -142,6 +180,14 @@ impl State {
             .and_then(Option::as_mut)
             .filter(|lane| lane.mount == mount && Arc::ptr_eq(&lane.token, token))
             .ok_or(DispatchError::Stale)
+    }
+    /// Steps queued across every lane.
+    pub fn runnable(&self) -> usize {
+        self.lanes
+            .iter()
+            .flatten()
+            .map(|lane| lane.ready.len())
+            .sum()
     }
     pub fn take(&mut self) -> Option<Arc<Task>> {
         let length = self.lanes.len();

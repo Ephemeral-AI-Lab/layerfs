@@ -29,11 +29,31 @@ profile readback. Clients submit typed short SQL windows. A command cannot conta
 a closure or hold the database across construction, transport or an entire Exec.
 No dependency or route invokes the retired server or old daemon implementation.
 
+R7 update, 2026-10-09: the connection is no longer confined to that thread.
+It lives in the owner's shared state and is used one exclusive **turn** at a
+time (`State::busy`). A turn is one job or one maintenance step. The owner
+thread still takes turns for queued work and for maintenance. A thread that
+submits a job while nothing else is queued and no turn is held takes the turn
+itself: `OwnerClient::try_submit` admits and queues the job exactly as
+before, takes it back through the same namespace rotation and lane fences,
+and runs the same readiness check and service on the submitting thread. The
+job is one transaction on the one connection either way; only the two thread
+hand-offs are gone. Any other submission (something queued, a turn held, a
+job a fence holds back) wakes the owner thread as before. The end of a
+submitter's turn wakes the owner thread only when a job is queued or the
+connection reports possible maintenance (`Overlay::maintenance_pending`);
+credit release and progress no longer wake it for nothing. A panic inside a
+submitter's turn stops the owner like the loss of its thread: admission
+closes, queued jobs get their commands back unattempted and the turn is never
+returned. The connection is stored before readiness is reported and closed by
+the owner thread when it exits, after any turn still held.
+
 [Queues](../../crates/layerfs-daemon/src/overlay/queue.rs) rotate between namespaces and
 six service classes. Their roster contains only admitted outstanding requests,
 not filesystem entries; configured concurrent slots/bytes bound it. When no job
-is runnable, a condition variable waits for admission/progress/shutdown events.
-There is no idle polling or a busy-inode waiter occupying the connection thread.
+is runnable, the owner thread waits on a condition variable for a queued job,
+reported maintenance or shutdown. There is no idle polling or a busy-inode
+waiter occupying the connection.
 
 An admitted capture orders after earlier queued mutations in the same namespace.
 It parks until their published reply-send-attempt tickets settle, using a read-only

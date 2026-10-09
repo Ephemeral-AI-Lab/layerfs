@@ -4,11 +4,11 @@ use crate::{
     owner::{OwnerConfig, OwnerError},
     service::completion::{Outcome, Publisher},
 };
-use layerfs_overlay::Route;
+use layerfs_overlay::{Overlay, Route};
 use std::{
     collections::VecDeque,
     mem::size_of,
-    sync::{Arc, Condvar, Mutex},
+    sync::{Arc, Condvar, Mutex, MutexGuard},
     time::Instant,
 };
 
@@ -176,8 +176,27 @@ pub(crate) struct State {
     pub work: OwnerWork,
     pub event: u64,
     pub maintenance_error: Option<Arc<layerfs_overlay::OverlayError>>,
+    /// The connection is taken for one turn: a job or a maintenance step,
+    /// on the owner thread or on the thread that submitted the job.
+    pub busy: bool,
+    /// Jobs served since the owner thread's last maintenance turn.
+    pub served: u8,
+    /// The connection reported possible maintenance work after a turn.
+    pub maintenance: bool,
 }
 impl State {
+    /// The next runnable job in namespace rotation, with every lane fence.
+    pub fn take(&mut self) -> Option<Box<Job>> {
+        for _ in 0..self.rotation.len() {
+            let ns = self.rotation.pop_front()?;
+            self.rotation.push_back(ns);
+            if let Some(job) = self.lane(ns)?.take() {
+                self.work.queued -= 1;
+                return Some(job);
+            }
+        }
+        None
+    }
     pub fn lane(&mut self, namespace: i64) -> Option<&mut Lane> {
         self.lanes
             .iter_mut()
@@ -204,6 +223,9 @@ pub(crate) struct Shared {
     pub wake: Condvar,
     pub config: OwnerConfig,
     pub admission: super::admission::Notifications,
+    /// The one engine connection. `State::busy` grants a turn before this
+    /// lock is taken, so the lock itself is never waited for in service.
+    pub connection: Mutex<Option<Box<Overlay>>>,
 }
 impl Shared {
     pub fn job_capacity(&self, class: ServiceClass, work: &OwnerWork) -> usize {
@@ -274,10 +296,14 @@ impl Shared {
                 },
                 event: 0,
                 maintenance_error: None,
+                busy: false,
+                served: 0,
+                maintenance: false,
             }),
             wake: Condvar::new(),
             config,
             admission,
+            connection: Mutex::new(None),
         }
     }
     pub fn scheduler_bytes(&self) -> usize {
@@ -285,20 +311,47 @@ impl Shared {
             .lock()
             .map_or(usize::MAX, |state| state.work.scheduler_bytes)
     }
-    pub fn poll(&self) -> Option<(Option<Box<Job>>, u64)> {
+    pub fn connection(&self) -> MutexGuard<'_, Option<Box<Overlay>>> {
+        self.connection
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    }
+    /// The owner thread's next turn: it waits out a turn taken by a
+    /// submitting thread, then takes the connection with the next runnable
+    /// job, if any. The flag says a maintenance turn is due first.
+    pub fn poll(&self) -> Option<(Option<Box<Job>>, u64, bool)> {
         let mut state = self.state.lock().ok()?;
-        if state.stopping {
-            return None;
-        }
-        for _ in 0..state.rotation.len() {
-            let ns = state.rotation.pop_front()?;
-            state.rotation.push_back(ns);
-            if let Some(job) = state.lane(ns)?.take() {
-                state.work.queued -= 1;
-                return Some((Some(job), state.event));
+        loop {
+            if state.stopping {
+                return None;
             }
+            if !state.busy {
+                break;
+            }
+            state = self.wake.wait(state).ok()?;
         }
-        Some((None, state.event))
+        state.busy = true;
+        let job = state.take();
+        let due = state.served >= 8 || job.is_none();
+        if due {
+            state.served = 0;
+        }
+        state.maintenance = false;
+        Some((job, state.event, due))
+    }
+    /// Ends a turn. The owner thread is woken only for work it must do: a
+    /// queued job, or maintenance the connection reported as possible.
+    pub fn idle(&self, maintenance: bool, owner: bool) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.busy = false;
+        state.maintenance |= maintenance;
+        let wanted = state.work.queued != 0 || state.maintenance;
+        drop(state);
+        if wanted && !owner {
+            self.wake.notify_all();
+        }
     }
     pub fn wait(&self, event: u64) {
         let Ok(mut state) = self.state.lock() else {
@@ -330,7 +383,6 @@ impl Shared {
                 .saturating_add(step.data_bytes);
             state.work.maintenance_ns = state.work.maintenance_ns.saturating_add(ns);
         }
-        self.wake.notify_all();
     }
     pub fn maintenance_failed(&self, error: layerfs_overlay::OverlayError) {
         if let Ok(mut state) = self.state.lock() {
@@ -360,6 +412,7 @@ impl Shared {
     pub fn progress(&self, ns: i64, class: ServiceClass, wait: u64, service: u64) {
         if let Ok(mut state) = self.state.lock() {
             state.event = state.event.wrapping_add(1);
+            state.served = state.served.saturating_add(1);
             let work = &mut state.work;
             work.completed[class as usize] = work.completed[class as usize].saturating_add(1);
             work.queue_wait_ns[class as usize] =
@@ -374,7 +427,6 @@ impl Shared {
                 }
             }
         }
-        self.wake.notify_all();
     }
     pub fn stop(&self) {
         let jobs = if let Ok(mut state) = self.state.lock() {

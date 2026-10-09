@@ -17,6 +17,6 @@ pub mod session;
 
 pub use dispatch::{
     AdmissionFailure, Dispatch, DispatchConfig, DispatchError, DispatchWork, FailureView,
-    MountQueue, MountWork, NextTurn, Permit, Received, RequestDisposition, RequestFuture, Shutdown,
-    StartFailure, HANDOFFS, MAX_INPUT_BYTES, RECEIVE_SLOTS,
+    LeaveReceiver, MountQueue, MountWork, NextTurn, Permit, Received, RequestDisposition,
+    RequestFuture, Shutdown, StartFailure, HANDOFFS, MAX_INPUT_BYTES, RECEIVE_SLOTS,
 };

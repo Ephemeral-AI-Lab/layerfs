@@ -248,20 +248,24 @@ fn a_request_running_through_the_stop_gets_its_turn_afterwards() {
     let (entered, started) = mpsc::channel();
     let (resume, resumed) = mpsc::channel();
     let polls = Arc::new(AtomicUsize::new(0));
-    handoff(
-        &queue,
-        Running {
+    // The first step runs on the thread that hands the request off, as it
+    // does on a receive loop; the test observes it from outside.
+    let receiver = {
+        let queue = queue.clone();
+        let running = Running {
             fence: queue.fence(),
             entered,
             resume: resumed,
             polls: polls.clone(),
-        },
-    );
+        };
+        std::thread::spawn(move || handoff(&queue, running))
+    };
     started.recv_timeout(WAIT).unwrap();
     assert_eq!(queue.work().unwrap().running, 1);
     queue.stop_service().unwrap();
     assert_eq!(queue.work().unwrap().running, 1);
     resume.send(()).unwrap();
+    receiver.join().unwrap();
     until(|| queue.work().unwrap().admitted == 0);
     assert_eq!(polls.load(Ordering::SeqCst), 2);
     assert_eq!(queue.work().unwrap().completed, 1);

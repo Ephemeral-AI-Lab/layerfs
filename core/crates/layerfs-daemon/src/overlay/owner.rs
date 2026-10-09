@@ -156,10 +156,18 @@ impl Owner {
                             return;
                         }
                     };
-                    if ready.send((Ok(db.profile().clone()), startup)).is_err() {
-                        return;
+                    // The connection is in place before readiness is
+                    // reported: the first submitted job may take its turn on
+                    // the submitting thread.
+                    let profile = db.profile().clone();
+                    *owner_shared.connection() = Some(Box::new(db));
+                    if ready.send((Ok(profile), startup)).is_ok() {
+                        run(&owner_shared);
                     }
-                    run(&owner_shared, &db);
+                    // The connection closes with its owner thread, after any
+                    // turn a submitting thread still holds.
+                    let closed = owner_shared.connection().take();
+                    drop(closed);
                 })
                 .map_err(OwnerError::Io)?;
             let profile = match receiver.recv() {
@@ -334,8 +342,25 @@ impl OwnerClient {
             .peak_credited_bytes
             .max(state.work.credited_bytes);
         state.work.admitted = state.work.admitted.saturating_add(1);
-        drop(state);
-        self.shared.wake.notify_one();
+        // With nothing else queued and the connection free, this thread
+        // takes the turn itself: the same selection, readiness and service
+        // as the owner thread's, without a hand-off to it and back.
+        let turn = if !state.busy && state.work.queued == 1 {
+            state.take()
+        } else {
+            None
+        };
+        match turn {
+            Some(job) => {
+                state.busy = true;
+                drop(state);
+                serve_submitted(&self.shared, job);
+            }
+            None => {
+                drop(state);
+                self.shared.wake.notify_all();
+            }
+        }
         Ok(pending)
     }
     pub fn diagnostics(&self) -> Result<OwnerWork, OwnerError> {
@@ -410,83 +435,127 @@ fn ready(db: &Overlay, job: &mut Job) -> Result<bool, OverlayError> {
     }
     Ok(true)
 }
-fn run(shared: &Shared, db: &Overlay) {
-    let mut served = 0_u8;
+/// A turn taken by the submitting thread. A panic in the job leaves the
+/// connection in an unknown state: admission closes, queued jobs get their
+/// commands back unattempted, and the turn is never returned.
+struct SubmittedTurn<'a>(&'a Shared, bool);
+impl Drop for SubmittedTurn<'_> {
+    fn drop(&mut self) {
+        if !self.1 {
+            self.0.stop();
+        }
+    }
+}
+fn serve_submitted(shared: &Shared, job: Box<Job>) {
+    let mut turn = SubmittedTurn(shared, false);
+    let maintenance = {
+        let connection = shared.connection();
+        match connection.as_deref() {
+            Some(db) => {
+                serve(shared, db, job);
+                db.maintenance_pending()
+            }
+            None => {
+                job.refuse(OwnerError::Stopped);
+                false
+            }
+        }
+    };
+    turn.1 = true;
+    shared.idle(maintenance, false);
+}
+/// One job on the connection, from its readiness check to its published
+/// outcome. The caller holds the turn.
+fn serve(shared: &Shared, db: &Overlay, mut job: Box<Job>) {
+    if shared.stopped() {
+        job.refuse(OwnerError::Stopped);
+        return;
+    }
+    let turn = Turn::begin(db);
+    match ready(db, &mut job) {
+        Ok(true) => {}
+        Ok(false) => {
+            turn.settle(shared, Some(&mut job.work));
+            job.work.queue_wait_ns = elapsed(job.admitted);
+            shared.park(job);
+            return;
+        }
+        Err(error) => {
+            turn.settle(shared, Some(&mut job.work));
+            job.work.queue_wait_ns = elapsed(job.admitted);
+            shared.progress(
+                ns(job.route),
+                job.command.class(),
+                job.work.queue_wait_ns,
+                0,
+            );
+            job.refuse(OwnerError::Overlay(error));
+            return;
+        }
+    }
+    let class = job.command.class();
+    let namespace = ns(job.route);
+    let wait = elapsed(job.admitted);
+    let start = Instant::now();
+    // The queued job's storage is released before its outcome exists.
+    let Job {
+        route,
+        command,
+        publisher,
+        mut work,
+        ..
+    } = *job;
+    let result = command.perform(db, route);
+    turn.settle(shared, Some(&mut work));
+    work.queue_wait_ns = wait;
+    work.service_ns = elapsed(start);
+    shared.progress(namespace, class, wait, work.service_ns);
+    publisher.publish(Box::new(Outcome { result, work }));
+}
+fn run(shared: &Shared) {
     let mut cursor = 0_u64;
     let mut maintenance_failed = false;
     let mut live_cursor = layerfs_overlay::MaintenanceCursor::default();
     let mut live_turn = true;
-    while let Some((job, event)) = shared.poll() {
+    while let Some((job, event, due)) = shared.poll() {
         let mut maintained = false;
-        if !maintenance_failed && (served >= 8 || job.is_none()) {
-            let turn = Turn::begin(db);
-            let start = Instant::now();
-            let maintenance = maintenance_turn(db, &mut live_cursor, &mut cursor, &mut live_turn);
-            turn.settle(shared, None);
-            served = 0;
-            match maintenance {
-                Ok(Some((step, closed))) => {
-                    shared.maintenance(step, closed, elapsed(start));
-                    maintained = true;
+        let idle = job.is_none();
+        {
+            let connection = shared.connection();
+            let Some(db) = connection.as_deref() else {
+                drop(connection);
+                if let Some(job) = job {
+                    job.refuse(OwnerError::Stopped);
                 }
-                Ok(None) => {}
-                Err(error) => {
-                    maintenance_failed = true;
-                    shared.maintenance_failed(error);
+                shared.idle(false, true);
+                return;
+            };
+            if !maintenance_failed && due {
+                let turn = Turn::begin(db);
+                let start = Instant::now();
+                let maintenance =
+                    maintenance_turn(db, &mut live_cursor, &mut cursor, &mut live_turn);
+                turn.settle(shared, None);
+                match maintenance {
+                    Ok(Some((step, closed))) => {
+                        shared.maintenance(step, closed, elapsed(start));
+                        maintained = true;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        maintenance_failed = true;
+                        shared.maintenance_failed(error);
+                    }
                 }
             }
-        }
-        let Some(mut job) = job else {
-            if !maintained {
-                shared.wait(event);
-            }
-            continue;
-        };
-        served = served.saturating_add(1);
-        if shared.stopped() {
-            job.refuse(OwnerError::Stopped);
-            continue;
-        }
-        let turn = Turn::begin(db);
-        match ready(db, &mut job) {
-            Ok(true) => {}
-            Ok(false) => {
-                turn.settle(shared, Some(&mut job.work));
-                job.work.queue_wait_ns = elapsed(job.admitted);
-                shared.park(job);
-                continue;
-            }
-            Err(error) => {
-                turn.settle(shared, Some(&mut job.work));
-                job.work.queue_wait_ns = elapsed(job.admitted);
-                shared.progress(
-                    ns(job.route),
-                    job.command.class(),
-                    job.work.queue_wait_ns,
-                    0,
-                );
-                job.refuse(OwnerError::Overlay(error));
-                continue;
+            if let Some(job) = job {
+                serve(shared, db, job);
             }
         }
-        let class = job.command.class();
-        let namespace = ns(job.route);
-        let wait = elapsed(job.admitted);
-        let start = Instant::now();
-        // The queued job's storage is released before its outcome exists.
-        let Job {
-            route,
-            command,
-            publisher,
-            mut work,
-            ..
-        } = *job;
-        let result = command.perform(db, route);
-        turn.settle(shared, Some(&mut work));
-        work.queue_wait_ns = wait;
-        work.service_ns = elapsed(start);
-        shared.progress(namespace, class, wait, work.service_ns);
-        publisher.publish(Box::new(Outcome { result, work }));
+        shared.idle(false, true);
+        if idle && !maintained {
+            shared.wait(event);
+        }
     }
 }
 

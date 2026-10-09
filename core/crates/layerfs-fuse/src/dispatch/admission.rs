@@ -74,7 +74,7 @@ impl MountQueue {
             .lane_mut(self.index, self.mount, &self.token)?
             .work
             .terminal = true;
-        self.shared.changed.notify_all();
+        self.shared.wake_all();
         Ok(())
     }
     /// This mount's terminal stop flag. A lane already released is terminal:
@@ -111,7 +111,7 @@ impl MountQueue {
             }
         }
         drop(state);
-        self.shared.changed.notify_all();
+        self.shared.wake_all();
         Ok(())
     }
     /// Observation wait for request drain. Returns once no unit is received,
@@ -231,20 +231,24 @@ impl Received {
 impl Drop for Received {
     fn drop(&mut self) {
         if self.active {
-            if let Ok(lane) = self.mount.shared.lock().lane_mut(
-                self.mount.index,
-                self.mount.mount,
-                &self.mount.token,
-            ) {
+            let mut state = self.mount.shared.lock();
+            if let Ok(lane) = state.lane_mut(self.mount.index, self.mount.mount, &self.mount.token)
+            {
                 lane.work.received -= 1;
             }
-            self.mount.shared.changed.notify_all();
+            self.mount.shared.announce(&state);
         }
     }
 }
 impl Permit {
     /// Ownership transfers even when stopping races handoff: that original
     /// future is then retained in its slot, never dropped as an unowned reply.
+    ///
+    /// The first bounded step runs on the calling thread. A request whose
+    /// prerequisites are all immediately available therefore completes
+    /// there, with no hand-off; one that has to wait parks in its slot and a
+    /// pool worker continues it. A step never waits: the only blocking wait
+    /// of a receive loop is still the one for a handoff slot.
     pub fn handoff(mut self, future: RequestFuture) -> Result<(), DispatchError> {
         let bytes = size_of_val(future.as_ref().get_ref());
         let task = Task::new(
@@ -270,12 +274,14 @@ impl Permit {
                 Some(Failure::Request(Box::new(DispatchError::Stopped)));
             entry.phase = Phase::Retained;
             lane.work.terminal = true;
-            self.mount.shared.changed.notify_all();
+            drop(state);
+            self.mount.shared.wake_all();
             Err(DispatchError::Stopped)
         } else {
-            entry.phase = Phase::Queued;
-            lane.ready.push_back(self.slot);
-            self.mount.shared.changed.notify_all();
+            entry.phase = Phase::Running(false);
+            lane.work.steps = lane.work.steps.saturating_add(1);
+            drop(state);
+            super::task::advance(task, &self.mount.shared, true);
             Ok(())
         }
     }
@@ -283,15 +289,13 @@ impl Permit {
 impl Drop for Permit {
     fn drop(&mut self) {
         if self.active {
-            if let Ok(lane) = self.mount.shared.lock().lane_mut(
-                self.mount.index,
-                self.mount.mount,
-                &self.mount.token,
-            ) {
+            let mut state = self.mount.shared.lock();
+            if let Ok(lane) = state.lane_mut(self.mount.index, self.mount.mount, &self.mount.token)
+            {
                 lane.tasks[self.slot] = None;
                 lane.work.admitted -= 1;
             }
-            self.mount.shared.changed.notify_all();
+            self.mount.shared.announce(&state);
         }
     }
 }

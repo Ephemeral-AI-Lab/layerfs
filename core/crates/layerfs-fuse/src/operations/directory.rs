@@ -259,6 +259,8 @@ impl DirectoryStream {
                     "native directory page identity",
                 )));
             }
+            // Provider reads never run on the loop that received the request.
+            crate::LeaveReceiver::default().await;
             let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
             let listing = immutable.native_directory_listing(page);
             drop(immutable);

@@ -66,8 +66,11 @@ impl Dispatch {
                 failed: false,
                 entered: 0,
                 live: 0,
+                idle: 0,
+                observers: 0,
             }),
             changed: Condvar::new(),
+            runnable: Condvar::new(),
             workers,
         });
         for number in 0..workers {
@@ -200,7 +203,7 @@ fn stop_workers(shared: &Shared) {
     for lane in state.lanes.iter_mut().flatten() {
         lane.work.terminal = true;
     }
-    shared.changed.notify_all();
+    shared.wake_all();
 }
 fn join_workers(shared: &Shared, threads: &mut Vec<JoinHandle<()>>) -> Shutdown {
     let joins = threads.drain(..).map(JoinHandle::join).collect();
@@ -248,7 +251,7 @@ impl Drop for Exit {
                 lane.work.terminal = true;
             }
         }
-        self.0.changed.notify_all();
+        self.0.wake_all();
     }
 }
 fn worker(shared: Arc<Shared>) {
@@ -256,7 +259,7 @@ fn worker(shared: Arc<Shared>) {
         let mut state = shared.lock();
         state.entered += 1;
         state.live += 1;
-        shared.changed.notify_all();
+        shared.announce(&state);
     }
     let _exit = Exit(shared.clone());
     loop {
@@ -268,9 +271,9 @@ fn worker(shared: Arc<Shared>) {
             if let Some(task) = state.take() {
                 break task;
             }
-            state = shared.wait(state);
+            state = shared.wait_runnable(state);
         };
         drop(state);
-        task::advance(task, &shared);
+        task::advance(task, &shared, false);
     }
 }

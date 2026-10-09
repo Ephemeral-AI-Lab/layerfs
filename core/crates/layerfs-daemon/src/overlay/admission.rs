@@ -5,7 +5,10 @@ use std::{
     future::Future,
     mem::size_of,
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
     task::{Context, Poll, Wake, Waker},
     thread::{self, Thread},
 };
@@ -19,6 +22,8 @@ struct Slot {
 
 pub(crate) struct Notifications {
     slots: Mutex<Vec<Slot>>,
+    /// Reserved slots. Zero means no admission wait exists to be told.
+    reserved: AtomicUsize,
     bytes: usize,
 }
 impl Notifications {
@@ -37,6 +42,7 @@ impl Notifications {
         Self {
             bytes: slots.capacity() * size_of::<Slot>(),
             slots: Mutex::new(slots),
+            reserved: AtomicUsize::new(0),
         }
     }
     pub fn bytes(&self) -> usize {
@@ -50,6 +56,7 @@ impl Notifications {
             .ok_or(OwnerError::AdmissionFull)?;
         slots[index].active = true;
         slots[index].changed = true;
+        self.reserved.fetch_add(1, Ordering::SeqCst);
         Ok(index)
     }
     /// Arm before checking credit availability. A release on either side of
@@ -66,6 +73,7 @@ impl Notifications {
     fn release(&self, index: usize) {
         let old = {
             let mut slots = self.slots.lock().unwrap_or_else(|error| error.into_inner());
+            self.reserved.fetch_sub(1, Ordering::SeqCst);
             std::mem::take(&mut slots[index])
         };
         drop(old);
@@ -73,6 +81,11 @@ impl Notifications {
     /// No queue lock is held by the caller. Wake/drop user tasks outside both
     /// locks, with no event-sized allocation and only the fixed slot scan.
     pub fn notify(&self) {
+        // A reservation made after this read arms itself with `changed` set
+        // and checks the credit this release already returned.
+        if self.reserved.load(Ordering::SeqCst) == 0 {
+            return;
+        }
         let count = self.slots.lock().unwrap_or_else(|e| e.into_inner()).len();
         for index in 0..count {
             let waker = {

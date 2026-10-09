@@ -37,6 +37,28 @@ admitted requests retain their original continuations through terminal fencing:
 `stop_admission`, the fence of the normal path, revokes new handoff and wakes
 receive waiters and does nothing else to an admitted request.
 
+R7 update, 2026-10-09: a request's **first step runs on the thread that
+received it**. `Permit::handoff` stores the continuation in its slot and
+polls it once there, through the same `advance` the workers use. With the
+owner's turn free (see [the owner](21-daemon-owner.md)) every owner job of
+that step runs on the same thread, so a request whose prerequisites are all
+immediately available is decided, replied to and released without one thread
+hand-off. A step that has to wait returns `Pending`, parks in its slot and is
+continued by a worker. A step never waits: the only blocking wait of a
+receive loop is still the one for a handoff slot. What a receive loop now
+executes is bounded: short owner jobs, the reply write, and for a creating
+request the serial allocator's refill (one bounded write per 1,024 serials).
+Provider reads never run there: every call that obtains a Store reader is
+preceded by `LeaveReceiver`, which is ready at once on a worker and yields one
+turn on a receive thread, so the continuation resumes on a worker first.
+
+The scheduler has two condition variables. `runnable` is for workers: one is
+woken per queued step, and only when one is idle. `changed` is for observers
+(a receive loop waiting for a slot, startup, drain and quiescence waits) and
+is signalled only while one waits. A worker that requeues its own step takes
+it on its next turn and wakes another worker only when more than that step is
+queued.
+
 Workers select one bounded continuation step in round-robin mount order. They
 poll outside scheduler and future-storage locks. Pending work parks with a
 notification; wakes during polling are coalesced into one later runnable turn.

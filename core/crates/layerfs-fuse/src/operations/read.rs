@@ -72,6 +72,8 @@ impl Custody {
             return Err(Box::new(OverlayError::Invalid("native read window")));
         }
         let local = self.services.local_read(read, offset, length).await?;
+        // Provider reads never run on the loop that received the request.
+        crate::LeaveReceiver::default().await;
         let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
         let data = if link {
             immutable

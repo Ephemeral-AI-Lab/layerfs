@@ -6,6 +6,7 @@ use super::{
 };
 use layerfs_overlay::NativeMount;
 use std::{
+    cell::Cell,
     future::Future,
     panic::{catch_unwind, AssertUnwindSafe},
     pin::Pin,
@@ -82,7 +83,7 @@ impl Task {
             Phase::Parked => {
                 entry.phase = Phase::Queued;
                 lane.ready.push_back(self.slot);
-                shared.changed.notify_all();
+                shared.wake_worker(&state);
             }
             Phase::Running(ref mut notified) => *notified = true,
             Phase::Reserved | Phase::Queued | Phase::Retained => {}
@@ -105,7 +106,25 @@ impl Drop for Running {
         }
     }
 }
-pub(crate) fn advance(task: Arc<Task>, shared: &Shared) {
+thread_local! {
+    /// Set while this thread runs a request's first step from its receive
+    /// callback, so that step can leave the loop before provider I/O.
+    static RECEIVING: Cell<bool> = const { Cell::new(false) };
+}
+struct Receiving(bool);
+impl Receiving {
+    fn enter(receiving: bool) -> Self {
+        Self(RECEIVING.replace(receiving))
+    }
+}
+impl Drop for Receiving {
+    fn drop(&mut self) {
+        RECEIVING.set(self.0);
+    }
+}
+/// One bounded step of a request. `receiving` is the first step, taken on
+/// the thread that received the request; every later step runs on a worker.
+pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
     let future = task
         .future
         .lock()
@@ -119,6 +138,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared) {
     let waker = task.waker.clone();
     // No scheduler, future, provider or registry lock spans the user's step.
     let outcome = catch_unwind(AssertUnwindSafe(|| {
+        let _receiving = Receiving::enter(receiving);
         running
             .future
             .as_mut()
@@ -140,7 +160,11 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared) {
             if matches!(entry.phase, Phase::Running(true)) {
                 entry.phase = Phase::Queued;
                 lane.ready.push_back(task.slot);
-                shared.changed.notify_all();
+                // A worker takes its own requeued step on its next turn; it
+                // wakes another only when more than that one step is queued.
+                if receiving || state.runnable() > 1 {
+                    shared.wake_worker(&state);
+                }
             } else {
                 entry.phase = Phase::Parked;
             }
@@ -162,7 +186,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared) {
             .expect("retained native slot")
             .phase = Phase::Retained;
         lane.work.terminal = true;
-        shared.changed.notify_all();
+        shared.announce(&state);
         return;
     }
     // Dispose the original continuation before releasing its handoff credit.
@@ -178,7 +202,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared) {
             .expect("retained native lane");
         lane.tasks[task.slot].as_mut().unwrap().phase = Phase::Retained;
         lane.work.terminal = true;
-        shared.changed.notify_all();
+        shared.announce(&state);
         return;
     }
     let mut state = shared.lock();
@@ -188,7 +212,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared) {
     lane.tasks[task.slot] = None;
     lane.work.admitted -= 1;
     lane.work.completed = lane.work.completed.saturating_add(1);
-    shared.changed.notify_all();
+    shared.announce(&state);
 }
 
 /// A completed bounded window yields one runnable turn even when every awaited
@@ -199,6 +223,23 @@ impl Future for NextTurn {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         if self.0 {
+            Poll::Ready(())
+        } else {
+            self.0 = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+}
+/// Ready at once on a pool worker. On the thread that received the request
+/// it yields one turn, so the rest of the request continues on a worker and
+/// the receive loop returns to the kernel before any provider I/O.
+#[derive(Default)]
+pub struct LeaveReceiver(bool);
+impl Future for LeaveReceiver {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 || !RECEIVING.get() {
             Poll::Ready(())
         } else {
             self.0 = true;

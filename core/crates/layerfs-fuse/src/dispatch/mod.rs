@@ -8,7 +8,7 @@ mod workers;
 
 pub use admission::{AdmissionFailure, MountQueue, Permit, Received};
 pub use diagnostics::{DispatchWork, MountWork};
-pub use task::NextTurn;
+pub use task::{LeaveReceiver, NextTurn};
 pub use types::{
     DispatchConfig, DispatchError, FailureView, RequestDisposition, RequestFuture, Shutdown,
     StartFailure, HANDOFFS, MAX_INPUT_BYTES, RECEIVE_SLOTS,
