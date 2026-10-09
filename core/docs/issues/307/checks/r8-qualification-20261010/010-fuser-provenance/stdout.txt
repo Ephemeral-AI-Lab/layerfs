@@ -1,0 +1,9 @@
+{
+  "checked_manifests_locks_configs": 101,
+  "errors": [
+    "core/benchmark/r7-passthrough/Cargo.lock: locked fuser has a local/replacement source",
+    "core/benchmark/r7-passthrough/Cargo.toml: patch override of fuser is not the authorized timestamp patch"
+  ],
+  "authorized_patch_verified": false,
+  "registry_package_verified": false
+}

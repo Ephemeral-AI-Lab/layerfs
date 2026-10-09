@@ -1,0 +1,20 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "9e4de35fcd69d7ec65ccb8479286f4f77239d57b",
+  "source_tree": "dce368b3e8511e9ebc45b5efec8f4cb361e03ee0",
+  "worktree_status": "M core/README.md\n M core/benchmark/fs-bench-pro-storage-content/Cargo.lock\n M core/benchmark/fs-bench-pro-storage-content/README.md\n M core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs\n M core/benchmark/fs-bench-pro-storage-content/tests/namespace_batch_probe.rs\n M core/benchmark/fs-bench-pro-storage-content/tests/pinned_expectations.rs\n M core/benchmark/fs-bench-pro-storage-content/tests/walk_ceiling.rs\n M core/benchmark/fs-bench-pro/families/workspace_write.py\n M core/benchmark/fs-bench-pro/runner.py\n M core/benchmark/fs-bench-pro/shared/evidence_jobs.py\n M core/benchmark/fs-bench-pro/shell_package.py\n M core/benchmark/fs-bench-pro/tests/test_evidence_disposal.py\n M core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py\n M core/benchmark/fs-bench-pro/tests/test_workspace_shell_package.py\n M core/benchmark/fs-bench-pro/tests/test_workspace_write.py\n?? core/benchmark/fs-bench-pro/shared/retired_families.py\n?? core/benchmark/r8-tools/\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/010-fuser-provenance/\n?? core/docs/issues/307/checks/r8-qualification-20261010/011-host-proof-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/012-retained-input-validation.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/013-linux-proof-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/014-wide-preparation/\n?? core/docs/issues/307/checks/r8-qualification-20261010/015-content-lock-resolution/\n?? core/docs/issues/307/checks/r8-qualification-20261010/016-python-harness-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/017-content-lock-parity.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/018-retired-family-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/02-plan-loc.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/020-retired-family-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/021-content-harness-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/023-amendment-loc.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/024-functional-inventory.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/025-functional-inventory.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/026-measurement-inventory.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/027-measurement-inventory.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/028-runtime-release-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/029-linux-source.sha256\n?? core/docs/issues/307/checks/r8-qualification-20261010/030-daemon-release-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/031-e04-contract-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/032-e04-import-precondition-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/033-full-proof-copy-preparation/\n?? core/docs/issues/307/checks/r8-qualification-20261010/034-full-oracle-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/035-full-oracle-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/036-full-oracle-time-range-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/037-r9-dependency-audit.json",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r8-validate-inventory.py"
+  ],
+  "limit_seconds": 100,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 132807541,
+  "status": "PASS"
+}

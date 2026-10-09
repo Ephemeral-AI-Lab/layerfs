@@ -40,8 +40,14 @@ use crate::workload::providers::{PairProvider, SharedStore, TreeStore};
 const LISTING_PAGE: usize = 64;
 /// Bytes per listing page.
 const LISTING_BYTES: usize = 8_192;
-/// Bindings one build may state before the walk ceiling refuses it.
-pub const WALK_CEILING: usize = 4_096;
+/// Historical workload width of one build-scale or namespace pipeline batch.
+///
+/// This preserves the frozen multi-operation workloads. It is not a product
+/// namespace or validation-work ceiling.
+pub const BUILD_BATCH_BINDINGS: usize = 4_096;
+/// Compatibility name used by the historical namespace pipeline driver.
+/// Its value declares workload batching, not a current product refusal.
+pub const WALK_CEILING: usize = BUILD_BATCH_BINDINGS;
 
 /// The scope every filesystem fixture uses, derived from the recipe seed.
 fn scope_of(seed: u64) -> layerfs_content::InodeScope {
@@ -55,11 +61,12 @@ fn scope_of(seed: u64) -> layerfs_content::InodeScope {
 
 /// Declared resource ceilings for one operation.
 ///
-/// The defaults are used unchanged: `maximum_pending_records` is 4,096, so a
-/// fixture of at most that many bindings resolves entirely in memory and the
-/// timed phase performs no ordering I/O. A larger fixture keeps the same declared
-/// ceilings and supplies a real [`FileBacking`], which is the operation's own
-/// declared scratch rather than a relaxed limit.
+/// The defaults are used unchanged. `maximum_pending_records` bounds the
+/// reducer's unfinished in-memory ordering rows, not total namespace entries or
+/// topology-walk work. A [`FileBacking`] supplies ordering scratch where needed.
+/// These historical drivers still use resident inputs and serial state; they do
+/// not call the indexed `*_streamed_backed` construction route. Its separate
+/// indexed backing is what permits construction state beyond resident limits.
 fn resources() -> FilesystemResources {
     FilesystemResources::default()
 }
@@ -611,12 +618,11 @@ pub fn fs_build(
     }
     let scope = scope_of(seed);
 
-    // The walk ceiling is two-sided and is the family's mechanism evidence. A tier
-    // whose tree fits one build states it in one operation and declares that it
-    // fits; a tier above the ceiling is grown by successive operations, and
-    // `run_batched_build_row` carries the gate that says so with the batch sizes
-    // it actually used. Exactly one gate owns the identifier per row.
-    if prepared.bindings() > WALK_CEILING {
+    // Preserve the registered workload: small tiers use one build and larger
+    // tiers use the historical batch chain. This is a harness workload choice,
+    // not a current product total-entry refusal. The legacy g2.walk-ceiling ID
+    // continues to check the declared batch width, once per row.
+    if prepared.bindings() > BUILD_BATCH_BINDINGS {
         // The chain is the input and the oracle, and it was acquired once. It is
         // loaded here rather than replayed: replaying it inside the performance
         // invocation charges the same 33 operations to preparation that the row
@@ -626,13 +632,13 @@ pub fn fs_build(
         let chain = chain_of(artifact)?;
         return run_batched_build_row(case, &prepared, scope, context, "fs_build", &chain);
     }
-    let gates = if case.entries >= WALK_CEILING as u32 {
+    let gates = if case.entries >= BUILD_BATCH_BINDINGS as u32 {
         vec![gates::require(
             GateClass::Mechanism,
             "g2.walk-ceiling",
-            prepared.bindings() <= WALK_CEILING,
+            prepared.bindings() <= BUILD_BATCH_BINDINGS,
             &format!("{} bindings in one build", prepared.bindings()),
-            &format!("at most {WALK_CEILING}: one build states its own bindings"),
+            &format!("at most {BUILD_BATCH_BINDINGS}: one build states its own bindings"),
         )]
     } else {
         Vec::new()
@@ -776,14 +782,13 @@ struct PreparedChain {
     roots: Vec<FilesystemRootId>,
 }
 
-/// A row whose measured phase builds a tree larger than one walk may charge.
+/// A row whose measured phase preserves the historical multi-operation build.
 ///
-/// `MAXIMUM_WALK_ENTRIES` is charged once per whole-tree walk and a build states
-/// its own bindings, so the product refuses one build above the ceiling and the
-/// declared route for a larger tree is several operations that each stay under
-/// it. The row measures **all** of them inside one timer: the tier's tree is the
-/// subject, and splitting the timer per batch would hide the chain's own cost.
-/// The batch structure is declared in the row's notes rather than inferred.
+/// The batch width is a frozen workload choice, not a product walk ceiling.
+/// R4 retired the whole-tree work refusal. This row continues to measure **all**
+/// registered batches inside one timer, because replacing them with one build
+/// would change the workload and its pinned counts and roots. The structure is
+/// declared in the row's notes rather than inferred.
 fn run_batched_build_row(
     case: &Case,
     prepared: &PreparedTree,
@@ -792,7 +797,7 @@ fn run_batched_build_row(
     label: &'static str,
     chain: &PreparedChain,
 ) -> Result<OpOutcome, OpError> {
-    let batches = match prepared.batches(WALK_CEILING) {
+    let batches = match prepared.batches(BUILD_BATCH_BINDINGS) {
         Ok(batches) => batches,
         Err(defect) => return Ok(unmeasured(&OpError::Io(defect), Vec::new())),
     };
@@ -874,15 +879,17 @@ fn run_batched_build_row(
         &format!("{label}.batch_bindings_max"),
         largest as i128,
         "bindings",
-        "largest batch, against the walk ceiling",
+        "largest batch, against the declared historical workload width",
     )?;
     let mut gates = common_gates(&measured, &measured.result, label);
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.walk-ceiling",
-        largest <= WALK_CEILING,
+        largest <= BUILD_BATCH_BINDINGS,
         &format!("{} operations, largest {largest} bindings", batches.len()),
-        &format!("every operation states at most {WALK_CEILING} bindings"),
+        &format!(
+            "historical workload: every operation states at most {BUILD_BATCH_BINDINGS} bindings"
+        ),
     ));
     gates.push(gates::require(
         GateClass::Correctness,
@@ -929,7 +936,7 @@ fn run_batched_build_row(
             format!("recipe_directories: {}", prepared.recipe.directories),
             format!("bindings: {}", prepared.bindings()),
             format!(
-                "multi_operation: {} batches of at most {WALK_CEILING} bindings; the first is a \
+                "multi_operation: {} batches of at most {BUILD_BATCH_BINDINGS} bindings; the first is a \
                  build and the rest are updates that state new files only",
                 batches.len()
             ),
@@ -956,8 +963,8 @@ fn ladder(files: u32) -> (u32, u64, u32) {
     }
 }
 
-/// C1-11 `prepare`: acquire the input tree, and — for a tier above the walk
-/// ceiling — the fixture chain every batch's base is read from.
+/// C1-11 `prepare`: acquire the input tree, and for a tier above the historical
+/// batch width, the fixture chain every batch's base is read from.
 ///
 /// Nothing here is measured. The chain is built by the same product entry points
 /// the measured row uses, into an authenticating `TreeStore`, and both halves are
@@ -973,8 +980,8 @@ fn fs_build_prepare(
     let scope = scope_of(recipe.seed);
     let mut artifact = Artifact::new(TreeStore::new());
     let mut chained = 0_usize;
-    if prepared.bindings() > WALK_CEILING {
-        let batches = match prepared.batches(WALK_CEILING) {
+    if prepared.bindings() > BUILD_BATCH_BINDINGS {
+        let batches = match prepared.batches(BUILD_BATCH_BINDINGS) {
             Ok(batches) => batches,
             Err(defect) => return Ok(unmeasured(&OpError::Io(defect), Vec::new())),
         };
@@ -1038,7 +1045,7 @@ fn fs_build_prepare(
 fn chain_of(artifact: Artifact) -> Result<PreparedChain, OpError> {
     if artifact.values.scalar("chained").unwrap_or(0) == 0 {
         return Err(OpError::Io(
-            "this tier is above the walk ceiling and its artifact carries no prepared chain"
+            "this tier declares historical batching and its artifact carries no prepared chain"
                 .to_string(),
         ));
     }

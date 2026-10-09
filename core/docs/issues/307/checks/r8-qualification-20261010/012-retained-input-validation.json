@@ -1,0 +1,75 @@
+{
+  "schema": "r8-read-only-preparation-validation-v1",
+  "status": "PASS",
+  "rows": [
+    {
+      "path": "/tmp/layerfs-r7-full-sealed-20261009.sqlite",
+      "sha256": "0c836c88ce4eb04be8d823cbe23980696f96f9a56fe6e2da226cbb3b6bdecf05",
+      "bytes": 1417285632,
+      "allocated_bytes": 1417285632,
+      "identity": [
+        16777230,
+        874405395,
+        1791490499349790708
+      ],
+      "expected_sha256": null,
+      "read_only": true
+    },
+    {
+      "path": "/tmp/layerfs-r7-full-installed-20261009.manifest",
+      "sha256": "1d3b8c9c679033dc98cf44eda6b7894fa7244fba2c963e3c7a7ef4fbac272684",
+      "bytes": 189,
+      "allocated_bytes": 4096,
+      "identity": [
+        16777230,
+        874405645,
+        1791490509191663959
+      ],
+      "expected_sha256": null,
+      "read_only": true
+    },
+    {
+      "path": "/tmp/layerfs-r7-full-inventory-20261009.jsonl",
+      "sha256": "d058d8c61220950b989772681cee4446575893076318d128a25884849271ba52",
+      "bytes": 46586430,
+      "allocated_bytes": 46587904,
+      "identity": [
+        16777230,
+        874732130,
+        1791498219112825645
+      ],
+      "expected_sha256": "d058d8c61220950b989772681cee4446575893076318d128a25884849271ba52",
+      "read_only": true
+    },
+    {
+      "path": "/tmp/layerfs-r7-full-fixture-seal-20261009.jsonl",
+      "sha256": "90cde1a4647d26ae3ad4971eb91c7bde0f68cda156025520a9fbc21fbc711840",
+      "bytes": 66186578,
+      "allocated_bytes": 66191360,
+      "identity": [
+        16777230,
+        874468820,
+        1791493649030216770
+      ],
+      "expected_sha256": "90cde1a4647d26ae3ad4971eb91c7bde0f68cda156025520a9fbc21fbc711840",
+      "read_only": true
+    },
+    {
+      "commit": "7999a6356",
+      "product_tree": "9a76077239b4db1955b83bb29e9134745efb963c",
+      "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    },
+    {
+      "commit": "7d244bb5f",
+      "product_tree": "9a76077239b4db1955b83bb29e9134745efb963c",
+      "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    },
+    {
+      "commit": "HEAD",
+      "product_tree": "9a76077239b4db1955b83bb29e9134745efb963c",
+      "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  ],
+  "original_setup_verdict": "FAILED retained unchanged; Init and install original events known successful",
+  "cache": "Hash reads warm host cache; no cold/performance claim"
+}

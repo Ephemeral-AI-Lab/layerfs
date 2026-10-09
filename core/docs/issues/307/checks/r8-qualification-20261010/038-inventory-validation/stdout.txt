@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "functional_rows": 90,
+  "functional_status_counts": {
+    "PARTIAL": 35,
+    "PASS": 41,
+    "WITHDRAWN": 8,
+    "NOT_RUN": 6
+  },
+  "canonical_timing_rows": 222,
+  "scenario_timing_rows": 60,
+  "timing_attempts": 0,
+  "product_reuse": "exact core/crates object matches 7999a6356",
+  "oracle_sha256": "1a4ee652f1f9eb74eb8e74c82a17f82c1f48f3f92b18cc9429ba3e4b976c340e",
+  "methods": "source path existence, exact canonical IDs/workload hashes, dispositions and retained result status; source scope reviewed separately"
+}

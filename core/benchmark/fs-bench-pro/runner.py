@@ -30,6 +30,7 @@ from families import workspace_namespace as namespace  # noqa: E402
 from families import workspace_mutations as mutations  # noqa: E402
 from families import workspace_shell_package as package  # noqa: E402
 from families import cluster_two_evidence as cluster_two  # noqa: E402
+from shared import retired_families
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -102,6 +103,7 @@ def identities():
 
 
 def build(out, target, identity):
+    retired_families.require_compatible(ROOT)
     cache = RESULTS / "sdk-build-release.json"
     prior = json.loads(cache.read_text()) if cache.exists() else None
     if prior and prior.get("build_profile") == BUILD_PROFILE and prior.get("product_seal") == identity["product_seal"] and all(
@@ -345,6 +347,11 @@ def fill_not_run(out, selection, blocked=None):
 def run(selection, out):
     out = owned(out)
     identity = identities()
+    if not retired_families.compatible(ROOT):
+        selected = init.SELECTED if selection == "init_namespace" else (selection,)
+        retired_families.record(out, selection, selected, identity)
+        manifest_run(out)
+        return out
     if identity["source_dirty"]:
         raise ValueError("commit the SDK route before collecting benchmark samples")
     target = target_path()
@@ -374,6 +381,34 @@ def run(selection, out):
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
         "family_cycle_budget_ns": 30_000_000_000})
     (out / "report.txt").write_text(report(out))
+    manifest_run(out)
+    return out
+
+
+def retired_selection(selection):
+    """The selected host-mediated cases; native routes retain their own scope."""
+    registries = ((init.CASES, {"init_namespace": init.SELECTED}),
+        (write.CASES, {"workspace_write": write.SELECTED}),
+        (commit.CASES, {"workspace-commit": commit.SELECTED}),
+        (namespace.SDK, {"workspace_namespace": tuple(namespace.SDK),
+                         "workspace-namespace-sdk": tuple(namespace.SDK)}),
+        (mutations.SDK, {"workspace_mutations": mutations.SELECTED,
+                         "workspace-mutations-sdk": mutations.SELECTED}),
+        (package.cases(), {"workspace_shell_package": tuple(package.cases()),
+                           "workspace-shell-package-tail": tuple(package.cases())[-2:]}))
+    for cases, families in registries:
+        if selection in cases:
+            return (selection,)
+        if selection in families:
+            return families[selection]
+    return (selection,) if selection == package.SDK_CAUSE else None
+
+
+def record_retired_selection(selection, output):
+    cases = retired_selection(selection)
+    if cases is None or retired_families.compatible(ROOT):
+        return None
+    out = retired_families.record(owned(output), selection, cases, identities())
     manifest_run(out)
     return out
 
@@ -428,6 +463,7 @@ def main():
         from diagnostics.reprove_reference import reprove
         print(reprove(args.run,args.case,args.out));return
     if args.command == "list":
+        host_status = "NOT_RUN — mechanism removed" if not retired_families.compatible(ROOT) else None
         for case_id, route, budget in cluster_two.list_rows():
             print(f"{case_id}\tE1 registration-only; NOT_RUN; route {route}; complete budget {budget if budget is not None else 'INCOMPLETE'} ns")
         for case in sqlite_phase7.CASES.values():
@@ -438,39 +474,43 @@ def main():
             print(f"{case.id}\tRETIRED PG/MinIO selection; historical receipts preserved")
         for case in init.CASES.values():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
-                  f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
+                  f"{host_status or ('SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON)}")
         for case in history.CASES.values():
             print(f"{case.id}\t{case.states} states\tallocated < {case.ceiling_bytes} B\t"
                   f"{'selected' if case.id in history.SELECTED else 'explicit run-only'}")
         for case in write.CASES.values():
             print(f"{case.id}\t{case.writes} {case.pattern} writes\t"
                   f"command <= {case.command_budget_ns / 1e9:g} s; verifier <= 9 s\t"
-                  "selected")
+                  f"{host_status or 'selected'}")
         for case in commit.CASES.values():
             print(f"{case.id}\tSDK same-Workspace retained pin\tcommand <= {case.command_budget_ns / 1e9:g} s; separate proof <= 9 s\t"
-                  f"{'historical method retired' if case.retired else 'fast lane selected' if case.id in commit.SELECTED else 'explicit-only ' + case.role}")
+                  f"{host_status or ('historical method retired' if case.retired else 'fast lane selected' if case.id in commit.SELECTED else 'explicit-only ' + case.role)}")
         for case in native.CASES.values():
             print(f"{case.id}\tnative functional component; command <= 60 s; no SDK time\t"
                   f"{'SKIPPED / OWNER-DEFERRED (#276)' if case.owner_deferred else 'selected'}")
         for case in namespace.NATIVE.values():
             print(f"{case.id}\tnative namespace control; command <= {case.budget_ns / 1e9:g} s; no SDK time")
         for case in namespace.SDK.values():
-            print(f"{case.id}\tpublic SDK/FUSE; command <= {case.budget_ns / 1e9:g} s; separate full proof < 9 s")
+            print(f"{case.id}\tpublic SDK/FUSE; command <= {case.budget_ns / 1e9:g} s; separate full proof < 9 s\t{host_status or 'selected'}")
         for case in mutations.NATIVE.values():
             print(f"{case.id}\tnative mixed mutation/custody; command <= 15 s; no SDK time")
         for case in mutations.SDK.values():
             print(f"{case.id}\tpublic SDK/FUSE; command <= 15 s; separate full proof < 9 s\t"
-                  f"{'historical cleanup FAIL r069; superseded v2 explicit recovery' if case.retired else 'current selected'}")
+                  f"{host_status or ('historical cleanup FAIL r069; superseded v2 explicit recovery' if case.retired else 'current selected')}")
         for case in package.cases().values():
-            print(f"{case.id}\tpublic SDK/POSIX package; command <= {case.budget_ns / 1e9:g} s; separate full proof < 9 s")
+            print(f"{case.id}\tpublic SDK/POSIX package; command <= {case.budget_ns / 1e9:g} s; separate full proof < 9 s\t{host_status or 'selected'}")
         for case in package.NATIVE.values():
             print(f"{case.id}\tnative same-thread progress/refusal custody; command <=15s; SDK time N/A")
-        print(f"{package.SDK_CAUSE}\tcount/custody SDK diagnostic; original1025 workload/25s bound; not a speed/gate arm")
+        print(f"{package.SDK_CAUSE}\tcount/custody SDK diagnostic; original1025 workload/25s bound; not a speed/gate arm\t{host_status or 'selected'}")
         print(f"{package.DEFERRED}\t{package.DEFER_REASON}")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
+        retired = record_retired_selection(selection, args.out)
+        if retired is not None:
+            print(retired)
+            return
         if selection in sqlite_phase7.CASES:
             if args.arm is None or args.arm=="baseline" and args.baseline_root is None:
                 parser.error("SQLite Phase7 requires an arm and owned baseline root")
@@ -526,7 +566,11 @@ def main():
         print(commit.prove(path, args.out, sys.modules[__name__]))
     elif args.command == "verify":
         path = owned(args.run, existing=True)
-        if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
+        if json.loads((path / "run.json").read_text()).get("schema") == retired_families.SCHEMA:
+            verify_run_manifest(path)
+            retired_families.verify(path)
+            print("PASS: retained NOT_RUN — mechanism removed dispositions only")
+        elif json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.verify(path, sys.modules[__name__]))
         elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
             print(write.verify(path, sys.modules[__name__]))
@@ -543,7 +587,13 @@ def main():
             print(verify_run(path))
     else:
         path = owned(args.run, existing=True)
-        if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
+        if json.loads((path / "run.json").read_text()).get("schema") == retired_families.SCHEMA:
+            verify_run_manifest(path)
+            summary = retired_families.verify(path)
+            print("case\tsamples\tstatus\treason")
+            for row in summary["rows"]:
+                print(f"{row['case']}\t0\tNOT_RUN\tmechanism removed")
+        elif json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
             print(write.report(path), end="")

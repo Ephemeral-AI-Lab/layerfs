@@ -1,0 +1,30 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "build",
+  "source_commit": "f8a0a5ff1cd5f93b90bf16f964705b4c7d773615",
+  "source_tree": "d627e31d911e7b979db00ce2f2306c160607cabe",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/010-fuser-provenance/\n?? core/docs/issues/307/checks/r8-qualification-20261010/02-plan-loc.json",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "complete_installed_roots",
+    "--test",
+    "host_handoff",
+    "--test",
+    "shared_processes",
+    "--no-run",
+    "--message-format=json"
+  ],
+  "limit_seconds": 560,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

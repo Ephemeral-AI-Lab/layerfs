@@ -1,0 +1,12 @@
+     Locking 7 packages to latest compatible versions
+      Adding block-buffer v0.12.1
+    Removing cfg_aliases v0.2.2
+      Adding const-oid v0.10.2
+      Adding crypto-common v0.2.2
+      Adding digest v0.11.3
+      Adding hybrid-array v0.4.15
+    Removing nix v0.31.3
+      Adding sha2 v0.11.0
+      Adding typenum v1.20.1
+note: pass `--verbose` to see 14 unchanged dependencies behind latest
+R4_WALL seconds<=1 limit=30s lock_wait=0s

@@ -387,6 +387,13 @@ class E01Receipts(unittest.TestCase):
 
 
 class E04OriginalWork(unittest.TestCase):
+    def test_aligned_borrowed_whole_row_counts_cells_without_a_copy(self):
+        self.assertEqual(jobs.e04_write_payload(True), (4096, 1, 0, 0))
+        self.assertEqual(jobs.e04_write_payload(False), (0, 0, 0, 0))
+        self.assertEqual(jobs.e04_write_payload(True, jobs.E04_LEGACY_PAYLOAD_MODEL), (4096, 1, 0, 4096))
+        with self.assertRaisesRegex(ValueError, "unregistered.*source contract"):
+            jobs.e04_write_payload(True, "infer-from-observed-counters")
+
     """Source-shaped Completion totals, independently of any product execution."""
 
     def work(self):
@@ -975,7 +982,8 @@ class E04Retained(unittest.TestCase):
 
     def checked(self):
         self.seal()
-        return jobs.validate(self.output, self.root)
+        # This synthetic retained v1 fixture models the pre-R7 copying source.
+        return jobs.validate(self.output, self.root, payload_model=jobs.E04_LEGACY_PAYLOAD_MODEL)
 
     def test_retained_complete_write_window_still_leaves_whole_e2_incomplete(self):
         result = self.checked()
@@ -983,6 +991,25 @@ class E04Retained(unittest.TestCase):
         self.assertEqual(result["observation_consistency"], "INCOMPLETE")
         self.assertFalse(result["admission_eligible"])
         self.assertEqual((result["qualification_status"], result["e1_sample_count"], result["E05_status"]), ("NOT_EVALUATED", 0, "NOT_RUN"))
+
+    def test_current_contract_does_not_accept_historical_copy_counters(self):
+        self.seal()
+        result = jobs.validate(self.output, self.root, payload_model=jobs.E04_PAYLOAD_MODEL)
+        self.assertEqual(result["write_window_consistency"], "INCOMPLETE")
+        self.assertTrue(any("aligned write payload differs" in error for error in result["errors"]), result)
+
+    def test_default_retains_the_frozen_legacy_payload_contract(self):
+        self.seal()
+        result = jobs.validate(self.output, self.root)
+        self.assertEqual(result["payload_model"], jobs.E04_LEGACY_PAYLOAD_MODEL)
+        self.assertEqual(result["write_window_consistency"], "PASS", result)
+
+    def test_legacy_contract_does_not_accept_borrowed_counters(self):
+        row = next(row for row in self.rows if row["work"]["payload"]["write_input_bytes"])
+        row["work"]["payload"]["cell_copy_bytes"] = 0
+        result = self.checked()
+        self.assertEqual(result["write_window_consistency"], "INCOMPLETE")
+        self.assertTrue(any("aligned write payload differs" in error for error in result["errors"]), result)
 
     def test_actual_open_has_no_route_until_original_opened_result(self):
         # driver::run records the actual pre-Open input as route: None. The
@@ -1112,7 +1139,9 @@ class E04NativeRetained(unittest.TestCase):
 
     def checked(self):
         self.case.seal()
-        return jobs.validate(self.case.output, self.case.root, self.native.seal())
+        # V2 retains the same pre-R7 copied-cell source contract as the v1 fixture.
+        return jobs.validate(self.case.output, self.case.root, self.native.seal(),
+                             payload_model=jobs.E04_LEGACY_PAYLOAD_MODEL)
 
     def test_v2_complete_original_window_is_narrow_pass_only(self):
         result = self.checked()

@@ -283,7 +283,7 @@ Recorded here so a reader is not misled by the sections above.
   longer hash their members at all.
 - **`c1.construct.*` is not prepared.** The construction *is* the measured operation, and
   preparing it would move the measurement into setup.
-- **`c1.fs.build-scale` above the walk ceiling loads its fixture chain rather than
+- **`c1.fs.build-scale` above its historical batch width loads its fixture chain rather than
   replaying it.** The chain every batch reads its base from is built once at acquisition;
   its objects are the artifact's packed object set and its per-batch roots are the
   artifact's members. The measured chain is still compared against those roots, and the
@@ -337,3 +337,33 @@ Recorded here so a reader is not misled by the sections above.
   rather than by a cross-build.
 - **`elapsed_ns` still never gate-decides.** Owner ruling 1: the golden number reports and
   does not gate. Counters, heap, CPU, space and the per-row ceilings keep deciding.
+
+## R8 preparation correction, 2026-10-10
+
+The 4,096-binding value in the historical build-scale and namespace pipeline
+workloads is a **batch width**, not a current product namespace or topology-work
+ceiling. R4 retired the whole-tree walk refusal. `BUILD_BATCH_BINDINGS` names the
+workload width; `WALK_CEILING` remains a compatibility alias for the namespace
+pipeline, and the historical `g2.walk-ceiling` gate still verifies that declared
+workload shape. The batch count, operation boundaries, roots, pinned counters and
+listing oracle are preserved. This correction registers no sample and makes no
+new performance claim.
+
+The drivers call the resident-input `build_filesystem`/`update_filesystem` route
+with unchanged `FilesystemResources::default()`. `FileBacking` supplies ordering
+runs; it does not supply indexed serial or topology state. The separate public
+`*_streamed_backed` route takes `IndexedConstructionBacking`, validates in bounded
+classification windows and has no resident-total refusal. These are distinct
+routes; passing these harness tests does not qualify the daemon's indexed route.
+
+`walk_ceiling` checks a single fresh build and a restated stored binding over a
+base larger than 4,096 bindings with ordering backing and complete fixture
+listings. `namespace_batch_probe` now fails when any registered-width batch fails,
+compares each discarding pass root with its retaining preparation root, and checks
+all final directory listings. It no longer merely prints errors and exits
+successfully. These are functional harness tests, not timed case invocations.
+
+The pinned `additions` digest remains part of the C2 offered-member oracle emitted
+by `ops/c2.rs`. It is unrelated to the crate-internal `CheckedInput.additions`
+field removed in R4. Removing the digest from discovery would weaken the frozen
+oracle, so its pinned identities and gates remain unchanged.

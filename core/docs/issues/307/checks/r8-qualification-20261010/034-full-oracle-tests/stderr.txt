@@ -1,0 +1,162 @@
+FFFF....FF.F.F..FFFF......F
+======================================================================
+FAIL: test_changed_mode (test_full_oracle.FullOracleTests.test_changed_mode)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 168, in test_changed_mode
+    self.assert_failed(self.run_proof(), "metadata mismatch mode: a")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'metadata mismatch mode: a' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_changed_mtime (test_full_oracle.FullOracleTests.test_changed_mtime)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 172, in test_changed_mtime
+    self.assert_failed(self.run_proof(), "metadata mismatch mtime_ns: a")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'metadata mismatch mtime_ns: a' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_changed_size (test_full_oracle.FullOracleTests.test_changed_size)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 164, in test_changed_size
+    self.assert_failed(self.run_proof(), "regular size mismatch: a")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'regular size mismatch: a' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_complete_tree_reads_every_byte_in_bounded_windows (test_full_oracle.FullOracleTests.test_complete_tree_reads_every_byte_in_bounded_windows)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 125, in test_complete_tree_reads_every_byte_in_bounded_windows
+    self.assertEqual(result["status"], "PASS", result)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'FAIL' != 'PASS'
+- FAIL
++ PASS
+ : {'schema': 'r8-full-mounted-oracle-v1', 'status': 'FAIL', 'root': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-tsz4wi3z/mount', 'inventory': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-tsz4wi3z/input.jsonl', 'expected_inventory_sha256': 'ed3ddd396e3a47933bc043ae5fed588a9b9c63331eb38c7dbbf557ad40d56735', 'output': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-tsz4wi3z/proof.json', 'artifacts': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-tsz4wi3z/proof.json.artifacts', 'projection': 'portable-init-fuse-r7-directory-links-v1', 'owner_uid': 501, 'owner_gid': 20, 'read_window_bytes': 65536, 'paths': 0, 'hashed_files': 0, 'hashed_bytes': 0, 'phase': 'namespace', 'differences': [{'phase': 'namespace', 'reason': 'metadata mismatch nlink: .'}], 'oracle_source_sha256': 'aea5a4b9b86e33d970791a4bcd7426d2be681e00d3aa4d20945b1cc1346cecb6', 'inventory_sha256_before': 'ed3ddd396e3a47933bc043ae5fed588a9b9c63331eb38c7dbbf557ad40d56735', 'expected_totals': {'entries': 5, 'regular_files': 2, 'regular_bytes': 153618}, 'projected_expected_sha256': 'c80691a30d1dc8c2e97e09d7f9e0f95d3a51959c771b870e04a60be2ad35622e', 'original_error': 'metadata mismatch nlink: .', 'original_error_type': 'ProofError', 'exactfailure': 'metadata mismatch nlink: .', 'original_phase': 'namespace', 'independent_close_failures': [], 'expected_sha256': 'c80691a30d1dc8c2e97e09d7f9e0f95d3a51959c771b870e04a60be2ad35622e', 'observed_sha256': 'bd927221e0ea36007c22d3fdc2f639018f6cc66e716140cd308bffa50f1884e2'}
+
+======================================================================
+FAIL: test_extra_name (test_full_oracle.FullOracleTests.test_extra_name)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 154, in test_extra_name
+    self.assert_failed(self.run_proof(), "extra namespace name: extra")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'extra namespace name: extra' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_file_changed_to_symlink_is_not_followed (test_full_oracle.FullOracleTests.test_file_changed_to_symlink_is_not_followed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 200, in test_file_changed_to_symlink_is_not_followed
+    self.assert_failed(result, "metadata mismatch kind: a")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'metadata mismatch kind: a' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_merged_distinct_alias_classes_detected (test_full_oracle.FullOracleTests.test_merged_distinct_alias_classes_detected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 248, in test_merged_distinct_alias_classes_detected
+    self.assert_failed(self.run_proof(observe=observation), "unrelated regular alias classes merged")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'unrelated regular alias classes merged' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_missing_name (test_full_oracle.FullOracleTests.test_missing_name)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 149, in test_missing_name
+    self.assert_failed(self.run_proof(), "missing namespace name: a")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'missing namespace name: a' not found in 'metadata mismatch nlink: dir'
+
+======================================================================
+FAIL: test_regular_alias_names_are_all_hashed (test_full_oracle.FullOracleTests.test_regular_alias_names_are_all_hashed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 225, in test_regular_alias_names_are_all_hashed
+    self.assertEqual(result["status"], "PASS", result)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'FAIL' != 'PASS'
+- FAIL
++ PASS
+ : {'schema': 'r8-full-mounted-oracle-v1', 'status': 'FAIL', 'root': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-xsd2iiek/mount', 'inventory': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-xsd2iiek/input.jsonl', 'expected_inventory_sha256': 'dfa4c6711f4bbd1e164e519cbdf9b31191a95fa64457dc84ef3c9c43fc6ba631', 'output': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-xsd2iiek/proof.json', 'artifacts': '/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/r8-oracle-unit-xsd2iiek/proof.json.artifacts', 'projection': 'portable-init-fuse-r7-directory-links-v1', 'owner_uid': 501, 'owner_gid': 20, 'read_window_bytes': 65536, 'paths': 0, 'hashed_files': 0, 'hashed_bytes': 0, 'phase': 'namespace', 'differences': [{'phase': 'namespace', 'reason': 'metadata mismatch nlink: .'}], 'oracle_source_sha256': 'aea5a4b9b86e33d970791a4bcd7426d2be681e00d3aa4d20945b1cc1346cecb6', 'inventory_sha256_before': 'dfa4c6711f4bbd1e164e519cbdf9b31191a95fa64457dc84ef3c9c43fc6ba631', 'expected_totals': {'entries': 6, 'regular_files': 3, 'regular_bytes': 153636}, 'projected_expected_sha256': '1dd7a9f9854d545c2b4fcfccfa89798ac9346fc9fdf74c2b3c5491adca7729a5', 'original_error': 'metadata mismatch nlink: .', 'original_error_type': 'ProofError', 'exactfailure': 'metadata mismatch nlink: .', 'original_phase': 'namespace', 'independent_close_failures': [], 'expected_sha256': '1dd7a9f9854d545c2b4fcfccfa89798ac9346fc9fdf74c2b3c5491adca7729a5', 'observed_sha256': '5fd320d59e56f4a2becaaa92897b0ecf8aa5881b43b92f701501815b733a3eda'}
+
+======================================================================
+FAIL: test_same_size_changed_bytes (test_full_oracle.FullOracleTests.test_same_size_changed_bytes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 159, in test_same_size_changed_bytes
+    self.assert_failed(self.run_proof(), "regular content mismatch: a")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'regular content mismatch: a' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_source_u64_identity_has_no_signed_sqlite_limit (test_full_oracle.FullOracleTests.test_source_u64_identity_has_no_signed_sqlite_limit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 284, in test_source_u64_identity_has_no_signed_sqlite_limit
+    self.assertEqual(self.run_proof()["status"], "PASS")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'FAIL' != 'PASS'
+- FAIL
++ PASS
+
+
+======================================================================
+FAIL: test_split_alias_detected_even_with_counterfeit_nlink (test_full_oracle.FullOracleTests.test_split_alias_detected_even_with_counterfeit_nlink)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 237, in test_split_alias_detected_even_with_counterfeit_nlink
+    self.assert_failed(self.run_proof(observe=observation), "regular alias class split")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'regular alias class split' not found in 'metadata mismatch nlink: .'
+
+======================================================================
+FAIL: test_wrong_symlink_target (test_full_oracle.FullOracleTests.test_wrong_symlink_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 192, in test_wrong_symlink_target
+    self.assert_failed(self.run_proof(), "symlink target/size mismatch: dir/link")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_oracle.py", line 116, in assert_failed
+    self.assertIn(phrase, result["exactfailure"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'symlink target/size mismatch: dir/link' not found in 'metadata mismatch nlink: .'
+
+----------------------------------------------------------------------
+Ran 27 tests in 0.180s
+
+FAILED (failures=13)
+R4_WALL seconds<=1 limit=100s lock_wait=0s

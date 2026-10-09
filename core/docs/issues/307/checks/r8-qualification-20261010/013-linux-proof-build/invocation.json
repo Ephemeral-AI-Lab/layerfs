@@ -1,0 +1,33 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "build",
+  "source_commit": "f8a0a5ff1cd5f93b90bf16f964705b4c7d773615",
+  "source_tree": "d627e31d911e7b979db00ce2f2306c160607cabe",
+  "worktree_status": "?? core/benchmark/fs-bench-pro/shared/retired_families.py\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/010-fuser-provenance/\n?? core/docs/issues/307/checks/r8-qualification-20261010/011-host-proof-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/012-retained-input-validation.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/02-plan-loc.json",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r8-proof-build-20261010",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "sh",
+    "-c",
+    "sha256sum -c --quiet core/target/r8-host.sha && exec cargo test --manifest-path core/Cargo.toml --locked -p layerfs-daemon --test complete_installed_roots --test host_handoff --test shared_processes --no-run --message-format=json"
+  ],
+  "limit_seconds": 560,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

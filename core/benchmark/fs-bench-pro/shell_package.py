@@ -19,6 +19,7 @@ BASE = "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd
 SEED_COMMAND = "printf '1' | dd of=node_modules/@fixture/core/BUILD_ID bs=1 seek=0 conv=notrunc 2>/dev/null"
 sys.path.insert(0, str(BENCH))
 from runner import identities  # noqa: E402
+from shared import retired_families  # noqa: E402
 
 
 def sha(data):
@@ -164,6 +165,9 @@ def case_spec(path, values):
 
 
 def prepare(output):
+    if not retired_families.compatible(ROOT):
+        return retired_families.record(output, "workspace-shell-package-v1-prepare",
+            [row["scenario_id"] for row in registry()["cases"]], identities())
     output.mkdir(parents=True, exist_ok=False)
     identity = identities()
     if identity["source_dirty"]:
@@ -364,6 +368,9 @@ def run_case(row, prepared, output):
 
 
 def run(prepared_path, output):
+    if not retired_families.compatible(ROOT):
+        return retired_families.record(output, "workspace-shell-package-v1",
+            [row["scenario_id"] for row in registry()["cases"]], identities())
     prepared = json.loads(prepared_path.read_text())
     current = identities()
     if current["source_dirty"] or current["source_commit"] != prepared["source"]["source_commit"] or current["product_seal"] != prepared["source"]["product_seal"] or current["harness_seal"] != prepared["source"]["harness_seal"]:

@@ -1,0 +1,39 @@
+   Compiling libc v0.2.189
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.12
+   Compiling pkg-config v0.3.34
+   Compiling typenum v1.20.1
+   Compiling cfg-if v1.0.4
+   Compiling constant_time_eq v0.4.2
+   Compiling vcpkg v0.2.15
+   Compiling arrayref v0.3.9
+   Compiling arrayvec v0.7.8
+   Compiling const-oid v0.10.2
+   Compiling foldhash v0.2.0
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling bitflags v2.13.1
+   Compiling hashbrown v0.17.1
+   Compiling smallvec v1.16.0
+   Compiling fallible-iterator v0.3.0
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashlink v0.12.2
+   Compiling hybrid-array v0.4.15
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling digest v0.11.3
+   Compiling rusqlite v0.40.2
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling fs-bench-pro-storage-content v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content)
+error: could not compile `fs-bench-pro-storage-content` (lib) due to 5 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `fs-bench-pro-storage-content` (lib test) due to 5 previous errors
+R4_WALL seconds<=14 limit=560s lock_wait=0s

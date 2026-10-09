@@ -1,20 +1,15 @@
-//! The walk ceiling, and the batched route a tier above it takes.
+//! Historical workload batching and the retired whole-tree walk refusal.
 //!
-//! The older 4,096-binding whole-build refusal no longer applies to a fresh
-//! tree: the current product charges actual effective-cycle visits against the
-//! caller's ordering budget. These tests check the public boundary and hold the
-//! batched route to the two properties the driver depends on:
+//! R4 validates affected bindings and topology incrementally. A topology walk's
+//! examined entries are not charged against a global 4,096-entry ceiling.
+//! FileBacking here supplies ordering runs, while input and serial state remain
+//! resident under the unchanged resource budget. The separate indexed serial
+//! route is not exercised by these tests.
 //!
-//! * every batch stays at or under the ceiling, and
-//! * an update that states **new files only** is served by a purely
-//!   non-retaining measured phase — it does not read back what it emits.
-//!
-//! The second property is the load-bearing one. `check_parent_aliases` walks the
-//! base tree once for every child that already has a stored record, so a batch
-//! that rebinds an existing name pays for the whole tree beside it; a batch of
-//! new files pays for nothing. A driver that restated a binding would still
-//! compile and would still be legal below the ceiling — and would refuse every
-//! tier above it.
+//! Preserve the registered multi-operation workload and prove its discarding
+//! pass reproduces every prepared root. Separately, a single build and a restated
+//! stored directory binding above the historical width must remain readable and
+//! equal the fixture's complete independent listings.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,7 +24,7 @@ use layerfs_content::filesystem::{
 use layerfs_content::DiscardingConsumer;
 
 /// Historical batch width; no longer a global build ceiling.
-const CEILING: usize = 4_096;
+const BATCH_BINDINGS: usize = fs_bench_storage_content::ops::fs::BUILD_BATCH_BINDINGS;
 
 fn scope() -> layerfs_content::InodeScope {
     scope_for_seed([7_u8; 32])
@@ -114,9 +109,9 @@ fn root_listing(store: &TreeStore, root: FilesystemRootId) -> Vec<(String, u64)>
 fn a_single_build_at_the_historical_batch_width_is_accepted() {
     // 1 directory binding + 4,095 file bindings = 4,096 stated bindings.
     let prepared = recipe(4_095, 1);
-    assert_eq!(prepared.bindings(), CEILING);
+    assert_eq!(prepared.bindings(), BATCH_BINDINGS);
     let mut store = TreeStore::new();
-    let batch = &prepared.batches(CEILING).expect("batches")[0];
+    let batch = &prepared.batches(BATCH_BINDINGS).expect("batches")[0];
     let empty = TreeStore::new();
     assert!(
         run_batch(batch, None, &empty, &mut store, "accept").is_ok(),
@@ -125,34 +120,79 @@ fn a_single_build_at_the_historical_batch_width_is_accepted() {
 }
 
 #[test]
-fn a_fresh_build_above_the_old_ceiling_is_accepted() {
+fn a_fresh_build_above_the_historical_width_is_accepted() {
     let prepared = recipe(4_096, 1);
-    assert_eq!(prepared.bindings(), CEILING + 1);
+    assert_eq!(prepared.bindings(), BATCH_BINDINGS + 1);
     let mut store = TreeStore::new();
     let empty = TreeStore::new();
     let root = run_batch(
-        &prepared.batches(CEILING + 1).expect("batches")[0],
+        &prepared.batches(BATCH_BINDINGS + 1).expect("batches")[0],
         None,
         &empty,
         &mut store,
-        "refuse",
+        "above-width",
     )
-    .expect("fresh 4,097 bindings do not require an effective-cycle walk");
-    assert!(!root_listing(&store, root).is_empty());
+    .expect("a fresh build above the historical batch width must be accepted");
+    assert_eq!(
+        fs_bench_storage_content::ops::fs::listings_match(&store, root, &prepared)
+            .expect("complete listing oracle"),
+        Ok(prepared.listings.len() as u64)
+    );
 }
 
 #[test]
-fn every_batch_stays_under_the_ceiling_and_states_new_files_only() {
+fn a_restated_stored_directory_over_a_large_base_has_no_walk_work_ceiling() {
+    let prepared = recipe(8_192, 1);
+    assert!(prepared.bindings() > BATCH_BINDINGS);
+    let batch = prepared.batches(prepared.bindings()).expect("single build");
+    assert_eq!(batch.len(), 1);
+    let empty = TreeStore::new();
+    let mut base = TreeStore::new();
+    let root = run_batch(&batch[0], None, &empty, &mut base, "large-base")
+        .expect("large base build");
+    let (name, serial) = prepared
+        .listings
+        .iter()
+        .find(|(path, _)| path.is_empty())
+        .expect("root manifest")
+        .1
+        .first()
+        .expect("root directory binding");
+    let restated = Batch {
+        directories: vec![layerfs_content::filesystem::DirectoryUpdate {
+            parent: ROOT_SERIAL,
+            changes: vec![(
+                layerfs_content::filesystem::PathName::new(name).unwrap(),
+                Some(*serial),
+            )],
+        }],
+        inodes: Vec::new(),
+        new_inodes: Vec::new(),
+    };
+    let mut emitted = TreeStore::new();
+    let updated = run_batch(&restated, Some(root), &base, &mut emitted, "restated")
+        .expect("restating a stored binding cannot impose a whole-base walk ceiling");
+    base.absorb(&emitted);
+    assert_eq!(
+        fs_bench_storage_content::ops::fs::listings_match(&base, updated, &prepared)
+            .expect("complete listing oracle"),
+        Ok(prepared.listings.len() as u64)
+    );
+    assert_eq!(updated, root, "restatement preserves the complete root");
+}
+
+#[test]
+fn every_batch_stays_within_its_declared_width_and_states_new_files_only() {
     let prepared = recipe(10_000, 100);
     assert_eq!(prepared.bindings(), 10_100);
-    let batches = prepared.batches(CEILING).expect("batches");
+    let batches = prepared.batches(BATCH_BINDINGS).expect("batches");
     assert!(
         batches.len() > 1,
         "the harness batches a tree above its declared width"
     );
     for (index, batch) in batches.iter().enumerate() {
         assert!(
-            batch.bindings() <= CEILING,
+            batch.bindings() <= BATCH_BINDINGS,
             "batch {index} states {} bindings",
             batch.bindings()
         );
@@ -183,11 +223,11 @@ fn every_batch_stays_under_the_ceiling_and_states_new_files_only() {
 
 #[test]
 fn the_batched_route_is_served_by_a_non_retaining_measured_phase() {
-    // The tier the registry declares, at the smallest size above the ceiling:
-    // 10,000 files over 100 directories. Every operation after the first reads a
+    // The smallest declared tier above the historical batch width is 10,000
+    // files over 100 directories. Every operation after the first reads a
     // base that a *fixture* store already holds, and the consumer discards.
     let prepared = recipe(10_000, 100);
-    let batches = prepared.batches(CEILING).expect("batches");
+    let batches = prepared.batches(BATCH_BINDINGS).expect("batches");
 
     // The fixture chain: the same operations into an authenticating store, so
     // every object the measured phase reads — including one an operation reads

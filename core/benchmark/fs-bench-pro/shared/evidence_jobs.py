@@ -18,6 +18,8 @@ SHA = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 E04_BYTES = 16_777_216
 E04_WRITES = 1000
+E04_PAYLOAD_MODEL = "borrowed-whole-row-v1"
+E04_LEGACY_PAYLOAD_MODEL = "legacy-copied-cell-v1"
 E04_VERSIONS = {"cluster-two-job-receipts-v1": "e04-original-write-receipts-v1",
                 "cluster-two-job-receipts-v2": "e04-original-write-receipts-v2",
                 "cluster-two-job-receipts-v3": "e04-original-write-receipts-v3"}
@@ -923,14 +925,31 @@ def e04_response(value):
         raise ValueError("unregistered response claimed inside E04")
 
 
-def validate_e04(directory, root=ROOT, docker_mapping=None):
+def e04_write_payload(applied, payload_model=E04_PAYLOAD_MODEL):
+    """Expected caller work, selected by the frozen source contract, not counters.
+
+    CELL_BYTES remains 4096. payload/stream.rs splits whole writes on 32 KiB
+    run boundaries, counts covered 4 KiB cells, and binds the caller's slice
+    directly in write_whole; only write_part copies a merge buffer. Each frozen
+    E04 write is aligned and exactly one cell: (4096, 1, 0, 0). Pre-R7 source
+    copied that cell; retained validations must explicitly select that contract.
+    """
+    require(payload_model in (E04_PAYLOAD_MODEL, E04_LEGACY_PAYLOAD_MODEL),
+            "unregistered E04 payload source contract")
+    copied = 4096 if payload_model == E04_LEGACY_PAYLOAD_MODEL else 0
+    return (4096, 1, 0, copied) if applied else (0, 0, 0, 0)
+
+
+def validate_e04(directory, root=ROOT, docker_mapping=None, *, payload_model=E04_LEGACY_PAYLOAD_MODEL):
     """Validate the frozen diagnostic write window; required E2 gaps stay open."""
     result = {"schema": "cluster-two-e2-observation-consistency-v1", "case": "E04-write-16m",
         "observation_consistency": "INCOMPLETE", "write_window_consistency": "INCOMPLETE",
         "qualification_status": "NOT_EVALUATED", "admission_eligible": False, "e1_sample_status": "NOT_RUN",
-        "e1_sample_count": 0, "E05_status": "NOT_RUN", "unavailable": list(E04_GAPS), "errors": []}
+        "e1_sample_count": 0, "E05_status": "NOT_RUN", "payload_model": payload_model,
+        "unavailable": list(E04_GAPS), "errors": []}
     failed = False
     try:
+        e04_write_payload(False, payload_model)
         manifest, _ = read_json(Path(directory) / "manifest.json")
         if manifest.get("schema") == "cluster-two-job-receipts-v3":
             result["application_disposal_consistency"] = "INCOMPLETE"
@@ -1097,7 +1116,7 @@ def validate_e04(directory, root=ROOT, docker_mapping=None):
                 require(low <= record["opened_ns"] <= record["closed_ns"] <= high, "original job crosses declared accounting endpoint")
                 if phase == 1:
                     applied = record["command_kind"] == "Namespace" and record["original_result"]["details"].get("outcome") == "Applied"
-                    expected_payload = (4096, 1, 0, 4096) if applied else (0, 0, 0, 0)
+                    expected_payload = e04_write_payload(applied, payload_model)
                     require(tuple(record["work"]["payload"][key] for key in ("write_input_bytes", "write_cells", "partial_write_cells", "cell_copy_bytes"))
                             == expected_payload, "original aligned write payload differs from frozen caller bytes/cell work")
                     yield record
@@ -1358,12 +1377,12 @@ def monotonic(before, after):
         require(before == after, "counter scope changed between endpoints")
 
 
-def validate(directory, root=ROOT, docker_mapping=None):
+def validate(directory, root=ROOT, docker_mapping=None, *, payload_model=E04_LEGACY_PAYLOAD_MODEL):
     """Read exact retained files. Never invoke a driver, sample or modify evidence."""
     try:
         selected, _ = read_json(Path(directory) / "manifest.json")
         if selected.get("case") == "E04-write-16m":
-            return validate_e04(directory, root, docker_mapping)
+            return validate_e04(directory, root, docker_mapping, payload_model=payload_model)
         if selected.get("case") == "E05-write-1g":
             return {"schema": "cluster-two-e2-observation-consistency-v1", "case": "E05-write-1g",
                 "observation_consistency": "INCOMPLETE", "write_window_consistency": "NOT_RUN",

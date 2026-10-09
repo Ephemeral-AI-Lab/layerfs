@@ -171,7 +171,10 @@ class DisposalFixture:
             "host_command_receipt": self.native.artifact("host-command.json", self.host_command),
             "pre_host_seal": self.native.artifact("pre-host-seal.json", self.seal)}
         self.case.seal()
-        return jobs.validate(self.case.output, self.root, self.native.seal())
+        # Disposal adds v3 envelopes to the retained pre-R7 copied-cell fixture;
+        # it does not change that fixture's frozen payload source contract.
+        return jobs.validate(self.case.output, self.root, self.native.seal(),
+                             payload_model=jobs.E04_LEGACY_PAYLOAD_MODEL)
 
 
 class E04ExplicitDisposal(unittest.TestCase):

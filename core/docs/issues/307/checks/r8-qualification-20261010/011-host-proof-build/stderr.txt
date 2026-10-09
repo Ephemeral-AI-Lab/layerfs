@@ -1,0 +1,2 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.29s
+R4_WALL seconds<=2 limit=560s lock_wait=0s

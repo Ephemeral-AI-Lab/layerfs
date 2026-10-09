@@ -1,30 +1,35 @@
 # LayerFS core (replacement product workspace)
 
-> **Status:** Current SQLite-only replacement workspace under qualification.
+> **Status:** Current general guide.
 
-The active workspace has eleven packages: six cluster-one libraries (content,
+The active workspace has thirteen packages: six cluster-one libraries (content,
 storage, history, persistence, Project Init and telemetry), plus Overlay,
-Workspace, Daemon, SDK and Bridge. Storage/history are engine-independent domains.
-The global persistence adapter owns the current host-local macOS SQLite Store;
+Workspace, Fuse, Daemon, Sandbox, SDK and Bridge. Storage/history are
+engine-independent domains. Host Project Init seals one SQLite Store for
+installation; each Linux daemon opens the shared Store directly afterwards.
 Objects/Metadata and History share it with separate bounded acknowledgements.
-Daemon Overlay owns separate disposable backing with no synchronization guarantee.
+The global profile is Disposable/WAL/OFF. Daemon Overlay owns a separate local
+MEMORY/OFF/EXCLUSIVE database.
 
-The [cluster-two design](docs/issues/303/README.md), current
-[implementation tracker](docs/issues/307/PROGRESS.md) and separate S7/S8/S9 audits
-own unfinished integration. SDK supplies host Init/install and authenticated
+The [cluster-two design](docs/issues/303/README.md) and current
+[rollout ledger](docs/issues/307/ROLLOUT-LEDGER-20261008.md) own implementation
+and qualification status. SDK supplies host Init/install and authenticated
 controls; each daemon directly opens the shared Store. Bridge and the replacement
 Sandbox provide the verified R1 startup/control and ordinary execution boundary.
 The [replacement Fuse request service](docs/architecture/75-native-request-service.md)
-is active with real deferred engine/Store reads and initial Linux callbacks.
-Application mount/Ready, full callback accounting and normal drain remain R2 work.
-Excluded predecessors, server and root reference are retained source, without
-dependency or fallback use.
+is active with deferred engine/Store reads, native callbacks, real Ready and
+normal drain. Live Commit and scoped forced teardown are implemented; their
+remaining proof limits are recorded in the R5/R6 completion records linked by
+the ledger. R7 and R7-retire are closed. All seven excluded predecessors and
+the Server were retired. The root reference and archived `reference-tests`
+remain for conditional R9; the active fixture-seal test still reads the root
+reference generator. Product runtime has no reference dependency or fallback.
 
 Project Init includes ignored/dependency/cache/output/.git paths and opaque symlink
-targets, and has removed the inherited4GiB refusal. Collection diagnostics still
-expose input-sized retention and native hard-link identity remains incomplete;
-complete bounded import acceptance is open. Component checks do not complete S7
-resource gates or integrated qualification. Historical cluster-one evidence below
+targets, and has removed the inherited4GiB refusal. Native acquisition uses
+indexed backing and preserves regular hard-link identity. Component checks
+retain their declared scopes; complete integrated R8 qualification remains open.
+Historical cluster-one evidence below
 retains its source/profile/cache pins and original verdicts.
 
 The source/LOC, locked dependency and verification rules remain in

@@ -1,0 +1,392 @@
+{
+  "schema": "r9-pinned-dependency-audit-v1",
+  "source_commit": "9e4de35fcd69d7ec65ccb8479286f4f77239d57b",
+  "source_core_tree": "9a76077239b4db1955b83bb29e9134745efb963c",
+  "active_member_count": 13,
+  "manifests": [
+    {
+      "manifest": "core/crates/layerfs-content/Cargo.toml",
+      "sha256": "acc00095e78434ad474a129b261cd5388b498ed2b469fb26a3ea7bb259f5a1a7",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-telemetry",
+          "path": "../layerfs-telemetry",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-storage/Cargo.toml",
+      "sha256": "91375ae0b8f8049aa030acc39e5ecf63c975639ae11e18225018bdb852000239",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-telemetry",
+          "path": "../layerfs-telemetry",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-persistence/Cargo.toml",
+      "sha256": "12f4d34ac211b39707c68fdc7bd91f753d34e9d31d388f746b5383ce970ba7c6",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-storage",
+          "path": "../layerfs-storage",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-history",
+          "path": "../layerfs-history",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        },
+        {
+          "kind": "dev-dependencies",
+          "name": "layerfs-telemetry",
+          "path": "../layerfs-telemetry",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-project/Cargo.toml",
+      "sha256": "2f56e952d790fc8ad94f78d3a5fbfd9acf86ebea7c21c0c907dbeae01890921a",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-storage",
+          "path": "../layerfs-storage",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-history",
+          "path": "../layerfs-history",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-telemetry",
+          "path": "../layerfs-telemetry",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry",
+          "root_reference": false
+        },
+        {
+          "kind": "dev-dependencies",
+          "name": "layerfs-persistence",
+          "path": "../layerfs-persistence",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-history/Cargo.toml",
+      "sha256": "6aa4be9e641a13bc3956b2fa1ec7f32d1453e059ffc655880723de01bbf36512",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-telemetry/Cargo.toml",
+      "sha256": "1d7d988a4d660c8840ad0721dac40a601780c706a44772fe3589b458ce5bc376",
+      "path_dependencies": []
+    },
+    {
+      "manifest": "core/crates/layerfs-overlay/Cargo.toml",
+      "sha256": "19cae3ad618c3c3e66c54b2944c52f756f5e4eb59f3cc3a1e6f62742296461ab",
+      "path_dependencies": []
+    },
+    {
+      "manifest": "core/crates/layerfs-workspace/Cargo.toml",
+      "sha256": "df8f0d962f1217489d35b4d5eedd1a9b367553c884d2c6c416c82873e0fa0c90",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-overlay",
+          "path": "../layerfs-overlay",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-telemetry",
+          "path": "../layerfs-telemetry",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry",
+          "root_reference": false
+        },
+        {
+          "kind": "dev-dependencies",
+          "name": "layerfs-daemon",
+          "path": "../layerfs-daemon",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-daemon/Cargo.toml",
+      "sha256": "7f2f8e08cec841144016197c8a0b44d77a3369e76d685bc905601d04ef7f2253",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-overlay",
+          "path": "../layerfs-overlay",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-workspace",
+          "path": "../layerfs-workspace",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-fuse",
+          "path": "../layerfs-fuse",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-bridge",
+          "path": "../layerfs-bridge",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-storage",
+          "path": "../layerfs-storage",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-history",
+          "path": "../layerfs-history",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-persistence",
+          "path": "../layerfs-persistence",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence",
+          "root_reference": false
+        },
+        {
+          "kind": "dev-dependencies",
+          "name": "layerfs-sdk",
+          "path": "../layerfs-api/sdk",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk",
+          "root_reference": false
+        },
+        {
+          "kind": "dev-dependencies",
+          "name": "layerfs-project",
+          "path": "../layerfs-project",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project",
+          "root_reference": false
+        },
+        {
+          "kind": "dev-dependencies",
+          "name": "layerfs-telemetry",
+          "path": "../layerfs-telemetry",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-api/sdk/Cargo.toml",
+      "sha256": "47f65e4a2280a1e57d4b407f796b3222c430453f00a1404fca5644647fc8bea0",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-bridge",
+          "path": "../../layerfs-bridge",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-history",
+          "path": "../../layerfs-history",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-persistence",
+          "path": "../../layerfs-persistence",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-storage",
+          "path": "../../layerfs-storage",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-telemetry",
+          "path": "../../layerfs-telemetry",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-project",
+          "path": "../../layerfs-project",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-sandbox",
+          "path": "../../layerfs-sandbox",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-bridge/Cargo.toml",
+      "sha256": "a5b932edcb1a28b90330535251a3f298eb4bdff2e224a3dc46c6cd48161cea60",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-history",
+          "path": "../layerfs-history",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history",
+          "root_reference": false
+        }
+      ]
+    },
+    {
+      "manifest": "core/crates/layerfs-sandbox/Cargo.toml",
+      "sha256": "e1abeab57acad5da8e59f400678cd6d7ee38aa27ab1797eb090375ec02fa5ef8",
+      "path_dependencies": []
+    },
+    {
+      "manifest": "core/crates/layerfs-fuse/Cargo.toml",
+      "sha256": "9c439dbb86530818d0fc1161901fee42455cb92bb6465fc191934207dd5072d4",
+      "path_dependencies": [
+        {
+          "kind": "dependencies",
+          "name": "layerfs-overlay",
+          "path": "../layerfs-overlay",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-workspace",
+          "path": "../layerfs-workspace",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace",
+          "root_reference": false
+        },
+        {
+          "kind": "dependencies",
+          "name": "layerfs-content",
+          "path": "../layerfs-content",
+          "resolved": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content",
+          "root_reference": false
+        }
+      ]
+    }
+  ],
+  "active_manifest_root_dependency": false,
+  "production_include_root_dependency": false,
+  "production_include_scope": "Read-only pinned source audit by r9_dependency_audit; required runtime SQL includes remain owning-core paths",
+  "active_test_dependency": {
+    "path": "core/crates/layerfs-content/tests/fixture_seal.rs",
+    "line": 87,
+    "read": "../../../crates/layerfs-content/tests/stage5_reference_fixtures.rs",
+    "test": "the_generator_cannot_reseal_during_an_ordinary_test_run",
+    "guard_sha256": "14dc723af185a752af0e9a367bae3632b8e6e988cd406145f38892ef64277bd0"
+  },
+  "core_independence": "NOT_ESTABLISHED \u2014 active fixture-seal test reads root reference",
+  "recovery_commit": "f8a0a5ff1cd5f93b90bf16f964705b4c7d773615",
+  "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "reference_tests_tree": "3a7fcdcc6f8d1610c896b9e2a2f89d2a0297f027",
+  "legacy_consumers": [
+    "Cargo.toml",
+    "benchmark/fs-bench-pro/Cargo.toml",
+    "benchmark/fs-bench-pro/shared/runner.py",
+    "tools/layerfs-eval/Cargo.toml",
+    "containers/layerfs-fuse/Dockerfile"
+  ],
+  "runtime_or_removal_attempts": 0
+}

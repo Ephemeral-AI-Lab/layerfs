@@ -1,0 +1,106 @@
+....................................................EEEEEEEEEEE........................................E
+======================================================================
+ERROR: test_missing_probe_is_unavailable_and_cannot_be_type_zero (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_missing_probe_is_unavailable_and_cannot_be_type_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_original_filesystem_probe_requires_both_descriptor_identity_reads (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_original_filesystem_probe_requires_both_descriptor_identity_reads)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_original_reopen_metadata_and_probe_errors_preserve_actual_prefix_counts (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_original_reopen_metadata_and_probe_errors_preserve_actual_prefix_counts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_startup_filesystem_must_match_original_native_observation (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_startup_filesystem_must_match_original_native_observation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_v2_cannot_use_v1_host_bind_mapping (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_v2_cannot_use_v1_host_bind_mapping)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_v2_complete_original_window_is_narrow_pass_only (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_v2_complete_original_window_is_narrow_pass_only)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_v2_driver_version_cannot_relabel_v1 (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_v2_driver_version_cannot_relabel_v1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_v2_guest_inode_cannot_be_substituted_by_host_copy (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_v2_guest_inode_cannot_be_substituted_by_host_copy)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_v2_original_row_cannot_mix_v1_schema (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_v2_original_row_cannot_mix_v1_schema)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_v2_original_typed_refusal_retains_no_reservation_or_sqlite (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_v2_original_typed_refusal_retains_no_reservation_or_sqlite)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_v2_preserves_preconsumer_fixture_seal (core.benchmark.fs-bench-pro.tests.test_evidence_jobs.E04NativeRetained.test_v2_preserves_preconsumer_fixture_seal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py", line 1096, in setUp
+    from test_evidence_backing import NativeFixture
+ModuleNotFoundError: No module named 'test_evidence_backing'
+
+======================================================================
+ERROR: test_evidence_disposal (unittest.loader._FailedTest.test_evidence_disposal)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_evidence_disposal
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_disposal.py", line 10, in <module>
+    import test_evidence_jobs as fixtures
+ModuleNotFoundError: No module named 'test_evidence_jobs'
+
+
+----------------------------------------------------------------------
+Ran 104 tests in 17.069s
+
+FAILED (errors=12)
+R4_WALL seconds<=18 limit=100s lock_wait=0s

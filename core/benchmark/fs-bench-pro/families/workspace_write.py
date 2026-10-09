@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+from shared import retired_families
 
 
 HERE = Path(__file__).resolve().parents[1]
@@ -148,6 +149,7 @@ def assess_numeric_cache(row):
 
 
 def build(out, runner, identity, *, reuse_image=None, artifacts_only=False):
+    retired_families.require_compatible(ROOT)
     if sys.platform != "darwin":
         raise RuntimeError("this cold-source profile requires Darwin mincore/msync and libproc")
     for name, expected in DIRECT_IO_FILES.items():
@@ -366,6 +368,11 @@ def case_run(out, case, prepared):
 def run(selection, output, runner):
     out = runner.owned(output)
     identity = runner.identities()
+    if not retired_families.compatible(ROOT):
+        selected = SELECTED if selection == "workspace_write" else (selection,)
+        retired_families.record(out, selection, selected, identity)
+        runner.manifest_run(out)
+        return out
     if identity["source_dirty"]:
         raise ValueError("commit the Family 3 runner before measurement")
     out.mkdir(parents=True)

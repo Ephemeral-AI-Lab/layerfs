@@ -139,6 +139,8 @@ fn a_pinned_digest_gate_is_two_sided() {
                 "file_root",
                 "filesystem_root",
                 "members",
+                // C2's offered-member digest, emitted by ops/c2.rs. This is
+                // unrelated to the removed Content CheckedInput.additions field.
                 "additions",
                 "leaves",
                 "supplied",
@@ -173,5 +175,27 @@ fn a_pinned_digest_gate_is_two_sided() {
             .status,
         Status::Incomplete,
         "an unpinned name must be INCOMPLETE rather than quietly skipped"
+    );
+}
+
+/// R4's removed private field does not remove C2's frozen member-root digest.
+#[test]
+fn the_c2_additions_digest_remains_a_required_two_sided_oracle() {
+    let expected = Expected::load().expect("the table must parse");
+    let case = "dedup-cross-file-anchor-1";
+    let pinned = expected
+        .digest(case, "additions")
+        .expect("C2 digest remains pinned");
+    assert_eq!(
+        expected
+            .digest_gate(case, "additions", "g1.o1-pinned-identity", pinned)
+            .status,
+        Status::Pass
+    );
+    assert_eq!(
+        expected
+            .digest_gate(case, "additions", "g1.o1-pinned-identity", &"0".repeat(64))
+            .status,
+        Status::Fail
     );
 }

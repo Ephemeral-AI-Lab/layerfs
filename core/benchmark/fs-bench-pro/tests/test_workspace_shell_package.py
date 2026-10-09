@@ -14,6 +14,44 @@ from families import workspace_namespace as namespace
 
 
 class PackageOracle(unittest.TestCase):
+    def test_current_runner_retires_host_mediated_selections_before_acquisition(self):
+        import runner
+        from shared import retired_families
+        selections = ("init_namespace", "workspace_write", "workspace-commit", "workspace_namespace",
+                      "workspace_mutations", "workspace_shell_package", package.SDK_CAUSE)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(runner, "ROOT", root), patch.object(runner, "owned", side_effect=lambda path: Path(path)), \
+                    patch.object(runner, "identities", return_value={"source_dirty": True}), \
+                    patch.object(runner, "target_path", side_effect=AssertionError("no Cargo metadata")), \
+                    patch.object(runner, "build", side_effect=AssertionError("no removed package build")):
+                for index, selection in enumerate(selections):
+                    out = root / str(index)
+                    with patch.object(sys, "argv", ["runner.py", "run", "--case", selection, "--out", str(out)]):
+                        runner.main()
+                    summary = retired_families.verify(out)
+                    self.assertEqual(summary["reason"], "mechanism removed")
+                    self.assertTrue(all(row["sample_count"] == 0 for row in summary["rows"]))
+
+    def test_retirement_does_not_select_native_or_owner_deferred_cases(self):
+        import runner
+        self.assertIsNone(runner.retired_selection(next(iter(package.NATIVE))))
+        self.assertIsNone(runner.retired_selection(package.DEFERRED))
+
+    def test_standalone_package_prepare_and_run_do_not_build_removed_packages(self):
+        import shell_package
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(shell_package, "ROOT", root), \
+                    patch.object(shell_package, "identities", return_value={"source_dirty": True}), \
+                    patch.object(shell_package, "run_command", side_effect=AssertionError("no resource acquisition")):
+                shell_package.prepare(root / "prepare")
+                shell_package.run(root / "absent-prepared.json", root / "run")
+            for name in ("prepare", "run"):
+                summary = json.loads((root / name / "run.json").read_text())
+                self.assertEqual((summary["status"], summary["reason"], summary["sample_count"]),
+                                 ("NOT_RUN", "mechanism removed", 0))
+
     def test_full_large_bytes_and_untouched_package_files(self):
         cases = package.cases()
         case = next(row for row in cases.values() if row.original == "overwrite-4k-v1")

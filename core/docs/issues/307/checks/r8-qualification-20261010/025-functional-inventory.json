@@ -1,0 +1,2581 @@
+{
+  "schema_version": 1,
+  "status": "Dated planning checkpoint; not release evidence or a product contract.",
+  "audit_date": "2026-10-10",
+  "audit_source": "f8a0a5ff1",
+  "current_reusable_execution_identity": "7999a6356",
+  "identity_evidence": {
+    "method": "Read-only Git object comparison reported by the audit; source and documentation inspected with git show f8a0a5ff1:<path>.",
+    "core_crates_tree": "9a76077239b4db1955b83bb29e9134745efb963c",
+    "core_lock_blob": "99a74df602029b16c4016bbde1ee94711ba73428",
+    "fuser_tree": "e73f311145af810565c82cb3b389122578a6cbfe",
+    "equality_scope": "All three objects are equal at f8a0a5ff1 and 7999a6356. Whole commit identity differs; no old receipt is relabelled."
+  },
+  "receipt_aliases": {
+    "H80": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+    "L81": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+    "H80_full": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite-full.log",
+    "L81_full": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite-full.log"
+  },
+  "semantics": {
+    "status": "Conservative outcome for the whole stated selection. PASS never extends beyond oracle_scope; a complete requirement with known missing halves is PARTIAL.",
+    "reuse_eligible": "Covered assertions in the last receipt are eligible for exact-current-product reuse. This does not mean a PARTIAL selection is wholly passed.",
+    "identity_differs": "Whether the source identity of the last actual evidence differs from the current product. false means product-equivalent source, not byte-identical commit or a newly executed R8 sample. For a zero-attempt selection with no last proof, source_identity is the selected current product and last_receipt is null.",
+    "not_run": "An unsupplied prerequisite invocation remains FAILED in its original raw receipt and NOT_RUN as the intended proof.",
+    "r2_r3_step_ids": "Inventory labels for each completion delivery step, not invented original FP proof IDs.",
+    "no_r6_4_or_r6_5": "The owning R6 plan/completion defines R6-1,2,3,6,7,8 plus named FP/P-1/capability rows; no independent R6-4/5 proof IDs were located.",
+    "platform": "Native mounted binaries execute only on Linux; host exit-zero binaries with zero tests are not macOS native proof.",
+    "evidence_policy": "Natural functional caches only; no new sample, timing, storage, resident-memory, cold or release qualification claim."
+  },
+  "authorities": [
+    {
+      "path": "core/docs/issues/307/S8-PROOF-PLAN-20261008.md",
+      "lines": "151-222;358-399"
+    },
+    {
+      "path": "core/docs/issues/307/S8-SPECIFICATION-20261008.md",
+      "lines": "1084-1107"
+    },
+    {
+      "path": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md",
+      "lines": "137-152"
+    },
+    {
+      "path": "core/docs/issues/307/R3-COMPLETION-20261008.md",
+      "lines": "20-57"
+    },
+    {
+      "path": "core/docs/issues/307/R4-COMPLETION-20261008.md",
+      "lines": "97-116"
+    },
+    {
+      "path": "core/docs/issues/307/R5-COMPLETION-20261009.md",
+      "lines": "84-104;185-196"
+    },
+    {
+      "path": "core/docs/issues/307/R6-COMPLETION-20261009.md",
+      "lines": "128-164;221-236"
+    },
+    {
+      "path": "core/docs/issues/307/R7-OPTIMIZATION-COMPLETION-20261009.md",
+      "lines": "140-142;256-260;286-307"
+    },
+    {
+      "path": "core/docs/issues/307/R7-RETIRE-COMPLETION-20261010.md",
+      "lines": "164-211"
+    }
+  ],
+  "r6_named_row_mapping": {
+    "FP-8": "mounted_parking",
+    "FP-34": "mounted_parking + forced_unmount + dispatch/fence",
+    "FP-9": "mounted_fusectl",
+    "FP-2": "mounted_fusectl (named fusectl half)",
+    "FP-26": "mounted_cycles",
+    "FP-24": "mounted_cycles",
+    "FP-27": "mounted_failure_scope + cold_failure_scope",
+    "FP-21": "mounted_drain + later mounted_store_read",
+    "FP-29": "mounted_drain",
+    "FP-31": "mounted_drain + native_lookup/native_revocation",
+    "FP-17": "native_mount + native_mutation",
+    "FP-33": "forced_smoke + forced_unmount",
+    "FP-32": "forced_producers + later mounted_store_read/store_read_drain",
+    "FP-19-FS": "forced_unmount",
+    "FP-22-FS": "forced_unmount",
+    "FP-23-FS": "union FP-32/33",
+    "FP-15": "native_coherence (header identity partial)",
+    "FP-16": "native_coherence (held GETATTR not run)",
+    "P-1": "mounted_failure_scope",
+    "force:capability": "forced_unavailable"
+  },
+  "records": [
+    {
+      "id": "FP-1",
+      "status": "PARTIAL",
+      "reason": "Current native Service lifecycle assertions passed. The complete SDK/Sandbox/actual-daemon-binary topology has only an older R3 execution.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_mount_routes.rs",
+        "core/crates/layerfs-api/sdk/examples/sandbox_native_mount.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Full SDK/Sandbox/binary topology is not executed at the current product identity.",
+        "No independent session-buffer or resident-memory observation."
+      ],
+      "oracle_scope": "Current native Service lifecycle assertions passed. The complete SDK/Sandbox/actual-daemon-binary topology has only an older R3 execution.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r3-mutation-20261008/full-topology-attempt2.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        },
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-2",
+      "status": "PARTIAL",
+      "reason": "Current tests assert Ready limits, mount options, own fusectl background/congestion agreement and abort binding.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/mounted_fusectl.rs",
+        "core/crates/layerfs-fuse/src/request/accounting.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Observed maximum READ and WRITE request sizes are not independently instrumented.",
+        "The forbidden negotiation-bit set is not explicitly compared by the retained assertion."
+      ],
+      "oracle_scope": "Current tests assert Ready limits, mount options, own fusectl background/congestion agreement and abort binding.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-3",
+      "status": "PASS",
+      "reason": "Independent complete names, bytes, metadata and link oracle passed for the declared small mounted roots.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_mount_routes.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "This scope is the declared small functional root, not the full historical fixture.",
+        "Huge installed-root and full-fixture selections are separately listed below; logical direct Store proof is not kernel proof."
+      ],
+      "oracle_scope": "Independent complete names, bytes, metadata and link oracle passed for the declared small mounted roots.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-4",
+      "status": "PASS",
+      "reason": "Sequential and simultaneous small-root mounts preserve projected inode identity and attributes with distinct devices.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount_routes.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "No large/full-fixture extension is established by this receipt."
+      ],
+      "oracle_scope": "Sequential and simultaneous small-root mounts preserve projected inode identity and attributes with distinct devices.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-5",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-5-Runtime",
+      "status": "PARTIAL",
+      "reason": "Older actual topology receipts prove unprivileged identity and declared protected path/proc/device/helper barriers at their own source pins.",
+      "source_identity": "37dcf5405",
+      "last_receipt": "core/docs/issues/307/checks/r3-mutation-20261008/full-topology-attempt2.txt",
+      "source_paths": [
+        "core/crates/layerfs-api/sdk/examples/sandbox_native_mount.rs",
+        "core/crates/layerfs-api/sdk/examples/sandbox_lifecycle.rs",
+        "core/crates/layerfs-sandbox/src/backend/docker/container.rs",
+        "core/crates/layerfs-sandbox/src/backend/docker/topology.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [
+        "The current deployment topology/source differs; old actual topology is not exact current-product reuse.",
+        "Full sibling visibility/isolation and every protected descriptor/abort alias are not established by the declared path checks."
+      ],
+      "oracle_scope": "Older actual topology receipts prove unprivileged identity and declared protected path/proc/device/helper barriers at their own source pins.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "e5e95e76c",
+          "receipt": "core/docs/issues/307/checks/r1-completion-20261008/13-native-lifecycle-proof.txt"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-6",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-6-Runtime",
+      "status": "PARTIAL",
+      "reason": "Older real ordinary streams prove exact declared input/output and status; current protocol tests prove framing and original partial-delivery custody.",
+      "source_identity": "e5e95e76c",
+      "last_receipt": "core/docs/issues/307/checks/r1-completion-20261008/18-stream-proof.txt",
+      "source_paths": [
+        "core/crates/layerfs-sandbox/examples/engine_streams.rs",
+        "core/crates/layerfs-sandbox/tests/engine_protocol.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [
+        "Current integrated actual runtime topology is not executed at this identity.",
+        "Actual slow sink/backpressure, complete stressed per-stream ordering and resident bounds are unqualified."
+      ],
+      "oracle_scope": "Older real ordinary streams prove exact declared input/output and status; current protocol tests prove framing and original partial-delivery custody.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-7",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-7-Runtime",
+      "status": "PARTIAL",
+      "reason": "Older actual streams distinguish transport EOF and root status; current mounted output-pressure test proves filesystem references remain live independently.",
+      "source_identity": "e5e95e76c",
+      "last_receipt": "core/docs/issues/307/checks/r1-completion-20261008/18-stream-proof.txt",
+      "source_paths": [
+        "core/crates/layerfs-sandbox/examples/engine_streams.rs",
+        "core/crates/layerfs-sandbox/tests/engine_protocol.rs",
+        "core/crates/layerfs-daemon/tests/mounted_cycles.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [
+        "Current actual runtime descendant-held-pipe/file and EOF/status/disposal matrix is not executed.",
+        "Old runtime source/build/topology identity is not exact current integrated reuse."
+      ],
+      "oracle_scope": "Older actual streams distinguish transport EOF and root status; current mounted output-pressure test proves filesystem references remain live independently.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-8",
+      "status": "PASS",
+      "reason": "Current mounted tests prove unrelated same-mount and sibling writes complete while cold readers are parked; dispatcher tests cover event-driven resumption.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_parking.rs",
+        "core/crates/layerfs-fuse/tests/dispatch.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "The R6 statement that every local READ takes a Store reader is historical: R7 changed the READ route. It is not a current-source claim.",
+        "No numerical fairness share follows from finite progress."
+      ],
+      "oracle_scope": "Current mounted tests prove unrelated same-mount and sibling writes complete while cold readers are parked; dispatcher tests cover event-driven resumption.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-9",
+      "status": "PASS",
+      "reason": "Own connection queues a second cold cached read behind parked readahead while foreground mutation proceeds.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_fusectl.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "The observed unit is a handoff; mounted Status has no per-opcode live counter."
+      ],
+      "oracle_scope": "Own connection queues a second cold cached read behind parked readahead while foreground mutation proceeds.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-10",
+      "status": "PASS",
+      "reason": "Cached read, direct read, stat and mutation agree for WRITE and O_APPEND; cached-reader request behavior is asserted.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs",
+        "core/crates/layerfs-daemon/tests/native_coherence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Cached read, direct read, stat and mutation agree for WRITE and O_APPEND; cached-reader request behavior is asserted.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-11",
+      "status": "PASS",
+      "reason": "Create, unlink, replacement rename and negative lookup changes are immediately visible through ordinary filesystem access.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Create, unlink, replacement rename and negative lookup changes are immediately visible through ordinary filesystem access.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-12",
+      "status": "PASS",
+      "reason": "LOOKUP racing CREATE, UNLINK and RENAME does not bind stale state in the retained native race test.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Original R3 failed attempts remain failures in their own receipts."
+      ],
+      "oracle_scope": "LOOKUP racing CREATE, UNLINK and RENAME does not bind stale state in the retained native race test.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-13",
+      "status": "PASS",
+      "reason": "Shrink, regrow, path truncate and O_TRUNC preserve zero tails and exact cached/direct content.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Shrink, regrow, path truncate and O_TRUNC preserve zero tails and exact cached/direct content.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-14",
+      "status": "PASS",
+      "reason": "Mounted hard-link aliases share inode/cache state and expose correct unlink metadata.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs",
+        "core/crates/layerfs-daemon/tests/native_coherence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "R7 separately records an unstaged host component case for a hard-link alias under visit LOOKUP; this mounted proof does not supply that separate case."
+      ],
+      "oracle_scope": "Mounted hard-link aliases share inode/cache state and expose correct unlink metadata.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-15",
+      "status": "PARTIAL",
+      "reason": "Current mapping tests cover msync, munmap without msync, map-close-store-exit, WRITE page-cache flag counts, append coexistence and EOF clipping.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "WRITE header identity is not observed.",
+        "Mapped Commit case forces writeback first; no Commit runs while the page is still dirty."
+      ],
+      "oracle_scope": "Current mapping tests cover msync, munmap without msync, map-close-store-exit, WRITE page-cache flag counts, append coexistence and EOF clipping.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        },
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-16",
+      "status": "PARTIAL",
+      "reason": "The current concurrent append/read test proves nondecreasing size and exact bytes.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "A GETATTR held after attribute sampling across WRITE has no real-resource holding fixture and remains NOT_RUN."
+      ],
+      "oracle_scope": "The current concurrent append/read test proves nondecreasing size and exact bytes.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-17",
+      "status": "PASS",
+      "reason": "Current native read/mutation assertions cover cached permission denial and chmod, times, opaque symlinks and target-length refusal.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_mutation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current native read/mutation assertions cover cached permission denial and chmod, times, opaque symlinks and target-length refusal.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        },
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-18",
+      "status": "PASS",
+      "reason": "Current native tests assert declared special-file, ownership, set-id, xattr and unsupported-operation refusals with no effect, and fsync without engine work.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_mutation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current native tests assert declared special-file, ownership, set-id, xattr and unsupported-operation refusals with no effect, and fsync without engine work.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-19",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-19-FS",
+      "status": "PASS",
+      "reason": "Current forced tests release a parked syscall without daemon process signalling and retain attempted-work drain/original outcomes.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/forced_unmount.rs",
+        "core/crates/layerfs-daemon/tests/forced_producers.rs",
+        "core/crates/layerfs-daemon/tests/mounted_store_read.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current forced tests release a parked syscall without daemon process signalling and retain attempted-work drain/original outcomes.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-20",
+      "status": "PASS",
+      "reason": "Retained cwd/O_PATH/descriptors and mutation/read/stat races receive reversible Busy while normal service remains usable; later explicit unmount drains.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/mounted_store_read.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Retained cwd/O_PATH/descriptors and mutation/read/stat races receive reversible Busy while normal service remains usable; later explicit unmount drains.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        },
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-21",
+      "status": "PARTIAL",
+      "reason": "Current proofs cover Lifecycle RELEASE held inside/past drain and native detach with a READ held inside its Store provider; drain prevents early Revoke.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_drain.rs",
+        "core/crates/layerfs-daemon/tests/mounted_store_read.rs",
+        "core/crates/layerfs-daemon/tests/store_read_drain.rs",
+        "core/crates/layerfs-overlay/tests/native_revocation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "R7 closes R6's missing held-Store-read scope, but no receipt supplies every service/Store-consumer and terminal failure stage.",
+        "Retained Join, Owner, Lane, Close and Registry failure paths are not all staged."
+      ],
+      "oracle_scope": "Current proofs cover Lifecycle RELEASE held inside/past drain and native detach with a READ held inside its Store provider; drain prevents early Revoke.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-22",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-22-FS",
+      "status": "PARTIAL",
+      "reason": "Current test-namespace proofs show truthful Busy, independent sibling references and no caller process kill during Force.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/forced_unmount.rs",
+        "core/crates/layerfs-daemon/tests/mounted_cycles.rs",
+        "core/crates/layerfs-daemon/tests/forced_unavailable.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Tests use one container mount namespace.",
+        "Actual Sandbox has no bound abort control and refuses Force; supported copied-mount/propagation disposal is not proved there."
+      ],
+      "oracle_scope": "Current test-namespace proofs show truthful Busy, independent sibling references and no caller process kill during Force.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-23",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-23-FS",
+      "status": "PARTIAL",
+      "reason": "Current active-producer, attempted-work and staged abort/detach cases prove their original dispositions and no daemon process kill.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/forced_producers.rs",
+        "core/crates/layerfs-daemon/tests/forced_unmount.rs",
+        "core/crates/layerfs-daemon/tests/mounted_store_read.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Whole successor depends on FP-33's unrun abort-error and independent-effects scopes."
+      ],
+      "oracle_scope": "Current active-producer, attempted-work and staged abort/detach cases prove their original dispositions and no daemon process kill.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-24",
+      "status": "PASS",
+      "reason": "Concurrent Branch, fork and descendant Workspaces retain isolated state, correct routing and stale/wrong token behavior.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_cycles.rs",
+        "core/crates/layerfs-daemon/tests/native_mount.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Concurrent Branch, fork and descendant Workspaces retain isolated state, correct routing and stale/wrong token behavior.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-25",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-25-Routes",
+      "status": "PARTIAL",
+      "reason": "Current native routes locate lost Mount/Attach acknowledgements without duplicate attachment or replay.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount_routes.rs",
+        "core/crates/layerfs-sandbox/tests/engine_protocol.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Attach failure after the mount syscall returns success is not staged.",
+        "Actual lost runtime-result ownership is not integrated at current identity; protocol lost Create/Start custody is narrower."
+      ],
+      "oracle_scope": "Current native routes locate lost Mount/Attach acknowledgements without duplicate attachment or replay.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-26",
+      "status": "PARTIAL",
+      "reason": "Current idle and live-sibling cycle proofs show the declared closed-namespace/reclamation plateau.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_cycles.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "mount:debt refusal is not implemented or run.",
+        "Stopped-maintenance admission/refusal is not established by plateau success."
+      ],
+      "oracle_scope": "Current idle and live-sibling cycle proofs show the declared closed-namespace/reclamation plateau.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-27",
+      "status": "PARTIAL",
+      "reason": "Current quarantine/failure tests prove one observing request fails and later healthy cold requests remain exact.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_failure_scope.rs",
+        "core/crates/layerfs-daemon/tests/cold_failure_scope.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "The real-mount failed-demand marker is staged for lookup/open scope, not every subsequent READ/release failure.",
+        "Invariant, poisoned-lock, foreign-reader and concurrent-demand retained classifications are source-reviewed rather than all staged."
+      ],
+      "oracle_scope": "Current quarantine/failure tests prove one observing request fails and later healthy cold requests remain exact.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-28",
+      "status": "PASS",
+      "reason": "Open-unlinked/rotation/truncate tests retain exact descriptor content and independent lookup/processing/captured ownership.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/native_mutation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Open-unlinked/rotation/truncate tests retain exact descriptor content and independent lookup/processing/captured ownership.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-29",
+      "status": "PASS",
+      "reason": "Current tests combine removed cwd/O_PATH metadata with a parked processing READ spanning sibling handle release and name removal.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/mounted_drain.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "The parked-read file is made local first; arbitrary cold unlink demand interleavings are not implied."
+      ],
+      "oracle_scope": "Current tests combine removed cwd/O_PATH metadata with a parked processing READ spanning sibling handle release and name removal.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-30",
+      "status": "WITHDRAWN",
+      "reason": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "source_identity": "1a6bb53ef",
+      "last_receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md",
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [],
+      "oracle_scope": "Managed-daemon Exec selection was withdrawn prospectively by R0; the applicable successor is listed separately.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "1a6bb53ef",
+          "receipt": "core/docs/issues/307/checks/r0-owner-reconciliation-20261008/original-withdrawn-proof-rows.json"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-30-Runtime",
+      "status": "NOT_RUN",
+      "reason": "No complete actual fast-exit/slow-consumer/last-buffered-chunk/descendant-held-pipe selection was located.",
+      "source_identity": "e5e95e76c",
+      "last_receipt": "core/docs/issues/307/checks/r1-completion-20261008/18-stream-proof.txt",
+      "source_paths": [
+        "core/crates/layerfs-sandbox/examples/engine_streams.rs",
+        "core/crates/layerfs-sandbox/tests/engine_protocol.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": true,
+      "known_gaps": [
+        "The older stream receipt establishes only a narrower EOF/status distinction.",
+        "Current complete runtime oracle/configuration is absent."
+      ],
+      "oracle_scope": "No complete actual fast-exit/slow-consumer/last-buffered-chunk/descendant-held-pipe selection was located.",
+      "additional_receipts": [],
+      "historical_evidence": [],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-31",
+      "status": "PARTIAL",
+      "reason": "Current mounted and component cases prove partial/batched exact lookup decrements and bounded indexed retirement after detach.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_drain.rs",
+        "core/crates/layerfs-daemon/tests/native_custody.rs",
+        "core/crates/layerfs-overlay/tests/native_lookup.rs",
+        "core/crates/layerfs-overlay/tests/native_revocation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Foreign-incarnation, underflow and failure custody remain component scope rather than native kernel adversarial requests.",
+        "No resident-memory measurement follows from bounded-row assertions."
+      ],
+      "oracle_scope": "Current mounted and component cases prove partial/batched exact lookup decrements and bounded indexed retirement after detach.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        },
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-32",
+      "status": "PASS",
+      "reason": "Current union proves before-effect refusal during active Commit phases, exact unknown/published custody, held owner work and provider READ blocking retirement.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/forced_producers.rs",
+        "core/crates/layerfs-daemon/tests/mounted_store_read.rs",
+        "core/crates/layerfs-daemon/tests/store_read_drain.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "R7 adds the provider-read hold missing from R6; the original R6 NOT_RUN receipt remains unchanged.",
+        "Independent abort/detach syscall tracing is a separate FP-33 gap."
+      ],
+      "oracle_scope": "Current union proves before-effect refusal during active Commit phases, exact unknown/published custody, held owner work and provider READ blocking retirement.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-33",
+      "status": "PARTIAL",
+      "reason": "Current force tests prove clean and held-reference Busy detach outcomes, connection-specific abort custody and no replay.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/forced_smoke.rs",
+        "core/crates/layerfs-daemon/tests/forced_unmount.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Short, failed and unknown abort writes are not staged.",
+        "Abort refusal after admission is not staged.",
+        "One abort and one detach are product receipts plus single source call sites; no independent syscall trace exists."
+      ],
+      "oracle_scope": "Current force tests prove clean and held-reference Busy detach outcomes, connection-specific abort custody and no replay.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FP-34",
+      "status": "PASS",
+      "reason": "Current mounted/component union proves bounded admitted/received ownership, capacity wakeup, terminal waiter disposition and sibling progress.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_parking.rs",
+        "core/crates/layerfs-daemon/tests/forced_unmount.rs",
+        "core/crates/layerfs-fuse/tests/dispatch.rs",
+        "core/crates/layerfs-fuse/tests/fence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Counts and source obligations do not imply measured phase resident peaks."
+      ],
+      "oracle_scope": "Current mounted/component union proves bounded admitted/received ownership, capacity wakeup, terminal waiter disposition and sibling progress.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        },
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "FP",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R2-STEP-1",
+      "status": "PASS",
+      "reason": "Callback dispositions and opcode/disposal accounting are covered by current native/Fuse component assertions.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-fuse/tests/dispatch.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Callback dispositions and opcode/disposal accounting are covered by current native/Fuse component assertions.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "R2",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R2-STEP-2",
+      "status": "PARTIAL",
+      "reason": "Current session/mount/Ready/normal drain assertions pass at their declared native scope.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_mount_routes.rs",
+        "core/crates/layerfs-daemon/tests/mounted_store_read.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "FP-2 observation gaps and all terminal/startup failure paths remain incomplete."
+      ],
+      "oracle_scope": "Current session/mount/Ready/normal drain assertions pass at their declared native scope.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "R2",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R2-STEP-3",
+      "status": "PARTIAL",
+      "reason": "Current Service assembly, registry routing and native Status assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_control.rs",
+        "core/crates/layerfs-daemon/tests/native_application.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Full current SDK/Sandbox/daemon-binary lifecycle is not executed; native_application is narrower."
+      ],
+      "oracle_scope": "Current Service assembly, registry routing and native Status assertions pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "R2",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R2-STEP-4",
+      "status": "PARTIAL",
+      "reason": "Current Attach/Locate/two-acknowledgement route and codec tests pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount_routes.rs",
+        "core/crates/layerfs-daemon/tests/native_control.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "FP-25-Routes post-mount failure and actual runtime lost-result scope remain incomplete."
+      ],
+      "oracle_scope": "Current Attach/Locate/two-acknowledgement route and codec tests pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "R2",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R2-STEP-5",
+      "status": "PARTIAL",
+      "reason": "Current reversible Busy, successful normal detach/drain and named Retained paths pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/mounted_drain.rs",
+        "core/crates/layerfs-daemon/tests/mounted_store_read.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "FP-21 remains PARTIAL across unstaged full failure/consumer scopes."
+      ],
+      "oracle_scope": "Current reversible Busy, successful normal detach/drain and named Retained paths pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "R2",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R2-STEP-6",
+      "status": "PARTIAL",
+      "reason": "Current Sandbox component topology assertions pass; actual unprivileged native deployment protection was last run at older R3 identity.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-sandbox/tests/engine_lifecycle.rs",
+        "core/crates/layerfs-api/sdk/examples/sandbox_native_mount.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "No exact current integrated actual Sandbox protection/topology execution."
+      ],
+      "oracle_scope": "Current Sandbox component topology assertions pass; actual unprivileged native deployment protection was last run at older R3 identity.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+        "core/docs/issues/307/checks/r3-mutation-20261008/full-topology-attempt2.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "R2",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R2-STEP-7",
+      "status": "PARTIAL",
+      "reason": "Current small-root native oracle, external access, retained references, repeat mounts and sustained requests pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mount.rs",
+        "core/crates/layerfs-daemon/tests/native_mount_routes.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Current actual full topology, huge prepared proof and full historical fixture remain separate incomplete selections."
+      ],
+      "oracle_scope": "Current small-root native oracle, external access, retained references, repeat mounts and sustained requests pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "04b04ef37",
+          "receipt": "core/docs/issues/307/checks/r2-completion-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/checks/r2-completion-20261008/00-results.md"
+        }
+      ],
+      "stage": "R2",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R3-STEP-1",
+      "status": "PASS",
+      "reason": "Current native custody tests observe kernel FORGET and a Retained normal-unmount case.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_custody.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Only the retained stage actually asserted is proved."
+      ],
+      "oracle_scope": "Current native custody tests observe kernel FORGET and a Retained normal-unmount case.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R3",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R3-STEP-2",
+      "status": "PASS",
+      "reason": "Current native writable OPEN/CREATE, descriptor and independent request ownership assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs",
+        "core/crates/layerfs-daemon/tests/native_coherence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current native writable OPEN/CREATE, descriptor and independent request ownership assertions pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R3",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R3-STEP-3",
+      "status": "PASS",
+      "reason": "Current WRITE, append, SETATTR/truncate/chmod/time assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current WRITE, append, SETATTR/truncate/chmod/time assertions pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R3",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R3-STEP-4",
+      "status": "PASS",
+      "reason": "Current ordinary namespace publication/link/rename/ancestry assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs",
+        "core/crates/layerfs-daemon/tests/native_coherence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current ordinary namespace publication/link/rename/ancestry assertions pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R3",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R3-STEP-5",
+      "status": "PASS",
+      "reason": "Current removed references and aliases plus later parked READ spanning release prove the stated scopes.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/native_mutation.rs",
+        "core/crates/layerfs-daemon/tests/mounted_drain.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Separate R7 host visit-LOOKUP alias proof remains unstaged."
+      ],
+      "oracle_scope": "Current removed references and aliases plus later parked READ spanning release prove the stated scopes.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R3",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R3-STEP-6",
+      "status": "PARTIAL",
+      "reason": "Current shared-mapping store flag, clipping and size semantics pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_coherence.rs",
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Header identity and Commit while a page remains dirty are not observed."
+      ],
+      "oracle_scope": "Current shared-mapping store flag, clipping and size semantics pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R3",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R3-STEP-7",
+      "status": "PARTIAL",
+      "reason": "Current named native assertions pass and earlier documentation records their scope.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/native_mutation.rs",
+        "core/crates/layerfs-daemon/tests/native_coherence.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Full current binary/Sandbox topology and complete FP-15/16 row coverage remain incomplete."
+      ],
+      "oracle_scope": "Current named native assertions pass and earlier documentation records their scope.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "37dcf5405",
+          "receipt": "core/docs/issues/307/checks/r3-mutation-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R3-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R3",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-1",
+      "status": "PASS",
+      "reason": "Current independent reachable-set, namespace, byte, metadata and link oracle assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace.rs",
+        "core/crates/layerfs-workspace/tests/captured_namespace_states.rs",
+        "core/crates/layerfs-workspace/tests/captured_namespace_rebound.rs",
+        "core/crates/layerfs-workspace/tests/captured_namespace_metadata.rs",
+        "core/crates/layerfs-daemon/tests/captured_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current independent reachable-set, namespace, byte, metadata and link oracle assertions pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-2",
+      "status": "PARTIAL",
+      "reason": "Current producer/backed Content topology, alias/cycle and generated-model assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_perturbed.rs",
+        "core/crates/layerfs-content/tests/filesystem_topology.rs",
+        "core/crates/layerfs-content/tests/filesystem_topology_backed.rs",
+        "core/crates/layerfs-content/tests/filesystem_topology_model.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Alias/cycle refusal is producer scope with a perturbing provider, not exercised through the real Commit driver."
+      ],
+      "oracle_scope": "Current producer/backed Content topology, alias/cycle and generated-model assertions pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-3",
+      "status": "PARTIAL",
+      "reason": "Current state-table tests cover rows one to five and seven and constructed clipped stores.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_holds.rs",
+        "core/crates/layerfs-workspace/tests/captured_namespace_states.rs",
+        "core/crates/layerfs-workspace/tests/captured_namespace_rebound.rs",
+        "core/crates/layerfs-workspace/tests/captured_namespace_fragments.rs",
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "State-table row six remains partial: no Commit runs while real mapped pages remain dirty."
+      ],
+      "oracle_scope": "Current state-table tests cover rows one to five and seven and constructed clipped stores.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-4",
+      "status": "PASS",
+      "reason": "Current fragmentation-equivalent roots pass for the declared unwritten-range shapes.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_fragments.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current fragmentation-equivalent roots pass for the declared unwritten-range shapes.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-5",
+      "status": "PASS",
+      "reason": "Current cursor/point/name/prefix agreement assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_cursor.rs",
+        "core/crates/layerfs-overlay/tests/captured_namespace.rs",
+        "core/crates/layerfs-daemon/tests/captured_namespace.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current cursor/point/name/prefix agreement assertions pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-6",
+      "status": "PARTIAL",
+      "reason": "Current receipts retain change-sized producer/owner/validation counts and growing sibling-page/Store work.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_cursor.rs",
+        "core/crates/layerfs-daemon/tests/captured_commit.rs",
+        "core/crates/layerfs-content/tests/filesystem_topology_counts.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Content sorted-merge inode pages and Store reads are not flat with base size.",
+        "No timing or resident-memory claim."
+      ],
+      "oracle_scope": "Current receipts retain change-sized producer/owner/validation counts and growing sibling-page/Store work.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-7",
+      "status": "PASS",
+      "reason": "Current backed row windows, page ordering and scaled-change counts pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_cursor.rs",
+        "core/crates/layerfs-workspace/tests/captured_namespace_order.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Counted windows do not measure resident memory."
+      ],
+      "oracle_scope": "Current backed row windows, page ordering and scaled-change counts pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-8",
+      "status": "PASS",
+      "reason": "Current later-active-mutation/install/Close assertions preserve exact captured reader state.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_order.rs",
+        "core/crates/layerfs-overlay/tests/captured_namespace.rs",
+        "core/crates/layerfs-daemon/tests/captured_namespace.rs",
+        "core/crates/layerfs-daemon/tests/captured_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current later-active-mutation/install/Close assertions preserve exact captured reader state.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-9",
+      "status": "PARTIAL",
+      "reason": "Current provider-failure sweep retains exact producer custody and stops provider work; a real engine refusal is driven through Commit.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-workspace/tests/captured_namespace_custody.rs",
+        "core/crates/layerfs-daemon/tests/captured_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Driver tests do not stage every producer provider cause.",
+        "These injected failures are external test providers, not product hooks."
+      ],
+      "oracle_scope": "Current provider-failure sweep retains exact producer custody and stops provider work; a real engine refusal is driven through Commit.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R4-10",
+      "status": "PASS",
+      "reason": "Current direct BoundWorkspace Commit driver over real Disposable Store produces an exact fresh-bind root.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/captured_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "This driver test uses a test constructor; R5 separately covers the product constructor."
+      ],
+      "oracle_scope": "Current direct BoundWorkspace Commit driver over real Disposable Store produces an exact fresh-bind root.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "R4",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-1",
+      "status": "PASS",
+      "reason": "Current mounted external Bash changes, control Commit, fresh Branch mount and independent full declared-root oracle pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Changed Commit through the actual daemon executable remains unverified; the mounted test composes the production Service in its own process."
+      ],
+      "oracle_scope": "Current mounted external Bash changes, control Commit, fresh Branch mount and independent full declared-root oracle pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-2",
+      "status": "PASS",
+      "reason": "Current mounted unchanged UpToDate/no-new-Commit and Store-scope stale unchanged overwrite/captured-parent assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs",
+        "core/crates/layerfs-daemon/tests/product_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current mounted unchanged UpToDate/no-new-Commit and Store-scope stale unchanged overwrite/captured-parent assertions pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-3",
+      "status": "PASS",
+      "reason": "Current shared-frontier test captures several unregistered launches including nonzero exit and a still-live reference.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current shared-frontier test captures several unregistered launches including nonzero exit and a still-live reference.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-4",
+      "status": "PASS",
+      "reason": "Current overwrite/captured-parent/displaced-history and sibling isolation assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_install.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current overwrite/captured-parent/displaced-history and sibling isolation assertions pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-5",
+      "status": "PARTIAL",
+      "reason": "Current same/fresh mount descriptor, direct/cached, projected identity and later-active-writer assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_install.rs",
+        "core/crates/layerfs-daemon/tests/mounted_concurrency.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Mappings across install, atime and O_DIRECT without a kept descriptor are not covered.",
+        "Captures observed between writer iterations; arbitrary inside-iteration capture is not established."
+      ],
+      "oracle_scope": "Current same/fresh mount descriptor, direct/cached, projected identity and later-active-writer assertions pass.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-6",
+      "status": "PARTIAL",
+      "reason": "Current mounted Busy/definite failure/lost History/known publication with unattempted install cases pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_commit_failures.rs",
+        "core/crates/layerfs-daemon/tests/product_commit.rs",
+        "core/crates/layerfs-daemon/tests/store_commit.rs",
+        "core/crates/layerfs-daemon/tests/captured_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Missing dependency is driver scope, not mounted route.",
+        "Attempted install failure and unknown outcome with no publication are not staged.",
+        "Unknown/install staging uses external catalog boundary, not a native SQLite failure."
+      ],
+      "oracle_scope": "Current mounted Busy/definite failure/lost History/known publication with unattempted install cases pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-7",
+      "status": "PARTIAL",
+      "reason": "Current original-cause/settled refusal/uncertain retained custody assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_commit_failures.rs",
+        "core/crates/layerfs-daemon/tests/product_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "A release itself refused after a settled failure has no hook-free staging and remains unrun."
+      ],
+      "oracle_scope": "Current original-cause/settled refusal/uncertain retained custody assertions pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-8",
+      "status": "PASS",
+      "reason": "Current repeated incremental Commit and remount/fresh-bind exactness assertions pass.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs",
+        "core/crates/layerfs-daemon/tests/product_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current repeated incremental Commit and remount/fresh-bind exactness assertions pass.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-9",
+      "status": "PARTIAL",
+      "reason": "Current mapped-store case reaches Commit with exact bytes after the test forces writeback.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "No Commit runs while the kernel page remains dirty; R4-3 row six is not closed."
+      ],
+      "oracle_scope": "Current mapped-store case reaches Commit with exact bytes after the test forces writeback.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-10",
+      "status": "PARTIAL",
+      "reason": "Current repeated Commit receipts retain one open Store and the structural single-product-constructor path.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/product_commit.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "No test counts construction producers.",
+        "Observer synchronous pragma does not prove the writer's synchronous setting.",
+        "Environment worker selection is exported but no active core source reads it."
+      ],
+      "oracle_scope": "Current repeated Commit receipts retain one open Store and the structural single-product-constructor path.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R5-11",
+      "status": "PASS",
+      "reason": "Current small/large product-constructor receipts report counted owner, SQL, Store, producer and storage work with asserted arithmetic.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/product_commit_cost.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Store-scope counts only, not mounted timing/cold/resident-memory qualification."
+      ],
+      "oracle_scope": "Current small/large product-constructor receipts report counted owner, SQL, Store, producer and storage work with asserted arithmetic.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "57244684b",
+          "receipt": "core/docs/issues/307/checks/r5-mounted-commit-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R5-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R5",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "P-1",
+      "status": "PARTIAL",
+      "reason": "Current mounted exhaustion case proves one Busy reservation, EAGAIN with no effect and later independent create success.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_failure_scope.rs",
+        "core/docs/issues/307/S8-SPECIFICATION-20261008.md"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Explicit configuration-driven low-water early refill is not implemented or run."
+      ],
+      "oracle_scope": "Current mounted exhaustion case proves one Busy reservation, EAGAIN with no effect and later independent create success.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R6-1",
+      "status": "PASS",
+      "reason": "Current owner test proves exact install/source slot interleaving; mounted finite process/Commit work completes.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/install_slots.rs",
+        "core/crates/layerfs-daemon/tests/mounted_concurrency.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Mounted result is no-stall-observed, not the exact owner-scope interleaving."
+      ],
+      "oracle_scope": "Current owner test proves exact install/source slot interleaving; mounted finite process/Commit work completes.",
+      "additional_receipts": [
+        "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite.txt"
+      ],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R6-2",
+      "status": "PASS",
+      "reason": "Current concurrent-writer Commit preserves exact captured prefixes, later live frontier and fresh-mount oracle.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_concurrency.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current concurrent-writer Commit preserves exact captured prefixes, later live frontier and fresh-mount oracle.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R6-3",
+      "status": "PASS",
+      "reason": "Current sibling writes advance during another Workspace's Commit with isolated names and exact later publication.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_concurrency.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current sibling writes advance during another Workspace's Commit with isolated names and exact later publication.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R6-6",
+      "status": "PASS",
+      "reason": "Current unequal finite arrivals finish on both Workspaces with every owner class advancing.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_concurrency.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "No declared numerical fairness share is asserted."
+      ],
+      "oracle_scope": "Current unequal finite arrivals finish on both Workspaces with every owner class advancing.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R6-7",
+      "status": "PARTIAL",
+      "reason": "Current live/idle repeated cycles show declared namespace and reclamation plateau.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_cycles.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Debt-capacity refusal is not implemented or staged; same partial scope as FP-26."
+      ],
+      "oracle_scope": "Current live/idle repeated cycles show declared namespace and reclamation plateau.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "R6-8",
+      "status": "PARTIAL",
+      "reason": "Current full-output-pipe caller retains descriptor/cwd/mapping, its earlier writes Commit, Busy preserves it and later drain succeeds.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/mounted_cycles.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [
+        "Filesystem side only; complete runtime stream delivery/backpressure/EOF is separately unqualified."
+      ],
+      "oracle_scope": "Current full-output-pipe caller retains descriptor/cwd/mapping, its earlier writes Commit, Busy preserves it and later drain succeeds.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "force:capability",
+      "status": "PASS",
+      "reason": "Current native test proves typed missing-abort-control refusal leaves Ready/read service usable and normal Unmount succeeds.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/forced_unavailable.rs"
+      ],
+      "reuse_eligible": true,
+      "identity_differs": false,
+      "known_gaps": [],
+      "oracle_scope": "Current native test proves typed missing-abort-control refusal leaves Ready/read service usable and normal Unmount succeeds.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "2b4dc28a6",
+          "receipt": "core/docs/issues/307/checks/r6-concurrency-teardown-20261009/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R6-COMPLETION-20261009.md"
+        }
+      ],
+      "stage": "R6",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "FULL-FIXTURE-ORACLE",
+      "status": "NOT_RUN",
+      "reason": "No retained passing final-identity full historical fixture byte/namespace/metadata/link kernel oracle was located.",
+      "source_identity": "7999a6356",
+      "last_receipt": null,
+      "source_paths": [
+        "core/docs/issues/307/S8-PROOF-PLAN-20261008.md"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": false,
+      "known_gaps": [
+        "R7 preparation 015 records successful Init/seal/install inside an overall failed preparation receipt; identities require separate validation before reuse.",
+        "Small functional roots and logical Store-port proofs cannot replace the faithful full historical fixture.",
+        "A full-byte functional proof and its own declared exception must be prospectively registered."
+      ],
+      "oracle_scope": "Faithful full historical fixture; independent complete through-mount oracle.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "R7 preparation identity, validate before reuse",
+          "receipt": "core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md",
+          "interpretation": "Successful host preparation inside an overall failed preparation receipt is not final qualification."
+        }
+      ],
+      "stage": "Prerequisites",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "PREREQ-COMPLETE-INSTALLED-HOST",
+      "status": "NOT_RUN",
+      "reason": "Latest invocation failed because LAYERFS_Q1_PREPARED was absent; unrun as the selected huge-namespace proof.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite-complete_installed_roots-e76bd78a0eded4e2.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/complete_installed_roots.rs",
+        "core/crates/layerfs-daemon/tests/support/complete_fixture.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": false,
+      "known_gaps": [
+        "Supply closed sealed preparation through ignored prepare_huge_native_namespace, then independent prepared_wide byte-copy clone.",
+        "The existing proof reads direct Store ports, not a kernel mount."
+      ],
+      "oracle_scope": "Latest invocation failed because LAYERFS_Q1_PREPARED was absent; unrun as the selected huge-namespace proof.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "Prerequisites",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "PREREQ-COMPLETE-INSTALLED-LINUX",
+      "status": "NOT_RUN",
+      "reason": "Latest invocation failed because LAYERFS_Q1_PREPARED was absent; unrun as the selected huge-namespace proof.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite-complete_installed_roots-b8a4f28c1707b846.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/complete_installed_roots.rs",
+        "core/crates/layerfs-daemon/tests/support/complete_fixture.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": false,
+      "known_gaps": [
+        "Supply closed sealed preparation through ignored prepare_huge_native_namespace, then independent prepared_wide byte-copy clone.",
+        "Place Store/Overlay on the declared native/named-volume route.",
+        "The existing proof reads direct Store ports, not a kernel mount."
+      ],
+      "oracle_scope": "Latest invocation failed because LAYERFS_Q1_PREPARED was absent; unrun as the selected huge-namespace proof.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "Prerequisites",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "PREREQ-HOST-HANDOFF",
+      "status": "NOT_RUN",
+      "reason": "Latest host invocation failed: explicit build-listed Linux binary was NotPresent.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/80-final-host-suite-host_handoff-a4c4b3d19848e0be.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/host_handoff.rs",
+        "core/crates/layerfs-daemon/tests/support/install_docker.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": false,
+      "known_gaps": [
+        "Supply the explicit build-listed Linux host_handoff test executable for ignored linux_daemon_install_role; do not substitute an ordinary daemon executable."
+      ],
+      "oracle_scope": "Latest host invocation failed: explicit build-listed Linux binary was NotPresent.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "Prerequisites",
+      "selection_kind": "functional"
+    },
+    {
+      "id": "PREREQ-SHARED-PROCESSES-LINUX",
+      "status": "NOT_RUN",
+      "reason": "Latest Linux invocation failed: explicit named-volume placement was absent.",
+      "source_identity": "7999a6356",
+      "last_receipt": "core/docs/issues/307/checks/r7-retire-20261010/81-final-linux-suite-shared_processes-498c7928b7fbb8cc.txt",
+      "source_paths": [
+        "core/crates/layerfs-daemon/tests/shared_processes.rs"
+      ],
+      "reuse_eligible": false,
+      "identity_differs": false,
+      "known_gaps": [
+        "Supply LAYERFS_SHARED_STORE_ROOT on an exactly owned named in-VM volume; preserve all inherited protected volumes.",
+        "The host temporary-directory route passed separately and does not supply this Linux precondition."
+      ],
+      "oracle_scope": "Latest Linux invocation failed: explicit named-volume placement was absent.",
+      "additional_receipts": [],
+      "historical_evidence": [
+        {
+          "source_identity": "5747f0119",
+          "receipt": "core/docs/issues/307/checks/r4-captured-namespace-20261008/final-linux-suite.txt",
+          "interpretation": "core/docs/issues/307/R4-COMPLETION-20261008.md"
+        }
+      ],
+      "stage": "Prerequisites",
+      "selection_kind": "functional"
+    }
+  ],
+  "selection_count": 90,
+  "status_counts": {
+    "PARTIAL": 35,
+    "PASS": 41,
+    "WITHDRAWN": 8,
+    "NOT_RUN": 6
+  }
+}

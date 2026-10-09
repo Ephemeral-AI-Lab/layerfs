@@ -1,0 +1,25 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "f8a0a5ff1cd5f93b90bf16f964705b4c7d773615",
+  "source_tree": "d627e31d911e7b979db00ce2f2306c160607cabe",
+  "worktree_status": "M core/benchmark/fs-bench-pro-storage-content/Cargo.lock\n M core/benchmark/fs-bench-pro-storage-content/README.md\n M core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs\n M core/benchmark/fs-bench-pro-storage-content/tests/namespace_batch_probe.rs\n M core/benchmark/fs-bench-pro-storage-content/tests/pinned_expectations.rs\n M core/benchmark/fs-bench-pro-storage-content/tests/walk_ceiling.rs\n M core/benchmark/fs-bench-pro/families/workspace_write.py\n M core/benchmark/fs-bench-pro/runner.py\n M core/benchmark/fs-bench-pro/shared/evidence_jobs.py\n M core/benchmark/fs-bench-pro/shell_package.py\n M core/benchmark/fs-bench-pro/tests/test_evidence_disposal.py\n M core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py\n M core/benchmark/fs-bench-pro/tests/test_workspace_shell_package.py\n M core/benchmark/fs-bench-pro/tests/test_workspace_write.py\n?? core/benchmark/fs-bench-pro/shared/retired_families.py\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/010-fuser-provenance/\n?? core/docs/issues/307/checks/r8-qualification-20261010/011-host-proof-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/012-retained-input-validation.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/013-linux-proof-build/\n?? core/docs/issues/307/checks/r8-qualification-20261010/014-wide-preparation/\n?? core/docs/issues/307/checks/r8-qualification-20261010/015-content-lock-resolution/\n?? core/docs/issues/307/checks/r8-qualification-20261010/016-python-harness-tests/\n?? core/docs/issues/307/checks/r8-qualification-20261010/017-content-lock-parity.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/02-plan-loc.json",
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "core/benchmark/fs-bench-pro/tests/test_workspace_write.py",
+    "core/benchmark/fs-bench-pro/tests/test_workspace_shell_package.py"
+  ],
+  "limit_seconds": 100,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 75,
+  "complete_command_ns": 25039917,
+  "status": "LOCK_BUSY_NOT_ATTEMPTED"
+}
