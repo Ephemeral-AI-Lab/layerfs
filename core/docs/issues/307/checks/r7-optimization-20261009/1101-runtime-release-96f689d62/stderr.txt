@@ -1,0 +1,2 @@
+    Finished `release` profile [optimized] target(s) in 0.20s
+R4_WALL seconds<=1 limit=560s lock_wait=0s

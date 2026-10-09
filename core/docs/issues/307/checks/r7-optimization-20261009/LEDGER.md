@@ -2718,3 +2718,67 @@ Consequences, stated now so that no later table is misread:
   judged on counts, owner service and receive-thread CPU, with command time
   compared only between samples of the same regime.
 
+### Batch 2 merged at `96f689d62`: receipts 1100–1151
+
+Merged with `--no-ff` by an integrating agent (its report is the merge
+commit message): payload rows of up to 32 KiB (`e555b771f`), accounting
+triggers write the namespace row only (`a0ae8b522`), closed-namespace
+reclamation by one range delete per page (`9f7037e04`), payload delete
+trigger that reads lengths (`95a9ddde0`). Schema 28 (three changes per
+side). Production LOC 188167 → 188499 (+332, almost all the run-row
+change). Every exact count pin of both sides passed at its own value on
+the merged tree; restaged at the merge: the schema version, and the page
+cap of one `costs.rs` fixture (96 → 80: the write that must hit
+SQLITE_FULL now needs 95 pages instead of 101, measured on the merged
+engine). Checks on the merged tree: host overlay 32/32, workspace 30/30,
+daemon 59/61 (the two known), Linux 21/21 mounted daemon binaries and three
+overlay binaries, `fmt --check`, guard. **Clippy fails** on
+`namespace/job_rows.rs:20` (`type_complexity`), a file from `dc0c0a6f7`
+unchanged by this merge; it is fixed in its own commit before the gate.
+
+Not reached, and why: the model's "about 262 transactions to reclaim a
+closed 64 MiB namespace" assumed a larger payload page. The step keeps its
+bound of 14 cells of bytes, so a dense 64 MiB file is about 2048 steps
+(computed, not measured), each one statement instead of a select and a
+delete per row. Enlarging the page would be a larger limit as the fix.
+
+All twelve rows DIAGNOSTIC, verifier PASS; the sample held the worktree
+locks; host load average 5 to 8.
+
+| Cell | Receipt | Command ms before → after | A2 ms | Ratio | Statement executions | Owner service ms before → after | Overlay logical bytes before → after | Receive thread vol : invol, before → after |
+| --- | --- | --- | ---: | ---: | --- | --- | --- | --- |
+| C01 | 1107 | 183.8 → 398.2 | 183.4 | 2.17 | 44002 → 44002 | 97.5 → 141.5 | 512000 → 503808 | 12 : 3991 → 3988 : 0 |
+| C02 | 1111 | 862.3 → 825.6 | 965.0 | 0.86 | 46004 → 46004 | 127.2 → 111.4 | 512000 → 503808 | 3833 : 1173 → 1019 : 3988 |
+| C03 | 1115 | 617.3 → 651.7 | 410.8 | 1.59 | 109639 → 109634 | 255.7 → 282.9 | 512000 → 503808 | 6683 : 1 → 5499 : 1178 |
+| C04 | 1119 | 816.8 → 862.1 | 952.6 | 0.90 | 42654 → 42654 | 128.9 → 140.1 | 413696 → 405504 | 5322 : 1 → 5319 : 1 |
+| C05 | 1123 | 865.1 → 986.0 | 949.6 | 1.04 | 65516 → 65516 | 171.1 → 186.0 | 413696 → 405504 | 5772 : 0 → 5764 : 0 |
+| **C06** | 1127 | 247.4 → **161.6** | 78.6 | 2.06 | 36388 → 9764 | 150.5 → 64.4 | 76673024 → 68526080 | 517 : 0 → 517 : 0 |
+| **C07** | 1131 | 411.6 → **298.3** | 171.6 | 1.74 | 76379 → 23131 | 303.1 → 136.2 | 153088000 → 136794112 | 18 : 1532 → 1542 : 8 |
+| **C08** | 1135 | 300.2 → **244.3** | 106.1 | 2.30 | 36407 → 9783 | 178.3 → 103.9 | 76673024 → 68526080 | 521 : 0 → 521 : 0 |
+| C09 | 1139 | 99.9 → 114.0 | 106.2 | 1.07 | 1055 → 1055 | 4.6 → 5.4 | 266240 → 258048 | 517 : 0 → 517 : 0 |
+| **C10** | 1143 | 289.9 → **203.3** | 178.2 | 1.14 | 41028 → 14404 | 171.3 → 84.1 | 76673024 → 68526080 | 1034 : 3 → 1036 : 0 |
+| **C11** | 1147 | 239.7 → **142.2** | 85.8 | 1.66 | 36384 → 9760 | 147.2 → 59.6 | 76640256 → 68526080 | 517 : 0 → 517 : 0 |
+| C12 | 1151 | 259.8 → 291.7 | 189.3 | 1.54 | 25332 → 25337 | 67.8 → 80.1 | 372736 → 364544 | 2952 : 0 → 2950 : 1 |
+
+Verdict by counts: KEPT.
+
+- **The five large-file cells**, same regime before and after for C06,
+  C08, C10 and C11 (one voluntary sleep per request): statements −26624
+  per 64 MiB written (52 per 128 KiB WRITE: 71 → 19), owner service
+  −86.1 ms (C06), −74.4 (C08), −87.2 (C10), −87.6 (C11), as the model
+  predicted (147.6 → about 61 ms); command −85.8, −55.9, −86.6 and
+  −97.5 ms. C07 (two files) service −166.9 ms; its "before" was a
+  same-CPU sample, so its −113 ms understates the change (its cross-CPU
+  samples before were 475.7 to 564.4 ms).
+- **Storage fell**: overlay logical bytes for 64 MiB of data
+  76673024 → 68526080 (−10.6 %; 1.143 → 1.021 bytes stored per byte
+  written), and −8192 in every small cell.
+- C01 is back in the cross-CPU regime at unchanged counts: 398.2 ms with
+  service 141.5 ms, against 97.5 ms of service for the same 44002
+  statements in the same-CPU sample. Owner service is therefore not
+  regime-free either (about 45 % more for identical statements); only the
+  counts are.
+- C02 is mostly same-CPU in this sample (1019 : 3988) and C03 partly.
+  C05 and C09 are above A2 here and were below it in the previous sample
+  at identical counts and the same regime: one-sample spread.
+

@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "96f689d62eb27711efd2493d65890df75611c447",
+  "source_tree": "b18d5991ecfd94935c453c94c9ec1d9ef89edbc1",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/1100-L-source-seal-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1101-runtime-release-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1102-daemon-release-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1103-build-provenance-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1104-C01-L-volume-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1105-C01-L-clone-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1106-C01-L-configuration-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1107-C01-B-L-sample-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1108-C02-L-volume-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1109-C02-L-clone-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1110-C02-L-configuration-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1111-C02-B-L-sample-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1112-C03-L-volume-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1113-C03-L-clone-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1114-C03-L-configuration-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1115-C03-B-L-sample-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1116-C04-L-volume-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1117-C04-L-clone-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1118-C04-L-configuration-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1119-C04-B-L-sample-96f689d62/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1120-C05-L-volume-96f689d62/",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r7-C05-L-copy-96f689d62",
+    "--network",
+    "none",
+    "-v",
+    "layerfs-r7-empty-master-20261009-2ac7cc762:/source:ro",
+    "-v",
+    "layerfs-r7-C05-L-96f689d62-20261009:/dest",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "/bin/bash",
+    "-euo",
+    "pipefail",
+    "-c",
+    "test ! -e /dest/global; test ! -s /source/global/store.sqlite-wal; test ! -s /source/global/store.sqlite-journal; mkdir -m 700 /dest/global; cp --reflink=never --sparse=never --preserve=mode,ownership,timestamps /source/global/store.sqlite /dest/global/store.sqlite; cmp /source/global/store.sqlite /dest/global/store.sqlite; chmod --reference=/source/global /dest/global; chown --reference=/source/global /dest/global; touch -r /source/global /dest/global; sha256sum /source/global/store.sqlite /dest/global/store.sqlite; stat -c \"%n %s %b %B %a %u %g\" /source/global/store.sqlite /dest/global/store.sqlite"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

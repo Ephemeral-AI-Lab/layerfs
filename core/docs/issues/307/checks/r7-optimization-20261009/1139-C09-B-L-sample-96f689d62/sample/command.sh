@@ -1,0 +1,1 @@
+{ cat big > /dev/null; } >/dev/null

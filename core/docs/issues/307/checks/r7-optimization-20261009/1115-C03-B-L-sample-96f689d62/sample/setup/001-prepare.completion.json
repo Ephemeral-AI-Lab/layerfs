@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "docker",
+    "--host",
+    "unix:///Users/yifanxu/.docker/run/docker.sock",
+    "exec",
+    "--user",
+    "0:0",
+    "ebec5b1ff7045cd3d8fd76455821e491129ab311bb341e29b22cba9a5cdbaaff",
+    "python3",
+    "-c",
+    "import json,os,sys; v=json.loads(sys.argv[1]); assert all(not os.path.lexists(p) for p in v['roots']+v['mounts']); os.mkdir(v['evidence'],0o700); [os.mkdir(p,0o755) for p in v['mounts']]",
+    "{\"roots\": [\"/code\"], \"mounts\": [], \"evidence\": \"/tmp/layerfs-r7-setup-500ebcab6e0b7515557ea4272aa93fbe\"}"
+  ],
+  "attempts": 1,
+  "container": "ebec5b1ff7045cd3d8fd76455821e491129ab311bb341e29b22cba9a5cdbaaff",
+  "duration_ns": 121188208,
+  "end_ns": 825457410402083,
+  "engine_operation_identity": "UNAVAILABLE through Docker CLI; no guessed Exec ID",
+  "exit_code": 0,
+  "label": "prepare",
+  "sequence": 1,
+  "start_ns": 825457289213875
+}
