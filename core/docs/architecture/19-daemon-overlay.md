@@ -354,3 +354,45 @@ afterwards 4 (FORGET first) or 7 (owner first) -> 0, the three together 81
 or 122 -> 67. A 56-cell file: the FORGET drops 14 cells and the queue ends
 it in 5 steps. Pinned in
 [`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs).
+
+R7 update, 2026-10-09 (item-free steps, report item O6, schema unchanged at
+22). Implemented, superseding "read from the ready queue itself" above:
+
+- **A step and its queue item are separate.** `migrate_orphan` (an orphan
+  something holds), `reclaim_orphan` (an orphan nothing holds) and
+  `retire_layer` do the work for `(ns, serial[, gen])` and return a `Step`:
+  rows, bytes, what is left (`Next`: ready, a migration cursor, held, done)
+  and the layer an orphan's step released. `maintain_orphan` and
+  `retire_serial` are the queue's wrappers: they read the orphan row and the
+  references, call the step, and `settle_item` queues the released layer's
+  retirement and advances, parks or deletes the item. Every hold check and
+  every delete exists once.
+- **The releasing job writes no item for work it ends.**
+  `Overlay::finish_release` takes the orphan row `file_ref` read, calls
+  `reclaim_orphan` and, for each layer this job released, `retire_layer`
+  (oldest first, the orphan's row as the job left it), under the same bound
+  (6 calls, one `PAGE`). It neither seeks nor writes the ready queue while
+  it runs. Afterwards: a finished orphan deletes the item an earlier
+  descriptor or reader may have queued (one statement); an unfinished one is
+  queued and made ready; a layer left unfinished is queued ready; a layer
+  held by a generation owner is queued and parked (`hold_item`), which
+  `wake_generation` readies as before. `maintenance_ready` returns to its
+  earlier value when the job left nothing ready. A file with no orphan row
+  still queues its item.
+- **FORGET reads the Workspace row once**: the row read for the attachment
+  check also decides the pending close (`queue_closed_at`).
+
+Not changed: what is reclaimed and when (the last holder, the page, one
+inline finish per job, `retire_native` finishing none); FORGET still reads
+the mount row and the lookup row with one statement each, because the visit
+fence returns only the presence of the lookup and FORGET needs its owner,
+count and implicit flag. A retirement item of the same serial that was
+already ready before the releasing job is left to the owner thread; the job
+no longer seeks it. Counts: FORGET of a removed one-cell file 47 -> 29
+statement attempts (Workspace 4 -> 3, Inode 2, Lease 17 -> 11, Reclaim
+21 -> 10), UNLINK + FORGET 67 -> 49; FORGET of a 56-cell file 43 -> 33 with
+the same 14 cells dropped and 5 steps left; FORGET after an open-at-unlink
+migration 31 -> 19. Pinned in
+[`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs);
+the parked layer in `layerfs-overlay` `tests/orphans.rs`
+(`a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue`).

@@ -15,10 +15,6 @@ pub(crate) const NATIVE_DIRECTORY: i64 = 11;
 const READY: &str = "SELECT ns,kind,resource,target,phase,cursor,aux,name FROM maintenance
     INDEXED BY maintenance_ready WHERE ready=1 AND (ns,kind,resource,target)>(?1,?2,?3,?4)
     ORDER BY ns,kind,resource,target LIMIT 1";
-/// The same queue, for the items of one kind and resource.
-const READY_OF: &str = "SELECT ns,kind,resource,target,phase,cursor,aux,name FROM maintenance
-    INDEXED BY maintenance_ready WHERE ready=1 AND ns=?1 AND kind=?2 AND resource=?3 AND target>?4
-    ORDER BY target LIMIT 1";
 /// What a step of an orphan or of a layer's retirement may still drop:
 /// payload cells, and rows of any kind. The statements select one whole
 /// page; a caller that has spent part of it drops fewer.
@@ -100,23 +96,6 @@ impl Overlay {
         )?;
         self.maintenance_ready.set(true);
         Ok(())
-    }
-    /// The next ready item of one kind and resource after `target`.
-    pub(crate) fn ready_item(
-        &self,
-        ns: i64,
-        kind: i64,
-        resource: i64,
-        target: i64,
-    ) -> OverlayResult<Option<Item>> {
-        self.query(
-            StatementKind::Reclaim,
-            READY_OF,
-            &[&ns, &kind, &resource, &target],
-            32,
-            Item::decode,
-        )
-        .map(|mut rows| rows.pop())
     }
     pub(crate) fn advance_item(
         &self,

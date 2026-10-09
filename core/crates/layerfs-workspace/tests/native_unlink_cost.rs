@@ -184,6 +184,7 @@ impl Mounted<'_> {
         let stored = || overlay.resources(None).unwrap().counts.payload_cells;
         let base = stored();
         let orphans = overlay.resources(None).unwrap().counts.orphan_rows;
+        let queued = overlay.resources(None).unwrap().counts.maintenance_targets;
         let serial = self.workspace.next_serial(&self.b.allocator).unwrap();
         let mut request = self.mutation(1, None, NativeInput::Named(create(1, child)));
         (request.open, request.fresh) = (Some(true), Some(serial));
@@ -254,6 +255,8 @@ impl Mounted<'_> {
         let (steps, rows, _) = self.drain();
         let counts = overlay.resources(None).unwrap().counts;
         assert_eq!((counts.orphan_rows, counts.payload_cells), (orphans, base));
+        // No item of the file is left, parked or ready.
+        assert_eq!(counts.maintenance_targets, queued);
         Special {
             unlinked,
             cells,
@@ -565,45 +568,50 @@ const UNLINK: [(&str, u64, u64); 7] = [
     ("DirectoryEntry", 4, 5),
     ("Lease", 3, 4),
 ];
-/// FORGET of the last kernel reference, which reclaims the one-cell file.
-/// Its own part: the Workspace's row and the mount's [Workspace, Lease];
-/// the lookup's row, its deletion and its owner's [3 Lease, each deletion
-/// with its trigger]; the file reference dropped by a statement that
-/// returns what remains [Lease]; the orphan's item queued and made ready
-/// [2 Reclaim]; the orphan's row [Lease]; the Workspace's row for a pending
-/// close [Workspace]. The four maintenance steps it runs, as the owner ran
-/// them: the orphan releases its lower layer, that layer's retirement drops
-/// the cell, the orphan deletes its inode row, its row and the custody row
-/// and reads the engine's count of orphan rows, and the retirement ends
-/// [2 Workspace, 2 Inode, 11 Lease, 13 Reclaim]; six seeks of the ready
-/// queue for this file's items [Reclaim].
+/// FORGET of the last kernel reference, which reclaims the one-cell file
+/// in its own job and writes no queue item. Its own part: the Workspace's
+/// row, kept for the pending-close decision, and the mount's [Workspace,
+/// Lease]; the lookup's row, its deletion and its owner's [3 Lease, each
+/// deletion with its trigger]; the file reference dropped by a statement
+/// that returns what remains [Lease]; the orphan's row [Lease]. Then the
+/// four steps the owner ran, without their items. The orphan releases its
+/// lower layer: that layer's row, the wait row's deletion, the orphan's
+/// update [Inode, 2 Lease]. The layer's retirement: its generation's
+/// holders, its cells and the cell's drop [Lease, 2 Reclaim]. The orphan
+/// ends: its own cells and shrink rows, none; its inode row, its row, the
+/// engine's count of orphan rows and the custody row [5 Reclaim, Lease];
+/// the item an earlier descriptor or reader may have queued, deleted
+/// [Reclaim]. The retirement ends: the holders again, cells and shrink
+/// rows, none, the Workspace's route and row and the file's rows, where the
+/// tombstone stays [Lease, 2 Reclaim, 2 Workspace, Inode].
 const FORGET: [(&str, u64, u64); 7] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
-    ("Workspace", 4, 4),
+    ("Workspace", 3, 3),
     ("Inode", 2, 2),
-    ("Lease", 17, 21),
-    ("Reclaim", 21, 30),
+    ("Lease", 11, 15),
+    ("Reclaim", 10, 13),
 ];
 /// FORGET of a file of four pages: the orphan releases its lower layer and
-/// that layer's retirement drops one page of 14 cells; the rest stays queued.
+/// that layer's retirement drops one page of 14 cells; then the orphan's
+/// item and the layer's are queued, ready [4 Reclaim].
 const FORGET_PAGE: [(&str, u64, u64); 7] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
-    ("Workspace", 2, 2),
+    ("Workspace", 1, 1),
     ("Inode", 1, 1),
-    ("Lease", 12, 14),
-    ("Reclaim", 23, 41),
+    ("Lease", 9, 11),
+    ("Reclaim", 19, 37),
 ];
 /// FORGET of a file whose cell the owner had migrated while it was open:
-/// the orphan drops that cell, then deletes its rows.
+/// the orphan drops that cell, then deletes its rows and its parked item.
 const FORGET_MIGRATED: [(&str, u64, u64); 6] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
-    ("Workspace", 2, 2),
-    ("Lease", 11, 15),
-    ("Reclaim", 14, 19),
+    ("Workspace", 1, 1),
+    ("Lease", 7, 11),
+    ("Reclaim", 8, 12),
 ];

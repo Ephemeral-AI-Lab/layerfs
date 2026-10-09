@@ -416,6 +416,68 @@ fn three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlin
 }
 
 #[test]
+fn a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue() {
+    let temp = Temp::new();
+    let db = temp.db();
+    let route = db.open_workspace([151; 32], [152; 32]).unwrap();
+    let source = db.acquire_base_source(route, 1).unwrap();
+    let mut f = File::new(&db, source, 7, Vec::new());
+    f.write(0, &pattern(8199, 3));
+    let sealed = f.expect.clone();
+    db.release_base_source(source).unwrap();
+    // The capture and its reader hold the generation the file was written in.
+    let capture = db.capture(route).unwrap();
+    let reader = db.acquire_captured_reader(capture, 1).unwrap();
+    let source = db.acquire_base_source(route, 2).unwrap();
+    f.source = source;
+    let open = db.open_file(source, 1, &f.inode(8199), true).unwrap();
+    let mut inode = f.inode(8199);
+    inode.nlink = 0;
+    let p = db
+        .apply(
+            source,
+            &Changes {
+                inodes: vec![inode],
+                ..Changes::default()
+            },
+        )
+        .unwrap();
+    db.reply_attempted(p).unwrap();
+    let counts = || db.resources(None).unwrap().counts;
+    let (cells, queued) = (counts().payload_cells, counts().maintenance_targets);
+    assert_eq!((counts().orphan_rows, cells, queued), (1, 3, 1));
+
+    // The last reference leaves with no owner step in between. Its job
+    // releases both lower layers and deletes the orphan and its queued
+    // item; the held layer keeps its cells and is parked, not ready.
+    db.close_file(open).unwrap();
+    let after = counts();
+    assert_eq!(
+        (
+            after.orphan_rows,
+            after.payload_cells,
+            after.maintenance_targets,
+            after.ready_targets
+        ),
+        (0, 3, 1, 0)
+    );
+    assert_eq!(db.maintain(MaintenanceCursor::default()).unwrap(), None);
+    assert!(!db.maintenance_pending());
+    let p = db.read_captured(reader, 7, 0, 131072).unwrap().unwrap();
+    assert_eq!(p.data, sealed);
+
+    // The generation's release wakes the parked retirement and the queue
+    // finishes it.
+    db.resolve_failed_capture(capture).unwrap();
+    db.release_captured_reader(reader).unwrap();
+    maintain(&db);
+    let end = counts();
+    assert_eq!((end.payload_cells, end.maintenance_targets), (0, 0));
+    assert!(db.capture_ready(route).unwrap());
+    assert_eq!(db.inode(route, 7).unwrap().unwrap().nlink, 0);
+}
+
+#[test]
 fn inode_reads_probe_the_orphan_domain_only_while_an_orphan_exists() {
     let temp = Temp::new();
     let db = temp.db();

@@ -14,6 +14,12 @@ pub(crate) struct Orphan {
     pub top: i64,
     pub floor: i64,
 }
+impl Orphan {
+    /// Whether the orphan still reads generation `gen` of its serial.
+    pub(crate) fn holds(&self, gen: i64) -> bool {
+        gen > self.floor && gen <= self.top
+    }
+}
 impl Overlay {
     pub(crate) fn orphan(&self, ns: i64, serial: i64) -> OverlayResult<Option<Orphan>> {
         self.query(
@@ -33,9 +39,7 @@ impl Overlay {
         .map(|mut rows| rows.pop())
     }
     pub(crate) fn orphan_holds(&self, ns: i64, serial: i64, gen: i64) -> OverlayResult<bool> {
-        Ok(self
-            .orphan(ns, serial)?
-            .is_some_and(|o| gen > o.floor && gen <= o.top))
+        Ok(self.orphan(ns, serial)?.is_some_and(|o| o.holds(gen)))
     }
     /// The orphan-domain row of one serial. This engine holds no orphan
     /// while `orphan_seen` is false, so nothing is read then.
@@ -163,16 +167,6 @@ impl Overlay {
             &[&ns, &serial, &next],
             24,
         )?;
-        // A generation cursor that already skipped this independent source
-        // does not restart. The orphan's last reference owns targeted cleanup.
-        self.enqueue(ns, SERIAL_RETIRE, serial, gen)?;
-        self.execute(
-            StatementKind::Reclaim,
-            "UPDATE maintenance SET ready=1 WHERE ns=?1 AND kind=?2 AND resource=?3 AND target=?4",
-            &[&ns, &SERIAL_RETIRE, &serial, &gen],
-            32,
-        )?;
-        self.maintenance_ready.set(true);
         Ok(())
     }
     /// One current descriptor-read window. Its independent reader/source

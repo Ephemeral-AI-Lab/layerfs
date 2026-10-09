@@ -76,9 +76,15 @@ impl Overlay {
         self.require_native_live(mount)?;
         Ok(state)
     }
-    pub(crate) fn check_native_attached(&self, mount: NativeMount) -> OverlayResult<()> {
-        self.state(mount.route)?;
-        self.require_native_live(mount)
+    /// This mount attached to its Workspace, closed or not, and the
+    /// Workspace row read for it.
+    pub(crate) fn check_native_attached(
+        &self,
+        mount: NativeMount,
+    ) -> OverlayResult<WorkspaceState> {
+        let state = self.state(mount.route)?;
+        self.require_native_live(mount)?;
+        Ok(state)
     }
     fn require_native_live(&self, mount: NativeMount) -> OverlayResult<()> {
         if self.native_mount_state(mount)? != NativeMountState::Live {
@@ -351,7 +357,7 @@ impl Overlay {
             return Err(OverlayError::Invalid("zero native forget"));
         }
         self.atomic_cleanup(|| {
-            self.check_native_attached(mount)?;
+            let state = self.check_native_attached(mount)?;
             let (owner, held, implicit) = self
                 .native_lookup_row(mount, serial)?
                 .ok_or(OverlayError::Stale)?;
@@ -373,7 +379,8 @@ impl Overlay {
                     32,
                 )?;
             }
-            self.queue_closed(mount.route)
+            // The release changes no lifecycle, capture or base reader.
+            self.queue_closed_at(mount.route, &state)
         })
     }
     /// Call only after detach and complete native/service consumer drain. The

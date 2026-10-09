@@ -51,18 +51,16 @@ impl Overlay {
                 .pop()
                 .ok_or(OverlayError::Stale)?;
             if left == 0 {
-                let ready = self.maintenance_ready.get();
-                // The queued item is the exact fallback for whatever the
-                // inline steps below leave.
+                // An orphan's last reference finishes it in this job, once a
+                // job; what that leaves, and every other file, is queued.
+                if self.orphan_seen.get() && self.release_step.get() {
+                    if let Some(orphan) = self.orphan(ns, serial)? {
+                        self.release_step.set(false);
+                        return self.finish_release(ns, serial, orphan);
+                    }
+                }
                 self.enqueue(ns, crate::maintenance::ORPHAN, serial, -1)?;
                 self.wake_orphan(ns, serial)?;
-                if self.orphan_seen.get()
-                    && self.release_step.get()
-                    && self.orphan(ns, serial)?.is_some()
-                {
-                    self.release_step.set(false);
-                    self.finish_release(ns, serial, ready)?;
-                }
             }
         }
         Ok(())
