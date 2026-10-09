@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD a0ae8b522, uncommitted product/test paths=1, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/reclaim_cost-962cbcf761e6a7b8 --test-threads=1 --nocapture (cwd core/crates/layerfs-overlay)
+
+running 1 test
+test a_closed_namespace_is_reclaimed_in_pages_of_one_delete_beside_a_live_namespace ... R7_RECLAIM_COST files=[(Cost { steps: 21, all: 312, attempts: 249, executions: 444, rows: 207, widest: (64, 438) }, 193), (Cost { steps: 41, all: 988, attempts: 865, executions: 1636, rows: 783, widest: (64, 504) }, 769)]
+R7_RECLAIM_COST cells=[(Cost { steps: 19, all: 174, attempts: 117, executions: 184, rows: 79, widest: (14, 57344) }, 65), (Cost { steps: 33, all: 436, attempts: 337, executions: 596, rows: 271, widest: (14, 57344) }, 257)]
+R7_RECLAIM_COST runs=[(Cost { steps: 22, all: 133, attempts: 67, executions: 78, rows: 23, widest: (2, 32768) }, 9), (Cost { steps: 46, all: 277, attempts: 139, executions: 174, rows: 47, widest: (2, 32768) }, 33)]
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

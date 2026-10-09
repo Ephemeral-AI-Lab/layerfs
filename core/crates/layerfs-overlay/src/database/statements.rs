@@ -154,6 +154,14 @@ pub(crate) const INDEXED_OPERATION_RECORD_KEYS_AFTER: &str =
     "SELECT key FROM indexed_operation_record
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key>?5
     ORDER BY key LIMIT 64";
+/// Every record of one operation up to one key, in one statement.
+pub(crate) const INDEXED_OPERATION_RECORD_DELETE_OPERATION: &str =
+    "DELETE FROM indexed_operation_record
+    WHERE ns=?1 AND operation=?2 AND (file_scope,kind,key)<=(?3,?4,?5)";
+/// Every record of one namespace up to one key, in one statement.
+pub(crate) const INDEXED_OPERATION_RECORD_DELETE_NAMESPACE: &str =
+    "DELETE FROM indexed_operation_record
+    WHERE ns=?1 AND (operation,file_scope,kind,key)<=(?2,?3,?4,?5)";
 pub(crate) const INDEXED_OPERATION_RECORD_RECLAIM_OPERATION: &str =
     "SELECT file_scope,kind,key,length(value)
     FROM indexed_operation_record WHERE ns=?1 AND operation=?2 ORDER BY file_scope,kind,key LIMIT 64";

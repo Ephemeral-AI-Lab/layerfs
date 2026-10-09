@@ -46,26 +46,39 @@ impl Overlay {
                 decode,
             )?
         };
+        // One statement deletes every record up to the last one that fits.
         let (mut count, mut bytes) = (0, 0);
-        for record in records {
+        let mut last = None;
+        for record in &records {
             if bytes + record.bytes > OPERATION_RECORD_BYTES as u64 {
                 break;
             }
-            self.execute(
-                StatementKind::Reclaim,
-                sql::INDEXED_OPERATION_RECORD_DELETE,
-                &[
-                    &ns,
-                    &record.operation,
-                    &record.file_scope,
-                    &record.kind,
-                    &record.key,
-                ],
-                64,
-            )?;
             count += 1;
             bytes += record.bytes;
+            last = Some(record);
         }
+        let Some(last) = last else {
+            return Ok((0, 0));
+        };
+        let bound = 32 + (last.file_scope.len() + last.key.len()) as u64;
+        // Both statements bind the same key; one stays inside its operation.
+        let through = if operation.is_some() {
+            sql::INDEXED_OPERATION_RECORD_DELETE_OPERATION
+        } else {
+            sql::INDEXED_OPERATION_RECORD_DELETE_NAMESPACE
+        };
+        self.execute(
+            StatementKind::Reclaim,
+            through,
+            &[
+                &ns,
+                &last.operation,
+                &last.file_scope,
+                &last.kind,
+                &last.key,
+            ],
+            bound,
+        )?;
         Ok((count, bytes))
     }
 }
