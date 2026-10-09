@@ -4,9 +4,18 @@
 
 R7 update, 2026-10-09: native LOOKUP, GETATTR and mutations no longer open a
 base-source window. They are served by owner visits that record no source;
-see [native read custody](73-native-read-custody.md). The windows described
-here remain for caller sources, file reads, OPEN, OPENDIR and directory
-enumeration.
+see [native read custody](73-native-read-custody.md). Later the same day
+native OPEN, OPENDIR, READ, READLINK and directory enumeration stopped
+opening one as well. The windows described here remain for caller sources
+and the ordinary Workspace file read.
+
+Contract, owner decision 2026-10-09: `base_readers` counts the windows that
+remain and nothing else. An in-flight native READ, READLINK, OPEN or
+directory read holds no `base_readers` count and no SQL custody row, so a
+zero count is install readiness and not proof that no request reads a base
+root. Anything that collects Store objects or releases a base root must
+fence through the mount's dispatcher drain first; see
+[native read custody](73-native-read-custody.md).
 
 Schema6 adds `base_source(ns,owner,base_root)` and a maintained Workspace
 `base_readers` count. Acquire/release update both atomically. Tokens contain the

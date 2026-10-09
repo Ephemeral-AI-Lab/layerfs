@@ -3,6 +3,24 @@
 > **Status:** Implemented R2 component on parent78374ced6,2026-10-08.
 > Native Fuse activation, Ready and normal drain remain open.
 
+**Contract for anything that collects Store objects or releases a base
+root (owner decision 2026-10-09).** An in-flight READ, READLINK, OPEN or
+directory read holds no `base_readers` count and no SQL custody row. Between
+its owner visit and its reply it is known only to its mount's dispatcher
+lane (`admitted`) and, while it reads, to one Store reader lease; the engine
+cannot see it, so `base_readers == 0`, an empty source table and a
+`revoke_native_mount` that would succeed do not show that no request is
+reading a base root. Anything that collects Store objects or releases a base
+root must first fence through the mount's dispatcher drain (admission or
+service stopped, then `received == 0 && admitted == 0`), which is what
+Unmount and Force do before `Revoke`. Nothing does either today: there is no
+content GC, and an install keeps the earlier root's objects, so a read that
+named the earlier root is rebound to it and never mixed. This line binds
+future work; it describes no existing collector. Staged by
+[`store_read_drain.rs`](../../crates/layerfs-daemon/tests/store_read_drain.rs)
+and
+[`mounted_store_read.rs`](../../crates/layerfs-daemon/tests/mounted_store_read.rs).
+
 R7 update, 2026-10-09 (OPEN): **OPEN of a regular file is one owner visit
 that writes its descriptor and nothing else.** The job is the visit LOOKUP
 and GETATTR use (`NativeJob::ObserveVisit`, class Read), made by
