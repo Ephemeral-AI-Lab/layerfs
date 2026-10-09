@@ -1778,3 +1778,57 @@ Observations to carry:
   preallocated tail is established from the committed length when the file
   grows, so the final tail position depends on when the last growth was
   admitted. Logical size is equal.
+
+## Step 7 — B04, B07: FLUSH, FSYNC and FSYNCDIR answered `ENOSYS` once
+
+Cause: C01's command carries 2000 FLUSH requests (one per `close` of the
+CREATE descriptor and of the shell's duplicate) that only acknowledge: the
+mount has no writeback cache and no POSIX locks, so FLUSH has nothing to
+publish. Expected: 5 requests per created file, from the kernel's `no_flush`
+rule (an `ENOSYS` reply ends the opcode for the connection and the caller is
+returned success). Evidence: receipt 298 opcode counts.
+
+Change (commit `4dfec5c75`): the three callbacks reply `ENOSYS` through the
+ordinary refusal path. No owner job, no parked step, no handle lookup. The
+acknowledgement they returned before claimed nothing a caller could rely on
+(Disposable profile, no `fsync` on Workspace backing), and the kernel's own
+success after `ENOSYS` claims the same. Architecture notes 76 and 77 updated.
+
+Big-O: requests per `close` 1 → 0 after the first of the connection;
+requests per `fsync` likewise. Nothing else changes order.
+
+Checks at `4dfec5c75`: Fuse host suite (300), daemon Linux suite (299; one
+mounted assertion on the inline count adapted to the refusal count, attempt
+2 PASS), Clippy host and Linux, fmt, boundary guard.
+
+**308 — C01:B:L at `4dfec5c75`, one sample, exploratory.** Row DIAGNOSTIC,
+verifier PASS, custody KNOWN_STOP, cleanup Gone, gaps none.
+
+| Measure | 298 at `4398c013c` | 308 at `4dfec5c75` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 585850167 | 479159333 | −106690834 (−18.2 %) |
+| Mount / unmount ns | 10559625 / 4391542 | 9554209 / 5820583 | |
+| Requests | 7000 | 5001 | −1999 |
+| — Flush | 2000 | 1 (refused) | |
+| Owner jobs | 7001 | 7001 | 0 |
+| — Read / Mutation / Lifecycle | 2000 / 2000 / 3001 | 2000 / 2000 / 3001 | |
+| Statement executions | 119005 | 119005 | 0 |
+| Owner service ns | 253122866 | 234279150 | −18843716 |
+| — Read / Mutation / Lifecycle | | 27063743 / 148443404 / 58772003 | |
+| Owner queue wait ns | 47363124 | 43606770 | −3756354 |
+| — Read / Mutation / Lifecycle | | 42002518 / 796729 / 807523 | |
+| Command minus owner wait and service | 285364177 | 201273413 | −84090764 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 561152 / 269000704 | 561152 / 269000704 | 0 |
+| `peak_credited_bytes` / `scheduler_bytes` | 46581 / 25896 | 46581 / 25896 | 0 |
+| Daemon VmHWM | 47738880 | 47755264 | +16384 |
+
+KEPT. Command against target: 479.2 ms against A2's 183.4 ms, 2.6 times
+slower. Each removed request was worth 53 µs of command time (42 µs outside
+the owner), which prices the five that remain at about 210 µs before any
+SQL: the product cannot reach 183 µs per file by statement work alone.
+
+Per created file now: 5 requests, 7 owner jobs, 5 write transactions, 119
+statement executions; owner service 234 µs (Mutation 74 µs a job, Lifecycle
+19.6 µs, Read 13.5 µs), owner wait 43.6 µs (all of it the two Read jobs that
+arrive while a post-reply job holds the connection), outside 201 µs.
