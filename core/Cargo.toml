@@ -26,7 +26,6 @@ members = [
 exclude = [
     "vendor/fuser-0.18.0",
     "crates/layerfs-workspace-legacy",
-    "crates/layerfs-bridge-legacy",
 ]
 
 [workspace.package]

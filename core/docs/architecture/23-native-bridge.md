@@ -88,10 +88,15 @@ before real macOS Store calls. These are capability/local integration proofs;
 object/history/control codecs, multiplexing, credits, fair dispatch and disconnect/
 restart custody remain required. The pinned fuser timestamp gate is unaffected.
 
-The predecessor is preserved intact in excluded layerfs-bridge-legacy, with only
-manifest identity changed. Its 6,834 production LOC remain counted. Retired
-deadlines, timeout retry loop and prepared-construction routes are no active
-dependency/fallback. S11 removes it after replacement coverage.
+The predecessor was preserved intact in excluded `layerfs-bridge-legacy`, with
+only manifest identity changed, while this crate was built. R7-retire removed
+that directory on 2026-10-10 as retirement, 6834 production lines, after its
+[coverage audit](../issues/307/checks/r7-retire-20261010/15-layerfs-bridge-legacy.md)
+and by owner authorization; its last source is at `b56950220`. Its retired
+deadlines, timeout retry loop and prepared-construction routes were no active
+dependency or fallback. Its pinned read-only view records have no active
+replacement: 303/08 O-10 is deferred, and a kept feature needs a new design on
+the SQLite overlay.
 
 The subsequent [runtime wire ownership](40-runtime-wire-ownership.md) checkpoint
 adds actual contract/codec/native fragmentation and shared partial/result credits,
