@@ -2,7 +2,7 @@
 use std::{any::Any, error::Error, fmt, future::Future, io, pin::Pin};
 
 pub const HANDOFFS: usize = 16;
-pub const RECEIVE_SLOTS: usize = 2;
+pub const RECEIVE_SLOTS: usize = 1;
 /// Largest copied data window plus two maximum length namespace components.
 pub const MAX_INPUT_BYTES: usize = layerfs_overlay::WRITE_WINDOW + 2 * 255;
 
