@@ -33,6 +33,8 @@ def roots(arm):
 
 def relevant(relative, arm):
     path = Path(relative)
+    if path.name == ".DS_Store":
+        return False
     if any(part in IGNORED_DIRECTORIES for part in path.parts):
         return False
     selected = any(path == Path(root) or Path(root) in path.parents for root in roots(arm))

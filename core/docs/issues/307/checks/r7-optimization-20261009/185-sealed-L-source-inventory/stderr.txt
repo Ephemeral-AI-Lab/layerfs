@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/source_inventory.py", line 164, in <module>
+    main()
+    ~~~~^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/source_inventory.py", line 158, in main
+    value = seal(args.root,args.arm,args.output)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/source_inventory.py", line 121, in seal
+    records = collect(root,arm)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/source_inventory.py", line 107, in collect
+    assert_clean(root,arm,selected)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/source_inventory.py", line 76, in assert_clean
+    require(not untracked, "untracked relevant source input: " + repr(untracked[:5]))
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/source_inventory.py", line 26, in require
+    raise ValueError(reason)
+ValueError: untracked relevant source input: ['core/crates/.DS_Store', 'core/crates/layerfs-content/.DS_Store', 'core/crates/layerfs-content/src/.DS_Store', 'core/crates/layerfs-content/src/file/.DS_Store']
+R4_WALL seconds<=1 limit=30s lock_wait=0s

@@ -934,3 +934,32 @@ The full core suites remain host200/263, Linux60/263 executed with the explicit
 034 gap. Current compiled Rust identities remain unchanged. Harness checkpoint,
 actual native references, K/W runner proofs, final source seals and Stage0 full
 matrix still pending. No performance sample or accepted optimization iteration.
+
+## Local commit9 — harness checkpoint
+
+e1f6d557bf8654206867f217d189fe93042c610f commits the reviewed harness, tests,
+guides and immutable campaign receipts through184. Counted tree
+790a93031316f7a0ef02f664ceea81b884fbffd2. Exact staged and committed comparisons
+core/target/r7-loc-08-staged.json and r7-loc-08-committed.json agree:
+Production LOC185857 ->185857 (delta+0), core120440, active77566, excluded
+predecessors38878, excluded integration3996, root reference65417. Pinned counter
+c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb;
+independent first-parent/staged/committed git archives, product Rust/shipped SQL
+with inline/transitive tests, comments/blanks, harness/docs/tools/third-party
+excluded. Product tree remains6a03560dfecd7e322c5592a3ef0673ff190aef2a.
+No product optimization, migration or retirement is implied. Four protected
+untracked handoff/confirmation files remain unstaged. Local main only, no push/PR.
+
+Stage0 remains IN_PROGRESS. Next: seal actual relevant source bytes and build
+provenance, author first native reference, exercise actual K/W runner, retain all
+matrix outcomes and continue to baseline/optimization. Source review/tests are
+not numerical qualification; zero performance samples and accepted iterations.
+
+185 FAILED source admission in318491542 ns before writing a seal: the core
+source-specific branch incorrectly included Finder .DS_Store metadata, bypassing
+the common exclusion. Four such pre-existing files were reported; no product
+source includes them. Lead excluded that exact metadata filename before the
+product branch, preserving required shipped inputs of other extensions. No
+metadata file was removed or staged. 186 passed7 source-classification tests in
+182583125 ns. The original failed seal is retained, not silently replayed or
+declared clean. This correction needs a new local harness identity before seals.

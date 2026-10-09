@@ -26,6 +26,14 @@ class SourceInventoryContract(unittest.TestCase):
         self.assertTrue(source_inventory.relevant("core/crates/layerfs-content/src/embedded.bin","L"))
         self.assertFalse(source_inventory.relevant("core/crates/layerfs-content/tests/fixture.rs","L"))
 
+    def test_finder_metadata_is_not_a_source_operand_in_product_or_harness(self):
+        for path in ("core/crates/.DS_Store", "core/crates/layerfs-content/.DS_Store",
+                     "core/crates/layerfs-content/src/file/.DS_Store",
+                     "core/benchmark/r7-runtime/.DS_Store"):
+            for arm in ("L", "N", "P"):
+                self.assertFalse(source_inventory.relevant(path, arm))
+        self.assertTrue(source_inventory.relevant("core/crates/layerfs-content/runtime/format.codec", "L"))
+
     def test_same_length_byte_edit_changes_source_set(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

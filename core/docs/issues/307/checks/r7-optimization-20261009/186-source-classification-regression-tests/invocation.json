@@ -1,0 +1,23 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "e1f6d557bf8654206867f217d189fe93042c610f",
+  "source_tree": "790a93031316f7a0ef02f664ceea81b884fbffd2",
+  "worktree_status": "M core/benchmark/fs-bench-pro/r7/source_inventory.py\n M core/benchmark/fs-bench-pro/r7/test_source_inventory.py\n M core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/185-sealed-L-source-inventory/",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/benchmark/fs-bench-pro/r7",
+    "-p",
+    "test_source_inventory.py"
+  ],
+  "limit_seconds": 90,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}
