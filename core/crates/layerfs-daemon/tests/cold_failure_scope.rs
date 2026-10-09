@@ -459,7 +459,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
             4,
             serial,
             Some(handle),
-            NativeReadOperation::Getattr { serial },
+            NativeReadOperation::Data { serial },
         )
         .read_file(0, READ_WINDOW as u32),
     )
@@ -480,7 +480,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
         5,
         serial,
         Some(handle),
-        NativeReadOperation::Getattr { serial },
+        NativeReadOperation::Data { serial },
     );
     let listed = rig.read(
         services.clone(),

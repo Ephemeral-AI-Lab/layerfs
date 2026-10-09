@@ -11,10 +11,25 @@ use std::{fmt, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub enum NativeReadOperation {
-    Lookup { parent: u64, name: PathName },
-    Getattr { serial: u64 },
-    Open { serial: u64, writable: bool },
-    Opendir { serial: u64 },
+    Lookup {
+        parent: u64,
+        name: PathName,
+    },
+    /// Attributes only: no independent read is retained.
+    Getattr {
+        serial: u64,
+    },
+    /// The target of a READ or READLINK, with the read its bytes come from.
+    Data {
+        serial: u64,
+    },
+    Open {
+        serial: u64,
+        writable: bool,
+    },
+    Opendir {
+        serial: u64,
+    },
 }
 #[derive(Clone, Debug)]
 pub struct NativeReadJob {
@@ -46,7 +61,8 @@ pub struct NativeReadPlan {
 #[derive(Debug)]
 pub struct NativeReadValue {
     pub stat: ViewStat,
-    pub read: FileRead,
+    /// Absent for LOOKUP and GETATTR, whose reply carries no bytes.
+    pub read: Option<FileRead>,
     pub file: Option<OpenFile>,
     pub directory: Option<NativeDirectory>,
     pub original: Arc<NativeReadOutcome>,
@@ -74,6 +90,13 @@ impl NativeReadJob {
     pub const fn source(&self) -> BaseSource {
         self.source
     }
+    /// Whether a positive answer comes with an independent read.
+    const fn retains_read(&self) -> bool {
+        !matches!(
+            self.operation,
+            NativeReadOperation::Lookup { .. } | NativeReadOperation::Getattr { .. }
+        )
+    }
     pub fn charge(&self) -> usize {
         self.facts.charge() + 255
     }
@@ -89,8 +112,12 @@ impl NativeReadJob {
             db.observe_native_directory(self.mount, self.source, |rows, protected| {
                 self.decide_on(rows, protected)
             })
+        } else if matches!(self.operation, NativeReadOperation::Data { .. }) {
+            db.observe_native(self.mount, self.source, false, |rows, protected| {
+                self.decide_on(rows, protected)
+            })
         } else {
-            db.observe_native(self.mount, self.source, lookup, |rows, protected| {
+            db.observe_native_attributes(self.mount, self.source, lookup, |rows, protected| {
                 self.decide_on(rows, protected)
             })
         }
@@ -103,6 +130,7 @@ impl NativeReadJob {
         let wanted = match self.operation {
             NativeReadOperation::Lookup { parent, .. } => parent,
             NativeReadOperation::Getattr { serial }
+            | NativeReadOperation::Data { serial }
             | NativeReadOperation::Open { serial, .. }
             | NativeReadOperation::Opendir { serial } => serial,
         };
@@ -142,7 +170,9 @@ impl NativeReadJob {
     fn decide(&self, eval: &mut Eval<'_>) -> WorkspaceResult<Option<Inode>> {
         match &self.operation {
             // The source's independent read reference permits removed metadata.
-            NativeReadOperation::Getattr { serial } => eval.target(*serial),
+            NativeReadOperation::Getattr { serial } | NativeReadOperation::Data { serial } => {
+                eval.target(*serial)
+            }
             NativeReadOperation::Opendir { serial } => eval.directory(*serial),
             // The kernel names an inode it still references. A file whose
             // last name is gone stays openable under that reference, so a
@@ -213,8 +243,9 @@ impl NativeReadPlan {
         let previous = std::mem::replace(&mut self.stage, NativeReadStage::Finished);
         if previous == NativeReadStage::Owner {
             match (&original.result, &original.decision) {
-                (Ok(Some(read)), Some(NativeReadDecision::Value(inode)))
-                    if read.serial() == inode.serial =>
+                (Ok(read), Some(NativeReadDecision::Value(inode)))
+                    if read.is_some() == self.job.retains_read()
+                        && read.is_none_or(|read| read.serial() == inode.serial) =>
                 {
                     return Ok(Some(NativeReadValue {
                         stat: inode.clone().into(),

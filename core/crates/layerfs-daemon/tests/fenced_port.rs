@@ -289,10 +289,10 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
         4,
         serial,
         Some(handle),
-        NativeReadOperation::Getattr { serial },
+        NativeReadOperation::Data { serial },
     ))
     .unwrap();
-    let read = held.value().unwrap().read;
+    let read = held.value().unwrap().read.unwrap();
     let reply = wait(services.directory_read(directory, 5, 0)).unwrap();
     let directory_read = Arc::new(reply.get().as_ref().clone());
     drop(reply);

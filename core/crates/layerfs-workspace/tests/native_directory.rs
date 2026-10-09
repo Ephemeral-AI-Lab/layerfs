@@ -44,7 +44,7 @@ fn open(b: &Bench, mount: NativeMount, request: u64, serial: u64) -> NativeDirec
         serial,
         NativeReadOperation::Opendir { serial },
     );
-    b.overlay.release_file_read(value.read).unwrap();
+    b.overlay.release_file_read(value.read.unwrap()).unwrap();
     value.directory.unwrap()
 }
 #[test]
@@ -174,7 +174,7 @@ fn opened_directory_retains_parent_and_metadata_after_forget_and_rmdir() {
         },
     );
     assert_eq!(value.stat.serial, serial);
-    b.overlay.release_file_read(value.read).unwrap();
+    assert_eq!(value.read, None);
     let directory = open(&b, mount, 2, serial);
     b.overlay.forget_native(mount, serial, 1).unwrap();
     b.applied(rmdir(1, "empty"), T2);
@@ -216,7 +216,7 @@ fn next_directory_read_observes_parent_moved_by_the_atomic_namespace_job() {
             name: common::name("moving"),
         },
     );
-    b.overlay.release_file_read(value.read).unwrap();
+    assert_eq!(value.read, None);
     let directory = open(&b, mount, 2, serial);
     b.overlay.forget_native(mount, serial, 1).unwrap();
     let before = b

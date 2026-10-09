@@ -23,12 +23,17 @@ association and its lease. Copying a capability creates no ownership.
 [Workspace NativeReadPlan](../../crates/layerfs-workspace/src/operations/native_read.rs)
 uses the existing Eval/BaseFacts/Need semantics. Owner rounds perform bounded
 current-row decisions and request missing immutable facts; Base rounds run those
-demands outside SQL. Final positive lookup selects its inode, increments nlookup
-and retains an independent FileRead in one atomic transaction. Getattr uses the
-same observation without adding a kernel lookup. The existing source protects
-removed metadata, so a previously received getattr can report nlink0. A final
-negative/refusal is marked decided and acquires no FileRead. An original request
-cannot perform a second final decision.
+demands outside SQL. Final positive lookup selects its inode and increments
+nlookup in one atomic transaction. Getattr uses the same observation without
+adding a kernel lookup. Both replies carry attributes only, so neither retains
+a FileRead (`Overlay::observe_native_attributes`): the request's source and,
+for a lookup, the kernel reference taken in the same transaction are the only
+owners. The `Data` operation is the target of READ and READLINK; it runs the
+same decision and retains the independent FileRead its bytes are served
+from, as open and opendir do. The existing source protects removed metadata,
+so a previously received getattr can report nlink0. A final negative/refusal
+is marked decided and acquires no FileRead. An original request cannot perform
+a second final decision.
 
 [NativeObservation](../../crates/layerfs-overlay/src/lifetime/native_observation.rs)
 retains the original semantic decision separately from transaction completion.

@@ -192,7 +192,7 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
         6,
         serial,
         Some(handle),
-        NativeReadOperation::Getattr { serial },
+        NativeReadOperation::Data { serial },
     ))
     .unwrap();
     let data = wait(read.read_file(0, layerfs_overlay::READ_WINDOW as u32)).unwrap();
@@ -267,7 +267,7 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
         7,
         serial,
         Some(handle),
-        NativeReadOperation::Getattr { serial },
+        NativeReadOperation::Data { serial },
     ))
     .unwrap();
     let data = wait(read.read_file(0, layerfs_overlay::READ_WINDOW as u32)).unwrap();
@@ -551,7 +551,7 @@ fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credi
                     1000 + index as u64,
                     serial,
                     None,
-                    NativeReadOperation::Getattr { serial },
+                    NativeReadOperation::Data { serial },
                 )
                 .await
                 .unwrap();

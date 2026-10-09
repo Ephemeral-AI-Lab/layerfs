@@ -35,7 +35,10 @@ impl NativeRead {
     async fn data(self, offset: u64, length: u32, link: bool) -> Result<NativeData, ReadFailure> {
         let read = match self.value() {
             Ok(value) if value.file.is_none() && value.directory.is_none() => value.read,
-            _ => return Err(self.retain(Box::new(OverlayError::Invalid("native data answer")))),
+            _ => None,
+        };
+        let Some(read) = read else {
+            return Err(self.retain(Box::new(OverlayError::Invalid("native data answer"))));
         };
         let Self { value, mut custody } = self;
         custody.data_input = Some(if link {

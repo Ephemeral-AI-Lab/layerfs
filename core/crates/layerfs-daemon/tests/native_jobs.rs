@@ -164,11 +164,9 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
             .is_err()
     );
     let serial = value.stat.serial;
-    let read = value.read;
+    // A lookup answers with attributes only: there is no read to release.
+    assert_eq!(value.read, None);
     drop(value);
-    assert!(job(&client, route, Command::ReleaseFileRead(read))
-        .result()
-        .is_ok());
     assert!(job(&client, route, Command::ReleaseBaseSource(source))
         .result()
         .is_ok());
@@ -248,9 +246,13 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
         matches!(done.result(), Ok(Response::Native(NativeReply::RetainedFile(Some(retained)))) if *retained == file)
     );
     drop(done);
-    assert!(job(&client, route, Command::ReleaseFileRead(value.read))
-        .result()
-        .is_ok());
+    assert!(job(
+        &client,
+        route,
+        Command::ReleaseFileRead(value.read.unwrap())
+    )
+    .result()
+    .is_ok());
     assert!(job(&client, route, Command::ReleaseBaseSource(source))
         .result()
         .is_ok());
@@ -351,9 +353,13 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     }
     let (value, opened) = opened.expect("bounded directory open rounds");
     let directory = value.directory.unwrap();
-    assert!(job(&client, route, Command::ReleaseFileRead(value.read))
-        .result()
-        .is_ok());
+    assert!(job(
+        &client,
+        route,
+        Command::ReleaseFileRead(value.read.unwrap())
+    )
+    .result()
+    .is_ok());
     assert!(job(&client, route, Command::ReleaseBaseSource(source))
         .result()
         .is_ok());

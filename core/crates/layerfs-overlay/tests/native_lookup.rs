@@ -206,6 +206,63 @@ fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody(
 }
 
 #[test]
+fn attribute_only_decision_counts_the_lookup_and_retains_no_read() {
+    let f = Fixture::new();
+    let attributes = |request: u64, lookup: bool| {
+        let source = f.db.acquire_native_source(f.mount, request, 1).unwrap();
+        let before = f.db.diagnostics();
+        let outcome =
+            f.db.observe_native_attributes(f.mount, source, lookup, |_, protected| {
+                assert_eq!(protected, 1);
+                Ok(NativeDecision::Finished {
+                    inode: Some(inode(if lookup { 9 } else { 1 })),
+                    value: (),
+                })
+            });
+        let work = f.db.diagnostics().since(&before).total();
+        assert_eq!(outcome.result.unwrap(), None);
+        assert_eq!(outcome.candidate, None);
+        assert_eq!(f.db.retained_native_read(f.mount, request).unwrap(), None);
+        // The source decided once; nothing else is owed after its release.
+        assert!(matches!(
+            f.db.observe_native_attributes(
+                f.mount,
+                source,
+                lookup,
+                |_, _| -> Result<NativeDecision<()>, OverlayError> {
+                    panic!("replayed deciding job")
+                }
+            )
+            .result,
+            Err(OverlayError::Stale)
+        ));
+        f.db.release_base_source(source).unwrap();
+        work.executions
+    };
+    // A positive LOOKUP still takes its kernel reference in the same job.
+    let lookup = attributes(1, true);
+    assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(1));
+    let getattr = attributes(2, false);
+    assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(1));
+    // The same decision with a retained read runs strictly more statements.
+    let source = f.db.acquire_native_source(f.mount, 3, 1).unwrap();
+    let before = f.db.diagnostics();
+    let outcome = f.db.observe_native(f.mount, source, false, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(inode(1)),
+            value: (),
+        })
+    });
+    let with_read = f.db.diagnostics().since(&before).total().executions;
+    f.db.release_file_read(outcome.result.unwrap().unwrap())
+        .unwrap();
+    f.db.release_base_source(source).unwrap();
+    assert!(getattr < with_read, "{getattr} >= {with_read}");
+    println!("ATTRIBUTE-ONLY statements lookup={lookup} getattr={getattr} with_read={with_read}");
+    f.db.forget_native(f.mount, 9, 1).unwrap();
+    f.db.revoke_native_mount(f.mount).unwrap();
+}
+#[test]
 fn aggregate_forget_is_checked_and_implicit_root_is_independent() {
     let f = Fixture::new();
     assert_eq!(f.db.native_lookup_count(f.mount, 1).unwrap(), Some(0));

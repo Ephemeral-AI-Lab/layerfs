@@ -19,7 +19,20 @@ impl Overlay {
         lookup: bool,
         decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
-        self.observe_native_inner(mount, source, lookup, None, decide)
+        self.observe_native_inner(mount, source, lookup, true, None, decide)
+    }
+    /// The same deciding transaction for a reply that carries attributes only
+    /// (LOOKUP, GETATTR): the answer and a positive lookup increment are
+    /// atomic, and no independent read is retained because no byte is served
+    /// from this observation.
+    pub fn observe_native_attributes<T>(
+        &self,
+        mount: NativeMount,
+        source: BaseSource,
+        lookup: bool,
+        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
+    ) -> NativeObservation<T> {
+        self.observe_native_inner(mount, source, lookup, false, None, decide)
     }
     /// Like a native stat observation, but retains a regular OpenFile in the
     /// deciding transaction. A removed file stays openable: the source's
@@ -35,6 +48,7 @@ impl Overlay {
             mount,
             source,
             false,
+            true,
             Some(NativeOpen::File(writable)),
             decide,
         )
@@ -46,13 +60,21 @@ impl Overlay {
         source: BaseSource,
         decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
-        self.observe_native_inner(mount, source, false, Some(NativeOpen::Directory), decide)
+        self.observe_native_inner(
+            mount,
+            source,
+            false,
+            true,
+            Some(NativeOpen::Directory),
+            decide,
+        )
     }
     fn observe_native_inner<T>(
         &self,
         mount: NativeMount,
         source: BaseSource,
         lookup: bool,
+        read: bool,
         open: Option<NativeOpen>,
         decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
@@ -131,6 +153,9 @@ impl Overlay {
                     }
                     directory_candidate =
                         Some(self.retain_native_directory(mount, &request, inode.serial)?);
+                }
+                if !read {
+                    return Ok(());
                 }
                 // Negative keys reserve an internal request domain without colliding
                 // with public positive FileRead request IDs. The owner is still the

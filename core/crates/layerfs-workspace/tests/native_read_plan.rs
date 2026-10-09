@@ -33,7 +33,8 @@ fn lookup(b: &Bench, mount: NativeMount, request: u64, name: &str) -> u64 {
     let value = final_value.expect("bounded lookup rounds");
     assert_eq!(plan.stage(), NativeReadStage::Finished);
     let serial = value.stat.serial;
-    b.overlay.release_file_read(value.read).unwrap();
+    // A lookup answers with attributes only and retains no read.
+    assert_eq!(value.read, None);
     b.overlay.release_base_source(source).unwrap();
     serial
 }
@@ -97,7 +98,7 @@ fn processing_source_survives_forget_and_last_name_removal_before_getattr() {
     b.applied(unlink(1, "file"), T2);
     b.applied(unlink(1, "alias"), T2);
     let mut plan = view
-        .native_read_plan(mount, NativeReadOperation::Getattr { serial })
+        .native_read_plan(mount, NativeReadOperation::Data { serial })
         .unwrap();
     let value = plan
         .accept(Arc::new(plan.job().unwrap().perform(&b.overlay)))
@@ -109,10 +110,10 @@ fn processing_source_survives_forget_and_last_name_removal_before_getattr() {
     b.overlay.close(b.route()).unwrap();
     assert!(b
         .overlay
-        .source_inode(value.read.source(), serial)
+        .source_inode(value.read.unwrap().source(), serial)
         .unwrap()
         .is_some());
-    b.overlay.release_file_read(value.read).unwrap();
+    b.overlay.release_file_read(value.read.unwrap()).unwrap();
     b.overlay.release_base_source(source).unwrap();
     b.overlay.revoke_native_mount(mount).unwrap();
     assert_eq!(
@@ -150,7 +151,7 @@ fn native_open_retains_removed_metadata_after_last_lookup_and_handle_release() {
     }
     let opened = opened.expect("bounded open fact rounds");
     let file = opened.file.unwrap();
-    b.overlay.release_file_read(opened.read).unwrap();
+    b.overlay.release_file_read(opened.read.unwrap()).unwrap();
     b.overlay.release_base_source(source).unwrap();
     b.overlay.forget_native(mount, serial, 1).unwrap();
     b.applied(unlink(1, "file"), T2);
@@ -165,7 +166,7 @@ fn native_open_retains_removed_metadata_after_last_lookup_and_handle_release() {
         .unwrap();
     let view = b.workspace.view_for_source(source).unwrap();
     let mut plan = view
-        .native_read_plan(mount, NativeReadOperation::Getattr { serial })
+        .native_read_plan(mount, NativeReadOperation::Data { serial })
         .unwrap();
     let value = plan
         .accept(Arc::new(plan.job().unwrap().perform(&b.overlay)))
@@ -174,7 +175,7 @@ fn native_open_retains_removed_metadata_after_last_lookup_and_handle_release() {
     assert_eq!(value.stat.namespace_refs, 0);
     assert_eq!(value.stat.serial, serial);
     assert_eq!(value.file, None);
-    b.overlay.release_file_read(value.read).unwrap();
+    b.overlay.release_file_read(value.read.unwrap()).unwrap();
     b.overlay.release_base_source(source).unwrap();
     b.overlay.revoke_native_mount(mount).unwrap();
 }

@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 7fb1ef3a2, uncommitted product/test paths=11, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/cold_failure_scope-bd5834c6dd9aab4d --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause ... ok
+test an_owner_job_failure_is_not_a_base_demand_and_is_still_retained ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

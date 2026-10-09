@@ -108,7 +108,7 @@ impl Filesystem for NativeFilesystem {
             req.unique().0,
             serial,
             None,
-            NativeReadOperation::Getattr { serial },
+            NativeReadOperation::Data { serial },
             reply,
         );
     }
@@ -161,7 +161,7 @@ impl Filesystem for NativeFilesystem {
             req.unique().0,
             serial,
             Some(handle.0),
-            NativeReadOperation::Getattr { serial },
+            NativeReadOperation::Data { serial },
             reply,
         );
     }

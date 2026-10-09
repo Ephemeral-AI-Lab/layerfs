@@ -1247,3 +1247,44 @@ not diagnosed.
 
 Ratios after step 1: 16 owner jobs per created file, 2.29 per FUSE request,
 3.2 per handed-off request; 334 statements per created file.
+
+## Step 2 — C04: attribute-only requests retain no FileRead
+
+Cause, from source: every positive decision of a read-class request retained
+an independent FileRead (base source kind 1, `file_read`, lease and
+`native_read` rows) and Fuse released it in a separate Lifecycle job after
+the reply. LOOKUP and GETATTR reply with attributes only and never use it;
+only READ and READLINK serve bytes from it.
+
+Change: `Overlay::observe_native_attributes` runs the same deciding
+transaction without the read. Workspace `NativeReadOperation::Lookup` and
+`Getattr` use it; a new `Data { serial }` operation (READ, READLINK) keeps the
+previous behaviour. `NativeReadValue::read` is now `Option<FileRead>`. Open
+and opendir are unchanged.
+
+Expected count on C01: the GETATTR after each CREATE loses its release job,
+16 → 15 owner jobs per created file, and its deciding job runs fewer
+statements. Engine count test (`233-step2-attempt1-native_lookup.txt`):
+statements in the deciding job, getattr 25 → 13; positive lookup 22 without
+the read.
+
+Custody: for GETATTR the kernel already holds a reference on the target and
+the request's source holds its FileReader lease until release; for LOOKUP the
+kernel reference is taken in the deciding transaction. No byte is served from
+either reply. Gates by source review: less resident and stored state, not
+more (rows that are no longer written); no new table, index, column or file.
+
+Checks, one attempt each, all PASS:
+
+| Receipt (`233-step2-attempt1-…`) | Scope | Result |
+| --- | --- | --- |
+| `native_lookup.txt` | host, overlay | 8 passed, including the new attribute-only test |
+| `native_read_plan.txt`, `native_directory.txt` | host, Workspace | 4 and 3 passed |
+| `native_jobs.txt`, `fenced_port.txt`, `filesystem_port.txt`, `cold_failure_scope.txt` | host, daemon | 1, 4, 4 and 2 passed |
+| `linux-filesystem_port.txt` | Linux | 4 passed |
+| `linux-mounted_parking.txt`, `linux-native_application.txt`, `linux-native_coherence.txt`, `linux-native_mutation.txt` | Linux, real mount | 4, 1, 6 and 2 passed |
+
+Host Clippy `-D warnings` for overlay, workspace, fuse and daemon,
+`fmt --check` and the boundary guard passed. Tests that used GETATTR to obtain
+bytes now use `Data`; tests that released a lookup's read now assert there is
+none. Not run for this step: the full suites and Linux Clippy.
