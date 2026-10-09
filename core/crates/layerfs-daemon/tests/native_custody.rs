@@ -57,16 +57,20 @@ fn engine_mount(h: &Harness, route: Route) -> NativeMount {
     }
 }
 /// Every non-root path once by ordinary `lstat`: one positive LOOKUP each.
-fn walk(f: &fixture::Fixture, root: &Path) -> BTreeMap<u64, u64> {
+/// The names of each inode, and how many of the inodes are directories.
+fn walk(f: &fixture::Fixture, root: &Path) -> (BTreeMap<u64, u64>, u64) {
     let mut references = BTreeMap::new();
+    let mut directories = 0;
     for (path, _) in &f.metadata {
         if path.is_empty() {
             continue;
         }
-        let inode = fs::symlink_metadata(root.join(path)).unwrap().ino();
-        *references.entry(inode).or_insert(0) += 1;
+        let metadata = fs::symlink_metadata(root.join(path)).unwrap();
+        let names = references.entry(metadata.ino()).or_insert(0);
+        directories += u64::from(metadata.is_dir() && *names == 0);
+        *names += 1;
     }
-    references
+    (references, directories)
 }
 
 #[test]
@@ -97,16 +101,20 @@ fn kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement() {
 
     // 27 names over 26 inodes: the in-root hard link gives one inode two
     // kernel references, which the kernel must return in one FORGET unit.
-    let references = walk(&f, root);
+    let (references, directories) = walk(&f, root);
     let names: u64 = references.values().sum();
     let inodes = references.len() as u64;
+    // Each referenced inode has its lookup row and its file-custody row,
+    // and a directory its retained parent row. No `lease` row stands for a
+    // lookup reference.
+    let custody = 2 * inodes + directories;
     assert_eq!((names, inodes), (27, 26));
     assert!(references.values().any(|count| *count == 2));
     until("lookups quiescent", quiet);
     let looked = h.engine(helper);
     assert_eq!(
-        looked.owner_rows - baseline.owner_rows,
-        inodes,
+        looked.owner_details - baseline.owner_details,
+        custody,
         "one indexed lookup owner per live kernel inode: {baseline:?} {looked:?}"
     );
 
@@ -120,7 +128,7 @@ fn kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement() {
             .write(true)
             .open(RECLAIM)
             .and_then(|mut file| file.write_all(b"1G"));
-        quiet() && h.engine(helper).owner_rows == baseline.owner_rows
+        quiet() && h.engine(helper).owner_details == baseline.owner_details
     });
     let after = work();
     let returned = h.engine(helper);
@@ -135,17 +143,17 @@ fn kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement() {
         (after.retained, after.unadmitted, after.terminal),
         (0, 0, 0)
     );
-    assert_eq!(returned.owner_rows, baseline.owner_rows);
+    assert_eq!(returned.owner_details, baseline.owner_details);
     assert_eq!(h.phase(token), NativePhase::Ready);
     assert!(mount_entry(&ready.directory).is_some());
 
     // The connection is unchanged: the same names bind the same inodes again,
     // each through a new LOOKUP that reacquires exactly one reference.
-    assert_eq!(walk(&f, root), references);
+    assert_eq!(walk(&f, root), (references, directories));
     until("second lookups quiescent", quiet);
     assert_eq!(
-        h.engine(helper).owner_rows - baseline.owner_rows,
-        inodes,
+        h.engine(helper).owner_details - baseline.owner_details,
+        custody,
         "reacquired after FORGET"
     );
     assert_eq!(
@@ -155,7 +163,7 @@ fn kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement() {
     h.unmount(&ready);
     until("native ownership retired", || {
         let counts = h.engine(helper);
-        counts.namespaces == 1 && counts.owner_rows <= baseline.owner_rows
+        counts.namespaces == 1 && counts.owner_details <= baseline.owner_details
     });
     assert!(matches!(
         h.try_unmount(helper).unwrap().reply,

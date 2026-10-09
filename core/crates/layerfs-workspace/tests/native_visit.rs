@@ -415,7 +415,8 @@ fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
 
     // With its facts, read outside the owner, the next visit of the same
     // request decides and records the descriptor in its one transaction:
-    // one owner row more, no source, no base reader.
+    // its one row, which names the mount and the request, no source, no
+    // base reader.
     let mut facts = VisitFacts::default();
     facts.supply(&base, &needs, None).unwrap();
     let (Seen::Value(opened), Some(first)) = open(&b, empty(), mount, 30, 2, false, &facts) else {
@@ -432,10 +433,11 @@ fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
     assert_eq!(
         (
             after.1.owner_rows,
+            after.1.owner_details,
             after.1.source_rows,
             after.0.base_readers
         ),
-        (before.1.owner_rows + 1, 0, 0)
+        (before.1.owner_rows, before.1.owner_details + 1, 0, 0)
     );
     assert_eq!(b.overlay.retained_native_source(mount, 30).unwrap(), None);
     assert_eq!(b.overlay.retained_native_read(mount, 30).unwrap(), None);
@@ -510,8 +512,13 @@ fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
             .close_native_file(mount, descriptor.serial(), descriptor.owner_id())
             .unwrap();
     }
-    // What remains beyond the start is the created file's kernel reference.
-    assert_eq!(snapshot(&b).1.owner_rows, before.1.owner_rows + 1);
+    // What remains beyond the start is the created file's kernel reference:
+    // its lookup row and its custody row.
+    let left = snapshot(&b).1;
+    assert_eq!(
+        (left.owner_rows, left.owner_details),
+        (before.1.owner_rows, before.1.owner_details + 2)
+    );
     b.overlay.revoke_native_mount(mount).unwrap();
 }
 

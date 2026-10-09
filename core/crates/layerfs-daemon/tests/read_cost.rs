@@ -1112,8 +1112,8 @@ const READ_MIXED: Pinned = Pinned {
 };
 /// OPEN of a base file this daemon has seen: one visit decides over
 /// resident facts and writes the descriptor in its one transaction (the
-/// handle row, its lease, the file's open count and the request's
-/// association). Its row is read once. No source, no reader, no release.
+/// handle row, which names its mount and request, and the file's open
+/// count). Its row is read once. No source, no reader, no release.
 const OPEN_BASE: Pinned = Pinned {
     jobs: (1, 0, 0),
     grants: 0,
@@ -1124,7 +1124,7 @@ const OPEN_BASE: Pinned = Pinned {
         ("Commit", 1, 1),
         ("Workspace", 1, 1),
         ("Inode", 1, 1),
-        ("Lease", 4, 7),
+        ("Lease", 2, 3),
     ],
 };
 /// OPEN of a local file: the same visit, decided by the local row.
@@ -1138,7 +1138,7 @@ const OPEN_LOCAL: Pinned = Pinned {
         ("Commit", 1, 1),
         ("Workspace", 1, 1),
         ("Inode", 1, 1),
-        ("Lease", 4, 7),
+        ("Lease", 2, 3),
     ],
 };
 /// OPEN of a base file whose inode or length is not in memory: two visits
@@ -1153,7 +1153,7 @@ const OPEN_UNSEEN: Pinned = Pinned {
         ("Commit", 1, 1),
         ("Workspace", 2, 2),
         ("Inode", 2, 2),
-        ("Lease", 4, 7),
+        ("Lease", 2, 3),
     ],
 };
 /// RELEASE: one job, one transaction.
@@ -1166,7 +1166,7 @@ const RELEASE: Pinned = Pinned {
         ("Begin", 1, 1),
         ("Commit", 1, 1),
         ("Workspace", 1, 1),
-        ("Lease", 3, 7),
+        ("Lease", 2, 3),
     ],
 };
 /// READLINK of a base link: the visit, under the kernel's lookup reference,

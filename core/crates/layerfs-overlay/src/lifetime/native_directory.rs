@@ -48,12 +48,6 @@ impl Overlay {
             ],
             40,
         )?;
-        self.execute(
-            StatementKind::Lease,
-            "INSERT INTO lease VALUES(?1,7,?2,?3)",
-            &[&mount.route.ns, &integer(owner)?, &integer(serial)?],
-            24,
-        )?;
         self.file_ref(
             mount.route.ns,
             integer(serial)?,
@@ -140,12 +134,6 @@ impl Overlay {
             "UPDATE native_directory SET closed=1 WHERE ns=?1 AND owner=?2",
             &[&ns, &integer(directory.owner)?],
             16,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
-            &[&ns, &integer(directory.owner)?, &integer(directory.serial)?],
-            24,
         )?;
         self.file_ref(ns, integer(directory.serial)?, LeaseKind::FileHandle, false)?;
         self.queue_native_directory(ns, integer(directory.owner)?)

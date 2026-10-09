@@ -20,6 +20,13 @@ requires the trusted caller to fence/resolve all construction/history custody.
 Unknown history cannot be inferred from absence or released automatically. These
 engine primitives do not themselves resolve upstream outcomes.
 
+R7 update, 2026-10-09 (overlay schema 24): "exact owner lease" below is every
+exact owner. A descriptor and a lookup reference no longer have a `lease`
+row, so the eligibility statement names their tables (`file_handle`,
+`lookup_owner`, `native_lookup`) beside `lease`, `native_mount` and
+`native_directory`, each by a key probe. See the
+[overlay note](19-daemon-overlay.md).
+
 A namespace enters the ready index only when closed, with no capture, exact owner
 lease or pending publication ticket. Eligibility uses primary-key point/EXISTS
 queries, without COUNT or owner sweeps. Release/reply/capture transitions maintain

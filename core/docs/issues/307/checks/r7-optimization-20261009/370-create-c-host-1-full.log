@@ -1,0 +1,457 @@
+===== captured_namespace-7a119a081e2d1793 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 5 tests
+test inode_page_and_point_agree_and_a_folded_failed_capture_is_read_by_the_next_reader ... ok
+test later_active_rows_install_and_close_leave_reader_answers_until_exact_release ... ok
+test parent_cursor_and_name_point_answer_exactly_the_sealed_rows_of_each_parent ... ok
+test reader_name_and_symlink_jobs_seek_their_sealed_domain_while_the_active_generation_grows ... READER_NAMESPACE_PLAN ["parent-names: SEARCH directory_entry USING INDEX directory_entry_capture (ns=? AND gen=? AND parent=? AND name>?)", "name-point: SEARCH directory_entry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)"]
+READER_SYMLINK_PLAN ["layers: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "cell-window: SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)"]
+READER_NAMESPACE_WORK later_active_rows=128 cursor_vm=850 cursor_rows=64 point_vm=19 point_rows=1 absent_point_vm=16 absent_rows=0 symlink_layers_vm=30 symlink_cells_vm=29 job_total_vm=[899, 68, 65, 108] job_statements=[3, 3, 3, 4] fullscan=0 sorts=0 autoindex=0 reprepare=0
+READER_NAMESPACE_WORK later_active_rows=1024 cursor_vm=850 cursor_rows=64 point_vm=19 point_rows=1 absent_point_vm=16 absent_rows=0 symlink_layers_vm=30 symlink_cells_vm=29 job_total_vm=[899, 68, 65, 108] job_statements=[3, 3, 3, 4] fullscan=0 sorts=0 autoindex=0 reprepare=0
+READER_NAMESPACE_WORK later_active_rows=4096 cursor_vm=850 cursor_rows=64 point_vm=19 point_rows=1 absent_point_vm=16 absent_rows=0 symlink_layers_vm=30 symlink_cells_vm=29 job_total_vm=[899, 68, 65, 108] job_statements=[3, 3, 3, 4] fullscan=0 sorts=0 autoindex=0 reprepare=0
+ok
+test symlink_target_is_the_exact_local_bytes_of_a_live_symlink_or_missing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 0
+===== captured_namespace-e5b58a877c39c78b (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 3 tests
+test direct_provider_pages_and_points_keep_the_exact_capture_after_install_and_close ... ok
+test owner_pages_preserve_original_failed_completion_and_unattempted_command ... ok
+test owner_parent_names_points_and_symlinks_keep_original_custody ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== captured_namespace-f65f3c364e51c5a2 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 10 tests
+test a_deep_fresh_chain_ends_in_aliases_and_a_moved_base_directory ... ok
+test an_empty_capture_returns_the_base_root_identity ... ok
+test changed_content_mode_and_time_of_each_kind ... ok
+test deleted_files_directories_and_symlinks_leave_the_result ... ok
+test mutations_after_the_capture_are_absent_from_its_root_and_present_in_the_next ... ok
+test new_files_directories_and_symlinks_are_constructed ... ok
+test renamed_and_moved_names_of_each_kind_keep_their_inodes ... ok
+test replacing_renames_and_fresh_moves_compose_in_one_capture ... ok
+test the_model_of_the_fixture_is_the_base_root ... ok
+test the_walk_fails_on_an_inode_that_no_name_reaches - should panic ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== close_custody-33e67493f875fffd (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 2 tests
+test each_kind_of_custody_alone_holds_a_closed_workspace_and_another_workspace_never_does ... ok
+test the_owner_test_of_a_closed_workspace_reaches_every_custody_table_by_key ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== compound-015a16aad54419dc (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== costs-349e2bf53982389c (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 2 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== descriptor_request-766d8c76e8b5cf49 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 2 tests
+test a_request_owns_one_descriptor_of_its_mount_and_no_other_row_answers_for_it ... ok
+test retiring_a_mount_reads_its_own_descriptors_however_many_others_exist ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== directory_links-69605645be14f1d8 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 5 tests
+test a_base_directory_counts_its_child_directories_and_nothing_else ... ok
+test a_base_directory_with_children_keeps_its_count_exact_under_every_change ... ok
+test a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_supplied ... ok
+test every_binding_change_moves_the_count_of_a_local_directory_exactly ... ok
+test remembered_counts_are_bounded_and_an_evicted_one_is_derived_again ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.29s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== directory_links-b597317bca66614e (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 4 tests
+test a_failed_capture_folds_the_sealed_count_into_the_active_generation ... ok
+test the_count_round_trips_through_every_whole_row_reader ... ok
+test the_engine_refuses_a_count_on_a_file_and_an_unrepresentable_count ... ok
+test the_schema_check_refuses_a_negative_count_and_a_count_on_a_file ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== engine-31ef5a26acdeed4a (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 12 tests
+test backed_owner_and_operation_record_pages_have_no_total_record_limit ... ok
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+test closed_capture_retains_its_existing_rows_until_explicit_known_release ... ok
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test payload_name_operation_record_and_owner_access_keep_indexed_scope ... ok
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+test reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_operation_record_values ... ok
+test terminal_cleanup_waits_for_exact_owners_and_reply_attempts ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== job_cost-6806228384655850 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 1 test
+test completion_cost_matches_exclusive_owner_aggregate_and_retained_credit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== job_rows-d777c76c4ebfe5b5 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 3 tests
+test a_job_keeps_the_rows_it_can_publish_and_reads_the_rest_by_index ... ok
+test a_reserved_serial_that_already_has_a_row_fails_the_whole_job ... ok
+test a_row_the_job_read_is_written_as_the_indexed_path_writes_it ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_directory-da74e859bec14402 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 2 tests
+test cookies_are_reused_and_retire_in_bounded_indexed_live_turns ... ok
+test only_accepted_entries_publish_offsets_and_concurrent_aliases_remain_valid ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_directory-dc23566612d2ac3a (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 3 tests
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test next_directory_read_observes_parent_moved_by_the_atomic_namespace_job ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_lookup-c3a8c6eab76f3974 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 11 tests
+test a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source ... ok
+test a_read_visit_records_no_source_and_writes_only_a_positive_lookup_reference ... ok
+test a_visit_source_names_no_row_and_is_stale_once_the_base_or_frontier_moves ... ok
+test aggregate_forget_is_checked_and_implicit_root_is_independent ... ok
+test attribute_only_decision_counts_the_lookup_and_retains_no_read ... ok
+test foreign_engine_or_mount_cannot_consume_ownership ... ok
+test native_file_keys_retain_exact_open_owners_and_independent_processing ... ok
+test native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody ... ok
+test need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence ... ok
+test revoked_lookup_retirement_is_bounded_indexed_and_allows_closed_cleanup ... ok
+test source_and_read_fence_revocation_and_request_keys_keep_all_u64_bits ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_read_plan-b2bcdf9f7de89efd (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 4 tests
+test deciding_lookup_sees_mutation_after_missing_fact_round ... ok
+test native_open_retains_removed_metadata_after_last_lookup_and_handle_release ... ok
+test positive_lookup_preserves_alias_identity_and_exact_kernel_counts ... ok
+test processing_source_survives_forget_and_last_name_removal_before_getattr ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_revocation-5b16c0da6e2c9dee (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 1 test
+test revocation_retires_unreleased_handles_in_bounded_indexed_turns ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_unlink_cost-bcded746609cf3eb (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 1 test
+test one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit-3cf70db899407a5e (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 6 tests
+test a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source ... ok
+test a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_needs ... ok
+test a_resident_client_answers_only_from_memory_and_only_small_objects ... ok
+test a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing ... ok
+test an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone ... ok
+test facts_of_another_base_are_ignored_and_read_again_for_the_present_one ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_cost-31891792959c0ed4 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 1 test
+test the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_fence-05a8e2ec310cfb42 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 8 tests
+test a_closed_workspace_refuses_visits_and_still_releases_descriptors ... ok
+test a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole ... ok
+test a_descriptor_of_another_mount_or_inode_and_a_missing_reference_are_stale ... ok
+test a_read_only_descriptor_cannot_publish_and_begins_no_transaction ... ok
+test a_read_window_writes_nothing_and_follows_its_descriptor_past_unlink_and_install ... ok
+test a_revoked_or_replaced_mount_is_stale_for_every_fenced_job ... ok
+test an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_file ... ok
+test every_visit_statement_is_an_indexed_seek ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== orphans-ac39fc227e494246 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 10 tests
+test a_closed_namespace_that_takes_the_last_orphan_stops_the_probe ... ok
+test a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue ... ok
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... ok
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+test inode_reads_probe_the_orphan_domain_only_while_an_orphan_exists ... ok
+test logical_close_refuses_new_captured_owners_and_keeps_existing_consumers ... ok
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_operation_record ... ok
+test three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlink_reader ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== owner-dff6c9b96cdb7d0c (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 12 tests
+test a_closed_workspace_is_reclaimed_only_after_the_settling_job_of_its_last_reply_attempt ... ok
+test a_reply_attempt_is_recorded_without_an_owner_job_and_a_parked_capture_is_owed_one ... ok
+test concurrent_submitters_get_every_job_done_exactly_once_with_its_own_result ... ok
+test failed_capture_waits_for_readers_while_later_writes_and_idle_composition_progress ... ok
+test idle_cleanup_runs_without_an_explicit_reclaim_or_status_job ... ok
+test known_install_fences_later_sources_while_existing_reads_mutations_and_other_work_progress ... ok
+test last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work ... ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== product_commit_cost-d529d07479e9d877 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 1 test
+test a_small_and_a_large_change_through_the_product_constructor_are_counted ... PRODUCT_COMMIT_COST case=small base_paths=1736 final_paths=1738 steps=12 model=Delta { changed: 12, files: 5, files_same_bytes: 1, fresh: 3, fresh_symlinks: 1, removed: 2 }
+PRODUCT_COMMIT_COST_OWNER_JOBS case=small total=564 admitted=564 read=73 mutation=0 capture=2 lifecycle=4 operation_record=485 source=0
+PRODUCT_COMMIT_COST_SQL case=small statements=2360 rows_returned=1840 rows_changed=422 vm_steps=60143 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0 families: Startup(executions=76 rows_returned=76 rows_changed=0 direct_rows_changed=0 vm_steps=532 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Begin(executions=76 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=380 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Commit(executions=76 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=228 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Workspace(executions=642 rows_returned=642 rows_changed=0 direct_rows_changed=0 vm_steps=14766 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Inode(executions=10 rows_returned=10 rows_changed=0 direct_rows_changed=0 vm_steps=310 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Payload(executions=18 rows_returned=17 rows_changed=0 direct_rows_changed=0 vm_steps=548 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Capture(executions=67 rows_returned=119 rows_changed=5 direct_rows_changed=3 vm_steps=2882 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) OperationRecord(executions=808 rows_returned=416 rows_changed=381 direct_rows_changed=127 vm_steps=30138 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Lease(executions=579 rows_returned=560 rows_changed=24 direct_rows_changed=8 vm_steps=9695 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Reclaim(executions=8 rows_returned=0 rows_changed=12 direct_rows_changed=4 vm_steps=664 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0)
+PRODUCT_COMMIT_COST_RECEIPTS case=small capture(result_ok=true parked_turns=0 statements=6 Startup(executions=1 rows_returned=1 rows_changed=0 direct_rows_changed=0 vm_steps=7 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Begin(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=5 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Commit(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=3 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Workspace(executions=2 rows_returned=2 rows_changed=0 direct_rows_changed=0 vm_steps=46 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Capture(executions=1 rows_returned=0 rows_changed=1 direct_rows_changed=1 vm_steps=48 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0)) install(result_ok=true parked_turns=0 statements=14 Startup(executions=1 rows_returned=1 rows_changed=0 direct_rows_changed=0 vm_steps=7 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Begin(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=5 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Commit(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=3 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Workspace(executions=5 rows_returned=5 rows_changed=0 direct_rows_changed=0 vm_steps=115 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Capture(executions=3 rows_returned=0 rows_changed=4 direct_rows_changed=2 vm_steps=162 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Lease(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=13 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Reclaim(executions=2 rows_returned=0 rows_changed=3 direct_rows_changed=1 vm_steps=166 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0))
+PRODUCT_COMMIT_COST_PAYLOAD case=small PayloadWork { write_input_bytes: 0, write_cells: 0, partial_write_cells: 0, cell_copy_bytes: 0, cell_zeroed_bytes: 0, read_window_zeroed_bytes: 163, read_local_copy_bytes: 54 }
+PRODUCT_COMMIT_COST_STORE_READS case=small object_batches=6 object_ids=6 length_batches=3 length_ids=3 serial_reservations=0 read_grants=9 read_handles=2 cache_hits=26 cache_misses=6 upstream_batches=6 authenticated_bytes=9619 evictions=0 cached_objects_before=89 cached_objects_after=95 cache_state=as_left_by_bind_and_mutations_not_cold
+PRODUCT_COMMIT_COST_STORAGE case=small Diagnostics { policy: 1, locate: 24, read_packs: 0, read_pack_selections: 12, whole_selected: 9, whole_due_density: 5, whole_due_singleton: 0, whole_due_small: 2, whole_due_reuse: 2, range_selected: 3, range_scan_bytes: 0, range_acquired_bytes: 17499, range_materialized_bytes: 17499, value_groups: 36, signatures: 1, reserve: 1, initial_reservations: 1, reservation_refills: 0, publish: 1, payload_reads: 2, payload_read_bytes: 26225, pack_read_bytes: 173995, pack_write_bytes: 10141, pooled_packs: 1, pooled_groups: 3, reserved_directory_bytes: 4096, ordinal_reservations: 1, locator_hits: 436, locator_misses: 129, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 656, pack_hits: 288, pack_misses: 12, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 587, directory_unshared_walks: 587, directory_entry_bounds: 1881, prefetch_group_decodes: 0, forced_seals: 0 }
+PRODUCT_COMMIT_COST_SAVED case=small WriteOutcome { inserted: 52, reused: 48, full_records: 51, prefix_records: 1, packs: 4, canonical_bytes: 29915, pool: PoolCounters { leaves: 3, reused_values: 273, new_values: 12, groups: 3, delta_leaves: 1, full_leaves: 2, trials: 1, work_exceeded: 0 } }
+PRODUCT_COMMIT_COST_PRODUCER case=small CapturedNamespaceWork { inode_rows: 14, entry_rows: 10, inode_pages: 1, entry_pages: 1, change_pages: 31, largest_page: 14, parent_points: 5, base_lookups: 1, headers_written: 5, headers_dropped: 0, values_written: 12, fresh_serials: 3, tombstones_skipped: 2, files_constructed: 5, files_unchanged: 1, symlinks: 1, metadata_built: 3, metadata_patched: 9, record_jobs: 124, header_opens: 8, header_rows: 40, header_points: 55, change_opens: 31, change_rows: 65, change_points: 20, value_opens: 4, value_rows: 48, value_points: 13, fresh_opens: 4, fresh_rows: 12, fresh_points: 157 }
+PRODUCT_COMMIT_COST_CONTENT case=small FilesystemUpdateCounters { objects: ObjectWork { objects_read: 41, read_waves: 8, bytes_read: 148953, objects_emitted: 10, bytes_emitted: 26214 }, directories: SortedWork { pages_read: 5, read_waves: 0, pages_created: 5, pages_reused: 0, change_keys: 10, untouched_subtrees: 0, peak_scratch_bytes: 17304 }, inodes: SortedWork { pages_read: 36, read_waves: 3, pages_created: 4, pages_reused: 0, change_keys: 16, untouched_subtrees: 30, peak_scratch_bytes: 320972 }, references: ReferenceWork { rows_touched: 16, rows_spilled: 0, base_records_read: 13, base_waves: 1, final_values: 14, final_removals: 2, serials_scanned: 16, peak_pending: 0, runs: MergeWork { rows_written: 0, rows_read: 0, runs_created: 0, merges: 0, peak_level: 0, peak_live_runs: 0, peak_run_bytes: 0 } }, release: ReleaseWork { pages: 0, entries: 0, base_records: 0, released: 0, traversed_directories: 0, peak_depth: 0 }, bindings_added: 6, bindings_removed: 4, directory_updates: 5, base_records_read: 13, validation: ValidationWork { objects_read: 21, read_waves: 15, inode_demands: 17, inode_pages_read: 12, directory_pages_read: 4, entries_examined: 4, inode_pages_by_site: ValidationReadSites { allocation: 1, prefetch: 2, bindings: 0, aliases: 0, cycles: 9, reachability: 0 }, placements: 2, ancestry_steps: 2, territory_directories: 2, territory_entries: 4, peak_window_rows: 11, in_place_scans: 1, in_place_rows: 5, in_place_directories: 1 } }
+PRODUCT_COMMIT_COST case=large base_paths=1736 final_paths=1832 steps=576 model=Delta { changed: 432, files: 384, files_same_bytes: 24, fresh: 144, fresh_symlinks: 0, removed: 48 }
+PRODUCT_COMMIT_COST_OWNER_JOBS case=large total=21182 admitted=21182 read=2100 mutation=0 capture=2 lifecycle=4 operation_record=19076 source=0
+PRODUCT_COMMIT_COST_SQL case=large statements=87572 rows_returned=69473 rows_changed=13802 vm_steps=2170569 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0 families: Startup(executions=2572 rows_returned=2572 rows_changed=0 direct_rows_changed=0 vm_steps=18004 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Begin(executions=2572 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=12860 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Commit(executions=2572 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=7716 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Workspace(executions=23756 rows_returned=23756 rows_changed=0 direct_rows_changed=0 vm_steps=546388 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Inode(executions=984 rows_returned=984 rows_changed=0 direct_rows_changed=0 vm_steps=30504 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Payload(executions=1944 rows_returned=1920 rows_changed=0 direct_rows_changed=0 vm_steps=60070 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Capture(executions=1120 rows_returned=2640 rows_changed=5 direct_rows_changed=3 vm_steps=56456 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) OperationRecord(executions=30847 rows_returned=16423 rows_changed=13761 direct_rows_changed=4587 vm_steps=1115236 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Lease(executions=21197 rows_returned=21178 rows_changed=24 direct_rows_changed=8 vm_steps=322671 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Reclaim(executions=8 rows_returned=0 rows_changed=12 direct_rows_changed=4 vm_steps=664 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0)
+PRODUCT_COMMIT_COST_RECEIPTS case=large capture(result_ok=true parked_turns=0 statements=6 Startup(executions=1 rows_returned=1 rows_changed=0 direct_rows_changed=0 vm_steps=7 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Begin(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=5 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Commit(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=3 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Workspace(executions=2 rows_returned=2 rows_changed=0 direct_rows_changed=0 vm_steps=46 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Capture(executions=1 rows_returned=0 rows_changed=1 direct_rows_changed=1 vm_steps=48 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0)) install(result_ok=true parked_turns=0 statements=14 Startup(executions=1 rows_returned=1 rows_changed=0 direct_rows_changed=0 vm_steps=7 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Begin(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=5 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Commit(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=3 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Workspace(executions=5 rows_returned=5 rows_changed=0 direct_rows_changed=0 vm_steps=115 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Capture(executions=3 rows_returned=0 rows_changed=4 direct_rows_changed=2 vm_steps=162 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Lease(executions=1 rows_returned=0 rows_changed=0 direct_rows_changed=0 vm_steps=13 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0) Reclaim(executions=2 rows_returned=0 rows_changed=3 direct_rows_changed=1 vm_steps=166 fullscan_steps=0 sorts=0 autoindex_rows=0 reprepares=0))
+PRODUCT_COMMIT_COST_PAYLOAD case=large PayloadWork { write_input_bytes: 0, write_cells: 0, partial_write_cells: 0, cell_copy_bytes: 0, cell_zeroed_bytes: 0, read_window_zeroed_bytes: 25064, read_local_copy_bytes: 12532 }
+PRODUCT_COMMIT_COST_STORE_READS case=large object_batches=267 object_ids=267 length_batches=264 length_ids=264 serial_reservations=0 read_grants=531 read_handles=2 cache_hits=1078 cache_misses=267 upstream_batches=267 authenticated_bytes=14167 evictions=0 cached_objects_before=1412 cached_objects_after=1679 cache_state=as_left_by_bind_and_mutations_not_cold
+PRODUCT_COMMIT_COST_STORAGE case=large Diagnostics { policy: 1, locate: 335, read_packs: 0, read_pack_selections: 24, whole_selected: 21, whole_due_density: 18, whole_due_singleton: 0, whole_due_small: 1, whole_due_reuse: 2, range_selected: 3, range_scan_bytes: 0, range_acquired_bytes: 17494, range_materialized_bytes: 17494, value_groups: 36, signatures: 1, reserve: 1, initial_reservations: 1, reservation_refills: 0, publish: 3, payload_reads: 7, payload_read_bytes: 58347, pack_read_bytes: 301019, pack_write_bytes: 109363, pooled_packs: 1, pooled_groups: 28, reserved_directory_bytes: 4096, ordinal_reservations: 1, locator_hits: 4679, locator_misses: 2776, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 5592, pack_hits: 2599, pack_misses: 24, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 5242, directory_unshared_walks: 5242, directory_entry_bounds: 6974, prefetch_group_decodes: 0, forced_seals: 1 }
+PRODUCT_COMMIT_COST_SAVED case=large WriteOutcome { inserted: 2075, reused: 1388, full_records: 2074, prefix_records: 1, packs: 10, canonical_bytes: 307929, pool: PoolCounters { leaves: 29, reused_values: 1048, new_values: 432, groups: 28, delta_leaves: 1, full_leaves: 28, trials: 1, work_exceeded: 0 } }
+PRODUCT_COMMIT_COST_PRODUCER case=large CapturedNamespaceWork { inode_rows: 480, entry_rows: 192, inode_pages: 8, entry_pages: 4, change_pages: 288, largest_page: 64, parent_points: 48, base_lookups: 6, headers_written: 48, headers_dropped: 0, values_written: 432, fresh_serials: 144, tombstones_skipped: 48, files_constructed: 384, files_unchanged: 24, symlinks: 0, metadata_built: 144, metadata_patched: 288, record_jobs: 5970, header_opens: 8, header_rows: 384, header_points: 1992, change_opens: 288, change_rows: 1152, change_points: 384, value_opens: 4, value_rows: 1728, value_points: 264, fresh_opens: 4, fresh_rows: 576, fresh_points: 4561 }
+PRODUCT_COMMIT_COST_CONTENT case=large FilesystemUpdateCounters { objects: ObjectWork { objects_read: 59, read_waves: 26, bytes_read: 161210, objects_emitted: 79, bytes_emitted: 142953 }, directories: SortedWork { pages_read: 24, read_waves: 0, pages_created: 48, pages_reused: 0, change_keys: 192, untouched_subtrees: 0, peak_scratch_bytes: 17304 }, inodes: SortedWork { pages_read: 35, read_waves: 2, pages_created: 30, pages_reused: 0, change_keys: 480, untouched_subtrees: 7, peak_scratch_bytes: 320972 }, references: ReferenceWork { rows_touched: 480, rows_spilled: 0, base_records_read: 336, base_waves: 11, final_values: 432, final_removals: 48, serials_scanned: 480, peak_pending: 0, runs: MergeWork { rows_written: 0, rows_read: 0, runs_created: 0, merges: 0, peak_level: 0, peak_live_runs: 0, peak_run_bytes: 0 } }, release: ReleaseWork { pages: 0, entries: 0, base_records: 0, released: 0, traversed_directories: 0, peak_depth: 0 }, bindings_added: 144, bindings_removed: 48, directory_updates: 48, base_records_read: 336, validation: ValidationWork { objects_read: 168, read_waves: 9, inode_demands: 168, inode_pages_read: 9, directory_pages_read: 0, entries_examined: 0, inode_pages_by_site: ValidationReadSites { allocation: 3, prefetch: 6, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, placements: 24, ancestry_steps: 48, territory_directories: 0, territory_entries: 0, peak_window_rows: 64, in_place_scans: 0, in_place_rows: 0, in_place_directories: 0 } }
+PRODUCT_COMMIT_COST_RATIO case=small inode_rows=14 entry_rows=10 captured_rows=24 producer_record_jobs=124 operation_record_class_jobs=485 owner_jobs=564 statements=2360 producer_record_jobs_per_captured_row=5 operation_record_class_jobs_per_captured_row=20 owner_jobs_per_captured_row=23 statements_per_captured_row=98 producer_record_jobs_per_inode_row=8 owner_jobs_per_inode_row=40
+PRODUCT_COMMIT_COST_RATIO case=large inode_rows=480 entry_rows=192 captured_rows=672 producer_record_jobs=5970 operation_record_class_jobs=19076 owner_jobs=21182 statements=87572 producer_record_jobs_per_captured_row=8 operation_record_class_jobs_per_captured_row=28 owner_jobs_per_captured_row=31 statements_per_captured_row=130 producer_record_jobs_per_inode_row=12 owner_jobs_per_inode_row=44
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.54s
+
+R4_WALL seconds<=6 limit=100s lock_wait=0s
+
+EXIT 0
+===== read_cost-106cc8ee0ca7784d (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 5 tests
+test a_base_file_length_is_one_store_answer_per_daemon_and_costs_a_visit_when_not_remembered ... ok
+test a_window_reads_the_base_its_visit_named_whatever_is_installed_before_its_bytes ... ok
+test an_unlinked_open_file_still_reads_its_own_bytes_in_one_visit ... ok
+test read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows ... ok
+test without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== reply_tickets-ba2df1eac8a10c1d (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 11 tests
+test a_closed_workspace_with_a_pending_ticket_is_queued_only_by_the_settling_owner_turn ... ok
+test a_failed_attempt_and_release_gives_the_ticket_back_with_its_waiter ... ok
+test a_job_that_fails_after_its_frontier_advance_leaves_no_ticket ... ok
+test a_ticket_is_named_by_its_namespace_revision_and_generation ... ok
+test a_waiting_capture_is_owed_the_last_attempt_and_no_waiter_means_last ... ok
+test attempts_from_other_threads_are_pending_then_last_and_a_repeat_is_stale ... ok
+test concurrent_attempts_return_every_ticket_once_and_one_of_them_settles_the_namespace ... ok
+test every_publishing_job_issues_exactly_one_ticket_and_nothing_else_issues_any ... ok
+test pending_publications_page_in_ascending_revision_order_64_per_page ... ok
+test the_owner_turn_form_refuses_a_publication_of_another_engine ... ok
+test tickets_of_one_namespace_never_affect_another ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== resources-d5629cf95337a133 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 6 tests
+test last_generation_release_is_fixed_work_and_wakes_retirements_in_bounded_pages ... ok
+test lost_backing_path_quarantines_without_sql_or_releasing_published_capture ... ok
+test physical_reserve_counts_allocation_separately_from_logical_rows_and_reusable_pages ... ok
+test real_backing_corruption_retains_original_sql_cause_and_quarantines_custody ... ok
+test repeated_resource_snapshots_do_not_reprepare_expired_metadata_statements ... ok
+test retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_duplication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== source-d308c41190d7d1c0 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 5 tests
+test ordered_source_directory_entry_windows_visit_only_parent_and_generation_with_runtime_evidence ... ok
+test reply_attempt_and_source_release_are_one_transaction_or_nothing ... ok
+test source_changes_have_finite_plans_and_correlated_runtime_work ... ok
+test source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows ... ok
+test source_retains_selected_base_and_exact_close_custody_without_a_generation_pin ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== startup_cost-0425104fb12c0702 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 3 tests
+test existing_artifact_refusal_has_no_sql_or_allocation_replay ... ok
+test real_schema_full_failure_retains_original_error_work_and_artifact ... ok
+test startup_counts_profile_schema_accounting_and_entire_reservation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== startup_cost-12ef95805a0a314d (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 3 tests
+test admission_refusal_has_no_creation_receipt_or_artifact_effect ... ok
+test failed_owner_start_exposes_original_creation_receipt_without_retry ... ok
+test readiness_retains_startup_separately_from_foreground_and_maintenance ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== transactions-b47653736df2ab57 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 6 tests
+test a_failure_after_the_first_write_rolls_back_and_one_before_it_has_nothing_to_roll_back ... ok
+test a_read_only_atomic_job_begins_commits_and_admits_nothing ... ok
+test consecutive_writes_that_do_not_grow_the_file_allocate_at_most_once ... ok
+test linked_sqlite_classifies_reads_and_writes_as_the_engine_expects ... ok
+test owner_identities_are_unique_and_increasing_across_namespaces ... ok
+test reads_then_writes_are_one_transaction_begun_at_the_first_write ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0

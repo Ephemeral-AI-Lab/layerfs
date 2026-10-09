@@ -675,7 +675,7 @@ const OPENDIR_LOCAL: Pinned = Pinned {
         TRANSACTION[2],
         ("Workspace", 1, 1),
         ("Inode", 1, 1),
-        ("Lease", 4, 6),
+        ("Lease", 3, 4),
     ],
 };
 /// OPENDIR of a base directory this daemon has seen: the same visit, decided
@@ -689,7 +689,7 @@ const OPENDIR_BASE: Pinned = Pinned {
         TRANSACTION[2],
         ("Workspace", 1, 1),
         ("Inode", 1, 1),
-        ("Lease", 4, 6),
+        ("Lease", 3, 4),
     ],
 };
 /// RELEASEDIR: one job. The fence on the open descriptor, then the handle
@@ -703,7 +703,7 @@ const RELEASEDIR: Pinned = Pinned {
         TRANSACTION[1],
         TRANSACTION[2],
         ("Workspace", 1, 1),
-        ("Lease", 4, 5),
+        ("Lease", 3, 3),
         ("Reclaim", 1, 2),
     ],
 };

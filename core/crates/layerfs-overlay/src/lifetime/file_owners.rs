@@ -111,43 +111,52 @@ impl Overlay {
             if current.kind != InodeKind::File || current.nlink == 0 {
                 return Err(OverlayError::Missing);
             }
-            self.retain_file(source.route, request, current.serial, writable)
+            self.retain_file(source.route, None, request, current.serial, writable)
         })
     }
     /// The enclosing owner transaction has already validated current metadata.
+    /// `mount` is the native connection whose kernel request `request`
+    /// receives the descriptor; without one, `request` is the caller's own.
     pub(crate) fn retain_file(
         &self,
         route: Route,
+        mount: Option<u64>,
         request: i64,
         serial: u64,
         writable: bool,
     ) -> OverlayResult<OpenFile> {
-        let file = self.retain_file_row(route, request, serial, writable)?;
+        let file = self.retain_file_row(route, mount, request, serial, writable)?;
         self.file_ref(route.ns, integer(serial)?, LeaseKind::FileHandle, true)?;
         Ok(file)
     }
-    /// The descriptor's rows without its file reference, which the caller
-    /// takes in the same transaction.
+    /// The descriptor's row without its file reference, which the caller
+    /// takes in the same transaction. The row is the descriptor's whole
+    /// custody: no `lease` row stands for it.
     pub(crate) fn retain_file_row(
         &self,
         route: Route,
+        mount: Option<u64>,
         request: i64,
         serial: u64,
         writable: bool,
     ) -> OverlayResult<OpenFile> {
         let owner = self.mint_owner()?;
         let key = integer(serial)?;
+        let mount = mount.map_or(Ok(0), integer)?;
+        // A request one mount, or one caller, already holds a descriptor
+        // for is refused by the row's own unique key.
         self.execute(
             StatementKind::Lease,
-            "INSERT INTO file_handle VALUES(?1,?2,?3,?4,?5)",
-            &[&route.ns, &request, &integer(owner)?, &key, &writable],
-            33,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            "INSERT INTO lease VALUES(?1,7,?2,?3)",
-            &[&route.ns, &integer(owner)?, &key],
-            24,
+            "INSERT INTO file_handle VALUES(?1,?2,?3,?4,?5,?6)",
+            &[
+                &route.ns,
+                &mount,
+                &request,
+                &integer(owner)?,
+                &key,
+                &writable,
+            ],
+            41,
         )?;
         Ok(OpenFile {
             route,
@@ -162,7 +171,7 @@ impl Overlay {
         self.state(route)?;
         self.query(
             StatementKind::Lease,
-            "SELECT owner,serial,writable FROM file_handle WHERE ns=?1 AND request=?2",
+            "SELECT owner,serial,writable FROM file_handle WHERE ns=?1 AND mount=0 AND request=?2",
             &[&route.ns, &integer(request)?],
             16,
             |r| {
@@ -233,16 +242,6 @@ impl Overlay {
         if closed != 1 {
             return Err(OverlayError::Stale);
         }
-        self.execute(
-            StatementKind::Lease,
-            "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
-            &[
-                &file.route.ns,
-                &integer(file.owner)?,
-                &integer(file.serial)?,
-            ],
-            24,
-        )?;
         self.file_ref(
             file.route.ns,
             integer(file.serial)?,

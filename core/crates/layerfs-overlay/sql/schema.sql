@@ -1,4 +1,4 @@
--- Disposable overlay schema v23. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v25. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -70,7 +70,7 @@ CREATE INDEX payload_generation ON payload(ns,gen,serial,cell_offset);
 CREATE INDEX shrink_generation ON shrink(ns,gen,serial,depth);
 CREATE TABLE lease (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 9),
+    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6 OR kind=8),
     owner INTEGER NOT NULL CHECK(owner>0),
     resource INTEGER NOT NULL CHECK(resource>=0),
     PRIMARY KEY(ns,kind,owner,resource)
@@ -124,13 +124,17 @@ CREATE TABLE file_custody (
     readers INTEGER NOT NULL DEFAULT 0 CHECK(readers>=0),
     PRIMARY KEY(ns,serial)
 ) STRICT, WITHOUT ROWID;
+-- One open regular-file descriptor. A native descriptor names its mount and
+-- the kernel request that received it (any 64 bits); any other has mount 0
+-- and names its caller's request.
 CREATE TABLE file_handle (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    request INTEGER NOT NULL CHECK(request<>0),
+    mount INTEGER NOT NULL CHECK(mount>=0),
+    request INTEGER NOT NULL CHECK(mount>0 OR request>0),
     owner INTEGER NOT NULL CHECK(owner>0),
     serial INTEGER NOT NULL CHECK(serial>0),
     writable INTEGER NOT NULL CHECK(writable IN(0,1)),
-    PRIMARY KEY(ns,owner), UNIQUE(ns,request)
+    PRIMARY KEY(ns,owner), UNIQUE(ns,mount,request)
 ) STRICT, WITHOUT ROWID;
 CREATE TABLE file_read (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
@@ -227,15 +231,6 @@ CREATE TABLE native_read (
     owner INTEGER NOT NULL CHECK(owner>0),
     PRIMARY KEY(ns,mount,request), UNIQUE(ns,owner)
 ) STRICT, WITHOUT ROWID;
-CREATE TABLE native_file (
-    ns INTEGER NOT NULL,
-    mount INTEGER NOT NULL CHECK(mount>0),
-    request BLOB NOT NULL CHECK(length(request)=8),
-    owner INTEGER NOT NULL CHECK(owner>0),
-    PRIMARY KEY(ns,mount,owner), UNIQUE(ns,mount,request), UNIQUE(ns,owner),
-    FOREIGN KEY(ns,mount) REFERENCES native_mount(ns,owner),
-    FOREIGN KEY(ns,owner) REFERENCES file_handle(ns,owner) ON DELETE CASCADE
-) STRICT, WITHOUT ROWID;
 CREATE TABLE native_parent (
     ns INTEGER NOT NULL,
     mount INTEGER NOT NULL CHECK(mount>0),
@@ -280,4 +275,4 @@ CREATE TABLE native_cookie (
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_cookie_name ON native_cookie(ns,owner,name,cookie);
-PRAGMA user_version=23;
+PRAGMA user_version=25;

@@ -1,0 +1,168 @@
+===== captured_namespace_fragments-59ca1b366f488fcb (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 9 tests
+test a_hole_and_written_zeros_are_the_same_bytes ... ok
+test a_store_after_a_shrink_is_clipped_to_the_new_size ... ok
+test a_truncate_between_pieces_cuts_what_was_written_before_it ... ok
+test a_truncate_to_zero_then_appends_holds_only_the_appended_bytes ... ok
+test fragmented_writes_around_a_hole_of_a_new_file_give_one_root ... ok
+test fragmented_writes_of_a_base_file_give_one_root ... ok
+test mapped_stores_land_only_below_the_current_size ... ok
+test pieces_crossing_the_end_of_a_base_file_give_one_root ... ok
+test shrinking_and_regrowing_across_cells_never_returns_cut_bytes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== captured_namespace_holds-7d1f674aec88f68c (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-workspace)
+
+running 7 tests
+test a_base_directory_removed_while_held_is_absent_and_keeps_its_whiteout ... ok
+test a_base_file_held_written_unlinked_and_written_again_is_never_constructed ... ok
+test a_directory_created_filled_emptied_and_removed_while_held_is_dropped ... R3 row 7 held fresh directory: captured name rows under the tombstone = false, headers_dropped = 0
+ok
+test a_file_created_held_written_unlinked_and_written_again_is_never_constructed ... R3 row 1 next capture: inode_rows=0 entry_rows=0 tombstones_skipped=0
+ok
+test a_stored_file_replaced_by_rename_while_open_leaves_only_the_new_inode ... ok
+test files_and_a_symlink_held_only_by_a_lookup_are_absent_after_their_unlink ... ok
+test fresh_and_looked_up_inodes_replaced_by_rename_leave_only_the_new_inodes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== cold_failure_scope-bd5834c6dd9aab4d (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 2 tests
+test a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause ... ok
+test an_owner_job_failure_is_not_a_base_demand_and_is_still_retained ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== completion_ownership-b5c6d457734a887b (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 3 tests
+test a_completion_is_handed_out_once_and_wakes_its_blocked_waiter ... ok
+test every_configured_lifecycle_slot_is_admitted_while_ordinary_credit_is_saturated ... ok
+test original_family_receipts_equal_the_foreground_aggregate_on_every_path ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== device_capacity-a6d3fe900b7eb2fe (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== device_capacity-a8dab39510750df3 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== fenced_port-47a98c1a1fe5e978 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_they_hold ... ok
+test a_job_submitted_before_the_stop_is_awaited_to_its_original_result ... ok
+test a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call ... ok
+test a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== filesystem_port-9a367c3ce80975d4 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_full_handoff_of_parked_reads_holds_no_owner_credit_and_every_read_completes ... ok
+test directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close ... ok
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== lifetimes-92a4b3cb30ffe3b7 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-overlay)
+
+running 3 tests
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_jobs-80237cf905513ccf (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 1 test
+test native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== resources_observation-cfff9454e2fa8457 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 2 tests
+test global_resources_is_read_only_before_bind_and_after_terminal_cleanup ... ok
+test stopped_operator_observation_retains_the_exact_unattempted_command ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== store_read_service-df8aac8a952c42ac (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 10 tests
+test a_reader_grant_cannot_be_charged_to_a_different_workspace ... ok
+test bind_reads_snapshot_while_the_original_writer_session_is_occupied ... ok
+test cancellation_capacity_and_stop_dispose_only_unattempted_admission ... ok
+test diagnostic_reader_snapshots_leave_admission_and_provider_work_unchanged ... ok
+test idle_selection_and_replaced_wakeup_do_not_wait_on_a_busy_reader ... ok
+test last_quarantine_wakes_waiters_with_terminal_no_reader_disposition ... ok
+test original_reader_release_races_future_registration_without_polling ... ok
+test quarantined_session_keeps_original_failure_and_only_healthy_reader_is_reused ... ok
+test waiting_operation_has_no_failure_lock_and_its_failures_do_not_poison_other_requests ... ok
+test workspace_rotation_and_fifo_prevent_a_hot_lane_owning_the_next_reader ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== visit_port-80e4d2704ca0c1cc (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b4/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_capture_parked_behind_the_ticket_is_owed_exactly_one_settling_job ... ok
+test a_create_is_one_mutation_job_and_its_reply_attempt_is_no_owner_job ... ok
+test a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant ... ok
+test a_request_between_two_visits_fences_no_revocation_and_its_next_visit_is_refused ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0

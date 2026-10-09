@@ -41,12 +41,6 @@ impl Overlay {
                 &[&source.route.ns, &request, &integer(owner)?, &serial],
                 32,
             )?;
-            self.execute(
-                StatementKind::Lease,
-                "INSERT INTO lease VALUES(?1,9,?2,?3)",
-                &[&source.route.ns, &integer(owner)?, &serial],
-                24,
-            )?;
             self.file_ref(source.route.ns, serial, LeaseKind::LookupOwner, true)?;
             Ok(LookupOwner {
                 route: source.route,
@@ -128,16 +122,6 @@ impl Overlay {
                 "DELETE FROM lookup_owner WHERE ns=?1 AND owner=?2",
                 &[&lookup.route.ns, &integer(lookup.owner)?],
                 16,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                "DELETE FROM lease WHERE ns=?1 AND kind=9 AND owner=?2 AND resource=?3",
-                &[
-                    &lookup.route.ns,
-                    &integer(lookup.owner)?,
-                    &integer(lookup.serial)?,
-                ],
-                24,
             )?;
             self.file_ref(
                 lookup.route.ns,

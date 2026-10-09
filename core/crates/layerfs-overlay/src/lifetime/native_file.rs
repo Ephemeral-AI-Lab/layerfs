@@ -4,6 +4,12 @@ use crate::{
     BaseSource, NativeMount, OpenFile, Overlay, OverlayError, OverlayResult, StatementKind,
 };
 
+/// A kernel request identity as the descriptor row stores it: the same 64
+/// bits, so two requests of one mount have one row key exactly when they are
+/// one request.
+pub(crate) const fn native_request(request: u64) -> i64 {
+    i64::from_ne_bytes(request.to_ne_bytes())
+}
 impl Overlay {
     /// A kernel GETATTR handle can denote a file or a directory. Classify both
     /// indexed associations in one attempted transaction; do not try one failed
@@ -52,11 +58,27 @@ impl Overlay {
         serial: u64,
         handle: u64,
     ) -> OverlayResult<OpenFile> {
-        self.query(StatementKind::Lease,
-            "SELECT f.writable FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 AND n.owner=?3 AND f.serial=?4",
-            &[&mount.route.ns, &integer(mount.owner)?, &integer(handle)?, &integer(serial)?], 32,
-            |r| Ok(OpenFile { route: mount.route, owner: handle, serial, writable: r.get(0)? }))?
-            .pop().ok_or(OverlayError::Stale)
+        self.query(
+            StatementKind::Lease,
+            "SELECT writable FROM file_handle WHERE ns=?1 AND owner=?3 AND mount=?2 AND serial=?4",
+            &[
+                &mount.route.ns,
+                &integer(mount.owner)?,
+                &integer(handle)?,
+                &integer(serial)?,
+            ],
+            32,
+            |r| {
+                Ok(OpenFile {
+                    route: mount.route,
+                    owner: handle,
+                    serial,
+                    writable: r.get(0)?,
+                })
+            },
+        )?
+        .pop()
+        .ok_or(OverlayError::Stale)
     }
     /// Observes the original request's open owner, without replay or adoption.
     pub fn retained_native_file(
@@ -65,11 +87,25 @@ impl Overlay {
         request: u64,
     ) -> OverlayResult<Option<OpenFile>> {
         self.check_native_attached(mount)?;
-        self.query(StatementKind::Lease,
-            "SELECT f.owner,f.serial,f.writable FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 AND n.request=?3",
-            &[&mount.route.ns, &integer(mount.owner)?, &request.to_be_bytes().as_slice()], 24,
-            |r| Ok(OpenFile { route: mount.route, owner: unsigned(r, 0)?, serial: unsigned(r, 1)?, writable: r.get(2)? }))
-            .map(|mut rows| rows.pop())
+        self.query(
+            StatementKind::Lease,
+            "SELECT owner,serial,writable FROM file_handle WHERE ns=?1 AND mount=?2 AND request=?3",
+            &[
+                &mount.route.ns,
+                &integer(mount.owner)?,
+                &native_request(request),
+            ],
+            24,
+            |r| {
+                Ok(OpenFile {
+                    route: mount.route,
+                    owner: unsigned(r, 0)?,
+                    serial: unsigned(r, 1)?,
+                    writable: r.get(2)?,
+                })
+            },
+        )
+        .map(|mut rows| rows.pop())
     }
     /// The descriptor protects the target while this independent request source
     /// is acquired. Later RELEASE/FORGET cannot dispose its processing metadata.

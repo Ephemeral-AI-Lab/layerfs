@@ -289,9 +289,8 @@ fn the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size() {
 /// entry counts, updated over the row the job read [Inode]; the name's rows
 /// and its binding [2 DirectoryEntry, the binding with its trigger], the
 /// frontier [Workspace], and the reply's kernel custody [Lease]: the lookup
-/// row and its owner row, the descriptor row and its owner row, one custody
-/// row for both references and the mount's association, each with its
-/// trigger. COMMIT.
+/// row, the descriptor row, which names its mount and request, and one
+/// custody row for both references, each with its trigger. COMMIT.
 const CREATE: [(&str, u64, u64); 7] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
@@ -299,7 +298,7 @@ const CREATE: [(&str, u64, u64); 7] = [
     ("Workspace", 2, 2),
     ("Inode", 3, 4),
     ("DirectoryEntry", 5, 6),
-    ("Lease", 6, 12),
+    ("Lease", 3, 6),
 ];
 /// WRITE, in order. Reads: the fence with the descriptor [Workspace]; the
 /// file's row, which carries its layer columns [Inode]. Then one
@@ -315,17 +314,16 @@ const WRITE: [(&str, u64, u64); 6] = [
     ("Payload", 2, 3),
 ];
 /// RELEASE, in order. The fence with the descriptor [Workspace]; then one
-/// transaction [Lease]: the descriptor row is deleted (its trigger, the
-/// cascade that deletes the mount's association and that row's trigger),
-/// its owner row is deleted (with its trigger), and the file reference is
-/// dropped by a statement that returns the references that remain.
+/// transaction [Lease]: the descriptor row is deleted (with its trigger)
+/// and the file reference is dropped by a statement that returns the
+/// references that remain.
 const RELEASE: [(&str, u64, u64); 5] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
-    ("Lease", 3, 7),
+    ("Lease", 2, 3),
 ];
-/// Attempts and executions of the whole cycle: 32 statements of the five
+/// Attempts and executions of the whole cycle: 28 statements of the five
 /// jobs and the admission pragma, BEGIN and COMMIT of three transactions.
-const TOTAL: (u64, u64) = (41, 54);
+const TOTAL: (u64, u64) = (37, 44);

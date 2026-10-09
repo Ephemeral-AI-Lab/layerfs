@@ -4,7 +4,7 @@ use crate::{
     OverlayResult, StatementKind,
 };
 /// Unreleased handle windows: at most 64 small ownership rows per turn.
-pub(crate) const FILE_WINDOW: &str = "SELECT f.owner,f.serial,f.writable FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 ORDER BY n.owner LIMIT 64";
+pub(crate) const FILE_WINDOW: &str = "SELECT owner,serial,writable FROM file_handle WHERE ns=?1 AND mount=?2 ORDER BY request LIMIT 64";
 pub(crate) const DIRECTORY_WINDOW: &str = "SELECT owner,serial FROM native_directory INDEXED BY native_directory_open WHERE ns=?1 AND mount=?2 AND closed=0 ORDER BY owner LIMIT 64";
 impl Overlay {
     /// One turn retires one bounded page of one ownership class: unreleased
@@ -44,7 +44,6 @@ impl Overlay {
         )?;
         if !files.is_empty() {
             for file in &files {
-                // Deleting the exact handle cascades its native association.
                 self.close_file_inner(*file)?;
             }
             return Ok((files.len() as u64, 0, false));
