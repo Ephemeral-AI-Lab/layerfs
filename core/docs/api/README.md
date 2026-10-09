@@ -22,9 +22,14 @@ core/                                  existing Cargo workspace and lockfile
       src/client.rs
       src/host.rs                       owns fresh local Store/history setup
       tests/
-    mcp/README.md                       future adapter; no MCP package yet
-    cli/README.md                       future adapter; no CLI package yet
+    mcp/                                future adapter; no MCP package yet
+    cli/                                future adapter; no CLI package yet
 ```
+
+R7-retire, 2026-10-10: the placeholder `mcp/README.md` and `cli/README.md`
+were removed by owner authorization; they held one sentence each and no
+source. The adapters remain planned as described here. Each directory is
+created with its first real file, not before.
 
 The first issue adds only the source needed for a working `init_project` and small
 Workspace/exec placeholders that explicitly report unsupported operations.
