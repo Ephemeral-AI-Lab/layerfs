@@ -1,0 +1,1 @@
+{ dd if=/dev/zero of=big bs=1M count=64 status=none; cp big big2; } >/dev/null

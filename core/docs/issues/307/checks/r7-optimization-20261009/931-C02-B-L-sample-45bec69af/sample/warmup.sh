@@ -1,0 +1,1 @@
+{ for i in $(seq 1 1000); do echo $i > f$i; done; for i in $(seq 1 1000); do stat f$i; done; } >/dev/null

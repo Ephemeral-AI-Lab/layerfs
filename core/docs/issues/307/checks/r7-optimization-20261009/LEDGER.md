@@ -2528,3 +2528,43 @@ After batch 3: the gate once (four packages on host and in Linux, Clippy
 on both, `fmt --check`, guard), the benchmark-fitting audit, and the final
 table.
 
+### Batch 1 tip (`36e2ec328`, `2a23b82f2`) sampled at `45bec69af`: receipts 920–971
+
+Lean FORGET (model item O6): the orphan and layer steps are item-free cores
+with thin queue wrappers; the releasing job writes no queue item for work
+it completes. Live-file custody (O2): the last reference of a file with no
+orphan row deletes its custody row in the same transaction and queues
+nothing. Production LOC 187934 → 188037 (+103). Count test
+`native_unlink_cost.rs`: FORGET of a removed one-cell file 47 → 29
+attempts (the model said about 18; the implementer lists the 29 and what
+would lower them: a joined fence statement, one read of `active,
+installed`, folding the two retirement calls); UNLINK + FORGET 67 → 49;
+FORGET or RELEASE as the last reference of a live file: maintenance steps
+1 → 0.
+
+The sample held the locks of the three worktrees (no build overlapped it).
+All twelve rows DIAGNOSTIC, verifier PASS. Host load average 20 to 23.
+
+| Cell | Receipt | Command ms before → after | A2 ms | Ratio | Statement executions | Owner wait / service ms before → after | Container CPU ms before → after |
+| --- | --- | --- | ---: | ---: | --- | --- | --- |
+| C01 | 927 | 407.8 → 435.7 | 183.4 | 2.38 | 61004 → 61004 | 1.9 / 177.5 → 2.0 / 187.9 | 375 → 397 |
+| C02 | 931 | 919.5 → 971.0 | 965.0 | 1.01 | 63006 → 63006 | 2.1 / 171.8 → 2.2 / 191.2 | 875 → 950 |
+| C03 | 935 | 726.2 → 674.6 | 410.8 | 1.64 | 155715 → 131715 | 6.3 / 356.8 → 5.9 / 316.5 | 639 → 590 |
+| C04 | 939 | 781.3 → 889.4 | 952.6 | 0.93 | 59076 → 59076 | 3.1 / 170.5 → 3.5 / 190.9 | 808 → 912 |
+| C05 | 943 | 869.7 → 1004.7 | 949.6 | 1.06 | 90226 → 90226 | 20.4 / 226.6 → 14.7 / 259.3 | 888 → 1051 |
+| C06 | 947 | 235.7 → 262.7 | 78.6 | 3.34 | 36918 → 36918 | 0.2 / 151.3 → 0.2 / 154.9 | 250 → 271 |
+| C07 | 951 | 485.9 → 564.4 | 171.6 | 3.29 | 77958 → 77958 | 0.6 / 320.3 → 0.9 / 370.8 | 470 → 563 |
+| C08 | 955 | 254.7 → 284.1 | 106.1 | 2.68 | 36945 → 36945 | 0.2 / 156.3 → 0.3 / 170.3 | 269 → 308 |
+| C09 | 959 | 101.1 → 111.9 | 106.2 | 1.05 | 1068 → 1068 | 0.3 / 4.9 → 0.2 / 4.8 | 124 → 125 |
+| C10 | 963 | 303.0 → 248.0 | 178.2 | 1.39 | 42083 → 42083 | 0.6 / 184.7 → 0.3 / 165.7 | 336 → 292 |
+| C11 | 967 | 238.5 → 272.2 | 85.8 | 3.17 | 36911 → 36911 | 0.2 / 150.6 → 0.3 / 166.9 | 255 → 285 |
+| C12 | 971 | 302.8 → 299.0 | 189.3 | 1.58 | 32658 → 32467 | 2.3 / 104.9 → 2.3 / 96.4 | 292 → 273 |
+
+Verdict by counts: KEPT. C03 statements −24000 (24 per removed file),
+service 356.8 → 316.5 ms, receive-thread CPU 470 → 429 ms, command
+674.6 ms, the lowest of its five samples today but inside the spread.
+C12 −191 statements. The ten cells with identical counts moved between
+−18 % (C10) and +16 % (C07) with the host at load 20: no time in this
+table is evidence for or against any of them. Storage: logical bytes equal
+in every cell.
+
