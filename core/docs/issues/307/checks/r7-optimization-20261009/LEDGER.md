@@ -1434,3 +1434,32 @@ Open, unchanged: N and P timings for C01; every other cell of the matrix;
 the K and W runners; the harness count-interval gap that keeps each row
 INCOMPLETE; Linux suite from index 175; Linux Clippy and the full suites at
 the current identity.
+
+## Handoff to the next lead — 2026-10-09
+
+The owner asked for a handoff: the next lead works iteratively, with
+aggressive changes, and does not stop until every benchmark cell is faster
+than the LayerFS A2 column of issue #306, with storage not worse. The handoff
+is [HANDOFF-R7-BEAT-A2-20261009.md](../../HANDOFF-R7-BEAT-A2-20261009.md). It
+carries the A2 table, the definition of "beaten", the state above and the
+exit condition. No sample, build or test was run for it.
+
+Correction to this lead's own record. Steps 1 to 3 were worked from the R7
+handoffs, this ledger and the source. The
+[optimization handbook](../../../../../../docs/general/optimization-handbook.md)
+and the [optimization guide](../../../../../../docs/general/optimization-guide.md)
+were read only while writing the handoff. Against them:
+
+- Within authority: step 1 added a method to an interface between two active
+  crates; the original assignment allows that by owner direction.
+- Not done: the handbook's scaling check (§7 step 8) and the guide's review
+  record (§7) for each of the three steps. Each step has a count test and a
+  cause with numbers only. Recorded as owed in the handoff.
+- Not affected: no statement, index or schema was changed, so no query plan
+  was required; steps 2 and 3 removed executions of unchanged statements.
+- Three of the directions this lead listed for closing the gap (custody in
+  owner memory, several jobs under one transaction, answers from held state)
+  touch guide §4.1 and §4.2. The handoff now says so beside each.
+
+Stage state: IN_PROGRESS, handed to the next lead at product identity
+`87e234a62`. C01:B:L command 2,085.7 ms against the A2 target of 183.4 ms.
