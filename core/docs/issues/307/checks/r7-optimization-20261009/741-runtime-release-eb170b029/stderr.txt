@@ -1,0 +1,3 @@
+   Compiling layerfs-r7-runtime v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-runtime)
+    Finished `release` profile [optimized] target(s) in 1.96s
+R4_WALL seconds<=3 limit=560s lock_wait=0s

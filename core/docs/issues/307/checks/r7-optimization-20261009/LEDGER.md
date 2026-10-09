@@ -2296,8 +2296,8 @@ measurements.
 
 | Order | Row | Predicted counter | Predicted saving | Cells | Risk | State |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | READ and READLINK are one read-only owner visit; base-file length remembered inside the existing canonical-cache allowance | READ of base bytes: 6 jobs, 4 transactions, 2 grants, 68 statements → 1 job, 0, 1, 2 | C09 jobs 3082 → about 522 | C09, C10, C12 | accounting change (L4-2) | committed `de4789299`, `dbaad86a5`, `16fa316ee`; not yet sampled or verified by the lead |
-| 2 | OPEN of a regular file is one owner visit | OPEN of a seen base file: 5 jobs, 1 grant, 4 transactions, 64 statements → 1 job, 0, 1, 10 | | C09, C10, C12, C01 | same path | committed `8ac4b4c4c`; not yet sampled or verified by the lead |
+| 1 | READ and READLINK are one read-only owner visit; base-file length remembered inside the existing canonical-cache allowance | READ of base bytes: 6 jobs, 4 transactions, 2 grants, 68 statements → 1 job, 0, 1, 2 | C09 jobs 3082 → about 522 | C09, C10, C12 | accounting change (L4-2) | committed `de4789299`, `dbaad86a5`, `16fa316ee`; KEPT (samples 740–791) |
+| 2 | OPEN of a regular file is one owner visit | OPEN of a seen base file: 5 jobs, 1 grant, 4 transactions, 64 statements → 1 job, 0, 1, 10 | | C09, C10, C12, C01 | same path | committed `8ac4b4c4c`; KEPT (samples 740–791) |
 | 3 | Unlink, FORGET and closed-namespace reclamation finish in the job that creates them ([model](../../r7-open/unlink-forget-reclaim-63c48d8dc.md)) | C03 maintenance jobs 6,011 → about 17; owner wait 59 → 2 to 4 ms | C03 716 → about 590 to 655 ms | C03, C07 and every cell's warm-up cleanup | statement removal first, then the `orphan_seen` and trigger stages | brief written |
 | 4 | Create path: fewer inode statements, custody rows, accounting triggers write the namespace row only ([model](../../r7-open/create-path-sql-63c48d8dc.md)) | per created file about 163 → about 107 to 112 µs | about 50 ms per 1000 files | C01, C02, C03, C07 | statement removal | brief written |
 | 5 | Payload run rows, `RUN_BYTES` 32 KiB, schema 22 → 23 ([model](../../r7-open/payload-run-rows-63c48d8dc.md)) | Payload attempts per 128 KiB WRITE 32 → 8 | service per 64 MiB 147.6 → about 61 ms; overlay 73.0 → about 65.4 MiB | C06, C07, C08, C10, C11 | schema change, largest row | brief written; after the statement-removal rows |
@@ -2313,4 +2313,83 @@ Set aside, with the reason:
 | 1 MiB write windows | A larger limit as the fix |
 | A cached GETATTR record | A new cache and a contract change for a gain inside the spread |
 | A timer to wake maintenance | Forbidden (more loops or longer lifetimes as a fix) |
+
+### Rows 1 and 2 sampled: receipts 740–791 at `eb170b029` (product source of `8ac4b4c4c`)
+
+One build (740–743), one sample per cell, class B, arm L. All twelve rows
+DIAGNOSTIC, verifier PASS, custody KNOWN_STOP, cleanup Gone, gaps none. The
+five containers retained from the NOT_RUN rows of 600–651 (idle daemons,
+C06, C07, C08, C10, C11 at `c126f742e`) were stopped before this run, not
+removed. The harness differs from 652–703 by the per-thread observation
+(one read-only snapshot before the measured command of arm L).
+
+| Cell | Receipt | Command ms before → after | A2 ms | Ratio | Floor ms | After − floor | Owner jobs | Statement executions | Reader grants | Owner wait / service ms before → after |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
+| C01 | 747 | 379.7 → 392.2 | 183.4 | 2.14 | 285.5 | 106.7 | 5001 → 5001 | 61004 → 61004 | 0 → 0 | 1.7 / 162.9 → 1.7 / 165.1 |
+| C02 | 751 | 914.8 → 929.0 | 965.0 | 0.96 | 844.1 | 84.9 | 6002 → 6002 | 63006 → 63006 | 0 → 0 | 2.3 / 175.4 → 2.2 / 173.9 |
+| C03 | 755 | 715.9 → 721.0 | 410.8 | 1.76 | 406.6 | 314.4 | 9108 → 9108 | 127399 → 127399 | 17 → 17 | 59.3 / 300.4 → 57.7 / 301.9 |
+| C04 | 759 | 823.4 → 847.7 | 952.6 | 0.89 | 819.0 | 28.7 | 5382 → 5382 | 59076 → 59076 | 0 → 0 | 3.2 / 170.9 → 3.0 / 179.4 |
+| C05 | 763 | 880.5 → 910.0 | 949.6 | 0.96 | 854.2 | 55.8 | 7264 → 7264 | 90226 → 90226 | 222 → 222 | 14.8 / 230.5 → 14.0 / 233.1 |
+| C06 | 767 | 226.8 → 233.7 | 78.6 | 2.97 | 101.8 | 131.9 | 517 → 517 | 36918 → 36918 | 0 → 0 | 0.3 / 147.9 → 0.1 / 150.7 |
+| C07 | 771 | 499.4 → 502.3 | 171.6 | 2.93 | 174.7 | 327.6 | 1552 → 1549 | 78022 → 77958 | 0 → 0 | 0.7 / 320.2 → 0.7 / 332.7 |
+| C08 | 775 | 261.8 → 269.9 | 106.1 | 2.54 | 114.4 | 155.5 | 524 → 521 | 37009 → 36945 | 0 → 0 | 0.2 / 151.7 → 0.3 / 164.2 |
+| **C09** | 779 | 167.1 → **105.0** | 106.2 | **0.99** | 82.6 | 22.4 | 3082 → 517 | 42610 → 1068 | 1026 → 512 | 7.3 / 74.8 → 0.2 / 4.4 |
+| **C10** | 783 | 400.2 → **293.7** | 178.2 | 1.65 | 137.1 | 156.6 | 4110 → 1545 | 83625 → 42083 | 1026 → 512 | 55.1 / 262.6 → 0.5 / 172.0 |
+| C11 | 787 | 242.4 → 245.3 | 85.8 | 2.86 | 87.2 | 158.1 | 523 → 517 | 36982 → 36911 | 3 → 0 | 0.2 / 147.3 → 0.2 / 149.4 |
+| C12 | 791 | 317.7 → 325.7 | 189.3 | 1.72 | 244.7 | 81.0 | 4622 → 3495 | 59504 → 36598 | 121 → 11 | 5.3 / 133.7 → 3.0 / 112.5 |
+
+Verdict by counts (the prediction was C09 owner jobs 3082 → about 522):
+
+- **C09**: 517 jobs for 517 requests, 2 statements per READ, service
+  74.8 → 4.4 ms, command 167.1 → 105.0 ms (−37 %, more than the spread).
+  It is 1.2 ms below the A2 target in one diagnostic sample: at the target,
+  not established as below it. What is left above the floor is 22.4 ms, of
+  which the owner is 4.6 ms; the 512 Store reader grants are the rest.
+- **C10**: jobs 4110 → 1545, owner wait 55.1 → 0.5 ms, command −106.5 ms
+  (−27 %). The remaining 172 ms of service is the write half (payload rows).
+- **C12**: jobs −1127, statements −22906, grants 121 → 11, service −21 ms,
+  command +8 ms. Counts moved as predicted; the time is inside the spread
+  and the cell is 245 ms of floor.
+- The nine cells with unchanged counts are 0.6 to 3.4 % slower than in
+  652–703 with equal or slightly higher service time (C04 +8.5 ms, C08
+  +12.5 ms of service for equal statements). Identical counts, so this is
+  host state between two runs 100 minutes apart, inside the 10 % spread.
+  It is not credited or debited to the change.
+- Storage: Store and overlay logical bytes equal in every cell. Overlay
+  allocated bytes are 4096 higher in C07, C08 and C09 (one block of a
+  268 MiB to 421 MiB file) and equal in the other nine. Logical size is
+  equal, so no row or page was added; recorded as one block of host
+  allocation and watched in the next samples.
+- Memory: no resident structure added; `daemon_vmhwm_bytes` C09 37822464 →
+  33894400, C10 38809600 → 18726912, others within their earlier range
+  (C01 and C02 swap between 14 M and 31 M in both directions).
+
+Lead's check of the implementer's claim: count tier at this HEAD
+(`342-lead-count-eb170b029.txt`: overlay `costs`, `compound`,
+`transactions`, `native_visit_fence`; workspace `native_visit_cost`; daemon
+`job_cost`, `read_cost`; 7 binaries, all ok). The pins of `read_cost.rs`
+are READ_BASE 1 job, 1 grant, 0 transactions, 2 statements and OPEN_BASE
+1 job, 0 grants, 1 transaction, 10 statements; the sample agrees (C09:
+Workspace 517 + Inode 519 statements for 512 READs). Hand-back checks were
+run by the implementer at `8ac4b4c4c` and read here, not rerun:
+`340-read-s4-host-daemon-2` (58 ok; the two known failures
+`complete_installed_roots`, `host_handoff`),
+`341-read-s4-attempt1-linux-forced_unmount`, `-mounted_parking`,
+`-mounted_concurrency` (ok), Clippy on both, `fmt --check`, guard.
+
+Open points carried by rows 1 and 2:
+
+- Decision L4-2 rests on the lane drain before `Revoke`: a READ parked
+  after its visit holds no engine row and is ended by the fence (staged on
+  a real mount). A READ that is inside a Store read during an unmount is
+  covered by source only, not by a test.
+- One exact count became a range: completed OPENs in the saturated parking
+  tests (16 to 20), because how many OPENs finish before the slots fill is
+  not fixed.
+- Production LOC 187485 → 187803 (+318) across the four commits; the old
+  source-holding READ/OPEN path is still in the tree. Its deletion (stage
+  5) is queued as a separate assignment and must bring the total down.
+- `mounted_failure_scope::a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_effect`
+  failed once and passed on its single rerun in the implementer's Linux
+  suite; no READ is involved. Not fixed; to be watched at the gate.
 

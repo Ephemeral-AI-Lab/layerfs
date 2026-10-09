@@ -1,0 +1,25 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "eb170b02980f9cdf0791cbf4b123269c2bb69b64",
+  "source_tree": "b4c836bed19880d4adf16747430bb8a2265d42d3",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/740-L-source-seal-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/741-runtime-release-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/742-daemon-release-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/743-build-provenance-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/744-C01-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/745-C01-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/746-C01-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/747-C01-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/748-C02-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/749-C02-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/750-C02-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/751-C02-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/752-C03-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/753-C03-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/754-C03-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/755-C03-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/756-C04-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/757-C04-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/758-C04-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/759-C04-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/760-C05-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/761-C05-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/762-C05-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/763-C05-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/764-C06-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/765-C06-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/766-C06-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/767-C06-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/768-C07-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/769-C07-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/770-C07-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/771-C07-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/772-C08-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/773-C08-L-clone-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/774-C08-L-configuration-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/775-C08-B-L-sample-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/776-C09-L-volume-eb170b029/\n?? core/docs/issues/307/checks/r7-optimization-20261009/777-C09-L-clone-eb170b029/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-configure-cell.py",
+    "C09",
+    "/tmp/layerfs-r7-build-provenance-eb170b029-20261009.json",
+    "/tmp/layerfs-r7-C09-L-inputs-eb170b029-20261009",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/777-C09-L-clone-eb170b029/result.json",
+    "layerfs-r7-C09-L-eb170b029-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 787750250,
+  "status": "PASS"
+}
