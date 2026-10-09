@@ -1,0 +1,8 @@
+cold_failure_scope-bd5834c6dd9aab4d exit=0 seconds=1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+directory_cost-a418e959b7b472e1 exit=0 seconds=5 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.68s
+fenced_port-47a98c1a1fe5e978 exit=0 seconds=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+filesystem_port-9a367c3ce80975d4 exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+native_coherence-8f50984178b1a2dd exit=0 seconds=0 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+native_jobs-80237cf905513ccf exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+owner-dff6c9b96cdb7d0c exit=0 seconds=1 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+store_read_drain-660daebb6ec0e838 exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s

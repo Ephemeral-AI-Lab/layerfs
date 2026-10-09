@@ -9,8 +9,8 @@
 use crate::{BaseView, SourceView, Workspace, WorkspaceResult};
 use layerfs_content::{object::inode_leaf::InodeKind, ContentError};
 use layerfs_overlay::{
-    NativeCookieOffer, NativeDirectoryPage, NativeMount, Overlay, OverlayError, OverlayResult,
-    PAGE_ROWS,
+    NativeCookieOffer, NativeDirectoryCursor, NativeDirectoryPage, NativeMount, Overlay,
+    OverlayError, OverlayResult, PAGE_ROWS,
 };
 use std::{fmt, sync::Arc};
 
@@ -57,7 +57,8 @@ pub struct NativeDirectoryBatch {
     pub first: u64,
     /// The offer whose fresh range the offsets are, to publish the accepted
     /// names with. None: the offsets are those of an already published
-    /// reply with these names, and nothing is published.
+    /// reply with these names, and nothing is published. An offer that
+    /// rewinds is published even when the reply accepts none of the names.
     pub publish: Option<NativeCookieOffer>,
 }
 impl fmt::Debug for NativeDirectoryVisit {
@@ -108,6 +109,7 @@ impl NativeDirectoryVisit {
     /// The visit always answers: what memory does not hold of the base is
     /// left to the one read that follows outside the owner. The reuse lookup
     /// is skipped only when the job itself found that no name is listed.
+    /// An offset from before the handle's last rewind lists nothing.
     pub fn perform(&self, db: &Overlay) -> OverlayResult<NativeDirectoryWindow> {
         let page = db.read_native_directory_visit(
             self.mount,
@@ -116,6 +118,17 @@ impl NativeDirectoryVisit {
             self.offset,
             self.after.as_deref(),
         )?;
+        if *page.cursor() == NativeDirectoryCursor::Rewound {
+            return Ok(NativeDirectoryWindow {
+                page,
+                listing: Some(NativeDirectoryListing {
+                    entries: Vec::new(),
+                    continuation: None,
+                    visited: 0,
+                }),
+                offer: None,
+            });
+        }
         let listing = (self.resident.identity().0.to_bytes() == page.source().root())
             .then(|| listing(&self.resident, &page).ok())
             .flatten();
@@ -131,6 +144,11 @@ impl NativeDirectoryVisit {
     }
 }
 impl NativeDirectoryWindow {
+    /// The request's offset was handed out before the handle was last
+    /// listed from offset 0: it is refused, and the window lists nothing.
+    pub fn rewound(&self) -> bool {
+        *self.page.cursor() == NativeDirectoryCursor::Rewound
+    }
     /// The reply's bound of one visit: two local windows, the merged window,
     /// and one published reply's names to compare with.
     pub const CHARGE: usize = 3

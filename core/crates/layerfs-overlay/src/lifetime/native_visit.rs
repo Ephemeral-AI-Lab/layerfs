@@ -58,6 +58,29 @@ impl Overlay {
         held: Held,
         live: bool,
     ) -> OverlayResult<(WorkspaceState, bool)> {
+        let (state, held) = self.fence_row(mount, serial, held, live)?;
+        Ok((state, held != 0))
+    }
+    /// The same fence on an open directory descriptor, and its floor: the
+    /// first cookie that is still an offset of the handle.
+    pub(crate) fn directory_fence(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+        live: bool,
+    ) -> OverlayResult<(WorkspaceState, u64)> {
+        let (state, floor) = self.fence_row(mount, serial, Held::Directory(handle), live)?;
+        let floor = u64::try_from(floor).map_err(|_| OverlayError::Invalid("directory floor"))?;
+        Ok((state, floor))
+    }
+    fn fence_row(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        held: Held,
+        live: bool,
+    ) -> OverlayResult<(WorkspaceState, i64)> {
         self.check_route(mount.route)?;
         let (owner, key) = (integer(mount.owner)?, integer(serial)?);
         let incarnation = mount.route.incarnation.as_slice();
@@ -67,7 +90,7 @@ impl Overlay {
                 r.get::<_, Option<i64>>(11)?,
                 r.get::<_, Option<i64>>(12)?,
                 r.get::<_, Option<bool>>(13)?,
-                r.get::<_, Option<bool>>(14)?,
+                r.get::<_, Option<i64>>(14)?,
             ))
         };
         let row = match held {

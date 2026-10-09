@@ -1,0 +1,13 @@
+===== native_directory-a2554d3c325012f1 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 4 tests
+test a_reply_listed_from_offset_0_again_is_published_afresh_and_earlier_offsets_list_nothing ... ok
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test next_directory_read_observes_parent_moved_by_the_atomic_namespace_job ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0

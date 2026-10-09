@@ -56,6 +56,12 @@ impl NativeFilesystem {
                 .await;
                 match prepared {
                     Ok(Ok(stream)) => enumerate(reply, stream, identity, &fence).await,
+                    // An offset from before the handle's last rewind: the
+                    // visit recorded nothing and nothing is retained.
+                    Ok(Err(failure)) if failure.rewound() => {
+                        reply.error(Errno::EINVAL);
+                        RequestDisposition::Complete
+                    }
                     // The typed failure still owns whatever was acquired.
                     Ok(Err(failure)) if failure.fenced() => {
                         reply.error(terminal::STOPPED);

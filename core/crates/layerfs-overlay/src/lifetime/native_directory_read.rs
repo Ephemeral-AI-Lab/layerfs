@@ -1,7 +1,6 @@
 //! READDIR's reading visit: one read-only owner job that records nothing.
 use crate::{
     db::{integer, unsigned},
-    lifetime::native_visit::Held,
     sql, DirectoryEntry, DirectoryEntryWindow, InodeKind, NativeDirectory, NativeDirectoryCursor,
     NativeDirectoryPage, NativeMount, Overlay, OverlayError, OverlayResult, StatementKind,
 };
@@ -20,16 +19,19 @@ pub(crate) fn decode_names(blob: &[u8]) -> Option<Vec<Vec<u8>>> {
     Some(names)
 }
 impl Overlay {
-    /// The reply that holds `cookie`, and the cookie's name in it.
+    /// The reply that holds `cookie`, and the cookie's name in it. A number
+    /// below the handle's floor is no offset since the handle's last rewind.
     pub(crate) fn native_directory_cursor(
         &self,
         directory: NativeDirectory,
         offset: u64,
+        floor: u64,
     ) -> OverlayResult<NativeDirectoryCursor> {
         match offset {
             0 => return Ok(NativeDirectoryCursor::Start),
             1 => return Ok(NativeDirectoryCursor::AfterDot),
             2 => return Ok(NativeDirectoryCursor::Names(None)),
+            _ if offset < floor => return Ok(NativeDirectoryCursor::Rewound),
             _ => {}
         }
         let (first, names) = self
@@ -40,8 +42,9 @@ impl Overlay {
                     &directory.mount.route.ns,
                     &integer(directory.owner)?,
                     &integer(offset)?,
+                    &integer(floor)?,
                 ],
-                24,
+                32,
                 |r| Ok((unsigned(r, 0)?, r.get::<_, Vec<u8>>(1)?)),
             )?
             .pop()
@@ -75,13 +78,31 @@ impl Overlay {
         if after.is_some_and(|name| name.is_empty() || name.len() > 255) {
             return Err(OverlayError::Invalid("native directory continuation"));
         }
-        let (state, _) = self.native_fence(mount, serial, Held::Directory(handle), true)?;
+        let (state, floor) = self.directory_fence(mount, serial, handle, true)?;
         let directory = NativeDirectory {
             mount,
             owner: handle,
             serial,
         };
-        let cursor = self.native_directory_cursor(directory, offset)?;
+        let cursor = self.native_directory_cursor(directory, offset, floor)?;
+        let source = self.visit_source(mount, state)?;
+        if cursor == NativeDirectoryCursor::Rewound {
+            return Ok(NativeDirectoryPage {
+                directory,
+                cursor,
+                floor,
+                parent: None,
+                after: None,
+                local: DirectoryEntryWindow {
+                    source,
+                    parent: serial,
+                    parent_inode: None,
+                    active: Vec::new(),
+                    captured: Vec::new(),
+                },
+                local_kinds: Vec::new(),
+            });
+        }
         if let (Some(after), Some(minimum)) = (after, cursor.after_name()) {
             if after < minimum {
                 return Err(OverlayError::Invalid("native directory continuation"));
@@ -91,7 +112,6 @@ impl Overlay {
             0 | 1 => Some(self.native_parent(mount, serial)?),
             _ => None,
         };
-        let source = self.visit_source(mount, state)?;
         let parent_inode = self.inode_at(mount.route, serial, state.active, state.installed)?;
         let after = after.or(cursor.after_name()).map(<[u8]>::to_vec);
         let start = after.as_deref().unwrap_or(&[]);
@@ -143,6 +163,7 @@ impl Overlay {
         Ok(NativeDirectoryPage {
             directory,
             cursor,
+            floor,
             parent,
             after,
             local: DirectoryEntryWindow {

@@ -90,13 +90,22 @@ pub(crate) const SOURCE_NAMES_KINDS: &str =
     WHERE i.ns=e.ns AND i.serial=e.serial AND i.gen<=?5 AND i.gen>?6 ORDER BY i.gen DESC LIMIT 1)
     FROM directory_entry e INDEXED BY directory_entry_capture
     WHERE e.ns=?1 AND e.gen=?2 AND e.parent=?3 AND e.name>?4 ORDER BY e.name LIMIT 64";
-/// The published reply that holds one cookie of an open directory.
+/// The published reply that holds one cookie of an open directory, at or
+/// above the handle's floor.
 pub(crate) const COOKIE_PAGE: &str = "SELECT first_cookie,names FROM native_cookie
-    WHERE ns=?1 AND owner=?2 AND first_cookie<=?3 ORDER BY first_cookie DESC LIMIT 1";
-/// The latest published reply of an open directory listed after one name.
-pub(crate) const COOKIE_PAGE_AFTER: &str = "SELECT first_cookie,names FROM native_cookie
-    INDEXED BY native_cookie_after WHERE ns=?1 AND owner=?2 AND after=?3
+    WHERE ns=?1 AND owner=?2 AND first_cookie<=?3 AND first_cookie>=?4
     ORDER BY first_cookie DESC LIMIT 1";
+/// The latest published reply of an open directory listed after one name,
+/// at or above the handle's floor.
+pub(crate) const COOKIE_PAGE_AFTER: &str = "SELECT first_cookie,names FROM native_cookie
+    INDEXED BY native_cookie_after WHERE ns=?1 AND owner=?2 AND after=?3 AND first_cookie>=?4
+    ORDER BY first_cookie DESC LIMIT 1";
+/// One bounded window of an open directory's replies below its floor: the
+/// lowest `?4 + 1` of them, found by one seek and that many index steps.
+pub(crate) const COOKIE_RETIRE: &str = "DELETE FROM native_cookie
+    WHERE ns=?1 AND owner=?2 AND first_cookie<?3 AND first_cookie<=ifnull((SELECT first_cookie
+    FROM native_cookie WHERE ns=?1 AND owner=?2 AND first_cookie<?3
+    ORDER BY first_cookie LIMIT 1 OFFSET ?4),?3)";
 /// At most one more than the replies a RELEASEDIR deletes in its own job:
 /// the LIMIT is `lifetime::INLINE_PAGES + 1`, kept equal by hand.
 pub(crate) const COOKIE_PAGES: &str = "SELECT first_cookie,length(names) FROM native_cookie
@@ -229,7 +238,7 @@ pub(crate) const FENCE_FILE: &str = fence!(
 pub(crate) const FENCE_HANDLE: &str = fence!(
     "CASE WHEN EXISTS(SELECT 1 FROM file_handle f WHERE f.ns=w.ns AND f.owner=?5 AND f.mount=?3 AND f.serial=?4) OR EXISTS(SELECT 1 FROM native_directory d WHERE d.ns=w.ns AND d.owner=?5 AND d.mount=?3 AND d.serial=?4 AND d.closed=0) THEN 1 END"
 );
-/// An open directory descriptor of the inode.
+/// An open directory descriptor of the inode; the column is its floor.
 pub(crate) const FENCE_DIRECTORY: &str = fence!(
-    "SELECT 1 FROM native_directory d WHERE d.ns=w.ns AND d.owner=?5 AND d.mount=?3 AND d.serial=?4 AND d.closed=0"
+    "SELECT d.floor FROM native_directory d WHERE d.ns=w.ns AND d.owner=?5 AND d.mount=?3 AND d.serial=?4 AND d.closed=0"
 );

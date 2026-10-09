@@ -1,0 +1,14 @@
+===== native_directory-759a31465d4c06d7 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 5 tests
+test a_directory_listed_once_stores_fewer_rows_and_bytes_than_a_row_and_an_index_entry_per_name ... ok
+test a_handle_read_from_offset_0_again_stores_one_listing_however_often_it_is_rewound ... ok
+test a_handle_that_seeks_back_reuses_its_replies_and_a_long_handle_retires_in_bounded_indexed_turns ... ok
+test an_offset_from_before_a_rewind_is_refused_and_later_offsets_resume_after_their_names ... ok
+test only_accepted_names_become_offsets_and_a_closed_handle_reads_and_publishes_nothing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0

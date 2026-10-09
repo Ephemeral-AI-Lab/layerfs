@@ -1,5 +1,6 @@
 //! Native directory offsets: one read-only visit per window, one row per
-//! published reply, reuse on a rewound handle, and bounded retirement.
+//! published reply, reuse on a handle that seeks back, the replies a rewind
+//! retires, and bounded retirement.
 use layerfs_overlay::{
     Binding, Changes, CleanupState, DirectoryEntryChange, Inode, InodeKind, MaintenanceCursor,
     NativeCookieOffer, NativeDecision, NativeDirectory, NativeDirectoryCursor, NativeDirectoryPage,
@@ -140,10 +141,16 @@ impl Fixture {
             .counts
             .owner_details
     }
-    /// One whole enumeration, reply by reply, every window name accepted:
-    /// the names and the number of replies that published a row.
+    /// One whole enumeration from the first name, reply by reply, every
+    /// window name accepted: the names and the number of replies that
+    /// published a row.
     fn enumerate(&self) -> (Vec<Vec<u8>>, usize) {
-        let (mut listed, mut offset, mut published) = (Vec::new(), 2, 0);
+        self.enumerate_from(2)
+    }
+    /// The same from `start`: offset 0 is a rewind, offset 2 a seek back to
+    /// the first name.
+    fn enumerate_from(&self, start: u64) -> (Vec<Vec<u8>>, usize) {
+        let (mut listed, mut offset, mut published) = (Vec::new(), start, 0);
         loop {
             let page = self.read(offset).unwrap();
             let window = names_of(&page);
@@ -303,12 +310,21 @@ fn only_accepted_names_become_offsets_and_a_closed_handle_reads_and_publishes_no
         .unwrap();
     assert_eq!(names_of(&later), names(&["d"]));
 
-    // A rewound handle is offered its latest reply listed after the same
-    // name; a reply after another name has none.
-    let rewound = f.offer(&f.read(0).unwrap());
+    // A handle that seeks back to its first name is offered its latest
+    // reply listed after the same name; a reply after another name has
+    // none. At offset 0 the offer is a rewind and reuses nothing; unpublished
+    // it changes nothing.
+    let again = f.offer(&f.read(2).unwrap());
+    assert!(!again.rewinds());
     assert_eq!(
-        rewound.existing(),
+        again.existing(),
         Some((b.first(), names(&["a", "b"]).as_slice()))
+    );
+    let rewound = f.offer(&f.read(0).unwrap());
+    assert!(rewound.rewinds() && rewound.existing().is_none());
+    assert_eq!(
+        names_of(&f.read(a.first()).unwrap()),
+        names(&["b", "c", "d"])
     );
     assert!(f
         .offer(&f.read(b.first() + 1).unwrap())
@@ -401,13 +417,15 @@ fn only_accepted_names_become_offsets_and_a_closed_handle_reads_and_publishes_no
 }
 
 #[test]
-fn a_rewound_handle_reuses_its_replies_and_a_long_handle_retires_in_bounded_indexed_turns() {
+fn a_handle_that_seeks_back_reuses_its_replies_and_a_long_handle_retires_in_bounded_indexed_turns()
+{
     let f = Fixture::new();
     let plans = f.db().explain_native_directory(f.directory).unwrap();
     println!("NATIVE_DIRECTORY_PLANS {plans:#?}");
     for label in [
         "cookie-offset",
         "cookie-window",
+        "cookie-retire",
         "cookie-after",
         "names-kinds",
         "open-fence",
@@ -444,8 +462,8 @@ fn a_rewound_handle_reuses_its_replies_and_a_long_handle_retires_in_bounded_inde
     assert_eq!(listed.len(), 2 * PAGE_ROWS + 2);
     assert!(listed.windows(2).all(|pair| pair[0] < pair[1]));
     assert_eq!((published, f.pages()), (3, empty + 3));
-    // A rewound handle lists the same names at the same offsets and writes
-    // nothing, however often.
+    // A handle that seeks back to its first name lists the same names at the
+    // same offsets and writes nothing, however often.
     let begun = f.db().diagnostics().statements[StatementKind::Begin as usize].executions;
     for _ in 0..3 {
         assert_eq!(f.enumerate(), (listed.clone(), 0));
@@ -456,7 +474,7 @@ fn a_rewound_handle_reuses_its_replies_and_a_long_handle_retires_in_bounded_inde
         begun
     );
     // One name more in the middle: the replies from there on are listed
-    // again under fresh offsets, once; the next rewind reuses them.
+    // again under fresh offsets, once; the next seek back reuses them.
     f.bind(b"n0064a", Some(9000));
     let (changed, published) = f.enumerate();
     assert_eq!((changed.len(), published), (2 * PAGE_ROWS + 3, 2));
@@ -484,9 +502,13 @@ fn a_rewound_handle_reuses_its_replies_and_a_long_handle_retires_in_bounded_inde
             ],
         )
     };
-    let (count, last, first) = cost(0);
-    // The fence, the parent, the directory's row, the window, the reuse.
-    assert_eq!((count, first), (PAGE_ROWS, [1, 2, 1, 1, 0]));
+    let (count, reused, first) = cost(0);
+    // The fence, the parent, the directory's row, the window, and the reply
+    // listed from the start, which makes the offer a rewind that reuses none.
+    assert_eq!((count, reused, first), (PAGE_ROWS, None, [1, 2, 1, 1, 0]));
+    let (count, last, start) = cost(2);
+    // The fence, the directory's row, the window, the reuse.
+    assert_eq!((count, start), (PAGE_ROWS, [1, 1, 1, 1, 0]));
     let (count, last, middle) = cost(last.unwrap());
     // The fence, the offset's reply, the directory's row, the window, the reuse.
     assert_eq!((count, middle), (PAGE_ROWS, [1, 2, 1, 1, 0]));
@@ -532,6 +554,227 @@ fn a_rewound_handle_reuses_its_replies_and_a_long_handle_retires_in_bounded_inde
     assert_eq!(work.total().sorts, 0);
     assert_eq!(work.total().autoindex_rows, 0);
     assert_eq!(work.total().reprepares, 0);
+    f.db().revoke_native_mount(f.mount).unwrap();
+}
+
+#[test]
+fn a_handle_read_from_offset_0_again_stores_one_listing_however_often_it_is_rewound() {
+    let f = Fixture::new();
+    f.fill(10 * PAGE_ROWS);
+    let before = f.db().diagnostics();
+    let empty = f.pages();
+    let (listed, published) = f.enumerate_from(0);
+    assert_eq!((listed.len(), published), (10 * PAGE_ROWS, 10));
+    assert_eq!(f.pages(), empty + 10);
+    // Five rewinds, each after one more name that sorts before every other:
+    // every window's boundary moves, so every reply of every listing differs
+    // from the one before it. The handle still stores one listing.
+    for round in 0..5_u64 {
+        f.bind(format!("a{round:03}").as_bytes(), Some(9000 + round));
+        let (listed, published) = f.enumerate_from(0);
+        assert_eq!(listed.len(), 10 * PAGE_ROWS + 1 + round as usize);
+        assert!(listed.windows(2).all(|pair| pair[0] < pair[1]));
+        assert_eq!(published, 11, "round {round}");
+        assert_eq!(f.pages(), empty + 11, "round {round}");
+    }
+    // A rewind over an unchanged directory stores its one listing again.
+    for _ in 0..3 {
+        assert_eq!(f.enumerate_from(0).1, 11);
+        assert_eq!(f.pages(), empty + 11);
+    }
+    // The earlier replies go a bounded window with each reply published
+    // after the rewind: 11 rows, then 11 - 8 + 1, then 4 - 3 + 1, then 3.
+    let mut offset = 0;
+    for stored in [4, 2, 3] {
+        let page = f.read(offset).unwrap();
+        let offer = f.offer(&page);
+        assert!(offer.existing().is_none());
+        let window = names_of(&page);
+        f.db().publish_native_cookies(&offer, &window).unwrap();
+        offset = offer.first() + window.len() as u64 - 1;
+        assert_eq!(f.pages(), empty + stored);
+    }
+    let work = f.db().diagnostics().since(&before);
+    assert_eq!(work.total().fullscan_steps, 0);
+    assert_eq!(work.total().sorts, 0);
+    assert_eq!(work.total().autoindex_rows, 0);
+    assert_eq!(work.total().reprepares, 0);
+    // What a rewind left is released with the handle: more rows than its
+    // RELEASEDIR deletes are retired by the closed handle's item.
+    for _ in 0..3 {
+        f.enumerate_from(0);
+    }
+    f.bind(b"a999", Some(9999));
+    let page = f.read(0).unwrap();
+    let offer = f.offer(&page);
+    f.db()
+        .publish_native_cookies(&offer, &names_of(&page))
+        .unwrap();
+    assert_eq!(f.pages(), empty + 11 - 8 + 1);
+    let page = f.read(0).unwrap();
+    let offer = f.offer(&page);
+    f.db()
+        .publish_native_cookies(&offer, &names_of(&page))
+        .unwrap();
+    assert_eq!(f.pages(), empty + 4 - 4 + 1);
+    f.enumerate_from(0);
+    f.bind(b"a998", Some(9998));
+    let page = f.read(0).unwrap();
+    let offer = f.offer(&page);
+    f.db()
+        .publish_native_cookies(&offer, &names_of(&page))
+        .unwrap();
+    assert_eq!(f.pages(), empty + 11 - 8 + 1);
+    f.db()
+        .close_native_directory(f.mount, 1, f.directory.owner_id())
+        .unwrap();
+    assert_eq!(f.maintain(), Vec::<u64>::new(), "four rows: deleted inline");
+    assert_eq!(f.pages(), empty - 1);
+    f.db().revoke_native_mount(f.mount).unwrap();
+}
+
+#[test]
+fn an_offset_from_before_a_rewind_is_refused_and_later_offsets_resume_after_their_names() {
+    let f = Fixture::new();
+    f.fill(20 * PAGE_ROWS);
+    let empty = f.pages();
+    // One reply, accepted whole, at `offset`: its first cookie.
+    let reply = |offset: u64| {
+        let page = f.read(offset).unwrap();
+        let offer = f.offer(&page);
+        let window = names_of(&page);
+        f.db().publish_native_cookies(&offer, &window).unwrap();
+        (offer.first(), window)
+    };
+    let (first, window) = reply(0);
+    let (second, _) = reply(first + PAGE_ROWS as u64 - 1);
+    let old = [first, first + 5, first + 63, second, second + 63];
+    f.enumerate();
+    assert_eq!(f.pages(), empty + 20);
+    for offset in old {
+        assert!(matches!(
+            f.read(offset).unwrap().cursor(),
+            NativeDirectoryCursor::Names(Some(_))
+        ));
+    }
+    // A reading visit at offset 0 writes nothing: without its publication
+    // every offset stands and every row stays.
+    let unpublished = f.offer(&f.read(0).unwrap());
+    assert!(unpublished.rewinds());
+    assert_eq!(
+        f.read(first + 5).unwrap().cursor().after_name(),
+        Some(window[5].as_slice())
+    );
+    assert_eq!(f.pages(), empty + 20);
+
+    // The rewind: the reply listed from offset 0 is published. Every earlier
+    // offset is refused from then on, whether its row is deleted yet or not.
+    let later = f.read(second).unwrap();
+    let stale = f.offer(&later);
+    let (third, again) = reply(0);
+    assert_eq!(again, window);
+    assert!(third >= unpublished.first() + PAGE_ROWS as u64);
+    assert_eq!(f.pages(), empty + 20 - 8 + 1);
+    for offset in old {
+        let page = f.read(offset).unwrap();
+        assert_eq!(*page.cursor(), NativeDirectoryCursor::Rewound);
+        assert!(names_of(&page).is_empty() && page.parent().is_none());
+    }
+    // Offers made before the rewind was published write nothing.
+    for (offer, names) in [(&unpublished, &window), (&stale, &names_of(&later))] {
+        assert!(matches!(
+            f.db().publish_native_cookies(offer, names),
+            Err(OverlayError::Stale)
+        ));
+    }
+    assert_eq!(f.pages(), empty + 20 - 8 + 1);
+    // A number never handed out is Stale at or above the floor; below it
+    // nothing is told apart.
+    assert!(matches!(f.read(third + 64), Err(OverlayError::Stale)));
+    assert!(matches!(
+        f.read(unpublished.first()).unwrap().cursor(),
+        NativeDirectoryCursor::Rewound
+    ));
+
+    // Offsets handed out since the rewind resume strictly after their names,
+    // also by a seek back, and a reply listed again is reused, not stored.
+    assert_eq!(
+        f.read(third + 9).unwrap().cursor().after_name(),
+        Some(window[9].as_slice())
+    );
+    let (fourth, next) = reply(third + 63);
+    assert_eq!(next[0], format!("n{:04}", PAGE_ROWS).into_bytes());
+    assert_eq!(f.pages(), empty + 13 - 8 + 1);
+    let back = f.read(third + 63).unwrap();
+    assert_eq!(names_of(&back), next);
+    let offer = f.offer(&back);
+    assert!(!offer.rewinds());
+    assert_eq!(offer.existing(), Some((fourth, next.as_slice())));
+    let from_first_name = f.offer(&f.read(2).unwrap());
+    assert!(!from_first_name.rewinds());
+    assert_eq!(from_first_name.existing(), Some((third, window.as_slice())));
+    f.bind(b"n0063a", Some(8000));
+    assert_eq!(
+        names_of(&f.read(third + 63).unwrap())[0],
+        b"n0063a".to_vec(),
+        "strictly after n0063, whatever was bound since"
+    );
+    assert_eq!(f.pages(), empty + 6, "reading stores nothing");
+
+    // A reply that accepted no name still publishes its rewind: the floor
+    // moves and a window of earlier replies goes; no row is added.
+    let page = f.read(0).unwrap();
+    let offer = f.offer(&page);
+    assert!(offer.rewinds());
+    f.db().publish_native_cookies(&offer, &[]).unwrap();
+    assert_eq!(f.pages(), empty);
+    for offset in [third, third + 63, fourth] {
+        assert_eq!(
+            *f.read(offset).unwrap().cursor(),
+            NativeDirectoryCursor::Rewound
+        );
+    }
+    // No reply is left, so the next reading from offset 0 is a first one.
+    let fresh = f.offer(&f.read(0).unwrap());
+    assert!(!fresh.rewinds() && fresh.existing().is_none());
+    assert!(matches!(
+        f.db().publish_native_cookies(&fresh, &[]),
+        Err(OverlayError::Invalid("native cookie names"))
+    ));
+
+    // Another handle of the same directory keeps its own offsets and floor.
+    let other = Fixture::open(f.db(), f.mount, u64::MAX - 1);
+    let read = |offset: u64| {
+        f.db()
+            .read_native_directory_visit(f.mount, 1, other.owner_id(), offset, None)
+    };
+    let theirs = f.db().offer_native_cookies(&read(0).unwrap()).unwrap();
+    f.db()
+        .publish_native_cookies(&theirs, &window[..3])
+        .unwrap();
+    reply(0);
+    reply(0);
+    assert_eq!(
+        read(theirs.first() + 2).unwrap().cursor().after_name(),
+        Some(window[2].as_slice())
+    );
+
+    // A closed handle with rows left by a rewind is retired like any other:
+    // 20 replies, a rewind that deletes 8 and adds 1, then RELEASEDIR.
+    let mut offset = 0;
+    for _ in 0..20 {
+        offset = reply(offset).0 + 63;
+    }
+    reply(0);
+    let held = f.pages();
+    f.db()
+        .close_native_directory(f.mount, 1, f.directory.owner_id())
+        .unwrap();
+    assert_eq!(f.maintain(), [8, 5, 1], "13 rows and the header");
+    assert_eq!(f.pages(), held - 14);
+    f.db()
+        .close_native_directory(f.mount, 1, other.owner_id())
+        .unwrap();
     f.db().revoke_native_mount(f.mount).unwrap();
 }
 

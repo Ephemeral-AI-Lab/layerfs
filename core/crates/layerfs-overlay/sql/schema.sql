@@ -232,6 +232,10 @@ CREATE TABLE native_directory (
     serial INTEGER NOT NULL CHECK(serial>0),
     request BLOB NOT NULL CHECK(length(request)=8),
     closed INTEGER NOT NULL DEFAULT 0 CHECK(closed IN(0,1)),
+    -- The first cookie of the reply that last listed this handle from
+    -- offset 0 over published replies; 0 until then. A reply row below it
+    -- is retired and none of its cookies is an offset.
+    floor INTEGER NOT NULL DEFAULT 0 CHECK(floor>=0),
     PRIMARY KEY(ns,owner), UNIQUE(ns,mount,request)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_directory_open ON native_directory(ns,mount,owner) WHERE closed=0;
@@ -249,4 +253,4 @@ CREATE TABLE native_cookie (
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_cookie_after ON native_cookie(ns,owner,after,first_cookie);
-PRAGMA user_version=31;
+PRAGMA user_version=32;

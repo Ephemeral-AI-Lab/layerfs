@@ -27,6 +27,10 @@ pub enum NativeDirectoryCursor {
     Start,
     AfterDot,
     Names(Option<Vec<u8>>),
+    /// The offset was handed out before the handle was last listed from
+    /// offset 0 over published replies. It denotes no position: the request
+    /// is refused and the page lists nothing.
+    Rewound,
 }
 impl NativeDirectoryCursor {
     pub fn after_name(&self) -> Option<&[u8]> {
@@ -44,6 +48,8 @@ impl NativeDirectoryCursor {
 pub struct NativeDirectoryPage {
     pub(crate) directory: NativeDirectory,
     pub(crate) cursor: NativeDirectoryCursor,
+    /// The handle's floor as the visit's fence read it.
+    pub(crate) floor: u64,
     /// The parent the directory was reached through, read only for a reply
     /// that starts before its `..` entry.
     pub(crate) parent: Option<u64>,
@@ -72,12 +78,27 @@ impl NativeDirectoryPage {
 /// open directory that was listed after the same name, and a fresh range of
 /// `PAGE_ROWS` numbers no one else holds. Neither makes an offset valid;
 /// only publication of accepted names does.
+///
+/// An offer made at offset 0 for a handle that has published replies is a
+/// rewind: it reuses none, and its publication raises the handle's floor to
+/// its fresh range, which retires every earlier reply.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NativeCookieOffer {
     pub(crate) directory: NativeDirectory,
     pub(crate) after: Vec<u8>,
     pub(crate) first: u64,
-    pub(crate) existing: Option<(u64, Vec<Vec<u8>>)>,
+    pub(crate) published: Published,
+}
+/// What an offer found among the handle's published replies.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Published {
+    /// No reply listed after the same name.
+    None,
+    /// The latest reply listed after the same name: its first cookie and
+    /// its names, to reuse.
+    Latest(u64, Vec<Vec<u8>>),
+    /// A reply listed from the start, found at offset 0: a rewind.
+    Rewind,
 }
 impl NativeCookieOffer {
     pub const fn directory(&self) -> NativeDirectory {
@@ -87,17 +108,22 @@ impl NativeCookieOffer {
     pub const fn first(&self) -> u64 {
         self.first
     }
+    /// Whether publishing this offer retires the handle's earlier replies.
+    /// Such an offer is published even when its reply accepted no name.
+    pub const fn rewinds(&self) -> bool {
+        matches!(self.published, Published::Rewind)
+    }
     /// The first cookie and the names of the published reply to reuse.
     pub fn existing(&self) -> Option<(u64, &[Vec<u8>])> {
-        self.existing
-            .as_ref()
-            .map(|(first, names)| (*first, names.as_slice()))
+        match &self.published {
+            Published::Latest(first, names) => Some((*first, names.as_slice())),
+            _ => None,
+        }
     }
     pub fn heap_bytes(&self) -> usize {
         self.after.capacity()
-            + self.existing.as_ref().map_or(0, |(_, names)| {
-                names.capacity() * std::mem::size_of::<Vec<u8>>()
-                    + names.iter().map(Vec::capacity).sum::<usize>()
+            + self.existing().map_or(0, |(_, names)| {
+                std::mem::size_of_val(names) + names.iter().map(Vec::capacity).sum::<usize>()
             })
     }
 }

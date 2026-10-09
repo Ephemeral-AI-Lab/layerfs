@@ -232,6 +232,18 @@ impl Rig {
         let work = self.client.diagnostics().unwrap();
         (work.maintenance_jobs, work.maintenance_rows)
     }
+    /// Handle and reply rows the engine stores for the home Workspace.
+    fn stored(&self) -> u64 {
+        let done = finish(
+            &self.client,
+            self.bound.route(),
+            Command::Resources { global: false },
+        );
+        match done.result() {
+            Ok(Response::Resources(resources)) => resources.counts.owner_details,
+            other => panic!("resources: {other:?}"),
+        }
+    }
     /// Taken once every result of the request under observation is returned.
     fn snapshot(&self) -> Snapshot {
         until("owner results returned", || {
@@ -848,6 +860,126 @@ fn a_reply_whose_inherited_names_memory_does_not_hold_takes_one_reader() {
     let (page, cost) = rig.measured(|| rig.readdir(local, handle, 0));
     assert_eq!(page.len(), 2 + SMALL);
     assert_eq!(cost, READDIR_DATA.cost());
+    rig.stop();
+}
+
+/// READDIR at offset 0 of a handle that has published replies: the same two
+/// visits. The publishing visit also raises the handle's floor and deletes
+/// one bounded window of the replies below it: two statements more, and one
+/// execution for each of the 8 rows that go.
+const READDIR_REWIND: Pinned = Pinned {
+    jobs: (2, 0, 0),
+    grants: 0,
+    sql: &[
+        TRANSACTION[0],
+        TRANSACTION[1],
+        TRANSACTION[2],
+        ("Workspace", 2, 2),
+        ("Inode", 1, 1),
+        ("DirectoryEntry", 1, 1),
+        ("Lease", 5, 14),
+    ],
+};
+/// A later reply of a handle that has a floor: one statement more, the
+/// bounded delete, here of 8 further rows. It finds nothing once the
+/// earlier replies are gone.
+const READDIR_AFTER_REWIND: Pinned = Pinned {
+    jobs: (2, 0, 0),
+    grants: 0,
+    sql: &[
+        TRANSACTION[0],
+        TRANSACTION[1],
+        TRANSACTION[2],
+        ("Workspace", 2, 2),
+        ("Inode", 1, 1),
+        ("DirectoryEntry", 1, 1),
+        ("Lease", 4, 13),
+    ],
+};
+
+#[test]
+fn a_rewound_handle_stores_one_listing_and_refuses_the_offsets_it_gave_before() {
+    let rig = Rig::new("directory-rewind", 185, CACHE);
+    let replies = 20;
+    let directory = rig.local_directory("rewound", replies * WINDOW);
+    let handle = rig.opendir(directory);
+    let mut open = rig.stored();
+    let idle = rig.maintenance();
+
+    // An ordinary listing: one row per reply, at the ordinary cost.
+    let (first, cost) = rig.measured(|| rig.readdir(directory, handle, 0));
+    assert_eq!(cost, READDIR_DATA.cost());
+    let mut before = vec![first[2].1, first.last().unwrap().1];
+    let (page, cost) = rig.measured(|| rig.readdir(directory, handle, before[1]));
+    assert_eq!(cost, READDIR_DATA.cost());
+    before.push(page.last().unwrap().1);
+    let (rest, more) = rig.rest(directory, handle, before[2]);
+    assert_eq!((rest.len(), more), ((replies - 2) * WINDOW, replies - 2));
+    assert_eq!(rig.stored(), open + replies as u64);
+
+    // Five rewinds, each after one more name that sorts before every other,
+    // so every reply of every listing differs from the last one's. Each
+    // listing is complete, and the handle stores one listing, not six.
+    let mut early = Vec::new();
+    for round in 0..5 {
+        let created = format!("a-{round}");
+        // The created file's own rows are not rows of the handle.
+        let quiet = rig.stored();
+        rig.mutate(
+            directory,
+            MutationInput::Named(create(directory, name(&created), 0o644)),
+        );
+        open += rig.stored() - quiet;
+        early.push(created.into_bytes());
+        let (page, cost) = rig.measured(|| rig.readdir(directory, handle, 0));
+        assert_eq!(cost, READDIR_REWIND.cost(), "round {round}");
+        assert_eq!(page.len(), 2 + WINDOW);
+        let (next, cost) = rig.measured(|| rig.readdir(directory, handle, page.last().unwrap().1));
+        assert_eq!(cost, READDIR_AFTER_REWIND.cost(), "round {round}");
+        let (rest, more) = rig.rest(directory, handle, next.last().unwrap().1);
+        assert_eq!(more, replies - 1);
+        let listed: Vec<Vec<u8>> = page
+            .iter()
+            .chain(&next)
+            .map(|(name, _)| name.clone())
+            .chain(rest)
+            .collect();
+        let wanted: Vec<Vec<u8>> = [b".".to_vec(), b"..".to_vec()]
+            .into_iter()
+            .chain(early.iter().cloned())
+            .chain((0..replies * WINDOW).map(|index| child(index).into_bytes()))
+            .collect();
+        assert_eq!(listed, wanted, "round {round}");
+        assert_eq!(rig.stored(), open + replies as u64 + 1, "round {round}");
+        // Every offset given before this rewind is refused as an invalid
+        // argument of its own request; nothing is retained for it.
+        for offset in &before {
+            let refused = rig.try_readdir(directory, handle, *offset).unwrap_err();
+            assert!(refused.rewound(), "{refused:?}");
+            wait(refused.relinquish()).unwrap();
+        }
+        before = vec![page[2].1, page.last().unwrap().1, next.last().unwrap().1];
+        // Offsets given since still resume strictly after their names.
+        let again = rig.readdir(directory, handle, before[1]);
+        assert_eq!(again, next, "round {round}");
+    }
+    assert_eq!(rig.maintenance(), idle, "a rewind queues nothing");
+
+    // A rewind read only as far as its first reply leaves the rest of the
+    // earlier listing to the handle's release: 21 rows, 8 deleted, 1 added.
+    rig.readdir(directory, handle, 0);
+    assert_eq!(
+        rig.stored(),
+        open + (replies as u64 + 1) - INLINE as u64 + 1
+    );
+    rig.releasedir(directory, handle);
+    let retired = rig.maintenance();
+    assert_eq!(
+        (retired.0 - idle.0, retired.1 - idle.1),
+        (3, 14 + 1),
+        "14 rows in two turns, then the handle"
+    );
+    assert_eq!(rig.stored(), open - 1);
     rig.stop();
 }
 

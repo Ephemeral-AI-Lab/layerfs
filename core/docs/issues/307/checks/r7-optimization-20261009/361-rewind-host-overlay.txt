@@ -1,0 +1,1 @@
+native_directory-759a31465d4c06d7 exit=0 seconds=2 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s

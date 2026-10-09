@@ -180,8 +180,9 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
         visit(&b, directory, listed.first + 2, None),
         Err(OverlayError::Stale)
     ));
-    // A rewound handle is answered with the reply it was given: the same two
-    // names at the same offsets, and nothing to publish.
+    // A handle that seeks back to its first name is answered with the reply
+    // it was given: the same two names at the same offsets, and nothing to
+    // publish.
     let mut after = None;
     let again = loop {
         let again = batch(&b, visit(&b, directory, 2, after.take()).unwrap());
@@ -213,6 +214,61 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
     ));
     b.overlay.revoke_native_mount(mount).unwrap();
 }
+#[test]
+fn a_reply_listed_from_offset_0_again_is_published_afresh_and_earlier_offsets_list_nothing() {
+    let b = Bench::new("native-directory-rewind");
+    b.applied(create(1, "zz-local"), T1);
+    let mount = b.overlay.create_native_mount(b.route(), 1).unwrap();
+    let directory = open(&b, mount, 1, 1);
+    let publish = |listed: &NativeDirectoryBatch, accepted: usize| {
+        let names: Vec<_> = listed.entries.iter().map(|e| e.name.clone()).collect();
+        let offer = listed.publish.as_ref().expect("a reply to publish");
+        b.overlay
+            .publish_native_cookies(offer, &names[..accepted])
+            .unwrap();
+    };
+    // The first listing from offset 0 is an ordinary one.
+    let first = batch(&b, visit(&b, directory, 0, None).unwrap());
+    assert!(first.entries.len() > 2);
+    assert!(!first.publish.as_ref().unwrap().rewinds());
+    publish(&first, first.entries.len());
+    let last = first.first + first.entries.len() as u64 - 1;
+    // A seek back to the first name reuses that reply and publishes nothing.
+    let back = batch(&b, visit(&b, directory, 2, None).unwrap());
+    assert_eq!((back.first, back.publish.is_none()), (first.first, true));
+
+    // The same names from offset 0 again: a rewind. The reply is not the
+    // earlier one at its offsets but a fresh one, to be published.
+    let again = batch(&b, visit(&b, directory, 0, None).unwrap());
+    assert_eq!(again.entries, first.entries);
+    assert!(again.first > last);
+    assert!(again.publish.as_ref().unwrap().rewinds());
+    // Until it is published the earlier offsets stand.
+    assert!(!visit(&b, directory, last, None).unwrap().rewound());
+    publish(&again, 2);
+    for offset in [first.first, last] {
+        let window = visit(&b, directory, offset, None).unwrap();
+        assert!(window.rewound());
+        assert!(window.offer.is_none() && window.page.local.active.is_empty());
+        let listed = window.finish(None).unwrap();
+        assert!(listed.entries.is_empty() && listed.continuation.is_none());
+        assert!(listed.publish.is_none());
+    }
+    // An offset of the new reply resumes strictly after its name.
+    let next = visit(&b, directory, again.first + 1, None).unwrap();
+    assert!(!next.rewound());
+    assert_eq!(
+        next.page.cursor().after_name(),
+        Some(first.entries[1].name.as_slice())
+    );
+    let next = batch(&b, next);
+    assert_eq!(next.entries[..], first.entries[2..]);
+    b.overlay
+        .close_native_directory(directory.mount(), directory.serial(), directory.owner_id())
+        .unwrap();
+    b.overlay.revoke_native_mount(mount).unwrap();
+}
+
 #[test]
 fn opened_directory_retains_parent_and_metadata_after_forget_and_rmdir() {
     let b = Bench::new("native-directory-removed");

@@ -12,11 +12,20 @@ describes this implementation; the R2 flow it replaced (a class 2 directory
 source held across page, cookie plan, publication and release jobs) is in the
 history of this file and in the R2 evidence linked at the end.
 
+Owner decision applied, 2026-10-09 (overlay schema 32; supersedes D-a's last
+sentence and ledger decision L4-9). **A READDIR at offset 0 on a handle that
+has published replies is a rewind: its reply is published afresh and retires
+every earlier reply of the handle, and an offset handed out before it is
+answered `EINVAL` from then on.** POSIX leaves a `telldir` position
+unspecified after `rewinddir`. Offsets handed out since the rewind are
+unchanged, including a seek back to one of them and to offset 2. See
+"Rewind" below.
+
 ## Decisions recorded for batch 3b
 
 | | Decision | Where it is implemented |
 | --- | --- | --- |
-| D-a | No visible contract change. An offset means "resume strictly after this name". Only names the reply buffer accepted become offsets. A rewound handle is answered with the reply it was given: a reply listed after the same name, whose names the present listing begins with, is returned again at its offsets, for one more SELECT per reply. Replies are not retired at offset 0. | `offer_native_cookies`, `NativeDirectoryWindow::finish` |
+| D-a | An offset means "resume strictly after this name". Only names the reply buffer accepted become offsets. A handle that seeks back is answered with the reply it was given: a reply listed after the same name, whose names the present listing begins with, is returned again at its offsets, for one more SELECT per reply. Superseded in one point by the owner decision above: replies are retired at offset 0. | `offer_native_cookies`, `NativeDirectoryWindow::finish` |
 | D-b | READDIR is strictly two visits: the reading visit, the request fills its reply, the publishing visit records the accepted names in one transaction, then the reply is sent. | `DirectoryStream`, `DirectoryBatch::accept` |
 | D-c | No new resident structure. Offsets come from the engine's existing owner counter. Memory is bounded per in-flight READDIR and nothing is resident per open handle. | "Memory" below |
 | D-d | Storage does not rise: a directory listed once stores fewer rows and bytes than before at 10 and at 4000 names. | "Storage" below |
@@ -56,6 +65,7 @@ read. Offsets of 3 and above are positions in a published reply of this one
 open. Removing or renaming a name does not invalidate its offset; resumption
 is strictly after that name. An offset of another handle or Workspace, one that
 was reserved but never accepted, and any offset of a released handle are Stale.
+An offset from before the handle's last rewind is refused `EINVAL`.
 
 **The reading visit** is `NativeDirectoryJob::Visit` (class Read), made by
 `Workspace::native_directory_visit` and run by
@@ -63,9 +73,12 @@ was reserved but never accepted, and any offset of a released handle are Stale.
 with no write transaction:
 
 1. the fence on the open descriptor (`FENCE_DIRECTORY`: Workspace row open,
-   mount attached and not revoked, this handle open on this inode);
-2. the offset's name: nothing for 0, 1 and 2, otherwise one seek to the reply
-   row whose range holds it (`COOKIE_PAGE`);
+   mount attached and not revoked, this handle open on this inode), which
+   also returns the handle's floor;
+2. the offset's name: nothing for 0, 1 and 2; a number below the floor ends
+   the visit as `NativeDirectoryCursor::Rewound`, with no further statement;
+   otherwise one seek to the reply row at or above the floor whose range
+   holds it (`COOKIE_PAGE`);
 3. the parent, only for offsets 0 and 1;
 4. the directory's row and one window of at most 64 local names with their
    inode kinds (`SOURCE_NAMES_KINDS`), on the active generation and, during a
@@ -74,9 +87,11 @@ with no write transaction:
    canonical cache holds every object it needs. The job asks the provider
    nothing;
 6. unless the job found that no name is listed, the offer of offsets: the
-   latest reply of this handle listed after the same name
-   (`COOKIE_PAGE_AFTER`) and a fresh range of 64 numbers from the engine's
-   owner counter. Reserving a range writes nothing and makes no offset valid.
+   latest reply of this handle at or above the floor listed after the same
+   name (`COOKIE_PAGE_AFTER`) and a fresh range of 64 numbers from the
+   engine's owner counter. Reserving a range writes nothing and makes no
+   offset valid. At offset 0, finding such a reply makes the offer a rewind
+   that reuses nothing.
 
 When memory did not hold an inherited name or kind, the request leaves the
 receive loop, takes one Store reader and merges the same window outside the
@@ -104,6 +119,49 @@ release.
 Two requests on one handle that list the same window each publish their own
 reply; both ranges stay valid. A later request at that position reuses the
 latest.
+
+### Rewind
+
+Offsets are numbers of the engine's owner counter, which only rises, so one
+number per handle separates the replies of before a rewind from those after
+it: `native_directory.floor`, 0 until the handle is first rewound.
+
+- **What a rewind is.** The reading visit at offset 0 reads the latest reply
+  at or above the floor that was listed from the start. Every reply of a
+  handle descends from one listed from the start (offsets 0, 1 and 2 are the
+  only ones that need no earlier reply), so that one statement, which the
+  visit ran before this change too, tells whether the handle has an offset
+  left. If it has, the offer is a rewind: it reuses no reply.
+- **When it takes effect.** In the publishing visit of that offer, in its one
+  transaction: the floor is set to the offer's fresh range, then the reply's
+  row is inserted. The request publishes a rewinding offer even when its
+  buffer accepted no name; then only the floor moves. A reading visit alone
+  changes nothing. A rewind whose reading finds no name to offer (the
+  directory lists nothing from offset 0) publishes nothing, retires nothing
+  and stores nothing.
+- **What it retires.** Every reply row below the floor. A request at an
+  offset below the floor is refused whether or not its row is deleted yet:
+  the Fuse request answers `EINVAL`, completes and retains nothing
+  (`DirectoryFailure::rewound`). Offsets 0, 1 and 2 are never below a floor.
+- **How the rows go.** Every publishing visit on a handle whose floor is not
+  0 deletes at most `INLINE_PAGES` (8) rows below the floor in one statement
+  (`COOKIE_RETIRE`: one seek and at most eight index steps). There is no
+  queue item, loop or timer for an open handle. Rows still left when the
+  handle is released go with it: RELEASEDIR and the closed-handle item
+  delete every row of the handle, as before.
+- **Bound.** A publication adds one row and, while a row below the floor
+  exists, deletes at least one. So the rows of one handle never exceed the
+  largest number of replies published between two of its rewinds: one
+  listing, however often the handle is rewound. Before this change K rewinds
+  of a directory whose early names changed stored K listings.
+- **Races.** A publication whose offer was made before the floor passed its
+  range is Stale and writes nothing: its reply fails as a publication on a
+  released handle does. The kernel serializes READDIR on one open file, so
+  this needs two requests the kernel does not send.
+- **Unchanged.** A handle that is never read from offset 0 a second time has
+  floor 0 and runs no statement it did not run before. A seek back to an
+  offset handed out since the last rewind, or to offset 2, reuses or
+  publishes exactly as before and retires nothing.
 
 ## RELEASEDIR
 
@@ -143,6 +201,8 @@ the R2 flow, measured by the same test before the change
 | READDIR returning 64 inherited names | 3/2/1 jobs, 1 grant, 4 transactions, 192/265 | the same 10/11 |
 | READDIR at an offset already answered | 3/2/1 jobs, 1 grant, 4 transactions, 323/332 | 1/0/0 jobs, 0 grants, 0 transactions, 5/5 |
 | READDIR after the last name | 1/2/1 jobs, 1 grant, 2 transactions, 44/53 | 1/0/0 jobs, 0 grants, 0 transactions, 4/4 |
+| READDIR at offset 0 of a handle with replies (rewind) | did not exist: 1/0/0 jobs, 0 transactions, 5/5 when the first reply was unchanged, the ordinary 10/11 when it was not | 2/0/0 jobs, 0 grants, 1 transaction, 12 attempts (two more than an ordinary reply: the floor and the bounded delete) and one execution per deleted row, at most 8 |
+| READDIR that returns names on a handle with a floor | the ordinary 10/11 | 2/0/0 jobs, 0 grants, 1 transaction, 11 attempts (the bounded delete) and one execution per deleted row |
 | RELEASEDIR | 0/2/0 jobs, 1 transaction, 15/17 | 0/1/0 jobs, 1 transaction, 9/12 with one reply (one execution more per reply, at most nine) |
 | Maintenance after listing and closing a 10-name directory | 1 queued item | 0 items, 0 turns |
 
@@ -176,10 +236,14 @@ which builds both layouts from their DDL;
 | 4000 | 8000 | 126 | 40,000 | 24,620 | 36 | 6 |
 
 The `native_directory.next_cookie` column and the `native_directory_read`
-association table with its index and accounting triggers are removed. A handle
-that is rewound and listed again while its directory changes keeps the earlier
-replies (D-a) and adds one row per reply that differs; every row is deleted at
-RELEASEDIR or by its bounded retirement.
+association table with its index and accounting triggers are removed. Schema
+32 adds `native_directory.floor`, one integer per open handle and no index.
+A handle that is rewound stores one listing ("Rewind" above): after five
+rewinds of a 1280-name directory, each after a name was added before every
+other, the handle holds 21 reply rows, where the layout without the floor
+held 20 + 5 × 21. A handle that seeks back without a rewind after its
+directory changed still adds one row per reply that differs; every row is
+deleted at RELEASEDIR or by its bounded retirement.
 
 ## Memory
 
@@ -190,7 +254,9 @@ replies are SQL rows. One in-flight READDIR owns one
 kinds, the merged window of at most 64 entries, and the names of one earlier
 reply, at most 64 names of 255 bytes. A publishing visit carries at most 64
 names of 255 bytes; one reply row is at most 16,384 bytes of names. Offsets
-are taken from the engine's owner counter, which existed before.
+are taken from the engine's owner counter, which existed before. The floor
+is a column of the handle's row; the page and the offer of one in-flight
+READDIR carry it as one integer and one flag.
 
 ## Jobs and evidence
 
@@ -199,18 +265,25 @@ run on the existing fair SQL owner: the two READDIR visits with ordinary read
 credits, observation and close with lifecycle credits. No job performs
 provider I/O or imports fuser types.
 
-Component tests of this implementation: offsets, reuse, races with RELEASEDIR
-and bounded retirement in
+Component tests of this implementation: offsets, reuse, races with RELEASEDIR,
+bounded retirement, and the rewind (exact rows after repeated rewinds, refused
+earlier offsets, later offsets and seeks back, a rewind whose reply accepted
+nothing, offers that predate it, a second handle) in
 [overlay `native_directory.rs`](../../crates/layerfs-overlay/tests/native_directory.rs);
 whiteout windows, removed and moved directories in
 [workspace `native_directory.rs`](../../crates/layerfs-workspace/tests/native_directory.rs);
 exact counts, a cold cache, names created and removed between replies, two
-handles of one directory and two mounted Workspaces listing one inherited
-directory in `directory_cost.rs`; accepted prefixes and a reply racing
+handles of one directory, two mounted Workspaces listing one inherited
+directory, and the cost, stored rows and refusals of a rewound handle through
+the Fuse port in `directory_cost.rs`; accepted prefixes and a reply racing
 RELEASEDIR in
 [`filesystem_port.rs`](../../crates/layerfs-daemon/tests/filesystem_port.rs).
 These are host component tests without a kernel mount; they establish no
-latency and no kernel reply-buffer behavior.
+latency and no kernel reply-buffer behavior. On a real Linux mount,
+[`mounted_rewind.rs`](../../crates/layerfs-daemon/tests/mounted_rewind.rs)
+drives `telldir`, `rewinddir` and `seekdir` of libc: the position from before
+the rewind is `EINVAL`, one taken since resumes after its name, and nothing
+is retained for the refusal.
 
 [R2 component evidence](../issues/307/checks/r2-native-directory-20261008/62-results.md)
 covered concurrent aliases, partial/empty accepted prefixes, old offsets after

@@ -1,0 +1,41 @@
+===== namespace-4a50c5f0df51f7a3 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 5 tests
+test chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime ... ok
+test create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically ... ok
+test rename_moves_replaces_and_refuses_cycles_without_descendant_rows ... ok
+test unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact ... ok
+test unrepresentable_names_targets_and_reservations_are_refused_before_any_job ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== namespace_view-cabfc696f47bb082 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 5 tests
+test a_rebound_name_between_owner_rounds_is_resolved_before_the_one_attempt ... ok
+test enumeration_returns_every_persistent_name_once_across_mutation_and_resume ... ok
+test known_install_folds_a_capture_and_keeps_later_namespace_changes ... ok
+test name_and_inode_counts_have_no_cap_and_every_window_stays_bounded ... ok
+test opposing_directory_moves_cannot_form_a_cycle_between_owner_rounds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_directory-a2554d3c325012f1 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 4 tests
+test a_reply_listed_from_offset_0_again_is_published_afresh_and_earlier_offsets_list_nothing ... ok
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test next_directory_read_observes_parent_moved_by_the_atomic_namespace_job ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0

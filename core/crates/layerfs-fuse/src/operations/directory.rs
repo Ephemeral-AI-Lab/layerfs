@@ -30,6 +30,16 @@ pub enum DirectoryStep {
     Batch(DirectoryBatch),
     End(DirectoryStream),
 }
+/// The request's offset was handed out before its handle was last listed
+/// from offset 0 over published replies. The visit recorded nothing.
+#[derive(Clone, Copy, Debug)]
+struct Rewound;
+impl fmt::Display for Rewound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("directory offset from before the handle's rewind")
+    }
+}
+impl std::error::Error for Rewound {}
 /// The exact failed step and the request's identity. Nothing is owned in the
 /// engine: a reading visit records nothing, and a publication that failed
 /// or whose outcome is unknown is never repeated.
@@ -85,12 +95,17 @@ impl DirectoryFailure {
     pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
         self.reason.downcast_ref()
     }
-    /// Ends an enumeration that was fenced or whose base demand failed. It
-    /// holds nothing in the engine, so nothing is released and no job is
-    /// submitted; an unpublished batch made no offset valid. Any other
-    /// failure is returned unchanged.
+    /// The offset is from before the handle's last rewind: an invalid
+    /// argument of this request, and no failure of the mount.
+    pub fn rewound(&self) -> bool {
+        self.reason.is::<Rewound>()
+    }
+    /// Ends an enumeration that was fenced, whose base demand failed or
+    /// whose offset a rewind retired. It holds nothing in the engine, so
+    /// nothing is released and no job is submitted; an unpublished batch
+    /// made no offset valid. Any other failure is returned unchanged.
     pub async fn relinquish(self) -> Result<(), DirectoryFailure> {
-        if !self.fenced() && self.base_demand().is_none() {
+        if !self.fenced() && self.base_demand().is_none() && !self.rewound() {
             return Err(self);
         }
         Ok(())
@@ -123,7 +138,8 @@ impl std::error::Error for DirectoryFailure {
 }
 impl DirectoryStream {
     /// The request's first reading visit: an offset that no reply of this
-    /// open handle handed out, a closed handle and a stopped mount fail here.
+    /// open handle handed out, one that a rewind retired, a closed handle
+    /// and a stopped mount fail here.
     pub async fn prepare(
         services: Arc<dyn RequestServices>,
         mount: NativeMount,
@@ -144,6 +160,14 @@ impl DirectoryStream {
             ended: false,
         };
         match stream.visit(None).await {
+            Ok(())
+                if stream
+                    .window
+                    .as_ref()
+                    .is_some_and(|window| window.rewound()) =>
+            {
+                Err(DirectoryFailure::new(Box::new(Rewound), stream, None))
+            }
             Ok(()) => Ok(stream),
             Err(reason) => Err(DirectoryFailure::new(reason, stream, None)),
         }
@@ -229,8 +253,9 @@ impl DirectoryBatch {
     }
     /// Publish exactly the prefix that actually fit the native reply buffer,
     /// before the reply is sent. Offsets of an already published reply and
-    /// an empty prefix publish nothing and submit no job. Consuming self
-    /// prevents a second attempt after an error or lost outcome.
+    /// an empty prefix publish nothing and submit no job, except that a
+    /// rewinding offer is published with whatever prefix it has. Consuming
+    /// self prevents a second attempt after an error or lost outcome.
     pub async fn accept(self, accepted: usize) -> Result<DirectoryStream, DirectoryFailure> {
         let Self {
             mut stream,
@@ -247,7 +272,11 @@ impl DirectoryBatch {
         // One published window ends this reply even when names remain; the
         // next native read resumes after the last accepted offset.
         stream.ended = true;
-        let Some(offer) = batch.publish.take().filter(|_| accepted != 0) else {
+        let Some(offer) = batch
+            .publish
+            .take()
+            .filter(|offer| accepted != 0 || offer.rewinds())
+        else {
             return Ok(stream);
         };
         let names = batch.entries[..accepted]

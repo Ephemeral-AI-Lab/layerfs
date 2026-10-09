@@ -1,0 +1,4 @@
+attributes-5c7828b114353505 exit=0 seconds=0 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+dispatch-90817d26534023de exit=0 seconds=1 test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+fence-29996ff71b442d8c exit=0 seconds=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+layerfs_fuse-dbe2f29cc3c7518d exit=0 seconds=0 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

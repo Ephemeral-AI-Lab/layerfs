@@ -1,11 +1,12 @@
 //! The cookies of published READDIR replies: one row per reply, holding
 //! exactly the names its buffer accepted.
 use super::native_directory_read::decode_names;
+use super::INLINE_PAGES;
 use crate::{
+    contract::native_directory::Published,
     db::{integer, unsigned},
-    lifetime::native_visit::Held,
-    sql, NativeCookieOffer, NativeDirectoryPage, Overlay, OverlayError, OverlayResult,
-    StatementKind, PAGE_ROWS,
+    sql, NativeCookieOffer, NativeDirectoryCursor, NativeDirectoryPage, Overlay, OverlayError,
+    OverlayResult, StatementKind, PAGE_ROWS,
 };
 impl Overlay {
     /// Inside the reading visit's job, for a window that may list a name:
@@ -13,6 +14,10 @@ impl Overlay {
     /// same name, and a fresh range of `PAGE_ROWS` numbers from the engine's
     /// owner counter. One read; nothing is written, and neither makes an
     /// offset valid.
+    ///
+    /// A reply at or above the floor listed from the start exists exactly
+    /// when the handle has an offset left, so finding one at offset 0 is the
+    /// rewind: the offer reuses nothing and its publication retires them.
     pub fn offer_native_cookies(
         &self,
         page: &NativeDirectoryPage,
@@ -27,17 +32,20 @@ impl Overlay {
                     &directory.mount.route.ns,
                     &integer(directory.owner)?,
                     &after.as_slice(),
+                    &integer(page.floor)?,
                 ],
-                24 + after.len() as u64,
+                32 + after.len() as u64,
                 |r| Ok((unsigned(r, 0)?, r.get::<_, Vec<u8>>(1)?)),
             )?
-            .pop()
-            .map(|(first, names)| {
-                decode_names(&names)
-                    .map(|names| (first, names))
-                    .ok_or(OverlayError::Invalid("cookie names"))
-            })
-            .transpose()?;
+            .pop();
+        let published = match existing {
+            None => Published::None,
+            Some(_) if page.cursor == NativeDirectoryCursor::Start => Published::Rewind,
+            Some((first, names)) => Published::Latest(
+                first,
+                decode_names(&names).ok_or(OverlayError::Invalid("cookie names"))?,
+            ),
+        };
         let first = self.mint_owners(PAGE_ROWS as u64)?;
         if first < 3 {
             return Err(OverlayError::Invalid("directory cookie range"));
@@ -46,7 +54,7 @@ impl Overlay {
             directory,
             after,
             first,
-            existing,
+            published,
         })
     }
     /// READDIR's publishing visit, before the reply is sent: the names the
@@ -56,6 +64,12 @@ impl Overlay {
     /// revoked mount and a closed Workspace publish nothing. An unavailable
     /// send outcome keeps the row; a second publication of one offer fails
     /// whole on the row's key. Never replay it.
+    ///
+    /// A rewinding offer first raises the handle's floor to its range, also
+    /// when its reply accepted no name. On a handle that has a floor, every
+    /// publication deletes at most `INLINE_PAGES` replies below it; what is
+    /// left goes with a later publication or with the handle. An offer made
+    /// before the floor passed its range is Stale and writes nothing.
     pub fn publish_native_cookies(
         &self,
         offer: &NativeCookieOffer,
@@ -78,19 +92,43 @@ impl Overlay {
             blob.extend_from_slice(name);
             last = name;
         }
-        if names.is_empty() || names.len() > PAGE_ROWS {
+        if names.len() > PAGE_ROWS || (names.is_empty() && !offer.rewinds()) {
             return Err(OverlayError::Invalid("native cookie names"));
         }
         let directory = offer.directory;
+        let (ns, owner) = (directory.mount.route.ns, integer(directory.owner)?);
         self.atomic(|| {
-            let held = Held::Directory(directory.owner);
-            self.native_fence(directory.mount, directory.serial, held, true)?;
+            let (_, mut floor) =
+                self.directory_fence(directory.mount, directory.serial, directory.owner, true)?;
+            if offer.first < floor {
+                return Err(OverlayError::Stale);
+            }
+            if offer.rewinds() {
+                floor = offer.first;
+                self.execute(
+                    StatementKind::Lease,
+                    "UPDATE native_directory SET floor=?3 WHERE ns=?1 AND owner=?2",
+                    &[&ns, &owner, &integer(floor)?],
+                    24,
+                )?;
+            }
+            if floor != 0 {
+                self.execute(
+                    StatementKind::Lease,
+                    sql::COOKIE_RETIRE,
+                    &[&ns, &owner, &integer(floor)?, &(INLINE_PAGES as i64 - 1)],
+                    32,
+                )?;
+            }
+            if names.is_empty() {
+                return Ok(());
+            }
             self.execute(
                 StatementKind::Lease,
                 "INSERT INTO native_cookie VALUES(?1,?2,?3,?4,?5)",
                 &[
-                    &directory.mount.route.ns,
-                    &integer(directory.owner)?,
+                    &ns,
+                    &owner,
                     &integer(offer.first)?,
                     &offer.after.as_slice(),
                     &blob.as_slice(),
@@ -107,23 +145,30 @@ impl Overlay {
         self.state(directory.mount.route)?;
         let (ns, owner) = (directory.mount.route.ns, integer(directory.owner)?);
         let mut plans = Vec::new();
+        plans.extend(self.query(
+            StatementKind::Explain,
+            &format!("EXPLAIN QUERY PLAN {}", sql::COOKIE_PAGES),
+            &[&ns, &owner, &0_i64],
+            24,
+            |r| Ok(format!("cookie-window: {}", r.get::<_, String>(3)?)),
+        )?);
         for (label, statement) in [
             ("cookie-offset", sql::COOKIE_PAGE),
-            ("cookie-window", sql::COOKIE_PAGES),
+            ("cookie-retire", sql::COOKIE_RETIRE),
         ] {
             plans.extend(self.query(
                 StatementKind::Explain,
                 &format!("EXPLAIN QUERY PLAN {statement}"),
-                &[&ns, &owner, &0_i64],
-                24,
+                &[&ns, &owner, &0_i64, &0_i64],
+                32,
                 |r| Ok(format!("{label}: {}", r.get::<_, String>(3)?)),
             )?);
         }
         plans.extend(self.query(
             StatementKind::Explain,
             &format!("EXPLAIN QUERY PLAN {}", sql::COOKIE_PAGE_AFTER),
-            &[&ns, &owner, &b"x".as_slice()],
-            17,
+            &[&ns, &owner, &b"x".as_slice(), &0_i64],
+            25,
             |r| Ok(format!("cookie-after: {}", r.get::<_, String>(3)?)),
         )?);
         plans.extend(self.query(

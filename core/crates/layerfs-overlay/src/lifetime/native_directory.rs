@@ -155,7 +155,8 @@ impl Overlay {
         Ok(())
     }
 }
-/// Published replies one RELEASEDIR deletes in its own job, and one
-/// maintenance turn retires: a window of the same statement. The LIMIT of
-/// `sql::COOKIE_PAGES` is this value plus one, kept equal by hand.
+/// Published replies one RELEASEDIR deletes in its own job, one maintenance
+/// turn retires, and one publication on a rewound handle deletes below the
+/// floor. The LIMIT of `sql::COOKIE_PAGES` is this value plus one, kept
+/// equal by hand.
 pub(crate) const INLINE_PAGES: usize = 8;
