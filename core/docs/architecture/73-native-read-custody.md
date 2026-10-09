@@ -12,8 +12,8 @@ in one transaction: the fence on the kernel's lookup reference
 (`FENCE_LOOKUP`), the same bounded decision (`decide_read` for `Open`) over
 current rows and base facts carried by the request or resident in memory
 (the inode value and, for a base file, the remembered length), and, when it
-decides a regular file, the descriptor's rows (`file_handle`, its `lease`,
-the file's open count) and the `native_file` association with the kernel
+decides a regular file, the descriptor's rows (`file_handle`, the file's
+open count; since schema 24 no `lease` row) and the `native_file` association with the kernel
 request that receives it. The descriptor's internal request key is the
 job's own minted owner, as for a created-and-opened file. An undecided visit
 writes nothing and holds nothing; the request reads the facts outside the

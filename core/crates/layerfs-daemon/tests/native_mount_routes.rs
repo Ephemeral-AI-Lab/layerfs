@@ -285,7 +285,7 @@ fn fresh_mounts_repeat_and_one_mount_sustains_uncached_work() {
     }
     until("fresh mounts retired", || {
         let counts = h.engine(helper);
-        counts.namespaces == 1 && counts.owner_rows <= idle.owner_rows
+        counts.namespaces == 1 && counts.owner_details <= idle.owner_details
     });
     // Sustained same-mount work from two concurrent callers.
     const ROUNDS: usize = 150;

@@ -126,8 +126,9 @@ impl Overlay {
         self.file_ref(route.ns, integer(serial)?, LeaseKind::FileHandle, true)?;
         Ok(file)
     }
-    /// The descriptor's rows without its file reference, which the caller
-    /// takes in the same transaction.
+    /// The descriptor's row without its file reference, which the caller
+    /// takes in the same transaction. The row is the descriptor's whole
+    /// custody: no `lease` row stands for it.
     pub(crate) fn retain_file_row(
         &self,
         route: Route,
@@ -142,12 +143,6 @@ impl Overlay {
             "INSERT INTO file_handle VALUES(?1,?2,?3,?4,?5)",
             &[&route.ns, &request, &integer(owner)?, &key, &writable],
             33,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            "INSERT INTO lease VALUES(?1,7,?2,?3)",
-            &[&route.ns, &integer(owner)?, &key],
-            24,
         )?;
         Ok(OpenFile {
             route,
@@ -233,16 +228,6 @@ impl Overlay {
         if closed != 1 {
             return Err(OverlayError::Stale);
         }
-        self.execute(
-            StatementKind::Lease,
-            "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
-            &[
-                &file.route.ns,
-                &integer(file.owner)?,
-                &integer(file.serial)?,
-            ],
-            24,
-        )?;
         self.file_ref(
             file.route.ns,
             integer(file.serial)?,

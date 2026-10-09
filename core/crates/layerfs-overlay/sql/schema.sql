@@ -1,4 +1,4 @@
--- Disposable overlay schema v23. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v24. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -70,7 +70,7 @@ CREATE INDEX payload_generation ON payload(ns,gen,serial,cell_offset);
 CREATE INDEX shrink_generation ON shrink(ns,gen,serial,depth);
 CREATE TABLE lease (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 9),
+    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6 OR kind=8),
     owner INTEGER NOT NULL CHECK(owner>0),
     resource INTEGER NOT NULL CHECK(resource>=0),
     PRIMARY KEY(ns,kind,owner,resource)
@@ -280,4 +280,4 @@ CREATE TABLE native_cookie (
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_cookie_name ON native_cookie(ns,owner,name,cookie);
-PRAGMA user_version=23;
+PRAGMA user_version=24;

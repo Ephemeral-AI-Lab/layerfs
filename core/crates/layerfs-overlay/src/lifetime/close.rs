@@ -1,6 +1,17 @@
 //! Logical close and exact last-owner eligibility, without namespace sweeps.
 use crate::{Capture, Overlay, OverlayError, OverlayResult, Route, StatementKind};
 pub(crate) const CLOSE_KEY: i64 = i64::MAX;
+/// Whether any owner still holds one namespace: each table that holds
+/// custody is asked by the namespace prefix of its own key. A descriptor is
+/// its `file_handle` or `native_directory` row and a lookup reference its
+/// `lookup_owner` or `native_lookup` row; `lease` holds the owners that have
+/// no row of their own.
+pub(crate) const HELD: &str = "SELECT EXISTS(SELECT 1 FROM lease WHERE ns=?1)
+    OR EXISTS(SELECT 1 FROM file_handle WHERE ns=?1)
+    OR EXISTS(SELECT 1 FROM lookup_owner WHERE ns=?1)
+    OR EXISTS(SELECT 1 FROM native_lookup WHERE ns=?1)
+    OR EXISTS(SELECT 1 FROM native_mount WHERE ns=?1)
+    OR EXISTS(SELECT 1 FROM native_directory WHERE ns=?1)";
 const OBSERVE_CLEANUP: &str = "SELECT w.incarnation,w.lifecycle,
     EXISTS(SELECT 1 FROM reclaim WHERE ns=?1 AND queue_key=?2),
     (SELECT seq FROM sqlite_sequence WHERE name='workspace')
@@ -67,6 +78,17 @@ impl Overlay {
             StatementKind::Explain,
             &format!("EXPLAIN QUERY PLAN {OBSERVE_CLEANUP}"),
             &[&1_i64, &CLOSE_KEY],
+            512,
+            |row| row.get(3),
+        )
+    }
+    /// Plan of the owner test of one closed namespace: one keyed probe of
+    /// each table that holds custody.
+    pub fn explain_close_held(&self) -> OverlayResult<Vec<String>> {
+        self.query(
+            StatementKind::Explain,
+            &format!("EXPLAIN QUERY PLAN {HELD}"),
+            &[&1_i64],
             512,
             |row| row.get(3),
         )
@@ -142,9 +164,11 @@ impl Overlay {
         }
         // A pending reply holds the namespace; its last attempt owes the
         // owner turn that comes back here.
-        let held=self.tickets.watch(route.ns)||self.query(StatementKind::Reclaim,
-            "SELECT EXISTS(SELECT 1 FROM lease WHERE ns=?1) OR EXISTS(SELECT 1 FROM native_mount WHERE ns=?1) OR EXISTS(SELECT 1 FROM native_directory WHERE ns=?1)",
-            &[&route.ns],8,|row|row.get::<_,i64>(0))?[0]!=0;
+        let held = self.tickets.watch(route.ns)
+            || self.query(StatementKind::Reclaim, HELD, &[&route.ns], 8, |row| {
+                row.get::<_, i64>(0)
+            })?[0]
+                != 0;
         if !held {
             self.execute(StatementKind::Reclaim,
                 "INSERT INTO reclaim(ns,queue_key,target,cursor) VALUES(?1,?2,?2,0) ON CONFLICT(ns,queue_key) DO NOTHING",

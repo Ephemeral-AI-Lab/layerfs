@@ -601,7 +601,7 @@ const CREATE: [(&str, u64, u64); 7] = [
     ("Workspace", 2, 2),
     ("Inode", 3, 4),
     ("DirectoryEntry", 5, 6),
-    ("Lease", 6, 12),
+    ("Lease", 4, 8),
 ];
 const WRITE: [(&str, u64, u64); 6] = [
     ("Startup", 1, 1),
@@ -616,7 +616,7 @@ const RELEASE: [(&str, u64, u64); 5] = [
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
-    ("Lease", 3, 7),
+    ("Lease", 2, 5),
 ];
 /// UNLINK under the kernel's lookup reference, in order. Reads: the fence
 /// [Workspace]; the directory's row, the name's rows and the file's row,
@@ -640,8 +640,8 @@ const UNLINK: [(&str, u64, u64); 7] = [
 /// FORGET of the last kernel reference, which reclaims the one-cell file
 /// in its own job and writes no queue item. Its own part: the Workspace's
 /// row, kept for the pending-close decision, and the mount's [Workspace,
-/// Lease]; the lookup's row, its deletion and its owner's [3 Lease, each
-/// deletion with its trigger]; the file reference dropped by a statement
+/// Lease]; the lookup's row and its deletion [2 Lease, the deletion with
+/// its trigger]; the file reference dropped by a statement
 /// that returns what remains [Lease]; the orphan's row [Lease]. Then the
 /// four steps the owner ran, without their items. The orphan releases its
 /// lower layer: that layer's row, the wait row's deletion, the orphan's
@@ -659,7 +659,7 @@ const FORGET: [(&str, u64, u64); 7] = [
     ("Commit", 1, 1),
     ("Workspace", 3, 3),
     ("Inode", 2, 2),
-    ("Lease", 11, 15),
+    ("Lease", 10, 13),
     ("Reclaim", 10, 13),
 ];
 /// FORGET of a file of four pages: the orphan releases its lower layer and
@@ -671,7 +671,7 @@ const FORGET_PAGE: [(&str, u64, u64); 7] = [
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
     ("Inode", 1, 1),
-    ("Lease", 9, 11),
+    ("Lease", 8, 9),
     ("Reclaim", 19, 37),
 ];
 /// FORGET of a file whose cell the owner had migrated while it was open:
@@ -681,28 +681,28 @@ const FORGET_MIGRATED: [(&str, u64, u64); 6] = [
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
-    ("Lease", 7, 11),
+    ("Lease", 6, 9),
     ("Reclaim", 8, 12),
 ];
 /// FORGET as the last reference of a file that keeps its name: the
-/// Workspace's row and the mount's [Workspace, Lease]; the lookup's row, its
-/// deletion and its owner's [3 Lease]; the file reference dropped by a
-/// statement that returns what remains [Lease]; the custody row, deleted
-/// [Lease, with its trigger]. Nothing is queued.
+/// Workspace's row and the mount's [Workspace, Lease]; the lookup's row and
+/// its deletion [2 Lease]; the file reference dropped by a statement that
+/// returns what remains [Lease]; the custody row, deleted [Lease, with its
+/// trigger]. Nothing is queued.
 const LIVE_FORGET: [(&str, u64, u64); 5] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
-    ("Lease", 6, 10),
+    ("Lease", 5, 8),
 ];
 /// RELEASE as the last reference of such a file: the fence [Workspace]; the
-/// descriptor's row and its owner's, the file reference [3 Lease]; the
-/// custody row, deleted [Lease, with its trigger]. Nothing is queued.
+/// descriptor's row and the file reference [2 Lease]; the custody row,
+/// deleted [Lease, with its trigger]. Nothing is queued.
 const LIVE_RELEASE: [(&str, u64, u64); 5] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
-    ("Lease", 4, 10),
+    ("Lease", 3, 8),
 ];

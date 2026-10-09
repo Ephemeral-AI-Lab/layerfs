@@ -6,6 +6,33 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (custody rows, lead decision C2 part 1, overlay schema
+24): **a descriptor or a lookup reference is its own row and has no `lease`
+row.** `lease` rows of kind 7 (file and directory descriptors) and kind 9
+(lookup owners, native and not) were written and deleted with their owner
+and never read by key; they are no longer written, and the table's CHECK is
+`kind BETWEEN 1 AND 6 OR kind=8`. The custody is the owner's own row:
+`file_handle`, `native_directory`, `lookup_owner`, `native_lookup`. The one
+reader that used "any `lease` row of the namespace" as "the namespace is
+owned" is the terminal-cleanup decision `queue_closed_at`
+([`close.rs`](../../crates/layerfs-overlay/src/lifetime/close.rs), statement
+`HELD`): it now also asks `file_handle`, `lookup_owner` and `native_lookup`
+by the namespace prefix of their keys, beside `lease`, `native_mount` and
+`native_directory` as before, so a closed Workspace is held by exactly the
+owners that held it and Close, drain, unmount and forced unmount report what
+they reported. `GENERATION_HELD` (kinds 1 and 6) and the operation probe
+(kind 4) are unchanged. `StoredCounts::owner_rows` is the number of `lease`
+rows and therefore no longer counts descriptors and lookup references;
+`owner_details` counts their rows, as it did. `PRAGMA user_version` and its
+startup readback are 24. Stored rows of one created and open file 6 -> 4
+(b-tree entries 12 -> 8), of one kernel-referenced inode 3 -> 2 (5 -> 3).
+Per created file the five request jobs attempt 38 statements (48
+executions) instead of 41 (54): CREATE's Lease family 6 (12) -> 4 (8),
+RELEASE's 3 (7) -> 2 (5); OPEN 4 (7) -> 3 (5). Proofs:
+[`close_custody.rs`](../../crates/layerfs-overlay/tests/close_custody.rs)
+(each kind of custody alone, none, another Workspace's rows, the plan of
+`HELD`) and the count tests named above.
+
 R7 update, 2026-10-09 (inode statements, lead decision C1, overlay schema
 23): **a visit job reads an inode row once and writes it without a second
 read.** `INODE_LOOKUP` also returns the generation that holds the row and

@@ -214,7 +214,7 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
         (served.terminal, served.unadmitted, served.retained),
         (0, 0, 0)
     );
-    assert!(h.engine(helper).owner_rows > before.owner_rows);
+    assert!(h.engine(helper).owner_details > before.owner_details);
     println!(
         "NATIVE_READY paths={paths} regular_bytes={regular} receipt={receipt:?} entry={entry:?} served={served:?}"
     );
@@ -269,10 +269,10 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
     resident.wait().unwrap();
 
     // Cached kernel lookups and idle receive loops are not busy.
-    let lookups = h.engine(helper).owner_rows;
+    let lookups = h.engine(helper).owner_details;
     let done = h.unmount(&ready);
     println!(
-        "NATIVE_UNMOUNT lookup_owner_rows={lookups} receipt={:?}",
+        "NATIVE_UNMOUNT lookup_owner_details={lookups} receipt={:?}",
         done.native
     );
     for request in [Request::Status(token), Request::Attach(token)] {
@@ -288,7 +288,7 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
     // Indexed retirement and namespace deletion finish as bounded owner work.
     until("native ownership retired", || {
         let counts = h.engine(helper);
-        counts.namespaces == 1 && counts.owner_rows <= before.owner_rows
+        counts.namespaces == 1 && counts.owner_details <= before.owner_details
     });
     assert!(matches!(
         h.try_unmount(helper).unwrap().reply,

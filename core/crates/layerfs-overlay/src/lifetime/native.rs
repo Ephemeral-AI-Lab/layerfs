@@ -268,8 +268,9 @@ impl Overlay {
             true,
         )
     }
-    /// The lookup rows without their file reference, which the caller takes
-    /// in the same transaction. A row that already exists is a failure.
+    /// The lookup row without its file reference, which the caller takes in
+    /// the same transaction. A row that already exists is a failure. The
+    /// row is the reference's whole custody: no `lease` row stands for it.
     pub(crate) fn insert_native_lookup_row(
         &self,
         mount: NativeMount,
@@ -290,12 +291,6 @@ impl Overlay {
                 &implicit,
             ],
             48,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            "INSERT INTO lease VALUES(?1,9,?2,?3)",
-            &[&mount.route.ns, &integer(owner)?, &integer(serial)?],
-            24,
         )?;
         Ok(())
     }
@@ -336,12 +331,6 @@ impl Overlay {
                 &integer(owner)?,
             ],
             32,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            "DELETE FROM lease WHERE ns=?1 AND kind=9 AND owner=?2 AND resource=?3",
-            &[&mount.route.ns, &integer(owner)?, &integer(serial)?],
-            24,
         )?;
         self.file_ref(
             mount.route.ns,

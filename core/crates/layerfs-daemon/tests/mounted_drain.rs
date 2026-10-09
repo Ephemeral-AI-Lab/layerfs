@@ -94,6 +94,13 @@ const RECLAIM: Duration = Duration::from_secs(40);
 const HELD: Duration = Duration::from_secs(3);
 /// Rows one maintenance turn may retire.
 const WINDOW: u64 = 64;
+/// Engine rows that hold the kernel's lookup custody of `inodes` inodes, of
+/// which `directories` are directories: each inode has its lookup row and
+/// its file-custody row, and a directory its retained parent row. No `lease`
+/// row stands for a lookup reference or a descriptor.
+const fn custody(inodes: u64, directories: u64) -> u64 {
+    2 * inodes + directories
+}
 
 fn before(what: &str, wait: Duration, mut condition: impl FnMut() -> bool) {
     let deadline = Instant::now() + wait;
@@ -341,7 +348,7 @@ impl Parked {
         assert_eq!(cleanup(&client, route), CleanupState::Live);
         let mounted = rig.harness.engine(helper);
         assert_eq!(mounted.namespaces, empty.namespaces + 1);
-        assert!(mounted.owner_rows > empty.owner_rows, "{mounted:?}");
+        assert!(mounted.owner_details > empty.owner_details, "{mounted:?}");
         quiet(&rig, token);
         let before = work(&rig, token);
         let credits = holds::Credits::lifecycle(&client, route, 2, WAIT);
@@ -365,7 +372,7 @@ impl Parked {
             (1, 1, 0)
         );
         println!(
-            "FP-21 staged: lifecycle_credits_held={} owner_outstanding={} release(handoffs={}->{} admitted={} parked={} completed={}) engine(namespaces={} owner_rows={}) mount_state=Live cleanup=Live",
+            "FP-21 staged: lifecycle_credits_held={} owner_outstanding={} release(handoffs={}->{} admitted={} parked={} completed={}) engine(namespaces={} owner_details={}) mount_state=Live cleanup=Live",
             credits.count(),
             client.diagnostics().unwrap().outstanding,
             before.handoffs,
@@ -374,7 +381,7 @@ impl Parked {
             parked.parked,
             parked.completed,
             mounted.namespaces,
-            mounted.owner_rows
+            mounted.owner_details
         );
         Self {
             credits,
@@ -442,7 +449,7 @@ fn fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_
         if round % 10 == 0 {
             let counts = rig.harness.engine(helper);
             assert_eq!(counts.namespaces, empty.namespaces + 1);
-            assert!(counts.owner_rows > empty.owner_rows, "{counts:?}");
+            assert!(counts.owner_details > empty.owner_details, "{counts:?}");
         }
         steady += 1;
         thread::sleep(Duration::from_millis(2));
@@ -618,7 +625,7 @@ fn fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_l
     // while the credits are still held.
     let held = rig.harness.engine(helper);
     assert_eq!(held.namespaces, empty.namespaces + 1);
-    assert!(held.owner_rows > empty.owner_rows, "{held:?}");
+    assert!(held.owner_details > empty.owner_details, "{held:?}");
     // Observation: the custody's counters are read from the retained
     // connection at each reply, not stored at the stop. The test's own owner
     // job above released a credit, which wakes the parked request for one
@@ -701,10 +708,10 @@ fn fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_l
     assert_eq!(end.closed_namespaces, start.closed_namespaces);
     assert_eq!(rig.harness.serving.work().unwrap().mounts, 1);
     println!(
-        "FP-21 retained: stage=Requests detached=true loops_joined=1 admitted_at_stop=1 mount_row=None phase=Retained activity=Closing engine_mount=Live cleanup=Live namespaces={}(baseline {}) owner_rows={} closed_namespaces={}->{} after_release(completed={}->{} phase=Retained lane_kept=1) store_consumer_half=NOT_STAGED",
+        "FP-21 retained: stage=Requests detached=true loops_joined=1 admitted_at_stop=1 mount_row=None phase=Retained activity=Closing engine_mount=Live cleanup=Live namespaces={}(baseline {}) owner_details={} closed_namespaces={}->{} after_release(completed={}->{} phase=Retained lane_kept=1) store_consumer_half=NOT_STAGED",
         last.namespaces,
         empty.namespaces,
-        last.owner_rows,
+        last.owner_details,
         start.closed_namespaces,
         end.closed_namespaces,
         parked.completed,
@@ -840,7 +847,7 @@ fn fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_i
     let admission = rig.store.read_work();
     let unread = matches!(read.try_recv(), Err(mpsc::TryRecvError::Empty));
     println!(
-        "FP-29 hold: leases_held={} read(handoffs={}->{} parked=1 read_admissions_waiting=1) sibling_release(handoffs={}->{} completed={}->{}) engine_owner_rows(two_handles_quiescent={} one_handle_and_parked_read={}) unlink_while_held={removed:?} after_unlink(handoffs={} completed={} parked={} admitted={}) read_still_parked={unread} read_admissions_waiting={} reader_grants={}->{}",
+        "FP-29 hold: leases_held={} read(handoffs={}->{} parked=1 read_admissions_waiting=1) sibling_release(handoffs={}->{} completed={}->{}) engine_owner_details(two_handles_quiescent={} one_handle_and_parked_read={}) unlink_while_held={removed:?} after_unlink(handoffs={} completed={} parked={} admitted={}) read_still_parked={unread} read_admissions_waiting={} reader_grants={}->{}",
         leases.count(),
         quiescent.handoffs,
         parked.handoffs,
@@ -848,8 +855,8 @@ fn fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_i
         released.handoffs,
         parked.completed,
         released.completed,
-        opened.owner_rows,
-        closed.owner_rows,
+        opened.owner_details,
+        closed.owner_details,
         after.handoffs,
         after.completed,
         after.parked,
@@ -989,13 +996,13 @@ fn returned(
         requests += 1;
         reclaim.request();
         let (now, counts) = (work(rig, token), rig.harness.engine(helper));
-        if now.received == 0 && now.admitted == 0 && counts.owner_rows == rows {
+        if now.received == 0 && now.admitted == 0 && counts.owner_details == rows {
             return requests;
         }
         assert!(
             Instant::now() < deadline,
-            "bounded observation expired: {what}: reclaim_requests={requests} owner_rows={} wanted={rows} {now:?} {counts:?}",
-            counts.owner_rows
+            "bounded observation expired: {what}: reclaim_requests={requests} owner_details={} wanted={rows} {now:?} {counts:?}",
+            counts.owner_details
         );
         thread::sleep(Duration::from_millis(2));
     }
@@ -1035,9 +1042,9 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
     quiet(&rig, token);
     let looked = rig.harness.engine(helper);
     assert_eq!(
-        looked.owner_rows - baseline.owner_rows,
-        1,
-        "one indexed lookup owner for the one kernel inode"
+        looked.owner_details - baseline.owner_details,
+        custody(1, 0),
+        "the lookup row and the custody row of the one kernel inode"
     );
     let mut checks = Checks::default();
     let credits = holds::Credits::lifecycle(&client, route, 2, WAIT);
@@ -1053,8 +1060,8 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
     let parked = work(&rig, token);
     assert_eq!((parked.admitted, parked.received), (1, 0), "{parked:?}");
     assert_eq!(
-        rig.harness.engine(helper).owner_rows,
-        looked.owner_rows,
+        rig.harness.engine(helper).owner_details,
+        looked.owner_details,
         "nothing is decremented while the unit is parked"
     );
 
@@ -1073,15 +1080,15 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
     let second = settled(&rig, token, |now| now.completed == parked.completed + 1);
     let both = rig.harness.engine(helper);
     println!(
-        "FP-31 partial hold: reclaim_requests={first_requests} forget_units={} parked_forget=1 second_lookup={again:?} handoffs={}->{} parked={} admitted={} owner_rows(baseline={} looked={} while_parked={})",
+        "FP-31 partial hold: reclaim_requests={first_requests} forget_units={} parked_forget=1 second_lookup={again:?} handoffs={}->{} parked={} admitted={} owner_details(baseline={} looked={} while_parked={})",
         parked.forget_units,
         parked.handoffs,
         second.handoffs,
         second.parked,
         second.admitted,
-        baseline.owner_rows,
-        looked.owner_rows,
-        both.owner_rows
+        baseline.owner_details,
+        looked.owner_details,
+        both.owner_details
     );
     checks.that(again == Some(Ok(inode)), || {
         format!("FP-31: the second LOOKUP did not return the same inode while the FORGET was parked: {again:?} {second:?}")
@@ -1094,7 +1101,7 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
             && second.forget_units == 1
             && (second.parked, second.admitted) == (1, 1)
             && second.completed == parked.completed + 1
-            && both.owner_rows == looked.owner_rows,
+            && both.owner_details == looked.owner_details,
         || format!("FP-31: not exactly one more request, completed, beside the parked unit: {parked:?} -> {second:?}, {both:?}"),
     );
 
@@ -1113,10 +1120,10 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
         (0, 0, 0),
         "{after:?}"
     );
-    checks.that(partial.owner_rows == looked.owner_rows, || {
+    checks.that(partial.owner_details == looked.owner_details, || {
         format!(
-            "FP-31: a unit of 1 against a count of 2 did not leave the lookup row: owner_rows {} (looked {}, baseline {})",
-            partial.owner_rows, looked.owner_rows, baseline.owner_rows
+            "FP-31: a unit of 1 against a count of 2 did not leave the lookup row: owner_details {} (looked {}, baseline {})",
+            partial.owner_details, looked.owner_details, baseline.owner_details
         )
     });
 
@@ -1126,7 +1133,7 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
         &rig,
         token,
         helper,
-        baseline.owner_rows,
+        baseline.owner_details,
         "the remaining reference is returned",
     );
     quiet(&rig, token);
@@ -1141,14 +1148,14 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
         (0, 0, 0),
         "an underflow would be retained: {last:?}"
     );
-    assert_eq!(returned.owner_rows, baseline.owner_rows);
+    assert_eq!(returned.owner_details, baseline.owner_details);
     assert_eq!(rig.harness.phase(token), NativePhase::Ready);
     let receipt = rig.unmount(&ready);
     let counts = opcodes(&receipt);
     println!(
-        "FP-31 partial: count 1 -> 2 (second lookup) -> 1 (unit of 1, row kept: owner_rows={}) -> 0 (unit of 1, row returned: owner_rows={}) forget_units={} reclaim_requests={first_requests}+{second_requests}+1 retained=0 receipt_opcodes(lookup={} forget_frames={} batch_frames={})",
-        partial.owner_rows,
-        returned.owner_rows,
+        "FP-31 partial: count 1 -> 2 (second lookup) -> 1 (unit of 1, row kept: owner_details={}) -> 0 (unit of 1, row returned: owner_details={}) forget_units={} reclaim_requests={first_requests}+{second_requests}+1 retained=0 receipt_opcodes(lookup={} forget_frames={} batch_frames={})",
+        partial.owner_details,
+        returned.owner_details,
         last.forget_units,
         counts[Opcode::Lookup as usize],
         counts[Opcode::Forget as usize],
@@ -1290,8 +1297,8 @@ fn fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_
     quiet(&rig, token);
     let looked = rig.harness.engine(helper);
     assert_eq!(
-        looked.owner_rows - baseline.owner_rows,
-        INODES,
+        looked.owner_details - baseline.owner_details,
+        custody(INODES, 1 + DIRECTORIES as u64),
         "one indexed lookup owner per live kernel inode: {baseline:?} {looked:?}"
     );
 
@@ -1301,7 +1308,7 @@ fn fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_
         &rig,
         token,
         helper,
-        baseline.owner_rows + KEPT,
+        baseline.owner_details + custody(KEPT, 2),
         "every unreferenced inode returned by FORGET",
     );
     quiet(&rig, token);
@@ -1310,24 +1317,28 @@ fn fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_
     let partial = work(&rig, token);
     let kept = rig.harness.engine(helper);
     println!(
-        "FP-31 wide: names={names} inodes={INODES} pinned_files={PINNED} reclaim_requests={first_requests}+1 forget_units={} owner_rows(baseline={} looked={} after_reclaim={}) engine_decrement={}",
+        "FP-31 wide: names={names} inodes={INODES} pinned_files={PINNED} reclaim_requests={first_requests}+1 forget_units={} owner_details(baseline={} looked={} after_reclaim={}) engine_decrement={}",
         partial.forget_units,
-        baseline.owner_rows,
-        looked.owner_rows,
-        kept.owner_rows,
-        looked.owner_rows - kept.owner_rows
+        baseline.owner_details,
+        looked.owner_details,
+        kept.owner_details,
+        looked.owner_details - kept.owner_details
     );
     assert_eq!(
         partial.forget_units,
         INODES - KEPT,
         "one unit per evicted inode"
     );
+    // Every directory but `tree` and the pinned files' own was returned.
     assert_eq!(
-        looked.owner_rows - kept.owner_rows,
-        partial.forget_units,
+        looked.owner_details - kept.owner_details,
+        custody(partial.forget_units, DIRECTORIES as u64 - 1),
         "the engine's decrement is the units received"
     );
-    assert_eq!(kept.owner_rows - baseline.owner_rows, KEPT);
+    assert_eq!(
+        kept.owner_details - baseline.owner_details,
+        custody(KEPT, 2)
+    );
     assert_eq!(
         (partial.retained, partial.unadmitted, partial.terminal),
         (0, 0, 0),
@@ -1341,7 +1352,7 @@ fn fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_
         &rig,
         token,
         helper,
-        baseline.owner_rows,
+        baseline.owner_details,
         "every lookup owner returned by FORGET",
     );
     quiet(&rig, token);
@@ -1357,8 +1368,8 @@ fn fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_
     quiet(&rig, token);
     let outstanding = rig.harness.engine(helper);
     assert_eq!(
-        outstanding.owner_rows - baseline.owner_rows,
-        OUTSTANDING,
+        outstanding.owner_details - baseline.owner_details,
+        custody(OUTSTANDING, 1 + AGAIN as u64),
         "reacquired after FORGET"
     );
     let start = client.diagnostics().unwrap();
