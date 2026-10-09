@@ -116,11 +116,15 @@ commands. The 24-cycle install proof preserves later metadata/cell/reply state,
 and names paginate without revisiting prior prefixes. These small proofs do not
 establish aggregate end-to-end/resource acceptance.
 
-The dormant daemon is temporarily relocated at `layerfs-daemon-legacy`, excluded,
-with its package manifest explicitly renamed. Its 2,151 implementation LOC remain
-counted and no active consumer uses it. This additional preservation step follows
-the same temporary-reference pattern as Workspace; S11 must remove it once actual
-native integration has replacement coverage. Root reference remains for S13.
+The dormant daemon was temporarily relocated at `layerfs-daemon-legacy`,
+excluded, with its package manifest explicitly renamed, and no active consumer
+used it. R7-retire removed that directory on 2026-10-10 as retirement, 2151
+production lines, after its
+[coverage audit](../issues/307/checks/r7-retire-20261010/14-layerfs-daemon-legacy.md)
+and by owner authorization; its last source is at `d6b7539f7`. Its pinned
+read-only view control has no active replacement: 303/08 O-10 is deferred, and
+a kept feature needs a new design on the SQLite overlay. The root reference
+remains until its own retirement.
 
 Remaining: weighted automatic maintenance, physical admission/debt, full generation/
 reader/orphan/failure composition, mutable filesystem semantics, actual deferred

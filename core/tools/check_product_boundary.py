@@ -71,7 +71,7 @@ ENGINES_AND_CLUSTER2 = {
 # stays in Git history; a directory or manifest that returns fails the scan.
 RETIRED_PACKAGES = (
     "layerfs-server", "layerfs-fuse-legacy", "layerfs-sandbox-legacy",
-    "layerfs-sdk-legacy",
+    "layerfs-sdk-legacy", "layerfs-daemon-legacy",
 )
 RETIRED_PACKAGE = "retired package; its directory was removed and is not restored"
 
