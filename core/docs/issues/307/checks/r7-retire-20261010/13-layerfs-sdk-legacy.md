@@ -1,6 +1,12 @@
 # Coverage audit: `layerfs-sdk-legacy`
 
 > **Status:** Dated checkpoint receipt; coverage audit written before any removal.
+>
+> **Addendum 2026-10-10:** the directory was removed after this audit, 505 production lines,
+> as retirement, by owner authorization ("yes, do the full cleanup"; see the
+> [completion record](../../R7-RETIRE-COMPLETION-20261010.md#addendum-full-cleanup-by-owner-authorization)).
+> Its last source is at `55aa5b000`. The verdict below is the verdict at audit time and is kept as written.
+> O-10 stays open as a product question; the rows classed O have no implementation in the tree.
 
 The previous agent SDK over one composed host Server and its Sandbox owner. Classes and the directions `[D1]`–`[D13]` are defined in [00-scope-and-method.md](00-scope-and-method.md). Test directories: D daemon, W workspace, O overlay, F fuse, B bridge, S sandbox, K SDK, P project, C content, PE persistence.
 

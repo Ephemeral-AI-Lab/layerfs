@@ -82,10 +82,15 @@ checks. Exact semantic and missing-dependency failures retain their original pha
 Uncertain/failed-cleanup custody has source handling but still needs actual owning-
 platform integration proof; no failure injection or small fixture completes S9.
 
-The old SDK is preserved byte-for-byte under `layerfs-sdk-legacy`, excluded, with
-only the declared manifest package identity/relative dependency paths changed.
-Its product LOC remain counted. S11 must retire this source once replacement
-Init/control/transport has coverage; root reference remains until S13.
+The old SDK was preserved under `layerfs-sdk-legacy`, excluded, with only the
+declared manifest package identity/relative dependency paths changed, while
+this crate was built. R7-retire removed that directory on 2026-10-10 as
+retirement, 505 production lines, after its
+[coverage audit](../issues/307/checks/r7-retire-20261010/13-layerfs-sdk-legacy.md)
+and by owner authorization; its last source is at `55aa5b000`. Its pinned
+read-only view calls have no active replacement: 303/08 O-10 is deferred, and
+a kept feature needs a new design on the SQLite overlay. The root reference
+remains until its own retirement.
 
 The following P5 slice adds authorized saved-file lengths through a borrowed
 metadata sink. See [file-length facts](24-file-lengths.md) for the exact descriptor
