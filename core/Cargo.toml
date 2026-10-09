@@ -28,7 +28,6 @@ exclude = [
     "crates/layerfs-sdk-legacy",
     "crates/layerfs-sandbox-legacy",
     "crates/layerfs-daemon-legacy",
-    "crates/layerfs-fuse-legacy",
     "crates/layerfs-workspace-legacy",
     "crates/layerfs-bridge-legacy",
 ]

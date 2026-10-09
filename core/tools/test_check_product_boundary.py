@@ -64,7 +64,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(any("retired host-mediated" in message for _, message in findings), relative)
 
     def test_retired_packages_cannot_return(self):
-        self.assertIn("layerfs-server", RETIRED_PACKAGES)
+        self.assertEqual(RETIRED_PACKAGES, ("layerfs-server", "layerfs-fuse-legacy"))
         for name in RETIRED_PACKAGES:
             findings = violations(Path("core/crates") / name / "src/lib.rs", "pub use std::io::Read;")
             self.assertTrue(any("retired package" in message for _, message in findings), name)

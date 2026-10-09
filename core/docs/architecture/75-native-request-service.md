@@ -11,8 +11,11 @@ named below no longer exist; every request is served through
 
 The replacement `layerfs-fuse` is an active core member. The daemon depends on
 Fuse, which consumes Workspace plans and existing Content/Overlay domain types.
-The former excluded Fuse is preserved byte-for-byte in `layerfs-fuse-legacy`;
-its 1447 production lines are reclassified as a predecessor, not retired.
+The former excluded Fuse was preserved byte-for-byte in `layerfs-fuse-legacy`
+while this crate was built. R7-retire removed that directory on 2026-10-10 as
+retirement, 1447 production lines, after its
+[coverage audit](../issues/307/checks/r7-retire-20261010/11-layerfs-fuse-legacy.md);
+its last source is at `15e33e22c`.
 
 This component implements the shared dispatcher, actual asynchronous engine and
 admitted Store adapters, native read continuations and the Linux callback
