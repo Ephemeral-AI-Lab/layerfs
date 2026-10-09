@@ -1,0 +1,50 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 5a9065b0b, uncommitted product/test paths=49, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/directory_links-8b2c026c8adf368f --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 5 tests
+test a_base_directory_counts_its_child_directories_and_nothing_else ... FAILED
+test a_base_directory_with_children_keeps_its_count_exact_under_every_change ... FAILED
+test a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_supplied ... FAILED
+test every_binding_change_moves_the_count_of_a_local_directory_exactly ... FAILED
+test remembered_counts_are_bounded_and_an_evicted_one_is_derived_again ... FAILED
+
+failures:
+
+---- a_base_directory_counts_its_child_directories_and_nothing_else stdout ----
+
+thread 'a_base_directory_counts_its_child_directories_and_nothing_else' panicked at crates/layerfs-workspace/tests/directory_links.rs:123:10:
+called `Result::unwrap()` on an `Err` value: InvalidRecord("directory bindings missing")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_base_directory_with_children_keeps_its_count_exact_under_every_change stdout ----
+
+thread 'a_base_directory_with_children_keeps_its_count_exact_under_every_change' panicked at crates/layerfs-workspace/tests/directory_links.rs:123:10:
+called `Result::unwrap()` on an `Err` value: InvalidRecord("directory bindings missing")
+
+---- a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_supplied stdout ----
+
+thread 'a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_supplied' panicked at crates/layerfs-workspace/tests/directory_links.rs:123:10:
+called `Result::unwrap()` on an `Err` value: InvalidRecord("directory bindings missing")
+
+---- every_binding_change_moves_the_count_of_a_local_directory_exactly stdout ----
+
+thread 'every_binding_change_moves_the_count_of_a_local_directory_exactly' panicked at crates/layerfs-workspace/tests/directory_links.rs:123:10:
+called `Result::unwrap()` on an `Err` value: InvalidRecord("directory bindings missing")
+
+---- remembered_counts_are_bounded_and_an_evicted_one_is_derived_again stdout ----
+
+thread 'remembered_counts_are_bounded_and_an_evicted_one_is_derived_again' panicked at crates/layerfs-workspace/tests/directory_links.rs:123:10:
+called `Result::unwrap()` on an `Err` value: InvalidRecord("directory bindings missing")
+
+
+failures:
+    a_base_directory_counts_its_child_directories_and_nothing_else
+    a_base_directory_with_children_keeps_its_count_exact_under_every_change
+    a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_supplied
+    every_binding_change_moves_the_count_of_a_local_directory_exactly
+    remembered_counts_are_bounded_and_an_evicted_one_is_derived_again
+
+test result: FAILED. 0 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 101

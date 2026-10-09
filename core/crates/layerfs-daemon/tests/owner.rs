@@ -194,6 +194,7 @@ fn value(serial: u64) -> Inode {
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     }
 }
 
@@ -324,7 +325,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 21);
+    assert_eq!(owner.profile().schema_version, 22);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);

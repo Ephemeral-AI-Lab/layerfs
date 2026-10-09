@@ -43,7 +43,7 @@ impl Overlay {
         if !self.orphan_seen.get() {
             return Ok(None);
         }
-        self.query(StatementKind::Inode,"SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries
+        self.query(StatementKind::Inode,"SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs
             FROM inode WHERE ns=?1 AND serial=?2 AND gen=-1",&[&ns,&serial],16,inode::decode).map(|mut rows|rows.pop())
     }
     /// Last unlink creates only ownership/metadata. Its at-most-two lower
@@ -97,8 +97,9 @@ impl Overlay {
                 &0_i64,
                 &0_i64,
                 &0_i64,
+                &0_i64,
             ],
-            112,
+            120,
         )?;
         self.enqueue(route.ns, ORPHAN, serial, DOMAIN)
     }

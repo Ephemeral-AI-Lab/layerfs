@@ -1,0 +1,14 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 5a9065b0b, uncommitted product/test paths=49, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/directory_links-8b2c026c8adf368f --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 5 tests
+test a_base_directory_counts_its_child_directories_and_nothing_else ... ok
+test a_base_directory_with_children_keeps_its_count_exact_under_every_change ... ok
+test a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_supplied ... ok
+test every_binding_change_moves_the_count_of_a_local_directory_exactly ... ok
+test remembered_counts_are_bounded_and_an_evicted_one_is_derived_again ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 0

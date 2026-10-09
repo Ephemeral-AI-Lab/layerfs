@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 5a9065b0b, uncommitted product/test paths=54, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/reply_tickets-e01139f6076113b3 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 11 tests
+test a_closed_workspace_with_a_pending_ticket_is_queued_only_by_the_settling_owner_turn ... ok
+test a_failed_attempt_and_release_gives_the_ticket_back_with_its_waiter ... ok
+test a_job_that_fails_after_its_frontier_advance_leaves_no_ticket ... ok
+test a_ticket_is_named_by_its_namespace_revision_and_generation ... ok
+test a_waiting_capture_is_owed_the_last_attempt_and_no_waiter_means_last ... ok
+test attempts_from_other_threads_are_pending_then_last_and_a_repeat_is_stale ... ok
+test concurrent_attempts_return_every_ticket_once_and_one_of_them_settles_the_namespace ... ok
+test every_publishing_job_issues_exactly_one_ticket_and_nothing_else_issues_any ... ok
+test pending_publications_page_in_ascending_revision_order_64_per_page ... ok
+test the_owner_turn_form_refuses_a_publication_of_another_engine ... ok
+test tickets_of_one_namespace_never_affect_another ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

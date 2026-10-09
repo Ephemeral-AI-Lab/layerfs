@@ -64,6 +64,7 @@ impl<'a> File<'a> {
             inherited_cutoff: self.base.len() as u64,
             born: 0,
             entries: 0,
+            subdirs: 0,
         }
     }
     pub fn apply(&mut self, size: u64, write: Option<PayloadWrite>) {

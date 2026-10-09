@@ -44,6 +44,15 @@ account, and the next visit fails `Stale`; the kernel's reference keeps the
 parent or target inode as before. OPEN, OPENDIR, file data, symbolic-link
 data and directory enumeration still record a source, as described below.
 
+R7 update, 2026-10-09 (directory link counts): the fact of a base directory
+now includes its child-directory count, which is derived, not stored
+([effective view](29-effective-base-view.md)). Inside a visit the memory-only
+client answers it only from the remembered counts; it never lists. A count
+that is not remembered is one more fact that is not resident: the visit is
+undecided and unchanged, the request derives the count outside the owner and
+carries the complete inode fact to its next visit, so an eviction between the
+two visits cannot make it ask again. An empty directory needs no count.
+
 Overlay schema17 adds one engine-minted NativeMount per Workspace and indexed
 native_lookup, native_source and native_read associations in the existing Overlay.
 The mount retains its authenticated root serial. Its implicit root lookup owner

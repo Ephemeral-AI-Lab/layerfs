@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 5a9065b0b, uncommitted product/test paths=54, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-overlay IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/indexed_operation_record_cursor-544b56c108e47c19 --test-threads=1 
+
+running 2 tests
+test full_binary_exclusive_boundary_and_restart_handle_lower_insertions ... ok
+test sealed_pass_preserves_all_records_across_windows_and_exact_prefixes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

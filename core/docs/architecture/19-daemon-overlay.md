@@ -6,6 +6,18 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (directory link counts, overlay schema 22): the `inode`
+row gains `subdirs INTEGER NOT NULL CHECK(subdirs>=0 AND (kind=2 OR
+subdirs=0))`, the absolute number of child directories bound in a directory
+in the row's view, and `Inode` gains the field. Every whole-row statement
+carries it (`INODE_PUT`, now fifteen bound values and 120 declared bound
+bytes; `INODE_LOOKUP`; `INODE_CAPTURE`; the orphan select; the fold's select
+and its `put_inode` copy). `PRAGMA user_version` and its startup readback are
+22. No statement was added and no statement count changed. `nlink` keeps its
+meaning, the namespace reference count that construction writes back. The
+filesystem meaning of the column belongs to Workspace; see
+[namespace operations](30-namespace-operations.md).
+
 R7 update, 2026-10-09 (statement diet, schema unchanged at 21): **a job
 reads a row once.** A native visit's fence is one statement
 (`FENCE_LOOKUP`, `FENCE_FILE`, `FENCE_HANDLE` in

@@ -89,6 +89,48 @@ logical length with zero owning payload/pack reads, authorized by an actual nati
 handshake binding, then preserves RuntimeError::Denied without fallback. Required
 checks/source/build pins are recorded in [S3 exit audit](../issues/307/S3-EXIT-AUDIT.md).
 
+## R7 update, 2026-10-09: derived child-directory counts
+
+`ViewStat` gains `subdirs`, the number of a directory's bindings that are
+directories; the reply reports two more as the POSIX link count
+([native mutation and kernel coherence](77-native-mutation-coherence.md)).
+`namespace_refs` is still not a link count. A local row carries the value in
+its `subdirs` column ([namespace operations](30-namespace-operations.md)).
+
+The canonical format stores nothing of the kind: a directory row is a name and
+a serial, and a directory's reference count is 1. For a base directory the
+count is therefore **derived** in
+[`links.rs`](../../crates/layerfs-workspace/src/base/links.rs):
+
+- An empty directory (root-page count 0) is 0 with no read.
+- Otherwise the directory is listed with the existing listing API in windows
+  of at most 256 rows and 64 KiB, and each window's serials are resolved with
+  one batch inode demand (`FilesystemRead::lookup_inodes`). Nothing held
+  grows with the directory; the listed total is checked against the root-page
+  count. Cost: one root-to-leaf descent per window plus the inode-table pages
+  of the listed serials, O(entries) once.
+- A serial's kind never changes, so the result is a pure function of the
+  directory's `content_root`. It is remembered under that key in a
+  least-recently-used table owned by the shared `CanonicalCache`, beside the
+  object cache and under the same lock: `DIRECTORY_COUNT_CAPACITY` = 16,384
+  entries for the whole daemon, 88 logical bytes each (1,441,792 bytes at
+  capacity; accounting of the stored values, not a measured allocation).
+  Eviction loses an answer and nothing else. `ClientWork` reports
+  `directory_counts` and the cumulative `directory_count_scans`.
+
+The derivation is provider work. It runs where base facts are read outside
+the owner: `SourceView::stat`/`lookup`, `SourceView::supply` and
+`VisitFacts::supply`. `BaseView::base_inode` seeds a first local row's
+`subdirs` from it as it seeds `entries`. A memory-only client never derives;
+see [native read custody](73-native-read-custody.md).
+
+After an install the directories a Commit changed have new content roots, so
+each is listed once more on its next stat. That recomputation is the accepted
+cost of keeping the canonical format unchanged; no second mechanism carries
+counts across an install. Not measured here: latency of the first stat of a
+very large base directory, and the hit rate of the table on trees with more
+than 16,384 non-empty directories.
+
 ## S4 update
 
 Lookup and listing now read the directory's local row first: a directory

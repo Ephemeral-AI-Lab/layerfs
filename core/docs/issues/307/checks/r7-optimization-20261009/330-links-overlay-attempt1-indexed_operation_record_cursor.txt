@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 5a9065b0b, uncommitted product/test paths=35, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/indexed_operation_record_cursor-176a82882423d724 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 2 tests
+test full_binary_exclusive_boundary_and_restart_handle_lower_insertions ... ok
+test sealed_pass_preserves_all_records_across_windows_and_exact_prefixes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

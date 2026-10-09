@@ -59,6 +59,7 @@ fn inode(wave: u64) -> Inode {
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     }
 }
 fn mutation(wave: u64) -> Command {

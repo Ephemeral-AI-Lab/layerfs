@@ -122,6 +122,24 @@ connection, so the kernel updates its caches from the reply:
 A link count is the engine's namespace reference count for a file. A
 directory's count is projected: 2 while it has a name, 0 once removed.
 
+R7 update, 2026-10-09 (directory link counts, overlay schema 22): the
+sentence above is superseded for a named directory. A directory reports
+**2 plus the number of its child directories**, as a native filesystem does,
+and still 0 once removed; the root, which has no namespace reference and is
+never removed, follows the rule of a named directory.
+[`Identity::attributes`](../../crates/layerfs-fuse/src/attributes.rs) adds 2
+to `ViewStat::subdirs` with a checked conversion (`EOVERFLOW` beyond 32 bits),
+so LOOKUP, GETATTR, MKDIR, SETATTR and every other reply that carries
+directory attributes report one value. The count is the inode row's `subdirs`
+column, moved by the transaction that changes a binding
+([namespace operations](30-namespace-operations.md)); for a directory with no
+local row it is derived from the base and remembered
+([effective view](29-effective-base-view.md)). It is never the reference
+count: a directory's `nlink` stays 1, the root's 0, as the canonical grammar
+requires. No notification is sent: after mkdir, rmdir and rename the kernel
+drops the attributes of the parents it changed by itself. The mounted proof is
+[`mounted_links.rs`](../../crates/layerfs-daemon/tests/mounted_links.rs).
+
 ## Removed references
 
 Kernel lookup custody, open handles and processing sources are independent

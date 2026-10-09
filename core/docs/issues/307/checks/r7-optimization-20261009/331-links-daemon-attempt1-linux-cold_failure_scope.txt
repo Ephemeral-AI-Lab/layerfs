@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 5a9065b0b, uncommitted product/test paths=54, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/cold_failure_scope-143b6c1ec6acaead --test-threads=1 
+
+running 2 tests
+test a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause ... ok
+test an_owner_job_failure_is_not_a_base_demand_and_is_still_retained ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

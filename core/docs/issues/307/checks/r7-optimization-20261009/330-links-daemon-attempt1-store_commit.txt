@@ -1,0 +1,17 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 5a9065b0b, uncommitted product/test paths=54, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/store_commit-45736c8a2e8d8b59 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 8 tests
+test a_held_producer_does_not_hold_workspace_metadata_or_read_capacity ... ok
+test busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss ... ok
+test committed_up_to_date_overwrite_and_new_bind_preserve_exact_roots ... ok
+test history_busy_after_save_has_no_stage_and_counts_only_acknowledged_save_writes ... ok
+test known_publication_survives_an_unattempted_local_install ... ok
+test later_mutation_survives_capture_publication_and_known_install ... ok
+test nested_storage_unknown_keeps_original_capture_and_blocks_another_commit ... ok
+test unknown_history_acknowledgement_retains_original_intent_and_capture ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

@@ -120,6 +120,7 @@ fn hold_capture(client: &OwnerClient, route: Route) -> (Publication, Pending) {
                 inherited_cutoff: 0,
                 born: 0,
                 entries: 0,
+                subdirs: 0,
             },
             name: None,
             cell: None,

@@ -38,6 +38,7 @@ fn inode(serial: u64) -> Inode {
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     }
 }
 fn cell(byte: u8) -> Cell {

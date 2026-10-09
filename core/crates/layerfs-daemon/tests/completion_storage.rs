@@ -78,6 +78,7 @@ fn publish(serial: u64) -> Command {
             inherited_cutoff: 0,
             born: 0,
             entries: 0,
+            subdirs: 0,
         },
         name: None,
         cell: None,

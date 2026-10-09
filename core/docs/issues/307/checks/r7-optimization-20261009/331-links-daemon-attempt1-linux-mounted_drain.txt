@@ -1,0 +1,14 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 5a9065b0b, uncommitted product/test paths=54, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_drain-5c15ce76d3942f4a --test-threads=1 
+
+running 5 tests
+test fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window ... ok
+test fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount ... ok
+test fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_its_name ... ok
+test fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder ... ok
+test fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_after_detach ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.88s
+
+R4_WALL seconds<=21 limit=115s lock_wait=0s
+EXIT 0

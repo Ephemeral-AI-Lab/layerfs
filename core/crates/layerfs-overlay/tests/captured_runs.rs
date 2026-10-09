@@ -77,6 +77,7 @@ fn sparse_cutoff_gap_above_four_gib_avoids_payload_windows_and_pays_root_metadat
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     };
     let publication = db
         .apply(

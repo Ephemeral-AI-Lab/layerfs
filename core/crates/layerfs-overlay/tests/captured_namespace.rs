@@ -27,6 +27,7 @@ fn node(serial: u64, kind: InodeKind, size: u64, born: u64) -> Inode {
         inherited_cutoff: 0,
         born,
         entries: 0,
+        subdirs: 0,
     }
 }
 /// The one payload cell Workspace writes for a fresh symlink or a small file.

@@ -30,7 +30,7 @@ pub(crate) use workspace::view;
 
 pub(crate) use operations::file::write;
 
-pub use base::{BaseRead, BaseStat, BaseView};
+pub use base::{BaseRead, BaseStat, BaseView, DIRECTORY_COUNT_CAPACITY};
 pub use cache::CanonicalCache;
 pub use client::{CanonicalClient, ClientWork};
 pub use construction::{

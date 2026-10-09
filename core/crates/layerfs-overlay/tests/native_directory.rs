@@ -39,6 +39,7 @@ impl Fixture {
                     inherited_cutoff: 0,
                     born: 0,
                     entries: 0,
+                    subdirs: 0,
                 }),
                 value: serial,
             })

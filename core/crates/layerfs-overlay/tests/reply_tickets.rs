@@ -23,6 +23,7 @@ fn file(serial: u64) -> Inode {
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     }
 }
 fn publish(db: &Overlay, route: Route, serial: u64) -> Publication {

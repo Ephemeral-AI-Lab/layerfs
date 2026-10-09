@@ -119,6 +119,7 @@ fn a_queued_install_and_the_sources_behind_it_leave_the_holder_a_slot() {
                 inherited_cutoff: 0,
                 born: 0,
                 entries: 0,
+                subdirs: 0,
             },
             name: None,
             cell: None,

@@ -24,6 +24,7 @@ pub(crate) fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Inode> {
         inherited_cutoff: unsigned(row, 7)?,
         born: unsigned(row, 8)?,
         entries: unsigned(row, 9)?,
+        subdirs: unsigned(row, 10)?,
     })
 }
 pub(crate) fn optional_serial(value: Option<i64>, column: usize) -> rusqlite::Result<Option<u64>> {
@@ -41,7 +42,7 @@ pub(crate) fn check(inode: &Inode) -> OverlayResult<()> {
         || inode.mode & !allowed != 0
         || (inode.kind == InodeKind::Symlink && inode.mode != 0o777)
         || inode.mtime_nanoseconds >= 1_000_000_000
-        || (inode.kind != InodeKind::Directory && inode.entries != 0)
+        || (inode.kind != InodeKind::Directory && (inode.entries != 0 || inode.subdirs != 0))
     {
         return Err(OverlayError::Invalid("inode metadata"));
     }
@@ -52,6 +53,7 @@ pub(crate) fn check(inode: &Inode) -> OverlayResult<()> {
         inode.inherited_cutoff,
         inode.born,
         inode.entries,
+        inode.subdirs,
     ] {
         integer(value)?;
     }
@@ -174,10 +176,11 @@ impl Overlay {
                 &integer(layer.cutoff)?,
                 &integer(inode.born)?,
                 &integer(inode.entries)?,
+                &integer(inode.subdirs)?,
                 &layer.epoch,
                 &layer.height,
             ],
-            112,
+            120,
         )?;
         Ok((added && !orphan, layer))
     }

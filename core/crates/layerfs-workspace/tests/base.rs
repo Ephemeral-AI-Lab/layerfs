@@ -170,6 +170,7 @@ fn known_install_advances_selected_base_and_preserves_retained_plans_and_later_r
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     };
     let publication = overlay
         .publish(
@@ -304,6 +305,7 @@ fn local(serial: u64, size: u64, links: u64) -> layerfs_overlay::Inode {
         inherited_cutoff: size,
         born: 0,
         entries: 0,
+        subdirs: 0,
     }
 }
 fn publish_name(

@@ -65,6 +65,7 @@ fn inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_i
             inherited_cutoff: stat.logical_len,
             born: 0,
             entries: 0,
+            subdirs: 0,
         };
         service.job(
             Command::OpenFile {
@@ -265,6 +266,7 @@ fn non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer() {
                     inherited_cutoff: stat.logical_len,
                     born: 0,
                     entries: 0,
+                    subdirs: 0,
                 }
             });
             service.job(

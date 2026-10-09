@@ -22,6 +22,7 @@ fn inode(serial: u64) -> Inode {
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     }
 }
 fn entry(serial: u64) -> DirectoryEntry {
@@ -211,6 +212,7 @@ fn link(serial: u64, target: &[u8], born: u64) -> (Inode, Cell) {
             inherited_cutoff: 0,
             born,
             entries: 0,
+            subdirs: 0,
         },
         Cell {
             offset: 0,

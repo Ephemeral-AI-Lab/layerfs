@@ -73,7 +73,7 @@ impl BaseView {
     pub(crate) fn rebind(&self, identity: FilesystemRootId) -> ContentResult<Self> {
         Self::open(self.client.clone(), identity, self.root.scope())
     }
-    fn reader(&self) -> ContentResult<FilesystemRead<'_>> {
+    pub(crate) fn reader(&self) -> ContentResult<FilesystemRead<'_>> {
         FilesystemRead::new(self.client.as_ref(), self.identity)
     }
     pub fn child(&self, parent: u64, name: &PathName) -> ContentResult<Resolved> {

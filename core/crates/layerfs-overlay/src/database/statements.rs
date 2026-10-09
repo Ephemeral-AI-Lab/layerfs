@@ -1,9 +1,9 @@
 //! Fixed statement templates shared by ordinary jobs and plan diagnostics.
 pub(crate) const INODE_LOOKUP: &str =
-    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries
+    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs
     FROM inode WHERE ns=?1 AND serial=?2 AND gen<=?3 AND gen>?4 ORDER BY gen DESC LIMIT 1";
 pub(crate) const INODE_CAPTURE: &str =
-    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries
+    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs
     FROM inode INDEXED BY inode_capture WHERE ns=?1 AND gen=?2 AND serial>?3 ORDER BY serial LIMIT 64";
 pub(crate) const CELL_LOOKUP: &str = "SELECT epoch,data,validity FROM payload
     WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4";
@@ -62,11 +62,12 @@ pub(crate) const CAPTURED_DIRECTORY_ENTRY: &str =
 pub(crate) const OPERATION_RECORD_PAGE: &str = "SELECT kind,key,value FROM operation_record
     WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64";
 pub(crate) const INODE_PUT: &str = "INSERT INTO inode
-    VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+    VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
     ON CONFLICT(ns,serial,gen) DO UPDATE SET kind=excluded.kind,mode=excluded.mode,
     mtime_seconds=excluded.mtime_seconds,mtime_nanoseconds=excluded.mtime_nanoseconds,
     nlink=excluded.nlink,size=excluded.size,inherited_cutoff=excluded.inherited_cutoff,
-    born=excluded.born,entries=excluded.entries,epoch=excluded.epoch,height=excluded.height";
+    born=excluded.born,entries=excluded.entries,subdirs=excluded.subdirs,
+    epoch=excluded.epoch,height=excluded.height";
 pub(crate) const DIRECTORY_ENTRY_ACTIVE: &str =
     "SELECT serial,inherited FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
 pub(crate) const DIRECTORY_ENTRY_PUT: &str = "INSERT INTO directory_entry VALUES(?1,?2,?3,?4,?5,?6)

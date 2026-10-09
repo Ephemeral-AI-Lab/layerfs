@@ -53,6 +53,7 @@ fn inode(serial: u64) -> Inode {
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     }
 }
 /// The file `serial` created under the root at the active generation.

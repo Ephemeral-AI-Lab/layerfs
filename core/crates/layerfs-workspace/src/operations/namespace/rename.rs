@@ -117,13 +117,19 @@ pub(crate) fn rename(
             _ => {}
         }
     }
-    let gained = replaced.is_none();
+    // The source parent loses the moved binding; the destination gains it and
+    // loses the binding it replaces. In one parent the moved binding only
+    // changes its name, so the row's net change is the replaced binding alone.
+    let lost = replaced.as_ref().map(|old| old.kind);
     let mut inodes = if same {
-        vec![touched(&from, now, gained, true)?]
+        match lost {
+            Some(lost) => vec![touched(&from, now, None, Some(lost))?],
+            None => vec![touched(&from, now, Some(moved.kind), Some(moved.kind))?],
+        }
     } else {
         vec![
-            touched(&from, now, false, true)?,
-            touched(&to, now, gained, false)?,
+            touched(&from, now, None, Some(moved.kind))?,
+            touched(&to, now, Some(moved.kind), lost)?,
         ]
     };
     if let Some(old) = &replaced {

@@ -101,6 +101,12 @@ remain governed by the unchanged owning contracts.
 
 ## Cost, copies and limits
 
+R7 update, 2026-10-09: the cache owner also holds the bounded table of derived
+child-directory counts, `DIRECTORY_COUNT_CAPACITY` entries keyed by directory
+content root, outside the byte allowance described below and under the same
+lock; see [effective view](29-effective-base-view.md). `ClientWork` gains
+`directory_counts` and `directory_count_scans`.
+
 For E admitted immutable entries and B demanded bytes, cache lookup/recency work
 remains O(log E) per ID plus actual bytes and eviction work. A hit clones that
 entry's canonical Vec into the caller result. Each successfully admitted distinct

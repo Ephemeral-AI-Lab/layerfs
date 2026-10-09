@@ -419,13 +419,24 @@ pub fn kernel(root: &Path) -> Kernel {
 /// What the model does not read, checked against it for a whole mounted tree:
 /// every owner is the command identity; a regular file's `st_nlink` is its
 /// alias count and its `st_size` its byte length; two paths share `st_ino`
-/// exactly when they are aliases of one inode; a directory's count is the
-/// projected 2. Symlink sizes are reported, not asserted.
+/// exactly when they are aliases of one inode; a directory's count is 2 plus
+/// the directories the model names directly beneath it. Symlink sizes are
+/// reported, not asserted.
 pub fn assert_kernel(expected: &Flat, table: &Kernel, what: &str) {
     assert_eq!(expected.len(), table.len(), "{what}: paths");
+    // The model's own count of each directory's child directories, by the
+    // parent's path; the root is the empty path.
+    let mut below = BTreeMap::<&[u8], u64>::new();
+    for (path, seen) in expected {
+        if seen.kind == DIRECTORY && !path.is_empty() {
+            let parent = path.iter().rposition(|byte| *byte == b'/').unwrap_or(0);
+            *below.entry(&path[..parent]).or_default() += 1;
+        }
+    }
     let mut by_identity = BTreeMap::<&[u8], u64>::new();
     let mut inodes = BTreeSet::new();
     let (mut files, mut aliased, mut directories, mut symlinks, mut sized) = (0, 0, 0, 0, 0);
+    let mut nested = 0;
     for (path, stat) in table {
         let name = path.as_os_str().as_bytes();
         let seen = expected
@@ -456,7 +467,16 @@ pub fn assert_kernel(expected: &Flat, table: &Kernel, what: &str) {
             }
             DIRECTORY => {
                 directories += 1;
-                assert_eq!(stat.nlink, 2, "{what}: directory count of {path:?}");
+                // R7 update, 2026-10-09: this pinned the projected 2 for
+                // every directory. The count is exact now: 2 plus the
+                // child directories, as a native filesystem reports it.
+                let children = below.get(name).copied().unwrap_or(0);
+                assert_eq!(
+                    stat.nlink,
+                    2 + children,
+                    "{what}: directory count of {path:?}"
+                );
+                nested += usize::from(children != 0);
             }
             _ => {
                 symlinks += 1;
@@ -476,7 +496,7 @@ pub fn assert_kernel(expected: &Flat, table: &Kernel, what: &str) {
         }
     }
     println!(
-        "MOUNTED_KERNEL {what}: paths={} inodes={} files={files} alias_names={aliased} directories={directories} symlinks={symlinks} symlink_size_is_target_length={sized} owner={COMMAND}:{COMMAND}",
+        "MOUNTED_KERNEL {what}: paths={} inodes={} files={files} alias_names={aliased} directories={directories} directories_with_child_directories={nested} symlinks={symlinks} symlink_size_is_target_length={sized} owner={COMMAND}:{COMMAND}",
         table.len(),
         inodes.len()
     );

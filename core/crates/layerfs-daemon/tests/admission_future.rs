@@ -278,6 +278,7 @@ fn a_command_larger_than_the_entire_budget_is_refused_without_waiting() {
             inherited_cutoff: 0,
             born: 0,
             entries: 0,
+            subdirs: 0,
         },
         name: Some(DirectoryEntry {
             inherited: false,
@@ -325,6 +326,7 @@ fn worker_loss_fences_admission_and_retains_the_original_join_failure() {
                 inherited_cutoff: 0,
                 born: 0,
                 entries: 0,
+                subdirs: 0,
             },
             name: None,
             cell: None,

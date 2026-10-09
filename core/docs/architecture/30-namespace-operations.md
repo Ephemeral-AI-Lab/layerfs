@@ -78,6 +78,41 @@ The windows bound one job; they are not totals. `Overlay::source_rows` gives the
 job consistent point reads: an inode's latest row, and for a name both its
 active row and its latest lower row.
 
+R7 update, 2026-10-09 (directory link counts, overlay schema 22): a third
+absolute view fact, `subdirs`, is a directory's exact number of child bindings
+that are directories (zero for any other kind, by `CHECK` and by the engine's
+value grammar). It travels with the whole row through `INODE_PUT`,
+`INODE_LOOKUP`, `INODE_CAPTURE`, the orphan select and the fold copy, and adds
+no statement to any job: every mutation that changes it already rewrites the
+parent's row. `touched` in
+[`eval.rs`](../../crates/layerfs-workspace/src/mutation/eval.rs) takes the
+kinds of the binding a parent gains and loses and moves `entries` and
+`subdirs` together:
+
+| Change | Parent `subdirs` |
+| --- | --- |
+| mkdir | +1; the new directory starts at 0 |
+| rmdir, including the whiteout of a base subdirectory | −1 |
+| directory renamed inside one parent, nothing replaced | unchanged |
+| directory renamed over an empty directory of the same parent | −1 (the replaced one) |
+| directory renamed to another parent | −1 on the old parent, +1 on the new |
+| directory renamed over an empty directory of another parent | −1 on the old parent; +1 and −1 on the new |
+| create, symlink, link, unlink, any rename of a file or symlink | unchanged |
+
+A count that would leave its range, or exceed `entries`, is the definite
+`InvalidRecord("directory child count")`; nothing is clamped. A removed
+directory's row has no child, so its count is 0. The first local row of a base
+directory starts from the base's derived count, exactly as `entries` starts
+from the root-page count ([effective view](29-effective-base-view.md)). Commit
+adds nothing to the canonical namespace: the captured row and the count
+derived from the root built from it agree by construction, which
+[`directory_links_install.rs`](../../crates/layerfs-workspace/tests/directory_links_install.rs)
+checks through the real producer and install. The reference count column
+`nlink` keeps its meaning. Proofs:
+[`directory_links.rs`](../../crates/layerfs-workspace/tests/directory_links.rs)
+and the overlay's
+[`directory_links.rs`](../../crates/layerfs-overlay/tests/directory_links.rs).
+
 R7 update, 2026-10-09 (statement diet): `SourceRows::name` reads both rows
 of a name with one seek of the name's rows (`NAME_LAYERS`, newest first,
 at most two rows), and the compound job computes a name's inheritance once

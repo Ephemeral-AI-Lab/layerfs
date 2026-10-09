@@ -53,7 +53,7 @@ fn startup_counts_profile_schema_accounting_and_entire_reservation() {
     let physical = work.allocation_state.as_ref().unwrap().as_ref().unwrap();
     assert!(physical.high_water_allocated_bytes >= MUTATION_GROWTH + CLEANUP_HEADROOM);
     assert_eq!(physical.work, work.allocation);
-    assert_eq!(db.profile().schema_version, 21);
+    assert_eq!(db.profile().schema_version, 22);
     println!("S7_STARTUP_SUCCESS {work:?}");
 }
 

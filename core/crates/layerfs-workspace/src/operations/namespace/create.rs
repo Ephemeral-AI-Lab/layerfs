@@ -67,6 +67,7 @@ pub(crate) fn create(
         inherited_cutoff: 0,
         born: eval.rows.active().number() as u64,
         entries: 0,
+        subdirs: 0,
     };
     // A symlink target is at most one cell and never changes after creation.
     let cell = (fresh.kind == InodeKind::Symlink).then(|| {
@@ -91,7 +92,10 @@ pub(crate) fn create(
         created: Some(fresh.serial),
         detached: None,
         moved_directory: None,
-        inodes: vec![inode.clone(), touched(&directory, now, true, false)?],
+        inodes: vec![
+            inode.clone(),
+            touched(&directory, now, Some(fresh.kind), None)?,
+        ],
         directory_entries: vec![bind(parent, name, fresh.serial)],
         cell,
         write: None,
@@ -129,7 +133,11 @@ pub(crate) fn link(
         created: None,
         detached: None,
         moved_directory: None,
-        inodes: vec![file.clone(), touched(&directory, now, true, false)?],
+        // A hard link is a file by the check above: no directory is gained.
+        inodes: vec![
+            file.clone(),
+            touched(&directory, now, Some(file.kind), None)?,
+        ],
         directory_entries: vec![bind(parent, name, serial)],
         cell: None,
         write: None,

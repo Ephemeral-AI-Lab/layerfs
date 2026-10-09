@@ -64,6 +64,7 @@ fn real_owner_reclaims_at_device_full_after_last_owner_without_a_cleanup_job() {
         inherited_cutoff: 0,
         born: 0,
         entries: 0,
+        subdirs: 0,
     };
     for serial in 1..=128 {
         inode.serial = serial;

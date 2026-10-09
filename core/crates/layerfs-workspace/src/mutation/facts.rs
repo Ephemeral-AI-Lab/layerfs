@@ -108,17 +108,22 @@ impl VisitFacts {
 }
 impl BaseView {
     /// The base inode as a complete local value, or None when the base has no
-    /// such serial. Directory entry counts come from the directory root page.
+    /// such serial. Directory entry counts come from the directory root page;
+    /// child-directory counts are derived, or remembered, per content root.
     fn base_inode(&self, serial: u64) -> WorkspaceResult<Option<Inode>> {
         let stat = match self.stat(serial) {
             Ok(stat) => stat,
             Err(WorkspaceError::Content(ContentError::PathNotFound)) => return Ok(None),
             Err(error) => return Err(error),
         };
-        let (kind, entries) = match stat.value.kind {
-            BaseKind::RegularFile => (InodeKind::File, 0),
-            BaseKind::Symlink => (InodeKind::Symlink, 0),
-            BaseKind::Directory => (InodeKind::Directory, self.entries(stat.value)?),
+        let (kind, entries, subdirs) = match stat.value.kind {
+            BaseKind::RegularFile => (InodeKind::File, 0, 0),
+            BaseKind::Symlink => (InodeKind::Symlink, 0, 0),
+            BaseKind::Directory => {
+                let entries = self.entries(stat.value)?;
+                let subdirs = self.subdirs_among(stat.value, entries)?;
+                (InodeKind::Directory, entries, subdirs)
+            }
         };
         Ok(Some(Inode {
             serial,
@@ -132,6 +137,7 @@ impl BaseView {
             inherited_cutoff: stat.logical_len,
             born: 0,
             entries,
+            subdirs,
         }))
     }
     fn base_child(&self, parent: u64, name: &PathName) -> WorkspaceResult<Option<u64>> {

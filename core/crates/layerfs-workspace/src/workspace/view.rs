@@ -19,15 +19,21 @@ pub struct ViewStat {
     pub metadata: PortableMetadata,
     pub namespace_refs: u64,
     pub logical_len: u64,
+    /// Bindings of a directory that are directories: its POSIX link count
+    /// is two more while it has a name. Zero for other kinds.
+    pub subdirs: u64,
 }
-impl From<BaseStat> for ViewStat {
-    fn from(v: BaseStat) -> Self {
+impl ViewStat {
+    /// The facts of a base inode. `subdirs` is the derived child-directory
+    /// count of a directory and zero for any other kind.
+    pub fn of_base(v: BaseStat, subdirs: u64) -> Self {
         Self {
             serial: v.serial,
             kind: v.value.kind,
             metadata: v.metadata,
             namespace_refs: v.value.namespace_ref_count,
             logical_len: v.logical_len,
+            subdirs,
         }
     }
 }
@@ -47,6 +53,7 @@ impl From<Inode> for ViewStat {
             },
             namespace_refs: v.nlink,
             logical_len: v.size,
+            subdirs: v.subdirs,
         }
     }
 }
@@ -87,16 +94,18 @@ impl SourceView {
             return Ok(value.into());
         }
         let inherited = match self.base.stat(serial) {
-            Ok(value) => Some(value),
+            Ok(value) if value.value.kind == InodeKind::Directory => {
+                let subdirs = self.base.subdirs(value.value)?;
+                Some(ViewStat::of_base(value, subdirs))
+            }
+            Ok(value) => Some(ViewStat::of_base(value, 0)),
             Err(WorkspaceError::Content(ContentError::PathNotFound)) => None,
             Err(error) => return Err(error),
         };
         if let Some(value) = overlay.inode(self.source, serial)? {
             return Ok(value.into());
         }
-        inherited
-            .map(Into::into)
-            .ok_or(ContentError::PathNotFound.into())
+        inherited.ok_or(ContentError::PathNotFound.into())
     }
     /// Canonical root directory serial of the owned base; never rebound.
     pub fn root_serial(&self) -> u64 {

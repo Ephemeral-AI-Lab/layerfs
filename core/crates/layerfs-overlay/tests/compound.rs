@@ -39,6 +39,7 @@ fn file(serial: u64, born: u64) -> Inode {
         inherited_cutoff: 0,
         born,
         entries: 0,
+        subdirs: 0,
     }
 }
 fn directory(serial: u64, entries: u64) -> Inode {

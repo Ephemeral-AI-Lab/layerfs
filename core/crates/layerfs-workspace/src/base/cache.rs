@@ -4,6 +4,8 @@ use std::{collections::BTreeMap, sync::Mutex};
 
 pub(crate) struct State {
     pub(crate) cache: Cache,
+    /// Derived child-directory counts of base directories, by content root.
+    pub(crate) counts: crate::base::links::DirectoryCounts,
     pub(crate) work: crate::ClientWork,
 }
 
@@ -22,6 +24,7 @@ impl CanonicalCache {
         Self {
             state: Mutex::new(State {
                 cache: Cache::new(bytes),
+                counts: Default::default(),
                 work: crate::ClientWork::default(),
             }),
         }
@@ -38,6 +41,7 @@ impl CanonicalCache {
         let mut work = state.work;
         work.charged_cache_bytes = state.cache.charged();
         work.cached_objects = state.cache.entries();
+        work.directory_counts = state.counts.len();
         Ok(work)
     }
 }

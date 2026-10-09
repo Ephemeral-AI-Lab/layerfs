@@ -20,6 +20,11 @@ pub struct ClientWork {
     pub evictions: u64,
     pub charged_cache_bytes: usize,
     pub cached_objects: usize,
+    /// Base directories whose child-directory count was derived by listing.
+    pub directory_count_scans: u64,
+    /// Child-directory counts currently remembered; at most
+    /// [`crate::DIRECTORY_COUNT_CAPACITY`].
+    pub directory_counts: usize,
 }
 /// A runtime-backed authenticated object provider with bounded immutable caching.
 /// Upstream implements its public demand-window/authority contract; allocation
@@ -97,6 +102,29 @@ impl CanonicalClient {
     /// Bounded cumulative acquisition counters and logical cache charge.
     pub fn diagnostics(&self) -> ContentResult<ClientWork> {
         self.cache.diagnostics()
+    }
+    /// Whether this client answers from memory only.
+    pub(crate) const fn is_resident(&self) -> bool {
+        self.resident
+    }
+    fn state(&self) -> ContentResult<std::sync::MutexGuard<'_, crate::cache::State>> {
+        self.cache
+            .state
+            .lock()
+            .map_err(|_| ContentError::ProviderFailure {
+                what: "base cache owner",
+            })
+    }
+    /// The remembered child-directory count of one directory content root.
+    pub(crate) fn directory_count(&self, root: ObjectId) -> ContentResult<Option<u64>> {
+        Ok(self.state()?.counts.get(root))
+    }
+    /// Remembers one derived count; the least recently used one makes room.
+    pub(crate) fn remember_directory_count(&self, root: ObjectId, count: u64) -> ContentResult<()> {
+        let mut state = self.state()?;
+        state.counts.insert(root, count);
+        state.work.directory_count_scans = state.work.directory_count_scans.saturating_add(1);
+        Ok(())
     }
 }
 impl AuthenticatedObjects for CanonicalClient {

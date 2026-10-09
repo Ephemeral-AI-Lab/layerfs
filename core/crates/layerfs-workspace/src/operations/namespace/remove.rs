@@ -56,7 +56,7 @@ pub(crate) fn remove(
         moved_directory: None,
         inodes: vec![
             dereferenced(&target),
-            touched(&directory, now, false, true)?,
+            touched(&directory, now, None, Some(target.kind))?,
         ],
         directory_entries: vec![unbind(parent, name, inherited)],
         cell: None,

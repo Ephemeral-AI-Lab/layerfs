@@ -68,6 +68,10 @@ pub struct Inode {
     pub born: u64,
     /// Exact visible child bindings of a directory; zero for other kinds.
     pub entries: u64,
+    /// Exact visible child bindings of a directory that are themselves
+    /// directories; zero for other kinds. A directory's POSIX link count is
+    /// two more than this. It is never the `nlink` reference count.
+    pub subdirs: u64,
 }
 /// One final name binding; None is a whiteout, names remain binary in SQL.
 #[derive(Clone, Debug, Eq, PartialEq)]

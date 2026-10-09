@@ -64,6 +64,7 @@ fn setup(client: &OwnerClient, tag: u8, size: u64, with_cell: bool) -> (Route, C
                 inherited_cutoff: 0,
                 born: 0,
                 entries: 0,
+                subdirs: 0,
             },
             name: None,
             cell: with_cell.then_some(cell),

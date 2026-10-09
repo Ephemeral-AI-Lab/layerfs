@@ -117,22 +117,33 @@ impl Eval<'_> {
         }
     }
 }
-/// The parent's final value after one entry change at `now`.
+/// The parent's final value after one entry change at `now`. `added` and
+/// `removed` are the kinds of the binding the directory gains and loses, so
+/// its entry count and its child-directory count move in the same row, in
+/// the transaction that changes the binding. A count that would leave its
+/// range is a definite error, never a clamped value.
 pub(crate) fn touched(
     parent: &Inode,
     now: Time,
-    added: bool,
-    removed: bool,
+    added: Option<InodeKind>,
+    removed: Option<InodeKind>,
 ) -> WorkspaceResult<Inode> {
-    let entries = parent
-        .entries
-        .checked_add(u64::from(added))
-        .and_then(|entries| entries.checked_sub(u64::from(removed)))
+    let moved = |count: u64, added: bool, removed: bool| {
+        count
+            .checked_add(u64::from(added))
+            .and_then(|count| count.checked_sub(u64::from(removed)))
+    };
+    let directory = |kind: Option<InodeKind>| kind == Some(InodeKind::Directory);
+    let entries = moved(parent.entries, added.is_some(), removed.is_some())
         .ok_or(ContentError::InvalidRecord("directory entry count"))?;
+    let subdirs = moved(parent.subdirs, directory(added), directory(removed))
+        .filter(|subdirs| *subdirs <= entries)
+        .ok_or(ContentError::InvalidRecord("directory child count"))?;
     Ok(Inode {
         mtime_seconds: now.seconds,
         mtime_nanoseconds: now.nanoseconds,
         entries,
+        subdirs,
         ..parent.clone()
     })
 }
