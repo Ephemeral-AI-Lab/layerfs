@@ -1,0 +1,4 @@
+0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c  /source/global/store.sqlite
+0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c  /dest/global/store.sqlite
+/source/global/store.sqlite 172032 336 512 600 0 0
+/dest/global/store.sqlite 172032 336 512 600 0 0

@@ -2178,6 +2178,7 @@ B (fresh mount on a warm daemon), arm L, one sample.
 | L4-4 | Fast path, by owner direction in conversation on 2026-10-09 ("update the docs/notes and continue to follow this fast iteration path"): one stage per implementer assignment; a stage commit needs the count tier and the touched test binaries only; every cell is sampled at every stage commit; full suites at the hand-back and the gate at the batch tip; rows ordered by risk as well as saving; exact counts kept in one cost-test file per operation; no receipt per intermediate attempt. The mounted concurrency, forced-unmount, parking and install-race binaries are not dropped | The first change ran about 90 minutes with no sample (five chained stages, both full daemon suites per stage, pins restaged over several attempts). A 12-cell sample is about 2 minutes (652–703: 16:55:19 to 16:57:10) | [benchmark instruction, loop time](../../../../../docs/general/benchmark_instruction.md#loop-time-three-tiers) |
 | L4-5 | By owner direction in conversation on 2026-10-09 ("i prefer not to apply one by one sequentially, we need to be faster"): the remaining rows are applied as three batches by code area, each one implementer assignment of several commits with no hand-back between them; all 12 cells are sampled once at the batch tip and the package suites run once per batch. An intermediate commit is sampled only when the tip's counts are right and its time is worse | Sampling is 2 minutes; the time went into hand-offs between single-commit assignments (three of them took 11, 17 and about 30 minutes of implementation plus a lead turn each). The cut points stay: one commit and one counter per change | this table; batches listed under "Batches" below |
 | L4-6 | OWNER decision, not delegated: "yes, i allow parallel worktree" (conversation, 2026-10-09, in answer to the lead's statement that the assignment forbids another worktree). Batches run in parallel in git worktrees beside the main checkout: `layerfs-r7-b2` (branch `r7-batch2`, write path), `layerfs-r7-b3` (branch `r7-batch3b`, directory visits and old-path deletion), and one for the create path. Each has its own Cargo targets, lock file and container names; the main checkout is the lead's integration tree (merge with `git merge --no-ff`, so each commit keeps its parent and its Production LOC line; samples and the gate run only there). A sample holds every worktree's lock, so no build overlaps a measurement. Nothing is pushed | The assignment's "another worktree" prohibition is lifted by the owner for this purpose only; every other prohibition stands (push, pull request, publish, Durable, and the rest) | this table |
+| L4-7 | The foreign key from descriptor rows to `native_mount` is dropped with `native_file` (batch 3a, `e62685c59`) | Reported by the implementer, accepted by the lead: SQLite's child scan on mount deletion would not use the partial index and walked every descriptor of the namespace (4 VM steps per unrelated row, measured); keeping the key needs a third b-tree, which is storage for a check. The mount row is read by the inserting job's fence and deleted only by the job that has just read its descriptor window empty; `descriptor_request.rs` pins equal cost of retiring a mount beside 2 and beside 40 unrelated descriptors | commit `e62685c59`; `core/docs/architecture/19-daemon-overlay.md` |
 
 ### Samples 600–651 at `c126f742e` (product source equal to `82c51a439`)
 
@@ -2637,4 +2638,83 @@ cell, but the host also went quiet during this run, so the size of the
 time change is not attributed. C02, C04 and C05 are below A2 in this
 sample; C09 is 3.8 ms above it at unchanged counts. Storage: logical bytes
 equal in every cell.
+
+### Batch 3a complete, merged at `47ca8f80e`: receipts 1040–1091, and two scheduler regimes
+
+Merged with `--no-ff`: `77a2c137a` (no lease rows of kinds 7 and 9) and
+`e62685c59` (`native_file` folded into `file_handle`). With `dc0c0a6f7`,
+one created file is 48 → 37 statement attempts and 61 → 44 executions; one
+created and open file stores 6 → 3 rows. Production LOC of the batch
+188037 → 188144 on its branch (+107: +161, −39, −15). One conflict
+(`native_directory.rs`) and three re-pins in `directory_cost.rs`, both
+described in the merge commit. `owner_rows` now counts `lease` rows only;
+descriptors and lookup references are in `owner_details`.
+
+All twelve rows DIAGNOSTIC, verifier PASS; the sample held the worktree
+locks. The last column is the receive thread's voluntary : involuntary
+context switches during the command.
+
+| Cell | Receipt | Command ms before → after | A2 ms | Ratio | Statement executions | Owner service ms before → after | Overlay logical bytes before → after | Receive thread vol : invol |
+| --- | --- | --- | ---: | ---: | --- | --- | --- | --- |
+| C01 | 1047 | 379.5 → 183.8 | 183.4 | 1.00 | 54002 → 44002 | 151.1 → 97.5 | 557056 → 512000 | 12 : 3991 |
+| C02 | 1051 | 930.5 → 862.3 | 965.0 | 0.89 | 56004 → 46004 | 158.4 → 127.2 | 557056 → 512000 | 3833 : 1173 |
+| C03 | 1055 | 654.2 → 617.3 | 410.8 | 1.50 | 121643 → 109639 | 291.3 → 255.7 | 557056 → 512000 | 6683 : 1 |
+| C04 | 1059 | 799.9 → 816.8 | 952.6 | 0.86 | 52914 → 42654 | 155.4 → 128.9 | 458752 → 413696 | 5322 : 1 |
+| C05 | 1063 | 851.5 → 865.1 | 949.6 | 0.91 | 76224 → 65516 | 200.6 → 171.1 | 458752 → 413696 | 5772 : 0 |
+| C06 | 1067 | 245.8 → 247.4 | 78.6 | 3.15 | 36398 → 36388 | 152.9 → 150.5 | 76685312 → 76673024 | 517 : 0 |
+| C07 | 1071 | 475.7 → 411.6 | 171.6 | 2.40 | 76407 → 76379 | 308.2 → 303.1 | 153100288 → 153088000 | 18 : 1532 |
+| C08 | 1075 | 246.1 → 300.2 | 106.1 | 2.83 | 36425 → 36407 | 147.6 → 178.3 | 76685312 → 76673024 | 521 : 0 |
+| C09 | 1079 | 110.0 → 99.9 | 106.2 | 0.94 | 1065 → 1055 | 5.3 → 4.6 | 278528 → 266240 | 517 : 0 |
+| C10 | 1083 | 240.4 → 289.9 | 178.2 | 1.63 | 41048 → 41028 | 155.7 → 171.3 | 76685312 → 76673024 | 1034 : 3 |
+| C11 | 1087 | 225.7 → 239.7 | 85.8 | 2.79 | 36394 → 36384 | 141.8 → 147.2 | 76652544 → 76640256 | 517 : 0 |
+| C12 | 1091 | 254.4 → 259.8 | 189.3 | 1.37 | 29706 → 25332 | 76.5 → 67.8 | 401408 → 372736 | 2952 : 0 |
+
+Verdict by counts: KEPT. Statements −10000 in C01 and C02 (10 per created
+file), −12004 in C03, −10260 in C04, −10708 in C05, −4374 in C12. Storage
+FELL in every cell: overlay logical bytes −45056 for 1000 created files,
+−12288 for the single-file cells (fewer tables). Store bytes equal.
+
+**Two scheduler regimes, found in this run.** C01's 183.8 ms is not what
+ten statements per file buy (its service fell 53.6 ms; its command fell
+195.7 ms). In that sample the receive thread was preempted 3991 times and
+slept voluntarily 12 times, with 16.3 ms of runqueue wait: client and
+daemon shared one CPU and handed it to each other, where every other C01
+sample today has about one voluntary sleep per request (3989 to 3999) and
+the two wake each other across CPUs. Container CPU 337 → 202 ms, system
+CPU 157 → 74 ms. The same signature marks every unexplained fast sample of
+today, at identical counts:
+
+| Cell | Receipt | Commit | Receive thread vol : invol | Command ms | Same cell, other regime, ms |
+| --- | --- | --- | --- | ---: | --- |
+| C01 | 1047 | `47ca8f80e` | 12 : 3991 | 183.8 | 379.5 to 435.7 |
+| C10 | 963, 1023 | `45bec69af`, `c263919e7` | 33 : 1014, 14 : 1022 | 248.0, 240.4 | 289.9 to 314.9 |
+| C07 | 1071 | `47ca8f80e` | 18 : 1532 | 411.6 | 475.7 to 564.4 |
+| C07 | 831 | `3558fb2be` | 759 : 790 (mixed) | 432.6 | |
+| C03 | 815 | `3558fb2be` | 4954 : 2080 (mixed) | 694.6 | |
+| C06 | 767 | `eb170b029` | 192 : 326 (mixed) | 233.7 | |
+| C02 | 1051 | `47ca8f80e` | 3833 : 1173 (mixed) | 862.3 | |
+
+Consequences, stated now so that no later table is misread:
+
+- The kernel's scheduler chooses the regime, per sample; the product did
+  not change between two samples of one commit pair that differ by it.
+  Most of today's "host noise" between samples of identical counts is this.
+- The C10 times of 963 and 1023 (248.0, 240.4) were the fast regime; its
+  cross-CPU time at the same counts is 289.9 ms (1083). The earlier
+  sentence that C10 moved "inside the spread" stands; no C10 gain after the
+  READ change is claimed.
+- The floor table (710–726) was taken in the cross-CPU regime. A same-CPU
+  sample of L can be below it (C01 here), so the floor is a bound for that
+  regime only, and "target below the floor" holds for that regime only.
+- A2's C01 target (183.4 ms) equals L's time in the same-CPU regime
+  (183.8 ms). Whether A2 was measured in that regime or under a CPU limit
+  is being read from the repository now; until it is known, no verdict
+  against A2 is drawn from a sample whose regime differs from A2's.
+- CPU pinning and spinning are forbidden and are not being considered. A
+  read-only agent is checking whether the product itself causes
+  cross-thread wakes per request (which make the kernel spread the two
+  tasks) that it could simply stop making.
+- From here every sample table carries the regime column, and a change is
+  judged on counts, owner service and receive-thread CPU, with command time
+  compared only between samples of the same regime.
 

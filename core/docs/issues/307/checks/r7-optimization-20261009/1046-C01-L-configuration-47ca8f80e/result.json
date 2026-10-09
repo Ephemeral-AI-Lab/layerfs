@@ -1,0 +1,25 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "47ca8f80eb2e2fb7f171d5abd964f60dee4c1d56",
+  "source_tree": "7ce5d9c0f8344a746f703cd37a3fdb6495cc4854",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/1040-L-source-seal-47ca8f80e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1041-runtime-release-47ca8f80e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1042-daemon-release-47ca8f80e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1043-build-provenance-47ca8f80e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1044-C01-L-volume-47ca8f80e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1045-C01-L-clone-47ca8f80e/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-configure-cell.py",
+    "C01",
+    "/tmp/layerfs-r7-build-provenance-47ca8f80e-20261009.json",
+    "/tmp/layerfs-r7-C01-L-inputs-47ca8f80e-20261009",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/1045-C01-L-clone-47ca8f80e/result.json",
+    "layerfs-r7-C01-L-47ca8f80e-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 788692083,
+  "status": "PASS"
+}
