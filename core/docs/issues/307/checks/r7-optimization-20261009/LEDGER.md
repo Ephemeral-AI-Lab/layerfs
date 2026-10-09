@@ -1999,3 +1999,80 @@ share its CPUs.
 `core/target/r7-summary.py` (git-ignored helper) failed on the C12 receipt
 because a verifier difference can be a plain string; it now prints both
 forms. No receipt was rewritten.
+
+## Owner direction — 2026-10-09: stop after the verifier fixes, hand off the rest
+
+Relayed from a fork of this session and again through the session channel
+(owner's words, verbatim): "write a note for the main agent to stop after
+fixing all of the verifier issues. and i want to handoff the rest of work of
+optimization to the next agent." This replaces "do not stop until every cell
+beats A2" for this lead; no other rule is lifted. Consequences recorded here:
+no new optimization step is started; the statement diet that was in flight is
+landed as its first stage only (step 10 below); the three research analyses
+that were in flight finished and are kept under
+`core/docs/issues/307/r7-open/`; the directory link count (C04, C05, C12) is
+fixed next; then the second handoff is written and the run stops. The fork's
+own reading, not the owner's words: the five NOT_RUN rows are not verifier
+failures and no payload-layout work is started for them.
+
+## Step 10 — E04, first stage: one fence statement, no repeated reads
+
+Cause: at `fdc24ef3f` one created file runs 88 statement attempts (101
+executions) in its five owner jobs; the exact per-job trace
+(`r7-open/statement-diet-sql-trace-3ae26648f.md`) shows the Workspace state
+row read up to six times in one job, the descriptor row twice, each name's
+active and lower rows by two statements and its inheritance twice, an orphan
+probe before every inode read, and a pre-read before every custody insert.
+Expected from the trace: about 48 attempts with those removed and nothing
+else changed.
+
+Change (commit `c31c2a42c`, written by a subagent to this lead's brief
+`r7-open/statement-diet-brief.md`, bounded to its first stage after the
+owner's direction, reviewed here): items D1, D2, D4, D5, D6, D8, D9 and D11
+of the brief. One fence statement per visit reads the Workspace row, the
+native mount and the kernel reference or descriptor; that row is passed on;
+one seek returns a name's active and lower rows; the orphan probe runs only
+after this engine created an orphan; a created inode's lookup row is inserted
+without a pre-read; create+open is one custody write and every decrement
+returns what remains. No schema change. Not landed: D3, D7, D10, D13, D14,
+D15 and the CHECK rewrite (two findings on D10 and D15 are in the handoff).
+
+Big-O: every remaining statement is a point seek or a single-row write; the
+cost test asserts equal per-family counts at the 10th and the 4,000th file of
+one directory. Nothing resident was added except one boolean per engine
+(`orphan_seen`).
+
+Checks: host suites of overlay, workspace, fuse, daemon (`320-diet-*`); Linux
+suites of overlay (25 binaries) and daemon (58) in the pinned image
+(`321-diet-*`); Clippy `-D warnings` host and Linux; fmt; boundary guard.
+Failures: `complete_installed_roots` (host and Linux), `host_handoff` (host),
+`shared_processes` (Linux) — the known precondition-missing cases. Three
+earlier `320-diet-*` attempts are FAIL receipts of the work in progress
+(placeholder expectations, a plan count, a `SCAN CONSTANT ROW` in the handle
+fence that was then rewritten) and are kept.
+
+**579 — C01:B:L at `c31c2a42c`, one sample.** Row DIAGNOSTIC, verifier PASS,
+custody KNOWN_STOP, cleanup Gone, gaps none. Requests and jobs equal 527.
+
+| Measure | 527 at `fdc24ef3f` | 579 at `c31c2a42c` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 452515208 | 420483083 | −32032125 (−7.1 %) |
+| Mount / unmount ns | 7952209 / 6107333 | 8573583 / 5238208 | |
+| Requests / owner jobs | 5001 / 5001 | 5001 / 5001 | 0 |
+| Statement attempts | 88005 | 48006 | −39999 |
+| Statement executions | 101005 | 61004 | −40001 |
+| Write transactions | 3000 | 3000 | 0 |
+| Owner service ns | — (516: 192772384) | 174925023 | −17847361 against 516 |
+| Statement ns (sum of families) | — (516: about 163 ms) | 145412157 | about −18 ms |
+| Overlay logical / allocated bytes | 557056 / 268996608 | 557056 / 268992512 | 0 / −4096 |
+
+KEPT on counts. The command time is inside the one-sample spread (416.4 ms
+in 516 and 452.5 ms in 527 for identical product code), so the measured
+effect is the 18 ms of owner service, not the 32 ms of command time. Forty
+statements a file bought only 18 µs a file because the removed statements
+were the cheap ones (about 0.4 µs each): the merged fence costs 3.0 µs an
+attempt, COMMIT 10.8 µs (32.3 ms for 3000), the Lease family 37.5 ms for
+9000 attempts with 10000 trigger runs. What remains per created file: 48
+attempts, 61 executions, 3 write transactions, service 175 µs, and about
+243 µs outside the owner. Command against target: 420.5 ms against 183.4 ms,
+2.29 times.

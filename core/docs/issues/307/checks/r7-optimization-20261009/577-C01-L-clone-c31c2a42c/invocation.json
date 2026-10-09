@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "c31c2a42cce7f8c127ae081cc7e22de9be0ddeaa",
+  "source_tree": "1c35af6f83284f38763c24cc519d7bbcca071c7c",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/572-L-source-seal-c31c2a42c/\n?? core/docs/issues/307/checks/r7-optimization-20261009/573-runtime-release-c31c2a42c/\n?? core/docs/issues/307/checks/r7-optimization-20261009/574-daemon-release-c31c2a42c/\n?? core/docs/issues/307/checks/r7-optimization-20261009/575-build-provenance-c31c2a42c/\n?? core/docs/issues/307/checks/r7-optimization-20261009/576-C01-L-volume-c31c2a42c/\n?? core/docs/issues/307/r7-open/",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r7-C01-L-copy-c31c2a42c",
+    "--network",
+    "none",
+    "-v",
+    "layerfs-r7-empty-master-20261009-2ac7cc762:/source:ro",
+    "-v",
+    "layerfs-r7-C01-L-c31c2a42c-20261009:/dest",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "/bin/bash",
+    "-euo",
+    "pipefail",
+    "-c",
+    "test ! -e /dest/global; test ! -s /source/global/store.sqlite-wal; test ! -s /source/global/store.sqlite-journal; mkdir -m 700 /dest/global; cp --reflink=never --sparse=never --preserve=mode,ownership,timestamps /source/global/store.sqlite /dest/global/store.sqlite; cmp /source/global/store.sqlite /dest/global/store.sqlite; chmod --reference=/source/global /dest/global; chown --reference=/source/global /dest/global; touch -r /source/global /dest/global; sha256sum /source/global/store.sqlite /dest/global/store.sqlite; stat -c \"%n %s %b %B %a %u %g\" /source/global/store.sqlite /dest/global/store.sqlite"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}
