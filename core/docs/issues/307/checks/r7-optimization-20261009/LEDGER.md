@@ -1609,3 +1609,95 @@ post-reply release still holds the turn on the first, so it is queued for
 the owner thread. Candidate D06 below.
 
 Command against target: 1,204.6 ms against A2's 183.4 ms, 6.6 times slower.
+
+### Step 4 review (commit `804e77f02`)
+
+A fresh-context review of `b313abdab` found no blocker and six defects, all
+fixed in `804e77f02` with the false sentences it listed: unbounded hold-back
+of maintenance by a submitter that keeps taking its own turn; a panic in a
+submitter's turn lost to `Owner::stop`; the connection left open after an
+owner-thread panic; a hand-off counted after its first step; dispatcher
+shutdown counting retained requests while a first step still ran; a futile
+owner wake-up per job after a maintenance error. Receipts 263 (Fuse) and 264
+(daemon) on host; the Linux run was taken with step 5 (269, 270). No sample
+was taken at this identity.
+
+## Step 5 — E01, E02, E03 and part of E04: framing and constants
+
+Cause: C01's command spends 42 framing statements, 112 stat calls and 14
+`fallocate` calls per created file because every owner job, also a read-only
+one, opens a write transaction with physical admission; about 15 statement
+prepares per file because the statement cache (48) is one below the cycle's
+49 texts (LRU simulation, not observed); 13 status calls per execution with
+one walk of the prepared program; 12 statements per file to mint six
+identities. Evidence: receipt 250 and the statement analysis above.
+
+Change (commit `9306a9073`, written by a subagent to this lead's brief and
+reviewed here): a transaction and its admission begin at a job's first
+writing statement; Linux establishes the reserved range only when the
+tracked tail is short; cache capacity 256 over about 224 fixed texts; six
+counters read and reset after execution, `MEMUSED` only for one-use
+statements; identities from a counter in the connection, `next_owner`
+removed, schema 20.
+
+Owner decision used (delegated, see above): the statement cache capacity
+rises from 48 to 256. It is sized to the engine's statement set, which is
+fixed by source; it is not a limit that grows with data and is not the fix
+for a data-dependent miss. Owner decision used: the per-transaction Linux
+`fallocate` was deliberate; it is replaced by the tracked range with the
+over-credit analysis in the commit's review (rollback truncation is observed
+by the kept trailing observation; the file never shrinks on commit;
+`auto_vacuum` is NONE).
+
+Scaling: fixed costs per job, statement and identity removed; nothing added
+depends on files, bytes or operations.
+
+Checks: host suites of overlay, workspace, fuse, daemon (265–268); Linux
+suites of overlay and daemon (269, 270); failures only the known
+precondition-missing cases. Host Clippy, `fmt --check`, guard pass. No test
+exists for the cache size: nothing observes a cache hit.
+
+**278 — C01:B:L at `9306a9073`, one sample, exploratory.** Row DIAGNOSTIC,
+verifier PASS, custody KNOWN_STOP, cleanup Gone.
+
+| Measure | 262 at `b313abdab` | 278 at `9306a9073` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 1204594500 | 900809042 | −303785458 (−25.2 %) |
+| Mount / unmount ns | 6685916 / 4377000 | 7267792 / 5425417 | |
+| Owner jobs | 15002 | 15002 | 0 |
+| Statement executions | 278013 | 263010 | −15003 |
+| — Begin / Commit / Startup | 14000 each | 13000 each | −1000 each |
+| — Lease | 147004 | 135004 | −12000 |
+| Owner service ns | 910408386 | 574973234 | −335435152 (−36.8 %) |
+| Owner queue wait ns | 125972672 | 59433176 | −66539496 |
+| Command minus owner wait and service | 168213442 | 266402632 | +98189190 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 557056 / 268992512 | 561152 / 268996608 | +4096 / +4096 |
+| `peak_credited_bytes` / `scheduler_bytes` | 46581 / 25872 | 46581 / 25896 | 0 / +24 |
+| Daemon VmHWM | 32014336 | 31477760 | |
+
+KEPT. Service fell by more than a third. Only one of the three observe jobs
+per file is read-only (the deciding ones mark their source decided), so one
+transaction per file went, not three; single-visit requests (C05) remove
+the mark.
+
+Two things this sample shows that are not improvements:
+
+- **One more overlay page (+4096 bytes logical and allocated).** At the
+  instant the command ended, 64 reclamation targets were still pending (1
+  in 262); the snapshot after the unmount is equal in both. Maintenance ran
+  1127 turns in the command against 1135. Since step 4 a serial requester
+  keeps taking its own turn and the owner thread gets a maintenance turn
+  when it wins the race or after eight served jobs, instead of after every
+  job. The lag is transient here, but its bound is one step per eight jobs
+  under a requester that never idles, which is the bound the owner always
+  had under a full queue. Candidate D07 below makes reclamation follow the
+  jobs that create it.
+- **Time outside the owner rose 168 → 266 ms.** Not explained by a count:
+  requests, hand-offs and jobs are equal. The hook that begins a transaction
+  subtracts its time from the triggering statement, so statement time moved
+  between families, but owner service is measured around the whole job and
+  fell. Open observation; the next sample at a new identity will show
+  whether it persists.
+
+Command against target: 900.8 ms against A2's 183.4 ms, 4.9 times slower.

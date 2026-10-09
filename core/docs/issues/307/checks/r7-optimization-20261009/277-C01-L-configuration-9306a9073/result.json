@@ -1,0 +1,24 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "9306a9073729ac27e0d5b17441ed064bd68263da",
+  "source_tree": "3b7e2a92b0cc1a4d543213e83f3d5c6373de09e3",
+  "worktree_status": "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/271-L-source-seal-9306a9073/\n?? core/docs/issues/307/checks/r7-optimization-20261009/272-runtime-release-9306a9073/\n?? core/docs/issues/307/checks/r7-optimization-20261009/273-daemon-release-9306a9073/\n?? core/docs/issues/307/checks/r7-optimization-20261009/274-build-provenance-9306a9073/\n?? core/docs/issues/307/checks/r7-optimization-20261009/275-C01-L-volume-9306a9073/\n?? core/docs/issues/307/checks/r7-optimization-20261009/276-C01-L-clone-9306a9073/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-configure-C01.py",
+    "/tmp/layerfs-r7-build-provenance-9306a9073-20261009.json",
+    "/tmp/layerfs-r7-C01-L-inputs-9306a9073-20261009",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/276-C01-L-clone-9306a9073/result.json",
+    "layerfs-r7-C01-L-9306a9073-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 782509375,
+  "status": "PASS"
+}
