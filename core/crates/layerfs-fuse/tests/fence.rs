@@ -2,7 +2,9 @@
 //! `stop_service` does to parked, running and receive-waiting units, and that
 //! the normal `stop_admission` does none of it. Every wait is bounded.
 mod support;
-use layerfs_fuse::{ports::Fence, DispatchError, MountQueue, RequestDisposition, HANDOFFS};
+use layerfs_fuse::{
+    ports::Fence, DispatchError, MountQueue, RequestDisposition, HANDOFFS, RECEIVE_SLOTS,
+};
 use std::{
     future::Future,
     pin::Pin,
@@ -168,9 +170,12 @@ fn stop_service_wakes_every_receive_capacity_waiter() {
         handoff(&queue, event.future());
     }
     until(|| queue.work().unwrap().parked == HANDOFFS);
-    let received = [queue.receive().unwrap(), queue.receive().unwrap()];
+    // Every receive unit of the mount: one per receive loop.
+    let received: Vec<_> = (0..RECEIVE_SLOTS)
+        .map(|_| queue.receive().unwrap())
+        .collect();
     let (send, recv) = mpsc::channel();
-    // Stopping in Drop lets both blocked admissions exit even if an assertion
+    // Stopping in Drop lets every blocked admission exit even if an assertion
     // below panics first; the threads have no other blocking work.
     struct Stop(MountQueue);
     impl Drop for Stop {
@@ -193,9 +198,11 @@ fn stop_service_wakes_every_receive_capacity_waiter() {
         })
         .collect();
     let work = queue.work().unwrap();
-    assert_eq!((work.received, work.admitted), (2, HANDOFFS));
+    assert_eq!((work.received, work.admitted), (RECEIVE_SLOTS, HANDOFFS));
     drop(stop);
-    let failures: Vec<_> = (0..2).map(|_| recv.recv_timeout(WAIT).unwrap()).collect();
+    let failures: Vec<_> = (0..RECEIVE_SLOTS)
+        .map(|_| recv.recv_timeout(WAIT).unwrap())
+        .collect();
     for thread in threads {
         thread.join().unwrap();
     }
@@ -203,7 +210,7 @@ fn stop_service_wakes_every_receive_capacity_waiter() {
         .iter()
         .all(|failure| failure.reason == DispatchError::Stopped));
     // Each waiter still owns its receive unit until its one reply attempt.
-    assert_eq!(queue.work().unwrap().received, 2);
+    assert_eq!(queue.work().unwrap().received, RECEIVE_SLOTS);
     drop(failures);
     assert_eq!(queue.work().unwrap().received, 0);
     // Sixteen parked requests each took the stop's one turn and parked again.

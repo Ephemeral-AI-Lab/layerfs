@@ -1832,3 +1832,114 @@ Per created file now: 5 requests, 7 owner jobs, 5 write transactions, 119
 statement executions; owner service 234 µs (Mutation 74 µs a job, Lifecycle
 19.6 µs, Read 13.5 µs), owner wait 43.6 µs (all of it the two Read jobs that
 arrive while a post-reply job holds the connection), outside 201 µs.
+
+## Step 8 — C07, D06: reply ticket in engine memory; no hand-off at a collision
+
+Cause: two of C01's seven owner jobs per created file only delete the reply
+ticket of a publication (one write transaction each), and the request that
+arrives while such a post-reply job holds the connection is served through
+two thread hand-offs (owner thread, then a pool worker). Expected: 5 jobs
+and 3 write transactions per file; collisions served without a hand-off.
+Evidence: receipt 308 (3001 Lifecycle jobs, Read jobs waiting 21 µs each),
+the per-job statement trace reproduced exactly from source at `3ae26648f`
+(research record in the session scratchpad; totals equal receipt 308 for
+every family).
+
+Change (commit `e2521ae7c`):
+
+- C07. The ticket is a record in the engine's memory (`ReplyTickets`),
+  issued by the publishing job, withdrawn if that job fails, returned by the
+  replying thread without an owner job. Exact ticket identity is kept
+  (engine, namespace, incarnation, revision, generation): a ticket not held
+  is Stale. A capture or terminal cleanup that found tickets pending marks
+  the namespace; the attempt that empties it owes one `ReplySettled` job.
+  Schema 21: no `request` table, triggers or `reply_tickets` column.
+- D06. A submitting thread's turn serves one further runnable job queued
+  meanwhile (`COMBINED = 1`, same fair selection, never ahead of due
+  maintenance). A request step made runnable by a thread that is running a
+  step of the same pool is that thread's next step; a receive thread runs at
+  most one such step, as a receiving step. A submission made while a turn is
+  held no longer wakes the owner thread.
+
+Owner decision used (delegated): reply-attempt custody may live in the
+engine's memory. The overlay is created by its engine and never reopened, so
+a stored ticket outlived nothing the record does not; the set is bounded by
+publications whose replies are in flight (dispatcher admission), not by
+files, bytes or operations. Recorded in architecture notes 19, 21, 75, 77.
+
+Big-O: owner jobs per published mutation 2 → 1; write transactions per
+created file 5 → 3; thread hand-offs at a collision 2 → 0.
+
+Review findings fixed before the commit (from the test engineer): a ticket
+of another engine with equal local keys was accepted by the shared record;
+a kept step of another dispatch pool would have been lost. Both have tests.
+
+Checks: overlay, workspace, fuse, daemon host suites (311, 312, 315, 316);
+daemon and fuse Linux suites (313, 314); Clippy host and Linux; fmt; guard.
+FP-32 restaged: the work that cannot be admitted under held Lifecycle
+credits is the descriptor's close and the read sources, not the ticket.
+
+**508 — C01:B:L at `8e2c280e4` (step 8 plus receipts), one sample.** Row
+DIAGNOSTIC, verifier PASS, custody KNOWN_STOP, cleanup Gone, gaps none.
+
+| Measure | 308 at `4dfec5c75` | 508 at `8e2c280e4` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 479159333 | 455118792 | −24040541 (−5.0 %) |
+| Mount / unmount ns | 9554209 / 5820583 | 8080209 / 5852917 | |
+| Owner jobs | 7001 | 5001 | −2000 |
+| — Read / Mutation / Lifecycle | 2000 / 2000 / 3001 | 2000 / 2000 / 1001 | |
+| Statement executions | 119005 | 101005 | −18000 |
+| — Begin, Commit, Startup | 5000 each | 3000 each | |
+| — Frontier | 8000 | 0 | |
+| Owner service ns | 234279150 | 211983730 | −22295420 |
+| Owner queue wait ns | 43606770 | 31029751 | −12577019 |
+| Command minus owner wait and service | 201273413 | 212105311 | +10831898 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 561152 / 269000704 | 557056 / 268992512 | −4096 / −8192 |
+| Daemon VmHWM | 47755264 | 31518720 | |
+
+KEPT. The removed jobs were cheap (about 10 µs each); the close job of
+RELEASE is 39 µs and the GETATTR that follows it still waits for it (Read
+wait 14.7 µs a job), now without a hand-off.
+
+## Step 9 — one receive loop per mount
+
+Cause: with two loops blocked on one device the kernel hands each request to
+the loop that has waited longest, so a serial caller alternates between two
+threads, and a request that arrives during the post-reply close of the
+previous one starts on the other thread, finds the connection held and
+queues. Expected: with one loop the same thread reads every request, no
+request of a serial caller finds a turn held, queue wait about 0.
+
+Change (commits `6703a9ad9` constant only, then tests and notes):
+`RECEIVE_SLOTS` 2 → 1. Owner jobs are serialized on the one connection
+either way; a first step that cannot have its turn parks; provider reads
+leave the loop for a worker (`LeaveReceiver`), so the second loop bought no
+service. Fewer loops, not more: no thread, limit or timeout is raised.
+
+**516 — C01:B:L at `6703a9ad9`, one sample.** Row DIAGNOSTIC, verifier
+PASS, custody KNOWN_STOP, cleanup Gone, gaps none. Counts equal 508.
+
+| Measure | 508 at `8e2c280e4` | 516 at `6703a9ad9` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 455118792 | 416407958 | −38710834 (−8.5 %) |
+| Mount / unmount ns | 8080209 / 5852917 | 5094709 / 5958917 | |
+| Owner service ns | 211983730 | 192772384 | −19211346 |
+| Owner queue wait ns | 31029751 | 1817984 | −29211767 |
+| Command minus owner wait and service | 212105311 | 221817590 | +9712279 |
+| Daemon VmHWM | 31518720 | 14422016 | |
+
+KEPT. Command against target: 416.4 ms against 183.4 ms, 2.27 times slower.
+The close job's time moved from queue wait into the time before the next
+request is read, so "outside" did not fall. Per created file now: 5
+requests, 5 jobs, 3 write transactions, 101 statement executions, service
+193 µs (Mutation 67 µs a job, Lifecycle 35 µs, Read 11 µs), outside 222 µs.
+
+Mounted and dispatch tests that asserted two loops or two receive units were
+adapted (317, 318); `mounted_parking` and `forced_unmount` FP-34 saturate
+with sixteen parked requests and one held receive unit.
+
+Open: the 44 µs per request outside the owner. The handbook quotes a FUSE
+round trip here at 44 µs across CPUs and 5 µs on one CPU, unpinned A2 at
+26 µs a request; the product's own share of that is not divided by any
+counter yet.

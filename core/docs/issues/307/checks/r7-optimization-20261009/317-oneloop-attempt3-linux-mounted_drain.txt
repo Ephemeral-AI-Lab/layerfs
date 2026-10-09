@@ -1,0 +1,39 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 6703a9ad9, uncommitted product/test paths=9, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_drain-5c15ce76d3942f4a --test-threads=1 
+
+running 5 tests
+test fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window ... FAILED
+test fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount ... FAILED
+test fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_its_name ... ok
+test fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder ... ok
+test fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_after_detach ... ok
+
+failures:
+
+---- fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window stdout ----
+FP-21 staged: lifecycle_credits_held=2 owner_outstanding=2 release(handoffs=4->5 admitted=1 parked=1 completed=4) engine(namespaces=2 owner_rows=3) mount_state=Live cleanup=Live
+
+thread 'fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window' panicked at crates/layerfs-daemon/tests/mounted_drain.rs:437:9:
+assertion `left == right` failed: NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 4, handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0 }
+  left: (1, 1, 1, 0)
+ right: (2, 1, 1, 0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount stdout ----
+FP-21 staged: lifecycle_credits_held=2 owner_outstanding=2 release(handoffs=4->5 admitted=1 parked=1 completed=4) engine(namespaces=2 owner_rows=3) mount_state=Live cleanup=Live
+FP-21 retained: custody=TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(0202020202020202020202020202020202020202020202020202020202020202), namespace: 2 }, stage: Requests, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 4, handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0 }), detail: "connection drain stopped at Requests: loops Some(SessionSnapshot { phase: Joined, revision: 7, configured: 1, created: 1, entered: 1, exited: 1, joined: 1 }), work Some(MountWork { received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, owned_input_bytes: 0, future_bytes: 232, receive_units: 6, completed: 4, steps: 11, wakes: 7, terminal: true })", forced: None }
+
+thread 'fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount' panicked at crates/layerfs-daemon/tests/mounted_drain.rs:646:13:
+assertion `left == right` failed: NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 1, queued: 1, running: 0, parked: 0, retained: 0, completed: 4, handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0 }
+  left: (1, 1, 0, 0, 4, 5)
+ right: (2, 1, 0, 0, 4, 5)
+
+
+failures:
+    fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window
+    fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.79s
+
+R4_WALL seconds<=20 limit=115s lock_wait=0s
+EXIT 101

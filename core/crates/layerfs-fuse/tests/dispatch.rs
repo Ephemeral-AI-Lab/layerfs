@@ -2,7 +2,7 @@
 mod support;
 use layerfs_fuse::{
     DispatchError, FailureView, LeaveReceiver, MountQueue, NextTurn, RequestDisposition,
-    RequestFuture, HANDOFFS, MAX_INPUT_BYTES,
+    RequestFuture, HANDOFFS, MAX_INPUT_BYTES, RECEIVE_SLOTS,
 };
 use std::{
     future::Future,
@@ -117,7 +117,7 @@ fn fixed_workers_share_mounts_and_survive_zero_mounts() {
 }
 
 #[test]
-fn two_borrowed_waiters_wake_on_terminal_without_releasing_original_credit() {
+fn every_receive_unit_waiter_wakes_on_terminal_without_releasing_original_credit() {
     let fixture = Fixture::new();
     let mut pool = fixture.pool(1);
     let queue = pool.register(fixture.mount(1)).unwrap();
@@ -132,14 +132,17 @@ fn two_borrowed_waiters_wake_on_terminal_without_releasing_original_credit() {
             .unwrap();
     }
     until(|| queue.work().unwrap().parked == HANDOFFS);
-    let received = [queue.receive().unwrap(), queue.receive().unwrap()];
+    // Every receive unit of the mount: one per receive loop.
+    let received: Vec<_> = (0..RECEIVE_SLOTS)
+        .map(|_| queue.receive().unwrap())
+        .collect();
     assert!(matches!(queue.receive(), Err(DispatchError::Capacity)));
     assert_eq!(
         queue.work().unwrap().owned_input_bytes,
         HANDOFFS * MAX_INPUT_BYTES
     );
     let (send, recv) = mpsc::channel();
-    // A terminal fence in Drop makes both blocking admissions exit even if a
+    // A terminal fence in Drop makes every blocking admission exit even if a
     // preceding assertion panics. Their test threads have no other blocking work.
     struct Fence(layerfs_fuse::MountQueue);
     impl Drop for Fence {
@@ -163,7 +166,7 @@ fn two_borrowed_waiters_wake_on_terminal_without_releasing_original_credit() {
         .collect();
     assert_eq!(queue.finish(), Err(DispatchError::Busy));
     drop(fence);
-    let failures: Vec<_> = (0..2)
+    let failures: Vec<_> = (0..RECEIVE_SLOTS)
         .map(|_| recv.recv_timeout(Duration::from_secs(3)).unwrap())
         .collect();
     for thread in threads {
@@ -172,7 +175,7 @@ fn two_borrowed_waiters_wake_on_terminal_without_releasing_original_credit() {
     assert!(failures
         .iter()
         .all(|error| error.reason == DispatchError::Stopped));
-    assert_eq!(queue.work().unwrap().received, 2);
+    assert_eq!(queue.work().unwrap().received, RECEIVE_SLOTS);
     assert_eq!(queue.work().unwrap().admitted, HANDOFFS);
     drop(failures);
     assert_eq!(queue.work().unwrap().received, 0);

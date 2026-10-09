@@ -1,0 +1,27 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 6703a9ad9, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/forced_unmount-3a624eb67361c91c --test-threads=1 
+
+running 5 tests
+test fp19_force_releases_a_parked_cold_reader_while_the_read_set_stays_leased ... ok
+test fp22_a_reference_in_a_never_holds_b_and_force_on_a_signals_no_process ... ok
+test fp33_a_held_descriptor_leaves_the_mount_aborted_and_retained ... ok
+test fp33_a_held_working_directory_leaves_the_mount_aborted_and_retained ... ok
+test fp34_force_ends_every_admitted_and_received_callback_of_a_saturated_mount ... FAILED
+
+failures:
+
+---- fp34_force_ends_every_admitted_and_received_callback_of_a_saturated_mount stdout ----
+
+thread 'fp34_force_ends_every_admitted_and_received_callback_of_a_saturated_mount' panicked at crates/layerfs-daemon/tests/forced_unmount.rs:149:9:
+bounded observation expired: the readers' requests parked
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FORCED_GUARD lazy umount of /tmp/layerfs-installed-7-fp34-terminal/mounts/1 by the test: Ok(ExitStatus(unix_wait_status(0)))
+
+
+failures:
+    fp34_force_ends_every_admitted_and_received_callback_of_a_saturated_mount
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.66s
+
+R4_WALL seconds<=7 limit=115s lock_wait=0s
+EXIT 101

@@ -55,8 +55,14 @@ identity. Kernel permission checks, not a library uid filter, decide access.
 write and readahead windows, background and congestion limits of 1, and adds no
 optional capability; writeback caching stays absent.
 
-Serving means the kernel mount exists, the handshake completed and both receive
-loops entered with none exited. A successful spawn or a probe read does not
+Serving means the kernel mount exists, the handshake completed and the receive
+loop entered and has not exited. (R7 update, 2026-10-09: a connection has one
+receive loop, `RECEIVE_SLOTS`. The kernel hands each request to the loop that
+has waited longest, so two loops made a serial caller alternate between two
+threads; owner jobs are serialized on the one connection either way, a first
+step that cannot have its turn parks, and provider reads leave the loop for a
+worker, so the second loop bought no service. Measured on C01, receipt 516
+against 508: command 455.1 to 416.4 ms, owner queue wait 31.0 to 1.8 ms.) A successful spawn or a probe read does not
 substitute. `ready_wait` (five seconds in the application) is an observation
 deadline; its expiry cancels nothing.
 

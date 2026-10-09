@@ -330,7 +330,7 @@ fn fresh_mounts_repeat_and_one_mount_sustains_uncached_work() {
     );
     assert_eq!(
         (after.loops_entered, after.loops_exited),
-        (2, 0),
+        (1, 0),
         "same connection throughout"
     );
     whole_root(&root);

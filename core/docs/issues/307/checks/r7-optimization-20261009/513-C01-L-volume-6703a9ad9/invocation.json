@@ -1,0 +1,18 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "6703a9ad9c24735715cb2f0b028d74f44995759f",
+  "source_tree": "3edf9c7c69c52c7dc6246e4d76ed3c5faed6ebe9",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/501-L-source-seal-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/502-runtime-release-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/503-daemon-release-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/504-build-provenance-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/505-C01-L-volume-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/506-C01-L-clone-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/507-C01-L-configuration-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/508-C01-B-L-sample-8e2c280e4/\n?? core/docs/issues/307/checks/r7-optimization-20261009/509-L-source-seal-6703a9ad9/\n?? core/docs/issues/307/checks/r7-optimization-20261009/510-runtime-release-6703a9ad9/\n?? core/docs/issues/307/checks/r7-optimization-20261009/511-daemon-release-6703a9ad9/\n?? core/docs/issues/307/checks/r7-optimization-20261009/512-build-provenance-6703a9ad9/",
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "layerfs-r7-C01-L-6703a9ad9-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

@@ -22,7 +22,10 @@ use std::{
     time::Duration,
 };
 
-/// Two receive loops share the one device descriptor.
+/// One receive loop per connection. The kernel hands a request to the loop
+/// that has waited longest, so a second loop made a serial caller alternate
+/// between two threads; every owner job is serialized on one connection
+/// anyway, and provider I/O leaves the loop for a worker.
 pub const RECEIVE_LOOPS: usize = crate::RECEIVE_SLOTS;
 
 #[derive(Clone, Debug)]

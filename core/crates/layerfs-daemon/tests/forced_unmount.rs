@@ -76,7 +76,7 @@ const COLD: usize = 20;
 const COLD_BYTES: usize = 12_000;
 /// The kernel-facing bounds of one mount: handoff slots and receive units.
 const HANDOFFS: usize = 16;
-const RECEIVE_UNITS: usize = 2;
+const RECEIVE_UNITS: usize = 1;
 /// The errnos Linux gives a caller of an aborted connection.
 const ABORTED: [&str; 2] = ["ENOTCONN", "ECONNABORTED"];
 
@@ -717,7 +717,7 @@ fn cold_rig(label: &str) -> Rig {
 }
 /// `count` cold readers parked behind a fully leased read set, then Force.
 /// With more readers than handoff slots the mount is saturated: sixteen
-/// requests admitted and parked, both receive units held by callbacks waiting
+/// requests admitted and parked, the receive unit held by a callback waiting
 /// for a slot, and the rest queued in the kernel.
 ///
 /// The staging does not fix how the teardown ends. The kernel's abort returns

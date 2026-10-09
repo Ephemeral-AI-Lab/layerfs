@@ -20,9 +20,8 @@
 //! bounded observation of three seconds during which the process had not
 //! exited; the leases are then returned and the process must finish.
 //!
-//! Limits. Which of the two receive loops took a request is not observable:
-//! FP-8 shows requests parked with both loops in service, and FP-34 shows
-//! both receive units held at once. A request of the sibling Workspace or of
+//! Limits. A mount has one receive loop: FP-8 shows requests parked with
+//! the loop in service, and FP-34 shows its one receive unit held. A request of the sibling Workspace or of
 //! the same mount is chosen so that it has no base demand (a file created
 //! through that mount); a request that needs base facts would wait for the
 //! same readers on any Workspace, because the read set belongs to the Store.
@@ -78,7 +77,7 @@ const COLD: usize = 20;
 const COLD_BYTES: usize = 12_000;
 /// The kernel-facing bounds of one mount: handoff slots and receive units.
 const HANDOFFS: u32 = 16;
-const RECEIVE_UNITS: u32 = 2;
+const RECEIVE_UNITS: u32 = 1;
 const LOCAL: &str = "local/written.txt";
 const WRITTEN: &[u8] = b"written through the mount\n";
 const APPENDED: &[u8] = b"appended while readers were parked\n";
@@ -466,7 +465,7 @@ fn fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_park
         READERS as u64,
         "one parked request for each reader"
     );
-    assert_eq!((parked.loops_configured, parked.loops_entered), (2, 2));
+    assert_eq!((parked.loops_configured, parked.loops_entered), (1, 1));
     let waiting = rig.store.read_work();
     assert_eq!(
         (waiting.leased, waiting.waiting, waiting.grants),
@@ -682,8 +681,8 @@ struct Bounds {
 }
 
 /// FP-34, admission half: with every Store reader leased and twenty cold
-/// readers on A, sixteen requests are admitted and parked, both receive
-/// units are held by callbacks waiting for a handoff slot, and no observation
+/// readers on A, sixteen requests are admitted and parked, the receive
+/// unit is held by a callback waiting for a handoff slot, and no observation
 /// ever shows more; sibling B completes a write meanwhile; after the leases
 /// are returned all twenty readers have exactly their bytes.
 #[test]
@@ -718,10 +717,9 @@ fn fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progr
     let full = |now: &NativeWork| {
         (now.admitted, now.parked, now.received) == (HANDOFFS, HANDOFFS, RECEIVE_UNITS)
     };
-    within(
-        "sixteen requests parked and both receive units held",
-        || full(&work(rig, a.token)),
-    );
+    within("sixteen requests parked and the receive unit held", || {
+        full(&work(rig, a.token))
+    });
     // The same state at every one of a hundred further observations.
     let mut steady = 0;
     for _ in 0..100 {
@@ -737,7 +735,7 @@ fn fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progr
     assert_eq!(
         saturated.handoffs - idle.handoffs,
         u64::from(HANDOFFS),
-        "sixteen requests handed off; the two received ones are not"
+        "sixteen requests handed off; the received one is not"
     );
     let waiting = rig.store.read_work();
     assert_eq!(steady, 100, "the saturated state is stable: {saturated:?}");

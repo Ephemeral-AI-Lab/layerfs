@@ -1,0 +1,37 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 6703a9ad9, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_parking-06841449600ba812 --test-threads=1 
+
+running 4 tests
+test a_read_of_locally_written_bytes_still_waits_for_a_store_reader ... ok
+test fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progresses ... FAILED
+test fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked ... FAILED
+test the_holds_are_exact_and_are_returned_on_every_path ... ok
+
+failures:
+
+---- fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progresses stdout ----
+
+thread 'fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progresses' panicked at crates/layerfs-daemon/tests/mounted_parking.rs:113:9:
+bounded observation expired: sixteen requests parked and both receive units held
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+PARKING_GUARD lazy umount of /tmp/layerfs-installed-7-fp34-admission/mounts/1 by the test: Ok(ExitStatus(unix_wait_status(0)))
+PARKING_GUARD lazy umount of /tmp/layerfs-installed-7-fp34-admission/mounts/2 by the test: Ok(ExitStatus(unix_wait_status(0)))
+
+---- fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked stdout ----
+
+thread 'fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked' panicked at crates/layerfs-daemon/tests/mounted_parking.rs:469:5:
+assertion `left == right` failed
+  left: (1, 1)
+ right: (2, 2)
+PARKING_GUARD lazy umount of /tmp/layerfs-installed-7-fp8-writes/mounts/1 by the test: Ok(ExitStatus(unix_wait_status(0)))
+PARKING_GUARD lazy umount of /tmp/layerfs-installed-7-fp8-writes/mounts/2 by the test: Ok(ExitStatus(unix_wait_status(0)))
+
+
+failures:
+    fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progresses
+    fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.46s
+
+R4_WALL seconds<=10 limit=115s lock_wait=0s
+EXIT 101

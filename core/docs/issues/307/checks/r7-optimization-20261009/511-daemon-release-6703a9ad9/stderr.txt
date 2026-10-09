@@ -1,0 +1,4 @@
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 6.23s
+R4_WALL seconds<=8 limit=560s lock_wait=0s

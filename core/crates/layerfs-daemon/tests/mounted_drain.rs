@@ -9,7 +9,7 @@
 //!   completions of the test's own `State` observations. A descriptor closed
 //!   afterwards sends RELEASE, whose `close_file` job cannot be admitted, so
 //!   the request is parked before its attempt while normal Unmount detaches
-//!   and joins both receive loops.
+//!   and joins the receive loop.
 //! - FP-29 leases every Store reader. A READ of a file whose bytes are still
 //!   the base's parks on reader admission. The file was moved into a
 //!   directory made through the mount and its mode changed before the hold,
@@ -362,7 +362,7 @@ impl Parked {
                 parked.loops_entered,
                 parked.loops_exited
             ),
-            (2, 2, 0)
+            (1, 1, 0)
         );
         println!(
             "FP-21 staged: lifecycle_credits_held={} owner_outstanding={} release(handoffs={}->{} admitted={} parked={} completed={}) engine(namespaces={} owner_rows={}) mount_state=Live cleanup=Live",
@@ -392,7 +392,7 @@ impl Parked {
     }
 }
 
-/// FP-21, released inside the window. Detach is known and both loops are
+/// FP-21, released inside the window. Detach is known and the loop is
 /// joined while the parked RELEASE keeps the unmount in its drain and the
 /// namespace live; once the test returns the credits inside the bounded drain
 /// window the same Unmount ends `Unmounted`. After that complete drain the
@@ -417,7 +417,7 @@ fn fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_
     } = Parked::new("fp21-released");
     let token = ready.token;
     let (left, worker) = unmount_apart(&rig, token);
-    within("detach known and both loops joined", || {
+    within("detach known and the loop joined", || {
         let native = rig.harness.status(token).native.unwrap();
         let work = native.work.unwrap();
         native.phase == NativePhase::Draining
@@ -436,7 +436,7 @@ fn fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_
         assert_eq!(native.phase, NativePhase::Draining, "{now:?}");
         assert_eq!(
             (now.loops_joined, now.admitted, now.parked, now.received),
-            (2, 1, 1, 0),
+            (1, 1, 1, 0),
             "{now:?}"
         );
         if round % 10 == 0 {
@@ -576,7 +576,7 @@ fn fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_l
     let stopped = custody.work.expect("counters at the stopping boundary");
     assert_eq!(
         (stopped.loops_configured, stopped.loops_joined),
-        (2, 2),
+        (1, 1),
         "{stopped:?}"
     );
     assert_eq!(
@@ -652,7 +652,7 @@ fn fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_l
                     now.completed,
                     now.handoffs
                 ),
-                (2, 1, 0, 0, stopped.completed, stopped.handoffs),
+                (1, 1, 0, 0, stopped.completed, stopped.handoffs),
                 "{now:?}"
             );
             println!(
@@ -701,7 +701,7 @@ fn fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_l
     assert_eq!(end.closed_namespaces, start.closed_namespaces);
     assert_eq!(rig.harness.serving.work().unwrap().mounts, 1);
     println!(
-        "FP-21 retained: stage=Requests detached=true loops_joined=2 admitted_at_stop=1 mount_row=None phase=Retained activity=Closing engine_mount=Live cleanup=Live namespaces={}(baseline {}) owner_rows={} closed_namespaces={}->{} after_release(completed={}->{} phase=Retained lane_kept=1) store_consumer_half=NOT_STAGED",
+        "FP-21 retained: stage=Requests detached=true loops_joined=1 admitted_at_stop=1 mount_row=None phase=Retained activity=Closing engine_mount=Live cleanup=Live namespaces={}(baseline {}) owner_rows={} closed_namespaces={}->{} after_release(completed={}->{} phase=Retained lane_kept=1) store_consumer_half=NOT_STAGED",
         last.namespaces,
         empty.namespaces,
         last.owner_rows,

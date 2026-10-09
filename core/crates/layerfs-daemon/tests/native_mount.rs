@@ -143,9 +143,9 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
     let ready = h.attach(token);
     let root = Path::new(&ready.directory);
     assert_eq!(root, h.mounts.join(token.namespace.to_string()));
-    // Ready evidence: kernel mount, negotiated profile and both loops serving.
+    // Ready evidence: kernel mount, negotiated profile and the loop serving.
     let receipt = ready.receipt;
-    assert_eq!(receipt.loops, 2);
+    assert_eq!(receipt.loops, 1);
     assert_eq!(receipt.abi_major, 7);
     assert_eq!((receipt.max_write, receipt.max_readahead), (131072, 131072));
     assert_eq!(
@@ -180,7 +180,7 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
     let work = native.work.unwrap();
     assert_eq!(
         (work.loops_configured, work.loops_entered, work.loops_exited),
-        (2, 2, 0)
+        (1, 1, 0)
     );
     assert_eq!((work.received, work.admitted, work.retained), (0, 0, 0));
 

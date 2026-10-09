@@ -213,7 +213,7 @@ fn an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it() {
     let work = custody.work.expect("counters at the stopping boundary");
     assert_eq!(
         (work.loops_configured, work.loops_joined),
-        (2, 2),
+        (1, 1),
         "{work:?}"
     );
     assert_eq!((work.received, work.admitted, work.retained), (0, 0, 0));

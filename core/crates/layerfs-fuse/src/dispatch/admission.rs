@@ -46,7 +46,7 @@ impl MountQueue {
         self.mount
     }
     /// Call at entry, before owned payload/name copies or any engine job. The
-    /// configured two receive loops can hold at most two such stack guards.
+    /// one receive loop of a mount holds at most one such stack guard.
     pub fn receive(&self) -> Result<Received, DispatchError> {
         let mut state = self.shared.lock();
         let lane = state.lane_mut(self.index, self.mount, &self.token)?;

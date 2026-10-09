@@ -1,0 +1,38 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 6703a9ad9, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_drain-5c15ce76d3942f4a --test-threads=1 
+
+running 5 tests
+test fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window ... FAILED
+test fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount ... FAILED
+test fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_its_name ... ok
+test fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder ... ok
+test fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_after_detach ... ok
+
+failures:
+
+---- fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window stdout ----
+
+thread 'fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window' panicked at crates/layerfs-daemon/tests/mounted_drain.rs:359:9:
+assertion `left == right` failed
+  left: (1, 1, 0)
+ right: (2, 2, 0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+DRAIN_GUARD lazy umount of /tmp/layerfs-installed-7-fp21-released/mounts/2 by the test: Ok(ExitStatus(unix_wait_status(0)))
+
+---- fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount stdout ----
+
+thread 'fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount' panicked at crates/layerfs-daemon/tests/mounted_drain.rs:359:9:
+assertion `left == right` failed
+  left: (1, 1, 0)
+ right: (2, 2, 0)
+DRAIN_GUARD lazy umount of /tmp/layerfs-installed-7-fp21-retained/mounts/2 by the test: Ok(ExitStatus(unix_wait_status(0)))
+
+
+failures:
+    fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window
+    fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.36s
+
+R4_WALL seconds<=22 limit=115s lock_wait=0s
+EXIT 101

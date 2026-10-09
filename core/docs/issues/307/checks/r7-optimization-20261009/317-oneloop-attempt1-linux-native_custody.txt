@@ -1,0 +1,28 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 6703a9ad9, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_custody-5748f62babb0e016 --test-threads=1 
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... FAILED
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... ok
+
+failures:
+
+---- an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it stdout ----
+Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+NATIVE_RETAINED custody=TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(0202020202020202020202020202020202020202020202020202020202020202), namespace: 1 }, stage: Revoke, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 0, handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0 }), detail: "Overlay(BaseSourcesPending)", forced: None }
+
+thread 'an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it' panicked at crates/layerfs-daemon/tests/native_custody.rs:214:5:
+assertion `left == right` failed: NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 0, handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0 }
+  left: (1, 1)
+ right: (2, 2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 101
