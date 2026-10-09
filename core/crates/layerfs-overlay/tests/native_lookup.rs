@@ -40,38 +40,18 @@ impl Fixture {
             _temp: Temp(path),
         }
     }
-    fn lookup(&self, request: u64, serial: u64) {
-        let source = self
+    /// One positive LOOKUP under the root: its kernel reference on `serial`.
+    fn lookup(&self, serial: u64) {
+        let outcome = self
             .db
-            .acquire_native_source(self.mount, request, 1)
-            .unwrap();
-        let outcome =
-            self.db
-                .observe_native_attributes(self.mount, source, true, |_, protected| {
-                    assert_eq!(protected, 1);
-                    Ok(NativeDecision::Finished {
-                        inode: Some(inode(serial)),
-                        value: serial,
-                    })
-                });
+            .observe_native_visit(self.mount, 1, None, true, |_, _| {
+                Ok(NativeDecision::Finished {
+                    inode: Some(inode(serial)),
+                    value: serial,
+                })
+            });
         assert_eq!(outcome.decision, Some(serial));
         assert_eq!(outcome.result.unwrap(), None);
-        assert_eq!(outcome.candidate, None);
-        // This source already decided.
-        assert!(matches!(
-            self.db
-                .observe_native_attributes(
-                    self.mount,
-                    source,
-                    true,
-                    |_, _| -> Result<NativeDecision<()>, OverlayError> {
-                        panic!("replayed deciding job")
-                    }
-                )
-                .result,
-            Err(OverlayError::Stale)
-        ));
-        self.db.release_base_source(source).unwrap();
     }
 }
 fn inode(serial: u64) -> Inode {
@@ -91,9 +71,9 @@ fn inode(serial: u64) -> Inode {
 }
 
 #[test]
-fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
+fn native_file_keys_retain_exact_open_owners() {
     let f = Fixture::new();
-    f.lookup(1, 2);
+    f.lookup(2);
     let mut files = Vec::new();
     for (request, writable) in [(u64::MAX, false), (u64::MAX - 1, true)] {
         let outcome =
@@ -117,15 +97,25 @@ fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
     }
     assert_ne!(files[0].owner_id(), files[1].owner_id());
     f.db.forget_native(f.mount, 2, 1).unwrap();
-    assert!(f.db.acquire_native_source(f.mount, 3, 2).is_err());
+    // Without the kernel's lookup reference a visit of the inode is stale.
+    assert!(matches!(
+        f.db.observe_native_visit(
+            f.mount,
+            2,
+            None,
+            false,
+            |_, _| -> Result<NativeDecision<()>, OverlayError> {
+                panic!("unreferenced inode reached semantics")
+            }
+        )
+        .result,
+        Err(OverlayError::Stale)
+    ));
     let other = Fixture::new();
     assert!(f
         .db
         .native_file(other.mount, 2, files[0].owner_id())
         .is_err());
-    let processing =
-        f.db.acquire_native_file_source(f.mount, 4, 2, files[0].owner_id())
-            .unwrap();
     f.db.close_native_file(f.mount, 2, files[0].owner_id())
         .unwrap();
     assert!(f
@@ -139,19 +129,14 @@ fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
         f.db.retained_native_file(f.mount, u64::MAX - 1).unwrap(),
         None
     );
-    assert!(f
-        .db
-        .acquire_native_file_source(f.mount, 5, 2, files[1].owner_id())
-        .is_err());
-    assert!(f.db.revoke_native_mount(f.mount).is_err());
-    f.db.release_base_source(processing).unwrap();
+    assert!(f.db.native_file(f.mount, 2, files[1].owner_id()).is_err());
     f.db.revoke_native_mount(f.mount).unwrap();
 }
 
 #[test]
 fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody() {
     let f = Fixture::new();
-    f.lookup(1, 2);
+    f.lookup(2);
     // A directory answer acquires nothing.
     let before = f.db.resources(Some(f.mount.route())).unwrap().counts;
     let outcome = f.db.open_native_visit(f.mount, 2, 2, true, |_, _| {
@@ -167,7 +152,6 @@ fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody(
     assert!(matches!(outcome.result, Err(OverlayError::Missing)));
     assert_eq!(outcome.decision, Some(2));
     assert!(outcome.open_candidate.is_none());
-    assert!(outcome.candidate.is_none());
     assert_eq!(
         f.db.resources(Some(f.mount.route())).unwrap().counts,
         before
@@ -194,62 +178,6 @@ fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody(
 }
 
 #[test]
-fn attribute_only_decision_counts_the_lookup_and_retains_no_read() {
-    let f = Fixture::new();
-    let attributes = |request: u64, lookup: bool| {
-        let before = f.db.diagnostics();
-        let source = f.db.acquire_native_source(f.mount, request, 1).unwrap();
-        // The acquiring transaction reads the Workspace row once and updates
-        // its reader count once.
-        let acquired = f.db.diagnostics().since(&before);
-        assert_eq!(
-            acquired.statements[StatementKind::Workspace as usize].executions,
-            2
-        );
-        let before = f.db.diagnostics();
-        let outcome =
-            f.db.observe_native_attributes(f.mount, source, lookup, |_, protected| {
-                assert_eq!(protected, 1);
-                Ok(NativeDecision::Finished {
-                    inode: Some(inode(if lookup { 9 } else { 1 })),
-                    value: (),
-                })
-            });
-        let work = f.db.diagnostics().since(&before);
-        // One Workspace row read serves the mount, source and row checks.
-        assert_eq!(
-            work.statements[StatementKind::Workspace as usize].executions,
-            1
-        );
-        let work = work.total();
-        assert_eq!(outcome.result.unwrap(), None);
-        assert_eq!(outcome.candidate, None);
-        // The source decided once; nothing else is owed after its release.
-        assert!(matches!(
-            f.db.observe_native_attributes(
-                f.mount,
-                source,
-                lookup,
-                |_, _| -> Result<NativeDecision<()>, OverlayError> {
-                    panic!("replayed deciding job")
-                }
-            )
-            .result,
-            Err(OverlayError::Stale)
-        ));
-        f.db.release_base_source(source).unwrap();
-        work.executions
-    };
-    // A positive LOOKUP still takes its kernel reference in the same job.
-    let lookup = attributes(1, true);
-    assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(1));
-    let getattr = attributes(2, false);
-    assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(1));
-    println!("ATTRIBUTE-ONLY statements lookup={lookup} getattr={getattr}");
-    f.db.forget_native(f.mount, 9, 1).unwrap();
-    f.db.revoke_native_mount(f.mount).unwrap();
-}
-#[test]
 fn aggregate_forget_is_checked_and_implicit_root_is_independent() {
     let f = Fixture::new();
     assert_eq!(f.db.native_lookup_count(f.mount, 1).unwrap(), Some(0));
@@ -257,10 +185,10 @@ fn aggregate_forget_is_checked_and_implicit_root_is_independent() {
         f.db.forget_native(f.mount, 1, 1),
         Err(OverlayError::Invalid("native lookup underflow"))
     ));
-    f.lookup(1, 2);
+    f.lookup(2);
     let rows = f.db.resources(Some(f.mount.route())).unwrap().counts;
-    for request in 2..=32 {
-        f.lookup(request, 2);
+    for _ in 2..=32 {
+        f.lookup(2);
     }
     assert_eq!(f.db.native_lookup_count(f.mount, 2).unwrap(), Some(32));
     assert_eq!(
@@ -285,32 +213,9 @@ fn aggregate_forget_is_checked_and_implicit_root_is_independent() {
 }
 
 #[test]
-fn a_source_fences_revocation_and_request_keys_keep_all_u64_bits() {
+fn revocation_is_once_and_a_revoked_mount_admits_no_visit() {
     let f = Fixture::new();
-    let source = f.db.acquire_native_source(f.mount, u64::MAX, 1).unwrap();
-    assert_eq!(
-        f.db.retained_native_source(f.mount, u64::MAX).unwrap(),
-        Some(source)
-    );
-    assert!(f.db.acquire_native_source(f.mount, u64::MAX, 1).is_err());
-    assert!(matches!(
-        f.db.revoke_native_mount(f.mount),
-        Err(OverlayError::BaseSourcesPending)
-    ));
-    let outcome =
-        f.db.observe_native_attributes(f.mount, source, true, |_, _| {
-            Ok(NativeDecision::Finished {
-                inode: Some(inode(2)),
-                value: (),
-            })
-        });
-    assert_eq!(outcome.result.unwrap(), None);
-    // The decided source still fences revocation until it is released.
-    assert!(matches!(
-        f.db.revoke_native_mount(f.mount),
-        Err(OverlayError::BaseSourcesPending)
-    ));
-    f.db.release_base_source(source).unwrap();
+    f.lookup(2);
     f.db.forget_native(f.mount, 2, 1).unwrap();
     f.db.revoke_native_mount(f.mount).unwrap();
     assert_eq!(
@@ -318,7 +223,16 @@ fn a_source_fences_revocation_and_request_keys_keep_all_u64_bits() {
         NativeMountState::Revoked
     );
     assert!(matches!(
-        f.db.acquire_native_source(f.mount, 4, 1),
+        f.db.observe_native_visit(
+            f.mount,
+            1,
+            None,
+            true,
+            |_, _| -> Result<NativeDecision<()>, OverlayError> {
+                panic!("revoked mount reached semantics")
+            }
+        )
+        .result,
         Err(OverlayError::Stale)
     ));
     assert!(matches!(
@@ -330,15 +244,12 @@ fn a_source_fences_revocation_and_request_keys_keep_all_u64_bits() {
 #[test]
 fn need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence() {
     let f = Fixture::new();
-    let source = f.db.acquire_native_source(f.mount, 7, 1).unwrap();
     let before = f.db.resources(Some(f.mount.route())).unwrap().counts;
-    let need =
-        f.db.observe_native_attributes(f.mount, source, true, |_, _| {
-            Ok(NativeDecision::Needs("base fact"))
-        });
+    let need = f.db.observe_native_visit(f.mount, 1, None, true, |_, _| {
+        Ok(NativeDecision::Needs("base fact"))
+    });
     assert_eq!(need.decision, Some("base fact"));
     assert!(matches!(need.result, Ok(None)));
-    assert_eq!(need.candidate, None);
     assert_eq!(
         f.db.resources(Some(f.mount.route())).unwrap().counts,
         before
@@ -346,29 +257,24 @@ fn need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence
     let original = Arc::new("original semantic value");
     let retained = original.clone();
     let start = f.db.diagnostics();
-    let failed =
-        f.db.observe_native_attributes(f.mount, source, true, |_, _| {
-            Ok(NativeDecision::Finished {
-                inode: Some(inode(0)),
-                value: original,
-            })
-        });
+    let failed = f.db.observe_native_visit(f.mount, 1, None, true, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(inode(0)),
+            value: original,
+        })
+    });
     assert!(failed.result.is_err());
     assert!(Arc::ptr_eq(failed.decision.as_ref().unwrap(), &retained));
     assert_eq!(
         f.db.resources(Some(f.mount.route())).unwrap().counts,
         before
     );
+    // The failed decision committed nothing: whatever the job began, it
+    // rolled back.
     let work = f.db.diagnostics().since(&start);
-    assert_eq!(
-        work.statements[StatementKind::Rollback as usize].executions,
-        1
-    );
-    assert_eq!(
-        f.db.retained_native_source(f.mount, 7).unwrap(),
-        Some(source)
-    );
-    f.db.release_base_source(source).unwrap();
+    let ran = |kind: StatementKind| work.statements[kind as usize].executions;
+    assert_eq!(ran(StatementKind::Commit), 0);
+    assert_eq!(ran(StatementKind::Rollback), ran(StatementKind::Begin));
 }
 
 #[test]
@@ -379,27 +285,26 @@ fn foreign_engine_or_mount_cannot_consume_ownership() {
         other.db.forget_native(f.mount, 1, 1),
         Err(OverlayError::Stale)
     ));
-    let source = f.db.acquire_native_source(f.mount, 1, 1).unwrap();
     assert!(matches!(
-        f.db.observe_native_attributes(
+        f.db.observe_native_visit(
             other.mount,
-            source,
+            1,
+            None,
             false,
             |_, _| -> Result<NativeDecision<()>, OverlayError> {
-                panic!("foreign source reached semantics")
+                panic!("foreign mount reached semantics")
             }
         )
         .result,
         Err(OverlayError::Stale)
     ));
-    f.db.release_base_source(source).unwrap();
 }
 
 #[test]
 fn revoked_lookup_retirement_is_bounded_indexed_and_allows_closed_cleanup() {
     let f = Fixture::new();
     for serial in 2..=131 {
-        f.lookup(serial, serial);
+        f.lookup(serial);
     }
     let plans = f.db.explain_native(f.mount).unwrap();
     assert!(
@@ -537,7 +442,7 @@ fn a_read_visit_records_no_source_and_writes_only_a_positive_lookup_reference() 
     });
     assert_eq!(missing.decision, Some("missing"));
     assert!(matches!(missing.result, Ok(None)));
-    assert!(missing.candidate.is_none() && missing.open_candidate.is_none());
+    assert!(missing.open_candidate.is_none());
     assert!(missing.directory_candidate.is_none());
     f.unchanged(&before);
 
@@ -578,7 +483,6 @@ fn a_read_visit_records_no_source_and_writes_only_a_positive_lookup_reference() 
         });
         assert_eq!(found.decision, Some(9));
         assert!(matches!(found.result, Ok(None)));
-        assert!(found.candidate.is_none());
         assert_eq!(f.transactions(&before), (1, 1, 0));
         assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(held));
         let counts = f.db.resources(Some(route)).unwrap().counts;
@@ -680,8 +584,7 @@ fn a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source() {
         (state.revision, state.base_readers),
         (before.revision + 1, 0)
     );
-    // No request source: neither a native_source nor a base_source row.
-    assert_eq!(f.db.retained_native_source(f.mount, REQUEST).unwrap(), None);
+    // No request source: no base_source row.
     let counts = f.db.resources(Some(route)).unwrap().counts;
     assert_eq!(counts.source_rows, before.counts.source_rows);
     assert_eq!(counts.reply_tickets, before.counts.reply_tickets + 1);

@@ -654,7 +654,7 @@ fn an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_fil
     // request that receives it, beside the first one. No source, no read.
     let opened = open(10, 50, false, Some(Some(inode(50))));
     assert!(matches!(opened.result, Ok(None)));
-    assert!(opened.candidate.is_none() && opened.directory_candidate.is_none());
+    assert!(opened.directory_candidate.is_none());
     let second = opened.open_candidate.expect("the OPEN's descriptor");
     assert_eq!((second.serial(), second.writable()), (50, false));
     assert_ne!(second.owner_id(), first.owner_id());
@@ -794,7 +794,7 @@ fn an_opendir_visit_writes_its_descriptor_alone_and_releasedir_closes_exactly_th
     // that receives it. No source and no read; the Workspace row is unchanged.
     let opened = open(20, 1, Some(Some(root.clone())));
     assert!(matches!(opened.result, Ok(None)));
-    assert!(opened.candidate.is_none() && opened.open_candidate.is_none());
+    assert!(opened.open_candidate.is_none());
     let directory = opened
         .directory_candidate
         .expect("the OPENDIR's descriptor");

@@ -2,6 +2,13 @@
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (cleanup): the ports `source`, `view`, `immutable`,
+`observe`, `release_source`, `open_source`, `prepare`, `mutate` and `replied`
+named below no longer exist; every request is served through
+`observe_visit`, `read_visit`, `mutate_visit`, `directory_visit`,
+`publish_cookies` and `base`. See
+[native read custody](73-native-read-custody.md).
+
 The replacement `layerfs-fuse` is an active core member. The daemon depends on
 Fuse, which consumes Workspace plans and existing Content/Overlay domain types.
 The former excluded Fuse is preserved byte-for-byte in `layerfs-fuse-legacy`;

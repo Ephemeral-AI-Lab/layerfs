@@ -236,9 +236,9 @@ impl Rig {
         .unwrap()
     }
     /// What a request may have recorded in the owner: the Workspace's
-    /// base-reader count, its base-source rows and this request's own source.
-    /// These observations are owner jobs themselves.
-    fn recorded(&self, request: u64) -> (u64, u64, bool) {
+    /// base-reader count and its base-source rows. These observations are
+    /// owner jobs themselves.
+    fn recorded(&self) -> (u64, u64) {
         let route = self.bound.route();
         let done = finish(&self.client, route, Command::State);
         let readers = match done.result() {
@@ -252,20 +252,7 @@ impl Rig {
             other => panic!("resources: {other:?}"),
         };
         drop(done);
-        let done = finish(
-            &self.client,
-            route,
-            Command::Native(NativeJob::RetainedSource {
-                mount: self.mount,
-                request,
-            }),
-        );
-        let source = match done.result() {
-            Ok(Response::Native(NativeReply::RetainedSource(source))) => source.is_some(),
-            other => panic!("retained source: {other:?}"),
-        };
-        drop(done);
-        (readers, sources, source)
+        (readers, sources)
     }
     fn revoke(&self) {
         let done = finish(
@@ -339,14 +326,14 @@ impl Rig {
 fn a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant() {
     let rig = Rig::new("visit-port-lookup", 161);
     let (mount, root) = (rig.mount, rig.root);
-    assert_eq!(rig.recorded(1), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
 
     // Whatever binding the Workspace left unread of the root directory is
     // read by this first miss, through the Store's shared canonical cache.
     let warm = rig.lookup(1, "absent-warm");
     assert!(matches!(warm.value(), Err(Refusal::Missing)));
     wait(warm.dispose()).unwrap();
-    assert_eq!(rig.recorded(1), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
 
     // The directory's objects are resident: a miss of another name in it is
     // one owner job of class Read, with no reader grant. The request recorded
@@ -358,7 +345,7 @@ fn a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant() {
     assert_eq!(visited, before.and(&[(ServiceClass::Read, 1)], 0));
     wait(missing.dispose()).unwrap();
     assert_eq!(rig.counted(), visited);
-    assert_eq!(rig.recorded(2), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
 
     // GETATTR of that directory is the same single job.
     let before = rig.counted();
@@ -374,7 +361,7 @@ fn a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant() {
     assert_eq!(attributes.value().unwrap().stat.serial, root);
     wait(attributes.dispose()).unwrap();
     assert_eq!(rig.counted(), before.and(&[(ServiceClass::Read, 1)], 0));
-    assert_eq!(rig.recorded(3), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
 
     // A regular file's length is the Store's answer, not a canonical object:
     // the lookup of a base file is undecided once and takes one reader, and
@@ -386,7 +373,7 @@ fn a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant() {
     assert_eq!(stat.logical_len, support::bytes(0).len() as u64);
     wait(found.dispose()).unwrap();
     assert_eq!(rig.counted(), before.and(&[(ServiceClass::Read, 2)], 1));
-    assert_eq!(rig.recorded(4), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
 
     println!(
         "VISIT-LOOKUP resident_miss=(1 Read job, 0 grants) resident_getattr=(1 Read job, 0 grants) base_file=(2 Read jobs, 1 grant) sources=0 base_readers=0 release_jobs=0"
@@ -460,7 +447,7 @@ fn a_create_is_one_mutation_job_and_its_reply_attempt_is_no_owner_job() {
         rig.client.reply_attempted(owed[0]),
         Err(OwnerError::Overlay(OverlayError::Stale))
     ));
-    assert_eq!(rig.recorded(2), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
 
     // The published file is found by one visit over its local row.
     let before = rig.counted();
@@ -468,7 +455,7 @@ fn a_create_is_one_mutation_job_and_its_reply_attempt_is_no_owner_job() {
     assert_eq!(found.value().unwrap().stat.serial, serial);
     wait(found.dispose()).unwrap();
     assert_eq!(rig.counted(), before.and(&[(ServiceClass::Read, 1)], 0));
-    assert_eq!(rig.recorded(3), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
 
     println!(
         "VISIT-CREATE jobs=(1 Mutation, 0 for its reply attempt) sources=0 reader_grants=0 base_readers=0"
@@ -634,12 +621,12 @@ fn a_request_between_two_visits_fences_no_revocation_and_its_next_visit_is_refus
         rig.client.diagnostics().unwrap().outstanding == 0
     });
     // Each made one visit and wrote nothing: no source, no reader count.
-    assert_eq!(rig.recorded(1), (0, 0, false));
-    assert_eq!(rig.recorded(2), (0, 0, false));
+    assert_eq!(rig.recorded(), (0, 0));
+    assert_eq!(rig.recorded(), (0, 0));
     let revision = rig.revision();
 
-    // Revocation is fenced by recorded request sources only: it is not
-    // refused while these two requests wait between their visits.
+    // Revocation waits for no request: it is not refused while these two
+    // requests wait between their visits.
     rig.revoke();
 
     // The reader returns; each request reads its facts and visits again. The

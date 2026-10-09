@@ -55,10 +55,9 @@ pub use operations::native_directory::{
     NativeDirectoryBatch, NativeDirectoryEntry, NativeDirectoryListing, NativeDirectoryVisit,
     NativeDirectoryWindow,
 };
-pub use operations::native_mutation::{NativeMutationJob, NativeMutationOutcome};
+pub use operations::native_mutation::NativeMutationOutcome;
 pub use operations::native_read::{
-    NativeReadDecision, NativeReadFailure, NativeReadJob, NativeReadOperation, NativeReadOutcome,
-    NativeReadPlan, NativeReadStage, NativeReadValue,
+    NativeReadDecision, NativeReadFailure, NativeReadOperation, NativeReadOutcome, NativeReadValue,
 };
 pub use operations::native_visit::{
     NativeInput, NativeMutationVisit, NativeReadVisit, NativeVisitRequest,

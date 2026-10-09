@@ -125,8 +125,6 @@ fn reference(raw: &rusqlite::Connection) -> StoredCounts {
         "file_custody",
         "native_mount",
         "native_lookup",
-        "native_source",
-        "native_read",
         "native_parent",
         "native_directory",
         "native_cookie",

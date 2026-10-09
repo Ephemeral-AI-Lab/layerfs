@@ -81,7 +81,7 @@ fn observe(
     let outcome = visit.perform(&b.overlay);
     assert_eq!(b.demand(), demand, "an owner visit asked the provider");
     assert!(matches!(outcome.result, Ok(None)), "{:?}", outcome.result);
-    assert!(outcome.candidate.is_none() && outcome.open_candidate.is_none());
+    assert!(outcome.open_candidate.is_none());
     assert!(outcome.directory_candidate.is_none());
     match outcome.decision {
         Some(NativeReadDecision::Needs(needs)) => Seen::Needs(needs),
@@ -116,7 +116,7 @@ fn open(
     let outcome = visit.perform(&b.overlay);
     assert_eq!(b.demand(), demand, "an owner visit asked the provider");
     assert!(matches!(outcome.result, Ok(None)), "{:?}", outcome.result);
-    assert!(outcome.candidate.is_none() && outcome.directory_candidate.is_none());
+    assert!(outcome.directory_candidate.is_none());
     let seen = match outcome.decision {
         Some(NativeReadDecision::Needs(needs)) => Seen::Needs(needs),
         Some(NativeReadDecision::Value(inode)) => Seen::Value(inode),
@@ -439,7 +439,6 @@ fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
         ),
         (before.1.owner_rows, before.1.owner_details + 1, 0, 0)
     );
-    assert_eq!(b.overlay.retained_native_source(mount, 30).unwrap(), None);
 
     // The file's objects and its length are resident now: another OPEN is
     // decided by its one visit with no facts and no provider demand.
@@ -713,7 +712,6 @@ fn a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source() 
         b.overlay.pending_publications(route, 0).unwrap(),
         vec![publication]
     );
-    assert_eq!(b.overlay.retained_native_source(mount, 7).unwrap(), None);
     b.overlay.reply_attempted(publication).unwrap();
     assert_eq!(b.lookup(1, "made").unwrap().serial, directory);
 

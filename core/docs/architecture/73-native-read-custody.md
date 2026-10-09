@@ -68,6 +68,29 @@ read it, and removing those statements moves pinned counts.
 [`read_cost.rs`](../../crates/layerfs-daemon/tests/read_cost.rs) asserts at
 the end of every test that no Source-class job ran and no source row exists.
 
+R7 update, 2026-10-09 (cleanup, overlay schema 30): the remainder named in
+the paragraph above is deleted, and the text below that describes native
+sources, `NativeReadPlan` and the retained-source point APIs is history.
+Deleted: Overlay `observe_native_attributes`, `acquire_native_source`,
+`retained_native_source`, `acquire_native_file_source`,
+`acquire_native_open_source` and `apply_native` with their internal
+source check and release; BaseSource kind 2; Workspace `NativeReadJob`,
+`NativeReadPlan`, `NativeReadStage`, `SourceView::native_read_plan`,
+`NativeMutationJob` and `MutationPlan::native_job`; the always-empty
+`NativeReadValue.read` and `NativeObservation.candidate`; daemon
+`NativeJob::{Source, RetainedSource, FileSource, Observe, OpenSource,
+Mutate}` and `Command::Replied`; and the ports `source`, `view`,
+`immutable`, `observe`, `release_source`, `open_source`, `prepare`, `mutate`
+and `replied`. The `native_source` and `native_read` tables and their four
+accounting triggers no longer exist (55 triggers remain).
+`revoke_native_mount` no longer probes them: a request records nothing, so
+the mark waits for no row and runs one statement fewer. LOOKUP, GETATTR,
+OPEN, OPENDIR, READ, READLINK and every mutation are owner visits only.
+Kept without a production caller and listed for a later step:
+`Overlay::reply_attempted_and_release`, the observers
+`NativeJob::{RetainedMount, RetainedFile, File, State}`, and
+`NativeObservation.result`, whose success value is always `None`.
+
 Mounted consequence for the proofs: a reader whose name
 was looked up is no longer parked in its OPEN when no Store reader is free;
 it is parked in its first READ of base bytes

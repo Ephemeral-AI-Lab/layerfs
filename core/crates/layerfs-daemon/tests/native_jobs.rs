@@ -9,8 +9,8 @@ use layerfs_daemon::{
 use layerfs_history::WorkspaceId;
 use layerfs_overlay::{ProfileConfig, Route, StatementKind};
 use layerfs_workspace::{
-    BaseView, NativeReadDecision, NativeReadOperation, NativeReadOutcome, NativeReadStage,
-    NativeReadVisit, VisitFacts,
+    BaseView, NativeReadDecision, NativeReadOperation, NativeReadOutcome, NativeReadVisit,
+    VisitFacts,
 };
 use std::{
     future::Future,
@@ -125,55 +125,30 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
         other => panic!("{other:?}"),
     };
     drop(done);
-    let done = job(
-        &client,
-        route,
-        Command::Native(NativeJob::Source {
-            mount,
-            request: u64::MAX,
-            serial: root,
-        }),
-    );
-    let source = match done.result() {
-        Ok(Response::Native(NativeReply::Source(source))) => *source,
+    // LOOKUP is owner visits that record no request source; the base facts
+    // an undecided visit names are read outside the owner.
+    let base = operation.workspace().base().unwrap();
+    let (original, receipt) = visit(&client, route, &base, |facts| {
+        operation
+            .workspace()
+            .native_read_visit(
+                operation.resident(),
+                mount,
+                root,
+                None,
+                NativeReadOperation::Lookup {
+                    parent: root,
+                    name: layerfs_content::filesystem::PathName::new("file-000000").unwrap(),
+                },
+                facts,
+            )
+            .unwrap()
+    });
+    let stat: layerfs_workspace::ViewStat = match &original.decision {
+        Some(NativeReadDecision::Value(inode)) => inode.clone().into(),
         other => panic!("{other:?}"),
     };
-    drop(done);
-    let view = operation.workspace().view_for_source(source).unwrap();
-    let mut plan = view
-        .native_read_plan(
-            mount,
-            NativeReadOperation::Lookup {
-                parent: root,
-                name: layerfs_content::filesystem::PathName::new("file-000000").unwrap(),
-            },
-        )
-        .unwrap();
-    let mut result = None;
-    for _ in 0..4 {
-        let before = store.work();
-        let receipt = job(
-            &client,
-            route,
-            Command::Native(NativeJob::Observe(Box::new(plan.job().unwrap().clone()))),
-        );
-        assert_eq!(store.work(), before, "SQL owner made a Store demand");
-        let original = match receipt.result() {
-            Ok(Response::Native(NativeReply::Observed(original))) => original.clone(),
-            other => panic!("{other:?}"),
-        };
-        if let Some(value) = plan.accept(original).unwrap() {
-            result = Some((value, receipt));
-            break;
-        }
-        drop(receipt);
-        assert_eq!(plan.stage(), NativeReadStage::Base);
-        // This component test's caller is a constructor/control thread. Native
-        // Fuse integration must supply these facts through admitted read steps.
-        plan.supply(&view).unwrap();
-    }
-    let (value, receipt) = result.expect("finite native fact rounds");
-    assert_eq!(value.stat.logical_len, support::bytes(0).len() as u64);
+    assert_eq!(stat.logical_len, support::bytes(0).len() as u64);
     assert_eq!(
         receipt
             .work()
@@ -193,22 +168,10 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
         1
     );
     assert!(client.diagnostics().unwrap().credited_bytes > 0);
-    assert!(
-        job(&client, route, Command::Native(NativeJob::Revoke(mount)))
-            .result()
-            .is_err()
-    );
-    let serial = value.stat.serial;
-    // A lookup answers with attributes only: there is no read to release.
-    assert_eq!(value.read, None);
-    drop(value);
-    assert!(job(&client, route, Command::ReleaseBaseSource(source))
-        .result()
-        .is_ok());
-    drop(receipt);
+    let serial = stat.serial;
+    drop((original, receipt));
     // OPEN is one owner visit that records no request source: the visit
     // that decides the file writes its descriptor.
-    let base = operation.workspace().base().unwrap();
     let (original, receipt) = visit(&client, route, &base, |facts| {
         operation
             .workspace()
@@ -266,23 +229,6 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     )
     .result()
     .is_ok());
-    // An open handle alone no longer fences revocation (its release may be
-    // lost at detach); request processing over it, acquired next, still does.
-    let done = job(
-        &client,
-        route,
-        Command::Native(NativeJob::FileSource {
-            mount,
-            request: u64::MAX - 2,
-            serial,
-            handle: file.owner_id(),
-        }),
-    );
-    let processing = match done.result() {
-        Ok(Response::Native(NativeReply::Source(source))) => *source,
-        other => panic!("{other:?}"),
-    };
-    drop(done);
     assert!(job(
         &client,
         route,
@@ -305,14 +251,6 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     )
     .result()
     .is_err());
-    assert!(
-        job(&client, route, Command::Native(NativeJob::Revoke(mount)))
-            .result()
-            .is_err()
-    );
-    assert!(job(&client, route, Command::ReleaseBaseSource(processing))
-        .result()
-        .is_ok());
     // OPENDIR is the same visit and writes the directory's descriptor.
     let (original, opened) = visit(&client, route, &base, |facts| {
         operation
@@ -401,7 +339,7 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     }
     assert!(client.maintenance_failure().unwrap().is_none());
     assert_eq!(client.diagnostics().unwrap().receipt_overruns, 0);
-    drop((plan, view, operation, bound, store));
+    drop((base, operation, bound, store));
     owner.stop().unwrap();
     f.cleanup();
 }

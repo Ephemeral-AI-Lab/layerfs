@@ -1,7 +1,7 @@
 //! Encoded native file handles retain the existing exact OpenFile owner.
 use crate::{
     db::{integer, unsigned},
-    BaseSource, NativeMount, OpenFile, Overlay, OverlayError, OverlayResult, StatementKind,
+    NativeMount, OpenFile, Overlay, OverlayError, OverlayResult, StatementKind,
 };
 
 /// A kernel request identity as the descriptor row stores it: the same 64
@@ -76,21 +76,6 @@ impl Overlay {
             },
         )
         .map(|mut rows| rows.pop())
-    }
-    /// The descriptor protects the target while this independent request source
-    /// is acquired. Later RELEASE/FORGET cannot dispose its processing metadata.
-    pub fn acquire_native_file_source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-        handle: u64,
-    ) -> OverlayResult<BaseSource> {
-        self.atomic(|| {
-            let state = self.check_native_mount(mount)?;
-            self.native_file(mount, serial, handle)?;
-            self.retain_native_source(mount, state, request, serial)
-        })
     }
     /// Close the exact handle once. Existing independently acquired sources/read
     /// windows survive; foreign or reused encoded handles are rejected.

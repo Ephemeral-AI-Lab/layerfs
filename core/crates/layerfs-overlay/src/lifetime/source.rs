@@ -114,7 +114,7 @@ impl Overlay {
         self.atomic_cleanup(|| self.release_source_inner(source))
     }
     pub(crate) fn release_class(&self, source: BaseSource) -> OverlayResult<()> {
-        if !matches!(source.class, 0 | 2) {
+        if source.class != 0 {
             return Err(OverlayError::Invalid(
                 "file read source requires file-read release",
             ));
@@ -123,9 +123,6 @@ impl Overlay {
     }
     pub(crate) fn release_source_inner(&self, source: BaseSource) -> OverlayResult<()> {
         self.source_state(source)?;
-        if source.class == 2 {
-            self.release_native_source(source)?;
-        }
         let changed = self.execute(
             StatementKind::Lease,
             sql::BASE_SOURCE_DELETE,

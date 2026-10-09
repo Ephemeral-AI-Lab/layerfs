@@ -1,0 +1,11 @@
+===== native_custody-5748f62babb0e016 (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... ok
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0

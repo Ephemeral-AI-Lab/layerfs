@@ -9,11 +9,10 @@ use layerfs_fuse::ports::{
     ServiceReply,
 };
 use layerfs_history::HistoryError;
-use layerfs_overlay::{BaseSource, NativeCookieOffer, NativeMount, OpenFile, Publication};
+use layerfs_overlay::{NativeCookieOffer, NativeMount, Publication};
 use layerfs_workspace::{
-    BaseView, MutationInputFailure, MutationPlan, NativeDirectoryWindow, NativeMutationJob,
-    NativeMutationOutcome, NativeReadJob, NativeReadOperation, NativeReadOutcome,
-    NativeVisitRequest, NativeWindow, Operation, SourceView, Time, VisitFacts, WorkspaceError,
+    BaseView, NativeDirectoryWindow, NativeMutationOutcome, NativeReadOperation, NativeReadOutcome,
+    NativeVisitRequest, NativeWindow, VisitFacts, WorkspaceError,
 };
 use std::{
     future::{poll_fn, Future},
@@ -269,25 +268,6 @@ impl RequestServices for FilesystemPort {
             .failure()?
             .map(|error| Box::new(error) as ServiceError))
     }
-    fn source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-    ) -> ServiceFuture<'_, ServiceReply<BaseSource>> {
-        let command = NativeJob::Source {
-            mount,
-            request,
-            serial,
-        };
-        self.acquire(Command::Native(command), |response| match response {
-            Response::Native(NativeReply::Source(source)) => Some(*source),
-            _ => None,
-        })
-    }
-    fn view(&self, source: BaseSource) -> Result<SourceView, ServiceError> {
-        Ok(self.0.workspace().view_for_source(source)?)
-    }
     fn base(&self) -> ServiceFuture<'_, BaseView> {
         Box::pin(async move {
             let client = self.admitted().await?;
@@ -299,9 +279,6 @@ impl RequestServices for FilesystemPort {
             Ok(base.with_client(client))
         })
     }
-    fn immutable<'a>(&'a self, view: &'a SourceView) -> ServiceFuture<'a, SourceView> {
-        Box::pin(async move { Ok(view.with_client(self.admitted().await?)) })
-    }
     fn failed_base_read(&self, step: ServiceError) -> ServiceError {
         // The canonical read ran in Fuse on the admitted view; whether the
         // provider failed is known only to this request's demand scope.
@@ -309,18 +286,6 @@ impl RequestServices for FilesystemPort {
             Ok(Some(cause)) if Self::scoped(&cause) => self.demand(cause),
             _ => step,
         }
-    }
-    fn observe(
-        &self,
-        job: NativeReadJob,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>> {
-        self.acquire(
-            Command::Native(NativeJob::Observe(Box::new(job))),
-            |response| match response {
-                Response::Native(NativeReply::Observed(value)) => Some(value.clone()),
-                _ => None,
-            },
-        )
     }
     fn observe_visit(
         &self,
@@ -380,9 +345,6 @@ impl RequestServices for FilesystemPort {
             Err(error) => Box::pin(async move { Err(Box::new(error) as ServiceError) }),
         }
     }
-    fn release_source(&self, source: BaseSource) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.dispose(Command::ReleaseBaseSource(source), done)
-    }
     fn forget(
         &self,
         mount: NativeMount,
@@ -398,26 +360,6 @@ impl RequestServices for FilesystemPort {
             |response| matches!(response, Response::Native(NativeReply::Done)).then_some(()),
         )
     }
-    fn open_source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-        handle: u64,
-    ) -> ServiceFuture<'_, ServiceReply<(BaseSource, OpenFile)>> {
-        self.acquire(
-            Command::Native(NativeJob::OpenSource {
-                mount,
-                request,
-                serial,
-                handle,
-            }),
-            |response| match response {
-                Response::Native(NativeReply::OpenSource(source, file)) => Some((*source, *file)),
-                _ => None,
-            },
-        )
-    }
     fn reserve_serial(&self) -> Result<Option<u64>, ServiceError> {
         self.fenced(true)?;
         match self.0.workspace().next_serial(self.0.ports()) {
@@ -425,29 +367,6 @@ impl RequestServices for FilesystemPort {
             Err(error) if writer_contended(&error) => Ok(None),
             Err(error) => Err(Box::new(error)),
         }
-    }
-    fn prepare(
-        &self,
-        view: &SourceView,
-        operation: Operation,
-        now: Time,
-        serial: Option<u64>,
-    ) -> Result<MutationPlan, Box<MutationInputFailure>> {
-        self.0
-            .workspace()
-            .prepare_mutation(view, operation, now, serial)
-    }
-    fn mutate(
-        &self,
-        job: NativeMutationJob,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>> {
-        self.acquire(
-            Command::Native(NativeJob::Mutate(Box::new(job))),
-            |response| match response {
-                Response::Native(NativeReply::Mutated(value)) => Some(value.clone()),
-                _ => None,
-            },
-        )
     }
     /// The attempt is recorded from this thread, with no owner turn. Only
     /// the last attempt of a Workspace that an owner job waits for owes one.
@@ -462,19 +381,6 @@ impl RequestServices for FilesystemPort {
             Ok(_) => Box::pin(std::future::ready(Ok(ServiceReply::new((), ())))),
             Err(error) => Box::pin(std::future::ready(Err(Box::new(error) as ServiceError))),
         }
-    }
-    fn replied(
-        &self,
-        publication: Publication,
-        source: BaseSource,
-    ) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.dispose(
-            Command::Replied {
-                publication,
-                source,
-            },
-            done,
-        )
     }
 }
 /// The allocator's immediate admission refusal: nothing was reserved.

@@ -1,8 +1,8 @@
-//! Indexed native connection, source and kernel lookup ownership.
+//! Indexed native connection and kernel lookup ownership.
 use crate::{
     db::{integer, unsigned},
-    BaseSource, LeaseKind, NativeMount, NativeMountState, Overlay, OverlayError, OverlayResult,
-    Route, StatementKind, WorkspaceState,
+    LeaseKind, NativeMount, NativeMountState, Overlay, OverlayError, OverlayResult, Route,
+    StatementKind, WorkspaceState,
 };
 
 impl Overlay {
@@ -69,13 +69,6 @@ impl Overlay {
             Some(_) => Err(OverlayError::Stale),
         }
     }
-    /// A live Workspace with this mount attached. The state it read is
-    /// returned so the same transaction does not read the row again.
-    pub(crate) fn check_native_mount(&self, mount: NativeMount) -> OverlayResult<WorkspaceState> {
-        let state = self.live(mount.route)?;
-        self.require_native_live(mount)?;
-        Ok(state)
-    }
     /// This mount attached to its Workspace, closed or not, and the
     /// Workspace row read for it.
     pub(crate) fn check_native_attached(
@@ -91,142 +84,6 @@ impl Overlay {
             return Err(OverlayError::Stale);
         }
         Ok(())
-    }
-    /// One exact native request's source. Engine-generated class2 identities
-    /// cannot collide with caller-issued class0 source IDs or class1 read IDs.
-    pub fn acquire_native_source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-    ) -> OverlayResult<BaseSource> {
-        self.atomic(|| {
-            let state = self.check_native_mount(mount)?;
-            if self.native_lookup_row(mount, serial)?.is_none() {
-                return Err(OverlayError::Stale);
-            }
-            self.retain_native_source(mount, state, request, serial)
-        })
-    }
-    /// `state` is the Workspace row this transaction already read.
-    pub(crate) fn retain_native_source(
-        &self,
-        mount: NativeMount,
-        state: WorkspaceState,
-        request: u64,
-        serial: u64,
-    ) -> OverlayResult<BaseSource> {
-        let owner = self.mint_owner()?;
-        self.execute(
-            StatementKind::Lease,
-            "INSERT INTO native_source VALUES(?1,?2,?3,?4,?5,0)",
-            &[
-                &mount.route.ns,
-                &integer(mount.owner)?,
-                &request.to_be_bytes().as_slice(),
-                &integer(owner)?,
-                &integer(serial)?,
-            ],
-            40,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            crate::sql::BASE_SOURCE_INSERT,
-            &[
-                &mount.route.ns,
-                &integer(owner)?,
-                &state.base_root.as_slice(),
-                &2_i64,
-            ],
-            56,
-        )?;
-        self.execute(
-            StatementKind::Workspace,
-            crate::sql::BASE_SOURCE_INCREMENT,
-            &[&mount.route.ns],
-            8,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            "INSERT INTO lease VALUES(?1,5,?2,?3)",
-            &[&mount.route.ns, &integer(owner)?, &integer(serial)?],
-            24,
-        )?;
-        self.file_ref(
-            mount.route.ns,
-            integer(serial)?,
-            LeaseKind::FileReader,
-            true,
-        )?;
-        Ok(BaseSource {
-            route: mount.route,
-            owner,
-            class: 2,
-            root: state.base_root,
-            installed: state.installed,
-        })
-    }
-
-    pub fn retained_native_source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-    ) -> OverlayResult<Option<BaseSource>> {
-        self.check_native_attached(mount)?;
-        let installed = self.state(mount.route)?.installed;
-        self.query(StatementKind::Lease,
-            "SELECT s.owner,b.base_root FROM native_source s JOIN base_source b ON b.ns=s.ns AND b.kind=2 AND b.owner=s.owner WHERE s.ns=?1 AND s.mount=?2 AND s.request=?3",
-            &[&mount.route.ns, &integer(mount.owner)?, &request.to_be_bytes().as_slice()], 24,
-            |r| Ok(BaseSource { route: mount.route, owner: unsigned(r, 0)?, class: 2,
-                root: r.get::<_, Vec<u8>>(1)?.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?, installed }))
-            .map(|mut rows| rows.pop())
-    }
-    pub(crate) fn check_native_source(
-        &self,
-        mount: NativeMount,
-        source: BaseSource,
-    ) -> OverlayResult<([u8; 8], u64, WorkspaceState)> {
-        let state = self.check_native_mount(mount)?;
-        if source.route != mount.route || source.class != 2 {
-            return Err(OverlayError::Stale);
-        }
-        self.source_held(source, state)?;
-        let (request, serial) = self.query(StatementKind::Lease,
-            "SELECT request,serial FROM native_source WHERE ns=?1 AND mount=?2 AND owner=?3 AND decided=0",
-            &[&mount.route.ns, &integer(mount.owner)?, &integer(source.owner)?], 24,
-            |r| Ok((r.get::<_, Vec<u8>>(0)?.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?, unsigned(r, 1)?)))?
-            .pop().ok_or(OverlayError::Stale)?;
-        Ok((request, serial, state))
-    }
-    pub(crate) fn release_native_source(&self, source: BaseSource) -> OverlayResult<()> {
-        let serial = self
-            .query(
-                StatementKind::Lease,
-                "SELECT serial FROM native_source WHERE ns=?1 AND owner=?2",
-                &[&source.route.ns, &integer(source.owner)?],
-                16,
-                |r| unsigned(r, 0),
-            )?
-            .pop()
-            .ok_or(OverlayError::Stale)?;
-        self.execute(
-            StatementKind::Lease,
-            "DELETE FROM native_source WHERE ns=?1 AND owner=?2",
-            &[&source.route.ns, &integer(source.owner)?],
-            16,
-        )?;
-        self.execute(
-            StatementKind::Lease,
-            "DELETE FROM lease WHERE ns=?1 AND kind=5 AND owner=?2 AND resource=?3",
-            &[&source.route.ns, &integer(source.owner)?, &integer(serial)?],
-            24,
-        )?;
-        self.file_ref(
-            source.route.ns,
-            integer(serial)?,
-            LeaseKind::FileReader,
-            false,
-        )
     }
     pub(crate) fn native_lookup_row(
         &self,
@@ -368,20 +225,25 @@ impl Overlay {
             self.queue_closed_at(mount.route, &state)
         })
     }
-    /// Call only after detach and complete native/service consumer drain. The
-    /// fixed logical mark is fenced by request source/read processing only. An
-    /// open file or directory handle whose kernel RELEASE can no longer arrive
+    /// Call only after detach and complete native/service consumer drain. A
+    /// request records nothing here, so the fixed logical mark waits for no
+    /// row. An open file or directory handle whose kernel RELEASE can no longer arrive
     /// stops representing a consumer here; bounded maintenance retires it.
     pub fn revoke_native_mount(&self, mount: NativeMount) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
             self.check_native_attached(mount)?;
-            let held = self.query(StatementKind::Lease,
-                "SELECT EXISTS(SELECT 1 FROM native_source WHERE ns=?1 AND mount=?2) OR EXISTS(SELECT 1 FROM native_read WHERE ns=?1 AND mount=?2)",
-                &[&mount.route.ns, &integer(mount.owner)?], 16, |r| r.get::<_, bool>(0))?[0];
-            if held { return Err(OverlayError::BaseSourcesPending); }
-            self.execute(StatementKind::Lease, "UPDATE native_mount SET revoked=1 WHERE ns=?1 AND owner=?2",
-                &[&mount.route.ns, &integer(mount.owner)?], 16)?;
-            self.enqueue(mount.route.ns, crate::maintenance::NATIVE, integer(mount.owner)?, integer(mount.owner)?)
+            self.execute(
+                StatementKind::Lease,
+                "UPDATE native_mount SET revoked=1 WHERE ns=?1 AND owner=?2",
+                &[&mount.route.ns, &integer(mount.owner)?],
+                16,
+            )?;
+            self.enqueue(
+                mount.route.ns,
+                crate::maintenance::NATIVE,
+                integer(mount.owner)?,
+                integer(mount.owner)?,
+            )
         })
     }
 }

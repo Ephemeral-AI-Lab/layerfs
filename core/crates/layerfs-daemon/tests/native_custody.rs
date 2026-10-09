@@ -19,7 +19,7 @@ use layerfs_bridge::control::{
 };
 use layerfs_daemon::{control::Failure, Command, Completion, NativeJob, NativeReply, Response};
 use layerfs_history::BranchId;
-use layerfs_overlay::{BaseSource, NativeMount, Route};
+use layerfs_overlay::{NativeMount, Route};
 use mounted::{mount_entry, until, Harness};
 use std::{
     collections::BTreeMap, fs, io::Write, os::unix::fs::MetadataExt, path::Path,
@@ -183,32 +183,22 @@ fn an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it() {
         fs::read(root.join("ignored.bin")).unwrap(),
         fixture::FILES[6].1
     );
-    // A service consumer outside the kernel connection: one request source
-    // acquired through the public owner and still held at unmount. Connection
-    // drain cannot see it; engine revocation must refuse rather than strand it.
-    // The read's asynchronous RELEASE and processing releases occupy this
-    // namespace's two lifecycle slots; a nonwaiting test submission made
-    // before they finish is refused unattempted (step 1 attempt 1).
+    // A service consumer outside the kernel connection: both of this
+    // namespace's lifecycle slots are held by owner results the test keeps.
+    // Connection drain cannot see them; the unmount's revocation is refused
+    // unattempted and the unmount stops retained rather than waiting.
+    // The read's asynchronous RELEASE occupies a lifecycle slot; a nonwaiting
+    // test submission made before it finishes is refused unattempted.
     until("read bookkeeping quiescent", || {
         let work = h.status(token).native.unwrap().work.unwrap();
         work.received == 0 && work.admitted == 0
     });
     let route = route(&h, token);
     let mount = engine_mount(&h, route);
-    let acquired = job(
-        &h,
-        route,
-        Command::Native(NativeJob::Source {
-            mount,
-            request: u64::MAX - 7,
-            serial: mount.root_serial(),
-        }),
-    );
-    let held: BaseSource = match acquired.result() {
-        Ok(Response::Native(NativeReply::Source(source))) => *source,
-        other => panic!("{other:?}"),
-    };
-    drop(acquired);
+    let held = [
+        job(&h, route, Command::Native(NativeJob::RetainedMount)),
+        job(&h, route, Command::Native(NativeJob::RetainedMount)),
+    ];
 
     let custody = match h.try_unmount(token) {
         Err(Failure::Retained(custody)) => *custody,
@@ -239,12 +229,6 @@ fn an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it() {
         kept.contains("Revoke") && kept.contains("Drained"),
         "{kept}"
     );
-    assert_eq!(
-        engine_mount(&h, route),
-        mount,
-        "the engine mount is neither revoked nor replaced"
-    );
-
     // Later operations answer with the same custody and attempt nothing.
     for request in [Request::Unmount(token), Request::Attach(token)] {
         match h.service.execute_control(&request) {
@@ -257,9 +241,12 @@ fn an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it() {
         .execute_control(&Request::Locate(token.workspace))
         .is_ok());
     // Releasing the consumer settles nothing by itself: no hidden retry runs.
-    let released = job(&h, route, Command::ReleaseBaseSource(held));
-    assert!(matches!(released.result(), Ok(Response::Done)));
-    drop(released);
+    drop(held);
+    assert_eq!(
+        engine_mount(&h, route),
+        mount,
+        "the engine mount is neither revoked nor replaced"
+    );
     assert_eq!(h.phase(token), NativePhase::Retained);
     match h.try_unmount(token) {
         Err(Failure::Retained(again)) => assert_eq!(*again, custody),

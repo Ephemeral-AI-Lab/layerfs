@@ -1,11 +1,9 @@
 //! Resumable native stat/lookup decisions using the ordinary Workspace evaluator.
-use crate::{
-    eval::Eval, BaseFacts, Need, Refusal, SourceView, ViewStat, WorkspaceError, WorkspaceResult,
-};
+use crate::{eval::Eval, BaseFacts, Need, Refusal, ViewStat, WorkspaceError, WorkspaceResult};
 use layerfs_content::{filesystem::PathName, ContentError};
 use layerfs_overlay::{
-    BaseSource, FileRead, Inode, InodeKind, NativeDecision, NativeDirectory, NativeMount,
-    NativeObservation, OpenFile, Overlay, OverlayError, OverlayResult, SourceRows,
+    Inode, InodeKind, NativeDecision, NativeDirectory, NativeMount, NativeObservation, OpenFile,
+    OverlayError, OverlayResult, SourceRows,
 };
 use std::{fmt, sync::Arc};
 
@@ -31,13 +29,6 @@ pub enum NativeReadOperation {
         serial: u64,
     },
 }
-#[derive(Clone, Debug)]
-pub struct NativeReadJob {
-    source: BaseSource,
-    mount: NativeMount,
-    operation: NativeReadOperation,
-    facts: BaseFacts,
-}
 #[derive(Debug)]
 pub enum NativeReadDecision {
     Needs(Vec<Need>),
@@ -47,22 +38,9 @@ pub enum NativeReadDecision {
 }
 pub type NativeReadOutcome = NativeObservation<NativeReadDecision>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NativeReadStage {
-    Owner,
-    Base,
-    Finished,
-}
-pub struct NativeReadPlan {
-    job: NativeReadJob,
-    needs: Vec<Need>,
-    stage: NativeReadStage,
-}
 #[derive(Debug)]
 pub struct NativeReadValue {
     pub stat: ViewStat,
-    /// Absent for LOOKUP and GETATTR, whose reply carries no bytes.
-    pub read: Option<FileRead>,
     pub file: Option<OpenFile>,
     pub directory: Option<NativeDirectory>,
     pub original: Arc<NativeReadOutcome>,
@@ -84,30 +62,6 @@ impl std::error::Error for NativeReadFailure {
             (_, Some(NativeReadDecision::Failed(error))) => Some(error),
             _ => None,
         }
-    }
-}
-impl NativeReadJob {
-    pub const fn source(&self) -> BaseSource {
-        self.source
-    }
-    pub fn charge(&self) -> usize {
-        self.facts.charge() + 255
-    }
-    /// One owner transaction contains current local reads and the positive
-    /// lookup increment. Provider I/O is absent. Only LOOKUP and GETATTR are
-    /// planned this way; every other request is an owner visit.
-    pub fn perform(&self, db: &Overlay) -> NativeReadOutcome {
-        let lookup = matches!(self.operation, NativeReadOperation::Lookup { .. });
-        db.observe_native_attributes(self.mount, self.source, lookup, |rows, protected| {
-            self.decide_on(rows, protected)
-        })
-    }
-    fn decide_on(
-        &self,
-        rows: SourceRows<'_>,
-        protected: u64,
-    ) -> OverlayResult<NativeDecision<NativeReadDecision>> {
-        decide_read(&self.operation, &self.facts, self.mount, rows, protected)
     }
 }
 /// One evaluation of a native read over current rows and supplied facts.
@@ -189,88 +143,5 @@ fn decide(operation: &NativeReadOperation, eval: &mut Eval<'_>) -> WorkspaceResu
             let serial = bound.ok_or(WorkspaceError::Refused(Refusal::Missing))?;
             eval.target(serial)
         }
-    }
-}
-impl SourceView {
-    /// No I/O or acquisition. The supplied source must be the original native
-    /// source protecting the operation's parent/target, and remain owned.
-    pub fn native_read_plan(
-        &self,
-        mount: NativeMount,
-        operation: NativeReadOperation,
-    ) -> WorkspaceResult<NativeReadPlan> {
-        if mount.route() != self.source.route() || mount.root_serial() != self.root_serial() {
-            return Err(OverlayError::Stale.into());
-        }
-        if !matches!(
-            operation,
-            NativeReadOperation::Lookup { .. } | NativeReadOperation::Getattr { .. }
-        ) {
-            return Err(OverlayError::Invalid("native read plan operation").into());
-        }
-        Ok(NativeReadPlan {
-            job: NativeReadJob {
-                source: self.source,
-                mount,
-                operation,
-                facts: BaseFacts::default(),
-            },
-            needs: Vec::new(),
-            stage: NativeReadStage::Owner,
-        })
-    }
-}
-impl NativeReadPlan {
-    pub const fn stage(&self) -> NativeReadStage {
-        self.stage
-    }
-    pub fn job(&self) -> Option<&NativeReadJob> {
-        (self.stage == NativeReadStage::Owner).then_some(&self.job)
-    }
-    pub fn charge(&self) -> usize {
-        self.job.charge() + self.needs.capacity() * (std::mem::size_of::<Need>() + 255)
-    }
-    /// The original complete observation remains in success/failure custody.
-    /// Engine completion must succeed before any semantic value can be used.
-    pub fn accept(
-        &mut self,
-        original: Arc<NativeReadOutcome>,
-    ) -> Result<Option<NativeReadValue>, NativeReadFailure> {
-        let previous = std::mem::replace(&mut self.stage, NativeReadStage::Finished);
-        if previous == NativeReadStage::Owner {
-            match (&original.result, &original.decision) {
-                (Ok(None), Some(NativeReadDecision::Value(inode))) => {
-                    return Ok(Some(NativeReadValue {
-                        stat: inode.clone().into(),
-                        read: None,
-                        file: original.open_candidate,
-                        directory: original.directory_candidate,
-                        original,
-                    }));
-                }
-                (Ok(None), Some(NativeReadDecision::Needs(needs))) if !needs.is_empty() => {
-                    self.needs = needs.clone();
-                    self.stage = NativeReadStage::Base;
-                    return Ok(None);
-                }
-                _ => {}
-            }
-        }
-        Err(NativeReadFailure {
-            reason: "native read did not produce a usable original answer",
-            original,
-        })
-    }
-    /// Only call with admitted immutable-provider capacity; no owner job runs
-    /// here. A failed demand retains input/facts/needs and finishes the plan.
-    pub fn supply(&mut self, view: &SourceView) -> WorkspaceResult<()> {
-        let previous = std::mem::replace(&mut self.stage, NativeReadStage::Finished);
-        if previous != NativeReadStage::Base || view.source() != self.job.source {
-            return Err(OverlayError::Stale.into());
-        }
-        view.supply(&mut self.job.facts, &self.needs, None)?;
-        self.needs.clear();
-        self.stage = NativeReadStage::Owner;
-        Ok(())
     }
 }

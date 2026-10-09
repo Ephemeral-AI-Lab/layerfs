@@ -32,11 +32,9 @@ pub enum NativeDecision<T> {
 pub struct NativeObservation<T> {
     pub decision: Option<T>,
     pub result: OverlayResult<Option<FileRead>>,
-    /// Candidate minted inside the transaction, including failed/unknown
+    /// Open candidate minted inside the transaction, including failed/unknown
     /// completion. Only result Ok proves acquisition; never release/adopt this
     /// candidate on a guess when the original result failed or is uncertain.
-    pub candidate: Option<FileRead>,
-    /// Original open candidate, subject to the same completion rule as read.
     /// A successful observation is required before this can be used as a handle.
     pub open_candidate: Option<OpenFile>,
     /// Original directory-open candidate; usable only after successful result.

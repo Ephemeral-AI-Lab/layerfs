@@ -217,22 +217,6 @@ CREATE TABLE native_lookup (
     CHECK(nlookup>0 OR implicit=1),
     PRIMARY KEY(ns,mount,serial), UNIQUE(ns,owner)
 ) STRICT, WITHOUT ROWID;
-CREATE TABLE native_source (
-    ns INTEGER NOT NULL REFERENCES workspace(ns),
-    mount INTEGER NOT NULL CHECK(mount>0),
-    request BLOB NOT NULL CHECK(length(request)=8),
-    owner INTEGER NOT NULL CHECK(owner>0),
-    serial INTEGER NOT NULL CHECK(serial>0),
-    decided INTEGER NOT NULL CHECK(decided IN(0,1)),
-    PRIMARY KEY(ns,mount,request), UNIQUE(ns,owner)
-) STRICT, WITHOUT ROWID;
-CREATE TABLE native_read (
-    ns INTEGER NOT NULL REFERENCES workspace(ns),
-    mount INTEGER NOT NULL CHECK(mount>0),
-    request BLOB NOT NULL CHECK(length(request)=8),
-    owner INTEGER NOT NULL CHECK(owner>0),
-    PRIMARY KEY(ns,mount,request), UNIQUE(ns,owner)
-) STRICT, WITHOUT ROWID;
 CREATE TABLE native_parent (
     ns INTEGER NOT NULL,
     mount INTEGER NOT NULL CHECK(mount>0),
@@ -265,4 +249,4 @@ CREATE TABLE native_cookie (
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_cookie_after ON native_cookie(ns,owner,after,first_cookie);
-PRAGMA user_version=29;
+PRAGMA user_version=30;

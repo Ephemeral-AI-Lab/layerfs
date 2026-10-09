@@ -6,6 +6,16 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (cleanup, overlay schema 30): the `native_source` and
+`native_read` tables and their four accounting triggers are dropped; no
+request path wrote them since READ, LOOKUP, OPEN and the mutations became
+owner visits. `PRAGMA user_version` and its startup readback are 30, and 55
+accounting triggers remain. BaseSource kind 2 (a native request's source) no
+longer exists; kinds 0 (caller) and 1 (file read) are unchanged, and a
+visit's own source (class 3) names no row. `revoke_native_mount` runs
+without its held-source probe. See
+[native read custody](73-native-read-custody.md).
+
 Merge note, 2026-10-09 (batch 3b): the directory-reply note below was
 written on a branch at schema 23; merged after the changes through schema 28
 (further down) it is schema 29, and `PRAGMA user_version` and its startup

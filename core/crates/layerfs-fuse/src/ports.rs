@@ -1,9 +1,8 @@
 //! External engine/Store boundaries; all waiting returns to the native pool.
-use layerfs_overlay::{BaseSource, NativeCookieOffer, NativeMount, OpenFile, Publication};
+use layerfs_overlay::{NativeCookieOffer, NativeMount, Publication};
 use layerfs_workspace::{
-    BaseView, MutationInputFailure, MutationPlan, NativeDirectoryWindow, NativeMutationJob,
-    NativeMutationOutcome, NativeReadJob, NativeReadOperation, NativeReadOutcome,
-    NativeVisitRequest, NativeWindow, Operation, SourceView, Time, VisitFacts,
+    BaseView, NativeDirectoryWindow, NativeMutationOutcome, NativeReadOperation, NativeReadOutcome,
+    NativeVisitRequest, NativeWindow, VisitFacts,
 };
 use std::{
     error::Error,
@@ -153,13 +152,11 @@ pub trait MountServices: Send + Sync {
 /// completion, registry or application configuration crosses this boundary.
 ///
 /// Once the fence is stopped, every acquiring call returns [`Fenced`] before
-/// its attempt, also from a wait it was already in: `source`, `open_source`,
-/// `observe`, `observe_visit`, `read_visit`, `mutate_visit`, `mutate`, `base`,
-/// `immutable`, `reserve_serial`, `directory_visit` and `publish_cookies`. A
-/// job already submitted is awaited to its original
+/// its attempt, also from a wait it was already in: `observe_visit`,
+/// `read_visit`, `mutate_visit`, `base`, `reserve_serial`, `directory_visit`
+/// and `publish_cookies`. A job already submitted is awaited to its original
 /// result. The disposal calls are never refused by the fence:
-/// `release_read`, `release_source`, `reply_attempted`, `replied`,
-/// `close_file`, `close_directory` and `forget`.
+/// `reply_attempted`, `close_file`, `close_directory` and `forget`.
 pub trait RequestServices: Send + Sync {
     /// READDIR's reading visit as one read-only owner job on the open
     /// directory `handle`: the position of the kernel `offset`, one window
@@ -208,27 +205,12 @@ pub trait RequestServices: Send + Sync {
     ) -> ServiceFuture<'_, ServiceReply<()>>;
     /// Original immutable-provider failure from this request's demand scope.
     fn provider_failure(&self) -> Result<Option<ServiceError>, ServiceError>;
-    fn source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-    ) -> ServiceFuture<'_, ServiceReply<BaseSource>>;
-    fn view(&self, source: BaseSource) -> Result<SourceView, ServiceError>;
-    /// Await actual reader admission before obtaining a provider-capable view.
-    /// Drop all resulting views/plans before parking for another engine job.
-    /// A refused or failed admission is a [`BaseDemandFailed`].
-    fn immutable<'a>(&'a self, view: &'a SourceView) -> ServiceFuture<'a, SourceView>;
     /// Classifies the failure of one canonical read made on a view from
-    /// `immutable`. When this request's demand scope recorded the original
+    /// `base`. When this request's demand scope recorded the original
     /// provider failure the answer is a [`BaseDemandFailed`] carrying it;
     /// any other failure of that step is returned unchanged. No demand is
     /// made here and none is repeated.
     fn failed_base_read(&self, step: ServiceError) -> ServiceError;
-    fn observe(
-        &self,
-        job: NativeReadJob,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>>;
     /// LOOKUP, GETATTR, OPEN of a regular file or OPENDIR as one owner job
     /// with no request source. An undecided outcome has changed nothing and
     /// holds nothing. A decided OPEN or OPENDIR recorded its descriptor for
@@ -252,48 +234,17 @@ pub trait RequestServices: Send + Sync {
         &self,
         request: NativeVisitRequest,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>>;
-    fn release_source(&self, source: BaseSource) -> ServiceFuture<'_, ServiceReply<()>>;
     fn forget(
         &self,
         mount: NativeMount,
         serial: u64,
         count: u64,
     ) -> ServiceFuture<'_, ServiceReply<()>>;
-    /// The exact descriptor and an independent request source in one job,
-    /// for a mutation the kernel addressed through a handle.
-    fn open_source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-        handle: u64,
-    ) -> ServiceFuture<'_, ServiceReply<(BaseSource, OpenFile)>>;
     /// One unused inode serial for a creating mutation. Local while the bound
     /// Workspace's reserved range lasts; a refill is one bounded allocator
     /// write that never waits. `None` is that allocator's exact contended
     /// refusal: nothing was reserved and no mutation was attempted.
     fn reserve_serial(&self) -> Result<Option<u64>, ServiceError>;
-    /// Workspace preparation of one mutation: no SQL, provider I/O or effect.
-    fn prepare(
-        &self,
-        view: &SourceView,
-        operation: Operation,
-        now: Time,
-        serial: Option<u64>,
-    ) -> Result<MutationPlan, Box<MutationInputFailure>>;
-    /// One owner round of a prepared mutation. The original outcome carries
-    /// the exact failure of an attempted job; it is never resubmitted.
-    fn mutate(
-        &self,
-        job: NativeMutationJob,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>>;
     /// Releases one publication ticket after its single reply attempt.
     fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>>;
-    /// The same release together with the request's processing source, as
-    /// one owner job. A failure leaves both in the caller's custody.
-    fn replied(
-        &self,
-        publication: Publication,
-        source: BaseSource,
-    ) -> ServiceFuture<'_, ServiceReply<()>>;
 }

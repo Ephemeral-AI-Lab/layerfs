@@ -1,7 +1,7 @@
 //! Drain-qualified revocation: handles whose kernel release never arrived.
 use layerfs_overlay::{
     CleanupState, Inode, InodeKind, MaintenanceCursor, NativeDecision, NativeMount,
-    NativeMountState, Overlay, OverlayError, ProfileConfig,
+    NativeMountState, Overlay, ProfileConfig,
 };
 use std::{
     path::PathBuf,
@@ -27,21 +27,16 @@ impl Fixture {
         Self { db, mount, path }
     }
     /// One kernel LOOKUP reference for a regular file below the root.
-    fn lookup(&self, request: u64, serial: u64) {
-        let source = self
-            .db
-            .acquire_native_source(self.mount, request, 1)
-            .unwrap();
+    fn lookup(&self, serial: u64) {
         let outcome = self
             .db
-            .observe_native_attributes(self.mount, source, true, |_, _| {
+            .observe_native_visit(self.mount, 1, None, true, |_, _| {
                 Ok(NativeDecision::Finished {
                     inode: Some(inode(serial, InodeKind::File)),
                     value: (),
                 })
             });
         assert_eq!(outcome.result.unwrap(), None);
-        self.db.release_base_source(source).unwrap();
     }
     /// A completed OPEN whose RELEASE is never delivered.
     fn open_file(&self, request: u64, serial: u64) {
@@ -95,7 +90,7 @@ fn inode(serial: u64, kind: InodeKind) -> Inode {
 fn revocation_retires_unreleased_handles_in_bounded_indexed_turns() {
     const HANDLES: u64 = 70;
     let f = Fixture::new();
-    f.lookup(1, 2);
+    f.lookup(2);
     for index in 0..HANDLES {
         f.open_file(100 + index, 2);
         f.open_directory(1000 + index);
@@ -109,20 +104,21 @@ fn revocation_retires_unreleased_handles_in_bounded_indexed_turns() {
     assert!(plans.iter().any(
         |plan| plan.starts_with("retire-directories") && plan.contains("native_directory_open")
     ));
-    // Request processing still fences the mark; an open handle alone does not.
-    let processing = f.db.acquire_native_source(f.mount, 7, 2).unwrap();
-    assert!(matches!(
-        f.db.revoke_native_mount(f.mount),
-        Err(OverlayError::BaseSourcesPending)
-    ));
+    // An open handle does not fence the mark.
     assert_eq!(
         f.db.native_mount_state(f.mount).unwrap(),
         NativeMountState::Live
     );
-    f.db.release_base_source(processing).unwrap();
     let before = f.db.diagnostics();
     f.db.revoke_native_mount(f.mount).unwrap();
     let mark = f.db.diagnostics().since(&before);
+    // The mark waits for no row: it reads the Workspace and the mount, then
+    // writes the mark and its retirement entry. No request row is probed.
+    assert_eq!(
+        (mark.total().attempts, mark.total().executions),
+        (7, 8),
+        "{mark:?}"
+    );
     assert_eq!(
         f.db.native_mount_state(f.mount).unwrap(),
         NativeMountState::Revoked

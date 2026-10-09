@@ -362,9 +362,6 @@ impl Overlay {
         .map(|mut rows| rows.pop())
     }
     pub(crate) fn check_file_read(&self, read: FileRead) -> OverlayResult<()> {
-        self.file_read_request(read).map(|_| ())
-    }
-    fn file_read_request(&self, read: FileRead) -> OverlayResult<i64> {
         self.source_state(read.source)?;
         self.query(
             StatementKind::Lease,
@@ -375,26 +372,19 @@ impl Overlay {
                 &integer(read.serial)?,
             ],
             24,
-            |r| r.get(0),
+            |r| r.get::<_, i64>(0),
         )?
         .pop()
+        .map(|_| ())
         .ok_or(OverlayError::Stale)
     }
     /// Releases only this read window after the last consumer/base demand is fenced.
     pub fn release_file_read(&self, read: FileRead) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
-            let native = self.file_read_request(read)? < 0;
+            self.check_file_read(read)?;
             let ns = read.source.route.ns;
             let owner = integer(read.source.owner)?;
             let serial = integer(read.serial)?;
-            if native {
-                self.execute(
-                    StatementKind::Lease,
-                    "DELETE FROM native_read WHERE ns=?1 AND owner=?2",
-                    &[&ns, &owner],
-                    16,
-                )?;
-            }
             self.execute(
                 StatementKind::Lease,
                 "DELETE FROM file_read WHERE ns=?1 AND owner=?2",

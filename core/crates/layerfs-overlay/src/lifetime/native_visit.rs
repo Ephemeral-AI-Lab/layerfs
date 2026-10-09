@@ -232,7 +232,6 @@ impl Overlay {
         NativeObservation {
             decision,
             result,
-            candidate: None,
             open_candidate,
             directory_candidate,
         }

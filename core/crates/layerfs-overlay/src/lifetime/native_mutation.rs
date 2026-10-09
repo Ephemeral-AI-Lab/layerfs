@@ -1,8 +1,8 @@
 //! One native mutation transaction: its publication together with the kernel
 //! lookup and open custody that the mutation's own reply hands to the kernel.
 use crate::{
-    db::integer, BaseSource, Changes, NativeApplied, NativeEffect, NativeMount, OpenFile, Overlay,
-    OverlayError, OverlayResult, StatementKind,
+    db::integer, Changes, NativeApplied, NativeEffect, NativeMount, Overlay, OverlayError,
+    OverlayResult, StatementKind,
 };
 
 /// Longest parent chain one cycle check reads: the canonical component limit
@@ -10,32 +10,6 @@ use crate::{
 const ANCESTRY_STEPS: usize = 257;
 
 impl Overlay {
-    /// Publishes one checked compound job through an exact undecided native
-    /// request source. The source is marked decided, so a second publication
-    /// through it is refused. An entry-bearing success acquires its kernel
-    /// lookup reference, and a created-and-opened file its descriptor, in this
-    /// same transaction: the reply attempt follows known custody and no
-    /// compensating release is ever guessed after an unobservable send.
-    pub fn apply_native(
-        &self,
-        mount: NativeMount,
-        source: BaseSource,
-        changes: &Changes,
-        effect: NativeEffect,
-    ) -> OverlayResult<NativeApplied> {
-        let checked = self.check_changes(changes)?;
-        self.atomic(|| {
-            let (request, _, state) = self.check_native_source(mount, source)?;
-            let publication = self.apply_checked(source, state, None, None, changes, &checked)?;
-            self.execute(
-                StatementKind::Lease,
-                "UPDATE native_source SET decided=1 WHERE ns=?1 AND owner=?2",
-                &[&mount.route.ns, &integer(source.owner)?],
-                16,
-            )?;
-            self.native_effect(mount, request, changes, effect, publication)
-        })
-    }
     /// The kernel custody an applied reply hands over, inside the publishing
     /// transaction: the entry's lookup reference and a created file's
     /// descriptor, keyed by the request that receives them.
@@ -122,23 +96,5 @@ impl Overlay {
             chain.push(current);
         }
         Ok(chain)
-    }
-    /// The exact descriptor and an independent request source in one job, for
-    /// a mutation addressed through a handle. The source survives RELEASE.
-    pub fn acquire_native_open_source(
-        &self,
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-        handle: u64,
-    ) -> OverlayResult<(BaseSource, OpenFile)> {
-        self.atomic(|| {
-            let state = self.check_native_mount(mount)?;
-            let file = self.native_file(mount, serial, handle)?;
-            Ok((
-                self.retain_native_source(mount, state, request, serial)?,
-                file,
-            ))
-        })
     }
 }

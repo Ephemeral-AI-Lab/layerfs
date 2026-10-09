@@ -194,7 +194,6 @@ impl Custody {
                     self.receipt = Some(receipt);
                     return Ok(Ok(NativeReadValue {
                         stat,
-                        read: None,
                         file: original.open_candidate,
                         directory: original.directory_candidate,
                         original,

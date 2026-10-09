@@ -2,6 +2,11 @@
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (cleanup): `acquire_native_open_source`,
+`apply_native` and `NativeMutationJob` named below are deleted; a native
+mutation is one `NativeMutationVisit` (`Overlay::mutate_native_visit`) with
+no request source. See [native read custody](73-native-read-custody.md).
+
 This record describes the implemented R3 composition: ordinary mutation through
 a mounted Workspace and how the kernel's caches stay exact without any
 notification. It builds on the [native request service](75-native-request-service.md)
