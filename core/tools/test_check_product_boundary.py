@@ -67,6 +67,7 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertEqual(RETIRED_PACKAGES, (
             "layerfs-server", "layerfs-fuse-legacy", "layerfs-sandbox-legacy",
             "layerfs-sdk-legacy", "layerfs-daemon-legacy", "layerfs-bridge-legacy",
+            "layerfs-workspace-legacy",
         ))
         for name in RETIRED_PACKAGES:
             findings = violations(Path("core/crates") / name / "src/lib.rs", "pub use std::io::Read;")

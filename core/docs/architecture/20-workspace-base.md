@@ -57,13 +57,17 @@ mode, EOF, missing-path distinctions, exact cache identity/eviction and a retain
 read across a newly constructed root. This is small deterministic correctness
 coverage, not the full development fixture or real authenticated Store/runtime.
 
-The previous excluded Workspace implementation is temporarily preserved at
-`core/crates/layerfs-workspace-legacy/`, as allowed by the implementation plan.
-Its implementation source bytes are unchanged; its package manifest is explicitly
-renamed for the temporary reference location. It is excluded and supplies no active dependency,
-include or fallback. Its 26,835 production LOC remain in the core subtotal as
-explicit relocation. S11 must remove it after replacement coverage; root
-`crates/` remains independently retained until qualified S13 retirement.
+The previous excluded Workspace implementation was temporarily preserved at
+`core/crates/layerfs-workspace-legacy/`, as allowed by the implementation plan,
+with unchanged source bytes and a renamed package manifest. It was excluded and
+supplied no active dependency, include or fallback. R7-retire removed that
+directory on 2026-10-10 as retirement, 26,835 production lines, after its
+[coverage audit](../issues/307/checks/r7-retire-20261010/16-layerfs-workspace-legacy.md)
+and by owner authorization; its last source is at `eeeffb6b5`. Its private page
+backing was already removed from the product by owner requirement. Its pinned
+read-only views have no active replacement: 303/08 O-10 is deferred, and a
+kept feature needs a new design on the SQLite overlay. Root `crates/` remains
+independently retained until its own qualified retirement.
 
 The same checkpoint corrects the initial overlay metadata schema to version 2:
 separate signed seconds plus nanoseconds preserve the canonical timestamp range,

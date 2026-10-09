@@ -72,6 +72,7 @@ ENGINES_AND_CLUSTER2 = {
 RETIRED_PACKAGES = (
     "layerfs-server", "layerfs-fuse-legacy", "layerfs-sandbox-legacy",
     "layerfs-sdk-legacy", "layerfs-daemon-legacy", "layerfs-bridge-legacy",
+    "layerfs-workspace-legacy",
 )
 RETIRED_PACKAGE = "retired package; its directory was removed and is not restored"
 
