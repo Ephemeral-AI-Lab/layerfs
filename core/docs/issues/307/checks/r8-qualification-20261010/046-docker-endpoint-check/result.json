@@ -1,0 +1,20 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "35971624f385d43142e592ff8dbdfbba0cb951b3",
+  "source_tree": "452ba129172661bca186a077f77814db89d60233",
+  "worktree_status": "A  core/benchmark/fs-bench-pro/registry/r8-integrated-qualification-v1.json\nM  core/docs/issues/307/ROLLOUT-LEDGER-20261008.md\nA  core/docs/issues/307/checks/r8-qualification-20261010/045-registration.md\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md",
+  "command": [
+    "python3",
+    "-c",
+    "import json,os,subprocess; from pathlib import Path; sdk=\"/Users/yifanxu/.docker/run/docker.sock\"; context=subprocess.check_output([\"docker\",\"context\",\"show\"],text=True).strip(); cli=json.loads(subprocess.check_output([\"docker\",\"context\",\"inspect\",context,\"--format\",\"{{json .Endpoints.docker.Host}}\"],text=True)); effective=os.environ.get(\"DOCKER_HOST\") if not os.environ.get(\"DOCKER_CONTEXT\") and os.environ.get(\"DOCKER_HOST\") else cli; assert effective.startswith(\"unix://\") and Path(effective[7:]).resolve()==Path(sdk).resolve(), \"CLI and SDK endpoint differ\"; print(json.dumps(dict(status=\"PASS\",context=context,cli_endpoint=effective,sdk_socket=sdk,resolved_socket=str(Path(sdk).resolve()),scope=\"selected default local endpoint; no Docker engine operation\",DOCKER_HOST_present=bool(os.environ.get(\"DOCKER_HOST\")),DOCKER_CONTEXT_present=bool(os.environ.get(\"DOCKER_CONTEXT\")))))"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 237078209,
+  "status": "PASS"
+}

@@ -1,0 +1,1 @@
+{"status": "PASS", "context": "desktop-linux", "cli_endpoint": "unix:///Users/yifanxu/.docker/run/docker.sock", "sdk_socket": "/Users/yifanxu/.docker/run/docker.sock", "resolved_socket": "/Users/yifanxu/.docker/run/docker.sock", "scope": "selected default local endpoint; no Docker engine operation", "DOCKER_HOST_present": false, "DOCKER_CONTEXT_present": false}
