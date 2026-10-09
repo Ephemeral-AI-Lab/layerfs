@@ -42,8 +42,8 @@ mod mounted;
 #[path = "support/store_gate.rs"]
 mod store_gate;
 use layerfs_bridge::control::{
-    AbortDisposition, Activity, ControlCode, DetachDisposition, NativePhase, NativeWork,
-    ReadyMount, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken,
+    AbortDisposition, Activity, ControlCode, DetachDisposition, ForcedOutcome, NativePhase,
+    NativeWork, ReadyMount, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken,
 };
 use layerfs_daemon::{
     control::Failure,
@@ -942,5 +942,146 @@ fn force_beside_a_read_inside_its_store_read_stops_at_requests_and_revokes_nothi
     assert!(detached.success(), "{name}: umount: {detached:?}");
     assert!(mount_entry(&staged.ready.directory).is_none());
     staged.abandon();
+    checks.done(name);
+}
+
+enum Forced {
+    Unmounted(Box<ForcedOutcome>, bool),
+    Retained(Box<TeardownCustody>),
+    Other(String),
+}
+/// One forced unmount, attempted once on its own thread. The thread ends
+/// with the product's own bounded drain; it waits for no thread of the test.
+fn force_apart(harness: &Harness, token: WorkspaceToken) -> (Receiver<Forced>, JoinHandle<()>) {
+    let service = harness.service.clone();
+    let (sender, receiver) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        let request = Request::ForceUnmount {
+            token,
+            relinquish_unknown: false,
+        };
+        let left = match service.execute_control(&request) {
+            Ok(done) => match &done.reply {
+                Reply::ForceUnmounted(closed) if closed.token == token => {
+                    Forced::Unmounted(Box::new(closed.outcome.clone()), done.completion.is_some())
+                }
+                other => Forced::Other(format!("{other:?}")),
+            },
+            Err(Failure::Retained(custody)) => Forced::Retained(custody),
+            Err(other) => Forced::Other(format!("{other:?}")),
+        };
+        let _ = sender.send(left);
+    });
+    (receiver, worker)
+}
+
+/// Forced unmount whose held READ returns inside the drain window. Contract
+/// (architecture 73): "one inside a Store read runs to its own result while
+/// the drain waits for it"; (architecture 80) `force_drain` "waits, bounded
+/// by `drain_wait`, for every loop to be joined and for no received or
+/// admitted request to remain, and only then makes one plain `umount2`".
+/// The abort ends the caller's read(2) and the caller leaves, so nothing of
+/// the kernel holds the mount; the gate is released while the Force is
+/// still inside its window, and the same Force then detaches, revokes and
+/// closes.
+#[test]
+fn force_completes_when_the_read_inside_its_store_read_returns_inside_the_drain_window() {
+    let name = "STORE-READ force(released)";
+    let mut checks = Checks::default();
+    let mut staged = Staged::new("store-read-force-released", "direct");
+    let token = staged.ready.token;
+    let held = staged.hold(name, &mut checks);
+    let grants = staged.store.read_work().grants;
+
+    let started = Instant::now();
+    let (left, worker) = force_apart(&staged.harness, token);
+    // The kernel's answer to the blocked caller is what tells the test that
+    // the abort was written.
+    let answer = staged.caller.line();
+    let errno = answer
+        .strip_prefix("errno ")
+        .and_then(|rest| rest.split(' ').nth(1));
+    checks.that(errno.is_some_and(|errno| ABORTED.contains(&errno)), || {
+        format!("{name}: the held READ's caller answered {answer:?}, not one of {ABORTED:?}")
+    });
+    let exit = std::mem::replace(
+        &mut staged.caller,
+        Caller {
+            child: None,
+            input: None,
+            lines: mpsc::channel().1,
+        },
+    )
+    .leave();
+    assert!(exit.success(), "{name}: the caller ended {exit:?}");
+    // The Force is in its drain: at every observation it has not returned,
+    // the READ is still inside its Store read, no detach was made and the
+    // Workspace is neither revoked nor closed.
+    for round in 0..10 {
+        assert!(
+            matches!(left.try_recv(), Err(mpsc::TryRecvError::Empty)),
+            "{name}: NOT STAGED: the Force returned before the Store read was released, {:?} after it started",
+            started.elapsed()
+        );
+        let now = staged.work();
+        assert_eq!((now.admitted, now.received), (1, 0), "{now:?}");
+        assert_eq!(staged.gate.observe().holding, 1);
+        assert!(mount_entry(&staged.ready.directory).is_some(), "detached");
+        if round % 5 == 0 {
+            assert!(staged.live(), "{name}: revoked or closed under the reader");
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
+    let waiting = staged.work();
+    let waited = started.elapsed();
+    println!(
+        "{name}: caller_answer={answer:?} caller_left=true steady_observations=10 admitted={} loops_joined={}/{} engine_mount=Live cleanup=Live mount_row=present force_returned=false released_after={waited:?}",
+        waiting.admitted, waiting.loops_joined, waiting.loops_configured
+    );
+
+    staged.gate.release();
+    let done = left
+        .recv_timeout(WAIT)
+        .expect("the Force did not return after the Store read was released");
+    worker.join().unwrap();
+    match done {
+        Forced::Unmounted(outcome, closed) => {
+            println!("{name}: released: reply=ForceUnmounted outcome={outcome:?} close_receipt={closed}");
+            checks.that(
+                outcome.facts.abort == AbortDisposition::Written
+                    && outcome.facts.detach == DetachDisposition::Detached
+                    && outcome.facts.fenced == 0
+                    && closed,
+                || format!("{name}: forced facts: {outcome:?}"),
+            );
+            checks.that(
+                (outcome.work.received, outcome.work.admitted, outcome.work.retained) == (0, 0, 0)
+                    && outcome.work.completed == held.completed + 1,
+                || format!("{name}: the released READ did not complete: {held:?} -> {:?}", outcome.work),
+            );
+        }
+        Forced::Retained(custody) => panic!(
+            "{name}: released {waited:?} after the Force started, inside its drain window, yet {custody:?}"
+        ),
+        Forced::Other(other) => panic!("{name}: {other}"),
+    }
+    assert!(mount_entry(&staged.ready.directory).is_none());
+    assert!(matches!(
+        staged
+            .harness
+            .service
+            .execute_control(&Request::Status(token)),
+        Err(Failure::Rejected(ControlCode::Missing, _))
+    ));
+    // The READ took no second reader, and the Workspace's rows retire.
+    checks.that(staged.store.read_work().grants == grants, || {
+        format!(
+            "{name}: reader grants {grants} -> {}",
+            staged.store.read_work().grants
+        )
+    });
+    staged.retired(name, &mut checks);
+    println!("{name}: cleanup=Gone; engine counts equal the baseline");
+    staged.finish();
     checks.done(name);
 }

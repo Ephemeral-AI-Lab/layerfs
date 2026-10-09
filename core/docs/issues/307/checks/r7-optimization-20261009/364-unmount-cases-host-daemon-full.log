@@ -1,0 +1,15 @@
+===== store_read_drain-660daebb6ec0e838 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 6 tests
+test a_read_inside_its_store_read_keeps_the_lane_undrained_until_it_replies ... ok
+test a_readdir_inside_its_store_read_keeps_the_lane_undrained_until_its_names_are_read ... ok
+test a_stopped_fence_does_not_end_a_read_inside_its_store_read ... ok
+test a_stopped_fence_refuses_the_publication_after_a_readdirs_store_read_and_stores_no_offset ... ok
+test a_stopped_fence_refuses_the_visit_after_an_opens_store_read_and_records_nothing ... ok
+test an_open_inside_its_store_read_keeps_the_lane_undrained_and_records_nothing_yet ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0

@@ -638,3 +638,222 @@ fn a_closed_namespace_that_takes_the_last_orphan_stops_the_probe() {
     assert_eq!(db.resources(None).unwrap().counts.orphan_rows, 0);
     assert_eq!(attempts(), 1);
 }
+
+fn full(result: OverlayResult<()>) -> bool {
+    match result {
+        Ok(()) => false,
+        Err(OverlayError::Sql(rusqlite::Error::SqliteFailure(code, _)))
+            if code.code == rusqlite::ErrorCode::DiskFull =>
+        {
+            true
+        }
+        Err(error) => panic!("original database failure: {error:?}"),
+    }
+}
+fn plain(serial: u64, size: u64, nlink: u64) -> Inode {
+    Inode {
+        serial,
+        kind: InodeKind::File,
+        mode: 0o644,
+        mtime_seconds: 1,
+        mtime_nanoseconds: 2,
+        nlink,
+        size,
+        inherited_cutoff: 0,
+        born: 0,
+        entries: 0,
+        subdirs: 0,
+    }
+}
+/// One compound job of one inode row and at most one write, its reply attempted.
+fn put(
+    db: &Overlay,
+    source: BaseSource,
+    inode: Inode,
+    write: Option<(u64, Vec<u8>)>,
+) -> OverlayResult<()> {
+    let write = write.map(|(offset, data)| PayloadWrite {
+        serial: inode.serial,
+        offset,
+        data: Arc::from(data),
+    });
+    let publication = db.apply(
+        source,
+        &Changes {
+            inodes: vec![inode],
+            write,
+            ..Changes::default()
+        },
+    )?;
+    db.reply_attempted(publication)
+}
+
+/// The releasing job's only growth is the queue row of a layer it parks, so
+/// its failure is staged with the file's real page quota and no hook: the
+/// queue's last leaves are filled by the same kind of row until one more
+/// needs a page the quota does not have.
+#[test]
+fn a_release_that_fails_leaves_the_last_orphan_as_it_was_and_the_queue_reclaims_it_later() {
+    const ORPHAN: u64 = 1 << 20;
+    const SIZE: u64 = 8199;
+    let temp = Temp::new();
+    let db = Overlay::create(
+        &temp.0.join("overlay.sqlite"),
+        ProfileConfig {
+            max_pages: Some(1024),
+            ..ProfileConfig::default()
+        },
+    )
+    .unwrap();
+    let route = db.open_workspace([153; 32], [154; 32]).unwrap();
+    // A second Workspace whose terminal reclamation frees pages later
+    // without adding a row.
+    let spare = db.open_workspace([155; 32], [156; 32]).unwrap();
+    let held = db.acquire_base_source(spare, 1).unwrap();
+    put(
+        &db,
+        held,
+        plain(3, 131072, 1),
+        Some((0, pattern(131072, 5))),
+    )
+    .unwrap();
+    db.release_base_source(held).unwrap();
+
+    let source = db.acquire_base_source(route, 1).unwrap();
+    let mut file = File::new(&db, source, ORPHAN, Vec::new());
+    file.write(0, &pattern(SIZE as usize, 3));
+    // Files removed with no owner in the generation the capture seals: their
+    // queue rows separate the orphan's own queue row from the last leaves.
+    for serial in 1000..2000 {
+        put(&db, source, plain(serial, 0, 1), None).unwrap();
+        put(&db, source, plain(serial, 0, 0), None).unwrap();
+    }
+    db.release_base_source(source).unwrap();
+    let capture = db.capture(route).unwrap();
+    let reader = db.acquire_captured_reader(capture, 1).unwrap();
+    let source = db.acquire_base_source(route, 2).unwrap();
+    file.source = source;
+    let open = db.open_file(source, 1, &file.inode(SIZE), true).unwrap();
+    put(&db, source, plain(ORPHAN, SIZE, 0), None).unwrap();
+    for serial in 2000..4000 {
+        put(&db, source, plain(serial, 0, 1), None).unwrap();
+    }
+
+    // The quota is reached by payload, then by rows that need a page only
+    // when a leaf splits, then by removals: each adds one queue row after
+    // every earlier one and changes no other row's size.
+    let cell = |at: u64| (at * 32768, pattern(32768, 7));
+    let filled = (0..4096)
+        .find(|at| {
+            full(put(
+                &db,
+                source,
+                plain(5, (at + 1) * 32768, 1),
+                Some(cell(*at)),
+            ))
+        })
+        .expect("the page quota is reached by payload");
+    let rows = (0..65536)
+        .find(|at| full(put(&db, source, plain(10_000 + at, 0, 1), None)))
+        .expect("the page quota is reached by rows");
+    let removed = (2000..4000)
+        .find(|serial| full(put(&db, source, plain(*serial, 0, 0), None)))
+        .expect("the page quota is reached by a queue row");
+
+    // Inode-family statements of one read of a serial that has no row: the
+    // seek, and before it the orphan-domain probe while an orphan exists.
+    let probes = |db: &Overlay| {
+        let before = db.diagnostics();
+        assert_eq!(db.source_inode(source, 9).unwrap(), None);
+        db.diagnostics().since(&before).statements[StatementKind::Inode as usize].attempts
+    };
+    let view = |db: &Overlay| {
+        let read = db.acquire_file_read(source, open, 77).unwrap();
+        let data = bytes(db, read, &[]);
+        db.release_file_read(read).unwrap();
+        data
+    };
+    let observed = |db: &Overlay| {
+        let all = db.resources(None).unwrap();
+        (
+            all.counts,
+            all.database_pages,
+            all.free_pages,
+            db.state(route).unwrap(),
+        )
+    };
+    assert_eq!(probes(&db), 2);
+    assert!(view(&db) == file.expect);
+    let before = observed(&db);
+    assert_eq!((before.0.orphan_rows, before.2), (1, 0));
+    let pending = db.maintenance_pending();
+
+    // The last reference leaves. Its job deletes the engine's only orphan,
+    // then fails on the queue row of the layer the capture holds.
+    let sql = db.diagnostics();
+    assert!(full(db.close_file(open)));
+    let work = db.diagnostics().since(&sql);
+    let reclaim = work.statements[StatementKind::Reclaim as usize];
+    assert!(reclaim.rows_changed >= 3, "{reclaim:?}");
+    assert_eq!(
+        work.statements[StatementKind::Rollback as usize].attempts,
+        1
+    );
+    // Every row is as it was: the descriptor, the orphan and its bytes, the
+    // queue. The orphan-domain probe is on again: without it the next
+    // release would not find the orphan and would leave its rows.
+    assert_eq!(observed(&db), before);
+    assert_eq!(db.maintenance_pending(), pending);
+    db.check_file(open, true).unwrap();
+    assert_eq!(db.retained_file(route, 1).unwrap(), Some(open));
+    assert_eq!(probes(&db), 2);
+    assert!(view(&db) == file.expect);
+    let sealed = db
+        .read_captured(reader, ORPHAN, 0, 131072)
+        .unwrap()
+        .unwrap();
+    assert_eq!(sealed.data, file.expect);
+
+    // Pages return and the queue runs: the orphan's own item is the one the
+    // failed job would have deleted, and it steps the held orphan.
+    db.close(spare).unwrap();
+    for turn in 0..1000 {
+        if db.reclaim_closed(0).unwrap().unwrap().done {
+            break;
+        }
+        assert!(turn < 999);
+    }
+    let run = |db: &Overlay| {
+        let mut cursor = MaintenanceCursor::default();
+        for _ in 0..20_000 {
+            let Some(step) = db.maintain(cursor).unwrap() else {
+                return;
+            };
+            cursor = step.cursor;
+        }
+        panic!("maintenance deadline");
+    };
+    run(&db);
+    assert_eq!(db.resources(None).unwrap().counts.orphan_rows, 1);
+    assert_eq!(view(&db), file.expect);
+
+    // The same release succeeds, and the capture's release wakes the layer
+    // it parked: the queue reclaims the orphan's cells.
+    let cells = db.resources(None).unwrap().counts.payload_cells;
+    db.close_file(open).unwrap();
+    assert!(db.check_file(open, false).is_err());
+    let after = db.resources(None).unwrap().counts;
+    assert_eq!((after.orphan_rows, after.payload_cells), (0, cells));
+    assert_eq!(probes(&db), 1);
+    db.resolve_failed_capture(capture).unwrap();
+    db.release_captured_reader(reader).unwrap();
+    run(&db);
+    let end = db.resources(None).unwrap().counts;
+    assert_eq!((end.orphan_rows, end.payload_cells), (0, cells - 2));
+    assert_eq!((end.maintenance_targets, end.ready_targets), (0, 0));
+    assert_eq!(db.inode(route, ORPHAN).unwrap().unwrap().nlink, 0);
+    println!(
+        "R7_RELEASE_ROLLBACK payload_writes={filled} rows={rows} removals={} failed={reclaim:?}",
+        removed - 2000
+    );
+}

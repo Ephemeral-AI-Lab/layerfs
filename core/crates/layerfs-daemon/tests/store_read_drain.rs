@@ -614,3 +614,179 @@ fn a_readdir_inside_its_store_read_keeps_the_lane_undrained_until_its_names_are_
     drop(services);
     rig.drained_and_revoked(1);
 }
+
+/// Forced teardown, OPEN. The fence is consulted only before an attempt
+/// (`service/filesystem_port.rs`): the Store read that was started runs to
+/// its end while the drain waits for it, and the deciding visit that would
+/// follow is refused before it is submitted. Contract (architecture 73):
+/// "a fenced or failed OPEN has nothing to give back".
+#[test]
+fn a_stopped_fence_refuses_the_visit_after_an_opens_store_read_and_records_nothing() {
+    let rig = Rig::new("store-open-fence", 165);
+    let fence = rig.queue.fence();
+    let services = rig.services(&fence);
+    let (serial, first) = rig.opened(&services);
+    let idle = rig.counts();
+    let (send, answer) = mpsc::channel();
+    let (mount, request) = (rig.mount, rig.services(&fence));
+    rig.held(Box::pin(async move {
+        let operation = NativeReadOperation::Open {
+            serial,
+            writable: false,
+        };
+        match NativeRead::prepare(request, mount, 41, serial, None, operation).await {
+            Ok(opened) => {
+                let _ = send.send(Answer::Other(format!(
+                    "opened {:?}",
+                    opened.value().is_ok()
+                )));
+                match opened.dispose().await {
+                    Ok(()) => RequestDisposition::Complete,
+                    Err(failure) => RequestDisposition::Retained(Box::new(failure)),
+                }
+            }
+            Err(failure) => {
+                let _ = send.send(if failure.fenced() {
+                    Answer::Fenced
+                } else {
+                    Answer::Other(format!("{failure:?}"))
+                });
+                match failure.relinquish().await {
+                    Ok(()) => RequestDisposition::Complete,
+                    Err(failure) => RequestDisposition::Retained(Box::new(failure)),
+                }
+            }
+        }
+    }));
+    let (grants, jobs) = (
+        rig.store.read_work().grants,
+        rig.client.diagnostics().unwrap().admitted,
+    );
+
+    rig.queue.stop_service().unwrap();
+    assert!(fence.stopped());
+    rig.not_drained(idle);
+    assert!(matches!(answer.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    // The observations of `not_drained` are the only owner jobs since.
+    let observed = rig.client.diagnostics().unwrap().admitted;
+
+    rig.gate.release();
+    assert_eq!(
+        answer.recv_timeout(WAIT).unwrap(),
+        Answer::Fenced,
+        "an OPEN whose Store read returns after the stop is refused before its deciding visit"
+    );
+    until("the OPEN left the lane", || rig.lane().admitted == 0);
+    // No second descriptor, no visit and no second reader followed.
+    assert_eq!(rig.client.diagnostics().unwrap().admitted, observed);
+    assert_eq!(rig.store.read_work().grants, grants);
+    assert_eq!(rig.counts(), idle);
+    println!(
+        "STORE-READ-FENCE open: held(admitted=1 engine_rows=idle lane_release=Busy) after_release(answer=Fenced owner_jobs={jobs}->{observed} (observations only) reader_grants={grants} engine_rows=idle)"
+    );
+    drop(wait(services.close_file(rig.mount, serial, first)).unwrap());
+    drop(wait(services.forget(rig.mount, serial, 1)).unwrap());
+    drop(services);
+    rig.drained_and_revoked(1);
+}
+
+/// Forced teardown, READDIR. The names of the window whose Store read was
+/// started are read, and the publishing visit that would make an offset of
+/// them valid is refused before it is submitted: "an unpublished batch made
+/// no offset valid" (`operations/directory.rs`).
+#[test]
+fn a_stopped_fence_refuses_the_publication_after_a_readdirs_store_read_and_stores_no_offset() {
+    let rig = Rig::new("store-readdir-fence", 166);
+    let fence = rig.queue.fence();
+    let services = rig.services(&fence);
+    let root = rig.root;
+    let listed = wait(NativeRead::prepare(
+        services.clone(),
+        rig.mount,
+        3,
+        root,
+        None,
+        NativeReadOperation::Opendir { serial: root },
+    ))
+    .unwrap();
+    let directory = listed.value().unwrap().directory.unwrap();
+    wait(listed.dispose()).unwrap();
+    let idle = rig.counts();
+    let (send, answer) = mpsc::channel();
+    let (mount, request, handle) = (rig.mount, rig.services(&fence), directory.owner_id());
+    rig.held(Box::pin(async move {
+        let stream = match DirectoryStream::prepare(request, mount, 51, root, handle, 0).await {
+            Ok(stream) => stream,
+            Err(failure) => {
+                let _ = send.send(Answer::Other(format!("{failure:?}")));
+                return RequestDisposition::Retained(Box::new(failure));
+            }
+        };
+        let batch = match stream.next().await {
+            Ok(DirectoryStep::Batch(batch)) => batch,
+            Ok(DirectoryStep::End(_)) => {
+                let _ = send.send(Answer::Names(Vec::new()));
+                return RequestDisposition::Complete;
+            }
+            Err(failure) => {
+                let _ = send.send(Answer::Other(format!("{failure:?}")));
+                return RequestDisposition::Retained(Box::new(failure));
+            }
+        };
+        let names: Vec<_> = batch
+            .entries()
+            .map(|(entry, _)| entry.name.clone())
+            .collect();
+        let accepted = names.len();
+        let _ = send.send(Answer::Names(names));
+        // The reply buffer took every entry: their offsets are published
+        // before the reply, as the request driver does.
+        match batch.accept(accepted).await {
+            Ok(_) => {
+                let _ = send.send(Answer::Other("published".into()));
+                RequestDisposition::Complete
+            }
+            Err(failure) => {
+                let _ = send.send(if failure.fenced() {
+                    Answer::Fenced
+                } else {
+                    Answer::Other(format!("{failure:?}"))
+                });
+                match failure.relinquish().await {
+                    Ok(()) => RequestDisposition::Complete,
+                    Err(failure) => RequestDisposition::Retained(Box::new(failure)),
+                }
+            }
+        }
+    }));
+    let grants = rig.store.read_work().grants;
+
+    rig.queue.stop_service().unwrap();
+    assert!(fence.stopped());
+    rig.not_drained(idle);
+    assert!(matches!(answer.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    let observed = rig.client.diagnostics().unwrap().admitted;
+
+    rig.gate.release();
+    assert_eq!(
+        answer.recv_timeout(WAIT).unwrap(),
+        Answer::Names(vec![b"file-000000".to_vec()]),
+        "a READDIR inside its Store read at the stop reads its names"
+    );
+    assert_eq!(
+        answer.recv_timeout(WAIT).unwrap(),
+        Answer::Fenced,
+        "the publication of their offsets is refused before its attempt"
+    );
+    until("the READDIR left the lane", || rig.lane().admitted == 0);
+    // No reply row, no publishing job and no second reader followed.
+    assert_eq!(rig.client.diagnostics().unwrap().admitted, observed);
+    assert_eq!(rig.store.read_work().grants, grants);
+    assert_eq!(rig.counts(), idle);
+    println!(
+        "STORE-READ-FENCE readdir: held(admitted=1 engine_rows=idle lane_release=Busy) after_release(names=[file-000000] publication=Fenced offsets_stored=0 reader_grants={grants})"
+    );
+    drop(wait(services.close_directory(rig.mount, directory.serial(), handle)).unwrap());
+    drop(services);
+    rig.drained_and_revoked(1);
+}
