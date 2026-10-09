@@ -1,5 +1,6 @@
 //! Bounded metadata/payload publication, with one transaction per attempted job.
 use crate::layers::Layer;
+use crate::namespace::job_rows::{JobRows, LocalRow};
 use crate::{
     db::{integer, unsigned},
     sql, Cell, DirectoryEntry, Generation, Inode, InodeKind, NameLayers, Overlay, OverlayError,
@@ -59,6 +60,26 @@ pub(crate) fn check(inode: &Inode) -> OverlayResult<()> {
     }
     Ok(())
 }
+/// The columns one update writes when the others are the ones its job read.
+enum Narrowed {
+    /// Time and size: a write, a truncate that cuts nothing off, a time change.
+    Size,
+    /// Time and entry counts: a binding gained or lost by a directory.
+    Counts,
+}
+/// The narrower update that carries `new` over the row value `old`. The
+/// cutoff a caller supplies is ignored: the row keeps the engine's.
+fn narrowed(old: &Inode, new: &Inode) -> Option<Narrowed> {
+    if (old.kind, old.mode, old.nlink, old.born) != (new.kind, new.mode, new.nlink, new.born) {
+        None
+    } else if (old.entries, old.subdirs) == (new.entries, new.subdirs) {
+        Some(Narrowed::Size)
+    } else if old.size == new.size {
+        Some(Narrowed::Counts)
+    } else {
+        None
+    }
+}
 pub(crate) fn check_name(parent: u64, name: &[u8]) -> OverlayResult<i64> {
     if name.is_empty() || name.len() > 255 || parent == 0 {
         return Err(OverlayError::Invalid("directory_entry window"));
@@ -83,12 +104,32 @@ impl Overlay {
             return Ok(Some(orphan));
         }
         Ok(self
+            .local_row(route.ns, serial, gen, installed)?
+            .map(|row| row.inode))
+    }
+    /// The latest local row of one serial within `(installed, gen]`, with
+    /// the generation that holds it and its payload-layer columns.
+    pub(crate) fn local_row(
+        &self,
+        ns: i64,
+        serial: i64,
+        gen: Generation,
+        installed: i64,
+    ) -> OverlayResult<Option<LocalRow>> {
+        Ok(self
             .query(
                 StatementKind::Inode,
                 sql::INODE_LOOKUP,
-                &[&route.ns, &serial, &gen.0, &installed],
+                &[&ns, &serial, &gen.0, &installed],
                 32,
-                decode,
+                |row| {
+                    Ok(LocalRow {
+                        inode: decode(row)?,
+                        gen: row.get(11)?,
+                        epoch: row.get(12)?,
+                        height: row.get(13)?,
+                    })
+                },
             )?
             .pop())
     }
@@ -102,14 +143,25 @@ impl Overlay {
         state: &WorkspaceState,
         inode: &Inode,
     ) -> OverlayResult<(bool, Layer)> {
-        self.put_inode_domain(route, state, inode, false)
+        self.put_inode_domain(route, state, inode, false, false, None)
     }
+    /// The same write for one inode of a compound job. `created` is a serial
+    /// reserved for this job: no row of it exists, so none is read and its
+    /// row is inserted. `seen` holds the rows this job read: a serial it
+    /// read is written without reading its layer rows again, as an insert
+    /// when the active generation has no row of it and as an update of the
+    /// columns that changed when it has. A serial the job did not read is
+    /// classified by its active and lower layer rows. Every write is a plain
+    /// insert or update: a row that exists is never inserted over and a row
+    /// that is gone is never created by an update.
     pub(crate) fn put_inode_domain(
         &self,
         route: Route,
         state: &WorkspaceState,
         inode: &Inode,
         owned: bool,
+        created: bool,
+        seen: Option<&JobRows>,
     ) -> OverlayResult<(bool, Layer)> {
         let serial = integer(inode.serial)?;
         let orphan = owned && inode.nlink == 0 && self.orphan(route.ns, serial)?.is_some();
@@ -121,31 +173,54 @@ impl Overlay {
         if inode.born > state.active.0 as u64 {
             return Err(OverlayError::Invalid("inode creation generation"));
         }
-        let active = self
-            .query(
-                StatementKind::Inode,
-                sql::LAYER_ACTIVE,
-                &[&route.ns, &serial, &gen],
-                24,
-                |r| Ok((unsigned(r, 0)?, unsigned(r, 1)?, r.get(2)?, r.get(3)?)),
-            )?
-            .pop();
-        let added = active.is_none();
-        let (size, cutoff, epoch, height) = match active {
-            Some(layer) => layer,
-            None => {
-                let lower = self
-                    .query(
-                        StatementKind::Inode,
-                        sql::LAYER_LOWER,
-                        &[&route.ns, &serial, &gen, &state.installed],
-                        32,
-                        |r| unsigned(r, 0),
-                    )?
-                    .pop()
-                    .unwrap_or(inode.inherited_cutoff);
-                (lower, lower, 0, 0)
+        // The job read the view's rows, not the orphan domain's.
+        let known = match seen {
+            Some(seen) if !orphan => seen.take(serial),
+            _ => None,
+        };
+        let fresh = (inode.inherited_cutoff, inode.inherited_cutoff, 0, 0);
+        // The active row's value as this job read it, when it did.
+        let mut read = None;
+        let (active, (size, cutoff, epoch, height)) = match known {
+            _ if created => (false, fresh),
+            Some(Some(row)) if row.gen == gen => {
+                let layer = (
+                    row.inode.size,
+                    row.inode.inherited_cutoff,
+                    row.epoch,
+                    row.height,
+                );
+                read = Some(row.inode);
+                (true, layer)
             }
+            // The latest row is a lower generation's: its length is inherited.
+            Some(Some(row)) => (false, (row.inode.size, row.inode.size, 0, 0)),
+            Some(None) => (false, fresh),
+            None => match self
+                .query(
+                    StatementKind::Inode,
+                    sql::LAYER_ACTIVE,
+                    &[&route.ns, &serial, &gen],
+                    24,
+                    |r| Ok((unsigned(r, 0)?, unsigned(r, 1)?, r.get(2)?, r.get(3)?)),
+                )?
+                .pop()
+            {
+                Some(layer) => (true, layer),
+                None => {
+                    let lower = self
+                        .query(
+                            StatementKind::Inode,
+                            sql::LAYER_LOWER,
+                            &[&route.ns, &serial, &gen, &state.installed],
+                            32,
+                            |r| unsigned(r, 0),
+                        )?
+                        .pop()
+                        .unwrap_or(inode.inherited_cutoff);
+                    (false, (lower, lower, 0, 0))
+                }
+            },
         };
         let mut layer = Layer {
             gen,
@@ -160,29 +235,72 @@ impl Overlay {
             self.shrink(route.ns, serial, &mut layer, inode.size)?;
         }
         layer.size = inode.size;
-        self.execute(
-            StatementKind::Inode,
-            sql::INODE_PUT,
-            &[
-                &route.ns,
-                &serial,
-                &gen,
-                &(inode.kind as i64),
-                &i64::from(inode.mode),
-                &inode.mtime_seconds,
-                &i64::from(inode.mtime_nanoseconds),
-                &integer(inode.nlink)?,
-                &integer(inode.size)?,
-                &integer(layer.cutoff)?,
-                &integer(inode.born)?,
-                &integer(inode.entries)?,
-                &integer(inode.subdirs)?,
-                &layer.epoch,
-                &layer.height,
-            ],
-            120,
-        )?;
-        Ok((added && !orphan, layer))
+        let time = (inode.mtime_seconds, i64::from(inode.mtime_nanoseconds));
+        // The columns that differ from the row this job read, when its layer
+        // columns are the ones that row has.
+        let narrowed = read
+            .filter(|_| (layer.cutoff, layer.epoch, layer.height) == (cutoff, epoch, height))
+            .and_then(|old| narrowed(&old, inode));
+        let key: [&dyn rusqlite::ToSql; 5] = [&route.ns, &serial, &gen, &time.0, &time.1];
+        let changed = match narrowed {
+            Some(Narrowed::Size) => self.execute(
+                StatementKind::Inode,
+                sql::INODE_RESIZE,
+                &[
+                    key[0],
+                    key[1],
+                    key[2],
+                    key[3],
+                    key[4],
+                    &integer(inode.size)?,
+                ],
+                48,
+            )?,
+            Some(Narrowed::Counts) => self.execute(
+                StatementKind::Inode,
+                sql::INODE_RECOUNT,
+                &[
+                    key[0],
+                    key[1],
+                    key[2],
+                    key[3],
+                    key[4],
+                    &integer(inode.entries)?,
+                    &integer(inode.subdirs)?,
+                ],
+                56,
+            )?,
+            None => self.execute(
+                StatementKind::Inode,
+                if active {
+                    sql::INODE_UPDATE
+                } else {
+                    sql::INODE_INSERT
+                },
+                &[
+                    key[0],
+                    key[1],
+                    key[2],
+                    &(inode.kind as i64),
+                    &i64::from(inode.mode),
+                    key[3],
+                    key[4],
+                    &integer(inode.nlink)?,
+                    &integer(inode.size)?,
+                    &integer(layer.cutoff)?,
+                    &integer(inode.born)?,
+                    &integer(inode.entries)?,
+                    &integer(inode.subdirs)?,
+                    &layer.epoch,
+                    &layer.height,
+                ],
+                120,
+            )?,
+        };
+        if changed != 1 {
+            return Err(OverlayError::Invalid("inode row of the running job"));
+        }
+        Ok((!active && !orphan, layer))
     }
     /// The active row and the latest lower row of one name within
     /// `(floor, top]`, in one seek of the name's rows.

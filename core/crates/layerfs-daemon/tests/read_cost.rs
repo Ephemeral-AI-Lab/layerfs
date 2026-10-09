@@ -1035,6 +1035,8 @@ impl Pinned {
 /// LOOKUP of a base regular file this daemon has seen: one visit. Its
 /// length is remembered, so the visit decides over resident facts and adds
 /// one to the kernel's count in one transaction. No reader, no length batch.
+/// The visit reads the directory's row and the file's once each, however
+/// many evaluations it takes.
 const LOOKUP_BASE: Pinned = Pinned {
     jobs: (1, 0, 0),
     grants: 0,
@@ -1044,17 +1046,18 @@ const LOOKUP_BASE: Pinned = Pinned {
         ("Begin", 1, 1),
         ("Commit", 1, 1),
         ("Workspace", 1, 1),
-        ("Inode", 3, 3),
+        ("Inode", 2, 2),
         ("DirectoryEntry", 2, 2),
         ("Lease", 2, 2),
     ],
 };
-/// GETATTR of the same file: one visit, and nothing written.
+/// GETATTR of the same file: one visit, one read of its row, and nothing
+/// written.
 const GETATTR_BASE: Pinned = Pinned {
     jobs: (1, 0, 0),
     grants: 0,
     length_batches: 0,
-    sql: &[("Workspace", 1, 1), ("Inode", 2, 2)],
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1)],
 };
 /// The first LOOKUP of a base regular file in a daemon, and every one where
 /// no length can be remembered: two visits around one reader, whose one
@@ -1110,7 +1113,7 @@ const READ_MIXED: Pinned = Pinned {
 /// OPEN of a base file this daemon has seen: one visit decides over
 /// resident facts and writes the descriptor in its one transaction (the
 /// handle row, its lease, the file's open count and the request's
-/// association). No source, no reader, no release.
+/// association). Its row is read once. No source, no reader, no release.
 const OPEN_BASE: Pinned = Pinned {
     jobs: (1, 0, 0),
     grants: 0,
@@ -1120,7 +1123,7 @@ const OPEN_BASE: Pinned = Pinned {
         ("Begin", 1, 1),
         ("Commit", 1, 1),
         ("Workspace", 1, 1),
-        ("Inode", 2, 2),
+        ("Inode", 1, 1),
         ("Lease", 4, 7),
     ],
 };

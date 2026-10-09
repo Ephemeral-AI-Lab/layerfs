@@ -10,6 +10,12 @@ forced unmount and timing qualification are not part of it. Scope, receipts,
 failed attempts and open decisions are in the
 [R3 completion record](../issues/307/R3-COMPLETION-20261008.md).
 
+R7 update, 2026-10-09 (inode statements): the mutation visit also publishes
+over the inode rows its evaluation read. Each is read once in the job, a
+created serial is inserted without a read, and a row the job read is
+updated in place with no layer probe. See the
+[overlay note](19-daemon-overlay.md).
+
 R7 update, 2026-10-09 (statement diet): the mutation visit evaluates and
 publishes over the Workspace row its fence read, and a handle-addressed
 mutation over the descriptor that fence read; a read-only descriptor is

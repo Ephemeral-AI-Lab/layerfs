@@ -1,6 +1,9 @@
 //! Fixed statement templates shared by ordinary jobs and plan diagnostics.
+/// The latest local row of one serial, with the generation that holds it and
+/// its payload-layer columns: a job that publishes the serial reads no layer
+/// row again.
 pub(crate) const INODE_LOOKUP: &str =
-    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs
+    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs,gen,epoch,height
     FROM inode WHERE ns=?1 AND serial=?2 AND gen<=?3 AND gen>?4 ORDER BY gen DESC LIMIT 1";
 pub(crate) const INODE_CAPTURE: &str =
     "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs
@@ -61,13 +64,22 @@ pub(crate) const CAPTURED_DIRECTORY_ENTRY: &str =
     "SELECT serial,inherited FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
 pub(crate) const OPERATION_RECORD_PAGE: &str = "SELECT kind,key,value FROM operation_record
     WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64";
-pub(crate) const INODE_PUT: &str = "INSERT INTO inode
-    VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
-    ON CONFLICT(ns,serial,gen) DO UPDATE SET kind=excluded.kind,mode=excluded.mode,
-    mtime_seconds=excluded.mtime_seconds,mtime_nanoseconds=excluded.mtime_nanoseconds,
-    nlink=excluded.nlink,size=excluded.size,inherited_cutoff=excluded.inherited_cutoff,
-    born=excluded.born,entries=excluded.entries,subdirs=excluded.subdirs,
-    epoch=excluded.epoch,height=excluded.height";
+/// The first row of a serial in a generation. A row that already exists is a
+/// constraint failure, never an update.
+pub(crate) const INODE_INSERT: &str = "INSERT INTO inode
+    VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)";
+/// Every value of a row that exists, with the parameters of the insert.
+pub(crate) const INODE_UPDATE: &str = "UPDATE inode SET kind=?4,mode=?5,
+    mtime_seconds=?6,mtime_nanoseconds=?7,nlink=?8,size=?9,inherited_cutoff=?10,
+    born=?11,entries=?12,subdirs=?13,epoch=?14,height=?15
+    WHERE ns=?1 AND serial=?2 AND gen=?3";
+/// A row whose time and size alone may differ from the value its job read.
+pub(crate) const INODE_RESIZE: &str = "UPDATE inode SET mtime_seconds=?4,
+    mtime_nanoseconds=?5,size=?6 WHERE ns=?1 AND serial=?2 AND gen=?3";
+/// A directory row whose time and entry counts alone differ from the value
+/// its job read.
+pub(crate) const INODE_RECOUNT: &str = "UPDATE inode SET mtime_seconds=?4,
+    mtime_nanoseconds=?5,entries=?6,subdirs=?7 WHERE ns=?1 AND serial=?2 AND gen=?3";
 pub(crate) const DIRECTORY_ENTRY_ACTIVE: &str =
     "SELECT serial,inherited FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
 pub(crate) const DIRECTORY_ENTRY_PUT: &str = "INSERT INTO directory_entry VALUES(?1,?2,?3,?4,?5,?6)

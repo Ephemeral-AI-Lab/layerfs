@@ -26,7 +26,7 @@ impl Overlay {
         let checked = self.check_changes(changes)?;
         self.atomic(|| {
             let (request, _, state) = self.check_native_source(mount, source)?;
-            let publication = self.apply_checked(source, state, None, changes, &checked)?;
+            let publication = self.apply_checked(source, state, None, None, changes, &checked)?;
             self.execute(
                 StatementKind::Lease,
                 "UPDATE native_source SET decided=1 WHERE ns=?1 AND owner=?2",

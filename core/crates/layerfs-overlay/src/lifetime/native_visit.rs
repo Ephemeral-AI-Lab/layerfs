@@ -3,6 +3,7 @@
 //! to release: install, revoke, close and reclamation are owner jobs too and
 //! cannot run inside it. A visit that cannot decide changes nothing; its
 //! request holds nothing until it visits again.
+use crate::namespace::job_rows::JobRows;
 use crate::{
     db::integer, inode, BaseSource, Changes, InodeKind, LocalRead, NativeApplied, NativeDecision,
     NativeEffect, NativeMount, NativeObservation, OpenFile, Overlay, OverlayError, OverlayResult,
@@ -147,7 +148,10 @@ impl Overlay {
                 let held = handle.map_or(Held::Lookup, Held::Handle);
                 let (state, _) = self.native_fence(mount, serial, held, true)?;
                 let source = self.visit_source(mount, state)?;
-                let inode = match decide(self.source_rows_at(source, state), source)? {
+                // The job's rounds read each inode row once.
+                let seen = JobRows::new();
+                let rows = self.source_rows_at(source, state, Some(&seen));
+                let inode = match decide(rows, source)? {
                     NativeDecision::Needs(value) => {
                         decision = Some(value);
                         return Ok(());
@@ -262,12 +266,15 @@ impl Overlay {
                 writable,
             });
             let source = self.visit_source(mount, state)?;
-            let rows = self.source_rows_at(source, state);
+            // The rows the decision reads are the rows it publishes over.
+            let seen = JobRows::new();
+            let rows = self.source_rows_at(source, state, Some(&seen));
             let Some((changes, effect)) = decide(rows, file)? else {
                 return Ok(None);
             };
             let checked = self.check_changes(&changes)?;
-            let publication = self.apply_checked(source, state, file, &changes, &checked)?;
+            let publication =
+                self.apply_checked(source, state, file, Some(&seen), &changes, &checked)?;
             self.native_effect(
                 mount,
                 source,

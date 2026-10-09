@@ -1,4 +1,5 @@
 //! One atomic bounded namespace job: several inode/name finals, one ticket.
+use crate::namespace::job_rows::JobRows;
 use crate::{
     db::integer,
     inode::{check, check_name},
@@ -16,6 +17,9 @@ pub struct SourceRows<'a> {
     db: &'a Overlay,
     source: BaseSource,
     state: WorkspaceState,
+    /// The running atomic job's own reads, when its rows are also the rows
+    /// it publishes over.
+    seen: Option<&'a JobRows>,
 }
 /// Validated name keys of one compound job, computed before its transaction.
 pub(crate) struct CheckedChanges {
@@ -26,19 +30,23 @@ impl Overlay {
     /// Checks source custody once for the bounded point reads of one job.
     pub fn source_rows(&self, source: BaseSource) -> OverlayResult<SourceRows<'_>> {
         let state = self.source_state(source)?;
-        Ok(self.source_rows_at(source, state))
+        Ok(self.source_rows_at(source, state, None))
     }
     /// Rows of a source whose custody this transaction has already checked
-    /// against `state`.
-    pub(crate) fn source_rows_at(
-        &self,
+    /// against `state`. `seen` belongs to the one atomic job that is
+    /// running: it reads each inode row once, however many evaluation
+    /// rounds ask for it.
+    pub(crate) fn source_rows_at<'a>(
+        &'a self,
         source: BaseSource,
         state: WorkspaceState,
-    ) -> SourceRows<'_> {
+        seen: Option<&'a JobRows>,
+    ) -> SourceRows<'a> {
         SourceRows {
             db: self,
             source,
             state,
+            seen,
         }
     }
     /// Publishes every final value of one namespace operation or none of them.
@@ -49,7 +57,7 @@ impl Overlay {
         let checked = self.check_changes(changes)?;
         self.atomic(|| {
             let state = self.source_state(source)?;
-            self.apply_checked(source, state, None, changes, &checked)
+            self.apply_checked(source, state, None, None, changes, &checked)
         })
     }
     /// Window and grammar checks of one compound job, before any transaction.
@@ -139,13 +147,14 @@ impl Overlay {
     /// The transaction body of one checked compound job. The caller owns the
     /// transaction, so native kernel custody can commit with the publication.
     /// `state` is the Workspace row this job read when it checked the
-    /// source's custody, and `held` the descriptor its fence read: neither is
-    /// read again here.
+    /// source's custody, `held` the descriptor its fence read and `seen` the
+    /// inode rows its evaluation read: none of them is read again here.
     pub(crate) fn apply_checked(
         &self,
         source: BaseSource,
         state: WorkspaceState,
         held: Option<crate::OpenFile>,
+        seen: Option<&JobRows>,
         changes: &Changes,
         checked: &CheckedChanges,
     ) -> OverlayResult<Publication> {
@@ -174,8 +183,14 @@ impl Overlay {
         let mut inodes = 0_i64;
         let mut layers = Vec::with_capacity(changes.inodes.len());
         for inode in &changes.inodes {
-            let (added, layer) =
-                self.put_inode_domain(route, &state, inode, changes.open.is_some())?;
+            let (added, layer) = self.put_inode_domain(
+                route,
+                &state,
+                inode,
+                changes.open.is_some(),
+                changes.created == Some(inode.serial),
+                seen,
+            )?;
             inodes += i64::from(added);
             layers.push((inode.serial, layer));
         }
@@ -235,12 +250,19 @@ impl Overlay {
         self.settle(route, &state, inodes, directory_entries)
     }
     /// Plans of the compound job's exact statements: the name seeks, active
-    /// row probes, upserts and the no-row delete. INSERT plans are VM programs.
+    /// row probes, the no-row delete, the three inode updates and the two
+    /// inserts. INSERT plans are VM programs.
     pub fn explain_compound(&self, source: BaseSource) -> OverlayResult<Vec<String>> {
         let state = self.source_state(source)?;
         let ns = source.route.ns;
         let name: &[u8] = b"n";
         let none: Option<i64> = None;
+        // Every column of one inode row, in the table's order.
+        let (one, zero) = (1_i64, 0_i64);
+        let mut row: Vec<&dyn rusqlite::ToSql> = vec![&ns, &one, &state.active.0, &one];
+        row.extend([&zero as &dyn rusqlite::ToSql; 3]);
+        row.push(&one);
+        row.extend([&zero as &dyn rusqlite::ToSql; 7]);
         let mut plans = Vec::new();
         for (label, statement, params) in [
             (
@@ -274,6 +296,17 @@ impl Overlay {
                 sql::LAYER_ACTIVE,
                 vec![&ns, &1_i64, &state.active.0],
             ),
+            ("update-inode", sql::INODE_UPDATE, row.clone()),
+            (
+                "resize-inode",
+                sql::INODE_RESIZE,
+                vec![&ns, &1_i64, &state.active.0, &0_i64, &0_i64, &0_i64],
+            ),
+            (
+                "recount-inode",
+                sql::INODE_RECOUNT,
+                vec![&ns, &1_i64, &state.active.0, &0_i64, &0_i64, &0_i64, &0_i64],
+            ),
         ] {
             plans.extend(self.query(
                 StatementKind::Explain,
@@ -289,27 +322,7 @@ impl Overlay {
                 sql::DIRECTORY_ENTRY_PUT,
                 vec![&ns, &1_i64, &name, &state.active.0, &none, &false],
             ),
-            (
-                "put-inode",
-                sql::INODE_PUT,
-                vec![
-                    &ns,
-                    &1_i64,
-                    &state.active.0,
-                    &1_i64,
-                    &0_i64,
-                    &0_i64,
-                    &0_i64,
-                    &1_i64,
-                    &0_i64,
-                    &0_i64,
-                    &0_i64,
-                    &0_i64,
-                    &0_i64,
-                    &0_i64,
-                    &0_i64,
-                ],
-            ),
+            ("insert-inode", sql::INODE_INSERT, row.clone()),
         ];
         for (label, statement, params) in programs {
             plans.push(self.explain_program(label, statement, &params)?);
@@ -361,13 +374,27 @@ impl SourceRows<'_> {
         self.state.active
     }
     /// Latest local inode row of the current view; None delegates to the base.
+    /// Inside a job that keeps its reads, a serial is read once.
     pub fn inode(&self, serial: u64) -> OverlayResult<Option<Inode>> {
-        self.db.inode_at(
-            self.source.route,
-            serial,
-            self.state.active,
-            self.state.installed,
-        )
+        let (route, state) = (self.source.route, &self.state);
+        let Some(seen) = self.seen else {
+            return self
+                .db
+                .inode_at(route, serial, state.active, state.installed);
+        };
+        let key = integer(serial)?;
+        if let Some(inode) = seen.seen(key) {
+            return Ok(inode);
+        }
+        // An orphan-domain row is not a row of the view: it is not kept.
+        if let Some(orphan) = self.db.orphan_inode(route.ns, key)? {
+            return Ok(Some(orphan));
+        }
+        let row = self
+            .db
+            .local_row(route.ns, key, state.active, state.installed)?;
+        seen.record(key, &row);
+        Ok(row.map(|row| row.inode))
     }
     /// The active row and the latest lower row of one name, in one seek.
     pub fn name(&self, parent: u64, name: &[u8]) -> OverlayResult<NameLayers> {

@@ -235,12 +235,13 @@ fn the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size() {
 
     // One fence, then the directory's local row.
     let getattr: Cost = vec![("Workspace", 1, 1), ("Inode", 1, 1)];
-    // The fence; then the directory's row and one seek of the name's rows,
+    // The fence; then the directory's row, and one seek of the name's rows
     // twice: the first evaluation needs the base's answer for the name, takes
-    // it from resident objects, and the second evaluation reads both again.
+    // it from resident objects, and the second evaluation reads the name's
+    // rows again. The job keeps the directory's row it read.
     let lookup: Cost = vec![
         ("Workspace", 1, 1),
-        ("Inode", 2, 2),
+        ("Inode", 1, 1),
         ("DirectoryEntry", 2, 2),
     ];
     let expected = [
@@ -279,37 +280,38 @@ fn the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size() {
     );
     b.overlay.revoke_native_mount(mount).unwrap();
 }
-/// CREATE, in order. Reads: the fence [Workspace]; the directory's row and
-/// the name's rows for the first evaluation, again for the second and again
-/// for the published binding's inheritance [3 Inode, 3 DirectoryEntry]; the
-/// new inode's active and lower layer rows, both absent [2 Inode]. Then one
-/// transaction, begun by its admission pragma [Startup] and BEGIN: the new
-/// inode [Inode, with its count trigger], the directory's active layer row
-/// and its update [2 Inode], the name's rows and its binding [2
-/// DirectoryEntry, the binding with its trigger], the frontier [Workspace],
-/// and the reply's kernel custody [Lease]: the lookup row and its owner row,
-/// the descriptor row and its owner row, one custody row for both references
-/// and the mount's association, each with its trigger. COMMIT.
+/// CREATE, in order. Reads: the fence [Workspace]; the directory's row, once
+/// for the job [Inode]; the name's rows for the first evaluation, again for
+/// the second and again for the published binding's inheritance [3
+/// DirectoryEntry]. Then one transaction, begun by its admission pragma
+/// [Startup] and BEGIN: the new inode, inserted without a read of its
+/// reserved serial [Inode, with its count trigger]; the directory's time and
+/// entry counts, updated over the row the job read [Inode]; the name's rows
+/// and its binding [2 DirectoryEntry, the binding with its trigger], the
+/// frontier [Workspace], and the reply's kernel custody [Lease]: the lookup
+/// row and its owner row, the descriptor row and its owner row, one custody
+/// row for both references and the mount's association, each with its
+/// trigger. COMMIT.
 const CREATE: [(&str, u64, u64); 7] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 2, 2),
-    ("Inode", 8, 9),
+    ("Inode", 3, 4),
     ("DirectoryEntry", 5, 6),
     ("Lease", 6, 12),
 ];
 /// WRITE, in order. Reads: the fence with the descriptor [Workspace]; the
-/// file's row and its active layer row [2 Inode]. Then one transaction: the
-/// inode's new size and time [Inode], the one partly covered cell read and
-/// written [2 Payload, the write with its trigger] and the frontier
-/// [Workspace].
+/// file's row, which carries its layer columns [Inode]. Then one
+/// transaction: the inode's new size and time, updated over that row
+/// [Inode], the one partly covered cell read and written [2 Payload, the
+/// write with its trigger] and the frontier [Workspace].
 const WRITE: [(&str, u64, u64); 6] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 2, 2),
-    ("Inode", 3, 3),
+    ("Inode", 2, 2),
     ("Payload", 2, 3),
 ];
 /// RELEASE, in order. The fence with the descriptor [Workspace]; then one
@@ -324,6 +326,6 @@ const RELEASE: [(&str, u64, u64); 5] = [
     ("Workspace", 1, 1),
     ("Lease", 3, 7),
 ];
-/// Attempts and executions of the whole cycle: 39 statements of the five
+/// Attempts and executions of the whole cycle: 32 statements of the five
 /// jobs and the admission pragma, BEGIN and COMMIT of three transactions.
-const TOTAL: (u64, u64) = (48, 61);
+const TOTAL: (u64, u64) = (41, 54);

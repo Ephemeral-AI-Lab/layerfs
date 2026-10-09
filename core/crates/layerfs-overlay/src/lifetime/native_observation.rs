@@ -96,7 +96,7 @@ impl Overlay {
                     return Err(OverlayError::Stale);
                 }
                 let (inode, value, finished) =
-                    match decide(self.source_rows_at(source, state), protected)? {
+                    match decide(self.source_rows_at(source, state, None), protected)? {
                         NativeDecision::Needs(value) => (None, value, false),
                         NativeDecision::Finished { inode, value } => (inode, value, true),
                     };
