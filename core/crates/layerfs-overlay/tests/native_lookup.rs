@@ -142,7 +142,7 @@ fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
         .close_native_file(f.mount, 2, files[0].owner_id())
         .is_err());
     assert_eq!(f.db.retained_native_file(f.mount, u64::MAX).unwrap(), None);
-    // The existing exact file close also cascades its native association.
+    // The existing exact file close removes the request's descriptor too.
     f.db.close_file(files[1]).unwrap();
     assert_eq!(
         f.db.retained_native_file(f.mount, u64::MAX - 1).unwrap(),
@@ -690,7 +690,7 @@ fn a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source() {
     assert_eq!(f.transactions(&before), (1, 1, 0));
     let file = applied.file.expect("the created file is open");
     assert_eq!((file.serial(), file.writable()), (50, true));
-    // native_lookup, file_handle and native_file.
+    // native_lookup and the file_handle row of the mount's request.
     assert_eq!(f.db.native_lookup_count(f.mount, 50).unwrap(), Some(1));
     f.db.check_file(file, true).unwrap();
     assert_eq!(

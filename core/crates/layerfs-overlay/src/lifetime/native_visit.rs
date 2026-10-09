@@ -110,8 +110,8 @@ impl Overlay {
     }
     /// OPEN of a regular file in one visit, under the kernel's lookup
     /// reference on the inode. The same bounded decision; when it finishes
-    /// with the file, its descriptor and the association with the request
-    /// that receives it are written in the deciding transaction. Nothing
+    /// with the file, its descriptor, which names the request that
+    /// receives it, is written in the deciding transaction. Nothing
     /// else is recorded: no request source and no processing read, so the
     /// reply is followed by no release. A file whose last name is gone stays
     /// openable under the kernel's reference.
@@ -180,22 +180,16 @@ impl Overlay {
                 if inode.kind != InodeKind::File {
                     return Err(OverlayError::Missing);
                 }
-                // The descriptor's request key is this job's own minted
-                // owner, in the negative internal domain.
-                let key = -integer(source.owner)?;
-                let file = self.retain_file(mount.route, key, serial, writable)?;
-                open_candidate = Some(file);
-                self.execute(
-                    StatementKind::Lease,
-                    "INSERT INTO native_file VALUES(?1,?2,?3,?4)",
-                    &[
-                        &mount.route.ns,
-                        &integer(mount.owner)?,
-                        &request.to_be_bytes().as_slice(),
-                        &integer(file.owner)?,
-                    ],
-                    32,
-                )?;
+                // The descriptor's row names the mount and the kernel
+                // request that receives it.
+                let key = super::native_file::native_request(request);
+                open_candidate = Some(self.retain_file(
+                    mount.route,
+                    Some(mount.owner),
+                    key,
+                    serial,
+                    writable,
+                )?);
                 Ok(())
             })
             .map(|()| None);
@@ -275,15 +269,8 @@ impl Overlay {
             let checked = self.check_changes(&changes)?;
             let publication =
                 self.apply_checked(source, state, file, Some(&seen), &changes, &checked)?;
-            self.native_effect(
-                mount,
-                source,
-                request.to_be_bytes(),
-                &changes,
-                effect,
-                publication,
-            )
-            .map(Some)
+            self.native_effect(mount, request.to_be_bytes(), &changes, effect, publication)
+                .map(Some)
         })
     }
     /// Plans of the statements a visit and its custody use: the three

@@ -236,15 +236,6 @@ CREATE TRIGGER native_read_account_delete AFTER DELETE ON native_read BEGIN
     UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
 END;
 
-CREATE TRIGGER native_file_account_insert AFTER INSERT ON native_file BEGIN
-    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=0;
-    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;
-END;
-CREATE TRIGGER native_file_account_delete AFTER DELETE ON native_file BEGIN
-    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=0;
-    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
-END;
-
 CREATE TRIGGER native_parent_account_insert AFTER INSERT ON native_parent BEGIN
     UPDATE accounting SET owner_details=owner_details+1 WHERE ns=0;
     UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;

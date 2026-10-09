@@ -6,6 +6,35 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (descriptor row, lead decision C2 part 2, overlay schema
+25): **an open regular-file descriptor is one row in two b-trees.** The
+`native_file` table (three b-trees: its key, `UNIQUE(ns,mount,request)` and
+`UNIQUE(ns,owner)`, with two accounting triggers and a cascading foreign key)
+is folded into `file_handle`, which gains a `mount` column: a native
+descriptor stores its mount's owner and the kernel request that received it
+(the same 64 bits, as an integer); any other descriptor stores mount 0 and
+its caller's positive request. The table is `PRIMARY KEY(ns,owner),
+UNIQUE(ns,mount,request)`: the first answers the fences and RELEASE by one
+seek, the second refuses a repeated request identity (of one mount, or of one
+caller) inside the descriptor's own insert, finds a lost visit's descriptor
+(`retained_native_file`, `retained_file`) and orders the retirement window
+of a revoked mount (`FILE_WINDOW`, no sort). `FENCE_FILE`, `FENCE_HANDLE`,
+`NATIVE_HANDLE_HELD` and `native_file` read one table instead of a join.
+The foreign keys of `native_file` are gone with it: the mount's row is read
+by the fence of the job that inserts a descriptor, and deleted by the
+maintenance job that has just read the mount's descriptor window empty; a
+declared key from `file_handle` could not be kept without a third b-tree
+(SQLite's child scan of a deleted mount does not use a partial index and
+would visit every descriptor of the namespace). A created-and-opened file
+writes 3 custody statements (6 executions), was 4 (8); OPEN writes 2 (3),
+was 3 (5); RELEASE runs 3 executions, was 5 (the association's trigger and
+the cascade are gone). `StoredCounts::owner_details` counts one row per open
+descriptor, was two. Asserted by
+[`descriptor_request`](../../crates/layerfs-overlay/tests/descriptor_request.rs)
+(refusal, lookup by request, two mounted Workspaces, a caller's request of
+the same number, retirement beside 2 and 40 unrelated descriptors with equal
+statements and VM steps) and the count tests named in the receipts.
+
 R7 update, 2026-10-09 (custody rows, lead decision C2 part 1, overlay schema
 24): **a descriptor or a lookup reference is its own row and has no `lease`
 row.** `lease` rows of kind 7 (file and directory descriptors) and kind 9
@@ -86,7 +115,8 @@ R7 update, 2026-10-09 (OPEN visit, schema unchanged at 22):
 lookup reference with one addition: when the decision finishes with the
 regular file it was asked for, the same transaction inserts the descriptor
 (`file_handle`, its `lease`, the open count) and its `native_file` row for
-the kernel request. A decision that names another inode or another kind
+the kernel request (since schema 25 the one `file_handle` row, which names
+the mount and the request). A decision that names another inode or another kind
 fails the whole job, and an undecided or refusing one writes nothing. No
 statement was added. It attempts 10 statements (13 executions) for a base
 file and 9 (12) for a local one, where the source-holding OPEN attempted 64

@@ -12,10 +12,10 @@ in one transaction: the fence on the kernel's lookup reference
 (`FENCE_LOOKUP`), the same bounded decision (`decide_read` for `Open`) over
 current rows and base facts carried by the request or resident in memory
 (the inode value and, for a base file, the remembered length), and, when it
-decides a regular file, the descriptor's rows (`file_handle`, the file's
-open count; since schema 24 no `lease` row) and the `native_file` association with the kernel
-request that receives it. The descriptor's internal request key is the
-job's own minted owner, as for a created-and-opened file. An undecided visit
+decides a regular file, the descriptor's rows: `file_handle` and the file's
+open count (since schema 24 no `lease` row; since schema 25 no `native_file`
+row: the `file_handle` row itself names the mount and the kernel request
+that receives it, as for a created-and-opened file). An undecided visit
 writes nothing and holds nothing; the request reads the facts outside the
 owner through `RequestServices::base` and visits again, exactly as LOOKUP
 does. A directory is refused `EISDIR` and anything else `EINVAL` by the
@@ -305,12 +305,15 @@ window. No new file token hierarchy, resident inode map or second close algorith
 is introduced. NativeJob exposes File/FileSource/RetainedFile/CloseFile through
 the same SQL owner and completion credit.
 
-The native_file association references the exact file_handle row. Exact close
-through either public path deletes the association atomically through a foreign
-key cascade; its owner index prevents a namespace scan on ordinary file close.
-Native file request keys occupy the negative internal engine-owner domain while
-full64bit original kernel request keys remain in native_file. Public caller
-open request IDs remain positive. Mount revocation no longer refuses remaining
+Since overlay schema 25 the association is the descriptor's own row: a native
+`file_handle` row stores its mount's owner and the full 64-bit kernel request
+(as an integer), and a public caller's row stores mount 0 and its positive
+request ID. `UNIQUE(ns,mount,request)` refuses a repeated request identity in
+the descriptor's insert, so a refused OPEN has no open candidate, and
+`retained_native_file` reads that key. Exact close through either public path
+deletes the one row; there is no cascade and no second table. (Before schema
+25 a `native_file` row referenced the `file_handle` row, whose request key was
+the job's minted owner in the negative domain.) Mount revocation no longer refuses remaining
 native file owners: a detached connection may never deliver their RELEASE, so
 they are retired in bounded indexed turns after revocation. The qualifying
 precondition is complete connection drain, described in

@@ -415,7 +415,8 @@ fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
 
     // With its facts, read outside the owner, the next visit of the same
     // request decides and records the descriptor in its one transaction:
-    // its row and the mount's association, no source, no base reader.
+    // its one row, which names the mount and the request, no source, no
+    // base reader.
     let mut facts = VisitFacts::default();
     facts.supply(&base, &needs, None).unwrap();
     let (Seen::Value(opened), Some(first)) = open(&b, empty(), mount, 30, 2, false, &facts) else {
@@ -436,7 +437,7 @@ fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
             after.1.source_rows,
             after.0.base_readers
         ),
-        (before.1.owner_rows, before.1.owner_details + 2, 0, 0)
+        (before.1.owner_rows, before.1.owner_details + 1, 0, 0)
     );
     assert_eq!(b.overlay.retained_native_source(mount, 30).unwrap(), None);
     assert_eq!(b.overlay.retained_native_read(mount, 30).unwrap(), None);

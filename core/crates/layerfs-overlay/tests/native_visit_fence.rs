@@ -239,7 +239,7 @@ fn every_visit_statement_is_an_indexed_seek() {
             seeks("drop-lookup"),
             seeks("drop-reader")
         ],
-        [3, 4, 5, 1, 1, 1],
+        [3, 3, 4, 1, 1, 1],
         "{plans:#?}"
     );
     // The merged name seek of a visit's evaluation and publication.
@@ -663,7 +663,8 @@ fn an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_fil
     );
     let after = rows();
     assert_eq!(after.0, before.0, "the Workspace row is unchanged");
-    // The descriptor's row and the mount's association: no `lease` row.
+    // The descriptor's one row, which names its mount and request: no
+    // `lease` row and no second table.
     assert_eq!(
         (
             after.1.owner_rows - before.1.owner_rows,
@@ -674,7 +675,7 @@ fn an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_fil
         ),
         (
             0,
-            2,
+            1,
             before.1.source_rows,
             before.1.inode_rows,
             before.1.payload_cells
@@ -729,9 +730,8 @@ fn a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole(
     let w = world();
     let lease = |w: &World| w.db.diagnostics().statements[StatementKind::Lease as usize];
 
-    // CREATE with an open descriptor: the lookup row, the descriptor row,
-    // one custody row for both references and the mount's association. No
-    // row is read first.
+    // CREATE with an open descriptor: the lookup row, the descriptor row
+    // and one custody row for both references. No row is read first.
     let before = lease(&w);
     let file = w.open(w.mount, 1, 50, true);
     let after = lease(&w);
@@ -740,7 +740,7 @@ fn a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole(
             after.attempts - before.attempts,
             after.rows_returned - before.rows_returned
         ),
-        (4, 0)
+        (3, 0)
     );
     assert_eq!(w.db.native_lookup_count(w.mount, 50).unwrap(), Some(1));
 

@@ -601,7 +601,7 @@ const CREATE: [(&str, u64, u64); 7] = [
     ("Workspace", 2, 2),
     ("Inode", 3, 4),
     ("DirectoryEntry", 5, 6),
-    ("Lease", 4, 8),
+    ("Lease", 3, 6),
 ];
 const WRITE: [(&str, u64, u64); 6] = [
     ("Startup", 1, 1),
@@ -616,7 +616,7 @@ const RELEASE: [(&str, u64, u64); 5] = [
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
-    ("Lease", 2, 5),
+    ("Lease", 2, 3),
 ];
 /// UNLINK under the kernel's lookup reference, in order. Reads: the fence
 /// [Workspace]; the directory's row, the name's rows and the file's row,
@@ -704,5 +704,5 @@ const LIVE_RELEASE: [(&str, u64, u64); 5] = [
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 1, 1),
-    ("Lease", 3, 8),
+    ("Lease", 3, 6),
 ];

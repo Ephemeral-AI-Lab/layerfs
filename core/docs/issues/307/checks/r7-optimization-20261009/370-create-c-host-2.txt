@@ -1,0 +1,13 @@
+captured_namespace_fragments-59ca1b366f488fcb exit=0 seconds=1 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+captured_namespace_holds-7d1f674aec88f68c exit=0 seconds=0 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+cold_failure_scope-bd5834c6dd9aab4d exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+completion_ownership-b5c6d457734a887b exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+device_capacity-a6d3fe900b7eb2fe exit=0 seconds=0 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+device_capacity-a8dab39510750df3 exit=0 seconds=1 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+fenced_port-47a98c1a1fe5e978 exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+filesystem_port-9a367c3ce80975d4 exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+lifetimes-92a4b3cb30ffe3b7 exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+native_jobs-80237cf905513ccf exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+resources_observation-cfff9454e2fa8457 exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+store_read_service-df8aac8a952c42ac exit=0 seconds=0 test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+visit_port-80e4d2704ca0c1cc exit=0 seconds=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s

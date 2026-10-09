@@ -127,24 +127,13 @@ impl Overlay {
                     if inode.kind != InodeKind::File {
                         return Err(OverlayError::Missing);
                     }
-                    let file = self.retain_file(
+                    open_candidate = Some(self.retain_file(
                         mount.route,
-                        -integer(source.owner)?,
+                        Some(mount.owner),
+                        i64::from_be_bytes(request),
                         inode.serial,
                         writable,
-                    )?;
-                    open_candidate = Some(file);
-                    self.execute(
-                        StatementKind::Lease,
-                        "INSERT INTO native_file VALUES(?1,?2,?3,?4)",
-                        &[
-                            &mount.route.ns,
-                            &integer(mount.owner)?,
-                            &request.as_slice(),
-                            &integer(file.owner)?,
-                        ],
-                        32,
-                    )?;
+                    )?);
                 }
                 if matches!(open, Some(NativeOpen::Directory)) {
                     if inode.kind != InodeKind::Directory

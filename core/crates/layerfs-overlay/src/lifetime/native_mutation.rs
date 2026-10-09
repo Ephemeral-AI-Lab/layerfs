@@ -33,7 +33,7 @@ impl Overlay {
                 &[&mount.route.ns, &integer(source.owner)?],
                 16,
             )?;
-            self.native_effect(mount, source, request, changes, effect, publication)
+            self.native_effect(mount, request, changes, effect, publication)
         })
     }
     /// The kernel custody an applied reply hands over, inside the publishing
@@ -42,7 +42,6 @@ impl Overlay {
     pub(crate) fn native_effect(
         &self,
         mount: NativeMount,
-        source: BaseSource,
         request: [u8; 8],
         changes: &Changes,
         effect: NativeEffect,
@@ -76,12 +75,14 @@ impl Overlay {
         // An inode this job created has no kernel reference yet: its row is
         // inserted without a read, and a duplicate is a definite failure.
         let created = changes.created == Some(serial);
-        let key = -integer(source.owner)?;
-        let opened = match (created, open) {
+        // A descriptor's row names the mount and the kernel request that
+        // receives it.
+        let (native, key) = (Some(mount.owner), i64::from_be_bytes(request));
+        let file = match (created, open) {
             (true, Some(writable)) => {
                 // One custody row write covers the lookup and the descriptor.
                 self.insert_native_lookup_row(mount, serial, false, 1)?;
-                let file = self.retain_file_row(mount.route, key, serial, writable)?;
+                let file = self.retain_file_row(mount.route, native, key, serial, writable)?;
                 self.execute(
                     StatementKind::Lease,
                     crate::sql::FILE_OPEN_LOOKUP_ADD,
@@ -96,30 +97,13 @@ impl Overlay {
             }
             (false, open) => {
                 self.add_native_lookup(mount, serial)?;
-                open.map(|writable| self.retain_file(mount.route, key, serial, writable))
+                open.map(|writable| self.retain_file(mount.route, native, key, serial, writable))
                     .transpose()?
             }
         };
         if directory {
             self.set_native_parent(mount, serial, parent)?;
         }
-        let file = match opened {
-            None => None,
-            Some(file) => {
-                self.execute(
-                    StatementKind::Lease,
-                    "INSERT INTO native_file VALUES(?1,?2,?3,?4)",
-                    &[
-                        &mount.route.ns,
-                        &integer(mount.owner)?,
-                        &request.as_slice(),
-                        &integer(file.owner)?,
-                    ],
-                    32,
-                )?;
-                Some(file)
-            }
-        };
         Ok(NativeApplied { publication, file })
     }
     /// The retained parent chain of one kernel-known directory, from itself to
