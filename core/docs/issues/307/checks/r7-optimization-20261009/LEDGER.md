@@ -2173,6 +2173,9 @@ B (fresh mount on a warm daemon), arm L, one sample.
 | # | Decision | Reason | Where it is recorded |
 | --- | --- | --- | --- |
 | L4-1 | The class-B runner waits for the warm-up Workspace's own `cleanup` observation to report `Gone` before the residency attestation (bounded by the existing `cleanup_wall_seconds`; the duration is stored as `cache.warmup_cleanup_to_gone_ns`) | Assignment item 2: "wait for the product's own readiness signal in the harness; do not weaken the predicate". The predicate in `r7-cache/residency.py` is unchanged. Before this, a measured mount of C01–C05 also overlapped the previous Workspace's reclamation (1125 maintenance jobs inside the "measured mount" interval of 611) | this section; `fs-bench-pro/r7/runner.py` |
+| L4-2 | A READ or READLINK records no SQL custody row (no `native_source`, `base_source`, lease, `file_read`, `native_read`, no `base_readers` count). It is accounted by the Fuse dispatcher lane (admitted until its future ends) and the fence gates, and is linearized at its one owner visit | Six owner jobs, four write transactions and two reader grants per READ existed only to record and release that custody (691: 517 requests, 3082 jobs). The condition was that drain and forced unmount still account for an in-flight READ; the implementer staged that on a real mount (`forced_unmount.rs`, `fenced_port.rs`) and the lead checks it before this row is called kept | commit `16fa316ee`; `core/docs/architecture` notes it updates |
+| L4-3 | Payload run rows hold at most 32 KiB (`RUN_BYTES`) | The largest bound for which no write shape costs more than today's one row per 4 KiB cell; a cold random 4 KiB read of a full run copies about 4 µs more in scratch, which is stated, not hidden. Not fitted to a cell: the cells write 128 KiB windows | [payload model](../../r7-open/payload-run-rows-63c48d8dc.md); not implemented yet |
+| L4-4 | Fast path, by owner direction in conversation on 2026-10-09 ("update the docs/notes and continue to follow this fast iteration path"): one stage per implementer assignment; a stage commit needs the count tier and the touched test binaries only; every cell is sampled at every stage commit; full suites at the hand-back and the gate at the batch tip; rows ordered by risk as well as saving; exact counts kept in one cost-test file per operation; no receipt per intermediate attempt. The mounted concurrency, forced-unmount, parking and install-race binaries are not dropped | The first change ran about 90 minutes with no sample (five chained stages, both full daemon suites per stage, pins restaged over several attempts). A 12-cell sample is about 2 minutes (652–703: 16:55:19 to 16:57:10) | [benchmark instruction, loop time](../../../../../docs/general/benchmark_instruction.md#loop-time-three-tiers) |
 
 ### Samples 600–651 at `c126f742e` (product source equal to `82c51a439`)
 
@@ -2246,3 +2249,68 @@ What the table says, as counts:
   35.2 ms, Lifecycle 11.9 ms, with 6 jobs per READ.
 - **C03**: owner wait 59.3 ms; **C12**: 4622 jobs for 3436 requests, 355
   Source jobs and 121 reader grants.
+
+### The floor: the same commands through a passthrough mount (receipts 710–726)
+
+Diagnostic, not a product arm and not a treatment: arm P1E of the harness
+(a mount whose daemon does no LayerFS work), the registered host clock,
+`63c48d8dc`. Report: [floor-passthrough](../../r7-open/floor-passthrough-63c48d8dc.md).
+One synchronous FUSE request costs about 39.4 µs with zero daemon work, one
+cross-process wake about 18 µs, and command launch is about 45 ms of every
+registered command span. A2 was timed inside the container.
+
+| Cell | L ms (652–703) | Floor ms | L − floor ms | A2 ms | A2 − floor ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| C01 | 379.7 | 285.5 | 94.2 | 183.4 | −102.1 |
+| C02 | 914.8 | 844.1 | 70.7 | 965.0 | 120.9 |
+| C03 | 715.9 | 406.6 | 309.3 | 410.8 | 4.2 |
+| C04 | 823.4 | 819.0 | 4.4 | 952.6 | 133.6 |
+| C05 | 880.5 | 854.2 | 26.3 | 949.6 | 95.4 |
+| C06 | 226.8 | 101.8 | 125.0 | 78.6 | −23.2 |
+| C07 | 499.4 | 174.7 | 324.7 | 171.6 | −3.1 |
+| C08 | 261.8 | 114.4 | 147.4 | 106.1 | −8.3 |
+| C09 | 167.1 | 82.6 | 84.5 | 106.2 | 23.6 |
+| C10 | 400.2 | 137.1 | 263.1 | 178.2 | 41.1 |
+| C11 | 242.4 | 87.2 | 155.2 | 85.8 | −1.4 |
+| C12 | 317.7 | 244.7 | 73.0 | 189.3 | −55.4 |
+
+Consequences, stated once and not relabeled later:
+
+- The A2 targets of C01, C06, C07, C08, C11 and C12 are below what a mount
+  with no daemon work takes on this clock, and C03's is 4.2 ms above it. No
+  product change inside the rules reaches them. They stay FAIL against A2;
+  the work on them is to remove L − floor.
+- C09 and C10 are reachable (23.6 and 41.1 ms of room above the floor).
+- C02, C04 and C05 are below A2 in one diagnostic sample each, with no
+  product change of this run behind them. Not established.
+- L's time outside the owner on C01 is 43.0 µs per request against the
+  passthrough's 42.9 µs: trimming dispatch has no measurable room
+  ([request-path model](../../r7-open/request-path-outside-owner-63c48d8dc.md):
+  3 to 5 µs per request at most). That row is dropped.
+
+### Opportunity list and order (one product writer at a time)
+
+Source models, each read-only at `63c48d8dc`, kept under
+[r7-open](../../r7-open/). Savings are the models' predictions, not
+measurements.
+
+| Order | Row | Predicted counter | Predicted saving | Cells | Risk | State |
+| ---: | --- | --- | --- | --- | --- | --- |
+| 1 | READ and READLINK are one read-only owner visit; base-file length remembered inside the existing canonical-cache allowance | READ of base bytes: 6 jobs, 4 transactions, 2 grants, 68 statements → 1 job, 0, 1, 2 | C09 jobs 3082 → about 522 | C09, C10, C12 | accounting change (L4-2) | committed `de4789299`, `dbaad86a5`, `16fa316ee`; not yet sampled or verified by the lead |
+| 2 | OPEN of a regular file is one owner visit | OPEN of a seen base file: 5 jobs, 1 grant, 4 transactions, 64 statements → 1 job, 0, 1, 10 | | C09, C10, C12, C01 | same path | committed `8ac4b4c4c`; not yet sampled or verified by the lead |
+| 3 | Unlink, FORGET and closed-namespace reclamation finish in the job that creates them ([model](../../r7-open/unlink-forget-reclaim-63c48d8dc.md)) | C03 maintenance jobs 6,011 → about 17; owner wait 59 → 2 to 4 ms | C03 716 → about 590 to 655 ms | C03, C07 and every cell's warm-up cleanup | statement removal first, then the `orphan_seen` and trigger stages | brief written |
+| 4 | Create path: fewer inode statements, custody rows, accounting triggers write the namespace row only ([model](../../r7-open/create-path-sql-63c48d8dc.md)) | per created file about 163 → about 107 to 112 µs | about 50 ms per 1000 files | C01, C02, C03, C07 | statement removal | brief written |
+| 5 | Payload run rows, `RUN_BYTES` 32 KiB, schema 22 → 23 ([model](../../r7-open/payload-run-rows-63c48d8dc.md)) | Payload attempts per 128 KiB WRITE 32 → 8 | service per 64 MiB 147.6 → about 61 ms; overlay 73.0 → about 65.4 MiB | C06, C07, C08, C10, C11 | schema change, largest row | brief written; after the statement-removal rows |
+| 6 | OPENDIR, READDIR and RELEASEDIR as visits ([model](../../r7-open/directory-git-request-mix-63c48d8dc.md)) | Source jobs and reader grants per directory read | | C12, C01 | same shape as row 1 | brief to write |
+| 7 | COPY_FILE_RANGE served in the daemon | requests for a 64 MiB copy | C10 about −58 ms | C10 | new request kind | undecided |
+
+Set aside, with the reason:
+
+| Idea | Why not |
+| --- | --- |
+| Group commit (reply before the outer COMMIT) | Changes what a reply means; cannot flip any cell's verdict by the model |
+| Eliding all-zero cells | The cells write `/dev/zero`; a gain that exists only for zero data is benchmark-fitting |
+| 1 MiB write windows | A larger limit as the fix |
+| A cached GETATTR record | A new cache and a contract change for a gain inside the spread |
+| A timer to wake maintenance | Forbidden (more loops or longer lifetimes as a fix) |
+

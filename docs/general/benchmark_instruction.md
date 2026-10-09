@@ -44,18 +44,20 @@ per change, and one sample per affected cell at the tip of the batch.
    every change in it has its own cause sentence, its own predicted counter
    and its own commit, so it can be judged and reverted alone. Record every
    design decision a change relies on and where it is documented.
-5. **Prove it before timing it.** Tests for the changed behaviour and for
-   every check a removed step used to make, at the tier the
-   [loop-time table](#loop-time-three-tiers) gives for each moment: the count
-   tests after every edit, the changed scope at every commit, and once at
-   the tip of the batch the changed packages' suites on host and in the
-   pinned Linux image, Clippy with warnings denied on both, `fmt --check`
-   and the boundary guard. Every test command has a wall limit of at most
-   120 s.
-6. **Sample once, at the tip.** One sample per affected cell from a clean,
-   sealed HEAD, into a fresh append-only receipt. No best-of, no repeat of an
-   unchanged identity. A failed, incomplete or unrun selection keeps its
-   receipt and its verdict.
+5. **Prove it at the cheapest tier that can refute it.** Tests for the
+   changed behaviour and for every check a removed step used to make, at the
+   tier the [loop-time table](#loop-time-three-tiers) gives for each moment:
+   the count tests and the touched test binaries at every stage commit, the
+   changed packages' suites on host and the mounted binaries in Linux when an
+   implementer hands the tree back, and once at the tip of the batch the four
+   packages on host and in the pinned Linux image, Clippy with warnings denied
+   on both, `fmt --check` and the boundary guard. Every test command has a
+   wall limit of at most 120 s.
+6. **Sample every cell once at every stage commit.** One sample per cell
+   from a clean, sealed HEAD, into a fresh append-only receipt (about 2
+   minutes for the 12 C cells). Each commit is its own identity. No best-of,
+   no repeat of an unchanged identity. A failed, incomplete or unrun
+   selection keeps its receipt and its verdict.
 7. **Decide by counts first, change by change.** Keep a change when its
    predicted counter moved as predicted, the verifier passes, no gate below is broken and
    storage is not worse. Command time decides only when it moves by more than
@@ -220,17 +222,46 @@ establish.
 
 ## Loop time: three tiers
 
-Run the smallest tier that can refute the edit just made. The full gate runs
-once per batch, not once per edit. Wall times are from the R7 receipts
-(`330-links-*`, `331-links-*`, samples 580 to 591) and one run of the count
-tier on 2026-10-09; they are upper bounds per binary summed, on this host.
+Run the smallest tier that can refute the edit just made. Wall times are from
+the R7 receipts (`330-links-*`, `331-links-*`, samples 580 to 591 and 652 to
+703) and one run of the count tier on 2026-10-09; they are upper bounds per
+binary summed, on this host.
 
 | Tier | When | What runs | Wall |
 | --- | --- | --- | ---: |
-| Count | after every edit | `check` of the edited package; the six exact-count binaries; the one behaviour binary of the edited path, filtered to the test | 9 s for the six binaries with nothing to rebuild, plus the compile of the edit |
-| Commit | once per commit of a batch | host suite of each package whose source changed; in Linux only what the host cannot run; `fmt --check` | 2 to 4 minutes |
+| Count | after every edit, and as the whole check of a stage commit | `check` of the edited package; the exact-count binaries; the test binaries the edit touches, by name | 9 s for the six binaries with nothing to rebuild, plus the compile of the edit |
+| Sample | at every stage commit | seal, release build, one sample of every cell | about 2 minutes for the 12 C cells (652 to 703: 16:55:19 to 16:57:10), plus the release build after a product change |
+| Hand-back | once per implementer assignment, before the tree changes hands | host suite of each package whose source changed; in Linux only what the host cannot run; `fmt --check` | 2 to 4 minutes |
 | Gate | once per batch, at its tip | four packages on host and in Linux, Clippy on both, `fmt --check`, guard | about 10 minutes |
-| Sample | once per batch, after the gate | seal, release build, one sample per affected cell | 23.5 s for C01 as the first cell (12.4 s of it the release build), 6.5 s more for C04; a longer command adds its own time |
+
+**The fast path (owner direction of 2026-10-09, decision L4-4 of the R7
+ledger).** The first change of the fourth R7 lead ran about 90 minutes with no
+sample: one implementer chained five stages, each stage ran both full daemon
+suites (about 110 s on host and 145 s in Linux), and exact counts pinned in
+unrelated test files were restaged over several attempts per stage. From that:
+
+- A stage commit needs the count tier only. The count test decides whether the
+  edit did what was predicted; the sample that follows, with each cell's
+  verifier, is the second check. Full suites wait for the hand-back.
+- Sample every cell at every stage commit. The sample is the cheapest
+  end-to-end check there is and shows a regression in a cell the stage was not
+  aimed at. Each commit is its own identity, so this is not resampling; a tip
+  that was already sampled is not sampled again after the gate.
+- One stage per assignment. An implementer hands the tree back clean after
+  each stage commit; the lead samples, then decides whether the next stage is
+  still worth its predicted saving.
+- Order rows by risk as well as by saving. A row that removes statements and
+  keeps semantics needs no new test and goes first. A row that changes
+  accounting, custody or schema needs new tests and goes later, one at a time.
+- Keep exact counts in one cost-test file per operation. A behaviour test that
+  pins a statement or job count in passing breaks on every optimization of
+  that path; when such a pin blocks a stage, change it to assert the behaviour.
+- Write a receipt for the passing run and for a real failure, not for every
+  intermediate attempt at a restaged number.
+- Do not drop the mounted concurrency, forced-unmount, parking and install-race
+  binaries. The cells are single-Workspace serial commands, so the verifier
+  cannot see a break under concurrent callers, a second Workspace or unmount
+  custody. They run at the hand-back and the gate, not at every stage.
 
 **Count tier (about 30 s).** The receipt's per-request statements,
 executions, transactions and jobs are reproduced in-process, with no mount,
@@ -250,7 +281,7 @@ loosen it to a range. If the path being changed has no such test, write it
 first (two sizes, equal per-unit `DatabaseWork`): it is the fast loop for
 every later edit of that path.
 
-**Commit tier (2 to 4 minutes).** What each piece costs:
+**Hand-back tier (2 to 4 minutes).** What each piece costs:
 
 | Piece | Binaries | Test time | Wall |
 | --- | ---: | ---: | ---: |
@@ -295,14 +326,15 @@ workspace in Linux, the two test builds and Clippy (16 to 18 s for four
 packages in Linux) were not timed separately and make up the rest. The
 link-count fix ran the daemon host suite three times and the workspace suite
 twice for one change: more than six minutes of repeated full runs (2 × 162 s
-and 63 s) where the count and commit tiers would have caught each restaged
+and 63 s) where the count and hand-back tiers would have caught each restaged
 assertion.
 
 **Sample.** One release build serves every cell at that HEAD
 (`r7-iterate-all.sh <n> [cells]`). What makes a sample step repeat: a HEAD
-that is not clean, sample containers retained from failed rows still holding
-idle daemons, and a stale test binary served by Docker after a small edit
-(`touch` the file, rebuild, next attempt number).
+that is not clean (so no implementer may be mid-edit), sample containers
+retained from failed rows still holding idle daemons, a lock held by another
+agent (export `R4_LOCK_WAIT`), and a stale test binary served by Docker after
+a small edit (`touch` the file, rebuild, next attempt number).
 
 No tier replaces the one above it, and none lifts the 120 s ceiling on a
 test command.
@@ -424,13 +456,14 @@ Take rows from the top of the list into one batch while all of these hold:
 - Rows that need an owner decision or change a public contract wait for it
   in a later batch.
 - Commits go bottom-up by crate (overlay, workspace, fuse, daemon), each
-  passing the commit tier, so the batch can be cut at any commit.
-- One writer per crate at a time; research agents read with
-  `git show <commit>:<path>` meanwhile.
+  passing the count tier and followed by one sample of every cell, so the
+  batch can be cut at any commit.
+- One writer per crate at a time, one stage per assignment; research agents
+  read with `git show <commit>:<path>` meanwhile.
 
-Then: the gate once at the tip, one sample of every affected cell from one
-build, one before/after table per cell with one line per row of the batch
-(predicted counter, observed counter).
+Then: the hand-back tier when an implementer returns the tree, the gate once
+at the tip, and one before/after table per cell with one line per row of the
+batch (predicted counter, observed counter).
 
 Reading the result:
 
@@ -439,11 +472,12 @@ Reading the result:
   count tier if one existed.
 - Counts right and time better by more than the spread: keep the batch. The
   time belongs to the batch; do not divide it between rows.
-- Counts right and time worse: sample the intermediate commits, one sample
-  each (each is its own identity), to find the commit that moved it.
+- Counts right and time worse: the per-stage samples already show which
+  commit moved it; revert that commit alone.
 
-Five rows cost about five commit tiers, one gate and one sample set (about
-25 minutes of checks) instead of five gates and five sample sets (about 50).
+Five rows cost about five count tiers, five sample sets of about 2 minutes,
+the hand-back tiers and one gate (about 30 minutes of checks) instead of five
+gates and five sample sets (about 60).
 
 ## Root-cause analysis of a time
 

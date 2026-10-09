@@ -1,0 +1,73 @@
+{
+ "arm": "N",
+ "big_residency": {
+  "mode": "observe",
+  "path": "/layerfs-store/floor/run/big",
+  "resident_pages_before": 16384,
+  "size": 67108864,
+  "total_pages": 16384
+ },
+ "body": "{ cp big big2; } >/dev/null",
+ "cell": "C10",
+ "container": "26fbacd2b8d0ee9ae554db7148fd16e4b277b100b5139e8e945dd8c9ce3da21a",
+ "container_name": "layerfs-r7-floor-720-c10-n",
+ "environment": [
+  "PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin",
+  "HOME=/tmp",
+  "LANG=C",
+  "LC_ALL=C",
+  "GIT_CONFIG_NOSYSTEM=1",
+  "GIT_AUTHOR_NAME=Experiment",
+  "GIT_AUTHOR_EMAIL=experiment@example.invalid",
+  "GIT_COMMITTER_NAME=Experiment",
+  "GIT_COMMITTER_EMAIL=experiment@example.invalid",
+  "GIT_AUTHOR_DATE=2026-10-03T00:00:00Z",
+  "GIT_COMMITTER_DATE=2026-10-03T00:00:00Z",
+  "LAYERFS_CONSTRUCTION_WORKERS=1"
+ ],
+ "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+ "label": "DIAGNOSTIC floor probe; NOT a registered benchmark row",
+ "measured": {
+  "body_sha256": "9d0a4d34e9d0f4555e22ea0632d409f40715090376b13598d3bff05fec629bcb",
+  "clock": "host time.monotonic_ns (macOS); same boundary as r7-runtime command span",
+  "command_ns": 66947958,
+  "directory": "/layerfs-store/floor/run",
+  "exec": "44738bc18fd2aaf7d125d1a96b7c2ef7f9d9b9dd6a665882a2c645459ae8169a",
+  "exec_create_ns": 2730375,
+  "exec_start_ns": 1518458,
+  "exec_status_ns": 1994792,
+  "exit_code": 0,
+  "running": false,
+  "stderr": "R7_FLOOR_BODY 1791537269.043287 1791537269.060134 0\n0m0.009s 0m0.003s\n0m0.000s 0m0.017s\n",
+  "stdout": "",
+  "streams_ns": 60704333,
+  "user": "501:20"
+ },
+ "preparation": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+ "preparation_scope": "untimed; run natively in the backing directory as 501:20 before any mount",
+ "sample_count": 1,
+ "schema": "r7-floor-probe-v1",
+ "status": "COMPLETED",
+ "teardown": [
+  "container rm exit 0",
+  "volume rm exit 0 "
+ ],
+ "uid_gid": "501:20",
+ "volume": "layerfs-r7-floor-720-c10-n",
+ "warmup": {
+  "body_sha256": "a4c2ff11f48eb28acd3cb6c1881a5376261e34f1e74c73887008a8885d5ed84f",
+  "clock": "host time.monotonic_ns (macOS); same boundary as r7-runtime command span",
+  "command_ns": 67796958,
+  "directory": "/layerfs-store/floor/warm",
+  "exec": "b3d169b3a2cc7cc40a72a2ec17facddc1844ec13e3ccfc61fb0532cfb5626735",
+  "exec_create_ns": 2072000,
+  "exec_start_ns": 1807958,
+  "exec_status_ns": 1898625,
+  "exit_code": 0,
+  "running": false,
+  "stderr": "",
+  "stdout": "",
+  "streams_ns": 62018375,
+  "user": "501:20"
+ }
+}

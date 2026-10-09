@@ -1,0 +1,23 @@
+== passthrough_pid NONE
+== mountinfo
+471 462 254:1 /docker/volumes/layerfs-r7-floor-712-c02-n/_data /layerfs-store rw,relatime master:1 - ext4 /dev/vda1 rw,discard
+== fusectl
+total 0
+== uname 6.12.76-linuxkit nproc 8 loadavg 0.90 0.83 0.90 1/403 1053
+== meminfo
+MemFree:         1559320 kB
+MemAvailable:    3189104 kB
+Cached:          1663564 kB
+Dirty:              4276 kB
+Writeback:            12 kB
+== cgroup.cpu.stat
+usage_usec 694936
+user_usec 266479
+system_usec 428456
+nice_usec 0
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+nr_bursts 0
+burst_usec 0
+== clock 1791537191.307937

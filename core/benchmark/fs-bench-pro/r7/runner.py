@@ -627,6 +627,49 @@ def snapshot_observations(runtime, observations):
         observations[name] = {"status": "AVAILABLE", "value": value, "provenance": str(found[-1]["fields"]["stdout"]) + "; original external observation; VmHWM lifetime only; Store/overlay include explicitly observed sidecars"}
 
 
+def thread_rows(path):
+    """Per-thread scheduler lines of one external snapshot; absent fields stay absent."""
+    threads, cgroup, kernel, section = {}, {}, None, None
+    with Path(path).open() as stream:
+        for line in stream:
+            line = line.rstrip("\n")
+            if line in {"DAEMON_THREADS", "CGROUP_CPU"}:
+                section = line
+            elif line.startswith("THREAD\t"):
+                parts = line.split("\t")
+                if len(parts) != 6:
+                    continue
+                sched, switches, stat = parts[3].split(), parts[4].split(), parts[5].split()
+                if len(sched) == 3 and len(switches) == 2 and len(stat) == 4:
+                    threads[parts[1]] = {"comm": parts[2], "run_ns": int(sched[0]), "runqueue_wait_ns": int(sched[1]),
+                        "timeslices": int(sched[2]), "voluntary_switches": int(switches[0]), "nonvoluntary_switches": int(switches[1]),
+                        "minor_faults": int(stat[0]), "user_ticks": int(stat[1]), "system_ticks": int(stat[2]), "last_cpu": int(stat[3])}
+            elif line.startswith("KERNEL\t"):
+                kernel = line.split("\t")[1:]
+            elif section == "CGROUP_CPU" and len(line.split()) == 2 and line.split()[1].isdigit():
+                cgroup[line.split()[0]] = int(line.split()[1])
+    return threads, cgroup, kernel
+
+
+def thread_observations(row, observations):
+    """Before/after difference per daemon thread around the measured command."""
+    paths = row.get("daemon_thread_snapshots")
+    if not paths:
+        return
+    before, cpu_before, _ = thread_rows(paths["before"])
+    after, cpu_after, kernel = thread_rows(paths["after"])
+    if not before or not after:
+        observations["daemon_threads"] = receipts.unavailable("per-thread scheduler lines absent from the original snapshots")
+        return
+    counters = ("run_ns", "runqueue_wait_ns", "timeslices", "voluntary_switches", "nonvoluntary_switches", "minor_faults", "user_ticks", "system_ticks")
+    delta = [{"tid": tid, "comm": after[tid]["comm"], "last_cpu": after[tid]["last_cpu"],
+              **{name: after[tid][name] - before[tid][name] for name in counters}} for tid in after if tid in before]
+    observations["daemon_threads"] = {"status": "AVAILABLE", "provenance": paths["scope"],
+        "value": {"threads": delta, "created": sorted(set(after) - set(before)), "exited": sorted(set(before) - set(after)),
+                  "cgroup_cpu": {name: cpu_after[name] - cpu_before[name] for name in cpu_after if name in cpu_before},
+                  "kernel": kernel, "interval": "pre-command observe to post-command snapshot; wider than the command span"}}
+
+
 def diagnostic_completion(row):
     """Availability, never a numerical or resource-admission verdict."""
     if row["row_status"] in {"FAIL","INELIGIBLE","NOT_RUN"}:
@@ -770,6 +813,7 @@ def one(config, selection, output, claims):
     passthroughs = []
     peers = control_peers(config, selection)
     closed_keys = []
+    thread_before = None
     endpoint_bindings = {}
     def bind_endpoint(label,event,position="last"):
         endpoint_bindings[label] = {"event_sequence":event["sequence"],"event":event["event"],"position":position}
@@ -1077,6 +1121,11 @@ def one(config, selection, output, claims):
             row["concurrency_process_count"] = {"ordinary_parent": 1, "concurrent_bash_children": 2,
                                                  "sequential_commands": 1 if case["case_id"] == "W02" else 0}
         else:
+            if selection["arm"] == "L":
+                # Read-only per-thread scheduler observation of the daemon just
+                # before the measured command; its pair is the snapshot taken
+                # after it. Outside the command span; no daemon call.
+                thread_before = runtime.send("observe", deadline=deadline)
             measured_events.append(runtime.send("command", directory, script(output, "command.sh", body), deadline=deadline))
         row["command_original_events"] = measured_events
         if case["case_id"].startswith("K"):
@@ -1089,9 +1138,12 @@ def one(config, selection, output, claims):
             cache["warmup_gap_ns"] = measured_events[0]["span"]["start_ns"] - warm_end
         deadline = time.monotonic() + max(0, budget - performance.observe(time.monotonic_ns())["performance_ns"] / 1e9)
         if active_key:
-            runtime.send("snapshot", active_key, deadline=deadline)
+            thread_after = runtime.send("snapshot", active_key, deadline=deadline)
             command_status = next(event for event in reversed(runtime.rows) if event.get("event") == "workspace_status")
             bind_endpoint("command_end_status",command_status)
+            if thread_before is not None:
+                row["daemon_thread_snapshots"] = {"before": thread_before["fields"]["stdout"], "after": thread_after["fields"]["stdout"],
+                    "scope": "PID 1 threads read from /proc before and after the measured command; includes the status call of the closing snapshot"}
         else:
             runtime.send("observe", deadline=deadline)
         before_verifier_ns = performance.observe(time.monotonic_ns())["performance_ns"]
@@ -1201,6 +1253,10 @@ def one(config, selection, output, claims):
     groups, correlation = {}, None
     if runtime is not None:
         snapshot_observations(runtime, observations)
+        try:
+            thread_observations(row, observations)
+        except (OSError, ValueError, KeyError) as error:
+            observations["daemon_threads"] = receipts.unavailable("per-thread observation unreadable: " + str(error))
     if runtime is not None and runtime.container:
         logs_argv = ["docker", "--host", "unix://" + config["socket"], "logs", "--timestamps=false", runtime.container]
         try:

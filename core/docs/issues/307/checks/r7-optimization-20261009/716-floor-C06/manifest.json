@@ -1,0 +1,39 @@
+{
+ "argv": [
+  "core/target/floor/probe.py",
+  "--number",
+  "716",
+  "--cell",
+  "C06",
+  "--arms",
+  "N,P1,P2,P1E"
+ ],
+ "arms": [
+  "N",
+  "P1",
+  "P2",
+  "P1E"
+ ],
+ "cell": "C06",
+ "host_uptime": "17:13  up 9 days,  9:30, 2 users, load averages: 6.05 5.71 5.56",
+ "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+ "label": "DIAGNOSTIC floor probe; NOT a registered benchmark row; one sample per configuration",
+ "other_containers_before": [
+  "61af21ff1b64 trusting_knuth Up 23 minutes",
+  "fa02723e247c goofy_hoover Up 23 minutes",
+  "3af5f79e50e7 upbeat_hypatia Up 23 minutes",
+  "b45f378e59ee cool_sanderson Up 23 minutes",
+  "919fc3b8df51 silly_kalam Up 23 minutes",
+  "9cf2fe345496 layerfs-experiment-305-dev Up 5 days",
+  "ce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927 Up 6 days",
+  "d2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab Up 7 days",
+  "d2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d Up 7 days"
+ ],
+ "probe_sha256": "2b8fe569c7a75262a6b7eabe200dbd12f419f5c3b3b4fd9e66704cba3a21f329",
+ "registered_binary_sha256": "bb7001182a8ca2c9764ad1b4c8081ebf70ada8d68cb37dee27827f7b35ff62cc",
+ "schema": "r7-floor-probe-v1",
+ "source_head": "de4789299b4a04c7bf01f6950a6aaeae59b61664",
+ "started_unix": 1791537230.222722,
+ "variant_binary_sha256": "a4de03a71fe367492c40b835de211570352439a8f41642357cf28e61a30d6a87",
+ "variant_diff_sha256": "d0e5f86c0e07f7beb024db1c346c17743dc17c34bfb5591d876bd4fadca78376"
+}

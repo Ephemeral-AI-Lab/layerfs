@@ -1,0 +1,78 @@
+== passthrough_pid 74
+== task 74
+comm r7-floor-pt
+schedstat 11280251 22833 17
+stat 74 (r7-floor-pt) S 0 74 74 0 -1 4194560 1134 0 0 0 0 0 0 0 20 0 3 0 65594214 141692928 503 18446744073709551615 187650235170816 187650235778284 281473944785616 0 0 0 0 4096 1088 1 0 0 17 3 0 0 0 0 0 187650235865112 187650235891845 187650977730560 281473944788414 281473944788480 281473944788480 281473944788957 0
+voluntary_ctxt_switches:	16
+nonvoluntary_ctxt_switches:	1
+io rchar: 44746
+io wchar: 7316
+io syscr: 34
+io syscw: 6
+io read_bytes: 0
+io write_bytes: 0
+io cancelled_write_bytes: 0
+== task 80
+comm r7-passthrough-
+schedstat 151042 48500 1
+stat 80 (r7-passthrough-) S 0 74 74 0 -1 4194368 6 0 0 0 0 0 0 0 20 0 3 0 65594217 141692928 503 18446744073709551615 187650235170816 187650235778284 281473944785616 0 0 0 0 4096 1088 1 0 0 -1 5 0 0 0 0 0 187650235865112 187650235891845 187650977730560 281473944788414 281473944788480 281473944788480 281473944788957 0
+voluntary_ctxt_switches:	1
+nonvoluntary_ctxt_switches:	0
+io rchar: 0
+io wchar: 0
+io syscr: 0
+io syscw: 0
+io read_bytes: 0
+io write_bytes: 0
+io cancelled_write_bytes: 0
+== task 81
+comm fuser-0
+schedstat 67125 9042 1
+stat 81 (fuser-0) S 0 74 74 0 -1 4194368 36 0 0 0 0 0 0 0 20 0 3 0 65594217 141692928 503 18446744073709551615 187650235170816 187650235778284 281473944785616 0 0 0 0 4096 1088 1 0 0 -1 5 0 0 0 0 0 187650235865112 187650235891845 187650977730560 281473944788414 281473944788480 281473944788480 281473944788957 0
+voluntary_ctxt_switches:	1
+nonvoluntary_ctxt_switches:	0
+io rchar: 0
+io wchar: 0
+io syscr: 0
+io syscw: 0
+io read_bytes: 0
+io write_bytes: 0
+io cancelled_write_bytes: 0
+== process.io
+rchar: 51546
+wchar: 7316
+syscr: 41
+syscw: 6
+read_bytes: 0
+write_bytes: 0
+cancelled_write_bytes: 0
+== process.schedstat 11280251 22833 17
+== process.status
+VmHWM:	    2132 kB
+VmRSS:	    2132 kB
+Threads:	3
+voluntary_ctxt_switches:	16
+nonvoluntary_ctxt_switches:	1
+== mountinfo
+471 462 254:1 /docker/volumes/layerfs-r7-floor-719-c09-p1/_data /layerfs-store rw,relatime master:1 - ext4 /dev/vda1 rw,discard
+364 462 0:142 / /workspaces/1 rw,nosuid,nodev,noatime - fuse layerfs-r7-passthrough rw,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072
+== fusectl
+total 0
+== uname 6.12.76-linuxkit nproc 8 loadavg 1.75 1.11 0.99 1/410 97
+== meminfo
+MemFree:         1389660 kB
+MemAvailable:    3157340 kB
+Cached:          1791348 kB
+Dirty:            132124 kB
+Writeback:             0 kB
+== cgroup.cpu.stat
+usage_usec 341186
+user_usec 188741
+system_usec 152568
+nice_usec 0
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+nr_bursts 0
+burst_usec 0
+== clock 1791537258.163681

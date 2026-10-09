@@ -1,0 +1,78 @@
+== cgroup.cpu.stat
+usage_usec 4791793
+user_usec 803983
+system_usec 3988592
+nice_usec 0
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+nr_bursts 0
+burst_usec 0
+== clock 1791537314.719306
+== passthrough_pid 55
+== task 55
+comm r7-floor-pt
+schedstat 9739709 30375 17
+stat 55 (r7-floor-pt) S 0 55 55 0 -1 4194560 1133 0 0 0 0 0 0 0 20 0 3 0 65599462 141692928 499 18446744073709551615 187650457272320 187650457879788 281474957475952 0 0 0 0 4096 1088 1 0 0 17 7 0 0 0 0 0 187650457966616 187650457993349 187651491221504 281474957479358 281474957479424 281474957479424 281474957479901 0
+voluntary_ctxt_switches:	16
+nonvoluntary_ctxt_switches:	1
+io rchar: 44746
+io wchar: 7316
+io syscr: 34
+io syscw: 6
+io read_bytes: 0
+io write_bytes: 0
+io cancelled_write_bytes: 0
+== task 61
+comm r7-passthrough-
+schedstat 183084 0 1
+stat 61 (r7-passthrough-) S 0 55 55 0 -1 4194368 6 0 0 0 0 0 0 0 20 0 3 0 65599464 141692928 499 18446744073709551615 187650457272320 187650457879788 281474957475952 0 0 0 0 4096 1088 1 0 0 -1 1 0 0 0 0 0 187650457966616 187650457993349 187651491221504 281474957479358 281474957479424 281474957479424 281474957479901 0
+voluntary_ctxt_switches:	1
+nonvoluntary_ctxt_switches:	0
+io rchar: 0
+io wchar: 0
+io syscr: 0
+io syscw: 0
+io read_bytes: 0
+io write_bytes: 0
+io cancelled_write_bytes: 0
+== task 62
+comm fuser-0
+schedstat 1201635141 4967468 100920
+stat 62 (fuser-0) S 0 55 55 0 -1 4194368 37 0 0 0 22 97 0 0 20 0 3 0 65599464 141692928 499 18446744073709551615 187650457272320 187650457879788 281474957475952 0 0 0 0 4096 1088 1 0 0 -1 2 0 0 0 0 0 187650457966616 187650457993349 187651491221504 281474957479358 281474957479424 281474957479424 281474957479901 0
+voluntary_ctxt_switches:	100916
+nonvoluntary_ctxt_switches:	4
+io rchar: 5656056
+io wchar: 1616120
+io syscr: 101001
+io syscw: 101001
+io read_bytes: 0
+io write_bytes: 0
+io cancelled_write_bytes: 0
+== process.io
+rchar: 5707602
+wchar: 1623436
+syscr: 101042
+syscw: 101007
+read_bytes: 0
+write_bytes: 0
+cancelled_write_bytes: 0
+== process.schedstat 9739709 30375 17
+== process.status
+VmHWM:	    2120 kB
+VmRSS:	    2120 kB
+Threads:	3
+voluntary_ctxt_switches:	16
+nonvoluntary_ctxt_switches:	1
+== mountinfo
+471 462 254:1 /docker/volumes/layerfs-r7-floor-723-s01-p1/_data /layerfs-store rw,relatime master:1 - ext4 /dev/vda1 rw,discard
+364 462 0:142 / /workspaces/1 rw,nosuid,nodev,noatime - fuse layerfs-r7-passthrough rw,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072
+== fusectl
+total 0
+== uname 6.12.76-linuxkit nproc 8 loadavg 1.71 1.22 1.04 1/411 102
+== meminfo
+MemFree:         1552940 kB
+MemAvailable:    3195064 kB
+Cached:          1660268 kB
+Dirty:              1244 kB
+Writeback:             0 kB

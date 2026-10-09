@@ -1,0 +1,10 @@
+entries 1001
+4020	.
+total 4024
+drwxr-xr-x 2  501 dialout 20480 Oct  9 09:19 .
+drwxr-xr-x 4 root root     4096 Oct  9 09:19 ..
+-rw-r--r-- 1  501 dialout     2 Oct  9 09:19 f1
+-rw-r--r-- 1  501 dialout     3 Oct  9 09:19 f10
+-rw-r--r-- 1  501 dialout     4 Oct  9 09:19 f100
+-rw-r--r-- 1  501 dialout     5 Oct  9 09:19 f1000
+-rw-r--r-- 1  501 dialout     4 Oct  9 09:19 f101

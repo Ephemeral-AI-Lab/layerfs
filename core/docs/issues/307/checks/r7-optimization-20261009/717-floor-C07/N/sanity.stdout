@@ -1,0 +1,7 @@
+entries 3
+131076	.
+total 131080
+drwxr-xr-x 2  501 dialout     4096 Oct  9 09:13 .
+drwxr-xr-x 4 root root        4096 Oct  9 09:13 ..
+-rw-r--r-- 1  501 dialout 67108864 Oct  9 09:13 big
+-rw-r--r-- 1  501 dialout 67108864 Oct  9 09:13 big2

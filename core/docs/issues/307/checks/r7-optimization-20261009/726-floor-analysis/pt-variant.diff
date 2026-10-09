@@ -1,0 +1,131 @@
+--- /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-passthrough/Cargo.toml	2026-10-09 03:59:15
++++ Cargo.toml	2026-10-09 17:07:59
+@@ -13,4 +13,4 @@
+ nix = { version = "=0.31.3", features = ["fs", "mount", "feature"] }
+ 
+ [patch.crates-io]
+-fuser = { version = "=0.18.0", path = "../../vendor/fuser-0.18.0" }
++fuser = { version = "=0.18.0", path = "../../../vendor/fuser-0.18.0" }
+--- /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-passthrough/src/state.rs	2026-10-09 04:58:53
++++ src/state.rs	2026-10-09 17:07:59
+@@ -54,9 +54,12 @@
+ }
+ pub struct Passthrough {
+     pub state: Mutex<State>,
++    /// Floor-probe variant only: receive loops and FLUSH reply mode.
++    pub loops: usize,
++    pub flush_enosys: bool,
+ }
+ impl Passthrough {
+-    pub fn new(root: File) -> io::Result<Self> {
++    pub fn new(root: File, loops: usize, flush_enosys: bool) -> io::Result<Self> {
+         let meta = root.metadata()?;
+         let key = (meta.dev(), meta.ino());
+         let mut nodes = HashMap::new();
+@@ -69,6 +72,8 @@
+             },
+         );
+         Ok(Self {
++            loops,
++            flush_enosys,
+             state: Mutex::new(State {
+                 nodes,
+                 identities: HashMap::from([(key, 1)]),
+--- /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-passthrough/src/native.rs	2026-10-09 04:58:53
++++ src/native.rs	2026-10-09 17:07:59
+@@ -43,7 +43,17 @@
+         )
+     })
+     .map_err(|e| io::Error::from_raw_os_error(e.code()))?;
+-    let fs = Passthrough::new(root)?;
++    let loops: usize = match env::var("R7_FLOOR_LOOPS").as_deref() {
++        Ok("1") => 1,
++        Ok("2") | Err(_) => 2,
++        Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidInput, "R7_FLOOR_LOOPS must be 1 or 2")),
++    };
++    let flush_enosys = match env::var("R7_FLOOR_FLUSH").as_deref() {
++        Ok("enosys") => true,
++        Ok("ok") | Err(_) => false,
++        Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidInput, "R7_FLOOR_FLUSH must be ok or enosys")),
++    };
++    let fs = Passthrough::new(root, loops, flush_enosys)?;
+     // The per-request creation mode already includes the caller's umask.
+     unsafe {
+         libc::umask(0);
+@@ -65,7 +75,7 @@
+     .map_err(io::Error::from)?;
+     let mut config = Config::default();
+     config.acl = SessionACL::All;
+-    config.n_threads = Some(2);
++    config.n_threads = Some(loops);
+     config.clone_fd = false;
+     // Caller owns exactly one plain native unmount; no implicit/lazy teardown.
+     let session = match Session::from_fd(fs, device, SessionACL::All, config) {
+@@ -75,5 +85,5 @@
+             return Err(error);
+         }
+     };
+-    crate::lifecycle::serve(session)
++    crate::lifecycle::serve(session, loops)
+ }
+--- /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-passthrough/src/lifecycle.rs	2026-10-09 04:58:53
++++ src/lifecycle.rs	2026-10-09 17:07:59
+@@ -72,7 +72,7 @@
+ }
+ impl std::error::Error for OwnerPanic {}
+ 
+-pub fn serve(session: Session<Passthrough>) -> io::Result<()> {
++pub fn serve(session: Session<Passthrough>, loops: usize) -> io::Result<()> {
+     let runner = session.into_runner();
+     let monitor = runner.monitor();
+     let owner = match thread::Builder::new()
+@@ -90,9 +90,9 @@
+     // This is the existing L readiness observation bound, not a command timeout.
+     let ready = monitor.wait_ready(Duration::from_secs(5));
+     let is_ready = ready.phase == SessionPhase::Serving
+-        && ready.configured == 2
+-        && ready.created == 2
+-        && ready.entered == 2
++        && ready.configured == loops
++        && ready.created == loops
++        && ready.entered == loops
+         && ready.exited == 0;
+     let mut output_error = emit(&observation(
+         if is_ready {
+@@ -138,10 +138,10 @@
+     if is_ready
+         && outcome.is_clean()
+         && final_state.phase == SessionPhase::Joined
+-        && final_state.created == 2
+-        && final_state.entered == 2
+-        && final_state.exited == 2
+-        && final_state.joined == 2
++        && final_state.created == loops
++        && final_state.entered == loops
++        && final_state.exited == loops
++        && final_state.joined == loops
+         && output_error.is_none()
+     {
+         Ok(())
+--- /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-passthrough/src/callbacks.rs	2026-10-09 04:58:53
++++ src/callbacks.rs	2026-10-09 17:07:59
+@@ -86,7 +86,7 @@
+             .map_err(|_| refused(0))?;
+         let selected = required | (offered & InitFlags::FUSE_MAX_PAGES);
+         let abi = config.kernel_abi();
+-        println!("{{\"event\":\"negotiated\",\"abi\":[{},{}],\"offered\":{},\"selected\":{},\"max_write\":{},\"max_readahead\":{},\"max_background\":1,\"congestion_threshold\":1,\"configured_receive_loops\":2,\"serving_established\":false,\"ttl_seconds\":60,\"writeback\":false,\"default_permissions\":true}}", abi.0, abi.1, offered.bits(), selected.bits(), WINDOW, WINDOW);
++        println!("{{\"event\":\"negotiated\",\"abi\":[{},{}],\"offered\":{},\"selected\":{},\"max_write\":{},\"max_readahead\":{},\"max_background\":1,\"congestion_threshold\":1,\"configured_receive_loops\":{},\"flush_enosys\":{},\"serving_established\":false,\"ttl_seconds\":60,\"writeback\":false,\"default_permissions\":true}}", abi.0, abi.1, offered.bits(), selected.bits(), WINDOW, WINDOW, self.loops, self.flush_enosys);
+         Ok(())
+     }
+     fn destroy(&mut self) {
+@@ -435,6 +435,10 @@
+     }
+     fn flush(&self, _: &Request, _: INodeNo, fh: FileHandle, _: LockOwner, reply: ReplyEmpty) {
+         self.count(25);
++        if self.flush_enosys {
++            // Floor-probe variant: the product's reply (sticky ENOSYS).
++            return reply.error(Errno::ENOSYS);
++        }
+         empty(reply, self.handle(fh.0).map(|_| ()));
+     }
+     fn release(

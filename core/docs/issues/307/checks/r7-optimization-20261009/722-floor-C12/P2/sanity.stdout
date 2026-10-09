@@ -1,0 +1,10 @@
+entries 322
+1300	.
+total 412
+drwxr-xr-x 3  501 dialout 4096 Oct  9 09:14 .
+drwxr-xr-x 4 root root    4096 Oct  9 09:14 ..
+drwxr-xr-x 8  501 dialout 4096 Oct  9 09:14 .git
+-rw-r--r-- 1  501 dialout    2 Oct  9 09:14 f1
+-rw-r--r-- 1  501 dialout    3 Oct  9 09:14 f10
+-rw-r--r-- 1  501 dialout    4 Oct  9 09:14 f100
+-rw-r--r-- 1  501 dialout    3 Oct  9 09:14 f11
