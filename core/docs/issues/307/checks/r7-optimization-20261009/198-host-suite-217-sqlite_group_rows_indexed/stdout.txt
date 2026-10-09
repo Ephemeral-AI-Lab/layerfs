@@ -1,0 +1,14 @@
+
+running 9 tests
+test covered_mapping_still_refuses_wrong_extents_before_blob_open ... ok
+test declared_layouts_reopen_without_mutating_or_promoting_their_schema ... ok
+test mapping_is_covered_and_complete_pack_reassembles_exactly ... ok
+test missing_covering_index_is_refused_at_open_without_automatic_repair ... ok
+test multigroup_read_reopens_one_cursor_and_never_retains_it_between_requests ... ok
+test typed_descriptor_rejects_invalid_domain_digest_and_length_before_blob_open ... ok
+test typed_singleton_matches_batch_results_missing_ids_and_statement_boundary ... ok
+test typed_singleton_rejects_invalid_role_and_signed_coordinates ... ok
+test wrong_reopened_body_length_is_refused_and_cursor_is_checked_closed ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

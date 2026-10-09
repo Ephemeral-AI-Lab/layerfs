@@ -1,0 +1,15 @@
+
+running 10 tests
+test a_disabled_report_serializes_to_null ... ok
+test a_failed_write_leaves_a_partial_file_and_surfaces_the_error ... ok
+test a_flush_failure_is_surfaced ... ok
+test a_real_recording_round_trips_through_json ... ok
+test durations_beyond_the_schema_are_reported_not_saturated ... ok
+test escaping_round_trips_through_an_independent_parser ... ok
+test json_matches_the_documented_shape ... ok
+test outcome_and_incomplete_fields_are_opt_in ... ok
+test saving_uses_no_clobber_creation_and_stays_separate_from_the_product_result ... ok
+test writer_failures_propagate ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+

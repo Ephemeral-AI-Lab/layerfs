@@ -637,6 +637,8 @@ def diagnostic_completion(row):
         receipts.validate_cache(cache,row["source_arm"],row["attempted_operation_count"])
     except ValueError as error:
         missing.append("cache qualification: " + str(error))
+    if cache["class"] == "A" and row["source_arm"] == "L":
+        missing.append("post-Mount command cache state: immutable metadata and pooled reader metadata may be warm; SQLite pager/prepared state and kernel metadata residency are unavailable")
     if cache["class"] == "B":
         demands = cache.get("object_demands")
         if type(demands) is not int or demands < 0:
@@ -966,6 +968,10 @@ def one(config, selection, output, claims):
         cache.update(residency=residency, required_residency_paths=[item["path"] for item in (residency.get("files") or [])],
                      store_path="/layerfs-store/global/store.sqlite", overlay_path="/layerfs-local/overlay/overlay.sqlite",
                      fresh_daemon_cache=selection["cache_class"] == "A", fresh_kernel_connection=selection["cache_class"] != "C")
+        if selection["cache_class"] == "A" and selection["arm"] == "L":
+            cache["initial_cache_scope"] = "CanonicalCache and StorageFetch start empty; startup SQL opens fresh connections but reads profile/schema/history metadata and prepares statements"
+            cache["command_cache_scope"] = "Mount reads canonical root/inode/directory metadata and retains immutable and pooled reader metadata; no post-Mount internal eviction or complete residency observation"
+            cache["cold_command_qualification"] = "INCOMPLETE; backing-file predicate before Mount is insufficient"
         if result_code or residency["status"] in {"INELIGIBLE", "UNAVAILABLE"}:
             raise OriginalFailure("pre-attempt cache predicate " + residency["status"] + ": " + residency.get("error", "original observation retained"))
         if selection["cache_class"] == "A":

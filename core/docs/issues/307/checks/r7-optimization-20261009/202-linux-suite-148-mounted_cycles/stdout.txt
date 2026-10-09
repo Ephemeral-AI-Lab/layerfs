@@ -1,0 +1,9 @@
+
+running 4 tests
+test a_caller_blocked_on_a_full_pipe_neither_blocks_commit_nor_is_touched_by_unmount ... ok
+test counts_plateau_over_twelve_cycles_beside_a_running_sibling_writer ... ok
+test counts_plateau_over_twelve_cycles_with_maintenance_awaited_after_each_unmount ... ok
+test simultaneous_mounts_over_related_roots_are_isolated_and_a_stale_token_never_redirects ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.14s
+

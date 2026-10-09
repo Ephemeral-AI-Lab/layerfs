@@ -1,0 +1,10 @@
+
+running 5 tests
+test retained_facts_travel_under_tag_15_and_tag_12_keeps_its_bytes ... ok
+test stopping_is_phase_7_in_every_native_block ... ok
+test the_force_request_is_tag_11_with_one_strict_flag ... ok
+test the_forced_receipt_is_tag_14_and_pins_every_value ... ok
+test the_largest_forced_records_stay_under_the_record_limit ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

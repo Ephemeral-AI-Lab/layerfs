@@ -1,0 +1,9 @@
+
+running 4 tests
+test a_failing_edit_returns_its_original_error_and_an_error_outcome ... ok
+test a_real_edit_reports_its_scopes_without_a_database ... ok
+test an_equal_replacement_reports_the_comparison_scope ... ok
+test recording_enabled_and_disabled_produce_the_same_result ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

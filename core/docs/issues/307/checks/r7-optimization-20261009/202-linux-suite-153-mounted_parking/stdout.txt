@@ -1,0 +1,9 @@
+
+running 4 tests
+test a_read_of_locally_written_bytes_still_waits_for_a_store_reader ... ok
+test fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progresses ... ok
+test fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked ... ok
+test the_holds_are_exact_and_are_returned_on_every_path ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.01s
+

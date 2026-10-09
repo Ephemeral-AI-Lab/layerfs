@@ -1,0 +1,10 @@
+
+running 5 tests
+test chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime ... ok
+test create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically ... ok
+test rename_moves_replaces_and_refuses_cycles_without_descendant_rows ... ok
+test unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact ... ok
+test unrepresentable_names_targets_and_reservations_are_refused_before_any_job ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

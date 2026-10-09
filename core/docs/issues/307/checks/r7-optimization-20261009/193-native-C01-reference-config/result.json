@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "1b028a24a2ce69aeb18c2b99d51f582d3734a005",
+  "source_tree": "517986534b4388923c435f824dfdbeb0c465e5d7",
+  "worktree_status": "M core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/187-sealed-L-source-corrected/\n?? core/docs/issues/307/checks/r7-optimization-20261009/188-sealed-N-source/\n?? core/docs/issues/307/checks/r7-optimization-20261009/189-sealed-P-source/\n?? core/docs/issues/307/checks/r7-optimization-20261009/190-native-C01-reference-volume/\n?? core/docs/issues/307/checks/r7-optimization-20261009/191-native-C01-independent-clone/\n?? core/docs/issues/307/checks/r7-optimization-20261009/192-final-reference-code-assets/",
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "import json,hashlib;from pathlib import Path;root=Path(\"/tmp/layerfs-r7-native-reference-inputs-20261009-1b028a24a\");config=json.loads((root/\"staging-config.json\").read_bytes());plan=json.loads(Path(config[\"container_setup\"][\"manifest\"]).read_bytes());plan[\"assets\"]=[item for item in plan[\"assets\"] if item[\"target\"]==\"/code\"];plan[\"native\"]=[dict(source=\"/tmp/layerfs-r7-empty-fixture-20261009\",target=\"/native\",inventory=\"/tmp/layerfs-r7-empty-inventory-20261009.jsonl\",inventory_sha256=\"a5695e32c5f1d0521272ea9794f5467c62a433f163aae9bfda2cc1be0bf31a33\",content_metadata_set_sha256=\"4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981\")];p=root/\"C01-native-plan.json\";f=p.open(\"x\");json.dump(plan,f,sort_keys=True,indent=2);f.write(\"\\n\");f.close();config[\"container_setup\"][\"manifest\"]=str(p);config[\"container_setup\"][\"manifest_sha256\"]=hashlib.sha256(p.read_bytes()).hexdigest();config.update(prepared_store_file=\"/tmp/layerfs-r7-empty-sealed-20261009.sqlite\",base_fixture_inventory=dict(path=\"/tmp/layerfs-r7-empty-inventory-20261009.jsonl\",sha256=\"a5695e32c5f1d0521272ea9794f5467c62a433f163aae9bfda2cc1be0bf31a33\",content_metadata_set_sha256=\"4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981\"),fixture_kind=\"empty\");config.pop(\"reduced_fixture_cut_identity\",None);p=root/\"C01-native-config.json\";f=p.open(\"x\");json.dump(config,f,sort_keys=True,indent=2);f.write(\"\\n\");f.close();print(json.dumps(dict(status=\"DECLARED_REFERENCE_SETUP_ONLY\",config=str(p),sha256=hashlib.sha256(p.read_bytes()).hexdigest(),asset_roots=[\"/code\"],native_roots=[\"/native\"],fixture_kind=\"empty\",prepared_store_sha256=hashlib.sha256(Path(config[\"prepared_store_file\"]).read_bytes()).hexdigest(),performance_samples=0)))"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 60139750,
+  "status": "PASS"
+}

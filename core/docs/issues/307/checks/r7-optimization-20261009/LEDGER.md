@@ -963,3 +963,45 @@ product branch, preserving required shipped inputs of other extensions. No
 metadata file was removed or staged. 186 passed7 source-classification tests in
 182583125 ns. The original failed seal is retained, not silently replayed or
 declared clean. This correction needs a new local harness identity before seals.
+
+## Local commit10 and actual source seals
+
+1b028a24a2ce69aeb18c2b99d51f582d3734a005 commits that source-classification
+correction and its owning test/receipts. Staged/committed tree
+517986534b4388923c435f824dfdbeb0c465e5d7 matches both exact counter records
+core/target/r7-loc-09-{staged,committed}.json. ProductionLOC185857 ->185857
+(delta+0), core120440/active77566/predecessors38878/integration3996/reference65417;
+same pinned counter/method as commit9. No product/format/migration change.
+
+187 actual corrected L source seal PASSED715878958 ns:994 files,
+source setcf07428b908447f470e09f403847322878e6c981c254f4af4f0dea4434fa7198,
+artifact12601962458c8b80dda543dcf5bf5fea8a6207098a8cf28d85293756b9cb00db.
+188 N seal PASSED229299042 ns:42files,
+set6a83226420d3a5ff45c0752ce6aa0b61e13a06dbc4850c0ad49da85cce0bfd45,
+artifact30c3c04f17e9fd65b09f8ae57475ddffca5edfb85a48a3adaac5ce09dba24805.
+189 P seal PASSED239722542 ns:115files,
+set4ae98581691c8ce834682ff05ba445cf8020c02b2457b1635b2ba62fa884ca41,
+artifactee3f759ee7cd069be8a775d4357f57b925ce671836a4e3c837013542482ece44.
+Each independently enumerated clean tracked membership and read complete bytes;
+compiled binary provenance remains a separate requirement.
+
+190/191 fresh native C01 reference volume
+layerfs-r7-native-C01-reference-20261009-1b028a24a contains an independent
+writable empty Store byte copy, source/destination0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c,
+172032 logical/allocated bytes, copy/compare239906208 ns under15s. Clone receipt
+4e44e44c074758fdbc48e941df3a9c864b0d27d53b450f27e884a1a8f0a078f4.
+192 fresh code-asset author is in progress; no Init/replay/native root copy or
+measurement occurs in that author. Parent/child are read-only auditing cacheA
+phase claims while lead prepares the actual reference controller.
+
+192 code-asset setup PASSED34524481125 ns (setup34381371667 ns), 17 entries/16 files/2015827 bytes, inventory bdb32a1af8814ce57db6c5e8d3ef0b1171a66ca12ad59127236230d186236285. No Init, root replay or performance sample. 193 prepared the exact native C01:B controller configuration, SHA68b0bdb25b3380b08e34ad381675b7bc640aff0665917f55baec07bca943fa9e. 194 actual reference PASSED3210051292 ns, controller3060622417 ns: original1000-file body as501:20, complete-tree observer, known EndSession and explicit Stop. Closed bundle70e22efd0cf99404183d702869b39fff7a9a8162b64c90c0171ac4c41c39c9be; all11 witness members/285758 bytes retained. Container d320ea6b5c1fe1e67707799baebfb4f586701a194c008c070e53fc53551698c1 is known stopped. No measured Workspace lifecycle or cache claim.
+
+195 packaging FAILED182122250 ns on chown of copied closed.json. Lead incorrectly attributed it to UID0, changed only its private setup helper and196 FAILED120193667 ns identically. Actual source witnesses all501:0/mode644; group0 is unavailable to the ordinary host owner. Both partial outputs and source witnesses remain unchanged. Taken under the owner direction2026-10-09: packaging code/evidence under host501:20 is permitted setup adaptation, with exact bytes/mode/mtime; it does not alter measured fixture metadata. 197 fresh packaging PASSED188383375 ns, 30 entries/27 files/2301585 bytes, inventory84581bab622e10e94c24b78756799a3db62fd5c001fbb51f2f4d080196b4644b, setd81fc53f3a99654cc7700cd4874d2f0097f4690fd9d9a2d9c90caa982acc426f. Original closed reference SHA unchanged.
+
+Recursive read-only cache audit found a concrete validator gap: main residency status and mandatory Store/overlay presence were not enforced. Parent owns the narrow harness correction and external negative vectors; lead runs checks after source freezes. Backing residency alone before Mount does not establish post-Mount command coldness: Mount warms immutable metadata/pooled reader metadata; startup SQL creates pager/prepared state. Initial CanonicalCache/StorageFetch genuinely start empty, operation-owned body arenas are not cross-operation caches. No measured A cold-command result may receive PASS with unavailable internal state. Existing positive file residency remains INELIGIBLE with zero attempts, not a new cache treatment. Stage0 still IN_PROGRESS; zero performance samples or accepted optimization iterations.
+
+198 host indices200–231 and199 indices232–262 PASSED once. All263 host binaries now ran at the unchanged product source, with named preparation gaps/skips and zero-test platform binaries retained. 200 Linux060–099 and201100–139 PASSED once. Linux140/263 executed:139PASS plus original034 unsupplied-precondition failure. 202 continues140–174; no source product change or passing-test resampling.
+
+202 Linux140–174 PASSED once, including actual mounted Commit/failure/concurrency/cycles/drain/install tests. Linux175/263 executed:174PASS plus retained034 fixture precondition failure. Fresh recursive cache reviewer accepted the narrow guards/runner annotation and the final all-counter/known-stop/zero-backing-page refusal vector at source scope, without a runtime cache claim. Parent froze receipts.py/test_registry.py/newtest_cache_contract.py (17 test methods); lead froze runner.py/test_runner.py/cache README. Child reuse for H05 was refused by tool thread limit; no child turn started, so active parent continues source-only narrowing, explicitly not a fresh independent review.
+
+203 complete frozen harness tests PASSED:227 tests in9.433s, original outer9684673292 ns under100s. This is external harness/source validation, not a cache or measurement result. The cache guard changes no product bytes, residency treatment, allowance or timeout. Next clean checkpoint allows actual build provenance/source seals and first real runner rows; Stage0 remains IN_PROGRESS.

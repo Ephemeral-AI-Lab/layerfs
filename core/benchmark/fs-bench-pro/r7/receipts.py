@@ -101,6 +101,9 @@ def validate_cache(row, arm, attempts, ineligible=False):
             require(set(semantic[0].get("required_residency_paths",[])) == set(declared["semantic_files"]), "semantic cold file coverage mismatch")
         residency = row.get("residency")
         require(isinstance(residency, dict) and residency.get("cache_class") == "A", "class A per-file residency required")
+        require(residency.get("status") in {"ELIGIBLE", "INELIGIBLE"}, "main cold predicate unavailable or not explicitly eligible/ineligible")
+        require(residency["status"] == "ELIGIBLE" or ineligible and attempts == 0,
+                "resident cold input attempted or ineligible disposition missing; original INELIGIBLE needs zero attempts")
         if residency.get("schema") == "r7-residency-stream-v1":
             require(arm in {"N", "P"}, "streamed native inventory is not a Store-sidecar substitute")
             inventory, manifest = residency.get("inventory", {}), residency.get("input_manifest", {})
@@ -112,6 +115,7 @@ def validate_cache(row, arm, attempts, ineligible=False):
             require(integer(residency.get("resident_pages")) and residency.get("eviction_hint_attempts") == inventory.get("physical_files")
                     and residency.get("payload_bytes_read") == 0 and residency.get("attempts") == 0, "actual streamed per-file hint/residency required")
             require(residency["resident_pages"] == 0 or attempts == 0, "resident cold input attempted; must be INELIGIBLE with zero attempts")
+            require((residency["status"] == "ELIGIBLE") == (residency["resident_pages"] == 0), "cold predicate status and observed residency disagree")
             require("mincore" in residency.get("method", "").lower(), "actual streamed mincore required")
             return
         files = residency.get("files")
@@ -122,17 +126,22 @@ def validate_cache(row, arm, attempts, ineligible=False):
         require(isinstance(required, list) and set(required) == paths, "complete input and sidecar inventory required")
         if arm == "L":
             require(isinstance(row.get("store_path"), str) and bool(row["store_path"]), "complete input and sidecar Store path required")
+            require(isinstance(row.get("overlay_path"), str) and bool(row["overlay_path"]), "complete input and sidecar overlay path required")
+            require(row["overlay_path"] != row["store_path"], "Store and overlay residency paths must be distinct")
             sidecars = {row["store_path"] + suffix for suffix in ("", "-wal", "-shm", "-journal")}
-            if row.get("overlay_path"):
-                sidecars |= {row["overlay_path"] + suffix for suffix in ("", "-wal", "-shm", "-journal")}
+            sidecars |= {row["overlay_path"] + suffix for suffix in ("", "-wal", "-shm", "-journal")}
             require(sidecars <= paths, "complete input and sidecar inventory required")
+            require(all(item.get("present") is True for item in files if item["path"] in {row["store_path"],row["overlay_path"]}),
+                    "mandatory Store and overlay database presence required")
         require(residency.get("payload_bytes_read") == 0 and residency.get("attempts") == 0, "residency observer cannot read payload or attempt product")
         require("mincore" in residency.get("method", "").lower(), "actual mincore observation required")
         require(all(type(item.get("present")) is bool and integer(item.get("resident_pages"))
                     and (not item["present"] or item.get("eviction_hint_attempts") == 1) for item in files), "class A eviction and measured residency required")
+        require(all(item["present"] or item["resident_pages"] == 0 for item in files), "absent input cannot have resident pages")
         resident = sum(item["resident_pages"] for item in files)
         require(residency.get("resident_pages") == resident, "residency total mismatch")
         require(resident == 0 or attempts == 0, "resident cold input attempted; must be INELIGIBLE with zero attempts")
+        require((residency["status"] == "ELIGIBLE") == (resident == 0), "cold predicate status and observed residency disagree")
         if arm == "L":
             require(row.get("fresh_daemon_cache") is True and row.get("fresh_kernel_connection") is True, "class A fresh cache state required")
         elif arm == "P":
@@ -155,6 +164,15 @@ def validate_receipt(row):
     attempts = row["attempted_operation_count"]
     require(attempts <= 1 and row["completed_operation_count"] <= attempts, "one original operation; no replay")
     require(integer(row.get("sample_count")) and row["sample_count"] == attempts, "sample count differs from original attempts")
+    if row.get("performance_status") == "PASS":
+        require(attempts > 0 and row["row_status"] not in {"NOT_RUN", "INELIGIBLE"}, "unrun or cache-ineligible row cannot claim performance PASS")
+        require(not (selected["cache_class"] == "A" and selected["arm"] == "L"),
+                "A:L post-Mount internal cold command state is unavailable; no performance PASS")
+        cache = row.get("cache", {})
+        if cache.get("class") == "A":
+            require(cache.get("residency", {}).get("status") == "ELIGIBLE" and
+                    all(item.get("residency", {}).get("status") == "ELIGIBLE" for item in cache.get("auxiliary_residencies", [])),
+                    "unknown or ineligible cold predicate cannot claim performance PASS")
     if row["row_status"] == "NOT_RUN":
         require(attempts == 0 and isinstance(row.get("reason"), str) and bool(row["reason"]), "unrun selection needs zero attempts and reason")
         return row

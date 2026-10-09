@@ -1,0 +1,18 @@
+
+running 13 tests
+test canonical_save_read_reuse_and_persisted_reservations_survive_reopen ... ok
+test explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts ... ok
+test failing_signature_page_rolls_back_prior_body_and_all_signature_rows ... ok
+test failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_immutable ... ok
+test final_body_multirow_locators_and_first_wins_have_one_atomic_ack ... ok
+test multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity ... ok
+test pack_insert_pages_keep_large_blob_binding_ownership_separate ... ok
+test pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal ... ok
+test readonly_refusal_and_external_writer_busy_do_not_retry ... ok
+test signature_pages_share_one_acknowledgement_at_the_existing_row_bound ... ok
+test signature_publication_is_bounded_set_based_and_preserves_stamps ... ok
+test wal_full_settings_and_unavailable_engine_are_explicit ... ok
+test writable_open_does_not_migrate_an_unrelated_database_journal ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+

@@ -1,0 +1,10 @@
+
+running 5 tests
+test a_directory_of_more_than_one_name_window_is_listed ... ok
+test a_later_commit_overwrites_the_branch_head_and_keeps_its_captured_parent ... ok
+test retained_descriptors_and_kernel_caches_are_unchanged_by_install ... ok
+test writes_during_a_commit_stay_live_and_reach_the_next_commit ... ok
+test writes_during_a_commit_stay_live_and_reach_the_next_commit_fifty_to_a_directory ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.00s
+

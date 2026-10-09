@@ -1,0 +1,7 @@
+
+running 2 tests
+test fp2_the_own_connection_agrees_with_the_ready_receipt_and_its_abort_control_is_bound ... ok
+test fp9_a_second_cold_cached_read_queues_in_the_kernel_behind_a_parked_readahead_read ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+

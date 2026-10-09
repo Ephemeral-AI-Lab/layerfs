@@ -1,0 +1,7 @@
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... ok
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+

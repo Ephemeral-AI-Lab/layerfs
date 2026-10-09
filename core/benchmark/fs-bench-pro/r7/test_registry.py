@@ -161,8 +161,9 @@ class Receipts(unittest.TestCase):
     def test_no_missing_sidecar_residency(self):
         row = diagnostic("E02:A:L")
         row["cache"] = {"class": "A", "scopes": dict.fromkeys(registry.PHASES, "synthetic test"), "fresh_daemon_cache": True, "fresh_kernel_connection": True,
+                        "store_path":"store", "overlay_path":"overlay",
                         "required_residency_paths": ["store", "store-wal"],
-                        "residency": {"cache_class": "A", "files": [{"path": "store", "present": True,
+                        "residency": {"cache_class": "A", "status":"ELIGIBLE", "files": [{"path": "store", "present": True,
                                         "resident_pages": 0, "eviction_hint_attempts": 1}], "resident_pages": 0,
                                       "payload_bytes_read": 0, "attempts": 0, "method": "fadvise and mincore"}}
         with self.assertRaisesRegex(ValueError, "complete input and sidecar"):
@@ -170,9 +171,11 @@ class Receipts(unittest.TestCase):
 
     def test_no_cold_attempt_if_resident(self):
         cache = {"class": "A", "scopes": dict.fromkeys(registry.PHASES, "synthetic test"), "fresh_daemon_cache": True, "fresh_kernel_connection": True,
-                 "store_path": "store", "required_residency_paths": ["store", "store-wal", "store-shm", "store-journal"], "residency": {"cache_class": "A",
+                 "store_path": "store", "overlay_path":"overlay", "required_residency_paths": ["store", "store-wal", "store-shm", "store-journal","overlay","overlay-wal","overlay-shm","overlay-journal"], "residency": {"cache_class": "A", "status":"INELIGIBLE",
                  "files": [{"path": "store", "present": True, "resident_pages": 1, "eviction_hint_attempts": 1}] +
-                          [{"path": "store" + suffix, "present": False, "resident_pages": 0} for suffix in ("-wal", "-shm", "-journal")],
+                          [{"path": "store" + suffix, "present": False, "resident_pages": 0} for suffix in ("-wal", "-shm", "-journal")] +
+                          [{"path":"overlay","present":True,"resident_pages":0,"eviction_hint_attempts":1}] +
+                          [{"path":"overlay"+suffix,"present":False,"resident_pages":0} for suffix in ("-wal","-shm","-journal")],
                  "resident_pages": 1, "payload_bytes_read": 0, "attempts": 0, "method": "fadvise and mincore"}}
         with self.assertRaisesRegex(ValueError, "resident cold input attempted"):
             receipts.validate_cache(cache, "L", 1)

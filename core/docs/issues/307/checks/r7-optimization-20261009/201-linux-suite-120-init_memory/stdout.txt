@@ -1,0 +1,6 @@
+
+running 1 test
+test init_100_and_1000_over_memory_ports_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+

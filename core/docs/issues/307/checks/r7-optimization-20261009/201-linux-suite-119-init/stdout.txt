@@ -1,0 +1,7 @@
+
+running 2 tests
+test init_seals_complete_root_and_first_branch_without_retained_handles ... ok
+test refusal_preserves_existing_output_and_original_request ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

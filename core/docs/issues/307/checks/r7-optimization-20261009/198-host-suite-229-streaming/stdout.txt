@@ -1,0 +1,14 @@
+
+running 9 tests
+test a_discarding_consumer_never_allocates_a_payload_copy ... ok
+test a_late_input_failure_is_returned_once_after_early_output ... ok
+test a_short_source_is_a_definitive_whole_file_result ... ok
+test children_are_emitted_before_their_parents ... ok
+test input_requests_stay_bounded_by_the_declared_windows ... ok
+test many_files_do_not_retain_the_whole_workload ... ok
+test root_identity_is_stable_across_repeated_streaming_runs ... ok
+test the_builder_retains_a_bounded_number_of_entries ... ok
+test unknown_length_and_known_length_agree_object_by_object ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

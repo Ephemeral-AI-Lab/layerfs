@@ -1,0 +1,11 @@
+
+running 6 tests
+test f1_store_busy_before_save_is_settled_and_a_later_commit_is_exact ... ok
+test f2_store_busy_at_publication_is_settled_and_releases_both_owners ... ok
+test f3_unknown_history_outcome_keeps_custody_and_the_mount_still_serves ... ok
+test f4_known_publication_with_an_unattempted_install_keeps_custody ... ok
+test f5_store_busy_inside_the_producer_is_settled_and_releases_both_owners ... ok
+test f6_a_port_refusal_in_the_producers_custody_reaches_the_driver_and_keeps_custody ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.42s
+

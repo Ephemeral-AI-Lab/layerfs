@@ -1,0 +1,15 @@
+
+running 10 tests
+test a_sparse_prefix_target_reconstructs_its_required_base_exactly ... ok
+test accessed_record_corruption_fails_canonical_authentication ... ok
+test adjacent_sparse_groups_coalesce_and_dense_promotion_preserves_bytes_and_order ... ok
+test dense_payload_coverage_promotes_once_and_then_reuses_sibling_groups ... ok
+test hash_valid_malformed_directory_is_refused_by_the_shared_prefix_validator ... ok
+test new_sparse_group_miss_promotes_retained_pack_then_all_siblings_reuse ... ok
+test random_sparse_groups_preserve_duplicate_slots ... ok
+test sparse_native_records_reconstruct_canonical_chunk_bytes ... ok
+test sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion ... ok
+test unread_corruption_is_outside_scoped_read_but_whole_pack_audit_refuses_it ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

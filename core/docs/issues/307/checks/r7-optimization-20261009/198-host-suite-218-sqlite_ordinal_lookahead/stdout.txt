@@ -1,0 +1,10 @@
+
+running 5 tests
+test a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan ... ok
+test content_reads_retain_the_original_same_save_storage_failure ... ok
+test fresh_leaves_share_one_combined_reservation_and_deduplicate_values ... ok
+test initial_combined_reservation_is_busy_before_effect ... ok
+test small_configured_blocks_refill_without_limiting_the_save ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

@@ -1,0 +1,6 @@
+
+running 1 test
+test sqlite_selected_ranges_scan_once_close_and_match_the_full_body ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

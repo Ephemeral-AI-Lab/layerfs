@@ -1,0 +1,8 @@
+
+running 3 tests
+test owned_capacity_is_not_retained ... ok
+test public_labels_are_normalized_before_attachment ... ok
+test recording_budget_pool_unwind_and_encoding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

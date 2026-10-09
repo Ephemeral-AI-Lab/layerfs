@@ -1,0 +1,6 @@
+
+running 1 test
+test linux_daemon_install_role ... ignored, external daemon role; invoked explicitly by the macOS handoff proof
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

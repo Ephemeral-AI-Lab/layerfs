@@ -1,0 +1,8 @@
+
+running 3 tests
+test attach_refusals_have_no_effect_and_a_failed_attach_returns_to_unattached ... ok
+test ready_mount_serves_the_complete_root_to_unregistered_access_then_drains ... ok
+test two_workspaces_share_one_dispatcher_and_unmount_independently ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s
+

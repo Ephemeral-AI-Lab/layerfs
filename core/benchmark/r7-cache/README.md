@@ -109,3 +109,21 @@ from manifest mode. Streamed tests cover two-file generator/consumer completenes
 raw hash, actual identity tampering before eviction, seal tampering before any
 file attempt, rooted symlink refusal and explicit alias accounting. The existing
 real Linux nonempty hot-page test still qualifies the actual mincore call.
+
+The receipt validator requires the main predicate to be explicitly ELIGIBLE
+with zero observed pages, or INELIGIBLE with positive pages and zero product
+attempts. Unknown, failed and pending main predicates cannot qualify an
+attempt. Both global Store and overlay database paths must be declared and
+present for L; absent optional sidecars remain valid, and absent paths cannot
+carry resident pages. Native streamed receipts retain their cardinality and
+per-physical-file hint requirements.
+
+A's pre-Mount backing predicate does not prove a cold command after Mount.
+The fresh CanonicalCache and StorageFetch start empty, but startup SQL reads
+profile/schema/history metadata and prepares statements. Mount reads canonical
+root, inode and directory metadata retained in the immutable and pooled-reader
+metadata caches. SQLite pager/prepared state and kernel metadata residency are
+not fully observed. L:A command qualification therefore stays INCOMPLETE even
+when all tested backing pages are absent. The runner keeps the original raw
+phase observations and the validator refuses performance PASS for this scope;
+no eviction, restart, larger budget or cache-profile substitution is added.

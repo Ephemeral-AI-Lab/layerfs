@@ -1,0 +1,27 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "1b028a24a2ce69aeb18c2b99d51f582d3734a005",
+  "source_tree": "517986534b4388923c435f824dfdbeb0c465e5d7",
+  "worktree_status": "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/187-sealed-L-source-corrected/\n?? core/docs/issues/307/checks/r7-optimization-20261009/188-sealed-N-source/",
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-m",
+    "r7.source_inventory",
+    "--arm",
+    "P",
+    "--output",
+    "/tmp/layerfs-r7-source-P-1b028a24a-20261009.json"
+  ],
+  "limit_seconds": 30,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 239722542,
+  "status": "PASS"
+}

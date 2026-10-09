@@ -1,0 +1,11 @@
+
+running 6 tests
+test a_lookup_racing_create_unlink_and_rename_never_binds_a_stale_inode ... ok
+test map_close_store_exit_process ... ok
+test mutations_racing_the_unmount_probe_keep_normal_results_and_persist ... ok
+test removed_references_keep_exact_state_without_open_custody ... ok
+test shared_mapping_stores_are_published_and_never_change_size ... ok
+test size_never_shrinks_under_concurrent_append_and_refusals_stay_refused ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.88s
+

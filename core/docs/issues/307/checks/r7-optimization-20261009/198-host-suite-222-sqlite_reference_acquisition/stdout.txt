@@ -1,0 +1,8 @@
+
+running 3 tests
+test exact_reuse_still_acquires_and_compares_canonical_bytes ... ok
+test missing_logical_child_is_still_refused ... ok
+test new_extent_leaf_checks_child_membership_without_reading_child_packs ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+

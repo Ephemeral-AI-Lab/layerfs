@@ -1,0 +1,11 @@
+
+running 6 tests
+test fp32_a_known_publication_is_forced_with_its_original_outcome ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_its_local_install ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_publication ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_save_finish ... ok
+test fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained ... ok
+test fp32_unknown_commit_custody_is_forced_only_when_relinquished_and_stays_unknown ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.57s
+

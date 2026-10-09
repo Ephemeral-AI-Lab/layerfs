@@ -1,0 +1,1 @@
+{"arm": "N", "files": 42, "path": "/tmp/layerfs-r7-source-N-1b028a24a-20261009.json", "sha256": "30c3c04f17e9fd65b09f8ae57475ddffca5edfb85a48a3adaac5ce09dba24805", "source_set_sha256": "6a83226420d3a5ff45c0752ce6aa0b61e13a06dbc4850c0ad49da85cce0bfd45", "status": "SEALED"}

@@ -1,0 +1,8 @@
+
+running 3 tests
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+

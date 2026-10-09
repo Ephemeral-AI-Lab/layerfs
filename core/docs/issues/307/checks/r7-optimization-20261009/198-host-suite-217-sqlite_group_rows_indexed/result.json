@@ -1,0 +1,23 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "1b028a24a2ce69aeb18c2b99d51f582d3734a005",
+  "source_tree": "517986534b4388923c435f824dfdbeb0c465e5d7",
+  "worktree_status": "M core/benchmark/fs-bench-pro/r7/test_runner.py\n M core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/187-sealed-L-source-corrected/\n?? core/docs/issues/307/checks/r7-optimization-20261009/188-sealed-N-source/\n?? core/docs/issues/307/checks/r7-optimization-20261009/189-sealed-P-source/\n?? core/docs/issues/307/checks/r7-optimization-20261009/190-native-C01-reference-volume/\n?? core/docs/issues/307/checks/r7-optimization-20261009/191-native-C01-independent-clone/\n?? core/docs/issues/307/checks/r7-optimization-20261009/192-final-reference-code-assets/\n?? core/docs/issues/307/checks/r7-optimization-20261009/193-native-C01-reference-config/\n?? core/docs/issues/307/checks/r7-optimization-20261009/194-real-native-C01-reference/\n?? core/docs/issues/307/checks/r7-optimization-20261009/195-C01-closed-reference-package/\n?? core/docs/issues/307/checks/r7-optimization-20261009/196-C01-reference-package-host-owner/\n?? core/docs/issues/307/checks/r7-optimization-20261009/197-C01-package-host-group/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-200-product_commit_cost/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-201-read_demand_custody/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-202-read_pack_locality/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-203-resources/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-204-resources_observation/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-205-root_qualification/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-206-runs/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-207-save_demand_locality/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-208-seal_allocation/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-209-selected_cache_bounds/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-210-selected_group_reads/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-211-semantic_admission/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-212-serverless_store/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-213-shared_processes/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-214-source/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-215-space_reclamation/\n?? core/docs/issues/307/checks/r7-optimization-20261009/198-host-suite-216-sqlite_group_rows/",
+  "command": [
+    "python3",
+    "-c",
+    "import os,sys;os.chdir(sys.argv[1]);os.execv(sys.argv[2],[sys.argv[2],*sys.argv[3:]])",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-proof/debug/deps/sqlite_group_rows_indexed-36ef8dc8ff64b89f",
+    "--test-threads=1"
+  ],
+  "limit_seconds": 100,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 807040041,
+  "status": "PASS"
+}

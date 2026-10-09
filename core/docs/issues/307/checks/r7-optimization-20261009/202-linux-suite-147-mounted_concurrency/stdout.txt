@@ -1,0 +1,9 @@
+
+running 4 tests
+test r6_1_twenty_four_processes_read_and_write_through_three_commits ... ok
+test r6_2_a_commit_against_twenty_writers_holds_an_exact_prefix_of_each ... ok
+test r6_3_a_commit_on_one_workspace_while_its_sibling_writes ... ok
+test r6_6_finite_arrivals_on_two_workspaces_both_finish ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.33s
+

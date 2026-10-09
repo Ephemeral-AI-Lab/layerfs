@@ -1,0 +1,8 @@
+
+running 3 tests
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

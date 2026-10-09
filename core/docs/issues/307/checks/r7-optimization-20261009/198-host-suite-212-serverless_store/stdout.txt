@@ -1,0 +1,10 @@
+
+running 5 tests
+test disposable_create_publish_seal_and_reopen_all_layouts ... ok
+test lock_child ... ok
+test non_wal_store_is_refused_without_conversion ... ok
+test seal_refuses_retained_provider_without_effect ... ok
+test second_process_busy_has_no_effect_and_readers_keep_progressing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

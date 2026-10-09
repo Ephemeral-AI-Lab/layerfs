@@ -1,0 +1,9 @@
+
+running 4 tests
+test invalid_windows_and_consumer_failure_stop_the_single_operation ... ok
+test multi_level_repetition_matches_streaming_extent_builder_without_zero_byte_scan ... ok
+test run_roots_equal_streaming_at_cutoff_cdc_and_leaf_partition_boundaries ... ok
+test terabyte_zero_runs_emit_logarithmic_objects_and_read_exact_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+

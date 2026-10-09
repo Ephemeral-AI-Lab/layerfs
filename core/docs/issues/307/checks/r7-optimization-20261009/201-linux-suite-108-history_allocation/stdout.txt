@@ -1,0 +1,8 @@
+
+running 3 tests
+test a_consumed_reservation_survives_a_later_failure ... ok
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

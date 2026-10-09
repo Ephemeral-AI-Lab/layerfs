@@ -1,0 +1,11 @@
+
+running 6 tests
+test lost_upload_and_start_keep_original_owner_and_refuse_replay ... ok
+test marker_inside_truncated_frame_keeps_evidence_and_fails_readiness ... ok
+test partial_create_identity_and_nonlocal_volume_are_not_adopted ... ok
+test stderr_and_substring_markers_never_satisfy_readiness ... ok
+test streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup ... ok
+test widened_or_missing_native_access_is_never_reported_as_the_endpoint ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

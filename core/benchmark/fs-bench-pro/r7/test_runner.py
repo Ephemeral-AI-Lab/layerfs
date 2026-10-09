@@ -107,6 +107,14 @@ class RunnerContract(unittest.TestCase):
         runner.diagnostic_completion(row)
         self.assertEqual(row["row_status"],"INCOMPLETE")
 
+    def test_all_backing_pages_absent_cannot_prove_post_mount_a_command_cold(self):
+        from r7.test_cache_contract import scalar
+        row = self.complete_row()
+        row["cache"] = scalar()
+        runner.diagnostic_completion(row)
+        self.assertEqual(row["row_status"], "INCOMPLETE")
+        self.assertTrue(any("post-Mount command cache state" in gap for gap in row["completion_gaps"]))
+
     def test_missing_b_and_c_predicates_never_become_zero_or_eligible(self):
         for cls,key in (("B","object_demands"),("C","warmup_gap_ns")):
             row = self.complete_row()
@@ -134,10 +142,10 @@ class RunnerContract(unittest.TestCase):
 
     def test_zero_store_pages_cannot_replace_missing_or_warm_replay_predicate(self):
         cache = {"class":"A","scopes":dict.fromkeys(registry.PHASES,"synthetic scope"),"fresh_daemon_cache":True,"fresh_kernel_connection":True,
-                 "store_path":"store","required_residency_paths":["store","store-wal","store-shm","store-journal"],
+                 "store_path":"store","overlay_path":"overlay","required_residency_paths":["store","store-wal","store-shm","store-journal","overlay","overlay-wal","overlay-shm","overlay-journal"],
                  "declared_external_inputs":{"replay_roots":["/replay"],"semantic_files":[]},
-                 "residency":{"cache_class":"A","files":[{"path":"store","present":True,"resident_pages":0,"eviction_hint_attempts":1}]+
-                   [{"path":"store"+suffix,"present":False,"resident_pages":0} for suffix in ("-wal","-shm","-journal")],
+                 "residency":{"cache_class":"A","status":"ELIGIBLE","files":[{"path":path,"present":True,"resident_pages":0,"eviction_hint_attempts":1} for path in ("store","overlay")]+
+                   [{"path":path+suffix,"present":False,"resident_pages":0} for path in ("store","overlay") for suffix in ("-wal","-shm","-journal")],
                    "resident_pages":0,"attempts":0,"payload_bytes_read":0,"method":"fadvise mincore"}}
         with self.assertRaisesRegex(ValueError,"replay cold roots"):
             receipts.validate_cache(cache,"L",1)

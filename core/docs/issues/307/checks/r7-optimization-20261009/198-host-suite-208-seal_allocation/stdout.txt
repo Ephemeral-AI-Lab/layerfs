@@ -1,0 +1,10 @@
+
+running 5 tests
+test hard_link_refusal_preserves_original_bytes_and_allocation ... ok
+test readonly_seal_does_not_release_extents ... ok
+test seal_releases_excess_and_preserves_original_file_for_all_layouts ... ok
+test shared_session_busy_leaves_allocation_untouched ... ok
+test symlink_refusal_preserves_original_bytes_and_allocation ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

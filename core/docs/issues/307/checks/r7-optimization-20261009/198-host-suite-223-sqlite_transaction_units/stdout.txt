@@ -1,0 +1,15 @@
+
+running 10 tests
+test a_small_acknowledged_pack_tail_serves_a_larger_following_wave ... ok
+test allocation_replenishes_before_pressure_seals_when_the_tail_is_consumed ... ok
+test canonical_and_shared_physical_bytes_are_bounded_independently ... ok
+test dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail ... ok
+test each_save_owns_a_new_combined_range_without_recycling_used_ids ... ok
+test partial_pack_queue_survives_wave_boundary_within_existing_budget ... ok
+test queued_chunk_groups_use_the_acknowledged_pack_tail ... ok
+test reader_reuses_authenticated_pack_within_one_operation ... ok
+test same_save_read_and_dependency_force_closure_of_carried_queue ... ok
+test successful_save_history_retains_selection_and_group_work_from_final_drain ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+

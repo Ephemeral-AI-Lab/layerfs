@@ -1,0 +1,11 @@
+
+running 6 tests
+test a_real_recording_renders_its_structure ... ok
+test disabled_report_is_explicit ... ok
+test labels_are_escaped_for_display ... ok
+test markers_show_error_and_missing_detail ... ok
+test text_renders_a_readable_tree ... ok
+test writer_failures_propagate ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
