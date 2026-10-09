@@ -17,7 +17,10 @@ pub(crate) struct LocalRow {
 /// entry is dropped by the statement that writes its serial. It holds as many
 /// serials as one compound job can publish; a serial beyond that is read by
 /// its indexed statements as before.
-pub(crate) struct JobRows(RefCell<[Option<(i64, Option<LocalRow>)>; COMPOUND_INODES]>);
+pub(crate) struct JobRows(RefCell<[Option<SeenRow>; COMPOUND_INODES]>);
+/// One read of one serial: the serial and its local row, None when the
+/// serial has no local row.
+type SeenRow = (i64, Option<LocalRow>);
 impl JobRows {
     pub(crate) fn new() -> Self {
         Self(RefCell::new(Default::default()))
