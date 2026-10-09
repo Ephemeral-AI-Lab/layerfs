@@ -1,0 +1,28 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "ffea8f9d5a40149637311ca54dea45925ae944f1",
+  "source_tree": "1d50d19e5e73c7d8a3009fb5809733f136c04c42",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/1220-L-source-seal-ffea8f9d5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1221-runtime-release-ffea8f9d5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1222-daemon-release-ffea8f9d5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1223-build-provenance-ffea8f9d5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1224-C01-L-volume-ffea8f9d5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1225-C01-L-clone-ffea8f9d5/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1226-C01-L-configuration-ffea8f9d5/",
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-m",
+    "r7.runner",
+    "--config",
+    "/tmp/layerfs-r7-C01-L-inputs-ffea8f9d5-20261009/L-config.json",
+    "--selection",
+    "C01:B:L",
+    "--output",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/1227-C01-B-L-sample-ffea8f9d5/sample",
+    "--claims",
+    "/tmp/layerfs-r7-treatment-claims-20261009"
+  ],
+  "limit_seconds": 30,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

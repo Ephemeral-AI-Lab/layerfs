@@ -1,0 +1,1 @@
+__r7_a=$(date +%s%N); /bin/bash -o pipefail -c '{ for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done; } >/dev/null'; __r7_s=$?; __r7_b=$(date +%s%N); printf 'R7_IN_CONTAINER_CLOCK_NS %s %s\n' "$__r7_a" "$__r7_b" >&2; exit $__r7_s

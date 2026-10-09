@@ -125,3 +125,25 @@ required cross-thread wake-ups, 29 dispatcher broadcasts.
 | E04b | Statement diet, rest: job-scoped row memo, layer columns in the inode read, no lease rows of kinds 7 and 9, narrow accounting rows, `native_file` folded into `file_handle`, CHECK rewrite / E | Attempts per created file 48 → about 25–35; trigger runs 13 → about 5 | Open, handed off; D10 changes `owner_rows` that mounted tests read, D15 is not provable as specified |
 | H01 | READ, OPEN, RELEASE and the directory requests as owner visits; bounded base-fact and length cache / C | Owner jobs per READ 6 → 1; statements 87 → about 5; reader grants 2 → 1 (receipt 559; `r7-open/read-directory-path-trace-fdc24ef3f.md`) | Open, handed off |
 | F01 (FIXED `82c51a439`, receipts 591, 595, 599: verifier PASS) | Directory link count 2 + child directories: absolute `subdirs` in the inode row, derived and remembered for base directories / correctness | Verifier FAIL rows 3 → 0; requests, jobs and transactions unchanged | Fixed; follow-up: carry the count across an install, or a Store-side derived count |
+
+## Fourth lead run, 2026-10-09: outcomes
+
+Outcomes of the rows above that this run worked, and the rows it added.
+Counters are from the ledger's sample sections (baseline 652–703 at
+`63c48d8dc`; final 1220–1271 at `ffea8f9d5`); one sample per identity.
+
+| ID | Outcome |
+| --- | --- |
+| H01 (READ, OPEN, RELEASE and directory requests as owner visits) | KEPT: `de4789299`, `16fa316ee`, `8ac4b4c4c`, `1fe0ed54b`, `39e4ce766`. C09 owner jobs 3082 → 517, statements 42610 → 1055, service 74.8 → 4.4 ms. A reply of 10 or 64 names: 6 jobs and 114 or 384 statements → 2 jobs and 10. The old source-holding path is deleted (`900231d0a`, `a591d05ff`) |
+| C08 (base file lengths in bounded memory) | KEPT `dbaad86a5`: charged 264 bytes an entry inside the existing immutable-cache allowance; no new allowance |
+| E04b (statement diet, rest) | KEPT: job-scoped row memo `dc0c0a6f7`, no lease kinds 7 and 9 `77a2c137a`, `native_file` folded into `file_handle` `e62685c59`, namespace-row accounting `a0ae8b522`. C01 statements 61004 → 44004, service 162.9 → 117.1 ms |
+| D07 (reclamation follows the jobs that create it) | KEPT as inline release: `3558fb2be`, `989bfa887`, `36e2ec328`, `2a23b82f2`. C03 statements 127399 → 102540, service 300.4 → 216.8 to 238.0 ms. The predicted command time (590 to 655 ms) was wrong in the first sample and is recorded as such |
+| G01 (payload cells that fit their pages) | KEPT as run rows of at most 32 KiB: `e555b771f`, with range reclamation `9f7037e04` and a delete trigger that reads lengths `95a9ddde0`. C06 statements 36918 → 9766, service 147.9 → 62.7 to 68.5 ms, overlay 76685312 → 68468736 bytes. 128 KiB windows were already the kernel's |
+| E05 (group commit) | SET ASIDE: a reply would precede the commit of its mutation, which changes what a reply means; about 20 ms a cell at most, and no verdict flips |
+| B05 (`COPY_FILE_RANGE`, larger windows, adaptive READDIRPLUS) | NOT DONE: larger windows are a larger limit as the fix; `COPY_FILE_RANGE` is undecided and C10 is at or below A2 without it |
+| B06 (OPEN answered `ENOSYS`) | NOT DONE: OPEN is one visit now; removing it changes descriptor ownership |
+| E01, E02, E03 | NOT WORKED in this run |
+| New: one clock for both arms (L4-8) | Harness `1166e7a4b`: the measured command is also timed inside the container, as A2 was |
+| New: scheduler regime label | Harness `eb170b029`: per-thread switches of the receive thread label a sample SEPARATE, STACKED or MIXED; wall time is compared within one label |
+| New: unused storage removed | `a591d05ff` (tables `native_source`, `native_read`), `289cc23e4` (index `payload_namespace_row`): 1000 small files 462848 → 430080 bytes |
+| New: larger SQLite page; payload outside SQLite; zero elision; forcing the same-CPU regime; a resident READ answered on the receive thread | SET ASIDE, reasons in the ledger |

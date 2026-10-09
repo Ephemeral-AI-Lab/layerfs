@@ -2181,7 +2181,7 @@ B (fresh mount on a warm daemon), arm L, one sample.
 | L4-7 | The foreign key from descriptor rows to `native_mount` is dropped with `native_file` (batch 3a, `e62685c59`) | Reported by the implementer, accepted by the lead: SQLite's child scan on mount deletion would not use the partial index and walked every descriptor of the namespace (4 VM steps per unrelated row, measured); keeping the key needs a third b-tree, which is storage for a check. The mount row is read by the inserting job's fence and deleted only by the job that has just read its descriptor window empty; `descriptor_request.rs` pins equal cost of retiring a mount beside 2 and beside 40 unrelated descriptors | commit `e62685c59`; `core/docs/architecture/19-daemon-overlay.md` |
 | L4-8 | OWNER decision: "we need fair comparison, either to exclude command time or include for both a2 and layerfs" (conversation, 2026-10-09). Lead's choice of the side: exclude launch for L. The class runner runs the measured cell command as one child Bash between two clock reads taken inside the container and stores the interval as `phases.command_in_container` (process start to exit: the clock of the A2 rows, `time.monotonic()` around `Popen` to pidfd exit on the experiment branch). The host span around Docker exec stays in `phases.command`; from the next sample the A2 ratio is computed on the in-container interval and both are printed | Including launch for A2 would need the A2 arm rebuilt from a branch that may only be read, or a constant added to its numbers. The filesystem requests of the command are unchanged; the harness identity changes, so every cell is sampled again | `fs-bench-pro/r7/runner.py` (`inner_timed`, `inner_clock_observation`) |
 | L4-9 | A READDIR offset keeps meaning "resume strictly after this name" and offsets handed out before a rewind stay valid (no visible contract change). Consequence accepted and recorded as an open risk: a handle that is rewound and listed again while its directory keeps changing stores one reply row (at most 16 KiB) per differing reply until RELEASEDIR, where the old layout stored one row per new name | Retiring earlier replies at offset 0 is permitted by POSIX but is a visible change and needs the owner's word. A directory listed once stores less (4000 names: 8000 → 126 b-tree entries) | `core/docs/architecture/74-native-directory-custody.md`; batch 3b |
-| L4-10 | After the audit of the whole run: the in-place overwrite of a live dense payload row stays, although no cell exercises it (C08 and C11 overwrite inherited bytes, so they insert rows: 4096 Payload attempts, the same as C06) | It is generic and counted: an aligned overwrite of local bytes is 4 statements per 128 KiB window where delete and insert is 8, with no page freed and reallocated (`costs.rs`). It has no sampled time behind it; the auditor names dropping it as the simpler form. Kept on the count, listed for the owner in the completion document | [audit](../../r7-open/audit-ca51a0c37.md) section G |
+| L4-10 | After the audit of the whole run: the in-place overwrite of a live dense payload row stays, although no cell exercises it (C11 overwrites inherited bytes, so it inserts rows: 4096 Payload attempts, the same as C06; no cell overwrites bytes it wrote) | It is generic and counted: an aligned overwrite of local bytes is 4 statements per 128 KiB window where delete and insert is 8, with no page freed and reallocated (`costs.rs`). It has no sampled time behind it; the auditor names dropping it as the simpler form. Kept on the count, listed for the owner in the completion document | [audit](../../r7-open/audit-ca51a0c37.md) section G |
 
 ### Samples 600–651 at `c126f742e` (product source equal to `82c51a439`)
 
@@ -2994,3 +2994,97 @@ binaries (`353-cleanup2-host.txt`; `complete_installed_roots` and
 `host_handoff` fail on their known prerequisites); Linux 21 of 21 mounted
 daemon binaries (`353-cleanup2-linux.txt`); `fmt --check`, Clippy on host
 and in Linux, guard.
+
+### Index dropped, tests merged: `289cc23e4`, `f9fd881ac`, `ffea8f9d5`
+
+- `289cc23e4` drops `payload_namespace_row`. New pin in `reclaim_cost.rs`:
+  the step that ends a closed namespace costs (13 attempts, 15 executions,
+  346 VM steps) beside 4 and beside 1024 payload rows in each of two live
+  namespaces, and its program opens only `payload_generation` on
+  `payload`. Schema 30 → 31; no other pin moved. Counters from a one-off
+  test (`355-index-counters.txt`): row insert 117 → 111 VM steps, a
+  128 KiB window 624 → 600; 1000 one-cell files 1203 → 1199 pages; a dense
+  64 MiB file 16721 → 16714 pages. Production LOC 187481 → 187480.
+  Checks at that commit: host 124 of 126 binaries (the two known); Linux
+  20 of 21 mounted binaries, `native_custody` failed once
+  (`355-index-linux.txt`, kept).
+- That failure is a race in the test as restaged by `a591d05ff`: the lane
+  can read idle before the kernel's RELEASE of the test's own read
+  arrives, and the nonwaiting submission then meets `AdmissionFull`.
+  `ffea8f9d5` (test only) keeps the file open, closes it, and waits for
+  the descriptor row to leave the engine, observed through another
+  namespace. `356-merge-linux.txt`: 2 of 2.
+- `f9fd881ac` merges `0fa417962` (tests only, worktree b2): the window
+  decision L4-2 rests on is now staged. Through a gate at the public
+  `PackPersistence` port of a Store read session, with no product hook:
+  an ordinary Unmount beside a READ inside its Store read answers Busy 20
+  times with the mount Live and `base_readers` 0, and completes after the
+  READ replies its exact bytes; a detached unmount stays Draining with one
+  admitted request for 50 observations and revokes only after the reply;
+  Force stops Retained at Requests with the abort written, the detach not
+  attempted and nothing revoked, the caller gets `ECONNABORTED`, and
+  later Unmount and Force return the same custody (the mount stays
+  aborted and mounted until it is detached by hand: the contract's
+  outcome, observed, not a new one). On the lane: the READ keeps it
+  undrained; a stopped fence does not end it; one case each for OPEN and
+  READDIR. Not staged: Force when the read is released inside the drain
+  window; the fenced halves of OPEN and READDIR. No defect observed.
+
+### Final sample: receipts 1220–1271 at `ffea8f9d5`
+
+All twelve rows DIAGNOSTIC, verifier PASS, custody KNOWN_STOP, cleanup
+Gone; the sample held the worktree locks; host load average about 7 to 9.
+Against 1160–1211 the product differs by deletions only (two tables, one
+index, an unread timer): **owner jobs and statement executions are
+identical in every cell**, so every time difference between the two
+samples is the host or the scheduler regime, not the product.
+
+| Cell | Receipt | In-container ms | A2 ms | Ratio | Regime | Previous sample (1160–1211) ms | Owner service ms, previous → now | Overlay logical bytes, run start → previous → now |
+| --- | --- | ---: | ---: | ---: | --- | ---: | --- | --- |
+| C01 | 1227 | 302.5 | 183.4 | 1.65 | SEPARATE | 299.4 | 116.9 → 117.1 | 557056 → 462848 → 430080 |
+| C02 | 1231 | 962.4 | 965.0 | 1.00 | SEPARATE | 822.1 | 130.6 → 149.2 | 557056 → 462848 → 430080 |
+| C03 | 1235 | 549.1 | 410.8 | 1.34 | SEPARATE | 422.1 (MIXED) | 216.8 → 238.0 | 557056 → 462848 → 430080 |
+| **C04** | 1239 | 853.5 | 952.6 | **0.90** | SEPARATE | 695.9 | 117.5 → 152.3 | 458752 → 397312 → 376832 |
+| **C05** | 1243 | 755.1 | 949.6 | **0.80** | SEPARATE | 765.2 | 133.9 → 134.8 | 458752 → 397312 → 376832 |
+| C06 | 1247 | 128.7 | 78.6 | 1.64 | SEPARATE | 113.5 | 62.7 → 68.5 | 76685312 → 68517888 → 68468736 |
+| C07 | 1251 | 262.4 | 171.6 | 1.53 | SEPARATE | 256.3 | 136.6 → 137.2 | 153100288 → 136785920 → 136708096 |
+| C08 | 1255 | 126.5 | 106.1 | 1.19 | SEPARATE | 117.6 | 59.9 → 64.3 | 76685312 → 68517888 → 68468736 |
+| **C09** | 1259 | 62.2 | 106.2 | **0.59** | SEPARATE | 49.7 | 3.6 → 4.4 | 278528 → 249856 → 229376 |
+| **C10** | 1263 | 149.1 | 178.2 | **0.84** | SEPARATE | 175.5 | 91.6 → 76.3 | 76685312 → 68517888 → 68468736 |
+| C11 | 1267 | 116.1 | 85.8 | 1.35 | SEPARATE | 114.5 | 65.0 → 63.7 | 76652544 → 68517888 → 68468736 |
+| C12 | 1271 | 205.1 | 189.3 | 1.08 | SEPARATE | 214.3 | 66.9 → 63.9 | 405504 → 356352 → 335872 |
+
+Reading:
+
+- **Below A2 in both samples on A2's clock: C04, C05, C09.** C10 is below
+  in this one (0.84) and at the target in the previous one (0.98). C02 is
+  below in the previous one (0.85) and at the target in this one (1.00,
+  2.6 ms under). C03 is at the target only in a MIXED sample (1.03) and
+  1.34 in a SEPARATE one.
+- **Above A2 in both: C01, C06, C07, C08, C11, C12.**
+- The spread between two samples of identical work is large: C02 +17 %,
+  C04 +23 %, C03 +30 % (regime), C10 −15 %, C09 +25 % (12 ms). For C02
+  the receive thread ran 217.3 → 248.8 ms and the container used 830 →
+  977 ms of CPU for the same 6002 jobs and 46004 statements: the host was
+  slower, the product did the same work. One sample per identity; neither
+  is a best-of, both are reported.
+- Storage fell again with the tables and the index: 1000 small files
+  462848 → 430080 bytes (−22.8 % against the start of the run), 64 MiB
+  68517888 → 68468736 (−10.7 %), C09 229376 (−17.6 %). Store bytes are
+  unchanged in every cell. Allocated overlay bytes fell with them.
+
+### Gate at the tip and hand-back
+
+Linux, four packages, every suite, at `ffea8f9d5`: 126 of 128 binaries
+(`357-tip-linux.txt`); `complete_installed_roots` and `shared_processes`
+fail as they did before this run. Host: 124 of 126 at `289cc23e4`
+(`355-index-host.txt`), and the tip adds tests only (`356-merge-host.txt`).
+`fmt --check`, Clippy on host and in Linux, guard: pass.
+
+The stop rule's first half does not hold: C01, C03, C06, C07, C08, C11 and
+C12 are above A2 in both final samples. Its second half holds: no ranked
+row with a predicted saving above the spread remains without a forbidden
+item. The run is handed back with
+[the completion document](../../R7-OPTIMIZATION-COMPLETION-20261009.md),
+which lists each cell above A2 with the measurement that shows why, the
+decisions left to the owner, and what remains.
