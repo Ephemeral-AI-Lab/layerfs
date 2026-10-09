@@ -612,7 +612,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
         Ok(_) => panic!("a directory page was listed without a reader"),
     };
     stopped(failure.base_demand().unwrap().cause());
-    assert!(!failure.fenced() && failure.retained_source().is_some());
+    assert!(!failure.fenced() && failure.offered().is_none());
     wait(failure.relinquish()).unwrap();
 
     // Fixed slots: the count grew by four; the first original cause is

@@ -10,13 +10,12 @@ use layerfs_fuse::ports::{
 };
 use layerfs_history::HistoryError;
 use layerfs_overlay::{
-    BaseSource, FileRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
-    NativeDirectoryRead, NativeMount, OpenFile, Publication,
+    BaseSource, FileRead, NativeCookieOffer, NativeMount, OpenFile, Publication,
 };
 use layerfs_workspace::{
-    BaseView, MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome,
-    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, NativeWindow,
-    Operation, SourceView, Time, VisitFacts, WorkspaceError,
+    BaseView, MutationInputFailure, MutationPlan, NativeDirectoryWindow, NativeMutationJob,
+    NativeMutationOutcome, NativeReadJob, NativeReadOperation, NativeReadOutcome,
+    NativeVisitRequest, NativeWindow, Operation, SourceView, Time, VisitFacts, WorkspaceError,
 };
 use std::{
     future::{poll_fn, Future},
@@ -157,89 +156,49 @@ impl FilesystemPort {
     }
 }
 impl RequestServices for FilesystemPort {
-    fn directory(
+    fn directory_visit(
         &self,
         mount: NativeMount,
         serial: u64,
         handle: u64,
-    ) -> ServiceFuture<'_, ServiceReply<NativeDirectory>> {
-        self.acquire(
-            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Handle {
-                mount,
-                serial,
-                handle,
-            }))),
-            |response| match response {
-                Response::Native(NativeReply::Directory(NativeDirectoryReply::Handle(value))) => {
-                    Some(*value)
-                }
-                _ => None,
-            },
-        )
-    }
-    fn directory_read(
-        &self,
-        directory: NativeDirectory,
-        request: u64,
         offset: u64,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryRead>>> {
-        self.acquire(
-            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Read {
-                directory,
-                request,
-                offset,
-            }))),
-            |response| match response {
-                Response::Native(NativeReply::Directory(NativeDirectoryReply::Read(value))) => {
-                    Some(value.clone())
-                }
-                _ => None,
-            },
-        )
-    }
-    fn directory_page(
-        &self,
-        read: Arc<NativeDirectoryRead>,
         after: Option<Vec<u8>>,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryPage>>> {
-        self.acquire(
-            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Page {
-                read,
-                after,
-            }))),
-            |response| match response {
-                Response::Native(NativeReply::Directory(NativeDirectoryReply::Page(value))) => {
-                    Some(value.clone())
-                }
-                _ => None,
-            },
-        )
-    }
-    fn directory_cookies(
-        &self,
-        read: Arc<NativeDirectoryRead>,
-        names: Vec<Vec<u8>>,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeCookiePlan>>> {
-        self.acquire(
-            Command::Native(NativeJob::Directory(Box::new(
-                NativeDirectoryJob::PrepareCookies { read, names },
-            ))),
-            |response| match response {
-                Response::Native(NativeReply::Directory(NativeDirectoryReply::Cookies(value))) => {
-                    Some(value.clone())
-                }
-                _ => None,
-            },
-        )
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryWindow>>> {
+        // A stopped mount refuses before anything about the request is read.
+        if let Err(fenced) = self.fenced(true) {
+            return Box::pin(async move { Err(fenced) });
+        }
+        let visit = self.0.workspace().native_directory_visit(
+            self.0.resident(),
+            mount,
+            serial,
+            handle,
+            offset,
+            after,
+        );
+        match visit {
+            Ok(visit) => self.acquire(
+                Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Visit(
+                    visit,
+                )))),
+                |response| match response {
+                    Response::Native(NativeReply::Directory(NativeDirectoryReply::Window(
+                        value,
+                    ))) => Some(value.clone()),
+                    _ => None,
+                },
+            ),
+            Err(error) => Box::pin(async move { Err(Box::new(error) as ServiceError) }),
+        }
     }
     fn publish_cookies(
         &self,
-        plan: Arc<NativeCookiePlan>,
-        accepted: usize,
+        offer: NativeCookieOffer,
+        names: Vec<Vec<u8>>,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
         self.acquire(
             Command::Native(NativeJob::Directory(Box::new(
-                NativeDirectoryJob::PublishCookies { plan, accepted },
+                NativeDirectoryJob::Publish { offer, names },
             ))),
             directory_done,
         )

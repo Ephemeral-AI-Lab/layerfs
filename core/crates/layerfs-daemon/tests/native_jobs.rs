@@ -364,71 +364,47 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
         .result()
         .is_ok());
     drop((value, opened));
-    let source_reply = dir_job(
-        &client,
-        route,
-        NativeDirectoryJob::Read {
-            directory,
-            request: 101,
-            offset: 2,
-        },
-    );
-    let read = match source_reply.result() {
-        Ok(Response::Native(NativeReply::Directory(NativeDirectoryReply::Read(read)))) => {
-            read.clone()
-        }
-        other => panic!("{other:?}"),
-    };
-    let before = store.work();
-    let page_reply = dir_job(
-        &client,
-        route,
-        NativeDirectoryJob::Page {
-            read: read.clone(),
-            after: None,
-        },
-    );
-    assert_eq!(store.work(), before, "directory owner made Store demand");
-    let page = match page_reply.result() {
-        Ok(Response::Native(NativeReply::Directory(NativeDirectoryReply::Page(page)))) => {
-            page.clone()
-        }
-        other => panic!("{other:?}"),
-    };
-    let directory_view = operation
+    // READDIR is a reading visit, the request's own merge and fill, and a
+    // publishing visit of the accepted names. Neither job reaches the Store.
+    let visit = operation
         .workspace()
-        .view_for_source(read.source())
+        .native_directory_visit(
+            operation.resident(),
+            mount,
+            directory.serial(),
+            directory.owner_id(),
+            2,
+            None,
+        )
         .unwrap();
-    let listing = directory_view.native_directory_listing(&page).unwrap();
-    assert_eq!(listing.entries.len(), 1);
-    let cookie_reply = dir_job(
-        &client,
-        route,
-        NativeDirectoryJob::PrepareCookies {
-            read: read.clone(),
-            names: listing
-                .entries
-                .iter()
-                .map(|entry| entry.name.clone())
-                .collect(),
-        },
-    );
-    let cookies = match cookie_reply.result() {
-        Ok(Response::Native(NativeReply::Directory(NativeDirectoryReply::Cookies(plan)))) => {
-            plan.clone()
+    let before = store.work();
+    let window_reply = dir_job(&client, route, NativeDirectoryJob::Visit(visit));
+    assert_eq!(store.work(), before, "directory owner made Store demand");
+    let window = match window_reply.result() {
+        Ok(Response::Native(NativeReply::Directory(NativeDirectoryReply::Window(window)))) => {
+            (**window).clone()
         }
         other => panic!("{other:?}"),
     };
+    drop(window_reply);
+    let batch = window
+        .finish(Some(&operation.workspace().base().unwrap()))
+        .unwrap();
+    assert_eq!(batch.entries.len(), 1);
+    let offer = batch.publish.expect("a fresh reply publishes its names");
+    let names: Vec<_> = batch.entries.into_iter().map(|entry| entry.name).collect();
+    let before = store.work();
     assert!(dir_job(
         &client,
         route,
-        NativeDirectoryJob::PublishCookies {
-            plan: cookies.clone(),
-            accepted: 1
+        NativeDirectoryJob::Publish {
+            offer: offer.clone(),
+            names: names.clone(),
         }
     )
     .result()
     .is_ok());
+    assert_eq!(store.work(), before, "directory owner made Store demand");
     assert!(dir_job(
         &client,
         route,
@@ -440,25 +416,13 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     )
     .result()
     .is_ok());
+    // A reply racing RELEASEDIR publishes nothing, and neither visit left
+    // anything that could hold the mount.
     assert!(
-        job(&client, route, Command::Native(NativeJob::Revoke(mount)))
+        dir_job(&client, route, NativeDirectoryJob::Publish { offer, names })
             .result()
             .is_err()
     );
-    let source = read.source();
-    drop((
-        listing,
-        cookies,
-        page,
-        read,
-        directory_view,
-        cookie_reply,
-        page_reply,
-        source_reply,
-    ));
-    assert!(job(&client, route, Command::ReleaseBaseSource(source))
-        .result()
-        .is_ok());
     assert!(
         job(&client, route, Command::Native(NativeJob::Revoke(mount)))
             .result()

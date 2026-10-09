@@ -8,44 +8,87 @@ use layerfs_content::{
     },
     object::inode_leaf::InodeKind,
 };
-use layerfs_overlay::{NativeDirectory, NativeMount};
-use layerfs_workspace::{NativeReadOperation, NativeReadValue};
+use layerfs_overlay::{NativeDirectory, NativeMount, OverlayError};
+use layerfs_workspace::{
+    CanonicalCache, CanonicalClient, NativeDirectoryBatch, NativeDirectoryWindow,
+    NativeReadDecision, NativeReadOperation, VisitFacts,
+};
 use std::sync::Arc;
-fn decide(
-    b: &Bench,
-    mount: NativeMount,
-    request: u64,
-    serial: u64,
-    operation: NativeReadOperation,
-) -> NativeReadValue {
-    let source = b
-        .overlay
-        .acquire_native_source(mount, request, serial)
-        .unwrap();
-    let view = b.workspace.view_for_source(source).unwrap();
-    let mut plan = view.native_read_plan(mount, operation).unwrap();
-    for _ in 0..5 {
-        let before = b.demand();
-        let original = Arc::new(plan.job().unwrap().perform(&b.overlay));
-        assert_eq!(b.demand(), before, "owner made provider demand");
-        if let Some(value) = plan.accept(original).unwrap() {
-            b.overlay.release_base_source(source).unwrap();
-            return value;
+/// A memory-only client over a cache that holds nothing.
+fn empty() -> Arc<CanonicalClient> {
+    Arc::new(CanonicalClient::resident(Arc::new(CanonicalCache::new(
+        1 << 20,
+    ))))
+}
+/// One opening or reading visit per turn until it decides, reading the facts
+/// an undecided visit names. A job itself asks the provider nothing.
+fn decide(b: &Bench, mount: NativeMount, request: u64, serial: u64) -> Option<NativeDirectory> {
+    let mut facts = VisitFacts::default();
+    for _ in 0..4 {
+        let visit = match request {
+            0 => b.workspace.native_read_visit(
+                empty(),
+                mount,
+                1,
+                None,
+                NativeReadOperation::Lookup {
+                    parent: 1,
+                    name: common::name(["empty", "moving"][serial as usize]),
+                },
+                Arc::new(facts.clone()),
+            ),
+            _ => b.workspace.native_opendir_visit(
+                empty(),
+                mount,
+                request,
+                serial,
+                Arc::new(facts.clone()),
+            ),
         }
-        plan.supply(&view).unwrap();
+        .unwrap();
+        let before = b.demand();
+        let outcome = visit.perform(&b.overlay);
+        assert_eq!(b.demand(), before, "owner made provider demand");
+        assert!(matches!(outcome.result, Ok(None)), "{:?}", outcome.result);
+        match outcome.decision {
+            Some(NativeReadDecision::Needs(needs)) => facts
+                .supply(&b.workspace.base().unwrap(), &needs, None)
+                .unwrap(),
+            Some(NativeReadDecision::Value(_)) => return outcome.directory_candidate,
+            other => panic!("undecided visit: {other:?}"),
+        }
     }
     panic!("directory decision did not finish its bounded fact rounds")
 }
 fn open(b: &Bench, mount: NativeMount, request: u64, serial: u64) -> NativeDirectory {
-    let value = decide(
-        b,
-        mount,
-        request,
-        serial,
-        NativeReadOperation::Opendir { serial },
-    );
-    b.overlay.release_file_read(value.read.unwrap()).unwrap();
-    value.directory.unwrap()
+    decide(b, mount, request, serial).expect("an open directory")
+}
+/// One READDIR reading visit as one owner job that asks the provider nothing.
+fn visit(
+    b: &Bench,
+    directory: NativeDirectory,
+    offset: u64,
+    after: Option<Vec<u8>>,
+) -> Result<NativeDirectoryWindow, OverlayError> {
+    let visit = b
+        .workspace
+        .native_directory_visit(
+            empty(),
+            directory.mount(),
+            directory.serial(),
+            directory.owner_id(),
+            offset,
+            after,
+        )
+        .unwrap();
+    let before = b.demand();
+    let window = visit.perform(&b.overlay);
+    assert_eq!(b.demand(), before, "owner made provider demand");
+    window
+}
+/// The reply's entries, merged outside the owner when memory held too little.
+fn batch(b: &Bench, window: NativeDirectoryWindow) -> NativeDirectoryBatch {
+    window.finish(Some(&b.workspace.base().unwrap())).unwrap()
 }
 #[test]
 fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies() {
@@ -87,42 +130,35 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
     let local = b.applied(create(1, "zz-local"), T2).unwrap().serial;
     let mount = b.overlay.create_native_mount(b.route(), 1).unwrap();
     let directory = open(&b, mount, 1, 1);
-    let read = b
-        .overlay
-        .acquire_native_directory_read(directory, 2, 2)
-        .unwrap();
-    let view = b.workspace.view_for_source(read.source()).unwrap();
     // READDIR needs inode kinds, not file lengths or portable attributes.
     // Make the otherwise valid fixture's length provider unavailable here.
     let lengths = std::mem::take(&mut *b.fixture.store.lengths.lock().unwrap());
     let mut after = None;
-    let mut final_listing = None;
+    let mut last = None;
     for turn in 0..3 {
-        let before = b.demand();
-        let page = b
-            .overlay
-            .native_directory_page(&read, after.as_deref())
-            .unwrap();
-        assert_eq!(b.demand(), before);
-        let listing = view.native_directory_listing(&page).unwrap();
-        assert!(listing.visited <= 64);
+        // Nothing of the base is resident: the job leaves the merge to its
+        // request and still offers the reply's offsets.
+        let window = visit(&b, directory, 2, after.take()).unwrap();
+        assert!(window.listing.is_none() && window.offer.is_some());
+        assert!(window.page.local.active.len() <= 64);
+        let batch = batch(&b, window);
         if turn < 2 {
-            assert!(listing.entries.is_empty());
-            assert!(listing.continuation.is_some());
-            after = listing.continuation;
+            assert!(batch.entries.is_empty());
+            assert!(batch.continuation.is_some());
+            after = batch.continuation;
         } else {
-            final_listing = Some(listing);
+            last = Some(batch);
         }
     }
-    let listing = final_listing.unwrap();
+    let listed = last.unwrap();
     assert!(b.fixture.store.lengths.lock().unwrap().is_empty());
     *b.fixture.store.lengths.lock().unwrap() = lengths;
-    assert_eq!(listing.entries.len(), 8);
-    assert!(listing
+    assert_eq!(listed.entries.len(), 8);
+    assert!(listed
         .entries
         .iter()
         .any(|e| e.name == b"symlink" && e.kind == InodeKind::Symlink));
-    assert!(listing
+    assert!(listed
         .entries
         .iter()
         .any(|e| e.serial == local && e.kind == InodeKind::RegularFile));
@@ -131,33 +167,50 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
         None,
         "READDIR acquired no lookup"
     );
-    let names: Vec<_> = listing.entries.iter().map(|e| e.name.clone()).collect();
-    let plan = b.overlay.prepare_native_cookies(&read, &names).unwrap();
-    b.overlay.publish_native_cookies(&plan, 2).unwrap();
-    let cookie = plan.entries()[1].cookie();
-    assert_eq!(plan.entries()[1].name(), b"alias");
-    b.overlay.release_base_source(read.source()).unwrap();
+    // The reply accepted two names: exactly those become offsets.
+    let names: Vec<_> = listed.entries.iter().map(|e| e.name.clone()).collect();
+    assert_eq!(names[1], b"alias");
+    let offer = listed.publish.expect("a fresh reply publishes its names");
+    assert_eq!(offer.first(), listed.first);
+    b.overlay
+        .publish_native_cookies(&offer, &names[..2])
+        .unwrap();
+    let cookie = listed.first + 1;
+    assert!(matches!(
+        visit(&b, directory, listed.first + 2, None),
+        Err(OverlayError::Stale)
+    ));
+    // A rewound handle is answered with the reply it was given: the same two
+    // names at the same offsets, and nothing to publish.
+    let mut after = None;
+    let again = loop {
+        let again = batch(&b, visit(&b, directory, 2, after.take()).unwrap());
+        if !again.entries.is_empty() {
+            break again;
+        }
+        after = Some(again.continuation.expect("more names"));
+    };
+    assert_eq!(again.first, listed.first);
+    assert!(again.publish.is_none());
+    assert!(again.entries.iter().map(|e| &e.name).eq(&names[..2]));
     b.applied(unlink(1, "alias"), T2);
     b.applied(unlink(1, "file"), T2);
-    let old = b
-        .overlay
-        .acquire_native_directory_read(directory, 3, cookie)
-        .unwrap();
-    assert_eq!(old.cursor().after_name(), Some(b"alias".as_slice()));
-    let view = b.workspace.view_for_source(old.source()).unwrap();
-    let page = b
-        .overlay
-        .native_directory_page(&old, old.cursor().after_name())
-        .unwrap();
-    let next = view.native_directory_listing(&page).unwrap();
+    // The offset resumes strictly after its name, which is gone by now.
+    let window = visit(&b, directory, cookie, None).unwrap();
+    assert_eq!(window.page.cursor().after_name(), Some(b"alias".as_slice()));
+    let next = batch(&b, window);
+    assert!(!next.entries.is_empty() && next.publish.is_some());
     assert!(next
         .entries
         .iter()
         .all(|e| e.name.as_slice() > b"alias" && e.name != b"file"));
-    b.overlay.release_base_source(old.source()).unwrap();
     b.overlay
         .close_native_directory(directory.mount(), directory.serial(), directory.owner_id())
         .unwrap();
+    assert!(matches!(
+        visit(&b, directory, 2, None),
+        Err(OverlayError::Stale)
+    ));
     b.overlay.revoke_native_mount(mount).unwrap();
 }
 #[test]
@@ -165,43 +218,26 @@ fn opened_directory_retains_parent_and_metadata_after_forget_and_rmdir() {
     let b = Bench::new("native-directory-removed");
     let serial = b.applied(mkdir(1, "empty"), T1).unwrap().serial;
     let mount = b.overlay.create_native_mount(b.route(), 1).unwrap();
-    let value = decide(
-        &b,
-        mount,
-        1,
-        1,
-        NativeReadOperation::Lookup {
-            parent: 1,
-            name: common::name("empty"),
-        },
-    );
-    assert_eq!(value.stat.serial, serial);
-    assert_eq!(value.read, None);
+    assert_eq!(decide(&b, mount, 0, 0), None);
     let directory = open(&b, mount, 2, serial);
     b.overlay.forget_native(mount, serial, 1).unwrap();
     b.applied(rmdir(1, "empty"), T2);
-    let read = b
-        .overlay
-        .acquire_native_directory_read(directory, 3, 0)
-        .unwrap();
-    assert_eq!(read.parent(), 1);
+    // The removed directory is still listed through its descriptor: its
+    // parent as it was, and no name. The job decides that alone.
+    let window = visit(&b, directory, 0, None).unwrap();
+    assert_eq!(window.page.parent(), Some(1));
+    assert_eq!(window.page.local.parent_inode.as_ref().unwrap().nlink, 0);
+    assert!(window.listing.is_some() && window.offer.is_none());
+    let listed = window.finish(None).unwrap();
+    assert!(listed.entries.is_empty() && listed.continuation.is_none());
+    assert!(listed.publish.is_none());
     b.overlay
         .close_native_directory(directory.mount(), directory.serial(), directory.owner_id())
         .unwrap();
-    let inode = b
-        .overlay
-        .source_inode(read.source(), serial)
-        .unwrap()
-        .unwrap();
-    assert_eq!(inode.nlink, 0);
-    let view = b.workspace.view_for_source(read.source()).unwrap();
-    let page = b.overlay.native_directory_page(&read, None).unwrap();
-    assert!(view
-        .native_directory_listing(&page)
-        .unwrap()
-        .entries
-        .is_empty());
-    b.overlay.release_base_source(read.source()).unwrap();
+    assert!(matches!(
+        visit(&b, directory, 0, None),
+        Err(OverlayError::Stale)
+    ));
     b.overlay.revoke_native_mount(mount).unwrap();
 }
 
@@ -210,40 +246,20 @@ fn next_directory_read_observes_parent_moved_by_the_atomic_namespace_job() {
     let b = Bench::new("native-directory-moved");
     let serial = b.applied(mkdir(1, "moving"), T1).unwrap().serial;
     let mount = b.overlay.create_native_mount(b.route(), 1).unwrap();
-    let value = decide(
-        &b,
-        mount,
-        1,
-        1,
-        NativeReadOperation::Lookup {
-            parent: 1,
-            name: common::name("moving"),
-        },
-    );
-    assert_eq!(value.read, None);
+    assert_eq!(decide(&b, mount, 0, 1), None);
     let directory = open(&b, mount, 2, serial);
     b.overlay.forget_native(mount, serial, 1).unwrap();
-    let before = b
-        .overlay
-        .acquire_native_directory_read(directory, 3, 0)
-        .unwrap();
-    assert_eq!(before.parent(), 1);
+    let before = visit(&b, directory, 0, None).unwrap();
+    assert_eq!(before.page.parent(), Some(1));
     b.applied(
         rename((1, "moving"), (7, "moved"), true, path(&["output"])),
         T2,
     );
-    let after = b
-        .overlay
-        .acquire_native_directory_read(directory, 4, 0)
-        .unwrap();
-    assert_eq!(after.parent(), 7);
-    assert_eq!(
-        b.overlay.retained_native_directory_read(mount, 3).unwrap(),
-        Some(before.clone()),
-        "original read keeps its observed parent"
-    );
-    b.overlay.release_base_source(before.source()).unwrap();
-    b.overlay.release_base_source(after.source()).unwrap();
+    // Each reading visit observes the parent of its own moment; a reply
+    // past the dots reads none.
+    let after = visit(&b, directory, 0, None).unwrap();
+    assert_eq!(after.page.parent(), Some(7));
+    assert_eq!(visit(&b, directory, 2, None).unwrap().page.parent(), None);
     b.overlay
         .close_native_directory(directory.mount(), directory.serial(), directory.owner_id())
         .unwrap();

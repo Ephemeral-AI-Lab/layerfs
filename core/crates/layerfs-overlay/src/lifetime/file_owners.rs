@@ -17,6 +17,17 @@ impl Overlay {
         self.next_owner.set(after);
         Ok(next)
     }
+    /// Mints `count` consecutive identities and returns the first. They are
+    /// engine memory only: taking them writes nothing.
+    pub(crate) fn mint_owners(&self, count: u64) -> OverlayResult<u64> {
+        let next = self.next_owner.get();
+        let after = next
+            .checked_add(count)
+            .filter(|after| *after <= i64::MAX as u64)
+            .ok_or(OverlayError::Invalid("owner identity exhausted"))?;
+        self.next_owner.set(after);
+        Ok(next)
+    }
     pub(crate) fn file_ref(
         &self,
         ns: i64,

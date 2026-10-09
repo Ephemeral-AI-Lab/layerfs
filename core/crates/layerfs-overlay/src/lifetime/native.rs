@@ -199,13 +199,13 @@ impl Overlay {
         Ok((request, serial, state))
     }
     pub(crate) fn release_native_source(&self, source: BaseSource) -> OverlayResult<()> {
-        let (serial, directory) = self
+        let serial = self
             .query(
                 StatementKind::Lease,
-                "SELECT serial,(SELECT directory FROM native_directory_read WHERE ns=?1 AND owner=?2) FROM native_source WHERE ns=?1 AND owner=?2",
+                "SELECT serial FROM native_source WHERE ns=?1 AND owner=?2",
                 &[&source.route.ns, &integer(source.owner)?],
                 16,
-                |r| Ok((unsigned(r, 0)?, r.get::<_, Option<i64>>(1)?)),
+                |r| unsigned(r, 0),
             )?
             .pop()
             .ok_or(OverlayError::Stale)?;
@@ -226,11 +226,7 @@ impl Overlay {
             integer(serial)?,
             LeaseKind::FileReader,
             false,
-        )?;
-        if let Some(directory) = directory {
-            self.queue_native_directory(source.route.ns, directory)?;
-        }
-        Ok(())
+        )
     }
     pub(crate) fn native_lookup_row(
         &self,

@@ -19,7 +19,9 @@ use layerfs_daemon::{
 use layerfs_fuse::{
     operations::{
         create::{create, mkdir},
-        DirectoryStep, DirectoryStream, MutationInput, MutationRequest, NativeMutation, NativeRead,
+        remove::unlink,
+        DirectoryFailure, DirectoryStep, DirectoryStream, MutationInput, MutationRequest,
+        NativeMutation, NativeRead,
     },
     ports::{Fence, MountServices, RequestServices},
 };
@@ -43,6 +45,8 @@ const SMALL: usize = 10;
 const LARGE: usize = 4000;
 /// Names of one reply of the large directories: one owner window.
 const WINDOW: usize = layerfs_overlay::PAGE_ROWS;
+/// Published replies of one handle that RELEASEDIR deletes itself.
+const INLINE: usize = 8;
 const NOW: Time = Time {
     seconds: 1_700_000_000,
     nanoseconds: 0,
@@ -162,10 +166,20 @@ struct Rig {
     store: Arc<Store>,
     owner: Owner,
     client: OwnerClient,
+    home: Seat,
+}
+/// One bound Workspace of the Store and its native mount group.
+struct Seat {
     bound: BoundWorkspace,
     root: u64,
     mount: NativeMount,
     next: Cell<u64>,
+}
+impl std::ops::Deref for Rig {
+    type Target = Seat;
+    fn deref(&self) -> &Seat {
+        &self.home
+    }
 }
 impl Rig {
     fn new(label: &str, authority: u8, cache: usize) -> Self {
@@ -196,52 +210,27 @@ impl Rig {
         )
         .unwrap();
         let client = owner.client();
-        let identity = WorkspaceId::from_authority([authority; 32]).unwrap();
-        let bound = store
-            .bind(
-                client.clone(),
-                BindRequest {
-                    branch: fixture.branch,
-                    workspace: identity,
-                },
-            )
-            .unwrap()
-            .workspace;
-        let root = bound
-            .operation()
-            .unwrap()
-            .workspace()
-            .base()
-            .unwrap()
-            .root()
-            .root_inode()
-            .serial();
-        let done = finish(
-            &client,
-            bound.route(),
-            Command::Native(NativeJob::Mount { root }),
-        );
-        let mount = match done.result() {
-            Ok(Response::Native(NativeReply::Mount(mount))) => *mount,
-            other => panic!("mount: {other:?}"),
-        };
-        drop(done);
+        let home = Seat::bind(&store, &client, &fixture, authority);
         Self {
             fixture,
             store,
             owner,
             client,
-            bound,
-            root,
-            mount,
-            next: Cell::new(1),
+            home,
         }
     }
-    /// Fresh services, as every kernel request has, and its request number.
-    fn request(&self) -> (Arc<dyn RequestServices>, u64) {
-        let request = self.next.get();
-        self.next.set(request + 1);
-        (self.bound.request(&Fence::default()).unwrap(), request)
+    /// Another Workspace of the same Store, branch and owner, mounted.
+    fn seat(&self, authority: u8) -> Seat {
+        Seat::bind(&self.store, &self.client, &self.fixture, authority)
+    }
+    /// The maintenance turns and rows the owner has run, once none is due.
+    fn maintenance(&self) -> (u64, u64) {
+        until("maintenance idle", || {
+            let done = finish(&self.client, self.bound.route(), Command::MaintenanceIdle);
+            matches!(done.result(), Ok(Response::MaintenanceIdle(true)))
+        });
+        let work = self.client.diagnostics().unwrap();
+        (work.maintenance_jobs, work.maintenance_rows)
     }
     /// Taken once every result of the request under observation is returned.
     fn snapshot(&self) -> Snapshot {
@@ -294,6 +283,74 @@ impl Rig {
         };
         (value, cost)
     }
+    fn stop(self) {
+        let Self {
+            fixture,
+            store,
+            owner,
+            client,
+            home,
+        } = self;
+        home.leave(&client);
+        until("owner credits returned", || {
+            client.diagnostics().unwrap().outstanding == 0
+        });
+        assert_eq!(store.read_work().outstanding, 0);
+        owner.stop().unwrap();
+        drop(store);
+        fixture.cleanup();
+    }
+}
+impl Seat {
+    fn bind(
+        store: &Arc<Store>,
+        client: &OwnerClient,
+        fixture: &support::Fixture,
+        authority: u8,
+    ) -> Self {
+        let identity = WorkspaceId::from_authority([authority; 32]).unwrap();
+        let bound = store
+            .bind(
+                client.clone(),
+                BindRequest {
+                    branch: fixture.branch,
+                    workspace: identity,
+                },
+            )
+            .unwrap()
+            .workspace;
+        let root = bound
+            .operation()
+            .unwrap()
+            .workspace()
+            .base()
+            .unwrap()
+            .root()
+            .root_inode()
+            .serial();
+        let done = finish(
+            client,
+            bound.route(),
+            Command::Native(NativeJob::Mount { root }),
+        );
+        let mount = match done.result() {
+            Ok(Response::Native(NativeReply::Mount(mount))) => *mount,
+            other => panic!("mount: {other:?}"),
+        };
+        drop(done);
+        Self {
+            bound,
+            root,
+            mount,
+            next: Cell::new(1),
+        }
+    }
+    /// Fresh services, as every kernel request has, and its request number.
+    fn request(&self) -> (Arc<dyn RequestServices>, u64) {
+        let request = self.next.get();
+        self.next.set(request + 1);
+        (self.bound.request(&Fence::default()).unwrap(), request)
+    }
     /// LOOKUP of a name: the kernel's reference and the serial.
     fn lookup(&self, parent: u64, child: &str) -> u64 {
         let (services, request) = self.request();
@@ -337,25 +394,24 @@ impl Rig {
     }
     /// READDIR at `offset`, filled as the kernel request fills its reply:
     /// every entry that fits one reply window, with its offset.
-    fn readdir(&self, serial: u64, handle: u64, offset: u64) -> Vec<(Vec<u8>, u64)> {
+    fn try_readdir(
+        &self,
+        serial: u64,
+        handle: u64,
+        offset: u64,
+    ) -> Result<Vec<(Vec<u8>, u64)>, Box<DirectoryFailure>> {
         let (services, request) = self.request();
         let mut stream = wait(DirectoryStream::prepare(
             services, self.mount, request, serial, handle, offset,
-        ))
-        .unwrap_or_else(|failure| panic!("readdir {serial} at {offset}: {failure:?}"));
+        ))?;
         let mut listed: Vec<(Vec<u8>, u64)> = stream
             .dots()
             .map(|(name, _, cookie)| (name.as_bytes().to_vec(), cookie))
             .collect();
         let mut used: usize = listed.iter().map(|(name, _)| entry_bytes(name)).sum();
         loop {
-            let batch = match wait(stream.next())
-                .unwrap_or_else(|failure| panic!("readdir {serial} at {offset}: {failure:?}"))
-            {
-                DirectoryStep::End(stream) => {
-                    wait(stream.dispose()).unwrap();
-                    return listed;
-                }
+            let batch = match wait(stream.next())? {
+                DirectoryStep::End(_) => return Ok(listed),
                 DirectoryStep::Batch(batch) => batch,
             };
             let mut accepted = 0;
@@ -368,15 +424,33 @@ impl Rig {
                 listed.push((entry.name.clone(), cookie));
                 accepted += 1;
             }
-            stream = wait(batch.accept(accepted))
-                .unwrap_or_else(|failure| panic!("readdir {serial} at {offset}: {failure:?}"));
+            stream = wait(batch.accept(accepted))?;
+        }
+    }
+    fn readdir(&self, serial: u64, handle: u64, offset: u64) -> Vec<(Vec<u8>, u64)> {
+        self.try_readdir(serial, handle, offset)
+            .unwrap_or_else(|failure| panic!("readdir {serial} at {offset}: {failure:?}"))
+    }
+    /// Every remaining name of an open directory from `offset`, reply by
+    /// reply: the names in the order returned and the number of data replies.
+    fn rest(&self, serial: u64, handle: u64, mut offset: u64) -> (Vec<Vec<u8>>, usize) {
+        let (mut names, mut replies) = (Vec::new(), 0);
+        loop {
+            let page = self.readdir(serial, handle, offset);
+            let Some((_, last)) = page.last() else {
+                return (names, replies);
+            };
+            offset = *last;
+            replies += 1;
+            names.extend(page.into_iter().map(|(name, _)| name));
         }
     }
     fn releasedir(&self, serial: u64, handle: u64) {
         let (services, _) = self.request();
         drop(wait(services.close_directory(self.mount, serial, handle)).unwrap());
     }
-    /// One published mutation and its reply attempt: the changed inode.
+    /// One published mutation and its reply attempt: the changed inode, or 0
+    /// when the reply names none.
     fn mutate(&self, protected: u64, input: MutationInput) -> u64 {
         let (services, request) = self.request();
         let done = wait(NativeMutation::perform(
@@ -394,7 +468,7 @@ impl Rig {
         .unwrap_or_else(|failure| panic!("mutation: {failure:?}"));
         let published = done.value().unwrap();
         assert!(published.changed);
-        let serial = published.stat.as_ref().unwrap().serial;
+        let serial = published.stat.as_ref().map_or(0, |stat| stat.serial);
         wait(done.replied()).unwrap();
         serial
     }
@@ -412,50 +486,25 @@ impl Rig {
         }
         serial
     }
-    /// Every name of a directory through one descriptor, reply by reply:
-    /// the names in the order returned and the number of data replies.
+    /// Every name of a directory through one descriptor that is then closed.
     fn enumerate(&self, serial: u64) -> (Vec<Vec<u8>>, usize) {
         let handle = self.opendir(serial);
-        let (mut names, mut offset, mut replies) = (Vec::new(), 0, 0);
-        loop {
-            let page = self.readdir(serial, handle, offset);
-            let Some((_, last)) = page.last() else { break };
-            offset = *last;
-            replies += 1;
-            names.extend(page.into_iter().map(|(name, _)| name));
-        }
+        let listed = self.rest(serial, handle, 0);
         self.releasedir(serial, handle);
-        (names, replies)
+        listed
     }
-    fn stop(self) {
-        let Self {
-            fixture,
-            store,
-            owner,
-            client,
-            bound,
-            mount,
-            ..
-        } = self;
+    /// The mount group revoked, with nothing of this Workspace left held.
+    fn leave(self, client: &OwnerClient) {
         let done = finish(
-            &client,
-            bound.route(),
-            Command::Native(NativeJob::Revoke(mount)),
+            client,
+            self.bound.route(),
+            Command::Native(NativeJob::Revoke(self.mount)),
         );
         assert!(
             matches!(done.result(), Ok(Response::Native(NativeReply::Done))),
             "revoke: {:?}",
             done.result()
         );
-        drop(done);
-        until("owner credits returned", || {
-            client.diagnostics().unwrap().outstanding == 0
-        });
-        assert_eq!(store.read_work().outstanding, 0);
-        drop(bound);
-        owner.stop().unwrap();
-        drop(store);
-        fixture.cleanup();
     }
 }
 
@@ -587,53 +636,52 @@ fn opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrel
     let second = pass(&rig, &subjects);
     assert_eq!(first, second, "beside {UNRELATED} unrelated local files");
 
-    // Equal work at both sizes.
+    // Equal work at both sizes, local and inherited: a reply of SMALL names
+    // and one of WINDOW names cost the same, so one more listed name costs
+    // no statement.
     for (one, other) in [
         ("opendir local small", "opendir local large"),
         ("opendir base small", "opendir base large"),
-        ("releasedir local small", "releasedir local large"),
+        ("readdir first local small", "readdir first local large"),
+        ("readdir first local small", "readdir first base small"),
+        ("readdir first local small", "readdir first base large"),
+        ("readdir first local small", "readdir next local large"),
+        ("readdir first local small", "readdir next base large"),
+        ("readdir again local large", "readdir again base large"),
+        ("readdir end local small", "readdir end base small"),
         ("releasedir local small", "releasedir base small"),
-        ("releasedir local small", "releasedir base large"),
+        ("releasedir local large", "releasedir base large"),
     ] {
         assert_eq!(of(&first, one), of(&first, other), "{one} and {other}");
     }
-    let expected: [(&str, Cost); 13] = [
+    let expected: [(&str, Cost); 7] = [
         ("opendir local small", OPENDIR_LOCAL.cost()),
         ("opendir base small", OPENDIR_BASE.cost()),
-        (
-            "readdir first local small",
-            READDIR_FIRST_LOCAL_SMALL.cost(),
-        ),
-        (
-            "readdir first local large",
-            READDIR_FIRST_LOCAL_LARGE.cost(),
-        ),
-        ("readdir next local large", READDIR_NEXT_LOCAL.cost()),
-        ("readdir again local large", READDIR_AGAIN_LOCAL.cost()),
+        ("readdir first local small", READDIR_DATA.cost()),
+        ("readdir again local large", READDIR_AGAIN.cost()),
         ("readdir end local small", READDIR_END.cost()),
-        ("readdir first base small", READDIR_FIRST_BASE_SMALL.cost()),
-        ("readdir first base large", READDIR_FIRST_BASE_LARGE.cost()),
-        ("readdir next base large", READDIR_NEXT_BASE.cost()),
-        ("readdir again base large", READDIR_AGAIN_BASE.cost()),
-        ("readdir end base small", READDIR_END.cost()),
-        ("releasedir local small", RELEASEDIR.cost()),
+        ("releasedir local small", RELEASEDIR_ONE_REPLY.cost()),
+        ("releasedir local large", RELEASEDIR_TWO_REPLIES.cost()),
     ];
     for (label, wanted) in &expected {
         assert_eq!(of(&first, label), wanted, "{label}");
     }
 
-    // The statements one more listed name costs: the difference between a
-    // first reply of WINDOW names and one of SMALL names.
-    for (kind, wanted) in [("local", PER_NAME_LOCAL), ("base", PER_NAME_BASE)] {
-        let small = of(&first, &format!("readdir first {kind} small")).statements();
-        let large = of(&first, &format!("readdir first {kind} large")).statements();
-        let more = (WINDOW - SMALL) as u64;
-        assert_eq!(
-            (large.0 - small.0, large.1 - small.1),
-            (wanted.0 * more, wanted.1 * more),
-            "{kind}: {more} more names"
-        );
-    }
+    // Listing and closing a small directory leaves maintenance nothing: its
+    // one reply is deleted by RELEASEDIR itself. A handle with more replies
+    // than the inline bound is retired by the indexed item instead, in turns
+    // of that bound and one for the handle.
+    let idle = rig.maintenance();
+    rig.enumerate(subjects.local_small);
+    rig.enumerate(subjects.base_small);
+    assert_eq!(rig.maintenance(), idle, "a small directory was queued");
+    let (_, replies) = rig.enumerate(subjects.local_large);
+    assert_eq!(replies, LARGE.div_ceil(WINDOW));
+    let retired = rig.maintenance();
+    assert_eq!(
+        (retired.0 - idle.0, retired.1 - idle.1),
+        (replies.div_ceil(INLINE) as u64 + 1, replies as u64 + 1)
+    );
 
     // OPENDIR of a regular file is refused by kind and leaves nothing.
     let file = rig.lookup(rig.root, "file");
@@ -692,10 +740,11 @@ const OPENDIR_BASE: Pinned = Pinned {
         ("Lease", 4, 6),
     ],
 };
-/// RELEASEDIR: one job. The fence on the open descriptor, then the handle
-/// closed, its lease and open count released and its cookie retirement
-/// queued, in one transaction.
-const RELEASEDIR: Pinned = Pinned {
+/// RELEASEDIR of a handle with one published reply: one job. The fence on
+/// the open descriptor, then in one transaction its lease and open count
+/// released, its replies found by one bounded window and deleted, and the
+/// handle row deleted. Nothing is queued.
+const RELEASEDIR_ONE_REPLY: Pinned = Pinned {
     jobs: (0, 1, 0),
     grants: 0,
     sql: &[
@@ -703,138 +752,210 @@ const RELEASEDIR: Pinned = Pinned {
         TRANSACTION[1],
         TRANSACTION[2],
         ("Workspace", 1, 1),
-        ("Lease", 4, 5),
-        ("Reclaim", 1, 2),
+        ("Lease", 5, 8),
     ],
 };
-/// READDIR, first reply of a local directory of SMALL names: six jobs (the
-/// handle, the request source, the page, the cookie plan, its publication,
-/// and the release after the reply), four transactions and one reader.
-const READDIR_FIRST_LOCAL_SMALL: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 1,
+/// The same statements with two published replies: the window steps one row
+/// more, and never more than the inline bound and one.
+const RELEASEDIR_TWO_REPLIES: Pinned = Pinned {
+    jobs: (0, 1, 0),
+    grants: 0,
     sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 25, 25),
-        ("Inode", 11, 11),
-        ("DirectoryEntry", 1, 1),
-        ("Lease", 65, 84),
+        TRANSACTION[0],
+        TRANSACTION[1],
+        TRANSACTION[2],
+        ("Workspace", 1, 1),
+        ("Lease", 5, 9),
     ],
 };
-/// The same reply with WINDOW names.
-const READDIR_FIRST_LOCAL_LARGE: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 1,
+/// READDIR that returns names, at any size and any offset, local or
+/// inherited: a reading visit and a publishing visit. The reading visit is
+/// the descriptor's fence, the directory's row, one window of local names
+/// with their kinds, the offset's position (the parent in the first reply)
+/// and the reply to reuse; the publishing visit is the fence and one row
+/// for every accepted name, in the request's one transaction. No reader:
+/// the cache holds the inherited names and kinds.
+const READDIR_DATA: Pinned = Pinned {
+    jobs: (2, 0, 0),
+    grants: 0,
     sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 79, 79),
-        ("Inode", 65, 65),
+        TRANSACTION[0],
+        TRANSACTION[1],
+        TRANSACTION[2],
+        ("Workspace", 2, 2),
+        ("Inode", 1, 1),
         ("DirectoryEntry", 1, 1),
-        ("Lease", 227, 300),
+        ("Lease", 3, 4),
     ],
 };
-/// A reply of WINDOW names from the middle: the offset's name is one more
-/// statement in each of the four jobs that check the request's read.
-const READDIR_NEXT_LOCAL: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 1,
+/// The same offset again: the reading visit finds the reply it published
+/// and returns it. Nothing is written.
+const READDIR_AGAIN: Pinned = Pinned {
+    jobs: (1, 0, 0),
+    grants: 0,
     sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 79, 79),
-        ("Inode", 65, 65),
+        ("Workspace", 1, 1),
+        ("Inode", 1, 1),
         ("DirectoryEntry", 1, 1),
-        ("Lease", 231, 304),
+        ("Lease", 2, 2),
     ],
 };
-/// The same offset again: every name's offset exists and is not written.
-const READDIR_AGAIN_LOCAL: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 1,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 79, 79),
-        ("Inode", 65, 65),
-        ("DirectoryEntry", 1, 1),
-        ("Lease", 166, 175),
-    ],
-};
-/// READDIR after the last name: four jobs, two transactions and one reader.
+/// READDIR after the last name: the reading visit alone, which finds no
+/// name and asks for no offsets.
 const READDIR_END: Pinned = Pinned {
-    jobs: (1, 2, 1),
-    grants: 1,
+    jobs: (1, 0, 0),
+    grants: 0,
     sql: &[
-        ("Startup", 2, 2),
-        ("Begin", 2, 2),
-        ("Commit", 2, 2),
-        ("Workspace", 11, 11),
+        ("Workspace", 1, 1),
         ("Inode", 1, 1),
         ("DirectoryEntry", 1, 1),
-        ("Lease", 25, 34),
+        ("Lease", 1, 1),
     ],
 };
-/// The replies of a base directory: its names have no local row.
-const READDIR_FIRST_BASE_SMALL: Pinned = Pinned {
-    jobs: (3, 2, 1),
+/// The same two requests when memory holds nothing of the base: the merge
+/// is made outside the owner over one reader, and the end asks for offsets
+/// because the job could not tell that no name follows.
+const READDIR_DATA_COLD: Pinned = Pinned {
+    grants: 1,
+    ..READDIR_DATA
+};
+const READDIR_END_COLD: Pinned = Pinned {
+    jobs: (1, 0, 0),
     grants: 1,
     sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 15, 15),
+        ("Workspace", 1, 1),
         ("Inode", 1, 1),
         ("DirectoryEntry", 1, 1),
-        ("Lease", 55, 74),
+        ("Lease", 2, 2),
     ],
 };
-const READDIR_FIRST_BASE_LARGE: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 1,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 15, 15),
-        ("Inode", 1, 1),
-        ("DirectoryEntry", 1, 1),
-        ("Lease", 163, 236),
-    ],
-};
-const READDIR_NEXT_BASE: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 1,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 15, 15),
-        ("Inode", 1, 1),
-        ("DirectoryEntry", 1, 1),
-        ("Lease", 167, 240),
-    ],
-};
-const READDIR_AGAIN_BASE: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 1,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 15, 15),
-        ("Inode", 1, 1),
-        ("DirectoryEntry", 1, 1),
-        ("Lease", 102, 111),
-    ],
-};
-/// Statements (attempts, executions) one more listed name costs in a first
-/// reply: a local name's kind and its offset's lookup and row; a base name's
-/// offset alone.
-const PER_NAME_LOCAL: (u64, u64) = (5, 6);
-const PER_NAME_BASE: (u64, u64) = (2, 3);
+
+#[test]
+fn a_reply_whose_inherited_names_memory_does_not_hold_takes_one_reader() {
+    let rig = Rig::new("directory-cost-cold", 182, 0);
+    let base = rig.lookup(rig.root, "base-small");
+    let handle = rig.opendir(base);
+    let (page, cost) = rig.measured(|| rig.readdir(base, handle, 0));
+    assert_eq!(page.len(), 2 + SMALL);
+    assert_eq!(cost, READDIR_DATA_COLD.cost());
+    let end = page.last().unwrap().1;
+    let (page, cost) = rig.measured(|| rig.readdir(base, handle, end));
+    assert!(page.is_empty());
+    assert_eq!(cost, READDIR_END_COLD.cost());
+    // A local directory has no inherited name: its visit decides alone.
+    let local = rig.local_directory("local", SMALL);
+    let handle = rig.opendir(local);
+    let (page, cost) = rig.measured(|| rig.readdir(local, handle, 0));
+    assert_eq!(page.len(), 2 + SMALL);
+    assert_eq!(cost, READDIR_DATA.cost());
+    rig.stop();
+}
+
+#[test]
+fn every_name_present_throughout_is_listed_once_by_each_handle_of_each_workspace() {
+    let rig = Rig::new("directory-concurrency", 183, CACHE);
+    let count = 2 * WINDOW + 22;
+    let wanted = |skip: &[usize], more: &[&str]| -> Vec<Vec<u8>> {
+        [".".to_string(), "..".to_string()]
+            .into_iter()
+            .chain((0..count).filter(|n| !skip.contains(n)).map(child))
+            .chain(more.iter().map(|name| name.to_string()))
+            .map(String::into_bytes)
+            .collect()
+    };
+    let directory = rig.local_directory("changing", count);
+
+    // Names created and removed between two replies of one handle. A name
+    // present throughout is returned exactly once; a name removed before
+    // its reply is not returned; one created past the offset is.
+    let handle = rig.opendir(directory);
+    let page = rig.readdir(directory, handle, 0);
+    let mut listed: Vec<Vec<u8>> = page.iter().map(|(name, _)| name.clone()).collect();
+    assert_eq!(listed.len(), 2 + WINDOW);
+    for created in ["a-early", "zz-late"] {
+        rig.mutate(
+            directory,
+            MutationInput::Named(create(directory, name(created), 0o644)),
+        );
+    }
+    for removed in [5, WINDOW + 7] {
+        rig.mutate(
+            directory,
+            MutationInput::Named(unlink(directory, name(&child(removed)))),
+        );
+    }
+    let (rest, replies) = rig.rest(directory, handle, page.last().unwrap().1);
+    assert_eq!(replies, 2);
+    listed.extend(rest);
+    assert_eq!(listed, wanted(&[WINDOW + 7], &["zz-late"]));
+    rig.releasedir(directory, handle);
+
+    // Two handles of one directory, reply by reply in turn: each lists
+    // every name once, and an offset of one is no offset of the other.
+    let (one, other) = (rig.opendir(directory), rig.opendir(directory));
+    let now = {
+        let mut now = wanted(&[5, WINDOW + 7], &["zz-late"]);
+        now.insert(2, b"a-early".to_vec());
+        now
+    };
+    let (mut names, mut offsets) = ([Vec::new(), Vec::new()], [0, 0]);
+    for _ in 0..3 {
+        for (index, handle) in [one, other].into_iter().enumerate() {
+            let page = rig.readdir(directory, handle, offsets[index]);
+            offsets[index] = page.last().unwrap().1;
+            names[index].extend(page.into_iter().map(|(name, _)| name));
+        }
+    }
+    assert_eq!(names[0], now);
+    assert_eq!(names[1], now);
+    assert_ne!(offsets[0], offsets[1]);
+    assert!(rig.try_readdir(directory, other, offsets[0]).is_err());
+    // Closing one handle ends its offsets and leaves the other's.
+    rig.releasedir(directory, one);
+    assert!(rig.try_readdir(directory, one, offsets[0]).is_err());
+    assert!(rig.readdir(directory, other, offsets[1]).is_empty());
+    assert_eq!(rig.rest(directory, other, 0).0, now);
+    rig.releasedir(directory, other);
+
+    // Two mounted Workspaces list the same inherited directory in turn.
+    // Each sees every inherited name once and only its own local name.
+    let second = rig.seat(184);
+    let seats = [&rig.home, &second];
+    let base = seats.map(|seat| seat.lookup(seat.root, "base-large"));
+    rig.mutate(
+        base[0],
+        MutationInput::Named(create(base[0], name("zz-mine"), 0o644)),
+    );
+    let handles = [seats[0].opendir(base[0]), seats[1].opendir(base[1])];
+    let (mut names, mut offsets, mut ended) = ([Vec::new(), Vec::new()], [0, 0], [false; 2]);
+    let mut foreign = 0;
+    while ended != [true; 2] {
+        for index in 0..2 {
+            let page = seats[index].readdir(base[index], handles[index], offsets[index]);
+            match page.last() {
+                Some((_, last)) => offsets[index] = *last,
+                None => ended[index] = true,
+            }
+            names[index].extend(page.into_iter().map(|(name, _)| name));
+        }
+        if foreign == 0 {
+            foreign = offsets[0];
+        }
+    }
+    let inherited: Vec<Vec<u8>> = [".".to_string(), "..".to_string()]
+        .into_iter()
+        .chain((0..LARGE).map(child))
+        .map(String::into_bytes)
+        .collect();
+    assert_eq!(names[1], inherited);
+    assert_eq!(names[0].last().unwrap(), b"zz-mine");
+    assert_eq!(names[0][..2 + LARGE], inherited[..]);
+    assert_eq!(names[0].len(), 3 + LARGE);
+    // An offset of one Workspace's handle is no offset of the other's.
+    assert!(seats[1].try_readdir(base[1], handles[1], foreign).is_err());
+    for index in 0..2 {
+        seats[index].releasedir(base[index], handles[index]);
+    }
+    second.leave(&rig.client);
+    rig.stop();
+}

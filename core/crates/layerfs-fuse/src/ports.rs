@@ -1,12 +1,11 @@
 //! External engine/Store boundaries; all waiting returns to the native pool.
 use layerfs_overlay::{
-    BaseSource, FileRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
-    NativeDirectoryRead, NativeMount, OpenFile, Publication,
+    BaseSource, FileRead, NativeCookieOffer, NativeMount, OpenFile, Publication,
 };
 use layerfs_workspace::{
-    BaseView, MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome,
-    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, NativeWindow,
-    Operation, SourceView, Time, VisitFacts,
+    BaseView, MutationInputFailure, MutationPlan, NativeDirectoryWindow, NativeMutationJob,
+    NativeMutationOutcome, NativeReadJob, NativeReadOperation, NativeReadOutcome,
+    NativeVisitRequest, NativeWindow, Operation, SourceView, Time, VisitFacts,
 };
 use std::{
     error::Error,
@@ -158,38 +157,32 @@ pub trait MountServices: Send + Sync {
 /// Once the fence is stopped, every acquiring call returns [`Fenced`] before
 /// its attempt, also from a wait it was already in: `source`, `open_source`,
 /// `observe`, `observe_visit`, `read_visit`, `mutate_visit`, `mutate`, `base`,
-/// `immutable`, `reserve_serial`, `directory`, `directory_read`,
-/// `directory_page`, `directory_cookies` and `publish_cookies`. A job already submitted is awaited to its original
+/// `immutable`, `reserve_serial`, `directory_visit` and `publish_cookies`. A
+/// job already submitted is awaited to its original
 /// result. The disposal calls are never refused by the fence:
 /// `release_read`, `release_source`, `reply_attempted`, `replied`,
 /// `close_file`, `close_directory` and `forget`.
 pub trait RequestServices: Send + Sync {
-    fn directory(
+    /// READDIR's reading visit as one read-only owner job on the open
+    /// directory `handle`: the position of the kernel `offset`, one window
+    /// of current names (after `after` when it continues an earlier window
+    /// of the same request) and the offsets the reply may hand out. It
+    /// records nothing, so its request holds nothing afterwards.
+    fn directory_visit(
         &self,
         mount: NativeMount,
         serial: u64,
         handle: u64,
-    ) -> ServiceFuture<'_, ServiceReply<NativeDirectory>>;
-    fn directory_read(
-        &self,
-        directory: NativeDirectory,
-        request: u64,
         offset: u64,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryRead>>>;
-    fn directory_page(
-        &self,
-        read: Arc<NativeDirectoryRead>,
         after: Option<Vec<u8>>,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryPage>>>;
-    fn directory_cookies(
-        &self,
-        read: Arc<NativeDirectoryRead>,
-        names: Vec<Vec<u8>>,
-    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeCookiePlan>>>;
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeDirectoryWindow>>>;
+    /// READDIR's publishing visit, before the reply is sent: exactly the
+    /// names the reply buffer accepted become valid offsets, in one
+    /// transaction behind the fence on the still open descriptor.
     fn publish_cookies(
         &self,
-        plan: Arc<NativeCookiePlan>,
-        accepted: usize,
+        offer: NativeCookieOffer,
+        names: Vec<Vec<u8>>,
     ) -> ServiceFuture<'_, ServiceReply<()>>;
     /// RELEASEDIR as one owner job: the open descriptor is found and closed.
     fn close_directory(

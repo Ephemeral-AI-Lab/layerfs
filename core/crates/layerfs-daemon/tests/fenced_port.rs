@@ -299,11 +299,10 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     .unwrap();
     let directory = listed.value().unwrap().directory.unwrap();
     wait(listed.dispose()).unwrap();
-    let reply = wait(services.directory_read(directory, 5, 0)).unwrap();
-    let directory_read = Arc::new(reply.get().as_ref().clone());
-    drop(reply);
-    let reply = wait(services.directory_cookies(directory_read.clone(), Vec::new())).unwrap();
-    let cookies = Arc::new(reply.get().as_ref().clone());
+    // A READDIR reading visit made before the stop: it holds nothing, and
+    // its offer of offsets is what a publishing visit would be given.
+    let reply = wait(services.directory_visit(mount, root, directory.owner_id(), 2, None)).unwrap();
+    let offer = reply.get().offer.clone().expect("offsets for the reply");
     drop(reply);
     let reply = wait(services.source(mount, 6, root, None)).unwrap();
     let source = *reply.get();
@@ -396,19 +395,13 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     );
     refused("immutable", services.immutable(&view));
     refused(
-        "directory",
-        services.directory(mount, root, directory.owner_id()),
-    );
-    refused("directory_read", services.directory_read(directory, 13, 0));
-    refused(
-        "directory_page",
-        services.directory_page(directory_read.clone(), None),
+        "directory_visit",
+        services.directory_visit(mount, root, directory.owner_id(), 2, None),
     );
     refused(
-        "directory_cookies",
-        services.directory_cookies(directory_read.clone(), Vec::new()),
+        "publish_cookies",
+        services.publish_cookies(offer, vec![b"file-000000".to_vec()]),
     );
-    refused("publish_cookies", services.publish_cookies(cookies, 0));
     match services.reserve_serial() {
         Err(error) if error.is::<Fenced>() => {}
         other => panic!("reserve_serial on a stopped fence: {other:?}"),
@@ -428,18 +421,17 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     wait(published.replied()).unwrap();
     assert_eq!(rig.owner_work().admitted, admitted);
     drop(wait(services.release_source(source)).unwrap());
-    drop(wait(services.release_source(directory_read.source())).unwrap());
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
     drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
     drop(wait(services.forget(mount, serial, 1)).unwrap());
     // A READ or READLINK served before the stop left nothing to dispose.
-    assert_eq!(rig.owner_work().admitted, admitted + 5);
+    assert_eq!(rig.owner_work().admitted, admitted + 4);
     // The stopped fence did not keep the ticket: it was returned.
     assert!(rig.pending_publications(route).is_empty());
     // The port itself replies to nothing.
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "FENCED-CALLS refused=17 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=5"
+        "FENCED-CALLS refused=14 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=4"
     );
     drop((view, services));
     rig.revoke_and_stop();
@@ -819,7 +811,8 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
     .unwrap();
     let directory = listed.value().unwrap().directory.unwrap();
     wait(listed.dispose()).unwrap();
-    // An enumeration that holds its read source and has not asked for a page.
+    // An enumeration whose reading visit is done and that has not merged its
+    // window yet: it holds nothing.
     let stream = wait(DirectoryStream::prepare(
         services.clone(),
         mount,
@@ -902,9 +895,9 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
         Err(failure) => failure,
         Ok(_) => panic!("a directory page was read on a stopped fence"),
     };
-    assert!(failure.fenced() && failure.retained_source().is_some());
+    assert!(failure.fenced() && failure.offered().is_none());
     wait(failure.relinquish()).unwrap();
-    // An enumeration that starts now is refused holding nothing.
+    // An enumeration that starts now is refused holding nothing too.
     let failure = match wait(DirectoryStream::prepare(
         services.clone(),
         mount,
@@ -916,11 +909,10 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
         Err(failure) => failure,
         Ok(_) => panic!("an enumeration started on a stopped fence"),
     };
-    assert!(failure.fenced() && failure.retained_source().is_none());
+    assert!(failure.fenced() && failure.offered().is_none());
     wait(failure.relinquish()).unwrap();
-    // Exactly the enumeration's source release was admitted; nothing else
-    // was attempted.
-    assert_eq!(rig.owner_work().admitted, admitted + 1);
+    // Nothing was held, so nothing was released: no owner job was admitted.
+    assert_eq!(rig.owner_work().admitted, admitted);
     drop(reader);
     drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
 
@@ -939,7 +931,7 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
     assert!(absent.value().is_err());
     wait(absent.dispose()).unwrap();
     println!(
-        "FENCED-DRIVERS mutation=(fenced,no_source,no_ticket)->nothing held opendir=(fenced,source_held,no_read)->released directory=(fenced,source_held)->released late_directory=(fenced,nothing) owner_jobs_after_stop=2"
+        "FENCED-DRIVERS mutation=(fenced,no_source,no_ticket)->nothing held opendir=(fenced,no_source,no_read)->nothing held directory=(fenced,nothing) late_directory=(fenced,nothing) owner_jobs_after_stop=0"
     );
     drop(services);
     rig.revoke_and_stop();

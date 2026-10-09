@@ -57,6 +57,24 @@ pub(crate) const DIRECTORY_ENTRY_CAPTURE: &str = "SELECT parent,name,serial,inhe
 pub(crate) const SOURCE_NAMES: &str =
     "SELECT parent,name,serial,inherited FROM directory_entry INDEXED BY directory_entry_capture
     WHERE ns=?1 AND gen=?2 AND parent=?3 AND name>?4 ORDER BY name LIMIT 64";
+/// The same window with the kind of each bound name's latest local inode
+/// row at the current view, or NULL when the inode has none: one seek per
+/// returned name inside this one statement.
+pub(crate) const SOURCE_NAMES_KINDS: &str =
+    "SELECT e.parent,e.name,e.serial,e.inherited,(SELECT i.kind FROM inode i
+    WHERE i.ns=e.ns AND i.serial=e.serial AND i.gen<=?5 AND i.gen>?6 ORDER BY i.gen DESC LIMIT 1)
+    FROM directory_entry e INDEXED BY directory_entry_capture
+    WHERE e.ns=?1 AND e.gen=?2 AND e.parent=?3 AND e.name>?4 ORDER BY e.name LIMIT 64";
+/// The published reply that holds one cookie of an open directory.
+pub(crate) const COOKIE_PAGE: &str = "SELECT first_cookie,names FROM native_cookie
+    WHERE ns=?1 AND owner=?2 AND first_cookie<=?3 ORDER BY first_cookie DESC LIMIT 1";
+/// The latest published reply of an open directory listed after one name.
+pub(crate) const COOKIE_PAGE_AFTER: &str = "SELECT first_cookie,names FROM native_cookie
+    INDEXED BY native_cookie_after WHERE ns=?1 AND owner=?2 AND after=?3
+    ORDER BY first_cookie DESC LIMIT 1";
+/// At most one more than the replies a RELEASEDIR deletes in its own job.
+pub(crate) const COOKIE_PAGES: &str = "SELECT first_cookie,length(names) FROM native_cookie
+    WHERE ns=?1 AND owner=?2 AND first_cookie>?3 ORDER BY first_cookie LIMIT 9";
 pub(crate) const CAPTURED_DIRECTORY_ENTRY: &str =
     "SELECT serial,inherited FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
 pub(crate) const OPERATION_RECORD_PAGE: &str = "SELECT kind,key,value FROM operation_record

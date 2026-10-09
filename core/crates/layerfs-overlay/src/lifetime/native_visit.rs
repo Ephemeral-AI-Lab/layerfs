@@ -32,7 +32,11 @@ impl Overlay {
     /// The current base as this job's own source. It names no row and is
     /// accepted only while the Workspace still has this base and install
     /// frontier, which holds for the whole job that made it.
-    fn visit_source(&self, mount: NativeMount, state: WorkspaceState) -> OverlayResult<BaseSource> {
+    pub(crate) fn visit_source(
+        &self,
+        mount: NativeMount,
+        state: WorkspaceState,
+    ) -> OverlayResult<BaseSource> {
         Ok(BaseSource {
             route: mount.route,
             owner: self.mint_owner()?,

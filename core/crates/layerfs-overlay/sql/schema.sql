@@ -250,34 +250,22 @@ CREATE TABLE native_directory (
     owner INTEGER NOT NULL CHECK(owner>0),
     serial INTEGER NOT NULL CHECK(serial>0),
     request BLOB NOT NULL CHECK(length(request)=8),
-    next_cookie INTEGER NOT NULL DEFAULT 3 CHECK(next_cookie>=3),
     closed INTEGER NOT NULL DEFAULT 0 CHECK(closed IN(0,1)),
     PRIMARY KEY(ns,owner), UNIQUE(ns,mount,request)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_directory_open ON native_directory(ns,mount,owner) WHERE closed=0;
-CREATE TABLE native_directory_read (
-    ns INTEGER NOT NULL,
-    owner INTEGER NOT NULL CHECK(owner>0),
-    directory INTEGER NOT NULL CHECK(directory>0),
-    offset INTEGER NOT NULL CHECK(offset>=0),
-    parent INTEGER NOT NULL CHECK(parent>0),
-    first_cookie INTEGER,
-    end_cookie INTEGER,
-    published INTEGER NOT NULL DEFAULT 0 CHECK(published IN(0,1)),
-    PRIMARY KEY(ns,owner),
-    FOREIGN KEY(ns,owner) REFERENCES native_source(ns,owner) ON DELETE CASCADE,
-    FOREIGN KEY(ns,directory) REFERENCES native_directory(ns,owner),
-    CHECK((first_cookie IS NULL AND end_cookie IS NULL AND published=0) OR
-          (first_cookie IS NOT NULL AND end_cookie IS NOT NULL AND first_cookie>=3 AND end_cookie>=first_cookie))
-) STRICT, WITHOUT ROWID;
-CREATE INDEX native_directory_read_owner ON native_directory_read(ns,directory,owner);
+-- One row per published READDIR reply of one open directory: the names the
+-- reply buffer accepted, each one byte of length and its bytes, in order.
+-- Cookie first_cookie+i resumes strictly after the i-th name. `after` is
+-- the name the reply was listed after (empty at the start).
 CREATE TABLE native_cookie (
     ns INTEGER NOT NULL,
     owner INTEGER NOT NULL CHECK(owner>0),
-    cookie INTEGER NOT NULL CHECK(cookie>=3),
-    name BLOB NOT NULL CHECK(length(name)>0 AND length(name)<=255),
-    PRIMARY KEY(ns,owner,cookie),
+    first_cookie INTEGER NOT NULL CHECK(first_cookie>=3),
+    after BLOB NOT NULL CHECK(length(after)<=255),
+    names BLOB NOT NULL CHECK(length(names)>=2 AND length(names)<=16384),
+    PRIMARY KEY(ns,owner,first_cookie),
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
-CREATE INDEX native_cookie_name ON native_cookie(ns,owner,name,cookie);
-PRAGMA user_version=22;
+CREATE INDEX native_cookie_after ON native_cookie(ns,owner,after,first_cookie);
+PRAGMA user_version=23;
