@@ -290,6 +290,106 @@ from counts unless a receipt is named.
    counters (`directory_counts`, `directory_count_scans`) are not exported to
    the daemon diagnostics or the receipt.
 
+## Audit against benchmark-fitting
+
+The owner's rule, 2026-10-09: be aggressive and creative, but nothing may be
+fitted to the benchmark — no warm-cache credit, no hard-coded or specialised
+structure, no metadata or throughput limit that happens to suit the cells.
+The previous lead's own audit of steps 4 to 10 and the fix:
+
+- **No path recognises a workload.** A search of the product source of the
+  four crates finds no benchmark name, cell id, command text or data pattern.
+  No test hook, oracle, workload, limit or cache predicate was changed; the
+  five NOT_RUN rows were left NOT_RUN rather than relaxing the predicate.
+- **Every sample is cache class B**: a fresh mount after an identical warm-up
+  on the same daemon. That is the declared class, not a hidden credit, but
+  it means the daemon's immutable cache and prepared statements are warm in
+  every number in this document. Classes A and C were never measured; say
+  "class B" beside any time you quote.
+- **Constants this run introduced or changed**, all fixed by source and none
+  derived from a cell:
+
+  | Constant | Value | Why it is not a data limit | Risk to watch |
+  | --- | --- | --- | --- |
+  | Receive loops per mount | 2 → 1 | One thread fewer | **Validated on serial commands only.** Concurrency is unmeasured; this is the change most exposed to having been tuned to the cells |
+  | Jobs one held turn may also serve | 1 | Bounds a turn | Same: no concurrent sample |
+  | Prepared-statement cache | 48 → 256 | Sized to the engine's fixed statement set (about 224 texts) | Must be re-derived if the statement set grows |
+  | Resident object bytes read inside a visit; rounds per visit | 64 KiB; 4 | Bound one job; a larger need leaves the visit undecided and is read outside the owner | None known |
+  | Directory-count memo | 16,384 entries | Fixed capacity; eviction only recomputes | Chosen, not measured; the cells have at most about 120 directories, so the cells cannot have tuned it |
+  | Listing window of a derivation | 256 rows, 64 KiB | Streaming window, no total cap | None known |
+
+- **Changes whose benefit shows only when facts are resident.** A visit
+  decides in one job when the base objects it needs are in the immutable
+  cache; otherwise it reads outside the owner and visits again. That is
+  generic, but its measured gain is a class-B gain.
+- **A trap in the open candidates.** Storing all-zero cells as absence would
+  take the `dd if=/dev/zero` cells under their targets while incompressible
+  data stays near 100 ms. It is a general, exact rule, but its benchmark
+  effect is a sparse-file effect; report both numbers or it is fitting.
+- **Not audited line by line:** the two subagent-written changes (step 10
+  and the link-count fix).
+
+## Fast iteration: what cost time, and how to avoid it
+
+**The loop.**
+
+- One C01 iteration is about 25 s of wall time: seal under 1 s, two release
+  builds about 12 s, provenance, volume, clone and configuration about 2 s,
+  the sample 6–7 s. One build serves every cell at that HEAD
+  (`r7-iterate-all.sh <n> C01 C04 …`), 4 receipts per further cell.
+- The sample needs a clean HEAD. Commit pending documents first; untracked
+  files did not block the seal, a modified tracked file was not tried.
+- Stop sample containers retained from FAIL or NOT_RUN rows before
+  measuring; they hold idle daemons.
+- Suites: the daemon's Linux suite is 59 binaries and 6–8 minutes, one
+  bounded run each; overlay 26 and fuse 4 take under a minute. Run only the
+  changed packages. Build with `--no-run` first so compilation is not
+  mistaken for a slow test.
+- One writer in the tree at a time. Research agents read with
+  `git show <commit>:<path>` while an implementer edits; receipts and
+  documents can be committed meanwhile by staging explicit paths.
+
+**Reading a sample (in this order).**
+
+1. `r7-summary.py <receipt.json>`: row and verifier, then requests by
+   opcode, jobs by class, statements by family, owner wait and service.
+2. Divide by the unit of work and by requests; compute time outside the
+   owner. Whichever of the four multipliers is largest (requests per unit,
+   jobs per request, statements per job, cost per statement) is the target.
+3. `r7-statements.py`: time and VM steps per family. Statement count is a
+   weak proxy; trigger runs are executions minus statements; COMMIT is three
+   VM steps and 10.8 µs.
+4. A FAIL row: the verifier's differences are in
+   `sample/runtime.events.artifacts/*-verify.stdout`; the full comparison
+   file is inside the retained container (`docker cp`).
+5. A NOT_RUN row: the reason is in `sample/cache.stdout`.
+
+**Finding the change.**
+
+- Have a read-only agent build the per-request model from source and require
+  it to reproduce the receipt's counts exactly. Each took 15–30 minutes and
+  several ran in parallel; every kept step came from one.
+- Give an implementer a brief with the decided design, the items, the proof
+  required, the helper commands and **stages that each leave the tree
+  green**. That is what allowed step 10 to be cut to its first stage cleanly
+  when the owner changed direction.
+- Before changing a constant or a count, search the tests for it. Changing
+  the receive loops broke eight test binaries that asserted the old number;
+  moving the reply ticket broke three exact-count tests.
+- Exact-count tests (`costs.rs`, `compound.rs`, `transactions.rs`,
+  `native_visit_cost.rs`, `job_cost.rs`) are the fastest regression signal:
+  restage them with the true new number, never loosen them.
+- Run `fmt` before the suites, not after.
+
+**Known noise.**
+
+- Docker can serve a stale test binary after a small edit (the rebuild
+  finishes in two seconds and the old assertion still fails): `touch` the
+  file, rebuild, use the next attempt number.
+- "RECEIPT EXISTS" for the second `layerfs_daemon` unit binary is harmless.
+- zsh expands unquoted globs in `grep --include=*.rs`; quote them.
+- One-sample time spread is about 10 %; peak resident memory is bimodal.
+
 ## Not measured at all
 
 - Every E cell (E01–E19). They need closed oracles and configurations like
