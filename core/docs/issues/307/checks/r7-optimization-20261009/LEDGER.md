@@ -1384,3 +1384,53 @@ Checks, one attempt each, all PASS: all 22 host overlay test binaries
 `native_custody` 2, `native_mutation` 2. Host Clippy `-D warnings` for the
 four crates, `fmt --check` and the boundary guard passed. Not run: the full
 suites and Linux Clippy.
+
+## Step 3 result — KEPT
+
+Commit 17 is `87e234a62`, tree `cf9e05faa4e02760868c7b33df673e20eb7ab11e`;
+LOC records `r7-loc-16-*` agree. Production LOC 185969 -> 185992 (delta +23).
+Iteration receipts 243–250, one attempt each, all PASS.
+
+**250 — C01:B:L at `87e234a62`, one sample, exploratory.** Row INCOMPLETE for
+the same harness gap. Verifier PASS, custody KNOWN_STOP, cleanup Gone.
+
+| Measure | 241 at `952e0b3bb` | 250 at `87e234a62` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 2202119833 | 2085655209 | −116464624 (−5.3 %) |
+| Owner jobs | 15002 | 15002 | 0 |
+| Statement executions | 302017 | 278013 | −24004 |
+| — Workspace | 61005 | 40002 | −21003 |
+| — Lease | 150005 | 147004 | −3001 |
+| Owner queue wait ns | 503679525 | 485224604 | −18454921 |
+| Owner service ns | 1258286490 | 1166561334 | −91725156 |
+| Command minus owner wait and service | 440153818 | 433869271 | −6284547 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 557056 / 268992512 | 557056 / 268992512 | 0 |
+| `peak_credited_bytes` / `scheduler_bytes` | 53643 / 25848 | 53643 / 25848 | 0 |
+| Daemon VmHWM | 46661632 | 46637056 | −24576 |
+
+Statement counts fell as predicted and both gates hold. The wall difference
+is inside the variation described under step 2 and is not claimed as a gain.
+
+## Summary after three steps (all one-sample, exploratory)
+
+| Identity | Step | Owner jobs | Statements | Owner wait + service ns | Command ns |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `82780f72e` (223) | start | 18002 | 342017 | 2166831555 | 2226041875 |
+| `9244dc8c6` (232) | 1: one post-reply job | 16002 | 334017 | 1805996908 | 2004655833 |
+| `952e0b3bb` (241) | 2: no FileRead for attributes | 15002 | 302017 | 1761966015 | 2202119833 |
+| `87e234a62` (250) | 3: one state read | 15002 | 278013 | 1651785938 | 2085655209 |
+
+From start to step 3: owner jobs −16.7 %, statements −18.7 %, time inside
+the owner (wait plus service) −23.8 %, command wall −6.3 %. The wall follows
+the owner time only in part: the command time outside the owner was 59 ms in
+223 and 199, 440 and 434 ms afterwards. That remainder has no counter. It is
+the open question for the next step (candidate D04): either it is run-level
+variation, or the request path outside the owner (receive loop, dispatch
+worker, wake-ups, kernel round trip) got slower as the owner got less busy.
+An instrument for it is needed before more wall time can be attributed.
+
+Open, unchanged: N and P timings for C01; every other cell of the matrix;
+the K and W runners; the harness count-interval gap that keeps each row
+INCOMPLETE; Linux suite from index 175; Linux Clippy and the full suites at
+the current identity.
