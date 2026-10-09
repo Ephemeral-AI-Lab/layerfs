@@ -33,7 +33,7 @@ impl Overlay {
             {
                 return Err(OverlayError::Missing);
             }
-            let owner = self.mint_owner(source.route)?;
+            let owner = self.mint_owner()?;
             let serial = integer(current.serial)?;
             self.execute(
                 StatementKind::Lease,

@@ -21,7 +21,7 @@ impl Overlay {
             if state.closed {
                 return Err(OverlayError::Closed);
             }
-            let owner = self.mint_owner(capture.route)?;
+            let owner = self.mint_owner()?;
             self.execute(
                 StatementKind::Lease,
                 "INSERT INTO captured_reader VALUES(?1,?2,?3,?4,?5,?6,?7)",

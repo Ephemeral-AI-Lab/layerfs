@@ -5,27 +5,17 @@ use crate::{
 };
 
 impl Overlay {
-    pub(crate) fn mint_owner(&self, route: Route) -> OverlayResult<u64> {
-        let next = self
-            .query(
-                StatementKind::Lease,
-                "SELECT next_owner FROM workspace WHERE ns=?1",
-                &[&route.ns],
-                8,
-                |r| r.get::<_, i64>(0),
-            )?
-            .pop()
-            .ok_or(OverlayError::Stale)?;
+    /// Mints one owner identity of this engine, unique across its namespaces.
+    /// A job that rolls back does not return its identities.
+    pub(crate) fn mint_owner(&self) -> OverlayResult<u64> {
+        let next = self.next_owner.get();
+        // Identities are stored as SQLite signed integers.
         let after = next
             .checked_add(1)
+            .filter(|after| *after <= i64::MAX as u64)
             .ok_or(OverlayError::Invalid("owner identity exhausted"))?;
-        self.execute(
-            StatementKind::Lease,
-            "UPDATE workspace SET next_owner=?2 WHERE ns=?1",
-            &[&route.ns, &after],
-            16,
-        )?;
-        Ok(next as u64)
+        self.next_owner.set(after);
+        Ok(next)
     }
     pub(crate) fn file_ref(
         &self,
@@ -34,32 +24,18 @@ impl Overlay {
         kind: LeaseKind,
         add: bool,
     ) -> OverlayResult<()> {
-        let column = match kind {
-            LeaseKind::Open | LeaseKind::FileHandle => "opens",
-            LeaseKind::Lookup | LeaseKind::LookupOwner => "lookups",
-            LeaseKind::FileReader => "readers",
+        let (increment, decrement) = match kind {
+            LeaseKind::Open | LeaseKind::FileHandle => (sql::FILE_OPENS_ADD, sql::FILE_OPENS_DROP),
+            LeaseKind::Lookup | LeaseKind::LookupOwner => {
+                (sql::FILE_LOOKUPS_ADD, sql::FILE_LOOKUPS_DROP)
+            }
+            LeaseKind::FileReader => (sql::FILE_READERS_ADD, sql::FILE_READERS_DROP),
             _ => return Ok(()),
         };
         if add {
-            self.execute(
-                StatementKind::Lease,
-                &format!(
-                    "INSERT INTO file_custody(ns,serial,{column}) VALUES(?1,?2,1)
-                ON CONFLICT(ns,serial) DO UPDATE SET {column}={column}+1"
-                ),
-                &[&ns, &serial],
-                16,
-            )?;
+            self.execute(StatementKind::Lease, increment, &[&ns, &serial], 16)?;
         } else {
-            let changed = self.execute(
-                StatementKind::Lease,
-                &format!(
-                    "UPDATE file_custody SET {column}={column}-1
-                WHERE ns=?1 AND serial=?2 AND {column}>0"
-                ),
-                &[&ns, &serial],
-                16,
-            )?;
+            let changed = self.execute(StatementKind::Lease, decrement, &[&ns, &serial], 16)?;
             if changed != 1 {
                 return Err(OverlayError::Stale);
             }
@@ -119,7 +95,7 @@ impl Overlay {
         serial: u64,
         writable: bool,
     ) -> OverlayResult<OpenFile> {
-        let owner = self.mint_owner(route)?;
+        let owner = self.mint_owner()?;
         let serial = integer(serial)?;
         self.execute(
             StatementKind::Lease,
@@ -252,7 +228,7 @@ impl Overlay {
         serial: u64,
         request: i64,
     ) -> OverlayResult<FileRead> {
-        let owner = self.mint_owner(source.route)?;
+        let owner = self.mint_owner()?;
         let serial = integer(serial)?;
         self.execute(
             StatementKind::Lease,

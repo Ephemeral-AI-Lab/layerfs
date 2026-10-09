@@ -1,7 +1,10 @@
 //! Bounded aggregate observations from actual SQLite executions.
 use crate::{OverlayError, OverlayResult};
 use rusqlite::{Connection, StatementStatus, ToSql};
-use std::{cell::RefCell, time::Instant};
+use std::{
+    cell::RefCell,
+    time::{Duration, Instant},
+};
 
 /// Fixed statement families; aggregation never stores an input-sized trace.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -47,10 +50,12 @@ pub struct StatementWork {
     pub bound_bytes: u64,
     /// SQL bytes supplied to statement checkout; repeated cached lookups count.
     pub sql_bytes: u64,
-    /// Samples of SQLITE_STMTSTATUS_MEMUSED, not pager/process residency.
+    /// Samples of SQLITE_STMTSTATUS_MEMUSED, taken only from statements
+    /// prepared for one use. A statement retained in the connection's cache
+    /// is not sampled. Not pager/process residency.
     pub statement_memory_samples: u64,
-    /// Sum of approximate prepared-statement heap samples. Repeated sampling
-    /// counts the same cached statement again; this is not resident allocation.
+    /// Sum of approximate prepared-statement heap of those one-use statements.
+    /// It excludes the retained statement cache; this is not resident allocation.
     pub statement_memory_sample_bytes: u64,
     pub elapsed_ns: u64,
 }
@@ -65,6 +70,9 @@ pub(crate) struct Query<'a> {
     pub params: &'a [&'a dyn ToSql],
     pub bound_bytes: u64,
     pub cached: bool,
+    /// Called once after prepare and before execution when the prepared
+    /// statement is not read-only. Its failure is this statement's failure.
+    pub before_write: Option<&'a dyn Fn() -> OverlayResult<()>>,
 }
 pub(crate) fn query<T>(
     connection: &Connection,
@@ -78,6 +86,7 @@ pub(crate) fn query<T>(
         params,
         bound_bytes,
         cached,
+        before_write,
     } = input;
     let start = Instant::now();
     let mut observed = StatementWork {
@@ -86,6 +95,8 @@ pub(crate) fn query<T>(
         sql_bytes: sql.len() as u64,
         ..Default::default()
     };
+    // Statements run by `before_write` record their own elapsed time.
+    let mut nested = Duration::ZERO;
     let result = (|| {
         let mut plain;
         let mut retained;
@@ -96,15 +107,13 @@ pub(crate) fn query<T>(
             plain = connection.prepare(sql)?;
             &mut plain
         };
-        for counter in [
-            StatementStatus::Run,
-            StatementStatus::VmStep,
-            StatementStatus::FullscanStep,
-            StatementStatus::Sort,
-            StatementStatus::AutoIndex,
-            StatementStatus::RePrepare,
-        ] {
-            statement.reset_status(counter);
+        if let Some(before_write) = before_write {
+            if !statement.readonly() {
+                let entered = Instant::now();
+                let admitted = before_write();
+                nested = entered.elapsed();
+                admitted?;
+            }
         }
         let before_changes = connection.total_changes();
         let result: rusqlite::Result<Vec<T>> = (|| {
@@ -117,22 +126,29 @@ pub(crate) fn query<T>(
             }
             Ok(result)
         })();
-        let count = |counter| statement.get_status(counter).max(0) as u64;
+        // Reading resets each counter, so a statement returns to the cache
+        // at zero and its next use needs no reset before execution.
+        let count = |counter| statement.reset_status(counter).max(0) as u64;
         observed.executions = count(StatementStatus::Run);
         observed.vm_steps = count(StatementStatus::VmStep);
         observed.fullscan_steps = count(StatementStatus::FullscanStep);
         observed.sorts = count(StatementStatus::Sort);
         observed.autoindex_rows = count(StatementStatus::AutoIndex);
         observed.reprepares = count(StatementStatus::RePrepare);
-        observed.statement_memory_samples = 1;
-        observed.statement_memory_sample_bytes = count(StatementStatus::MemUsed);
+        if !cached {
+            // MemUsed walks the whole prepared program.
+            observed.statement_memory_samples = 1;
+            observed.statement_memory_sample_bytes =
+                statement.get_status(StatementStatus::MemUsed).max(0) as u64;
+        }
         observed.rows_changed = connection.total_changes().saturating_sub(before_changes);
         if observed.rows_changed != 0 {
             observed.direct_rows_changed = connection.changes();
         }
         result.map_err(OverlayError::from)
     })();
-    observed.elapsed_ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+    let elapsed = start.elapsed().saturating_sub(nested);
+    observed.elapsed_ns = elapsed.as_nanos().min(u64::MAX as u128) as u64;
     work.borrow_mut().statements[kind as usize].accumulate(observed);
     result
 }

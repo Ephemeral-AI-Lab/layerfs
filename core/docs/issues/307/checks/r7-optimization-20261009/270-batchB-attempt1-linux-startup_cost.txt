@@ -1,0 +1,12 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 804e77f02, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/startup_cost-292e30b6a8e994f9 --test-threads=1 
+
+running 3 tests
+test admission_refusal_has_no_creation_receipt_or_artifact_effect ... ok
+test failed_owner_start_exposes_original_creation_receipt_without_retry ... ok
+test readiness_retains_startup_separately_from_foreground_and_maintenance ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

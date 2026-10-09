@@ -106,11 +106,8 @@ pub(crate) fn create(path: &Path, config: ProfileConfig) -> Creation {
                 return Err(crate::OverlayError::UnsupportedFilesystem { linux_magic });
             }
         }
-        allocation = Some(super::allocation::Allocation::new(file, path)?);
-        allocation
-            .as_ref()
-            .expect("allocation created")
-            .admit(false, 0)?;
+        let physical = allocation.insert(super::allocation::Allocation::new(file, path)?);
+        physical.admit(false, 0, physical.state()?)?;
         work.sqlite_open_calls = 1;
         let connection = Connection::open_with_flags(
             path,
@@ -136,11 +133,15 @@ pub(crate) fn create(path: &Path, config: ProfileConfig) -> Creation {
             super::profile::readback(&connection, &sql, "PRAGMA user_version", |row| row.get(0))?;
         let application: i64 =
             super::profile::readback(&connection, &sql, "PRAGMA application_id", |row| row.get(0))?;
-        if profile.schema_version != 19 || application != 1279676210 {
+        if profile.schema_version != 20 || application != 1279676210 {
             return Err(crate::OverlayError::Invalid("overlay schema readback"));
         }
         work.cache_configuration_calls = 1;
-        connection.set_prepared_statement_cache_capacity(48);
+        // The capacity covers the engine's fixed statement set, about 224
+        // literal texts, so no statement of a steady request cycle is prepared
+        // twice. The set is fixed by source; it does not grow with files,
+        // bytes or operations.
+        connection.set_prepared_statement_cache_capacity(256);
         let identity = NEXT_ENGINE
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
                 next.checked_add(1)
@@ -154,6 +155,8 @@ pub(crate) fn create(path: &Path, config: ProfileConfig) -> Creation {
             quarantined: Cell::new(false),
             maintenance_ready: Cell::new(false),
             closed_ready: Cell::new(false),
+            transaction: Cell::new(super::connection::Transaction::None),
+            next_owner: Cell::new(1),
             profile,
             allocation: allocation.take().expect("allocation created"),
         })

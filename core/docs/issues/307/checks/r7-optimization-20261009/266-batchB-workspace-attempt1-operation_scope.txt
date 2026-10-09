@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 804e77f02, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/operation_scope-1a4848c41508d0a6 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 4 tests
+test checked_base_client_override_performs_no_acquisition_and_uses_new_lengths ... ok
+test failed_operation_provider_does_not_poison_shared_cache_or_fresh_provider ... ok
+test fresh_clients_share_one_allowance_and_return_independent_bytes ... ok
+test scoped_views_share_original_install_serials_and_keep_original_provider ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

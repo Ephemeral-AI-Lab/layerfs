@@ -18,6 +18,18 @@ allocation. It conservatively discards credit on a length/block decrease. Alloca
 block totals do not establish range position. No zero-fill fallback, retry, sync,
 VACUUM, shrink or second database is introduced.
 
+R7 update, 2026-10-09 (overlay schema 20): admission belongs to a job's first
+writing statement, not to the job. A job that writes nothing reads no
+freelist cookie, observes no allocation and is not an admitted job. Linux no
+longer calls `fallocate` on every admission: as on Darwin, the range is
+established only when the tracked tail is shorter than the required one. The
+tracked tail ends where this process itself established a range; an
+observation that sees the file's length or block count shrink withdraws it,
+and it is established again from the committed length once the file has grown
+into it. One observation precedes an admission; the observation after a
+transaction remains only after `ROLLBACK` or a failed `COMMIT`, where
+truncation can discard a preallocated tail.
+
 The S7 E04 continuation adds a narrow Linux startup compatibility refusal.
 After creating the fresh owned descriptor, Linux startup unconditionally opens
 the same path read-only with O_NOFOLLOW. Both descriptors must identify the same

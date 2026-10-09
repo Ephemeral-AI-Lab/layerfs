@@ -116,16 +116,24 @@ impl Allocation {
     }
     /// Failed admission changes no logical bytes or SQL state. Preserve exact
     /// original allocation failure; never zero-fill, retry or estimate free disk.
-    pub(crate) fn admit(&self, cleanup: bool, reusable_bytes: u64) -> OverlayResult<()> {
-        let before = self.state()?;
+    /// `before` is the caller's observation for this admission.
+    pub(crate) fn admit(
+        &self,
+        cleanup: bool,
+        reusable_bytes: u64,
+        before: AllocationState,
+    ) -> OverlayResult<()> {
         let budget = CLEANUP_HEADROOM + if cleanup { 0 } else { MUTATION_GROWTH };
         // Reusable committed SQLite pages are already physically owned. They
         // replenish cleanup capacity without requiring free filesystem blocks.
         let required = budget.saturating_sub(reusable_bytes);
         let mut work = self.work.get();
-        // Linux establishes the precise range on every admission. An already
-        // allocated range needs no new disk space; no block-total inference.
-        if required != 0 && (cfg!(target_os = "linux") || before.reserved_tail_bytes < required) {
+        // Allocate only when the tracked tail is short, on Linux as on macOS.
+        // The tail is exact: it ends where this process itself established a
+        // range, state() withdraws it when the file's length or block count
+        // shrinks, and it is established again from the committed length once
+        // the file has grown into it. No block-total inference.
+        if required != 0 && before.reserved_tail_bytes < required {
             let need = required.saturating_sub(before.reserved_tail_bytes);
             let requested = if cfg!(target_os = "linux") {
                 required

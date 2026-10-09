@@ -1,0 +1,13 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 804e77f02, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/filesystem_port-4fb32d26badddcfb --test-threads=1 
+
+running 4 tests
+test directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close ... ok
+test full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credit ... ok
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

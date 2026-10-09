@@ -6,6 +6,21 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (overlay schema 20): an atomic job starts its SQLite
+transaction at its first writing statement. Reads before it run in
+autocommit, which is the same state here: the connection is the only one,
+holds the exclusive lock and runs one job at a time. A job that writes
+nothing issues no `BEGIN`, `COMMIT` or freelist read. A nested atomic job is
+refused. Owner identities are minted from a counter in the connection, which
+creates the database and never reopens it; `workspace.next_owner` is gone,
+and an identity minted by a rolled-back job is not reused. The prepared-
+statement cache holds 256 statements, above the engine's fixed set of about
+224 literal texts, so a steady request cycle prepares nothing twice; the set
+is fixed by source and does not grow with files, bytes or operations.
+Per-statement observation reads and resets six counters after execution, and
+`SQLITE_STMTSTATUS_MEMUSED` is sampled only for statements prepared for one
+use.
+
 Implemented source: the S0/S1 checkpoint introducing `layerfs-overlay` on local
 main for [#307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 Complete Workspace/FUSE/daemon and milestone qualification remain outstanding;

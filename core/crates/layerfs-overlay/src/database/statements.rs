@@ -81,6 +81,26 @@ pub(crate) const ORPHAN_LOOKUP: &str =
 pub(crate) const FILE_REFS: &str =
     "SELECT opens+lookups+readers FROM file_custody WHERE ns=?1 AND serial=?2";
 
+pub(crate) const FILE_OPENS_ADD: &str = "INSERT INTO file_custody(ns,serial,opens) VALUES(?1,?2,1)
+    ON CONFLICT(ns,serial) DO UPDATE SET opens=opens+1";
+pub(crate) const FILE_OPENS_DROP: &str = "UPDATE file_custody SET opens=opens-1
+    WHERE ns=?1 AND serial=?2 AND opens>0";
+pub(crate) const FILE_LOOKUPS_ADD: &str =
+    "INSERT INTO file_custody(ns,serial,lookups) VALUES(?1,?2,1)
+    ON CONFLICT(ns,serial) DO UPDATE SET lookups=lookups+1";
+pub(crate) const FILE_LOOKUPS_DROP: &str = "UPDATE file_custody SET lookups=lookups-1
+    WHERE ns=?1 AND serial=?2 AND lookups>0";
+pub(crate) const FILE_READERS_ADD: &str =
+    "INSERT INTO file_custody(ns,serial,readers) VALUES(?1,?2,1)
+    ON CONFLICT(ns,serial) DO UPDATE SET readers=readers+1";
+pub(crate) const FILE_READERS_DROP: &str = "UPDATE file_custody SET readers=readers-1
+    WHERE ns=?1 AND serial=?2 AND readers>0";
+
+pub(crate) const OPERATION_RECORD_DELETE: &str =
+    "DELETE FROM operation_record WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4";
+pub(crate) const OWNED_OPERATION_RECORD_DELETE: &str =
+    "DELETE FROM owned_operation_record WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4";
+
 pub(crate) const OPERATION_CUSTODY: &str = "SELECT 1 FROM operation_owner WHERE ns=?1 AND owner=?2";
 
 pub(crate) const INDEXED_OPERATION_RECORD_CONTAINS: &str = "SELECT 1 FROM indexed_operation_record

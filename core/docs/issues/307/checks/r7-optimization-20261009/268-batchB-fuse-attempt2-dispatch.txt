@@ -1,0 +1,18 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 804e77f02, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/dispatch-90817d26534023de --test-threads=1  (cwd core/crates/layerfs-fuse)
+
+running 9 tests
+test completion_event_resumes_without_another_request_and_old_wakers_are_stale ... ok
+test fixed_workers_share_mounts_and_survive_zero_mounts ... ok
+test handoff_after_pool_shutdown_retains_original_and_returns_terminal_error ... ok
+test notification_registration_does_not_keep_a_disposed_request_alive ... ok
+test panic_and_failure_retain_original_future_and_do_not_stop_other_mounts ... ok
+test quiescence_wait_is_event_driven_and_expiry_disposes_nothing ... ok
+test rejected_copy_capacity_keeps_receive_ownership_and_permit_cancel_is_exact ... ok
+test two_borrowed_waiters_wake_on_terminal_without_releasing_original_credit ... ok
+test wake_during_poll_is_coalesced_and_never_lost ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

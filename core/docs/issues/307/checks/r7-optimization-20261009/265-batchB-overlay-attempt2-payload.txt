@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 804e77f02, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/payload-68ae5eb9eeaeeafc --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 4 tests
+test a_tall_shrink_staircase_keeps_logarithmic_lookups_and_exact_bytes ... ok
+test holes_cost_no_rows_and_tiny_and_dense_files_report_measured_pages ... ok
+test layered_reads_match_a_reference_model_across_writes_resizes_capture_and_install ... ok
+test shrink_work_is_independent_of_discarded_data_and_regrow_reads_zero ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.34s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

@@ -78,6 +78,7 @@ pub(crate) fn initialize(
                 params: &[],
                 bound_bytes: 0,
                 cached: false,
+                before_write: None,
             },
             |r| r.get(0),
         )?,
@@ -133,6 +134,7 @@ pub(crate) fn readback<T>(
             params: &[],
             bound_bytes: 0,
             cached: false,
+            before_write: None,
         },
         decode,
     )?;

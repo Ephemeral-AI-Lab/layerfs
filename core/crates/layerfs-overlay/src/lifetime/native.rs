@@ -15,7 +15,7 @@ impl Overlay {
         integer(root)?;
         self.atomic(|| {
             self.live(route)?;
-            let owner = self.mint_owner(route)?;
+            let owner = self.mint_owner()?;
             self.execute(
                 StatementKind::Lease,
                 "INSERT INTO native_mount(ns,owner,root,revoked) VALUES(?1,?2,?3,0)",
@@ -110,7 +110,7 @@ impl Overlay {
         request: u64,
         serial: u64,
     ) -> OverlayResult<BaseSource> {
-        let owner = self.mint_owner(mount.route)?;
+        let owner = self.mint_owner()?;
         self.execute(
             StatementKind::Lease,
             "INSERT INTO native_source VALUES(?1,?2,?3,?4,?5,0)",
@@ -254,7 +254,7 @@ impl Overlay {
         implicit: bool,
         count: u64,
     ) -> OverlayResult<()> {
-        let owner = self.mint_owner(mount.route)?;
+        let owner = self.mint_owner()?;
         self.execute(
             StatementKind::Lease,
             "INSERT INTO native_lookup VALUES(?1,?2,?3,?4,?5,?6)",

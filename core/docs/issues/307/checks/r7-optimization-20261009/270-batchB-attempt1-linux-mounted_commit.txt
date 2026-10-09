@@ -1,0 +1,16 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 804e77f02, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_commit-9a3eab5504a12301 --test-threads=1 
+
+running 7 tests
+test map_close_store_exit_process ... ok
+test r5_1_external_bash_changes_of_every_kind_are_committed_and_read_back_on_a_fresh_mount ... ok
+test r5_2_unchanged_is_up_to_date_and_a_change_is_committed_once ... ok
+test r5_3_commit_captures_what_every_launch_published_whatever_became_of_the_process ... ok
+test r5_8_five_incremental_commits_on_one_mount_each_read_back_completely ... ok
+test r5_9_stores_through_shared_mappings_are_committed_once_written_back ... ok
+test the_native_replay_starts_from_the_same_tree_as_the_mounted_base ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.32s
+
+R4_WALL seconds<=4 limit=115s lock_wait=0s
+EXIT 0

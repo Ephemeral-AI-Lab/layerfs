@@ -22,8 +22,25 @@ pub struct Overlay {
     /// possible work. A rolled-back enqueue can leave only a false positive.
     pub(crate) maintenance_ready: Cell<bool>,
     pub(crate) closed_ready: Cell<bool>,
+    /// What the running atomic job has asked of this connection.
+    pub(super) transaction: Cell<Transaction>,
+    /// Next owner identity of this engine. The database is created by this
+    /// connection and never reopened, so the counter needs no stored row.
+    pub(crate) next_owner: Cell<u64>,
     pub(super) profile: DatabaseProfile,
     pub(super) allocation: crate::database::allocation::Allocation,
+}
+/// An atomic job starts its SQLite transaction at its first writing statement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Transaction {
+    None,
+    /// The job has executed no writing statement; its reads ran in autocommit.
+    Wanted {
+        cleanup: bool,
+    },
+    /// Admission and BEGIN are executing for the job's first writing statement.
+    Beginning,
+    Begun,
 }
 impl Overlay {
     /// Creates fresh disposable state once. An existing path is refused.
@@ -110,6 +127,8 @@ impl Overlay {
         decode: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
     ) -> OverlayResult<Vec<T>> {
         self.available()?;
+        let begin = || self.begin();
+        let wanted = matches!(self.transaction.get(), Transaction::Wanted { .. });
         let result = metrics::query(
             &self.connection,
             &self.work,
@@ -119,6 +138,7 @@ impl Overlay {
                 params,
                 bound_bytes: bytes,
                 cached,
+                before_write: if wanted { Some(&begin) } else { None },
             },
             decode,
         );
@@ -160,61 +180,35 @@ impl Overlay {
         self.available()?;
         self.allocation.state()
     }
+    /// Runs one job atomically. Reads before the job's first writing statement
+    /// execute in autocommit: this connection is the only one, holds the
+    /// exclusive lock and runs one job at a time, so they see the same state.
+    /// A job that writes nothing begins, commits and admits nothing.
     fn transaction<T>(
         &self,
         cleanup: bool,
         job: impl FnOnce() -> OverlayResult<T>,
     ) -> OverlayResult<T> {
         self.available()?;
-        // page_count includes Expire in the supported SQLite VM. Keep it out
-        // of the hot admission path; committed dense descriptor length supplies
-        // the physical bound, and freelist_count reads one nonexpiring cookie.
-        self.allocation.freelist_query();
-        let free = self.query(
-            StatementKind::Startup,
-            "PRAGMA main.freelist_count",
-            &[],
-            0,
-            |r| unsigned(r, 0),
-        )?[0];
-        let physical = self.allocation.state();
-        let admission = match physical {
-            Ok(state)
-                if state.logical_bytes != 0
-                    && state.logical_bytes % 4096 == 0
-                    && free <= state.logical_bytes / 4096 =>
-            {
-                self.allocation.admit(cleanup, free * 4096)
-            }
-            Ok(_) => Err(OverlayError::Invalid(
-                "committed database length/accounting",
-            )),
-            Err(error) => Err(error),
-        };
-        if let Err(cause) = admission {
-            if !matches!(
-                cause,
-                OverlayError::Reservation { .. } | OverlayError::UnsupportedPlatform
-            ) {
-                self.quarantined.set(true);
-                return Err(OverlayError::Uncertain {
-                    cause: Box::new(cause),
-                    completion: None,
-                });
-            }
-            return Err(cause);
+        if self.transaction.get() != Transaction::None {
+            return Err(OverlayError::Invalid("nested transaction"));
         }
-        self.execute(StatementKind::Begin, "BEGIN IMMEDIATE", &[], 0)?;
+        self.transaction.set(Transaction::Wanted { cleanup });
         let result = job();
-        let finished = match result {
+        if self.transaction.replace(Transaction::None) != Transaction::Begun {
+            return result;
+        }
+        let failure = match result {
             Ok(value) => match self.execute(StatementKind::Commit, "COMMIT", &[], 0) {
-                Ok(_) => Ok(value),
+                // A commit never shrinks this file. The next admission's own
+                // observation sees the committed length and allocation.
+                Ok(_) => return Ok(value),
                 Err(cause) => {
                     self.quarantined.set(true);
-                    Err(OverlayError::Uncertain {
+                    OverlayError::Uncertain {
                         cause: Box::new(cause),
                         completion: None,
-                    })
+                    }
                 }
             },
             Err(cause) => {
@@ -230,7 +224,7 @@ impl Overlay {
                         });
                     }
                 }
-                Err(cause)
+                cause
             }
         };
         // Observe rollback truncation before another admission or resource
@@ -240,10 +234,69 @@ impl Overlay {
             self.quarantined.set(true);
             return Err(OverlayError::Uncertain {
                 cause: Box::new(cause),
-                completion: finished.err().map(Box::new),
+                completion: Some(Box::new(failure)),
             });
         }
-        finished
+        Err(failure)
+    }
+    /// Admission and BEGIN for the first writing statement of an atomic job,
+    /// before that statement executes. A failure is returned by that statement
+    /// and leaves no transaction open.
+    fn begin(&self) -> OverlayResult<()> {
+        let Transaction::Wanted { cleanup } = self.transaction.get() else {
+            return Ok(());
+        };
+        // BEGIN IMMEDIATE is itself a writing statement.
+        self.transaction.set(Transaction::Beginning);
+        let begun = self
+            .admit(cleanup)
+            .and_then(|()| self.execute(StatementKind::Begin, "BEGIN IMMEDIATE", &[], 0));
+        self.transaction.set(match begun {
+            Ok(_) => Transaction::Begun,
+            Err(_) => Transaction::Wanted { cleanup },
+        });
+        begun.map(|_| ())
+    }
+    fn admit(&self, cleanup: bool) -> OverlayResult<()> {
+        // page_count includes Expire in the supported SQLite VM. Keep it out
+        // of the hot admission path; committed dense descriptor length supplies
+        // the physical bound, and freelist_count reads one nonexpiring cookie.
+        self.allocation.freelist_query();
+        let free = self.query(
+            StatementKind::Startup,
+            "PRAGMA main.freelist_count",
+            &[],
+            0,
+            |r| unsigned(r, 0),
+        )?[0];
+        let admission = match self.allocation.state() {
+            Ok(state)
+                if state.logical_bytes != 0
+                    && state.logical_bytes % 4096 == 0
+                    && free <= state.logical_bytes / 4096 =>
+            {
+                self.allocation.admit(cleanup, free * 4096, state)
+            }
+            Ok(_) => Err(OverlayError::Invalid(
+                "committed database length/accounting",
+            )),
+            Err(error) => Err(error),
+        };
+        match admission {
+            Err(cause)
+                if !matches!(
+                    cause,
+                    OverlayError::Reservation { .. } | OverlayError::UnsupportedPlatform
+                ) =>
+            {
+                self.quarantined.set(true);
+                Err(OverlayError::Uncertain {
+                    cause: Box::new(cause),
+                    completion: None,
+                })
+            }
+            admission => admission,
+        }
     }
 }
 pub(crate) fn integer(value: u64) -> OverlayResult<i64> {

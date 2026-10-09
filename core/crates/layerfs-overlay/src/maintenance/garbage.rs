@@ -182,17 +182,22 @@ impl Overlay {
             }
             return Ok((count, bytes, count == 0));
         }
-        let table = if item.target == 1 {
-            "owned_operation_record"
+        let (page, delete) = if item.target == 1 {
+            (
+                "SELECT kind,key,length(value) FROM owned_operation_record
+            WHERE ns=?1 AND operation=?2 AND (kind,key)>(?3,?4) ORDER BY kind,key LIMIT 64",
+                sql::OWNED_OPERATION_RECORD_DELETE,
+            )
         } else {
-            "operation_record"
+            (
+                "SELECT kind,key,length(value) FROM operation_record
+            WHERE ns=?1 AND operation=?2 AND (kind,key)>(?3,?4) ORDER BY kind,key LIMIT 64",
+                sql::OPERATION_RECORD_DELETE,
+            )
         };
         let rows = self.query(
             StatementKind::OperationRecord,
-            &format!(
-                "SELECT kind,key,length(value) FROM {table}
-            WHERE ns=?1 AND operation=?2 AND (kind,key)>(?3,?4) ORDER BY kind,key LIMIT 64"
-            ),
+            page,
             &[&item.ns, &item.resource, &item.cursor, &item.aux],
             32,
             |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, unsigned(r, 2)?)),
@@ -204,7 +209,7 @@ impl Overlay {
             }
             self.execute(
                 StatementKind::Reclaim,
-                &format!("DELETE FROM {table} WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4"),
+                delete,
                 &[&item.ns, &item.resource, kind, key],
                 32,
             )?;

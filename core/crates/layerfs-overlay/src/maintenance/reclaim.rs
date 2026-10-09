@@ -2,11 +2,28 @@
 use crate::{
     close::CLOSE_KEY,
     db::{integer, unsigned},
-    Overlay, OverlayResult, StatementKind,
+    sql, Overlay, OverlayResult, StatementKind,
 };
 const BYTES: u64 = 65536;
 const READY:&str="SELECT ns,cursor FROM reclaim INDEXED BY reclaim_ready WHERE queue_key=?1 AND ns>?2 ORDER BY ns LIMIT 1";
 const PAYLOAD:&str="SELECT rowid,length(data)+ifnull(length(validity),0) FROM payload INDEXED BY payload_namespace_row WHERE ns=?1 ORDER BY rowid LIMIT 14";
+/// Fixed page and delete statements of one terminal table.
+const ORPHAN: [&str; 2] = [
+    "SELECT serial FROM orphan WHERE ns=?1 ORDER BY serial LIMIT 64",
+    "DELETE FROM orphan WHERE ns=?1 AND serial=?2",
+];
+const FILE_CUSTODY: [&str; 2] = [
+    "SELECT serial FROM file_custody WHERE ns=?1 ORDER BY serial LIMIT 64",
+    "DELETE FROM file_custody WHERE ns=?1 AND serial=?2",
+];
+const OPERATION_RECORD: [&str; 2] = [
+    "SELECT operation,kind,key,length(value) FROM operation_record WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64",
+    sql::OPERATION_RECORD_DELETE,
+];
+const OWNED_OPERATION_RECORD: [&str; 2] = [
+    "SELECT operation,kind,key,length(value) FROM owned_operation_record WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64",
+    sql::OWNED_OPERATION_RECORD_DELETE,
+];
 
 /// One short physical cleanup step. Bytes count payload, names and raw operation_record
 /// values, not structured identity keys or pages. SQL work records delivered
@@ -52,13 +69,13 @@ impl Overlay {
                 0 => self.delete_payload(ns)?,
                 1 => self.delete_names(ns)?,
                 2 => self.delete_inodes(ns)?,
-                3 => self.delete_operation_record(ns, "operation_record")?,
+                3 => self.delete_operation_record(ns, OPERATION_RECORD)?,
                 4 => self.delete_old_reclaim(ns)?,
                 5 => self.delete_steps(ns)?,
                 6 => self.delete_maintenance(ns)?,
-                7 => self.delete_orphan_metadata(ns, "orphan")?,
-                8 => self.delete_orphan_metadata(ns, "file_custody")?,
-                9 => self.delete_operation_record(ns, "owned_operation_record")?,
+                7 => self.delete_orphan_metadata(ns, ORPHAN)?,
+                8 => self.delete_orphan_metadata(ns, FILE_CUSTODY)?,
+                9 => self.delete_operation_record(ns, OWNED_OPERATION_RECORD)?,
                 10 => self.delete_wait(ns)?,
                 11 => self.delete_indexed_operation_record(ns, None)?,
                 _ => {
@@ -116,22 +133,16 @@ impl Overlay {
         )?);
         Ok(plans)
     }
-    fn delete_orphan_metadata(&self, ns: i64, table: &str) -> OverlayResult<(u64, u64)> {
-        // Only the two static names above reach this helper.
-        let rows = self.query(
-            StatementKind::Reclaim,
-            &format!("SELECT serial FROM {table} WHERE ns=?1 ORDER BY serial LIMIT 64"),
-            &[&ns],
-            8,
-            |r| r.get::<_, i64>(0),
-        )?;
+    fn delete_orphan_metadata(
+        &self,
+        ns: i64,
+        [page, delete]: [&str; 2],
+    ) -> OverlayResult<(u64, u64)> {
+        let rows = self.query(StatementKind::Reclaim, page, &[&ns], 8, |r| {
+            r.get::<_, i64>(0)
+        })?;
         for serial in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                &format!("DELETE FROM {table} WHERE ns=?1 AND serial=?2"),
-                &[&ns, serial],
-                16,
-            )?;
+            self.execute(StatementKind::Reclaim, delete, &[&ns, serial], 16)?;
         }
         Ok((rows.len() as u64, 0))
     }
@@ -237,8 +248,19 @@ impl Overlay {
         }
         Ok((rows.len() as u64, 0))
     }
-    fn delete_operation_record(&self, ns: i64, table: &str) -> OverlayResult<(u64, u64)> {
-        let rows=self.query(StatementKind::Reclaim,&format!("SELECT operation,kind,key,length(value) FROM {table} WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64"),&[&ns],8,|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,unsigned(r,3)?)))?;
+    fn delete_operation_record(
+        &self,
+        ns: i64,
+        [page, delete]: [&str; 2],
+    ) -> OverlayResult<(u64, u64)> {
+        let rows = self.query(StatementKind::Reclaim, page, &[&ns], 8, |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+                unsigned(r, 3)?,
+            ))
+        })?;
         let mut count = 0;
         let mut bytes = 0;
         for (operation, kind, key, size) in &rows {
@@ -247,7 +269,7 @@ impl Overlay {
             }
             self.execute(
                 StatementKind::Reclaim,
-                &format!("DELETE FROM {table} WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4"),
+                delete,
                 &[&ns, operation, kind, key],
                 32,
             )?;

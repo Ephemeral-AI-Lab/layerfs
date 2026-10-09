@@ -28,8 +28,10 @@ fn complete_mutation_reports_triggers_blob_delivery_and_physical_reservation() {
     assert_eq!(admission.freelist_queries, 2);
     assert_eq!(admission.admitted_jobs, 2);
     assert_eq!(admission.refusals, 0);
-    #[cfg(target_os = "linux")]
-    assert_eq!(admission.attempts, 2);
+    // The file has not grown since its range was last established, so
+    // neither admission allocates, on Linux as on macOS.
+    assert_eq!(admission.attempts, 0);
+    assert_eq!(admission.observations, 2);
     assert!(mutation.rows_changed > mutation.direct_rows_changed);
     assert_eq!(
         mutation.fullscan_steps + mutation.sorts + mutation.reprepares,

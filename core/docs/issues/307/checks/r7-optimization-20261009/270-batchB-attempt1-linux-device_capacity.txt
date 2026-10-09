@@ -1,0 +1,10 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 804e77f02, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/device_capacity-bfcd24eb683db1c7 --test-threads=1 
+
+running 1 test
+test real_owner_reclaims_at_device_full_after_last_owner_without_a_cleanup_job ... ignored, requires exclusively owned ext4 loop fixture; device_fixture.sh daemon
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

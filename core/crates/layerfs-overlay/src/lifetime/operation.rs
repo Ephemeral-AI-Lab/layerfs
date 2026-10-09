@@ -13,7 +13,7 @@ impl Overlay {
         }
         self.atomic(|| {
             self.live(route)?;
-            let owner = self.mint_owner(route)?;
+            let owner = self.mint_owner()?;
             self.execute(
                 StatementKind::Lease,
                 "INSERT INTO operation_owner VALUES(?1,?2,?3)",

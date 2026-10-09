@@ -35,7 +35,7 @@ impl Overlay {
         serial: u64,
     ) -> OverlayResult<NativeDirectory> {
         self.native_parent(mount, serial)?;
-        let owner = self.mint_owner(mount.route)?;
+        let owner = self.mint_owner()?;
         self.execute(
             StatementKind::Lease,
             "INSERT INTO native_directory(ns,mount,owner,serial,request) VALUES(?1,?2,?3,?4,?5)",
