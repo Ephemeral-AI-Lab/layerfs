@@ -538,8 +538,6 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
                 };
                 let error = error.downcast_ref::<ReadFailure>().unwrap();
                 assert_eq!(error.request(), *request);
-                assert_eq!(error.retained_source(), None);
-                assert_eq!(error.retained_read(), None);
                 assert_eq!(error.protected(), root);
                 match (error.operation(), operation) {
                     (
@@ -747,7 +745,8 @@ fn a_full_handoff_of_parked_reads_holds_no_owner_credit_and_every_read_completes
 }
 
 #[test]
-fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close() {
+fn directory_consumer_publishes_only_accepted_names_and_a_reply_racing_releasedir_publishes_nothing(
+) {
     let f = support::Fixture::new(65, "native-directory-consumer");
     assert_eq!(f.count, 65);
     let store = open_store(
@@ -847,8 +846,7 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
     }
     until(|| client.diagnostics().unwrap().outstanding == 0);
     for batch in offered {
-        let stream = wait(batch.accept(0)).unwrap();
-        wait(stream.dispose()).unwrap();
+        drop(wait(batch.accept(0)).unwrap());
     }
     let stream = wait(DirectoryStream::prepare(
         services.clone(),
@@ -876,10 +874,9 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
     let last_accepted = first[2].1;
     let never_accepted = first[3].1;
     let stream = wait(batch.accept(3)).unwrap();
-    let DirectoryStep::End(stream) = wait(stream.next()).unwrap() else {
+    let DirectoryStep::End(_) = wait(stream.next()).unwrap() else {
         panic!("partial buffer must end this reply")
     };
-    wait(stream.dispose()).unwrap();
     let invalid = match wait(DirectoryStream::prepare(
         services.clone(),
         mount,
@@ -891,7 +888,7 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
         Err(error) => error,
         Ok(_) => panic!("reserved but unreturned cookie became visible"),
     };
-    assert_eq!(invalid.retained_source(), None);
+    assert!(!invalid.fenced() && invalid.base_demand().is_none());
     drop(invalid);
 
     let stream = wait(DirectoryStream::prepare(
@@ -917,7 +914,8 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
             .map(|index| format!("file-{index:06}").into_bytes())
             .collect::<Vec<_>>()
     );
-    // RELEASEDIR cannot invalidate an already acquired read/cookie source.
+    // No READDIR holds anything for its reply: RELEASEDIR ends the handle,
+    // and a reply filled before it publishes nothing and fails.
     drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
     let closed = match wait(NativeRead::prepare(
         bound.request(&Fence::default()).unwrap(),
@@ -930,13 +928,15 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
         Err(error) => error,
         Ok(_) => panic!("closed directory handle acquired a new source"),
     };
-    assert_eq!(closed.retained_source(), None);
+    assert!(!closed.fenced() && closed.base_demand().is_none());
     drop(closed);
-    let stream = wait(batch.accept(remainder.len())).unwrap();
-    let DirectoryStep::End(stream) = wait(stream.next()).unwrap() else {
-        panic!("unexpected extra names")
+    let raced = match wait(batch.accept(remainder.len())) {
+        Err(error) => error,
+        Ok(_) => panic!("a reply racing RELEASEDIR published its names"),
     };
-    wait(stream.dispose()).unwrap();
+    assert!(!raced.fenced() && raced.base_demand().is_none());
+    assert_eq!(raced.prefix(), Some((remainder.len(), true)));
+    drop(raced);
     until(|| client.diagnostics().unwrap().outstanding == 0);
     assert_eq!(store.read_work().outstanding, 0);
     let done = wait(

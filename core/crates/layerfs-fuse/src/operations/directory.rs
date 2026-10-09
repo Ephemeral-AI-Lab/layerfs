@@ -1,16 +1,16 @@
-//! One native enumeration request, bounded pages and exact accepted cookies.
+//! One native enumeration request: reading visits, the reply's accepted
+//! prefix, one publishing visit. Nothing is held in the engine between them
+//! or after the reply.
 use crate::{
-    ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply},
+    ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError},
     NextTurn,
 };
-use layerfs_overlay::{
-    BaseSource, NativeCookiePlan, NativeDirectory, NativeDirectoryPage, NativeDirectoryRead,
-    NativeMount, OverlayError,
-};
-use layerfs_workspace::{NativeDirectoryEntry, NativeDirectoryListing, SourceView};
+use layerfs_overlay::{NativeMount, OverlayError};
+use layerfs_workspace::{NativeDirectoryBatch, NativeDirectoryEntry, NativeDirectoryWindow};
 use std::{fmt, sync::Arc};
 
-/// Source/cookie ownership of one kernel READDIR, independent of its open handle.
+/// One kernel READDIR on an open directory handle. It owns plain values
+/// only: the window its last reading visit returned and the parent for `..`.
 pub struct DirectoryStream {
     services: Arc<dyn RequestServices>,
     mount: NativeMount,
@@ -18,37 +18,33 @@ pub struct DirectoryStream {
     serial: u64,
     handle: u64,
     offset: u64,
-    directory: Option<NativeDirectory>,
-    source: Option<BaseSource>,
-    read: Option<Arc<NativeDirectoryRead>>,
-    view: Option<SourceView>,
-    page: Option<ServiceReply<Arc<NativeDirectoryPage>>>,
-    listing: Option<NativeDirectoryListing>,
-    cookies: Option<ServiceReply<Arc<NativeCookiePlan>>>,
-    after: Option<Vec<u8>>,
+    parent: Option<u64>,
+    window: Option<NativeDirectoryWindow>,
     ended: bool,
 }
 pub struct DirectoryBatch {
     stream: DirectoryStream,
-    listing: NativeDirectoryListing,
-    plan: Arc<NativeCookiePlan>,
+    batch: NativeDirectoryBatch,
 }
 pub enum DirectoryStep {
     Batch(DirectoryBatch),
     End(DirectoryStream),
 }
+/// The exact failed step and the request's identity. Nothing is owned in the
+/// engine: a reading visit records nothing, and a publication that failed
+/// or whose outcome is unknown is never repeated.
 pub struct DirectoryFailure {
     pub reason: ServiceError,
     pub provider: Option<ServiceError>,
     stream: DirectoryStream,
-    batch: Option<(NativeDirectoryListing, Arc<NativeCookiePlan>)>,
+    batch: Option<NativeDirectoryBatch>,
     prefix: Option<(usize, bool)>,
 }
 impl DirectoryFailure {
     fn new(
         reason: ServiceError,
         stream: DirectoryStream,
-        batch: Option<(NativeDirectoryListing, Arc<NativeCookiePlan>)>,
+        batch: Option<NativeDirectoryBatch>,
     ) -> Self {
         let provider = match stream.services.provider_failure() {
             Ok(error) => error,
@@ -68,25 +64,9 @@ impl DirectoryFailure {
     pub const fn request(&self) -> u64 {
         self.stream.request
     }
-    pub fn retained_read(&self) -> Option<&NativeDirectoryRead> {
-        self.stream.read.as_deref()
-    }
-    pub const fn retained_source(&self) -> Option<BaseSource> {
-        self.stream.source
-    }
-    pub fn retained_cookies(&self) -> Option<&NativeCookiePlan> {
-        self.batch
-            .as_ref()
-            .map(|(_, plan)| plan.as_ref())
-            .or_else(|| {
-                self.stream
-                    .cookies
-                    .as_ref()
-                    .map(|reply| reply.get().as_ref())
-            })
-    }
-    pub fn retained_page(&self) -> Option<&NativeDirectoryPage> {
-        self.stream.page.as_ref().map(|reply| reply.get().as_ref())
+    /// The batch whose reply conversion or publication failed.
+    pub fn offered(&self) -> Option<&NativeDirectoryBatch> {
+        self.batch.as_ref()
     }
     /// Requested accepted count and whether the publication port was invoked.
     /// Actual admission/effect is described by the original service outcome.
@@ -105,35 +85,15 @@ impl DirectoryFailure {
     pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
         self.reason.downcast_ref()
     }
-    /// Ends an enumeration that was fenced or whose base demand failed. Its
-    /// page, listing and unpublished cookie plan are dropped first: a
-    /// prepared plan made no offset valid, and its read row goes with the
-    /// source. The source, when one was acquired, is then released once
-    /// through the disposal call the fence never refuses. Any other failure
-    /// is returned unchanged.
+    /// Ends an enumeration that was fenced or whose base demand failed. It
+    /// holds nothing in the engine, so nothing is released and no job is
+    /// submitted; an unpublished batch made no offset valid. Any other
+    /// failure is returned unchanged.
     pub async fn relinquish(self) -> Result<(), DirectoryFailure> {
         if !self.fenced() && self.base_demand().is_none() {
             return Err(self);
         }
-        let Self {
-            mut stream, batch, ..
-        } = self;
-        drop(batch);
-        stream.page = None;
-        stream.listing = None;
-        stream.cookies = None;
-        stream.view = None;
-        let Some(source) = stream.source else {
-            return Ok(());
-        };
-        stream.read = None;
-        match stream.services.release_source(source).await {
-            Ok(reply) => {
-                drop(reply);
-                Ok(())
-            }
-            Err(reason) => Err(DirectoryFailure::new(reason, stream, None)),
-        }
+        Ok(())
     }
 }
 impl fmt::Debug for DirectoryFailure {
@@ -146,8 +106,7 @@ impl fmt::Debug for DirectoryFailure {
             .field("serial", &self.stream.serial)
             .field("handle", &self.stream.handle)
             .field("offset", &self.stream.offset)
-            .field("read", &self.stream.read)
-            .field("cookies", &self.retained_cookies())
+            .field("batch", &self.batch)
             .field("prefix", &self.prefix)
             .finish()
     }
@@ -163,6 +122,8 @@ impl std::error::Error for DirectoryFailure {
     }
 }
 impl DirectoryStream {
+    /// The request's first reading visit: an offset that no reply of this
+    /// open handle handed out, a closed handle and a stopped mount fail here.
     pub async fn prepare(
         services: Arc<dyn RequestServices>,
         mount: NativeMount,
@@ -178,213 +139,132 @@ impl DirectoryStream {
             serial,
             handle,
             offset,
-            directory: None,
-            source: None,
-            read: None,
-            view: None,
-            page: None,
-            listing: None,
-            cookies: None,
-            after: None,
+            parent: None,
+            window: None,
             ended: false,
         };
-        match stream.acquire().await {
+        match stream.visit(None).await {
             Ok(()) => Ok(stream),
             Err(reason) => Err(DirectoryFailure::new(reason, stream, None)),
         }
     }
-    async fn acquire(&mut self) -> Result<(), ServiceError> {
+    async fn visit(&mut self, after: Option<Vec<u8>>) -> Result<(), ServiceError> {
         let reply = self
             .services
-            .directory(self.mount, self.serial, self.handle)
+            .directory_visit(self.mount, self.serial, self.handle, self.offset, after)
             .await?;
-        let directory = *reply.get();
-        self.directory = Some(directory);
+        // The request's own copy: the job and its credit are gone before any
+        // provider wait and before the publishing visit.
+        let window = NativeDirectoryWindow::clone(reply.get());
         drop(reply);
-        let reply = self
-            .services
-            .directory_read(directory, self.request, self.offset)
-            .await?;
-        // Deep-copy the bounded capability/cursor into request-owned storage.
-        // No shared reply Arc survives consumption of the original completion.
-        let read = Arc::new(reply.get().as_ref().clone());
-        self.source = Some(read.source());
-        self.read = Some(read.clone());
-        drop(reply);
-        self.after = read.cursor().after_name().map(<[u8]>::to_vec);
-        self.view = Some(self.services.view(read.source())?);
+        self.parent = self.parent.or(window.page.parent());
+        self.window = Some(window);
         Ok(())
     }
     /// Fixed dot positions; no directory scan and no nlookup acquisition.
     pub fn dots(&self) -> impl Iterator<Item = (&'static str, u64, u64)> {
-        let read = self.read.as_ref().expect("prepared native directory");
-        let values = [
-            (".", read.directory().serial(), 1),
-            ("..", read.parent(), 2),
-        ];
         let offset = self.offset;
-        values
-            .into_iter()
-            .filter(move |(_, _, cookie)| *cookie > offset)
+        [
+            Some((".", self.serial, 1)),
+            self.parent.map(|parent| ("..", parent, 2)),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(move |(_, _, cookie)| *cookie > offset)
     }
     /// Consume this state before another owner attempt. Empty whiteout windows
     /// keep advancing, yielding between windows, until an entry or real EOF.
     pub async fn next(mut self) -> Result<DirectoryStep, DirectoryFailure> {
         match self.advance().await {
-            Ok(Some((listing, plan))) => Ok(DirectoryStep::Batch(DirectoryBatch {
+            Ok(Some(batch)) => Ok(DirectoryStep::Batch(DirectoryBatch {
                 stream: self,
-                listing,
-                plan,
+                batch,
             })),
             Ok(None) => Ok(DirectoryStep::End(self)),
             Err(reason) => Err(DirectoryFailure::new(reason, self, None)),
         }
     }
-    async fn advance(
-        &mut self,
-    ) -> Result<Option<(NativeDirectoryListing, Arc<NativeCookiePlan>)>, ServiceError> {
-        if self.ended {
-            return Ok(None);
-        }
+    async fn advance(&mut self) -> Result<Option<NativeDirectoryBatch>, ServiceError> {
         loop {
-            let read = self.read.as_ref().unwrap().clone();
-            self.page = Some(
-                self.services
-                    .directory_page(read.clone(), self.after.clone())
-                    .await?,
-            );
-            let page = self.page.as_ref().unwrap().get();
-            if page.read != *read || page.after != self.after {
-                return Err(Box::new(OverlayError::Invalid(
-                    "native directory page identity",
-                )));
-            }
-            // Provider reads never run on the loop that received the request.
-            crate::LeaveReceiver::default().await;
-            let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
-            let listing = immutable.native_directory_listing(page);
-            drop(immutable);
-            let listing = match listing {
-                Ok(listing) => listing,
+            let Some(window) = self.window.take().filter(|_| !self.ended) else {
+                return Ok(None);
+            };
+            // Only a window whose inherited names or kinds memory did not
+            // hold leaves the receive loop and takes one Store reader.
+            let base = if window.listing.is_none() {
+                // Provider reads never run on the loop that received the request.
+                crate::LeaveReceiver::default().await;
+                Some(self.services.base().await?)
+            } else {
+                None
+            };
+            let batch = window.finish(base.as_ref());
+            drop(base); // Return the actual reader before another SQL job.
+            let batch = match batch {
+                Ok(batch) => batch,
                 Err(error) => return Err(self.services.failed_base_read(error.into())),
             };
-            self.page = None; // All original page consumers ended before another SQL job.
-            if listing.entries.is_empty() {
-                match listing.continuation {
-                    Some(next) => {
-                        self.after = Some(next);
-                        NextTurn::default().await;
-                        continue;
-                    }
-                    None => {
-                        self.ended = true;
-                        return Ok(None);
-                    }
+            if !batch.entries.is_empty() {
+                return Ok(Some(batch));
+            }
+            match batch.continuation {
+                Some(next) => {
+                    NextTurn::default().await;
+                    self.visit(Some(next)).await?;
+                }
+                None => {
+                    self.ended = true;
+                    return Ok(None);
                 }
             }
-            self.listing = Some(listing);
-            let names = self
-                .listing
-                .as_ref()
-                .unwrap()
-                .entries
-                .iter()
-                .map(|entry| entry.name.clone())
-                .collect();
-            self.cookies = Some(self.services.directory_cookies(read.clone(), names).await?);
-            let cookies = self.cookies.as_ref().unwrap().get();
-            if cookies.read() != read.as_ref()
-                || !matches_listing(self.listing.as_ref().unwrap(), cookies)
-            {
-                return Err(Box::new(OverlayError::Invalid(
-                    "native cookie names/source",
-                )));
-            }
-            // This independent bounded copy retains every original reservation
-            // value; the old reply has no surviving shared-payload consumers.
-            // Publication can therefore obtain an ordinary slot even with all
-            // sixteen native request slots occupied.
-            let plan = Arc::new(cookies.as_ref().clone());
-            self.cookies = None;
-            return Ok(Some((self.listing.take().unwrap(), plan)));
         }
     }
     pub fn retain(self, reason: ServiceError) -> DirectoryFailure {
         DirectoryFailure::new(reason, self, None)
     }
-    /// After the data reply consumer ends, release the original source once.
-    /// No destructor performs SQL or retries a failed release.
-    pub async fn dispose(mut self) -> Result<(), DirectoryFailure> {
-        let source = self.source.unwrap();
-        self.view = None;
-        self.read = None;
-        match self.services.release_source(source).await {
-            Ok(reply) => {
-                drop(reply);
-                Ok(())
-            }
-            Err(reason) => {
-                // Exact source remains recoverable by mount/request even when
-                // release outcome is uncertain; retain its copied token too.
-                Err(DirectoryFailure::new(reason, self, None))
-            }
-        }
-    }
 }
 impl DirectoryBatch {
     pub fn entries(&self) -> impl Iterator<Item = (&NativeDirectoryEntry, u64)> {
-        self.listing
-            .entries
-            .iter()
-            .zip(self.plan.entries())
-            .map(|(entry, cookie)| (entry, cookie.cookie()))
+        self.batch.entries.iter().zip(self.batch.first..)
     }
-    /// Publish exactly the prefix that actually fit the native reply buffer.
-    /// Consuming self prevents a second attempt after an error or lost outcome.
+    /// Publish exactly the prefix that actually fit the native reply buffer,
+    /// before the reply is sent. Offsets of an already published reply and
+    /// an empty prefix publish nothing and submit no job. Consuming self
+    /// prevents a second attempt after an error or lost outcome.
     pub async fn accept(self, accepted: usize) -> Result<DirectoryStream, DirectoryFailure> {
         let Self {
             mut stream,
-            listing,
-            plan,
+            mut batch,
         } = self;
-        let valid = accepted <= listing.entries.len();
-        if !valid {
+        if accepted > batch.entries.len() {
             return Err(DirectoryFailure::new(
                 Box::new(OverlayError::Invalid("native cookie prefix")),
                 stream,
-                Some((listing, plan)),
+                Some(batch),
             )
             .with_prefix(accepted, false));
         }
-        let result = stream
-            .services
-            .publish_cookies(plan.clone(), accepted)
-            .await;
-        match result {
+        // One published window ends this reply even when names remain; the
+        // next native read resumes after the last accepted offset.
+        stream.ended = true;
+        let Some(offer) = batch.publish.take().filter(|_| accepted != 0) else {
+            return Ok(stream);
+        };
+        let names = batch.entries[..accepted]
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect();
+        match stream.services.publish_cookies(offer, names).await {
             Ok(reply) => {
                 drop(reply);
-                // A directory read owns one cookie plan, so one published
-                // window ends this reply even when names remain; the next
-                // native read resumes after the last published cookie.
-                stream.ended = true;
-                stream.after = listing.continuation;
-                drop(plan);
-                NextTurn::default().await;
                 Ok(stream)
             }
-            Err(reason) => Err(DirectoryFailure::new(reason, stream, Some((listing, plan)))
-                .with_prefix(accepted, true)),
+            Err(reason) => {
+                Err(DirectoryFailure::new(reason, stream, Some(batch)).with_prefix(accepted, true))
+            }
         }
     }
     pub fn retain(self, reason: ServiceError) -> DirectoryFailure {
-        DirectoryFailure::new(reason, self.stream, Some((self.listing, self.plan)))
+        DirectoryFailure::new(reason, self.stream, Some(self.batch))
     }
-}
-fn matches_listing(listing: &NativeDirectoryListing, plan: &NativeCookiePlan) -> bool {
-    plan.entries().len() == listing.entries.len()
-        && listing
-            .entries
-            .iter()
-            .zip(plan.entries())
-            .all(|(entry, cookie)| entry.name == cookie.name())
 }

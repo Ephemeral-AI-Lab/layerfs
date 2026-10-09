@@ -440,7 +440,6 @@ fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
         (before.1.owner_rows, before.1.owner_details + 1, 0, 0)
     );
     assert_eq!(b.overlay.retained_native_source(mount, 30).unwrap(), None);
-    assert_eq!(b.overlay.retained_native_read(mount, 30).unwrap(), None);
 
     // The file's objects and its length are resident now: another OPEN is
     // decided by its one visit with no facts and no provider demand.

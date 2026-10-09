@@ -1,0 +1,1 @@
+directory_cost-a418e959b7b472e1 exit=0 seconds=4 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.37s

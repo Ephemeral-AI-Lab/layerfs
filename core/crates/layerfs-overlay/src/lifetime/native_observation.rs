@@ -1,30 +1,15 @@
-//! Atomic native answer, kernel lookup increment and independent read ownership.
+//! Atomic native answer and kernel lookup increment of a source-holding request.
 use crate::{
-    db::{integer, unsigned},
-    inode, BaseSource, FileRead, InodeKind, NativeDecision, NativeMount, NativeObservation,
+    db::integer, inode, BaseSource, InodeKind, NativeDecision, NativeMount, NativeObservation,
     Overlay, OverlayError, OverlayResult, SourceRows, StatementKind,
 };
-enum NativeOpen {
-    File(bool),
-    Directory,
-}
 impl Overlay {
-    /// The callback is one bounded semantic decision over current rows and
-    /// previously acquired immutable facts. It must perform no provider I/O.
-    /// Its original value survives even a later transaction-completion failure.
-    pub fn observe_native<T>(
-        &self,
-        mount: NativeMount,
-        source: BaseSource,
-        lookup: bool,
-        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
-    ) -> NativeObservation<T> {
-        self.observe_native_inner(mount, source, lookup, true, None, decide)
-    }
-    /// The same deciding transaction for a reply that carries attributes only
-    /// (LOOKUP, GETATTR): the answer and a positive lookup increment are
-    /// atomic, and no independent read is retained because no byte is served
-    /// from this observation.
+    /// The deciding transaction of a source-holding LOOKUP or GETATTR: the
+    /// answer and a positive lookup increment are atomic, and no read is
+    /// retained because the reply carries attributes only. The callback is
+    /// one bounded semantic decision over current rows and previously
+    /// acquired immutable facts. It must perform no provider I/O. Its
+    /// original value survives even a later transaction-completion failure.
     pub fn observe_native_attributes<T>(
         &self,
         mount: NativeMount,
@@ -32,56 +17,7 @@ impl Overlay {
         lookup: bool,
         decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
-        self.observe_native_inner(mount, source, lookup, false, None, decide)
-    }
-    /// Like a native stat observation, but retains a regular OpenFile in the
-    /// deciding transaction. A removed file stays openable: the source's
-    /// protecting kernel reference already retains its inode and content.
-    pub fn observe_native_open<T>(
-        &self,
-        mount: NativeMount,
-        source: BaseSource,
-        writable: bool,
-        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
-    ) -> NativeObservation<T> {
-        self.observe_native_inner(
-            mount,
-            source,
-            false,
-            true,
-            Some(NativeOpen::File(writable)),
-            decide,
-        )
-    }
-    /// Current directory decision and its descriptor/read ownership are atomic.
-    pub fn observe_native_directory<T>(
-        &self,
-        mount: NativeMount,
-        source: BaseSource,
-        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
-    ) -> NativeObservation<T> {
-        self.observe_native_inner(
-            mount,
-            source,
-            false,
-            true,
-            Some(NativeOpen::Directory),
-            decide,
-        )
-    }
-    fn observe_native_inner<T>(
-        &self,
-        mount: NativeMount,
-        source: BaseSource,
-        lookup: bool,
-        read: bool,
-        open: Option<NativeOpen>,
-        decide: impl FnOnce(SourceRows<'_>, u64) -> OverlayResult<NativeDecision<T>>,
-    ) -> NativeObservation<T> {
         let mut decision = None;
-        let mut acquired = None;
-        let mut open_candidate = None;
-        let mut directory_candidate = None;
         let result = self
             .atomic(|| {
                 let (request, protected, state) = self.check_native_source(mount, source)?;
@@ -123,73 +59,16 @@ impl Overlay {
                 } else if inode.serial != protected {
                     return Err(OverlayError::Invalid("native observation serial"));
                 }
-                if let Some(NativeOpen::File(writable)) = open {
-                    if inode.kind != InodeKind::File {
-                        return Err(OverlayError::Missing);
-                    }
-                    open_candidate = Some(self.retain_file(
-                        mount.route,
-                        Some(mount.owner),
-                        i64::from_be_bytes(request),
-                        inode.serial,
-                        writable,
-                    )?);
-                }
-                if matches!(open, Some(NativeOpen::Directory)) {
-                    if inode.kind != InodeKind::Directory
-                        || (inode.nlink == 0 && inode.serial != mount.root)
-                    {
-                        return Err(OverlayError::Missing);
-                    }
-                    directory_candidate =
-                        Some(self.retain_native_directory(mount, &request, inode.serial)?);
-                }
-                if !read {
-                    return Ok(());
-                }
-                // Negative keys reserve an internal request domain without colliding
-                // with public positive FileRead request IDs. The owner is still the
-                // existing independently minted FileRead/source/lease identity.
-                let read =
-                    self.retain_serial_read(source, inode.serial, -integer(source.owner)?)?;
-                acquired = Some(read);
-                self.execute(
-                    StatementKind::Lease,
-                    "INSERT INTO native_read VALUES(?1,?2,?3,?4)",
-                    &[
-                        &mount.route.ns,
-                        &integer(mount.owner)?,
-                        &request.as_slice(),
-                        &integer(read.source.owner)?,
-                    ],
-                    32,
-                )?;
                 Ok(())
             })
-            .map(|()| acquired);
+            .map(|()| None);
         NativeObservation {
             decision,
             result,
-            candidate: acquired,
-            open_candidate,
-            directory_candidate,
+            candidate: None,
+            open_candidate: None,
+            directory_candidate: None,
         }
-    }
-    /// Read-only observation of the original independent owner after loss.
-    /// Finding it permits neither resending a reply nor replaying a lookup.
-    pub fn retained_native_read(
-        &self,
-        mount: NativeMount,
-        request: u64,
-    ) -> OverlayResult<Option<FileRead>> {
-        self.check_native_attached(mount)?;
-        let state = self.state(mount.route)?;
-        self.query(StatementKind::Lease,
-            "SELECT r.owner,r.serial,b.base_root FROM native_read n JOIN file_read r ON r.ns=n.ns AND r.owner=n.owner JOIN base_source b ON b.ns=r.ns AND b.kind=1 AND b.owner=r.owner WHERE n.ns=?1 AND n.mount=?2 AND n.request=?3",
-            &[&mount.route.ns, &integer(mount.owner)?, &request.to_be_bytes().as_slice()], 24,
-            |r| Ok(FileRead { source: BaseSource { route: mount.route, owner: unsigned(r, 0)?, class: 1,
-                root: r.get::<_, Vec<u8>>(2)?.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?, installed: state.installed }, serial: unsigned(r, 1)? }))
-            .map(|mut rows| rows.pop())
     }
     /// Actual indexed query plans for the native ownership points and bounded
     /// revoked lookup cursor; pair with diagnostics for work/complexity claims.

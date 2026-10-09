@@ -157,9 +157,9 @@ consults it only before an attempt, at three kinds of point:
 | Entry check | `reserve_serial`, the one synchronous acquiring call | returns `Fenced` before the allocator is asked |
 
 Acquiring calls are gated: `source`, `open_source`, `observe`, `mutate`,
-`read_visit`, `immutable`, `base`, `reserve_serial`, `directory`,
-`directory_read`, `directory_page`, `directory_cookies` and `publish_cookies`. Disposal calls are
-never gated: `release_read`, `release_source`, `reply_attempted`, `close_file`,
+`read_visit`, `immutable`, `base`, `reserve_serial`, `directory_visit` and
+`publish_cookies`. Disposal calls are
+never gated: `release_source`, `reply_attempted`, `close_file`,
 `close_directory` and `forget`. A stopped mount starts nothing new and still
 gives back what it holds. `Fenced` is produced only before submission: once a
 job is admitted its `Pending` is awaited to the original result, and the
@@ -184,14 +184,13 @@ was attempted and is counted either way. What can be held at a fenced step:
 | OPENDIR | nothing: a visit, as OPEN (R7 update, 2026-10-09) | — |
 | READ, READLINK | nothing: the visit records no row and its completion is dropped before the reader gate | — |
 | Mutation | nothing, or its source; never a publication ticket | source |
-| READDIR | nothing, or its source with a page or an unpublished cookie plan | page, listing and plan dropped, then source |
+| READDIR | nothing: neither visit records a source, and an unpublished reply made no offset valid (R7 update, 2026-10-09) | — |
 | RELEASEDIR | nothing | — |
 
 No gated call follows a publishing mutation job or a deciding OPEN, LOOKUP or
 CREATE job before its reply, so a fenced request never owes a reply for an
 effect. A fenced mutation that nevertheless held a ticket would end `Retained`
-with it; nothing releases a ticket on this path. An unpublished cookie plan
-made no offset valid, and its read row goes with the source. FORGET and RELEASE
+with it; nothing releases a ticket on this path. FORGET and RELEASE
 use only disposal calls and are never fenced. R7 update, 2026-10-09:
 RELEASEDIR is the same. It is one owner job that finds and closes its open
 descriptor through the ungated `close_directory(mount, serial, handle)`, so
@@ -228,7 +227,7 @@ alone calls, for the Store read path only:
 | Reader admission | `immutable`: the read ticket is refused or its wait fails | the scope's earlier failure, or `PortError::ReadAdmission` |
 | Fact round | `plan.supply` on the admitted view, in the read and mutation drivers | the `PortError` this request's scope recorded |
 | File or link window | `NativeWindow::finish` on the view `base` returned | same |
-| Directory listing | `native_directory_listing` | same |
+| Directory listing | `NativeDirectoryWindow::finish` on the view `base` returned | same |
 
 The reads of the last three rows run inside Fuse on the view `immutable` or
 `base` returned, so Fuse cannot see whether the provider failed. It hands the step's
@@ -345,20 +344,19 @@ through one indexed union in an atomic source acquisition, without failed-kind
 fallback. Closed, foreign or mismatched handles cannot acquire a new source.
 
 The [directory consumer](../../crates/layerfs-fuse/src/operations/directory.rs)
-holds one independently owned read source. A bounded deep copy consumes the
-original read reply; sharing an Arc alone is not a custody transfer. Each page
-completion remains through canonical reads and is consumed before the next SQL
-job. An offered cookie plan is copied into bounded request storage before its
-original completion is consumed, leaving ordinary SQL credit for publication.
-Sixteen offered batches can therefore publish prefixes at the unchanged limits.
-The consuming `DirectoryBatch::accept` permits one attempt for the exact prefix
-that fit, including zero; unused reservations do not become positions. One
-published window ends the reply: a directory read owns one cookie plan, so a
-full 64-name window with names remaining is answered short and the kernel's
-next READDIR resumes after its last cookie. Empty
-whiteout pages continue with a yielded turn. Existing sources and cookie plans
-survive descriptor close; new handle acquisitions fail. Failure retains original
-page/cookie responses, source, input offset and requested publication prefix.
+holds nothing in the engine (R7 update, 2026-10-09;
+[directory handles](74-native-directory-custody.md)). `DirectoryStream::prepare`
+makes the request's first reading visit and owns its window as plain values.
+`next` merges the window, over one Store reader only when the visit could not
+decide from memory, and offers one batch. The consuming
+`DirectoryBatch::accept` permits one publication attempt for the exact prefix
+that fit; a reused reply and an empty prefix publish nothing and submit no
+job. One accepted window ends the reply: a full 64-name window with names
+remaining is answered short and the kernel's next READDIR resumes after its
+last offset. Empty whiteout windows continue with a yielded turn and another
+reading visit. RELEASEDIR between the two visits makes the publication Stale
+and the reply fails. A failure keeps the offered batch, the input offset and
+the requested prefix for diagnosis; there is nothing to release.
 
 The native reply adapter limits encoded directory output to128KiB using the pinned
 24-byte fuse_dirent header and8-byte alignment. Actual fuser insertion determines

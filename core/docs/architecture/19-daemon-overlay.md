@@ -6,6 +6,29 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+Merge note, 2026-10-09 (batch 3b): the directory-reply note below was
+written on a branch at schema 23; merged after the changes through schema 28
+(further down) it is schema 29, and `PRAGMA user_version` and its startup
+readback are 29. `native_directory_read` and its two accounting triggers do
+not exist in the merged schema, so 59 accounting triggers remain, each
+writing its own namespace's row. A directory descriptor is its
+`native_directory` row and has no `lease` row (schema 24), so OPENDIR and
+RELEASEDIR each run one custody statement fewer than that branch pinned.
+
+R7 update, 2026-10-09 (directory replies, overlay schema 29): the per-name
+`native_cookie(ns, owner, cookie, name)` rows and their `native_cookie_name`
+index, the `native_directory.next_cookie` column and the
+`native_directory_read` association with its index and accounting triggers
+are replaced by `native_cookie(ns, owner, first_cookie, after, names)`, one row per published READDIR reply holding at most 64
+accepted names (16,384 bytes), and the index `native_cookie_after(ns, owner,
+after, first_cookie)`. `PRAGMA user_version` and its startup readback are 29.
+Statements added: `FENCE_DIRECTORY` (batch 3b change 1), `SOURCE_NAMES_KINDS`,
+`COOKIE_PAGE`, `COOKIE_PAGE_AFTER` and `COOKIE_PAGES`. Offsets are ranges of
+the engine's memory-only owner counter (`mint_owners`). RELEASEDIR deletes up
+to eight reply rows and the header itself; more are retired eight per
+maintenance turn. Counts, storage and memory are in
+[directory handles](74-native-directory-custody.md).
+
 Merge note, 2026-10-09: the three payload and accounting notes below were
 written on a branch at schema 23, 24 and 25; merged after the inode,
 custody-row and descriptor-row changes (schema 23, 24, 25, further down)

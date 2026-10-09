@@ -152,14 +152,16 @@ async fn enumerate(
             OsStr::new(name),
         ) {
             reply.ok();
-            return dispose(stream).await;
+            return RequestDisposition::Complete;
         }
     }
     loop {
         let batch = match stream.next().await {
-            Ok(DirectoryStep::End(stream)) => {
+            // Nothing is held in the engine after the visits: the reply
+            // ends the request.
+            Ok(DirectoryStep::End(_)) => {
                 reply.ok();
-                return dispose(stream).await;
+                return RequestDisposition::Complete;
             }
             Ok(DirectoryStep::Batch(batch)) => batch,
             Err(error) => {
@@ -231,10 +233,4 @@ fn add(
     }
     *used += size;
     false
-}
-async fn dispose(stream: DirectoryStream) -> RequestDisposition {
-    match stream.dispose().await {
-        Ok(()) => RequestDisposition::Complete,
-        Err(error) => RequestDisposition::Retained(Box::new(error)),
-    }
 }

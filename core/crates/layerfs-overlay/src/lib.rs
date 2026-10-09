@@ -39,8 +39,7 @@ pub use contract::native::{
     NativeApplied, NativeDecision, NativeEffect, NativeMount, NativeMountState, NativeObservation,
 };
 pub use contract::native_directory::{
-    NativeCookie, NativeCookiePlan, NativeDirectory, NativeDirectoryCursor, NativeDirectoryPage,
-    NativeDirectoryRead,
+    NativeCookieOffer, NativeDirectory, NativeDirectoryCursor, NativeDirectoryPage,
 };
 pub use database::accounting::{Resources, StoredCounts};
 pub use database::allocation::{

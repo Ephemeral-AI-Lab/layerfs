@@ -860,7 +860,12 @@ fn an_opendir_visit_writes_its_descriptor_alone_and_releasedir_closes_exactly_th
     ));
     // The other descriptor is untouched by that release, and a revoked
     // mount's RELEASEDIR is stale: revocation retires what is left.
-    assert!(w.db.native_directory(w.mount, 1, second.owner_id()).is_ok());
+    assert_eq!(
+        w.db.retained_native_directory(w.mount, 21)
+            .unwrap()
+            .map(|d| d.owner_id()),
+        Some(second.owner_id())
+    );
     w.db.close_native_file(w.mount, 50, file.owner_id())
         .unwrap();
     w.db.revoke_native_mount(w.mount).unwrap();

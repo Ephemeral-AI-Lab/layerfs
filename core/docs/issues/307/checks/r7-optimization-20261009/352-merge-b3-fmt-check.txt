@@ -1,0 +1,1 @@
+R4_WALL seconds<=3 limit=120s lock_wait=0s

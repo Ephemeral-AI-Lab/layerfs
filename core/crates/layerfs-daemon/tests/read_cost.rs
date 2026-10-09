@@ -437,6 +437,18 @@ impl Rig {
             mount,
             ..
         } = self;
+        // No request of this test, measured or not, recorded a request
+        // source: no Source-class job ran and no source row exists.
+        until("owner credits returned", || {
+            client.diagnostics().unwrap().outstanding == 0
+        });
+        assert_eq!(client.diagnostics().unwrap().completed[SOURCE], 0);
+        let done = finish(&client, bound.route(), Command::Resources { global: false });
+        match done.result() {
+            Ok(Response::Resources(resources)) => assert_eq!(resources.counts.source_rows, 0),
+            other => panic!("resources: {other:?}"),
+        }
+        drop(done);
         let done = finish(
             &client,
             bound.route(),

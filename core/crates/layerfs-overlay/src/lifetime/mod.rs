@@ -18,6 +18,7 @@ mod lookup;
 mod native;
 mod native_cookie;
 mod native_directory;
+pub(crate) use native_directory::INLINE_PAGES;
 mod native_directory_read;
 mod native_file;
 mod native_mutation;

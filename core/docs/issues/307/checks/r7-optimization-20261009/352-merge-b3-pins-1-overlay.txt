@@ -1,0 +1,14 @@
+accounting_reference-da5b666b2d4c70ae exit=0 seconds=2 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+compound-f27037c54631a7cf exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+costs-f1b14bc809c7fae2 exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+descriptor_request-1caa3510e01602ba exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+directory_links-86071f48a46b6927 exit=0 seconds=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+engine-b4fac0808988bc6c exit=0 seconds=2 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+native_directory-759a31465d4c06d7 exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+native_lookup-ca40178972058807 exit=0 seconds=1 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+native_revocation-fc8c86afe4e80996 exit=0 seconds=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+native_visit_fence-2501e5e8970fe9c1 exit=0 seconds=1 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+payload_runs-dceb2975487b213e exit=0 seconds=2 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+reclaim_cost-962cbcf761e6a7b8 exit=0 seconds=1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+resources-85eaf02848d9fc65 exit=0 seconds=1 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+startup_cost-edd0e558182d3325 exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s

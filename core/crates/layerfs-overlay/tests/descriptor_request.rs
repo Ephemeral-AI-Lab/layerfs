@@ -51,14 +51,13 @@ fn mounted(db: &Overlay, tag: u8) -> (Route, NativeMount) {
     let route = db.open_workspace([tag; 32], [9; 32]).unwrap();
     let mount = db.create_native_mount(route, 1).unwrap();
     let source = db.acquire_native_source(mount, 1, 1).unwrap();
-    let looked = db.observe_native(mount, source, true, |_, _| {
+    let looked = db.observe_native_attributes(mount, source, true, |_, _| {
         Ok(NativeDecision::Finished {
             inode: Some(base(50)),
             value: (),
         })
     });
-    db.release_file_read(looked.result.unwrap().unwrap())
-        .unwrap();
+    assert_eq!(looked.result.unwrap(), None);
     db.release_base_source(source).unwrap();
     (route, mount)
 }

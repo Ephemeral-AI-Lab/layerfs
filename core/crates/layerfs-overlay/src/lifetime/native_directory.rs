@@ -60,21 +60,9 @@ impl Overlay {
             serial,
         })
     }
-    /// Full mount/route/serial/encoded-handle validation, including open state.
-    pub fn native_directory(
-        &self,
-        mount: NativeMount,
-        serial: u64,
-        handle: u64,
-    ) -> OverlayResult<NativeDirectory> {
-        self.check_native_attached(mount)?;
-        self.query(StatementKind::Lease,
-            "SELECT 1 FROM native_directory WHERE ns=?1 AND owner=?2 AND mount=?3 AND serial=?4 AND closed=0",
-            &[&mount.route.ns, &integer(handle)?, &integer(mount.owner)?, &integer(serial)?], 32,
-            |_| Ok(NativeDirectory { mount, owner: handle, serial }))?.pop().ok_or(OverlayError::Stale)
-    }
-    /// Original association remains observable while closed-cookie cleanup is
-    /// pending; observing it never permits replaying OPENDIR or RELEASEDIR.
+    /// The original association of an open handle, or of a closed one whose
+    /// cookie cleanup is pending; observing it never permits replaying
+    /// OPENDIR or RELEASEDIR.
     pub fn retained_native_directory(
         &self,
         mount: NativeMount,
@@ -101,10 +89,9 @@ impl Overlay {
         .map(|mut rows| rows.pop())
     }
     /// RELEASEDIR in one visit: the fence reads this open descriptor's row
-    /// and the Workspace row, then the handle is closed and its lease
-    /// released. A closed Workspace still releases its descriptors. Cookie
-    /// and header storage stay for existing independent read sources; no
-    /// cookie sweep here.
+    /// and the Workspace row, then the handle is closed, its lease released
+    /// and its published replies retired. A closed Workspace still releases
+    /// its descriptors.
     pub fn close_native_directory(
         &self,
         mount: NativeMount,
@@ -124,27 +111,50 @@ impl Overlay {
     }
     /// The caller established that this exact handle row is still open, and
     /// decides afterwards whether its closed Workspace can be reclaimed.
+    ///
+    /// A handle with at most `INLINE_PAGES` published replies is deleted
+    /// here, rows and header, and queues nothing. Past that the header is
+    /// marked closed and its bounded, indexed maintenance item retires the
+    /// rows a window at a time; nothing is refused either way.
     pub(crate) fn close_native_directory_inner(
         &self,
         directory: NativeDirectory,
     ) -> OverlayResult<()> {
-        let ns = directory.mount.route.ns;
+        let (ns, owner) = (directory.mount.route.ns, integer(directory.owner)?);
+        self.file_ref(ns, integer(directory.serial)?, LeaseKind::FileHandle, false)?;
+        let pages = self.query(
+            StatementKind::Lease,
+            crate::sql::COOKIE_PAGES,
+            &[&ns, &owner, &0_i64],
+            24,
+            |_| Ok(()),
+        )?;
+        if pages.len() > INLINE_PAGES {
+            self.execute(
+                StatementKind::Lease,
+                "UPDATE native_directory SET closed=1 WHERE ns=?1 AND owner=?2",
+                &[&ns, &owner],
+                16,
+            )?;
+            return self.enqueue(ns, crate::maintenance::NATIVE_DIRECTORY, owner, owner);
+        }
+        if !pages.is_empty() {
+            self.execute(
+                StatementKind::Lease,
+                "DELETE FROM native_cookie WHERE ns=?1 AND owner=?2",
+                &[&ns, &owner],
+                16,
+            )?;
+        }
         self.execute(
             StatementKind::Lease,
-            "UPDATE native_directory SET closed=1 WHERE ns=?1 AND owner=?2",
-            &[&ns, &integer(directory.owner)?],
+            "DELETE FROM native_directory WHERE ns=?1 AND owner=?2",
+            &[&ns, &owner],
             16,
         )?;
-        self.file_ref(ns, integer(directory.serial)?, LeaseKind::FileHandle, false)?;
-        self.queue_native_directory(ns, integer(directory.owner)?)
-    }
-    pub(crate) fn queue_native_directory(&self, ns: i64, owner: i64) -> OverlayResult<()> {
-        let ready = self.query(StatementKind::Lease,
-            "SELECT closed=1 AND NOT EXISTS(SELECT 1 FROM native_directory_read WHERE ns=?1 AND directory=?2) FROM native_directory WHERE ns=?1 AND owner=?2",
-            &[&ns, &owner], 16, |r| r.get::<_, bool>(0))?.pop().unwrap_or(false);
-        if ready {
-            self.enqueue(ns, crate::maintenance::NATIVE_DIRECTORY, owner, owner)?;
-        }
         Ok(())
     }
 }
+/// Published replies one RELEASEDIR deletes in its own job, and one
+/// maintenance turn retires: a window of the same statement.
+pub(crate) const INLINE_PAGES: usize = 8;

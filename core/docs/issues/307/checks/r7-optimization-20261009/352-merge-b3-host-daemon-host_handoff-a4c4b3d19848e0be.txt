@@ -1,0 +1,21 @@
+
+running 1 test
+test macos_init_handoff_to_linux_daemon_has_no_host_data_path ... FAILED
+
+failures:
+
+---- macos_init_handoff_to_linux_daemon_has_no_host_data_path stdout ----
+
+thread 'macos_init_handoff_to_linux_daemon_has_no_host_data_path' panicked at crates/layerfs-daemon/tests/support/install_docker.rs:45:14:
+explicit build-listed Linux binary: NotPresent
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    macos_init_handoff_to_linux_daemon_has_no_host_data_path
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 101

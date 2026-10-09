@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 1fe0ed54b, uncommitted product/test paths=33, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_directory-759a31465d4c06d7 --test-threads=1 a_directory_listed_once --nocapture (cwd core/crates/layerfs-overlay)
+
+running 1 test
+test a_directory_listed_once_stores_fewer_rows_and_bytes_than_a_row_and_an_index_entry_per_name ... COOKIE_STORAGE names=10 before: entries=20 name_bytes=100 pages=0 now: entries=2 name_bytes=60 pages=0 page_size=4096
+COOKIE_STORAGE names=4000 before: entries=8000 name_bytes=40000 pages=36 now: entries=126 name_bytes=24620 pages=6 page_size=4096
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.40s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

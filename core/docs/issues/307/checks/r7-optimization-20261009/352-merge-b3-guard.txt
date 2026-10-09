@@ -1,0 +1,2 @@
+PASS: scanned 864 production Rust/SQL files; semantic review still required
+R4_WALL seconds<=2 limit=120s lock_wait=0s

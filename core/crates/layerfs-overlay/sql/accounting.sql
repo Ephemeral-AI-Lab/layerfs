@@ -204,13 +204,6 @@ CREATE TRIGGER native_directory_account_delete AFTER DELETE ON native_directory 
     UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
 END;
 
-CREATE TRIGGER native_directory_read_account_insert AFTER INSERT ON native_directory_read BEGIN
-    UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;
-END;
-CREATE TRIGGER native_directory_read_account_delete AFTER DELETE ON native_directory_read BEGIN
-    UPDATE accounting SET owner_details=owner_details-1 WHERE ns=OLD.ns;
-END;
-
 CREATE TRIGGER native_cookie_account_insert AFTER INSERT ON native_cookie BEGIN
     UPDATE accounting SET owner_details=owner_details+1 WHERE ns=NEW.ns;
 END;

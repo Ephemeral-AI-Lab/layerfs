@@ -1,0 +1,59 @@
+===== native_directory-a2554d3c325012f1 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 3 tests
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test next_directory_read_observes_parent_moved_by_the_atomic_namespace_job ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_read_plan-e8a41b2cc818cfcb (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 3 tests
+test deciding_lookup_sees_mutation_after_missing_fact_round ... ok
+test positive_lookup_preserves_alias_identity_and_exact_kernel_counts ... ok
+test processing_source_survives_forget_and_last_name_removal_before_getattr ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_unlink_cost-1177f1aa42ba015e (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit-446d787932187da0 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 6 tests
+test a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source ... ok
+test a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_needs ... ok
+test a_resident_client_answers_only_from_memory_and_only_small_objects ... ok
+test a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing ... ok
+test an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone ... ok
+test facts_of_another_base_are_ignored_and_read_again_for_the_present_one ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_cost-6727ef9358d162d7 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
