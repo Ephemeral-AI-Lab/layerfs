@@ -23,10 +23,10 @@ pub struct Overlay {
     /// possible work. A rolled-back enqueue can leave only a false positive.
     pub(crate) maintenance_ready: Cell<bool>,
     pub(crate) closed_ready: Cell<bool>,
-    /// Whether this engine has ever attempted to create an orphan. Set before
-    /// the only statement that inserts one and never cleared, so false is
-    /// exact: no orphan row and no orphan-domain inode row exists in any
-    /// namespace. A rolled-back insert leaves only a false positive.
+    /// Whether any namespace of this engine holds an orphan row. Set before
+    /// the only statement that inserts one, cleared by the transaction that
+    /// deletes the last one, and restored when a job fails, so it is exact:
+    /// while false no orphan row and no orphan-domain inode row exists.
     pub(crate) orphan_seen: Cell<bool>,
     /// What the running atomic job has asked of this connection.
     pub(super) transaction: Cell<Transaction>,
@@ -218,7 +218,12 @@ impl Overlay {
             return Err(OverlayError::Invalid("nested transaction"));
         }
         self.transaction.set(Transaction::Wanted { cleanup });
+        let orphans = self.orphan_seen.get();
         let result = job();
+        // A failed job's orphan rows are as they were before it.
+        if result.is_err() {
+            self.orphan_seen.set(orphans);
+        }
         // A ticket exists for its holder only once its job has succeeded.
         let issued = std::mem::take(&mut *self.issued.borrow_mut());
         if result.is_err() {

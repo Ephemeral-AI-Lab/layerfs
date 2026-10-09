@@ -73,7 +73,13 @@ impl Overlay {
                 4 => self.delete_old_reclaim(ns)?,
                 5 => self.delete_steps(ns)?,
                 6 => self.delete_maintenance(ns)?,
-                7 => self.delete_orphan_metadata(ns, ORPHAN)?,
+                7 => {
+                    let deleted = self.delete_orphan_metadata(ns, ORPHAN)?;
+                    if deleted.0 != 0 {
+                        self.orphans_deleted()?;
+                    }
+                    deleted
+                }
                 8 => self.delete_orphan_metadata(ns, FILE_CUSTODY)?,
                 9 => self.delete_operation_record(ns, OWNED_OPERATION_RECORD)?,
                 10 => self.delete_wait(ns)?,

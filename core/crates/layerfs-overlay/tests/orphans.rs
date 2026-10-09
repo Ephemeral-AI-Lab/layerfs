@@ -416,7 +416,7 @@ fn three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlin
 }
 
 #[test]
-fn inode_reads_probe_the_orphan_domain_only_once_an_orphan_was_created() {
+fn inode_reads_probe_the_orphan_domain_only_while_an_orphan_exists() {
     let temp = Temp::new();
     let db = temp.db();
     let route = db.open_workspace([141; 32], [142; 32]).unwrap();
@@ -469,8 +469,8 @@ fn inode_reads_probe_the_orphan_domain_only_once_an_orphan_was_created() {
     let (orphan, attempts) = read(source, 7);
     let orphan = orphan.expect("the orphan keeps its metadata");
     assert_eq!((orphan.nlink, orphan.size, attempts), (0, 4, 1));
-    // From now on every inode read of this engine probes first, in every
-    // namespace: a miss costs the probe and the seek.
+    // While it exists every inode read of this engine probes first, in
+    // every namespace: a miss costs the probe and the seek.
     assert_eq!(read(source, 9), (None, 2));
     assert_eq!(read(source, 8).1, 2);
     assert_eq!(read(elsewhere, 7), (None, 2));
@@ -498,10 +498,75 @@ fn inode_reads_probe_the_orphan_domain_only_once_an_orphan_was_created() {
     assert_eq!(bytes(&db, window, &[]), b"kept+2");
     db.release_file_read(window).unwrap();
 
-    // The orphan is reclaimed after its last owner; the probe stays on,
-    // finds nothing and the ordinary seek decides.
+    // A second orphan keeps the probe on when the first is reclaimed after
+    // its last owner.
+    let mut also = File::new(&db, source, 10, Vec::new());
+    also.write(0, b"also");
+    let held = db.open_file(source, 2, &also.inode(4), true).unwrap();
+    unlink(&also);
     db.close_file(open).unwrap();
     maintain(&db);
-    assert_eq!(read(source, 7).1, 2);
+    assert_eq!(db.resources(None).unwrap().counts.orphan_rows, 1);
     assert_eq!(read(source, 9), (None, 2));
+    assert_eq!(read(elsewhere, 7), (None, 2));
+    // The engine's last orphan is reclaimed: the probe stops in every
+    // namespace, one seek per inode.
+    db.close_file(held).unwrap();
+    maintain(&db);
+    assert_eq!(db.resources(None).unwrap().counts.orphan_rows, 0);
+    assert_eq!(read(source, 7).1, 1);
+    assert_eq!(read(source, 9), (None, 1));
+    assert_eq!(read(elsewhere, 7), (None, 1));
+}
+
+#[test]
+fn a_closed_namespace_that_takes_the_last_orphan_stops_the_probe() {
+    let temp = Temp::new();
+    let db = temp.db();
+    let route = db.open_workspace([145; 32], [146; 32]).unwrap();
+    let other = db.open_workspace([147; 32], [148; 32]).unwrap();
+    let source = db.acquire_base_source(route, 1).unwrap();
+    let elsewhere = db.acquire_base_source(other, 1).unwrap();
+    // Inode-family statements one inode read of the other Workspace attempts.
+    let attempts = || {
+        let before = db.diagnostics();
+        assert_eq!(db.source_inode(elsewhere, 9).unwrap(), None);
+        db.diagnostics().since(&before).statements[StatementKind::Inode as usize].attempts
+    };
+    let mut file = File::new(&db, source, 7, Vec::new());
+    file.write(0, b"kept");
+    let open = db.open_file(source, 1, &file.inode(4), true).unwrap();
+    let mut removed = file.inode(4);
+    removed.nlink = 0;
+    let publication = db
+        .apply(
+            source,
+            &Changes {
+                inodes: vec![removed],
+                ..Changes::default()
+            },
+        )
+        .unwrap();
+    db.reply_attempted(publication).unwrap();
+    assert_eq!(attempts(), 2);
+
+    // The Workspace closes and its last owner leaves with no live
+    // maintenance turn in between: terminal reclamation deletes the orphan
+    // row, after the namespace's inode rows.
+    db.close(route).unwrap();
+    db.release_base_source(source).unwrap();
+    db.close_file(open).unwrap();
+    assert_eq!(db.resources(None).unwrap().counts.orphan_rows, 1);
+    for turn in 0..1000 {
+        let step = db.reclaim_closed(0).unwrap().unwrap();
+        if db.resources(None).unwrap().counts.orphan_rows != 0 {
+            assert_eq!(attempts(), 2);
+        }
+        if step.done {
+            break;
+        }
+        assert!(turn < 999);
+    }
+    assert_eq!(db.resources(None).unwrap().counts.orphan_rows, 0);
+    assert_eq!(attempts(), 1);
 }

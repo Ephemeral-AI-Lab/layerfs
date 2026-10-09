@@ -59,7 +59,7 @@ It runs no transaction and writes no row:
 1. The fence statement, on the descriptor for READ (`FENCE_HANDLE`) and on the
    kernel's lookup reference for READLINK (`FENCE_LOOKUP`), with the outcomes
    of every other visit.
-2. Once the engine has created its first orphan, one probe for an orphan row
+2. While the engine holds an orphan row, one probe for an orphan row
    of the inode. An orphan is read from its own generation and names the base
    root the orphan retained; a removed regular file reached without a
    descriptor is `Missing`.
@@ -141,7 +141,7 @@ statements as attempted/executions):
 | READLINK of a base link | 3/2/1 jobs, 2 grants, 4 transactions, 68/83 | 1/0/0 jobs, 1 grant, 0 transactions, 2/2 |
 | READLINK of a local link | 2/2/1 jobs, 1 grant, 4 transactions, 63/78 | 1/0/0 jobs, 0 grants, 0 transactions, 3/3 |
 
-Once the engine has created an orphan, every READ and READLINK attempts one
+While the engine holds an orphan row, every READ and READLINK attempts one
 more statement, the orphan probe. A READ of an orphan reads its cells from
 the orphan generation and, until background maintenance has moved them
 there, from the generation they were written in: one or two cell statements.
@@ -167,8 +167,8 @@ Workspace, `Stale` for a missing Workspace, a foreign or revoked mount, or a
 reference that is not held. RELEASE (`close_native_file`) uses the same fence
 without the `Closed` refusal, so a closed Workspace still releases its
 descriptors, and it does not read the descriptor or the Workspace row a
-second time. The orphan-domain probe before an inode read is skipped until
-the engine has created its first orphan. See the
+second time. The orphan-domain probe before an inode read is skipped while
+the engine holds no orphan row. See the
 [overlay note](19-daemon-overlay.md).
 
 R7 update, 2026-10-09: **LOOKUP, GETATTR and every native mutation are

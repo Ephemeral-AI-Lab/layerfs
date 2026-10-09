@@ -220,7 +220,7 @@ impl Overlay {
         let held = handle.map_or(Held::Lookup, Held::Handle);
         let (state, _) = self.native_fence(mount, serial, held, true)?;
         let (ns, key) = (mount.route.ns, integer(serial)?);
-        // No orphan row exists before this engine created its first one.
+        // No orphan row exists while this engine holds none.
         if self.orphan_seen.get() {
             if let Some(orphan) = self.orphan(ns, key)? {
                 // Without a descriptor a removed regular file is gone.

@@ -1,0 +1,10 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 232dbec97, uncommitted product/test paths=1, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_unlink_cost-1177f1aa42ba015e --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 1 test
+test one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 0

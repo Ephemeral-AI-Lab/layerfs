@@ -137,6 +137,7 @@ impl Overlay {
             &[&ns, &serial],
             16,
         )?;
+        self.orphans_deleted()?;
         self.execute(
             StatementKind::Lease,
             "DELETE FROM file_custody WHERE ns=?1 AND serial=?2 AND opens+lookups+readers=0",

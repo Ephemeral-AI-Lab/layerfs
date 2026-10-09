@@ -32,7 +32,7 @@ file and 9 (12) for a local one, where the source-holding OPEN attempted 64
 R7 update, 2026-10-09 (READ window visit, schema unchanged at 22):
 `Overlay::read_native_visit` is the read-only job of a native READ or
 READLINK. It runs outside a transaction and writes nothing: the fence
-statement, the orphan probe once `orphan_seen` is set, the inode row, and
+statement, the orphan probe while `orphan_seen` is set, the inode row, and
 the cell range of the requested window when the inode has local payload.
 It returns the base root the window belongs to (the orphan's retained root,
 or the Workspace's current one) with the ordinary `LocalRead`. No statement
@@ -57,10 +57,9 @@ returns the references that remain (`UPDATE ... RETURNING`), and the kernel
 lookup reference and descriptor of a created-and-opened file are one custody
 row write. `Changes::created` names the serial a job creates: its kernel
 lookup row is inserted without a read, and a row that already exists fails
-the whole job. The orphan-domain probe of an inode read runs only after this
-engine has attempted its first `INSERT INTO orphan` (`Overlay::orphan_seen`,
-set before that statement and never cleared; the database is never
-reopened, and a rolled-back insert leaves only a probe that finds nothing).
+the whole job. The orphan-domain probe of an inode read runs only while this
+engine holds an orphan row (`Overlay::orphan_seen`; see the exact-flag update
+below).
 Per created file the five request jobs now attempt 48 statements (61
 executions) instead of 88 (101), exact per job and family in
 [`native_visit_cost.rs`](../../crates/layerfs-workspace/tests/native_visit_cost.rs);
@@ -289,3 +288,27 @@ release lifecycle proof 084 observes Gone after both normal unmounts at its
 scoped tree. These are scoped counts and functionality, not qualification.
 The authenticated daemon Cleanup control prices one read-only owner job
 after terminal routing removal, as described in the native-control guide.
+
+R7 update, 2026-10-09 (exact orphan flag, decision U2, schema unchanged at
+22): **`Overlay::orphan_seen` is true exactly while the engine holds an
+orphan row.** It is set before the only `INSERT INTO orphan`. A transaction
+that deletes orphan rows (the last step of `maintain_orphan`, and the orphan
+phase of closed-namespace reclamation when its page deleted rows) then reads
+`orphan_rows` of accounting namespace 0, the count the orphan triggers
+already keep, and clears the flag at zero: one point statement per such
+transaction, no scan and no new state. Each orphan-domain inode row is
+deleted before its orphan row (same transaction live, an earlier phase
+closed), so false still means that neither exists in any namespace. A job
+that fails restores the flag it started with, as its rollback restores the
+rows. Before, the first orphan of a daemon made every later inode read of
+every Workspace attempt one more statement for the daemon's life: 9 Inode
+attempts per created-and-removed file (LOOKUP 2, CREATE 3, WRITE 1,
+UNLINK 3), 30 instead of 21. Now a file made after the last orphan was
+reclaimed, and a Workspace mounted later, pay the fresh engine's 21; the
+last maintenance step of each orphan attempts one more Reclaim statement.
+Exact per job and family, beside 25 and 100 kept files, with UNLINK (22
+attempts), FORGET (12) and the maintenance steps of one removed file (4
+when FORGET arrives first, 7 when the owner runs first), in
+[`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs).
+Not changed: what is enqueued at UNLINK and FORGET, the steps themselves and
+closed-namespace reclamation.
