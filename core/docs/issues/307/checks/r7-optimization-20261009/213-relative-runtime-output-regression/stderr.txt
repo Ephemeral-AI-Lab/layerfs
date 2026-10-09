@@ -1,0 +1,41 @@
+test_cumulative_snapshots_are_not_phase_deltas (r7.test_runner.NumericFraming.test_cumulative_snapshots_are_not_phase_deltas) ... ok
+test_duplicate_section (r7.test_runner.NumericFraming.test_duplicate_section) ... ok
+test_footer_cannot_omit_numeric_value (r7.test_runner.NumericFraming.test_footer_cannot_omit_numeric_value) ... ok
+test_invalid_numeric_identity_or_u64_never_decoded (r7.test_runner.NumericFraming.test_invalid_numeric_identity_or_u64_never_decoded) ... ok
+test_missing_original_footer (r7.test_runner.NumericFraming.test_missing_original_footer) ... ok
+test_original_bound_footer_and_unavailable (r7.test_runner.NumericFraming.test_original_bound_footer_and_unavailable) ... ok
+test_unavailable_is_not_zero_array (r7.test_runner.NumericFraming.test_unavailable_is_not_zero_array) ... ok
+test_actual_peer_inputs_enable_both_controls (r7.test_runner.RunnerContract.test_actual_peer_inputs_enable_both_controls) ... ok
+test_all_backing_pages_absent_cannot_prove_post_mount_a_command_cold (r7.test_runner.RunnerContract.test_all_backing_pages_absent_cannot_prove_post_mount_a_command_cold) ... ok
+test_changed_checkpoint_keeps_up_to_date_as_failure_without_replay (r7.test_runner.RunnerContract.test_changed_checkpoint_keeps_up_to_date_as_failure_without_replay) ... ok
+test_children_require_exact_original_successes (r7.test_runner.RunnerContract.test_children_require_exact_original_successes) ... ok
+test_command_body_binding_refuses_wrong_known_zero_body_without_resend (r7.test_runner.RunnerContract.test_command_body_binding_refuses_wrong_known_zero_body_without_resend) ... ok
+test_complete_l_observations_are_diagnostic_without_resource_admission_pass (r7.test_runner.RunnerContract.test_complete_l_observations_are_diagnostic_without_resource_admission_pass) ... ok
+test_control_identity_does_not_follow_product_change (r7.test_runner.RunnerContract.test_control_identity_does_not_follow_product_change) ... ok
+test_control_workload_change_requires_new_identity (r7.test_runner.RunnerContract.test_control_workload_change_requires_new_identity) ... ok
+test_effective_claim_ignores_free_labels_and_binds_actual_source_and_execution (r7.test_runner.RunnerContract.test_effective_claim_ignores_free_labels_and_binds_actual_source_and_execution) ... ok
+test_expired_operation_is_not_sent (r7.test_runner.RunnerContract.test_expired_operation_is_not_sent) ... ok
+test_failed_verifier_time_is_excluded_before_custody_fence (r7.test_runner.RunnerContract.test_failed_verifier_time_is_excluded_before_custody_fence) ... ok
+test_git_variant_refuses_unrefreshed_index_after_class_c_warmup (r7.test_runner.RunnerContract.test_git_variant_refuses_unrefreshed_index_after_class_c_warmup) ... ok
+test_missing_b_and_c_predicates_never_become_zero_or_eligible (r7.test_runner.RunnerContract.test_missing_b_and_c_predicates_never_become_zero_or_eligible) ... ok
+test_missing_prepared_input_is_unrun_without_product (r7.test_runner.RunnerContract.test_missing_prepared_input_is_unrun_without_product) ... ok
+test_output_never_overwrites_original (r7.test_runner.RunnerContract.test_output_never_overwrites_original) ... ok
+test_overdue_buffered_known_reply_keeps_custody_without_budget_success (r7.test_runner.RunnerContract.test_overdue_buffered_known_reply_keeps_custody_without_budget_success) ... ok
+test_owner_unrun_selection_remains_visible (r7.test_runner.RunnerContract.test_owner_unrun_selection_remains_visible) ... ok
+test_p_missing_kernel_counts_remains_incomplete (r7.test_runner.RunnerContract.test_p_missing_kernel_counts_remains_incomplete) ... ok
+test_parallel_has_two_children_and_waits_every_pid (r7.test_runner.RunnerContract.test_parallel_has_two_children_and_waits_every_pid) ... ok
+test_peer_alias_overlap_or_missing_oracle_refused (r7.test_runner.RunnerContract.test_peer_alias_overlap_or_missing_oracle_refused) ... ok
+test_ready_without_matched_two_loop_profile_refused (r7.test_runner.RunnerContract.test_ready_without_matched_two_loop_profile_refused) ... ok
+test_relative_cli_output_reaches_runtime_as_absolute_original_artifact_paths (r7.test_runner.RunnerContract.test_relative_cli_output_reaches_runtime_as_absolute_original_artifact_paths) ... ok
+test_replay_and_semantic_data_are_declared_separately_from_helpers (r7.test_runner.RunnerContract.test_replay_and_semantic_data_are_declared_separately_from_helpers) ... ok
+test_sha_matches_independent_hashlib (r7.test_runner.RunnerContract.test_sha_matches_independent_hashlib) ... ok
+test_streamed_p_cold_receipt_requires_fresh_connection (r7.test_runner.RunnerContract.test_streamed_p_cold_receipt_requires_fresh_connection) ... ok
+test_terminal_failure_and_later_cleanup_preserve_performance_boundary (r7.test_runner.RunnerContract.test_terminal_failure_and_later_cleanup_preserve_performance_boundary) ... ok
+test_w02_uses_one_retained_native_root_and_mount (r7.test_runner.RunnerContract.test_w02_uses_one_retained_native_root_and_mount) ... ok
+test_zero_store_pages_cannot_replace_missing_or_warm_replay_predicate (r7.test_runner.RunnerContract.test_zero_store_pages_cannot_replace_missing_or_warm_replay_predicate) ... ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 0.044s
+
+OK
+R4_WALL seconds<=1 limit=100s lock_wait=0s

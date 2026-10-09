@@ -1,0 +1,1 @@
+{"command": "compare-stdout", "independent_close_failures": [], "original_failure": "original host output path required", "original_failure_type": "ValueError", "original_phase": null, "retry": false, "schema": "r7-oracle-preparation-boundary-v1", "status": "INCOMPLETE"}

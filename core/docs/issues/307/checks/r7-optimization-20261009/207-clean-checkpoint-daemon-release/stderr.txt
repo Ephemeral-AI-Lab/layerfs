@@ -1,0 +1,18 @@
+   Compiling blake3 v1.8.5
+   Compiling libsqlite3-sys v0.38.2
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling rustversion v1.0.23
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling num_enum v0.7.6
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 49.31s
+R4_WALL seconds<=51 limit=560s lock_wait=0s

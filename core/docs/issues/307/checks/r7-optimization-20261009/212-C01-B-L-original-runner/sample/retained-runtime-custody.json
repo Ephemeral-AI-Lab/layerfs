@@ -1,0 +1,24 @@
+{
+  "cause": "original host stdout comparison failed",
+  "cause_type": "ValueError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r7-optimization-20261009/212-C01-B-L-original-runner/sample/runtime.events.jsonl"
+  ],
+  "container": "8d50e8075c1ced7691b82e1dadba99b55fe4f5c7df0be2ddaaa278ac9edcaa16",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "773e9c5e5b88efeddc43054b620bb0fefb97b8f1d787675b4ce094bf68e9da00",
+    "773e9c5e5b88efeddc43054b620bb0fefb97b8f1d787675b4ce094bf68e9da00",
+    "03c614c1f64be610afdf72d787f2e483153c9924835e7365cd751f82cd4f45f0",
+    "03c614c1f64be610afdf72d787f2e483153c9924835e7365cd751f82cd4f45f0",
+    "b0b3e7483b5d9c062229c211b9887e26923d4ac77f27e8d6204ae405b935425e",
+    "b0b3e7483b5d9c062229c211b9887e26923d4ac77f27e8d6204ae405b935425e"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 69840,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": "host_stdout_comparator_exit"
+}

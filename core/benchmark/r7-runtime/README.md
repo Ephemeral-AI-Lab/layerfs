@@ -438,3 +438,9 @@ not prove that a binary was compiled from its declared sources. K cumulative dae
 snapshots include checkpoint verifier work. Use `command:i -> commit:i` for an
 isolated Commit interval; cross-checkpoint deltas cannot establish Commit-only
 producer ratios. Raw cumulative snapshots and every verifier event remain retained.
+
+The matrix runner converts its output directory to an absolute host path before
+creating any runtime, script or evidence owner. This also supports relative CLI
+output arguments: original stdout/stderr fields remain absolute paths that the
+strict independent host comparator can admit. A failed historical relative-path
+comparison remains failed; its original event fields and receipt are unchanged.

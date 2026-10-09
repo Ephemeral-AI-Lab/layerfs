@@ -11,7 +11,7 @@ publication, PR, worktree, predecessor retirement or reference retirement.
 
 ## Stage state
 
-Stage 0 IN_PROGRESS. Three disjoint subagent tracks build prospective registry,
+RESUMED 2026-10-09 by owner instruction, Stage 0 IN_PROGRESS under a new lead (see [Owner resume](#owner-resume--2026-10-09) at the end). The earlier state was STOPPED_BY_OWNER 2026-10-09 at Stage 0; see the [owner-stop handoff](../../HANDOFF-R7-OWNER-STOP-20261009.md). The following preparation description is historical. Three disjoint subagent tracks build prospective registry,
 SDK real-binary lifecycle/fixture harness, and passthrough/per-file residency
 tools. Lead owns every command receipt, timed sample, decision, record and commit.
 Only one Cargo/Docker/test/measurement command holds the existing checkout lock.
@@ -1005,3 +1005,59 @@ Recursive read-only cache audit found a concrete validator gap: main residency s
 202 Linux140–174 PASSED once, including actual mounted Commit/failure/concurrency/cycles/drain/install tests. Linux175/263 executed:174PASS plus retained034 fixture precondition failure. Fresh recursive cache reviewer accepted the narrow guards/runner annotation and the final all-counter/known-stop/zero-backing-page refusal vector at source scope, without a runtime cache claim. Parent froze receipts.py/test_registry.py/newtest_cache_contract.py (17 test methods); lead froze runner.py/test_runner.py/cache README. Child reuse for H05 was refused by tool thread limit; no child turn started, so active parent continues source-only narrowing, explicitly not a fresh independent review.
 
 203 complete frozen harness tests PASSED:227 tests in9.433s, original outer9684673292 ns under100s. This is external harness/source validation, not a cache or measurement result. The cache guard changes no product bytes, residency treatment, allowance or timeout. Next clean checkpoint allows actual build provenance/source seals and first real runner rows; Stage0 remains IN_PROGRESS.
+
+## Local commit11 — cache guard and complete host-suite checkpoint
+
+af92886c735a2ebedcd6477bbb87c8c449e0f96f commits the frozen cache guard/docs/tests and campaign evidence through203. Exact staged/committed tree8f4d9f525d63e4fb35f7f6dda097d9278f8b63d1 matches both core/target/r7-loc-10 records. Production LOC185857 ->185857 (delta+0); core120440/active77566/predecessors38878/integration3996/reference65417; same pinned counter and source classification as commit10. Product tree6a03560dfecd7e322c5592a3ef0673ff190aef2a unchanged. No optimization/migration/retirement or cold qualification claim. Protected untracked files remain unstaged. Next actual source/build seals and runner rows; Stage0 IN_PROGRESS.
+
+204 FAILED84646917 ns before source admission because lead omitted the Python module search path; no seal/operation was attempted. 205 corrected only invocation PYTHONPATH and PASSED669561042 ns:994 L files, source setd27eae914ff6f955981a740b24b44ecb4b2d12dccf20d7b5344f0f1ab54b99e0, artifacted159a63a89386cafe137587b2b8a638ca3c4c5e4baea14d8b84e46c157a080a ataf92886c735a2ebedcd6477bbb87c8c449e0f96f. 206 clean relevant-source locked/offline host release build PASSED469390750 ns, reused incremental build inputs explicitly. 207 corresponding pinned Linux release build is in progress. Previous dirty-source build receipts are retained and are not relabelled as clean.
+
+207 clean pinned Linux release build PASSED49745550250 ns. Recompiled native dependencies and daemon; actual daemon8639784 bytes SHA1ca4d9c29a0860d08243cd7a51e29e5562e5f095aa7354e3e81b848c44d463d5 differs from prior artifact, not relabelled. 208 actual before/after relevant-byte comparison PASSED602561333 ns; locked build provenance artifacta114782463c1c41306721c6c8f6521d000ea576a8dd8e8ede07d7b8d31e53ffa, dependency inputacf6f3059d703004d3dbaec8ffddd453fa18c8027fa2de080fa8011a64d80f5e, harness3f2df751d300a559196ab15f327f35459bbddbcb18d66713fcff54a474ced0a8. Runtimea228044... unchanged; incremental reuse explicit.
+
+209 fresh C01 L volume and210 independent empty Store clone PASSED54941000/211342750 ns; source/destination0c3de5a...172032 logical/allocated bytes. 211 sealed C01:B:L config PASSED737226791 ns including actual preflight, config071c5ec21e15fc02cb157f3ffdc009ba7ab6c321fc6fd454a3b1a6fb3ad63e5a, plan e753732a65a460ffe1cf554e2040ce95b1358f05e9a56fc94cc5f2c706690f03. All12 identities actual; code only, no materialized native root/replay; declared external VM interference unquantified.
+
+212 FIRST ORIGINAL PERFORMANCE ATTEMPT, C01:B:L ataf92886c7, exact1000-file body; attempted1/completed0/sample1, rowFAIL. Wrapper10571476750 ns is setup/control custody, not product time. Measured Mount10174125 ns, command2027328666 ns, transport2021757916 ns nested in command, retained priced elapsed2115828542 ns excluding failed independent verifier1460650750 ns. Original command exit0/unregistered; independent complete C01 tree comparison statusPASS/differences[]/timestampsNOT_CLAIMED. Then host stdout comparison failed first guard 'original host output path required': runtime used relative stdout field because lead supplied relative CLI output; no payload comparison happened. Store213072 logical/217088 allocated bytes, overlay516096 logical/268951552 allocated bytes, daemon lifetimeVmHWM46682112 bytes. These observations do not satisfy speed/storage/memory acceptance; no measured terminal unmount/Gone. ClassB actual objectdemands0. Original custodyRETAINED; host69840 oneSIGKILL/known-9, no filesystem drain inference.
+
+Measured command phase counters AVAILABLE:7000 opcode requests (5000 handoffs/2000inline), raw18003 ownerjobs; Resources observer subtraction leaves18002, actual typedStatusState1Lifecycle yields18001 (Lifecycle8000/Mutation3000/Read3001/Source4000). Readergrants2001; Store objectbatches/IDs0; canonical cache6033hits/0misses/0upstream/0authenticatedbytes. SQL profile/phase values retained; no scalar time adjustment. Warm-to-mount interval includes1129 maintenancejobs/3941rows/7786data bytes and must not be called isolated Mount work. This failed original sample is not an accepted baseline or optimization; original finite phase counts may guide diagnosis.
+
+213 scoped relative-output regression PASSED35 tests/296081042 ns. Lead corrected only runner output normalization to absolute before original runtime/evidence/script owners; strict comparator and original failed fields remain unchanged. Root fresh-agent review spawn was refused by tool thread limit; no reviewer started, limitation retained. 214 explicitly stopped only the failed sample's acknowledged container8d50e8075c1ced7691b82e1dadba99b55fe4f5c7df0be2ddaaa278ac9edcaa16 once, known success5330426125 ns. This external cleanup is not original WorkspaceUnmount/Gone or a repaired212 verdict; no original operation was replayed. Stage0 IN_PROGRESS; one failed performance attempt, zero accepted optimization iterations. New harness identity and fresh independent inputs required before another C01 sample.
+
+## Owner stop — 2026-10-09
+
+The owner explicitly stopped R7 and requested bounded closeout. This supersedes the earlier no-pause/run-to-exit direction. No new sample, optimization, harness extension or broad test campaign began after that instruction. HEAD remainsaf92886c735a2ebedcd6477bbb87c8c449e0f96f, tree8f4d9f525d63e4fb35f7f6dda097d9278f8b63d1; no staged files or closeout commit. The uncommitted one-line stdout-path fix/test/docs and all raw204–214 receipts remain. Stage0 stopped by owner, not achieved or closed for an external blocker. One failed original sample212; zero completed/accepted optimization iterations.
+
+Subagents stopped and returned state. Product_arm's cache/earlier oracle/controller changes are already committed; it owns no live resource/process or uncommitted product patch. Both children completed. Existing git_loader_review independently accepted the absolute-path correction in reused context, explicitly not a fresh-thread review, with no edits/execution. The root fresh-thread request and child H05 reuse attempt were refused by thread limit; no such turns started. Parent's returned H05 source reconstruction/candidates are preserved in CANDIDATES and the handoff, not implemented.
+
+215 bounded read-only custody inventory PASSED5665804208 ns/60s:14 retained campaign-owned containers currently Running=false/Pid0/Exit137;13 retained owned volumes; recorded host PIDs5939/51258/56891/69840 absent in exact-PID ps observation. No original WorkspaceGone/descendant drain inference, cleanup mutation, resource removal or replay. Host sealedStore current stat values are recorded without rereading payloads; original provisioning/seal receipts are unchanged. Protected unrelated resources were not inspected. 216 review-state captures exact Git patch/state and an index of636 original command-wrapper receipts; wrapper PASS is not a benchmark verdict.
+
+[HANDOFF-R7-OWNER-STOP-20261009.md](../../HANDOFF-R7-OWNER-STOP-20261009.md) records HEAD/committed and uncommitted work, checks/failures/skips, complete resource/artifact disposition, stdout first cause/frozen correction, build/source seal limits, prior per-commit LOC and smallest future steps. No closeout commit or new LOC comparison was made; latest exact committed count185857/core120440/active77566/predecessors38878/integration3996/reference65417 remains applicable to unchanged product source. Do not resume until a new owner instruction.
+
+217 bounded documentation verification PASSED604664084 ns/15s:13 local links resolved, exact HEADaf92886c735a2ebedcd6477bbb87c8c449e0f96f unchanged, no staged files, product/Rust-runtime source unchanged. This was closeout documentation verification, not a test/sample/campaign. Final handoff/ledger closing append follows that document-hash snapshot. No long-running command, execution session or subagent work remains active. Handoff written; stop under owner direction.
+
+## Owner resume — 2026-10-09
+
+The owner read the owner-stop handoff and replied, in order, to three offered
+steps: "1. commit", "2. yes" (one corrected C01 sample after the commit) and
+"3. continue, you are taking over the R7, work iteratively for optimization".
+This is the new owner instruction the stop required. It restores the assignment
+in the [R7 handoff](../../HANDOFF-R7-OPTIMIZATION-20261009.md) — authority,
+the two gates, the forbidden list, measurement rules and exit condition are
+unchanged — under a new lead (Claude). The owner is present, so the earlier
+"do not ask or pause" reading is not assumed to apply; decisions that are the
+owner's are still recorded here.
+
+Closeout commit (commit 12): the one-line absolute-output correction in
+`runner.py`, its regression test, the runtime README note, both ledgers, the
+candidate list, the owner-stop handoff and receipts 204–217. The four protected
+untracked files stay unstaged. No check was repeated for this commit: 213 is
+the scoped validation of the exact staged runner and test bytes. Product source
+is unchanged, so the production LOC delta is 0.
+
+What is still true after the commit and must not be blurred:
+
+- Sample 212 stays FAIL with its claim and custody; it is not rerun. The next
+  C01:B:L sample is a new treatment at a new harness identity with a fresh
+  source seal, configuration, output and independent Store clone.
+- Zero complete baseline samples and zero kept optimizations exist.
+- Linux suite: 174 PASS, 034 FAIL retained, next unrun index 175.
+

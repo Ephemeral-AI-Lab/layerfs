@@ -1,0 +1,700 @@
+{
+  "schema": "r7-owner-stop-custody-inventory-v1",
+  "status": "READ_ONLY_CLOSEOUT",
+  "observed_host_time_ns": 1791511620619533000,
+  "containers": [
+    {
+      "id": "8d50e8075c1ced7691b82e1dadba99b55fe4f5c7df0be2ddaaa278ac9edcaa16",
+      "name": "/dreamy_wozniak",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-09T01:55:37.890377761Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-09T01:55:38.038992887Z",
+        "FinishedAt": "2026-10-09T01:59:22.764226879Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-C01-L-af92886c7-20261009",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-C01-L-af92886c7-20261009/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "d320ea6b5c1fe1e67707799baebfb4f586701a194c008c070e53fc53551698c1",
+      "name": "/mystifying_margulis",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-09T01:32:52.481642421Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-09T01:32:52.637624588Z",
+        "FinishedAt": "2026-10-09T01:32:55.279363714Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-native-C01-reference-20261009-1b028a24a",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-native-C01-reference-20261009-1b028a24a/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "0faa42b0254da3a6b6c7ee96ae9c7d6afa0a66bb3f3971c4fa40b728619c3922",
+      "name": "/loving_hugle",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-09T00:45:27.319344465Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-09T00:45:27.453062507Z",
+        "FinishedAt": "2026-10-09T00:48:10.381977472Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-git-phase-clone-20261009-a22804404",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-git-phase-clone-20261009-a22804404/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "3c4e958e32336e29f6dd4171af33fa6ea365c08e8b3558c9c51c7dce66c4a94c",
+      "name": "/jolly_turing",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-09T00:19:25.181916047Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-09T00:19:25.322994547Z",
+        "FinishedAt": "2026-10-09T00:27:49.066275003Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-git-fullcut-clone-20261009-0782743f3",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-git-fullcut-clone-20261009-0782743f3/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "20586d26778f6ac52f15323a7e6811a5fbf28269e6abcfecea1d8841f853d797",
+      "name": "/keen_cannon",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T23:35:25.731763423Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T23:35:25.883845631Z",
+        "FinishedAt": "2026-10-08T23:37:30.901395675Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-cut-staging-clone-20261009-0782743f3",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-cut-staging-clone-20261009-0782743f3/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "b86f1f557ea5352b29d290d43f854ceb5ca77d51adc46b28568e533a698a6be7",
+      "name": "/friendly_mendeleev",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T23:04:31.437075801Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T23:04:31.568970426Z",
+        "FinishedAt": "2026-10-08T23:04:38.093187262Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-original-minus-master-20261009-0782743f3",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-original-minus-master-20261009-0782743f3/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "13543dab0f270181e13ddc423c5811362b0ac0ea00430092755e55801ac83579",
+      "name": "/competent_haslett",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T23:02:27.917412882Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T23:02:28.148098966Z",
+        "FinishedAt": "2026-10-08T23:02:34.691936135Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-cut-minus-master-20261009-0782743f3",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-cut-minus-master-20261009-0782743f3/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "3e1f310accc4fc3f7532c62713ee54467e046f8c655c35536707e740c8fb89b3",
+      "name": "/adoring_mcnulty",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T22:59:43.714128084Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T22:59:43.900556917Z",
+        "FinishedAt": "2026-10-08T22:59:54.932317756Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-cut-full-master-20261009-0782743f3",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-cut-full-master-20261009-0782743f3/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "baf6e1bb841d78d9b118200a27b439c16d1502616d6daf54177255afbb4d63c8",
+      "name": "/vigorous_mclaren",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T22:25:14.001039834Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T22:25:14.138958543Z",
+        "FinishedAt": "2026-10-08T22:28:25.624907256Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-staging-clone-20261009-b8d76c0a3",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-staging-clone-20261009-b8d76c0a3/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "c7977fcc74272540e0e67b79a90ac3f02c979425108745757809d720b8206429",
+      "name": "/bold_kirch",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T22:10:01.371424468Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T22:10:01.513532801Z",
+        "FinishedAt": "2026-10-08T22:10:02.71041476Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-big-master-20261009-b8d76c0a3",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-big-master-20261009-b8d76c0a3/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "287df310723500649b2b1069d54420a451a3f5b44789ca695f07a9a1f177601c",
+      "name": "/flamboyant_lalande",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T21:55:02.820653802Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T21:55:02.968639094Z",
+        "FinishedAt": "2026-10-08T21:55:04.873282136Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-lifecycle-clone-20261009-2ac7cc762",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-lifecycle-clone-20261009-2ac7cc762/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "b16ac5af97bc4f0767a2360374b5c8bbfcf2d0af1de57dc41a02b8aa698681cd",
+      "name": "/pensive_mccarthy",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T21:19:27.028842549Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T21:19:27.163389216Z",
+        "FinishedAt": "2026-10-08T21:19:28.347492133Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-empty-master-20261009-2ac7cc762",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-empty-master-20261009-2ac7cc762/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "e9847e604207558c250d7e05585e18662452c18c0a63fba95bbe6dbb1d74db7e",
+      "name": "/layerfs-r7-p-proof-20261009",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T21:14:00.376728593Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T21:14:00.426007051Z",
+        "FinishedAt": "2026-10-08T21:16:48.404887295Z"
+      },
+      "mounts": [
+        {
+          "Type": "bind",
+          "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-passthrough/proof.py",
+          "Destination": "/r7-proof.py",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        },
+        {
+          "Type": "bind",
+          "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-tools/passthrough_proof.py",
+          "Destination": "/r7-passthrough-proof.py",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        },
+        {
+          "Type": "bind",
+          "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-passthrough-release/release/layerfs-r7-passthrough",
+          "Destination": "/r7-passthrough",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    },
+    {
+      "id": "25eae7f3a4c9d4b9041fda7133329dbeb34de45eecfb909f6460535c2faf9a56",
+      "name": "/unruffled_mcnulty",
+      "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "created": "2026-10-08T20:14:59.538599259Z",
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-10-08T20:14:59.716370468Z",
+        "FinishedAt": "2026-10-08T20:17:56.808523925Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "layerfs-r7-master-20261009-980c169e6",
+          "Source": "/var/lib/docker/volumes/layerfs-r7-master-20261009-980c169e6/_data",
+          "Destination": "/layerfs-store",
+          "Driver": "local",
+          "Mode": "z",
+          "RW": true,
+          "Propagation": ""
+        }
+      ],
+      "auto_remove": false,
+      "scope": "current Engine state only; not original Workspace cleanup/descendant custody proof"
+    }
+  ],
+  "container_ids_mentioned_but_not_currently_listed": [],
+  "volumes": [
+    {
+      "CreatedAt": "2026-10-09T01:54:21Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-C01-L-af92886c7-20261009/_data",
+      "Name": "layerfs-r7-C01-L-af92886c7-20261009",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T22:09:44Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.stage": "r7-optimization-20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-big-master-20261009-b8d76c0a3/_data",
+      "Name": "layerfs-r7-big-master-20261009-b8d76c0a3",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T22:58:34Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.stage": "r7-optimization-20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-cut-full-master-20261009-0782743f3/_data",
+      "Name": "layerfs-r7-cut-full-master-20261009-0782743f3",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T22:58:35Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.stage": "r7-optimization-20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-cut-minus-master-20261009-0782743f3/_data",
+      "Name": "layerfs-r7-cut-minus-master-20261009-0782743f3",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T23:34:19Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-cut-staging-clone-20261009-0782743f3/_data",
+      "Name": "layerfs-r7-cut-staging-clone-20261009-0782743f3",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T21:19:05Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.stage": "r7-optimization-20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-empty-master-20261009-2ac7cc762/_data",
+      "Name": "layerfs-r7-empty-master-20261009-2ac7cc762",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-09T00:14:19Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-git-fullcut-clone-20261009-0782743f3/_data",
+      "Name": "layerfs-r7-git-fullcut-clone-20261009-0782743f3",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-09T00:40:52Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-git-phase-clone-20261009-a22804404/_data",
+      "Name": "layerfs-r7-git-phase-clone-20261009-a22804404",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T21:54:03Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.stage": "r7-optimization-20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-lifecycle-clone-20261009-2ac7cc762/_data",
+      "Name": "layerfs-r7-lifecycle-clone-20261009-2ac7cc762",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T20:13:04Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.owner": "local-main-980c169e6",
+        "layerfs.r7": "20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-master-20261009-980c169e6/_data",
+      "Name": "layerfs-r7-master-20261009-980c169e6",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-09T01:30:56Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-native-C01-reference-20261009-1b028a24a/_data",
+      "Name": "layerfs-r7-native-C01-reference-20261009-1b028a24a",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T22:58:35Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.stage": "r7-optimization-20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-original-minus-master-20261009-0782743f3/_data",
+      "Name": "layerfs-r7-original-minus-master-20261009-0782743f3",
+      "Options": null,
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-10-08T22:24:17Z",
+      "Driver": "local",
+      "Labels": {
+        "layerfs.stage": "r7-optimization-20261009"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/layerfs-r7-staging-clone-20261009-b8d76c0a3/_data",
+      "Name": "layerfs-r7-staging-clone-20261009-b8d76c0a3",
+      "Options": null,
+      "Scope": "local"
+    }
+  ],
+  "host_process_observation": {
+    "argv": [
+      "ps",
+      "-p",
+      "5939,51258,56891,69840",
+      "-o",
+      "pid=,ppid=,stat=,lstart=,comm="
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  "host_pid_scope": "exact recorded PIDs only; PID reuse/command name does not establish same original identity",
+  "host_store_copies": [
+    {
+      "path": "/tmp/layerfs-r7-big-sealed-20261009.sqlite",
+      "logical_bytes": 172032,
+      "allocated_bytes": 172032,
+      "uid": 501,
+      "gid": 0,
+      "mode": "0o644",
+      "mtime_ns": 1791497401344410747,
+      "content_hash": "not re-read at owner-stop; use original closed seal/provisioning receipt"
+    },
+    {
+      "path": "/tmp/layerfs-r7-cut-full-sealed-20261009.sqlite",
+      "logical_bytes": 1410854912,
+      "allocated_bytes": 1402388480,
+      "uid": 501,
+      "gid": 0,
+      "mode": "0o644",
+      "mtime_ns": 1791500383674777050,
+      "content_hash": "not re-read at owner-stop; use original closed seal/provisioning receipt"
+    },
+    {
+      "path": "/tmp/layerfs-r7-cut-minus-sealed-20261009.sqlite",
+      "logical_bytes": 772677632,
+      "allocated_bytes": 767279104,
+      "uid": 501,
+      "gid": 0,
+      "mode": "0o644",
+      "mtime_ns": 1791500547876176790,
+      "content_hash": "not re-read at owner-stop; use original closed seal/provisioning receipt"
+    },
+    {
+      "path": "/tmp/layerfs-r7-empty-sealed-20261009.sqlite",
+      "logical_bytes": 172032,
+      "allocated_bytes": 172032,
+      "uid": 501,
+      "gid": 0,
+      "mode": "0o644",
+      "mtime_ns": 1791494367003938023,
+      "content_hash": "not re-read at owner-stop; use original closed seal/provisioning receipt"
+    },
+    {
+      "path": "/tmp/layerfs-r7-full-sealed-20261009.sqlite",
+      "logical_bytes": 1417285632,
+      "allocated_bytes": 1417285632,
+      "uid": 501,
+      "gid": 0,
+      "mode": "0o644",
+      "mtime_ns": 1791490499349790708,
+      "content_hash": "not re-read at owner-stop; use original closed seal/provisioning receipt"
+    },
+    {
+      "path": "/tmp/layerfs-r7-original-minus-sealed-20261009.sqlite",
+      "logical_bytes": 772825088,
+      "allocated_bytes": 765124608,
+      "uid": 501,
+      "gid": 0,
+      "mode": "0o644",
+      "mtime_ns": 1791500671410030799,
+      "content_hash": "not re-read at owner-stop; use original closed seal/provisioning receipt"
+    }
+  ],
+  "protected_resources_inspected": false,
+  "mutation_operations": 0,
+  "performance_samples": 0,
+  "original_operations_replayed": false,
+  "source_sha256": "1cc54f1ba4c61f84b05511c26894df648e40c2df7d8c8412b5485d02f6312e7e"
+}

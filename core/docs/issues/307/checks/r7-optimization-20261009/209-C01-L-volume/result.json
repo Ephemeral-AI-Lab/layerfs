@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "af92886c735a2ebedcd6477bbb87c8c449e0f96f",
+  "source_tree": "8f4d9f525d63e4fb35f7f6dda097d9278f8b63d1",
+  "worktree_status": "M core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/204-final-cache-L-source-seal/\n?? core/docs/issues/307/checks/r7-optimization-20261009/205-L-source-import-path-corrected/\n?? core/docs/issues/307/checks/r7-optimization-20261009/206-clean-checkpoint-runtime-release/\n?? core/docs/issues/307/checks/r7-optimization-20261009/207-clean-checkpoint-daemon-release/\n?? core/docs/issues/307/checks/r7-optimization-20261009/208-clean-compiled-input-provenance/",
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "layerfs-r7-C01-L-af92886c7-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 54941000,
+  "status": "PASS"
+}

@@ -13,6 +13,24 @@ from r7 import receipts, registry, runner
 
 
 class RunnerContract(unittest.TestCase):
+    def test_relative_cli_output_reaches_runtime_as_absolute_original_artifact_paths(self):
+        import os
+        selected = next(row for row in registry.selections() if row["selection_id"] == "E01:A:L")
+        config = dict(runtime_binary="runtime",socket="socket",volume="volume",daemon_binary="daemon",
+                      manifest="manifest",uid=501,gid=20,native_root="/native",identities=dict.fromkeys(receipts.IDENTITIES,"synthetic"))
+        with tempfile.TemporaryDirectory() as folder:
+            relative = os.path.relpath(Path(folder) / "sample", Path.cwd())
+            with mock.patch.object(runner,"preflight",return_value={}), \
+                    mock.patch.object(runner,"effective_treatment",return_value={"synthetic":"never measured"}), \
+                    mock.patch.object(runner.verification_module,"load",return_value=None), \
+                    mock.patch.object(runner,"EventProcess",side_effect=runner.OriginalFailure("stop before any launch")) as launch:
+                row = runner.one(config,selected,relative,Path(folder)/"claims")
+            argv = launch.call_args.args[0]
+            for flag in ("--receipt","--environment-file"):
+                self.assertTrue(Path(argv[argv.index(flag)+1]).is_absolute())
+            self.assertEqual(row["attempted_operation_count"],0)
+            self.assertEqual(row["row_status"],"NOT_RUN")
+
     def test_overdue_buffered_known_reply_keeps_custody_without_budget_success(self):
         process = runner.EventProcess.__new__(runner.EventProcess)
         reply = {"event": "verify", "sequence": 1, "fields": {"container": "c", "exec": "e", "exit_code": "0"}}

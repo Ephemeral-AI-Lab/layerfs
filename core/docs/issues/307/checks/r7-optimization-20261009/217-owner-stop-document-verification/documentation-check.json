@@ -1,0 +1,83 @@
+{
+  "schema": "r7-owner-stop-document-verification-v1",
+  "status": "PASS",
+  "scope": "local documentation links, exact HEAD, no staged files and unchanged product/Rust runtime patch; no tests/samples",
+  "head": "af92886c735a2ebedcd6477bbb87c8c449e0f96f",
+  "tree": "8f4d9f525d63e4fb35f7f6dda097d9278f8b63d1",
+  "git_status": "M core/benchmark/fs-bench-pro/r7/runner.py\n M core/benchmark/fs-bench-pro/r7/test_runner.py\n M core/benchmark/r7-runtime/README.md\n M core/docs/issues/307/ROLLOUT-LEDGER-20261008.md\n M core/docs/issues/307/checks/r7-optimization-20261009/CANDIDATES.md\n M core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/204-final-cache-L-source-seal/\n?? core/docs/issues/307/checks/r7-optimization-20261009/205-L-source-import-path-corrected/\n?? core/docs/issues/307/checks/r7-optimization-20261009/206-clean-checkpoint-runtime-release/\n?? core/docs/issues/307/checks/r7-optimization-20261009/207-clean-checkpoint-daemon-release/\n?? core/docs/issues/307/checks/r7-optimization-20261009/208-clean-compiled-input-provenance/\n?? core/docs/issues/307/checks/r7-optimization-20261009/209-C01-L-volume/\n?? core/docs/issues/307/checks/r7-optimization-20261009/210-C01-L-independent-clone/\n?? core/docs/issues/307/checks/r7-optimization-20261009/211-C01-L-sealed-configuration/\n?? core/docs/issues/307/checks/r7-optimization-20261009/212-C01-B-L-original-runner/\n?? core/docs/issues/307/checks/r7-optimization-20261009/213-relative-runtime-output-regression/\n?? core/docs/issues/307/checks/r7-optimization-20261009/214-C01-failed-owned-container-stop/\n?? core/docs/issues/307/checks/r7-optimization-20261009/215-owner-stop-custody-inventory/\n?? core/docs/issues/307/checks/r7-optimization-20261009/216-owner-stop-review-state/\n?? core/docs/issues/307/checks/r7-optimization-20261009/217-owner-stop-document-verification/",
+  "document_sha256": {
+    "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md": "f56f009283f5ef5a950404893da0b422b59ae85d473d6b2cab61b728ec7944f5",
+    "core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md": "067f434177002502d060eae2dba867c0cc6c3f46e0d97d5bab093a706a603416",
+    "core/docs/issues/307/checks/r7-optimization-20261009/CANDIDATES.md": "ee22cab0adcef2ea8ed9931d8699fd06f89fec79fbea626868a8a8c508fe6ee7"
+  },
+  "links": [
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "HANDOFF-R7-OPTIMIZATION-20261009.md",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/216-owner-stop-review-state/review-state.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/213-relative-runtime-output-regression/result.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/084-real-release-lifecycle-proof/result.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/055-passthrough-lifecycle-proof/result.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/203-cache-contract-harness-tests/result.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/212-C01-B-L-original-runner/sample/receipt.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/LEDGER.md",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/HANDOFF-R7-OWNER-STOP-20261009.md",
+      "target": "checks/r7-optimization-20261009/215-owner-stop-custody-inventory/custody.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md",
+      "target": "../../HANDOFF-R7-OWNER-STOP-20261009.md",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md",
+      "target": "000-environment/result.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md",
+      "target": "001-fuser-provenance/result.json",
+      "exists": true
+    },
+    {
+      "document": "core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md",
+      "target": "../../HANDOFF-R7-OWNER-STOP-20261009.md",
+      "exists": true
+    }
+  ],
+  "new_closeout_commit": false,
+  "performance_samples": 0,
+  "subagents_stopped": true
+}

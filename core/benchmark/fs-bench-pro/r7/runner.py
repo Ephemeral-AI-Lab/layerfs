@@ -706,7 +706,7 @@ def ownership_proof(row, runtime, groups, correlation):
 
 def one(config, selection, output, claims):
     config = dict(config)
-    output = Path(output)
+    output = Path(output).absolute()
     output.mkdir(parents=True, exist_ok=False)
     row = {"schema": receipts.SCHEMA, "family_id": "r7-optimization", "mode": "exploratory",
            "admission_eligible": False, "registry_identity": registry.registry_identity(),
