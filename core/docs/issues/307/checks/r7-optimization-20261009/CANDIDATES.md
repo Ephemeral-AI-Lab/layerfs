@@ -83,3 +83,32 @@ Second pending candidate: inode_leaf decode validates each73-byte value into Ino
 | C04 | Attribute-only requests (LOOKUP, GETATTR) retain no FileRead | Owner jobs per created file in C01: 16 → 15; deciding-job statements for getattr 25 → 13 | KEPT on counts, commit `952e0b3bb` (receipts 233, 241): jobs 16002 → 15002, statements 334017 → 302017, disk equal. Wall time not confirmed: 2004655833 → 2202119833 ns in a run where untouched work was also slower |
 | D04 | Thread wake-up per owner job (owner idle between jobs; request task parked while the job runs) | Unmeasured: command minus owner wait and service was 59, 199 and 440 ms in three samples; queue wait 17–61 µs per job | Open hypothesis; no instrument. Fewer jobs per request is the allowed response; spinning or more threads is not proposed |
 | C03a | One Workspace state read per native check transaction | Workspace statements per created file 61 → 40; Lease 150 → 147 | KEPT, commit `87e234a62` (receipts 242, 250): statements 302017 → 278013, owner service 1258286490 → 1166561334 ns, disk equal |
+
+## Candidates opened by the third lead (2026-10-09, owner decisions delegated)
+
+Owner direction, 2026-10-09 (verbatim): "you are in a ultra optimization loop,
+do the best optimization without breaking our boundaries of workspace per tool
+call, unlimited file count, file size, mutation performed (they should be only
+bounded to the resource rather than the data structure limitation). do not ask
+me question (i am going to sleep now), you are the owner." And earlier the same
+day: work with subagents for research, big-O analysis every round, and batch
+several optimizations into one round when they are large.
+
+Three read-only source analyses at `87e234a62` (threading map, statement
+account, A2 profile) are summarized in the ledger. Counters per created file
+in C01 at that identity: 7 kernel requests, 15 owner jobs, 14 transactions,
+233 statement attempts (278 with trigger and cascade sub-programs), 35
+required cross-thread wake-ups, 29 dispatcher broadcasts.
+
+| ID | Candidate / group | Counter: now → floor | Outcome |
+| --- | --- | --- | --- |
+| D05 | Zero-hop path: the request's first step runs on its receive thread; an owner job is run by the submitting thread when nothing is queued and no turn is held; one worker woken per queued step; observers and the owner thread woken only when they have something to do / C, D | Required wake-ups per created file 35 → 2 (one `LeaveReceiver` hop for each of the two base-fact rounds); dispatcher broadcasts 29 → 0; spurious owner wakes 15 → 0; admission-table lock cycles per credit drop 288 → 0 | KEPT, commit `b313abdab` (receipt 262): command 2085655209 → 1204594500 ns, owner queue wait 485224604 → 125972672 ns, jobs and statements unchanged, disk equal |
+| E01 | Prepared-statement cache holds the request cycle: capacity 48 against 49 distinct texts in one created file's cycle (153 in the engine) / E | Re-prepares per created file 15 (derived by LRU simulation, no counter) → 0 | Open |
+| E02 | Per-statement profiling cost: 12 status calls, a `MEMUSED` walk of the whole program, every column read twice / E | Status calls per statement 13 → 6; `MEMUSED` samples per cached execution 1 → 0 | Open |
+| E03 | A transaction begins at its first writing statement: read-only jobs run no freelist read, `BEGIN`, `COMMIT`, reservation or identity observation / E | Framing statements per created file 42 → 3 per writing job; stat syscalls 112 → 8 per writing job | Open |
+| C05 | A request decided in one owner job holds no source: mount, kernel reference and base root are checked in the deciding transaction; base facts carry their root and are refused when it is not current / C | Owner jobs per created file 15 → 9; transient-custody statements 102 → 0 | Open; custody review before it is kept |
+| C06 | Base facts supplied before the first owner job for requests that name a parent and a name / C | Owner jobs per created file 9 → 7 | Open |
+| E04 | Statement diet of the publishing job: in-memory owner identities, no write-only lease rows, one accounting update per transaction, no repeated name seek / E | CREATE publishing job 44 statements → about 12 | Open |
+| B04 | FLUSH elision: the request is answered `ENOSYS` once and the kernel stops sending it / B | Kernel requests per created file 7 → 5 | Open; coherence note first (no writeback, no locks: FLUSH does no work today) |
+| B05 | `NO_OPENDIR_SUPPORT`, adaptive READDIRPLUS, 1 MiB windows, `COPY_FILE_RANGE` / B | Per cell; see the A2 profile analysis | Open, cell by cell |
+| D06 | No owner turn after a reply on the request path, and no hand-off at a collision: the thread that holds the turn serves a job queued meanwhile, and the thread that finished a step runs the step it made runnable / C, D | Queue wait of a request's first job 30.8 µs → 0; wake-ups at a collision 2 → 0 | Open |

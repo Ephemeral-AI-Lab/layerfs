@@ -1,0 +1,10 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 40e5d1753, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_jobs-5709a5c452daccb6 --test-threads=1 
+
+running 1 test
+test native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

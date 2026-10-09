@@ -1,0 +1,23 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 40e5d1753, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/shared_processes-498c7928b7fbb8cc --test-threads=1 
+
+running 2 tests
+test daemon_process_role ... ignored, explicit owned daemon subprocess role
+test overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store ... FAILED
+
+failures:
+
+---- overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store stdout ----
+
+thread 'overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store' panicked at crates/layerfs-daemon/tests/shared_processes.rs:55:59:
+explicit named-volume placement
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store
+
+test result: FAILED. 0 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 101

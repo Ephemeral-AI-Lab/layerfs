@@ -1463,3 +1463,149 @@ were read only while writing the handoff. Against them:
 
 Stage state: IN_PROGRESS, handed to the next lead at product identity
 `87e234a62`. C01:B:L command 2,085.7 ms against the A2 target of 183.4 ms.
+
+## Third lead — 2026-10-09: owner decisions delegated, research first
+
+Owner direction (verbatim, 2026-10-09): "Work with subagents for careful
+research and analysis on what cause the latency, db/sqlite statements, jobs,
+transactions, fuse callback rounds. big o analysis every round, we expect
+aggressive improvements, rather than minor changes. for example we could
+batch multiple optimization in the same round. and they are expected to be
+very very big. for example if a take 100 steps, think about how to cut it
+into 10 rather than 80 steps". Later the same day: "you are in a ultra
+optimization loop, do the best optimization without breaking our boundaries
+of workspace per tool call, unlimited file count, file size, mutation
+performed (they should be only bounded to the resource rather than the data
+structure limitation). do not ask me question (i am going to sleep now), you
+are the owner."
+
+How this lead reads it (the reading is this lead's, not the owner's): design
+decisions the handoff marked "owner's, proposal only" are taken here and
+recorded with each use. The standing rules of the repository guides are not
+lifted: Durable stays disabled, kernel writeback stays off, permission checks
+stay, no third-party edit beyond the fuser patches, nothing is pushed, every
+test command stays under 120 s. The product boundaries named by the owner are
+gates on every change: a Workspace per tool call, and no limit on file count,
+file size or mutations other than physical resources.
+
+Harness, commit `40e5d1753`: the declared interval "measured mount after warm
+terminal" spans a remount; opcode counters belong to one connection, so the
+end connection's own counters are now the interval. Rows can be DIAGNOSTIC.
+
+### Research at `87e234a62` (three read-only analyses, no run)
+
+**Threads and hand-offs.** Per daemon: one owner thread, K = read handles + 2
+dispatch workers (6), two receive loops per mount. A handed-off request with
+n owner jobs costs 1 + 2n required cross-thread wake-ups: 9 for LOOKUP and
+CREATE, 7 for GETATTR and WRITE, 3 for RELEASE; 35 per created file. Every
+ready push, completion and receive-unit drop was a `notify_all` on the one
+dispatcher condition variable (29 broadcasts per file, each waking up to five
+idle workers onto one mutex). Every credit release scanned the 288-slot
+admission table with one lock cycle per slot and woke the owner thread, which
+found nothing to do (15 per file). The owner ran a maintenance turn every
+time its queue emptied, which in a serial chain is after every job.
+
+**Statements.** The receipt's `executions` counts trigger and cascade
+sub-programs. Real statements are 233 per created file in 14 transactions
+(mutate round 1 runs outside one); the model reproduces every family of
+receipt 250 exactly. By purpose: 7 publish state, 15 are kernel custody that
+outlives the request, 64 are per-request transient custody (source acquire
+and release, decided marks, reply ticket), 72 re-validate state already read
+in the same request, 33 are row reads of which about 6 are needed, 42 are
+transaction framing. Each transaction also makes four identity observations
+(fstat plus lstat) and one `fallocate`. The prepared-statement cache holds 48
+statements and one created file's cycle uses 49 distinct texts: an LRU
+simulation gives 15 re-prepares per file (no counter observes it). Each
+execution pays 12 status calls and a `MEMUSED` walk of the program. All plans
+are primary-key or unique point seeks; growth with the number of files is
+b-tree depth only. A minimal design reaches 29 statements, 5 jobs and 3
+transactions per created file.
+
+**A2.** A2 negotiates the same kernel profile as the product (60 s
+lifetimes, 128 KiB windows, background depth 1, no writeback, default
+permissions) and its C01 receipt shows the same seven requests per file. Its
+advantage is per-request cost: two receive threads answer inline under one
+mutex, state is two hash maps and ext4 calls, FORGET, OPENDIR, RELEASEDIR
+are free and RELEASE is a map removal. Its whole added cost is 17–38 µs per
+request on metadata cells. Requests that can go without changing a lifetime:
+FLUSH (answered `ENOSYS` once), OPENDIR and RELEASEDIR, cold-walk LOOKUPs
+through READDIRPLUS, WRITE and READ counts through 1 MiB windows, and a
+copy's reads and writes through `COPY_FILE_RANGE`.
+
+Big-O at this identity: every count above is O(1) per request; the request
+path has no dependence on files in the directory beyond index depth. The gap
+to A2 is a constant factor of about eleven, made of four multipliers: jobs
+per request (3), statements per job (15), wake-ups per job (2.3) and
+per-statement overhead. The plan removes each multiplier rather than
+shaving any one.
+
+## Step 4 — D05: uncontended requests are served without a thread hand-off
+
+Cause: C01's command spends 35 required cross-thread wake-ups per created
+file because every owner job is handed to the owner thread and back and
+every request to a worker; expected 0 from a model in which the thread that
+received the request runs each bounded step itself while no one else needs
+the connection. Evidence: receipt 250 (owner queue wait 485224604 ns for
+15002 jobs on an owner idle between jobs; 433869271 ns of the command
+outside the owner), source map above.
+
+Change (commit `b313abdab`): the first step of a request runs on its receive
+thread; an owner job is run by the submitting thread when nothing else is
+queued and no turn is held; one idle worker is woken per queued step;
+observers and the owner thread are woken only when they have something to
+do; provider reads are kept off receive loops by `LeaveReceiver`.
+
+Scaling: the change removes a fixed number of wake-ups per job and adds no
+loop, statement or state that depends on files, bytes or operations. The
+count test at two sizes is owed with the request-path sweep.
+
+Gates by source review: no table, index, column or file; no limit, queue,
+buffer or credit enlarged; resident state added is five scalar fields and
+one thread-local flag. `scheduler_bytes` rose 25848 → 25872 (the three owner
+state fields and the connection pointer).
+
+Checks: receipts `251-batchA-*` (Fuse dispatch 9, fence 4 after the test's
+hand-off moved to its own thread; attempt 1 of fence is kept as FAIL),
+`252-batchA-host-*` (every daemon binary on host) and `253-batchA-*` (every
+daemon binary in the pinned Linux image with real mounts). All pass except
+cases whose precondition the suite does not supply:
+`complete_installed_roots` (closed preparation), `host_handoff` on host
+(Linux binary), `shared_processes` on Linux (named volume). Host Clippy
+`-D warnings`, `fmt --check` and the boundary guard passed. Receipt 254 is a
+lock-busy non-attempt of the source seal (the iterate script takes the lock
+itself).
+
+**262 — C01:B:L at `b313abdab`, one sample, exploratory.** Row DIAGNOSTIC
+(first complete row), verifier PASS, custody KNOWN_STOP, cleanup Gone.
+
+| Measure | 250 at `87e234a62` | 262 at `b313abdab` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 2085655209 | 1204594500 | −881060709 (−42.2 %) |
+| Mount ns | 6648958 | 6685916 | |
+| Unmount ns | 6503958 | 4377000 | |
+| Cleanup to Gone ns | 59707500 | 59420916 | |
+| Owner jobs | 15002 | 15002 | 0 |
+| Statement executions | 278013 | 278013 | 0 |
+| Owner queue wait ns | 485224604 | 125972672 | −359251932 |
+| — Source (4000 jobs) | 180764553 | 123029082 | |
+| — Read, Mutation, Lifecycle (11003 jobs) | 304460051 | 2943590 | |
+| Owner service ns | 1166561334 | 910408386 | −256152948 |
+| Command minus owner wait and service | 433869271 | 168213442 | −265655829 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 557056 / 268992512 | 557056 / 268992512 | 0 |
+| `peak_credited_bytes` / `scheduler_bytes` | 53643 / 25848 | 46581 / 25872 | −7062 / +24 |
+| Daemon VmHWM | 46637056 | 32014336 | |
+
+KEPT. The drop is far outside the 5–10 % run-level variation. Jobs and
+statements are unchanged, as intended: this step removed hand-offs, not
+work. Service time fell 22 % with the same statements, attributed to the
+job running on the thread and cache that already hold the request; that
+attribution is not measured.
+
+What is left of the waiting: 11003 jobs wait 0.27 µs each; the 4000 Source
+jobs still wait 30.8 µs each. A Source job is the first job of a request,
+and it arrives on the second receive loop while the previous request's
+post-reply release still holds the turn on the first, so it is queued for
+the owner thread. Candidate D06 below.
+
+Command against target: 1,204.6 ms against A2's 183.4 ms, 6.6 times slower.

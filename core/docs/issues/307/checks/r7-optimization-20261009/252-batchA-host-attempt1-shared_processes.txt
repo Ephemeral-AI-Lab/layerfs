@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 40e5d1753, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/shared_processes-e69f83730386774d --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test daemon_process_role ... ignored, explicit owned daemon subprocess role
+test overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

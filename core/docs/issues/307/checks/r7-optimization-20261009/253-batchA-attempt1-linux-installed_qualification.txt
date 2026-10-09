@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 40e5d1753, uncommitted product/test paths=16, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/installed_qualification-1e549b1f162eb29b --test-threads=1 
+
+running 2 tests
+test namespace_size_scales_explicit_qualification_but_not_mount ... ok
+test native_installed_mixed_root_is_qualified_as_an_explicit_paid_step ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0
