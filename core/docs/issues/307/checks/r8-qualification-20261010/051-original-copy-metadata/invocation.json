@@ -1,0 +1,29 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "3748e37ce3806d2514323ab1d15614ab5cfa192e",
+  "source_tree": "506148aa755953482e60cea6a7864df5144f3183",
+  "worktree_status": "M core/benchmark/r8-tools/run_full_oracle.py\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/047-full-mounted-proof/\n?? core/docs/issues/307/checks/r8-qualification-20261010/048-failed-startup-inspection/\n?? core/docs/issues/307/checks/r8-qualification-20261010/049-startup-diagnosis.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/050-full-proof-private-copy/",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r8-original-copy-observer",
+    "--network",
+    "none",
+    "-v",
+    "layerfs-r8-full-proof-20261010-cd9345cf061e:/original:ro",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "stat",
+    "-c",
+    "%n %s %a %u %g %F",
+    "/original/global/store.sqlite",
+    "/original/global"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}
