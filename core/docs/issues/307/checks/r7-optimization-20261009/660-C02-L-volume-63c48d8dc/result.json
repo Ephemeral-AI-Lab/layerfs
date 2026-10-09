@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "63c48d8dc4dd3c7c261af3a1dabec4a251dd20c8",
+  "source_tree": "745fd69f79f0b89e30a3d30bfece44a6b7ebde43",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/652-L-source-seal-63c48d8dc/\n?? core/docs/issues/307/checks/r7-optimization-20261009/653-runtime-release-63c48d8dc/\n?? core/docs/issues/307/checks/r7-optimization-20261009/654-daemon-release-63c48d8dc/\n?? core/docs/issues/307/checks/r7-optimization-20261009/655-build-provenance-63c48d8dc/\n?? core/docs/issues/307/checks/r7-optimization-20261009/656-C01-L-volume-63c48d8dc/\n?? core/docs/issues/307/checks/r7-optimization-20261009/657-C01-L-clone-63c48d8dc/\n?? core/docs/issues/307/checks/r7-optimization-20261009/658-C01-L-configuration-63c48d8dc/\n?? core/docs/issues/307/checks/r7-optimization-20261009/659-C01-B-L-sample-63c48d8dc/",
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "layerfs-r7-C02-L-63c48d8dc-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 47047000,
+  "status": "PASS"
+}

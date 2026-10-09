@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "docker",
+    "--host",
+    "unix:///Users/yifanxu/.docker/run/docker.sock",
+    "exec",
+    "--user",
+    "0:0",
+    "2886ced9628da1bd765096e437c11a8aa1cce828af09485b5be537f25727fe95",
+    "python3",
+    "/code/residency.py",
+    "--class",
+    "B",
+    "--store",
+    "/layerfs-store/global/store.sqlite",
+    "--overlay",
+    "/layerfs-local/overlay/overlay.sqlite"
+  ],
+  "container": "2886ced9628da1bd765096e437c11a8aa1cce828af09485b5be537f25727fe95",
+  "exec_identity": "UNAVAILABLE through Docker CLI; no guessed identity",
+  "phase": "pre-attempt cache observer"
+}

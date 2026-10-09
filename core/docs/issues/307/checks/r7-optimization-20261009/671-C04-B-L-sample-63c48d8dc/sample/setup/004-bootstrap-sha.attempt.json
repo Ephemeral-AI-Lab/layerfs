@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "docker",
+    "--host",
+    "unix:///Users/yifanxu/.docker/run/docker.sock",
+    "exec",
+    "--user",
+    "0:0",
+    "884316a292a2411f4f35097144abeaa8071dde1fc312d7e8a087a869fc4969a1",
+    "sha256sum",
+    "/code/r7_deployment.py"
+  ],
+  "attempts": 1,
+  "container": "884316a292a2411f4f35097144abeaa8071dde1fc312d7e8a087a869fc4969a1",
+  "engine_operation_identity": "UNAVAILABLE through Docker CLI; no guessed Exec ID",
+  "label": "bootstrap-sha",
+  "sequence": 4
+}

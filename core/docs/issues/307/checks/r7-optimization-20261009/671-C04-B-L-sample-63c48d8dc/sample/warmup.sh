@@ -1,0 +1,1 @@
+{ for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done; } >/dev/null

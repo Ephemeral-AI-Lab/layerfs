@@ -2200,3 +2200,49 @@ therefore not exact, and the passthrough arm in this harness is the floor to
 measure. C03's owner wait (Read 25.8 ms, Lifecycle 24.2 ms) is requests
 queued behind reclamation steps. C09 is unchanged in shape: 6 owner jobs and
 2 reader grants per READ.
+
+### Baseline of every C cell under the waiting runner: receipts 652–703 at `63c48d8dc`
+
+One build (652–655), one sample per cell, class B, arm L. Product source is
+unchanged (`82c51a439`); the harness differs from 600–651 only by decision
+L4-1. All twelve rows are DIAGNOSTIC, verifier PASS, custody KNOWN_STOP,
+cleanup Gone, gaps none. This is the "before" of the first batch.
+
+| Cell | Receipt | Command ms | A2 ms | Ratio | Mount / unmount ms | Requests | Owner jobs | Statement executions | Owner wait / service ms | Warm-up cleanup to Gone ms | Store logical / allocated | Overlay logical / allocated | Daemon VmHWM |
+| --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- | ---: | --- | --- | ---: |
+| C01 | 659 | 379.7 | 183.4 | 2.07 | 8.5 / 5.8 | 5001 | 5001 | 61004 | 1.7 / 162.9 | 44.3 | 213072 / 217088 | 557056 / 268992512 | 30806016 |
+| C02 | 663 | 914.8 | 965.0 | 0.95 | 5.4 / 7.2 | 6002 | 6002 | 63006 | 2.3 / 175.4 | 52.0 | 213072 / 217088 | 557056 / 268992512 | 14508032 |
+| C03 | 667 | 715.9 | 410.8 | 1.74 | 8.4 / 3.1 | 9021 | 9108 | 127399 | 59.3 / 300.4 | 11.0 | 213072 / 217088 | 557056 / 268992512 | 30822400 |
+| C04 | 671 | 823.4 | 952.6 | 0.86 | 9.3 / 7.0 | 5342 | 5382 | 59076 | 3.2 / 170.9 | 46.3 | 221312 / 225280 | 458752 / 268894208 | 30638080 |
+| C05 | 675 | 880.5 | 949.6 | 0.93 | 7.5 / 6.1 | 5889 | 7264 | 90226 | 14.8 / 230.5 | 46.4 | 221312 / 225280 | 458752 / 268894208 | 30633984 |
+| C06 | 679 | 226.8 | 78.6 | 2.89 | 10.1 / 7.1 | 517 | 517 | 36918 | 0.3 / 147.9 | 138.4 | 213072 / 217088 | 76685312 / 345120768 | 30736384 |
+| C07 | 683 | 499.4 | 171.6 | 2.91 | 9.1 / 8.3 | 1550 | 1552 | 78022 | 0.7 / 320.2 | 274.2 | 213072 / 217088 | 153100288 / 421535744 | 30859264 |
+| C08 | 687 | 261.8 | 106.1 | 2.47 | 8.8 / 6.9 | 521 | 524 | 37009 | 0.2 / 151.7 | 140.2 | 213072 / 217088 | 76685312 / 345120768 | 30941184 |
+| C09 | 691 | 167.1 | 106.2 | 1.57 | 9.5 / 6.2 | 517 | 3082 | 42610 | 7.3 / 74.8 | 1.8 | 204800 / 204800 | 278528 / 268713984 | 37822464 |
+| C10 | 695 | 400.2 | 178.2 | 2.25 | 9.4 / 8.8 | 1546 | 4110 | 83625 | 55.1 / 262.6 | 147.9 | 213072 / 217088 | 76685312 / 345120768 | 38809600 |
+| C11 | 699 | 242.4 | 85.8 | 2.82 | 7.1 / 5.2 | 517 | 523 | 36982 | 0.2 / 147.3 | 143.2 | 204800 / 204800 | 76652544 / 345088000 | 36622336 |
+| C12 | 703 | 317.7 | 189.3 | 1.68 | 9.2 / 2.8 | 3436 | 4622 | 59504 | 5.3 / 133.7 | 18.7 | 213072 / 217088 | 405504 / 268836864 | 30765056 |
+
+The statement column is the helper's per-family sum (executions, trigger
+and cascade sub-programs included). No cell is established as beaten: C02,
+C04 and C05 are below the A2 command time in one diagnostic sample each.
+
+What the table says, as counts:
+
+- **Large files are the largest gap** (C06, C07, C08, C10, C11: 1011 ms
+  over target in total). A 128 KiB WRITE is one Mutation job of 288 µs
+  (147.6 ms for 513 jobs in C06) with 64 Payload executions, and the time
+  outside the owner is 79 ms for 517 requests, which alone equals the
+  target. The data written by the cells is `/dev/zero`.
+- **Reclaiming a closed 64 MiB Workspace takes 138–148 ms** (274 ms for
+  C07's 128 MiB), and 11–52 ms for the small cells. That time was hidden
+  until the runner waited for it; it is product work after every unmount
+  and it is why those cells could not start before.
+- **C01 fell from 444.9 (587) to 379.7 ms with equal counts**: the
+  measured command no longer overlaps the previous Workspace's
+  reclamation. The two numbers are different harness identities and are
+  not a product change.
+- **C10** (copy of a base file) queues behind itself: Read jobs wait
+  35.2 ms, Lifecycle 11.9 ms, with 6 jobs per READ.
+- **C03**: owner wait 59.3 ms; **C12**: 4622 jobs for 3436 requests, 355
+  Source jobs and 121 reader grants.

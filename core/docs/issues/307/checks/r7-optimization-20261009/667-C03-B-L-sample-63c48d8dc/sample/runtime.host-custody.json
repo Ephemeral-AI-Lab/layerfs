@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-release/release/layerfs-r7-runtime",
+    "serve",
+    "--socket",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "--volume",
+    "layerfs-r7-C03-L-63c48d8dc-20261009",
+    "--daemon",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-linux-release/release/layerfs-daemon",
+    "--manifest",
+    "/private/tmp/layerfs-r7-empty-installed-20261009.manifest",
+    "--receipt",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/667-C03-B-L-sample-63c48d8dc/sample/runtime.events.jsonl",
+    "--uid",
+    "501",
+    "--gid",
+    "20",
+    "--environment-file",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/667-C03-B-L-sample-63c48d8dc/sample/environment.txt",
+    "--observation-scope",
+    "e624ee02bcde5baa436cf4f899b4394ccc1113bc894b3d7a96299732cb17ca37"
+  ],
+  "child_event_receipts": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/667-C03-B-L-sample-63c48d8dc/sample/runtime.events.jsonl"
+  ],
+  "host_group": 96092,
+  "host_pid": 96092,
+  "timeout_disposition": "host timeout does not stop Docker exec/container; exact owned IDs retained; lead explicit cancellation/stop only"
+}
