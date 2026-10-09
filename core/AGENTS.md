@@ -22,8 +22,8 @@ product mental model or campaign-specific benchmark procedures.
   reads. Independent file/captured/operation custody and bounded live reclamation
   are implemented through S6, including physical reservation/headroom and
   indexed automatic reclamation; native/runtime/integrated exits remain
-  unfinished. See [S6 audit](docs/issues/307/S6-EXIT-AUDIT.md). Its temporarily relocated `layerfs-workspace-legacy` source remains
-  excluded.
+  unfinished. See [S6 audit](docs/issues/307/S6-EXIT-AUDIT.md). Its relocated
+  predecessor `layerfs-workspace-legacy` was removed by R7-retire.
   Daemon exposes the fair SQL owner and a direct global Store adapter with a
   fixed read set with fair admission/quarantine and read-only bind snapshots,
   one immutable cache shared across Workspaces, bounded root
@@ -58,8 +58,8 @@ product mental model or campaign-specific benchmark procedures.
   see [Store Commit](docs/architecture/65-store-commit-composition.md).
   The external E01 example records original startup work, diagnostics and Stop
   without creating a Workspace route. It supplies diagnostic receipt consistency,
-  not E1/E2 performance admission. Its relocated predecessor remains excluded;
-  standalone native executable/Exec integration is unfinished.
+  not E1/E2 performance admission. Its relocated predecessor was removed by
+  R7-retire; standalone native executable/Exec integration is unfinished.
   Pre-S8 direct-operation accounting now has actual registered macOS/Linux engine
   and Store-half Commit runs, independent family/count validation, and supported
   phase observations. Numerical latency/residency and exact continuous peaks
@@ -74,14 +74,16 @@ product mental model or campaign-specific benchmark procedures.
   The prior client/runtime, daemon upstream, Bridge logical data framing and
   excluded API-core are retired. Historical receipts keep their original topology
   and verdicts; the root reference remains intact. R7-retire (2026-10-10)
-  removed the excluded `layerfs-server`, `layerfs-fuse-legacy` and
-  `layerfs-sandbox-legacy` directories as retirement; the boundary guard
-  refuses their return. The excluded `layerfs-sdk-legacy`,
+  removed all seven excluded directories as retirement: `layerfs-server`,
+  `layerfs-fuse-legacy`, `layerfs-sandbox-legacy`, `layerfs-sdk-legacy`,
   `layerfs-daemon-legacy`, `layerfs-bridge-legacy` and
-  `layerfs-workspace-legacy` remain, loadable by no Cargo command, because
-  they hold the pinned read-only view code whose future is the unanswered
-  owner question 303/08 O-10; see the
+  `layerfs-workspace-legacy`. `core/crates` now holds only the 13 active
+  members; the boundary guard refuses the return of a removed directory or
+  package name, and each source is recoverable from the commit named in the
   [R7-retire record](docs/issues/307/R7-RETIRE-COMPLETION-20261010.md).
+  Pinned read-only SDK views (303/08 O-10) are deferred, not dropped: no
+  implementation is in the tree, and a kept feature needs a new design on the
+  SQLite overlay. Do not restore the predecessor code to supply them.
   Project native import preserves opaque symlinks, complete membership and hard
   links, with indexed acquisition state. The accepted host WAL baseline retains
   its recorded speed FAIL; no new timing is implied by SDK composition.

@@ -1,6 +1,12 @@
 # R7-retire: prepared removal of the four crates kept for O-10
 
-> **Status:** Current planning checklist; nothing in it is executed.
+> **Status:** Executed 2026-10-10. Written as a planning checklist; kept as written below.
+>
+> **Addendum 2026-10-10:** the owner authorized the removal ("yes, do the full cleanup") whatever the
+> answer to O-10. The four steps were carried out as commits `d6b7539f7` (−505), `b56950220` (−2151),
+> `eeeffb6b5` (−6834) and `e6794521a` (−26835), each matching its expected delta. O-10 stays open as a
+> product question. See the
+> [completion record](../../R7-RETIRE-COMPLETION-20261010.md#addendum-full-cleanup-by-owner-authorization).
 
 Four excluded crates stay in the tree because they carry pinned read-only view
 code, and whether the product keeps pinned views is the unanswered owner

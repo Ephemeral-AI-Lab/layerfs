@@ -257,7 +257,7 @@ IDs are kept below so earlier references remain traceable.
 | O-7 | May the overlay start writeback and drop clean pages on its own files to bound guest page cache, given that root `AGENTS.md` §4 forbids sync calls on Workspace backing? | — | Target T8 |
 | O-8 | **Superseded by O-24 and K35:** Sandbox/executor owns actual command identity and visibility/protection | Same configured identity and exact actual access proof; shared uid is not adversarial isolation | R1/S8 |
 | O-9 | Is reporting `ctime = mtime` accepted? | Yes | S4 |
-| O-10 | Are pinned read-only SDK views kept? Each one is an extra live generation | Defer them | — |
+| O-10 | Are pinned read-only SDK views kept? Each one is an extra live generation. **Still open; deferred 2026-10-10:** the predecessor implementation was removed with the excluded crates by R7-retire under the owner's "yes, do the full cleanup"; no implementation is in the tree | Defer them. A kept feature needs a new design on the SQLite overlay | — |
 | O-11 | **Resolved by requirement:** remove inherited 4 GiB Workspace file cap | Engineering work; retain platform/resource limits | No additional owner gate |
 | O-12 | **Engineering assignment:** allocate P1/P3–P7/P12 follow-up ownership | Required integration scope, not a request to weaken requirements | No additional owner gate |
 | O-13 | **Engineering defaults:** Workspace/resource settings belong to actual owners; no daemon Exec count, expose explicit resource settings | Defaults must pass sustained progress/resource proofs; no qualification claimed | No additional owner gate |

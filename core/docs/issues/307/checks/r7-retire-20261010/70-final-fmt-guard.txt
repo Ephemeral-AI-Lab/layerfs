@@ -1,0 +1,35 @@
+# r7-retire second-pass closing checks at 7999a6356fdd9a0b0cf1936d1c5c66ab8b0b13b6 (all seven directories and the placeholders removed), host macOS arm64, cargo +1.85.1 --locked
+# Working tree = that commit plus documentation edits only (git diff --stat HEAD -- '*.rs' '*.sql' '*.toml' '*.lock' '*.py' is empty, shown last).
+# Exit statuses are of the command itself; no output filter is in the pipeline.
+
+$ perl core/target/r4-locked.pl 120 cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+R4_WALL seconds<=4 limit=120s lock_wait=0s
+EXIT 0
+
+$ perl core/target/r4-locked.pl 120 python3 -B core/tools/check_product_boundary.py
+PASS: scanned 674 production Rust/SQL files; semantic review still required
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+EXIT 0
+
+$ python3 -B -m unittest discover -s core/tools -p "test_*.py"
+..................................................
+----------------------------------------------------------------------
+Ran 50 tests in 0.185s
+
+OK
+EXIT 0
+
+$ python3 -B core/tools/check_fuser_integrity.py   # not a required check of this stage; see the completion record for why it is left failing
+{
+  "checked_manifests_locks_configs": 101,
+  "errors": [
+    "core/benchmark/r7-passthrough/Cargo.lock: locked fuser has a local/replacement source",
+    "core/benchmark/r7-passthrough/Cargo.toml: patch override of fuser is not the authorized timestamp patch"
+  ],
+  "authorized_patch_verified": false,
+  "registry_package_verified": false
+}
+EXIT 1
+
+$ git diff --stat HEAD -- '*.rs' '*.sql' '*.toml' '*.lock' '*.py'
+EXIT 0 (no output above = none)

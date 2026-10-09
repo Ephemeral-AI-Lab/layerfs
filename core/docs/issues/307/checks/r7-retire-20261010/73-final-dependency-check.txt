@@ -1,0 +1,149 @@
+# R7-retire final dependency check at 7999a6356, local date 2026-10-10
+# Each section prints the command's output; 'exit 1' after a grep means no match.
+
+## 1. The seven removed directories and the two placeholder directories on disk
+absent  core/crates/layerfs-server
+absent  core/crates/layerfs-fuse-legacy
+absent  core/crates/layerfs-sandbox-legacy
+absent  core/crates/layerfs-sdk-legacy
+absent  core/crates/layerfs-daemon-legacy
+absent  core/crates/layerfs-bridge-legacy
+absent  core/crates/layerfs-workspace-legacy
+absent  core/crates/layerfs-api/cli
+absent  core/crates/layerfs-api/mcp
+
+## 2. Tracked files under them: git ls-files | wc -l
+       0
+
+## 3. Directories under core/crates and core/crates/layerfs-api
+layerfs-api
+layerfs-bridge
+layerfs-content
+layerfs-daemon
+layerfs-fuse
+layerfs-history
+layerfs-overlay
+layerfs-persistence
+layerfs-project
+layerfs-sandbox
+layerfs-storage
+layerfs-telemetry
+layerfs-workspace
+layerfs-api: sdk 
+
+## 4. core/Cargo.toml [workspace] members and exclude
+[workspace]
+resolver = "2"
+members = [
+    "crates/layerfs-content",
+    "crates/layerfs-storage",
+    "crates/layerfs-persistence",
+    "crates/layerfs-project",
+    "crates/layerfs-history",
+    "crates/layerfs-telemetry",
+    "crates/layerfs-overlay",
+    "crates/layerfs-workspace",
+    "crates/layerfs-daemon",
+    "crates/layerfs-api/sdk",
+    "crates/layerfs-bridge",
+    "crates/layerfs-sandbox",
+    "crates/layerfs-fuse",
+]
+exclude = [
+    "vendor/fuser-0.18.0",
+]
+
+## 5. Packages Cargo resolves: cargo +1.85.1 metadata --locked --no-deps
+layerfs-bridge core/crates/layerfs-bridge/Cargo.toml
+layerfs-content core/crates/layerfs-content/Cargo.toml
+layerfs-daemon core/crates/layerfs-daemon/Cargo.toml
+layerfs-fuse core/crates/layerfs-fuse/Cargo.toml
+layerfs-history core/crates/layerfs-history/Cargo.toml
+layerfs-overlay core/crates/layerfs-overlay/Cargo.toml
+layerfs-persistence core/crates/layerfs-persistence/Cargo.toml
+layerfs-project core/crates/layerfs-project/Cargo.toml
+layerfs-sandbox core/crates/layerfs-sandbox/Cargo.toml
+layerfs-sdk core/crates/layerfs-api/sdk/Cargo.toml
+layerfs-storage core/crates/layerfs-storage/Cargo.toml
+layerfs-telemetry core/crates/layerfs-telemetry/Cargo.toml
+layerfs-workspace core/crates/layerfs-workspace/Cargo.toml
+members 13
+
+## 6. Any tracked manifest or lockfile naming a removed package
+exit 1
+
+## 7. #[path] / include! / include_str! / include_bytes! in any tracked Rust file naming a removed directory
+exit 1
+
+## 8. File-system paths into a removed directory from scripts and harnesses (core/tools, tools, core/benchmark, benchmark, core/target helpers)
+exit 1
+exit 1 (untracked helpers, rx-linux.sh excepted: its one match below is a filter pattern, not a path it opens)
+19:    | grep -v '^core/crates/.*-legacy/' | tr '\n' '\0' | xargs -0 shasum -a 256 > core/target/rx-host.sha
+
+## 9. Every remaining tracked mention by name outside core/docs/issues, docs/ and root crates/
+AGENTS.md:111:  unmount). Do not revive `layerfs-server` or build a host/server adapter in
+core/AGENTS.md:26:  predecessor `layerfs-workspace-legacy` was removed by R7-retire.
+core/AGENTS.md:77:  removed all seven excluded directories as retirement: `layerfs-server`,
+core/AGENTS.md:78:  `layerfs-fuse-legacy`, `layerfs-sandbox-legacy`, `layerfs-sdk-legacy`,
+core/AGENTS.md:79:  `layerfs-daemon-legacy`, `layerfs-bridge-legacy` and
+core/AGENTS.md:80:  `layerfs-workspace-legacy`. `core/crates` now holds only the 13 active
+core/AGENTS.md:99:  Its predecessor `layerfs-fuse-legacy` was removed by R7-retire; the last
+core/AGENTS.md:132:  their loops or inherit their retired topology. Do not revive `layerfs-server`.
+core/benchmark/fs-bench-pro/diagnostics/baseline_init.rs:5:use layerfs_server::{Service,StoreAccess,Grant};
+core/benchmark/fs-bench-pro/diagnostics/run_namespace_cause.py:38:        build=['cargo','+1.85.1','build','--manifest-path','core/Cargo.toml','--release','--locked','-p','layerfs-sdk','--example','ca
+core/benchmark/fs-bench-pro/diagnostics/sqlite_reference_init.rs:4:use layerfs_server::{Service,StoreAccess,Grant};
+core/benchmark/fs-bench-pro/families/phase7_sqlite.py:315:        if arm=='baseline':command+=['-p','layerfs-server']
+core/benchmark/fs-bench-pro/families/phase7_storage.py:60:        command += ['-p', 'layerfs-server']
+core/benchmark/fs-bench-pro/families/workspace_write.py:167:                      "-p", "layerfs-server", "--example", "verify_checkpoint5"]),
+core/benchmark/fs-bench-pro/runner.py:40:         "-p", "layerfs-sdk", "-p", "layerfs-server",
+core/benchmark/fs-bench-pro/shared/evidence_registration.py:77:        if not path.startswith("core/crates/") or "-legacy/" in path or "/layerfs-server/" in path:
+core/benchmark/fs-bench-pro/shell_package.py:186:        ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-server", "--example", "verify_shell
+core/docs/api/operations.md:8:> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+core/docs/api/operations.md:10:> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+core/docs/api/operations.md:12:> [coverage audit](../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+core/docs/api/operations.md:31:Service (`layerfs-server/src/service/handler.rs`, removed by R7-retire; last at `a7ba85d3b`) has a
+core/docs/architecture/03-files.md:5:> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+core/docs/architecture/03-files.md:7:> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+core/docs/architecture/03-files.md:9:> [coverage audit](../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+core/docs/architecture/03-files.md:21:The #252 Service input adapter in `layerfs-server/src/service/save/file_stream.rs`
+core/docs/architecture/14-service-runtime.md:3:> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+core/docs/architecture/14-service-runtime.md:5:> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+core/docs/architecture/14-service-runtime.md:7:> [coverage audit](../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+core/docs/architecture/14-service-runtime.md:467:`layerfs-server` package: `service/handler.rs` owns admission and dispatch;
+core/docs/architecture/14-service-runtime.md:478:sandbox owner together. `src/bin/layerfs-server.rs` is the only process
+core/docs/architecture/14-service-runtime.md:1262:The replacement-product package `layerfs-server` now owns both the authorized
+core/docs/architecture/16-history.md:7:> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+core/docs/architecture/16-history.md:9:> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+core/docs/architecture/16-history.md:11:> [coverage audit](../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+core/docs/architecture/16-history.md:134:layerfs-history ◄── layerfs-server    (composition, authorization, bootstrap)
+core/docs/architecture/20-workspace-base.md:61:`core/crates/layerfs-workspace-legacy/`, as allowed by the implementation plan,
+core/docs/architecture/20-workspace-base.md:65:[coverage audit](../issues/307/checks/r7-retire-20261010/16-layerfs-workspace-legacy.md)
+core/docs/architecture/21-daemon-owner.md:119:The dormant daemon was temporarily relocated at `layerfs-daemon-legacy`,
+core/docs/architecture/21-daemon-owner.md:123:[coverage audit](../issues/307/checks/r7-retire-20261010/14-layerfs-daemon-legacy.md)
+core/docs/architecture/22-sdk-runtime.md:85:The old SDK was preserved under `layerfs-sdk-legacy`, excluded, with only the
+core/docs/architecture/22-sdk-runtime.md:89:[coverage audit](../issues/307/checks/r7-retire-20261010/13-layerfs-sdk-legacy.md)
+core/docs/architecture/23-native-bridge.md:91:The predecessor was preserved intact in excluded `layerfs-bridge-legacy`, with
+core/docs/architecture/23-native-bridge.md:94:[coverage audit](../issues/307/checks/r7-retire-20261010/15-layerfs-bridge-legacy.md)
+core/docs/architecture/71-ordinary-engine-runtime-foundation.md:74:`layerfs-sandbox-legacy`, with only its package manifest name adjusted, while
+core/docs/architecture/71-ordinary-engine-runtime-foundation.md:78:[coverage audit](../issues/307/checks/r7-retire-20261010/12-layerfs-sandbox-legacy.md);
+core/docs/architecture/75-native-request-service.md:14:The former excluded Fuse was preserved byte-for-byte in `layerfs-fuse-legacy`
+core/docs/architecture/75-native-request-service.md:17:[coverage audit](../issues/307/checks/r7-retire-20261010/11-layerfs-fuse-legacy.md);
+core/docs/architecture/proposal/service-daemon-transport/07-public-operations.md:109:and [the service's streaming edit input](../../../../crates/layerfs-server/src/service/save/edit_stream.rs).
+core/docs/benchmark/fs-bench-pro/exec2edit.md:5:> **R7-retire, 2026-10-10:** the `layerfs-server` package named below was removed
+core/docs/benchmark/fs-bench-pro/exec2edit.md:7:> source is at `a7ba85d3b` (`git show a7ba85d3b:core/crates/layerfs-server/<path>`). The
+core/docs/benchmark/fs-bench-pro/exec2edit.md:9:> [coverage audit](../../issues/307/checks/r7-retire-20261010/10-layerfs-server.md).
+core/docs/benchmark/fs-bench-pro/exec2edit.md:43:per-case clone → layerfs-server open      WorkspaceApi::exec(command)
+core/docs/benchmark/fs-bench-pro/exec2edit.md:83:`layerfs-server`: keep its Service handler, move the native listener module
+core/tools/check_product_boundary.py:66:    "layerfs-server", "layerfs-sdk", "layerfs-api-core",
+core/tools/check_product_boundary.py:73:    "layerfs-server", "layerfs-fuse-legacy", "layerfs-sandbox-legacy",
+core/tools/check_product_boundary.py:74:    "layerfs-sdk-legacy", "layerfs-daemon-legacy", "layerfs-bridge-legacy",
+core/tools/check_product_boundary.py:75:    "layerfs-workspace-legacy",
+core/tools/test_check_product_boundary.py:68:            "layerfs-server", "layerfs-fuse-legacy", "layerfs-sandbox-legacy",
+core/tools/test_check_product_boundary.py:69:            "layerfs-sdk-legacy", "layerfs-daemon-legacy", "layerfs-bridge-legacy",
+core/tools/test_check_product_boundary.py:70:            "layerfs-workspace-legacy",
+core/tools/test_check_product_boundary.py:80:        self.assertTrue(violations(path, "use layerfs_server::Server;"))
+core/tools/test_check_product_boundary.py:91:        for dependency in ("layerfs-api-core","layerfs-server","layerfs-daemon","layerfs-persistence","layerfs-sdk"):
+core/tools/test_check_product_boundary.py:93:        self.assertTrue(dependency_violations('[package]\nname="layerfs-sandbox-legacy"\n[dependencies]\nlayerfs-api-core={path="../layerfs-api/core"}'))
+core/tools/test_check_product_boundary.py:105:        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
+core/tools/test_check_product_boundary.py:117:        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../layerfs-server"}'))
+core/tools/test_check_product_boundary.py:131:            self.assertTrue(violations(path,"use layerfs_server::Server;"))

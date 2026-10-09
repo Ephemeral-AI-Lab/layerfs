@@ -1,0 +1,18 @@
+# Linux Clippy at 7999a6356, pinned image sha256:378b799ef433...: cargo clippy --locked --manifest-path core/Cargo.toml -p <13 members> --all-targets -- -D warnings (sources verified by SHA-256 inside the container first)
+    Checking layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+    Checking layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+    Checking layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+    Checking layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Checking layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.08s
+R4_WALL seconds<=19 limit=560s lock_wait=0s
+HELPER EXIT 0
+# 'Finished' with no warning or error line is the pass signal: the helper pipes cargo through tail, so HELPER EXIT is not Clippy's own status; under -D warnings any lint is an error and prevents 'Finished'.

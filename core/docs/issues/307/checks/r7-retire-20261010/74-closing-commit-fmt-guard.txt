@@ -1,0 +1,23 @@
+# r7-retire final commit: fmt and guard on the staged tree e5cbde0bf2d05a87feb2113e0c7d5aedfff97eec (parent 7999a6356; documentation and receipts only)
+# This receipt and 66-loc-completion.json are added to the same commit after these commands; neither is Rust, SQL or a manifest.
+# Exit statuses are of the command itself; no output filter is in the pipeline.
+
+$ perl core/target/r4-locked.pl 120 cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+R4_WALL seconds<=5 limit=120s lock_wait=0s
+EXIT 0
+
+$ perl core/target/r4-locked.pl 120 python3 -B core/tools/check_product_boundary.py
+PASS: scanned 674 production Rust/SQL files; semantic review still required
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+EXIT 0
+
+$ python3 -B -m unittest discover -s core/tools -p "test_*.py"
+..................................................
+----------------------------------------------------------------------
+Ran 50 tests in 0.188s
+
+OK
+EXIT 0
+
+$ git diff --stat HEAD --cached -- core/crates core/vendor core/Cargo.toml core/Cargo.lock core/tools core/benchmark tools crates
+EXIT 0 (no output above = no product, manifest, harness or tool change)

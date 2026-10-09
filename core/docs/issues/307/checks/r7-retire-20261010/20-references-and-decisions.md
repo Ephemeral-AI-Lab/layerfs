@@ -2,6 +2,11 @@
 
 > **Status:** Dated checkpoint receipt. Reference audit at `a6655ef45`, before
 > any removal. No sample was taken.
+>
+> **Addendum 2026-10-10:** after this document was written the owner authorized the full cleanup
+> ("yes, do the full cleanup"). All seven directories and the two `layerfs-api` placeholder directories
+> are now removed; `core/reference-tests` stays for R9. The text below is kept as written at audit time.
+> Final state: [completion record](../../R7-RETIRE-COMPLETION-20261010.md#addendum-full-cleanup-by-owner-authorization).
 
 Raw search output: [receipt 04](04-references.txt). The search covers every
 tracked file outside the seven directories for the package names
