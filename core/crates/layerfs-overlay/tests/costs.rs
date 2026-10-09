@@ -106,3 +106,68 @@ fn failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts() {
     assert!(db.inode(route, 7).unwrap().is_none());
     println!("S7_FAILED_COST error={error:?} attempted={:?} rollback_family={:?} logical_counts_preserved=true", work.total(), work.statements[StatementKind::Rollback as usize]);
 }
+
+/// Payload statements, their executions with trigger programs, the rows
+/// they changed, and every statement attempt of the job.
+fn window_cost(db: &Overlay, job: impl FnOnce()) -> (u64, u64, u64, u64) {
+    let before = db.diagnostics();
+    job();
+    let work = db.diagnostics().since(&before);
+    let payload = work.statements[StatementKind::Payload as usize];
+    let total = work.total();
+    assert_eq!(
+        total.fullscan_steps + total.sorts + total.autoindex_rows + total.reprepares,
+        0
+    );
+    (
+        payload.attempts,
+        payload.executions,
+        payload.rows_changed,
+        total.attempts,
+    )
+}
+
+#[test]
+fn one_write_window_costs_the_same_statements_at_either_file_size_and_beside_another_file() {
+    let mut seen = Vec::new();
+    for windows in [1_u64, 16] {
+        let temp = Temp::new();
+        let db = temp.db();
+        let route = db.open_workspace([235; 32], [236; 32]).unwrap();
+        let source = db.acquire_base_source(route, 1).unwrap();
+        // An unrelated file with its own rows on both sides of the key.
+        for serial in [6, 8] {
+            File::new(&db, source, serial, Vec::new()).write(0, &pattern(WRITE_WINDOW, 2));
+        }
+        let mut file = File::new(&db, source, 7, Vec::new());
+        let window = pattern(WRITE_WINDOW, 1);
+        for at in 0..windows - 1 {
+            file.write(at * WRITE_WINDOW as u64, &window);
+        }
+        let copies = db.payload_work();
+        let last = (windows - 1) * WRITE_WINDOW as u64;
+        let fresh = window_cost(&db, || file.write(last, &window));
+        let rewritten = pattern(WRITE_WINDOW, 9);
+        let over = window_cost(&db, || file.write(last, &rewritten));
+        let first = window_cost(&db, || file.write(0, &rewritten));
+        let copies = db.payload_work().since(copies);
+        assert_eq!(copies.write_input_bytes, 3 * WRITE_WINDOW as u64);
+        file.check();
+        let rows = db.resources(Some(route)).unwrap().counts;
+        seen.push((fresh, over, first, rows.payload_cells, rows.payload_bytes));
+        println!(
+            "R7_WRITE_WINDOW windows={windows} fresh={fresh:?} overwrite={over:?} overwrite_first={first:?} payload_rows={} payload_bytes={}",
+            rows.payload_cells, rows.payload_bytes
+        );
+    }
+    // (Payload attempts, Payload executions, Payload rows changed, attempts
+    // of the whole job): 32 cell upserts, each with one accounting trigger
+    // program that updates two rows.
+    // The first window of a file also reads that no lower row exists.
+    let (first, fresh, over) = ((32, 64, 96, 43), (32, 64, 96, 42), (32, 64, 96, 42));
+    assert_eq!((seen[0].0, seen[0].1, seen[0].2), (first, over, over));
+    assert_eq!((seen[1].0, seen[1].1, seen[1].2), (fresh, over, over));
+    // Stored rows of the file and of the two files beside it.
+    assert_eq!((seen[0].3, seen[0].4), (3 * 32, 3 * 131_072));
+    assert_eq!((seen[1].3, seen[1].4), (18 * 32, 18 * 131_072));
+}
