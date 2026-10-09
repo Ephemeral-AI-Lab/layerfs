@@ -68,7 +68,6 @@ CREATE TABLE shrink (
     epoch INTEGER NOT NULL CHECK(epoch>0),
     PRIMARY KEY(ns,serial,gen,depth)
 ) STRICT, WITHOUT ROWID;
-CREATE INDEX payload_namespace_row ON payload(ns,rowid);
 CREATE INDEX payload_generation ON payload(ns,gen,serial,cell_offset);
 CREATE INDEX shrink_generation ON shrink(ns,gen,serial,depth);
 CREATE TABLE lease (
@@ -250,4 +249,4 @@ CREATE TABLE native_cookie (
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_cookie_after ON native_cookie(ns,owner,after,first_cookie);
-PRAGMA user_version=30;
+PRAGMA user_version=31;

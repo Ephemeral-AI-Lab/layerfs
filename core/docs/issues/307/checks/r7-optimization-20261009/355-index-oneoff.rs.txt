@@ -1,0 +1,161 @@
+//! One-off (not kept in the tree): counters of payload writes and stored
+//! pages, run once with and once without payload_namespace_row.
+mod payload_support;
+use layerfs_overlay::*;
+use payload_support::*;
+
+fn pages(temp: &Temp, label: &str) {
+    let raw = rusqlite::Connection::open(temp.0.join("overlay.sqlite")).unwrap();
+    let get = |sql: &str| -> i64 { raw.query_row(sql, [], |row| row.get(0)).unwrap() };
+    let (size, count, free) = (
+        get("PRAGMA page_size"),
+        get("PRAGMA page_count"),
+        get("PRAGMA freelist_count"),
+    );
+    let rows = get("SELECT count(*) FROM payload");
+    let indexes: Vec<String> = raw
+        .prepare("SELECT name FROM sqlite_schema WHERE tbl_name='payload' AND type='index' ORDER BY name")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    println!(
+        "INDEX_ONEOFF pages {label}: page_size={size} page_count={count} freelist={free} used_pages={} used_bytes={} payload_rows={rows} indexes={indexes:?}",
+        count - free,
+        (count - free) * size
+    );
+    let stat = raw.prepare("SELECT name,count(*),sum(pgsize) FROM dbstat WHERE name LIKE '%payload%' GROUP BY name ORDER BY name");
+    if let Ok(mut statement) = stat {
+        let per: Vec<(String, i64, i64)> = statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        println!("INDEX_ONEOFF dbstat {label}: {per:?}");
+    } else {
+        println!("INDEX_ONEOFF dbstat {label}: unavailable");
+    };
+}
+
+#[test]
+fn counters() {
+    // An empty database.
+    {
+        let temp = Temp::new();
+        drop(temp.db());
+        pages(&temp, "empty");
+    }
+    // 1000 files of one whole cell each.
+    {
+        let temp = Temp::new();
+        let db = temp.db();
+        let route = db.open_workspace([1; 32], [2; 32]).unwrap();
+        let source = db.acquire_base_source(route, 1).unwrap();
+        let cell = pattern(CELL_BYTES, 3);
+        let mut first = None;
+        for serial in 10..1010 {
+            let mut file = File::new(&db, source, serial, Vec::new());
+            let before = db.diagnostics();
+            file.write(0, &cell);
+            let work = db.diagnostics().since(&before);
+            let payload = work.statements[StatementKind::Payload as usize];
+            let seen = (
+                payload.attempts,
+                payload.executions,
+                payload.vm_steps,
+                work.total().attempts,
+                work.total().vm_steps,
+            );
+            if first.is_none() {
+                println!("INDEX_ONEOFF one-cell write (payload attempts, executions, vm_steps, job attempts, job vm_steps) first={seen:?}");
+                first = Some(seen);
+            }
+            if serial == 1009 {
+                println!("INDEX_ONEOFF one-cell write last={seen:?}");
+            }
+        }
+        let counts = db.resources(Some(route)).unwrap().counts;
+        println!(
+            "INDEX_ONEOFF 1000 files: payload_cells={} payload_bytes={}",
+            counts.payload_cells, counts.payload_bytes
+        );
+        drop(db);
+        pages(&temp, "1000-one-cell-files");
+        // CELL_PUT alone, through SQLite's own counter, with its trigger.
+        let raw = rusqlite::Connection::open(temp.0.join("overlay.sqlite")).unwrap();
+        raw.execute_batch("BEGIN").unwrap();
+        let mut put = raw
+            .prepare(
+                "INSERT INTO payload(ns,serial,gen,cell_offset,epoch,data,validity) VALUES(?1,?2,?3,?4,?5,?6,?7)
+    ON CONFLICT(ns,serial,gen,cell_offset) DO UPDATE SET epoch=excluded.epoch,
+    data=excluded.data,validity=excluded.validity",
+            )
+            .unwrap();
+        for (label, offset) in [("insert", 4096_i64), ("update", 4096)] {
+            put.reset_status(rusqlite::StatementStatus::VmStep);
+            put.execute(rusqlite::params![
+                1_i64,
+                500_i64,
+                -1_i64,
+                offset,
+                1_i64,
+                &cell[..],
+                Option::<Vec<u8>>::None
+            ])
+            .unwrap();
+            println!(
+                "INDEX_ONEOFF CELL_PUT {label}: vm_steps={}",
+                put.get_status(rusqlite::StatementStatus::VmStep)
+            );
+        }
+        let mut drop_row = raw
+            .prepare("DELETE FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4")
+            .unwrap();
+        drop_row
+            .execute(rusqlite::params![1_i64, 500_i64, -1_i64, 4096_i64])
+            .unwrap();
+        println!(
+            "INDEX_ONEOFF CELL_DROP: vm_steps={}",
+            drop_row.get_status(rusqlite::StatementStatus::VmStep)
+        );
+        drop(drop_row);
+        drop(put);
+        raw.execute_batch("ROLLBACK").unwrap();
+    }
+    // One dense 64 MiB file written a window at a time.
+    {
+        let temp = Temp::new();
+        let db = temp.db();
+        let route = db.open_workspace([1; 32], [2; 32]).unwrap();
+        let source = db.acquire_base_source(route, 1).unwrap();
+        let window = pattern(WRITE_WINDOW, 5);
+        let mut file = File::new(&db, source, 7, Vec::new());
+        for at in 0..(64 << 20) / WRITE_WINDOW as u64 {
+            let before = db.diagnostics();
+            file.write(at * WRITE_WINDOW as u64, &window);
+            if at == 0 || at == 511 {
+                let work = db.diagnostics().since(&before);
+                let payload = work.statements[StatementKind::Payload as usize];
+                println!(
+                    "INDEX_ONEOFF window write at={at} (payload attempts, executions, vm_steps, job attempts, job vm_steps)={:?}",
+                    (
+                        payload.attempts,
+                        payload.executions,
+                        payload.vm_steps,
+                        work.total().attempts,
+                        work.total().vm_steps
+                    )
+                );
+            }
+        }
+        let counts = db.resources(Some(route)).unwrap().counts;
+        println!(
+            "INDEX_ONEOFF dense file: payload_cells={} payload_bytes={}",
+            counts.payload_cells, counts.payload_bytes
+        );
+        drop(db);
+        pages(&temp, "dense-64MiB-file");
+    }
+    panic!("report");
+}

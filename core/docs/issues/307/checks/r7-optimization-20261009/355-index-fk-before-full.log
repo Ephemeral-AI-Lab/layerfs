@@ -1,0 +1,27 @@
+===== reclaim_cost-962cbcf761e6a7b8 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 3 tests
+test a_closed_namespace_is_reclaimed_in_pages_of_one_delete_beside_a_live_namespace ... ok
+test deleting_payload_rows_reads_their_lengths_and_never_their_bytes ... ok
+test ending_a_namespace_costs_the_same_beside_few_and_many_payload_rows_of_live_namespaces ... FAILED
+
+failures:
+
+---- ending_a_namespace_costs_the_same_beside_few_and_many_payload_rows_of_live_namespaces stdout ----
+R7_RECLAIM_ENDING beside_4=(13, 15, 346) beside_1024=(13, 15, 346)
+
+thread 'ending_a_namespace_costs_the_same_beside_few_and_many_payload_rows_of_live_namespaces' panicked at crates/layerfs-overlay/tests/reclaim_cost.rs:258:5:
+assertion `left == right` failed
+  left: (13, 15)
+ right: (0, 0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    ending_a_namespace_costs_the_same_beside_few_and_many_payload_rows_of_live_namespaces
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 101

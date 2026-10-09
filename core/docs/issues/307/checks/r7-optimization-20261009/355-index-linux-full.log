@@ -1,0 +1,278 @@
+===== forced_producers-d87c1e70a582dd8a (cwd /work/core/crates/layerfs-daemon)
+
+running 6 tests
+test fp32_a_known_publication_is_forced_with_its_original_outcome ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_its_local_install ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_publication ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_save_finish ... ok
+test fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained ... ok
+test fp32_unknown_commit_custody_is_forced_only_when_relinquished_and_stays_unknown ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.04s
+
+R4_WALL seconds<=5 limit=110s lock_wait=0s
+
+EXIT 0
+===== forced_smoke-64744aa7a39a3671 (cwd /work/core/crates/layerfs-daemon)
+
+running 1 test
+test an_idle_workspace_is_forced_with_one_abort_and_one_detach ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== forced_unavailable-32a8e0aa68623c66 (cwd /work/core/crates/layerfs-daemon)
+
+running 1 test
+test force_without_an_abort_control_is_refused_and_the_workspace_stays_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=1 limit=110s lock_wait=0s
+
+EXIT 0
+===== forced_unmount-3a624eb67361c91c (cwd /work/core/crates/layerfs-daemon)
+
+running 6 tests
+test a_read_parked_after_its_visit_holds_no_engine_row_and_is_ended_by_the_fence ... ok
+test fp19_force_releases_a_parked_cold_reader_while_the_read_set_stays_leased ... ok
+test fp22_a_reference_in_a_never_holds_b_and_force_on_a_signals_no_process ... ok
+test fp33_a_held_descriptor_leaves_the_mount_aborted_and_retained ... ok
+test fp33_a_held_working_directory_leaves_the_mount_aborted_and_retained ... ok
+test fp34_force_ends_every_admitted_and_received_callback_of_a_saturated_mount ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_commit-9a3eab5504a12301 (cwd /work/core/crates/layerfs-daemon)
+
+running 7 tests
+test map_close_store_exit_process ... ok
+test r5_1_external_bash_changes_of_every_kind_are_committed_and_read_back_on_a_fresh_mount ... ok
+test r5_2_unchanged_is_up_to_date_and_a_change_is_committed_once ... ok
+test r5_3_commit_captures_what_every_launch_published_whatever_became_of_the_process ... ok
+test r5_8_five_incremental_commits_on_one_mount_each_read_back_completely ... ok
+test r5_9_stores_through_shared_mappings_are_committed_once_written_back ... ok
+test the_native_replay_starts_from_the_same_tree_as_the_mounted_base ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.58s
+
+R4_WALL seconds<=3 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_commit_failures-997cb38e87f02c9d (cwd /work/core/crates/layerfs-daemon)
+
+running 6 tests
+test f1_store_busy_before_save_is_settled_and_a_later_commit_is_exact ... ok
+test f2_store_busy_at_publication_is_settled_and_releases_both_owners ... ok
+test f3_unknown_history_outcome_keeps_custody_and_the_mount_still_serves ... ok
+test f4_known_publication_with_an_unattempted_install_keeps_custody ... ok
+test f5_store_busy_inside_the_producer_is_settled_and_releases_both_owners ... ok
+test f6_a_port_refusal_in_the_producers_custody_reaches_the_driver_and_keeps_custody ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.33s
+
+R4_WALL seconds<=3 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_concurrency-4d1808e271b4d3d0 (cwd /work/core/crates/layerfs-daemon)
+
+running 5 tests
+test r6_1_twenty_four_processes_read_and_write_through_three_commits ... ok
+test r6_2_a_commit_against_twenty_writers_holds_an_exact_prefix_of_each ... ok
+test r6_3_a_commit_on_one_workspace_while_its_sibling_writes ... ok
+test r6_6_finite_arrivals_on_two_workspaces_both_finish ... ok
+test readers_on_two_workspaces_read_exact_bytes_while_one_is_written ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.55s
+
+R4_WALL seconds<=12 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_cycles-1fe616371e039cb6 (cwd /work/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_caller_blocked_on_a_full_pipe_neither_blocks_commit_nor_is_touched_by_unmount ... ok
+test counts_plateau_over_twelve_cycles_beside_a_running_sibling_writer ... ok
+test counts_plateau_over_twelve_cycles_with_maintenance_awaited_after_each_unmount ... ok
+test simultaneous_mounts_over_related_roots_are_isolated_and_a_stale_token_never_redirects ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.48s
+
+R4_WALL seconds<=6 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_drain-5c15ce76d3942f4a (cwd /work/core/crates/layerfs-daemon)
+
+running 5 tests
+test fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window ... ok
+test fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount ... ok
+test fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_its_name ... ok
+test fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder ... ok
+test fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_after_detach ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.23s
+
+R4_WALL seconds<=18 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_failure_scope-81d2baa09c7ec6f5 (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_effect ... ok
+test a_quarantined_reader_gets_no_further_demand_and_one_cold_failure_fails_no_later_read ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=1 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_fusectl-fcf789a6910cf56b (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test fp2_the_own_connection_agrees_with_the_ready_receipt_and_its_abort_control_is_bound ... ok
+test fp9_a_second_cold_cached_read_queues_in_the_kernel_behind_a_parked_readahead_read ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_install-b9263bb8ea32cca1 (cwd /work/core/crates/layerfs-daemon)
+
+running 5 tests
+test a_directory_of_more_than_one_name_window_is_listed ... ok
+test a_later_commit_overwrites_the_branch_head_and_keeps_its_captured_parent ... ok
+test retained_descriptors_and_kernel_caches_are_unchanged_by_install ... ok
+test writes_during_a_commit_stay_live_and_reach_the_next_commit ... ok
+test writes_during_a_commit_stay_live_and_reach_the_next_commit_fifty_to_a_directory ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.98s
+
+R4_WALL seconds<=5 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_links-b4f54eb744ef6cac (cwd /work/core/crates/layerfs-daemon)
+
+running 1 test
+test a_directory_reports_two_links_plus_its_child_directories ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== mounted_parking-06841449600ba812 (cwd /work/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_read_of_locally_written_bytes_needs_no_store_reader ... ok
+test fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progresses ... ok
+test fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked ... ok
+test the_holds_are_exact_and_are_returned_on_every_path ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== native_application-dfd38b1a980d8d3f (cwd /work/core/crates/layerfs-daemon)
+
+running 1 test
+test actual_daemon_install_hello_bind_status_no_constructor_and_session_end ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=1 limit=110s lock_wait=0s
+
+EXIT 0
+===== native_coherence-fda1540299be402d (cwd /work/core/crates/layerfs-daemon)
+
+running 6 tests
+test a_lookup_racing_create_unlink_and_rename_never_binds_a_stale_inode ... ok
+test map_close_store_exit_process ... ok
+test mutations_racing_the_unmount_probe_keep_normal_results_and_persist ... ok
+test removed_references_keep_exact_state_without_open_custody ... ok
+test shared_mapping_stores_are_published_and_never_change_size ... ok
+test size_never_shrinks_under_concurrent_append_and_refusals_stay_refused ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== native_custody-5748f62babb0e016 (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... FAILED
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... ok
+
+failures:
+
+---- an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it stdout ----
+Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+
+thread 'an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it' panicked at crates/layerfs-daemon/tests/native_custody.rs:48:10:
+called `Result::unwrap()` on an `Err` value: (AdmissionFull, Native(RetainedMount))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 101
+===== native_mount-cfafdd4a617043fd (cwd /work/core/crates/layerfs-daemon)
+
+running 3 tests
+test attach_refusals_have_no_effect_and_a_failed_attach_returns_to_unattached ... ok
+test ready_mount_serves_the_complete_root_to_unregistered_access_then_drains ... ok
+test two_workspaces_share_one_dispatcher_and_unmount_independently ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+R4_WALL seconds<=1 limit=110s lock_wait=0s
+
+EXIT 0
+===== native_mount_routes-b54e81012a18d4aa (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test fresh_mounts_repeat_and_one_mount_sustains_uncached_work ... ok
+test lost_bind_and_attach_acknowledgements_are_located_without_replay ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== native_mutation-c38a1a719dd23650 (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test namespace_mutations_are_visible_at_once_and_refusals_stay_refused ... ok
+test write_append_and_truncate_are_exact_in_cache_and_daemon ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+R4_WALL seconds<=1 limit=110s lock_wait=0s
+
+EXIT 0
+===== observed_application-667353e132ba6f06 (cwd /work/core/crates/layerfs-daemon)
+
+running 4 tests
+test diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind ... ok
+test equal_calls_and_reused_slot_have_distinct_public_observation_identity ... ok
+test observer_job_is_charged_and_cardinality_does_not_follow_unrelated_workspaces ... ok
+test resource_and_output_failure_preserve_original_status_reply ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0

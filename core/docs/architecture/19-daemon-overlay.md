@@ -6,6 +6,15 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (overlay schema 31): the index
+`payload_namespace_row ON payload(ns,rowid)` is dropped. No statement of the
+engine named or planned it; its one reader, the foreign-key check of the
+delete that ends a namespace, probes `payload_generation` by `ns` instead
+([terminal reclaim](25-terminal-reclaim.md)). `payload` keeps its unique key
+`(ns,serial,gen,cell_offset)` and `payload_generation
+(ns,gen,serial,cell_offset)`. `PRAGMA user_version` and its startup readback
+are 31; tables and triggers are unchanged.
+
 R7 update, 2026-10-09 (cleanup, overlay schema 30): the `native_source` and
 `native_read` tables and their four accounting triggers are dropped; no
 request path wrote them since READ, LOOKUP, OPEN and the mutations became

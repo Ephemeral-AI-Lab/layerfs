@@ -1,0 +1,24 @@
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... FAILED
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... ok
+
+failures:
+
+---- an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it stdout ----
+Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+
+thread 'an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it' panicked at crates/layerfs-daemon/tests/native_custody.rs:48:10:
+called `Result::unwrap()` on an `Err` value: (AdmissionFull, Native(RetainedMount))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 101

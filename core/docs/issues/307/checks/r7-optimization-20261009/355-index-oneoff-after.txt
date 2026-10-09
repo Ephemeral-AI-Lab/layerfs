@@ -1,0 +1,2 @@
+reclaim_cost-962cbcf761e6a7b8 exit=101 seconds=1 test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+zz_index_oneoff-ca3a8ecdb424827c exit=101 seconds=1 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s

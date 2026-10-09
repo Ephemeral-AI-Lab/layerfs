@@ -1,0 +1,16 @@
+compound-015a16aad54419dc exit=0 seconds=3 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+costs-349e2bf53982389c exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+directory_cost-a418e959b7b472e1 exit=0 seconds=4 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.75s
+directory_links-69605645be14f1d8 exit=0 seconds=2 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.36s
+directory_links-b597317bca66614e exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+engine-31ef5a26acdeed4a exit=0 seconds=2 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.36s
+job_cost-6806228384655850 exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+native_unlink_cost-bcded746609cf3eb exit=0 seconds=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+native_visit_cost-31891792959c0ed4 exit=0 seconds=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+native_visit_fence-05a8e2ec310cfb42 exit=0 seconds=0 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+owner-dff6c9b96cdb7d0c exit=0 seconds=1 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+read_cost-106cc8ee0ca7784d exit=0 seconds=1 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+reclaim_cost-e5be1256e7244ff0 exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+startup_cost-0425104fb12c0702 exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+startup_cost-12ef95805a0a314d exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+transactions-b47653736df2ab57 exit=0 seconds=0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s

@@ -1,0 +1,51 @@
+# Counters with (schema 30, HEAD 55eacb1e1) and without (schema 31) payload_namespace_row.
+# Source of the one-off test: 355-index-oneoff.rs.txt (not in the tree). Host, bundled SQLite, one run each.
+# Not a timing sample. used_pages = page_count - freelist_count; dbstat is per b-tree.
+
+## before (index present)
+INDEX_ONEOFF pages empty: page_size=4096 page_count=57 freelist=0 used_pages=57 used_bytes=233472 payload_rows=0 indexes=["payload_generation", "payload_namespace_row", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat empty: [("payload", 1, 4096), ("payload_generation", 1, 4096), ("payload_namespace_row", 1, 4096), ("sqlite_autoindex_payload_1", 1, 4096)]
+INDEX_ONEOFF one-cell write (payload attempts, executions, vm_steps, job attempts, job vm_steps) first=(2, 3, 144, 13, 458)
+INDEX_ONEOFF one-cell write last=(2, 3, 144, 13, 462)
+INDEX_ONEOFF 1000 files: payload_cells=1000 payload_bytes=4096000
+INDEX_ONEOFF pages 1000-one-cell-files: page_size=4096 page_count=1203 freelist=0 used_pages=1203 used_bytes=4927488 payload_rows=1000 indexes=["payload_generation", "payload_namespace_row", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat 1000-one-cell-files: [("payload", 1126, 4612096), ("payload_generation", 5, 20480), ("payload_namespace_row", 4, 16384), ("sqlite_autoindex_payload_1", 5, 20480)]
+INDEX_ONEOFF CELL_PUT insert: vm_steps=117
+INDEX_ONEOFF CELL_PUT update: vm_steps=143
+INDEX_ONEOFF CELL_DROP: vm_steps=102
+INDEX_ONEOFF window write at=0 (payload attempts, executions, vm_steps, job attempts, job vm_steps)=(8, 12, 624, 19, 938)
+INDEX_ONEOFF window write at=511 (payload attempts, executions, vm_steps, job attempts, job vm_steps)=(8, 12, 624, 18, 881)
+INDEX_ONEOFF dense file: payload_cells=2048 payload_bytes=67108864
+INDEX_ONEOFF pages dense-64MiB-file: page_size=4096 page_count=16721 freelist=0 used_pages=16721 used_bytes=68489216 payload_rows=2048 indexes=["payload_generation", "payload_namespace_row", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat dense-64MiB-file: [("payload", 16641, 68161536), ("payload_generation", 10, 40960), ("payload_namespace_row", 7, 28672), ("sqlite_autoindex_payload_1", 10, 40960)]
+R7_RECLAIM_ENDING beside_4=(13, 15, 346) beside_1024=(13, 15, 346)
+
+## after (index dropped)
+R7_RECLAIM_ENDING beside_4=(13, 15, 346) beside_1024=(13, 15, 346)
+INDEX_ONEOFF pages empty: page_size=4096 page_count=56 freelist=0 used_pages=56 used_bytes=229376 payload_rows=0 indexes=["payload_generation", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat empty: [("payload", 1, 4096), ("payload_generation", 1, 4096), ("sqlite_autoindex_payload_1", 1, 4096)]
+INDEX_ONEOFF one-cell write (payload attempts, executions, vm_steps, job attempts, job vm_steps) first=(2, 3, 138, 13, 452)
+INDEX_ONEOFF one-cell write last=(2, 3, 138, 13, 456)
+INDEX_ONEOFF 1000 files: payload_cells=1000 payload_bytes=4096000
+INDEX_ONEOFF pages 1000-one-cell-files: page_size=4096 page_count=1199 freelist=0 used_pages=1199 used_bytes=4911104 payload_rows=1000 indexes=["payload_generation", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat 1000-one-cell-files: [("payload", 1126, 4612096), ("payload_generation", 5, 20480), ("sqlite_autoindex_payload_1", 5, 20480)]
+INDEX_ONEOFF CELL_PUT insert: vm_steps=111
+INDEX_ONEOFF CELL_PUT update: vm_steps=142
+INDEX_ONEOFF CELL_DROP: vm_steps=96
+INDEX_ONEOFF window write at=0 (payload attempts, executions, vm_steps, job attempts, job vm_steps)=(8, 12, 600, 19, 914)
+INDEX_ONEOFF window write at=511 (payload attempts, executions, vm_steps, job attempts, job vm_steps)=(8, 12, 600, 18, 857)
+INDEX_ONEOFF dense file: payload_cells=2048 payload_bytes=67108864
+INDEX_ONEOFF pages dense-64MiB-file: page_size=4096 page_count=16714 freelist=0 used_pages=16714 used_bytes=68460544 payload_rows=2048 indexes=["payload_generation", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat dense-64MiB-file: [("payload", 16641, 68161536), ("payload_generation", 10, 40960), ("sqlite_autoindex_payload_1", 10, 40960)]
+
+## before -> after
+CELL_PUT insert VM steps (statement and its trigger program): 117 -> 111
+CELL_PUT update VM steps: 143 -> 142
+CELL_DROP VM steps (one row and its trigger program): 102 -> 96
+One-cell write, Payload family VM steps of the job: 144 -> 138; whole job 458 -> 452
+One 128 KiB window (four rows), Payload family VM steps: 624 -> 600; whole job 938 -> 914
+Empty database pages: 57 -> 56
+1000 files of one cell: used pages 1203 -> 1199 (-4 pages, -16384 bytes); payload_bytes 4096000 unchanged
+One dense 64 MiB file (2048 rows): used pages 16721 -> 16714 (-7 pages, -28672 bytes); payload_bytes 67108864 unchanged
+Step that ends a namespace (Reclaim attempts, executions, VM steps) beside 4 and 1024 payload rows
+in each of two live namespaces: (13, 15, 346) and (13, 15, 346) -> (13, 15, 346) and (13, 15, 346)

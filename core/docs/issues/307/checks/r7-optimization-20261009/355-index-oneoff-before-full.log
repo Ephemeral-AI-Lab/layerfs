@@ -1,0 +1,37 @@
+===== zz_index_oneoff-ca3a8ecdb424827c (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 1 test
+test counters ... FAILED
+
+failures:
+
+---- counters stdout ----
+INDEX_ONEOFF pages empty: page_size=4096 page_count=57 freelist=0 used_pages=57 used_bytes=233472 payload_rows=0 indexes=["payload_generation", "payload_namespace_row", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat empty: [("payload", 1, 4096), ("payload_generation", 1, 4096), ("payload_namespace_row", 1, 4096), ("sqlite_autoindex_payload_1", 1, 4096)]
+INDEX_ONEOFF one-cell write (payload attempts, executions, vm_steps, job attempts, job vm_steps) first=(2, 3, 144, 13, 458)
+INDEX_ONEOFF one-cell write last=(2, 3, 144, 13, 462)
+INDEX_ONEOFF 1000 files: payload_cells=1000 payload_bytes=4096000
+INDEX_ONEOFF pages 1000-one-cell-files: page_size=4096 page_count=1203 freelist=0 used_pages=1203 used_bytes=4927488 payload_rows=1000 indexes=["payload_generation", "payload_namespace_row", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat 1000-one-cell-files: [("payload", 1126, 4612096), ("payload_generation", 5, 20480), ("payload_namespace_row", 4, 16384), ("sqlite_autoindex_payload_1", 5, 20480)]
+INDEX_ONEOFF CELL_PUT insert: vm_steps=117
+INDEX_ONEOFF CELL_PUT update: vm_steps=143
+INDEX_ONEOFF CELL_DROP: vm_steps=102
+INDEX_ONEOFF window write at=0 (payload attempts, executions, vm_steps, job attempts, job vm_steps)=(8, 12, 624, 19, 938)
+INDEX_ONEOFF window write at=511 (payload attempts, executions, vm_steps, job attempts, job vm_steps)=(8, 12, 624, 18, 881)
+INDEX_ONEOFF dense file: payload_cells=2048 payload_bytes=67108864
+INDEX_ONEOFF pages dense-64MiB-file: page_size=4096 page_count=16721 freelist=0 used_pages=16721 used_bytes=68489216 payload_rows=2048 indexes=["payload_generation", "payload_namespace_row", "sqlite_autoindex_payload_1"]
+INDEX_ONEOFF dbstat dense-64MiB-file: [("payload", 16641, 68161536), ("payload_generation", 10, 40960), ("payload_namespace_row", 7, 28672), ("sqlite_autoindex_payload_1", 10, 40960)]
+
+thread 'counters' panicked at crates/layerfs-overlay/tests/zz_index_oneoff.rs:160:5:
+report
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    counters
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 101

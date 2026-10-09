@@ -22,14 +22,22 @@ payload one maintenance page of 14 cells of bytes (a row of several cells
 counts as its cells, so one 32 KiB row is a step while the next row is
 another). The payload page and delete use the unique key
 `(ns,serial,gen,cell_offset)`; no statement of the engine names or plans
-`payload_namespace_row` any more. It still has one reader (checked
-2026-10-09 under the bundled SQLite, receipt
-`353-cleanup-payload-plans.txt`): with `foreign_keys=ON`, the final
-`DELETE FROM workspace WHERE ns=?1 AND lifecycle=1` checks every child
-table by `ns`, and its program opens `payload_namespace_row` for that scan
-of `payload`. Without the index the same scan opens `payload_generation`.
-The index is therefore kept; dropping it is a decision about that scan,
-not the removal of an unread index. A table that holds nothing for the namespace is
+`payload_namespace_row`. Since overlay schema 31 that index does not exist.
+It had one reader (receipt `353-cleanup-payload-plans.txt`): with
+`foreign_keys=ON`, the final `DELETE FROM workspace WHERE ns=?1 AND
+lifecycle=1` checks every child table by `ns`, and its program opened
+`payload_namespace_row` for that scan of `payload`. It now opens
+`payload_generation (ns,gen,serial,cell_offset)`, which starts with the same
+column, so the check is still one probe by `ns`. Pinned in
+[`reclaim_cost.rs`](../../crates/layerfs-overlay/tests/reclaim_cost.rs): the
+step that ends a namespace is 13 statements and 15 executions with equal VM
+steps (346 when recorded, the same as with the index) beside 4 and beside
+1024 payload rows in each of a lower and a higher live namespace, and the
+delete's program opens `payload_generation` and nothing else of `payload`.
+What the index cost was one b-tree entry written with and deleted with
+every payload row: counters with and without it are in
+`355-index-oneoff-before-full.log` and `355-index-oneoff-after-full.log`.
+A table that holds nothing for the namespace is
 passed in the same step: a step deletes one page of the first table that
 still holds rows, or the final ready and workspace rows, so an empty table
 costs one page read and no transaction of its own (at most 12 empty page

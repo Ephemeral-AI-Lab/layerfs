@@ -1,7 +1,8 @@
 //! Exact transactions and statements of reclaiming a closed namespace: N and
 //! 4N small files, and a payload of N and 4N cells stored as rows of one
 //! cell and as rows of several cells. A live namespace with rows of every
-//! reclaimed table stands beside it and keeps every row.
+//! reclaimed table stands beside it and keeps every row. The step that ends
+//! a namespace costs the same beside few and many payload rows of others.
 mod payload_support;
 use layerfs_overlay::*;
 use payload_support::*;
@@ -204,6 +205,88 @@ fn a_closed_namespace_is_reclaimed_in_pages_of_one_delete_beside_a_live_namespac
             large.0.attempts - small.0.attempts,
             3 * (large.0.steps - small.0.steps)
         );
+    }
+}
+
+/// The step that ends a closed namespace, beside live namespaces of a lower
+/// and of a higher number that hold `rows` payload rows each: the Reclaim
+/// statements, their executions and their VM steps, and the cursors the
+/// delete of the workspace row opens on `payload` and its indexes.
+fn ending_step_beside(rows: u64) -> ((u64, u64, u64), Vec<String>) {
+    let temp = Temp::new();
+    let db = temp.db();
+    let lower = payload(&db, 1, rows, CELL_BYTES);
+    let closed = payload(&db, 2, 2, CELL_BYTES);
+    let higher = payload(&db, 3, rows, CELL_BYTES);
+    let kept = [lower.0, higher.0].map(|route| db.resources(Some(route)).unwrap().counts);
+    assert_eq!(kept.map(|counts| counts.payload_cells), [rows, rows]);
+    close(&db, closed);
+    let mut ending = None;
+    for _ in 0..100 {
+        let before = db.diagnostics();
+        let step = db.reclaim_closed(0).unwrap().unwrap();
+        // Namespaces are numbered as they open: the closed one is between.
+        assert_eq!(step.namespace, 2);
+        if !step.done {
+            continue;
+        }
+        let work = db.diagnostics().since(&before);
+        let total = work.total();
+        assert_eq!(
+            total.fullscan_steps + total.sorts + total.autoindex_rows + total.reprepares,
+            0
+        );
+        let reclaim = work.statements[StatementKind::Reclaim as usize];
+        ending = Some((reclaim.attempts, reclaim.executions, reclaim.vm_steps));
+        break;
+    }
+    assert_eq!(db.cleanup_state(closed.0).unwrap(), CleanupState::Gone);
+    assert_eq!(
+        [lower.0, higher.0].map(|route| db.resources(Some(route)).unwrap().counts),
+        kept
+    );
+    drop(db);
+    let raw = rusqlite::Connection::open(temp.0.join("overlay.sqlite")).unwrap();
+    raw.execute_batch("PRAGMA foreign_keys=ON").unwrap();
+    let roots: Vec<(i64, String)> = raw
+        .prepare("SELECT rootpage,name FROM sqlite_schema WHERE tbl_name='payload' AND rootpage>0")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    let opened = raw
+        .prepare("EXPLAIN DELETE FROM workspace WHERE ns=?1 AND lifecycle=1")
+        .unwrap()
+        .query_map([2_i64], |row| {
+            Ok((row.get::<_, String>(1)?, row.get::<_, i64>(3)?))
+        })
+        .unwrap()
+        .map(Result::unwrap)
+        .filter(|(opcode, _)| opcode.starts_with("Open"))
+        .filter_map(|(opcode, root)| {
+            let (_, name) = roots.iter().find(|(page, _)| *page == root)?;
+            Some(format!("{opcode} {name}"))
+        })
+        .collect();
+    (ending.expect("reclamation deadline"), opened)
+}
+
+#[test]
+fn ending_a_namespace_costs_the_same_beside_few_and_many_payload_rows_of_live_namespaces() {
+    // The delete of the workspace row checks every child table by `ns` under
+    // foreign_keys=ON. `payload` has no index kept for that check alone: it
+    // is probed through `payload_generation`, whose first column is `ns`, so
+    // the rows of other namespaces are never stepped over.
+    let (few, many) = (ending_step_beside(4), ending_step_beside(1024));
+    println!("R7_RECLAIM_ENDING beside_4={few:?} beside_1024={many:?}");
+    assert_eq!(few.0, many.0);
+    // The ready queue, the empty pages from the namespace's cursor on, the
+    // queue row and the workspace row; each of the two deletes runs one
+    // accounting trigger program.
+    assert_eq!((few.0 .0, few.0 .1), (13, 15));
+    for opened in [few.1, many.1] {
+        assert_eq!(opened, ["OpenRead payload_generation"]);
     }
 }
 
