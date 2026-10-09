@@ -538,8 +538,6 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
                 };
                 let error = error.downcast_ref::<ReadFailure>().unwrap();
                 assert_eq!(error.request(), *request);
-                assert_eq!(error.retained_source(), None);
-                assert_eq!(error.retained_read(), None);
                 assert_eq!(error.protected(), root);
                 match (error.operation(), operation) {
                     (
@@ -930,7 +928,7 @@ fn directory_consumer_publishes_only_accepted_names_and_a_reply_racing_releasedi
         Err(error) => error,
         Ok(_) => panic!("closed directory handle acquired a new source"),
     };
-    assert_eq!(closed.retained_source(), None);
+    assert!(!closed.fenced() && closed.base_demand().is_none());
     drop(closed);
     let raced = match wait(batch.accept(remainder.len())) {
         Err(error) => error,

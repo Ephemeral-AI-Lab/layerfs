@@ -159,8 +159,6 @@ pub(crate) const INDEXED_OPERATION_RECORD_RECLAIM_NAMESPACE: &str =
 
 pub(crate) const GENERATION_HELD: &str = "SELECT 1 FROM lease INDEXED BY lease_resource
             WHERE ns=?1 AND kind IN(1,6) AND resource=?2 LIMIT 1";
-/// An open file or directory descriptor of one mount on one inode.
-pub(crate) const NATIVE_HANDLE_HELD: &str = "SELECT 1 FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 AND n.owner=?3 AND f.serial=?4 UNION ALL SELECT 1 FROM native_directory d WHERE d.ns=?1 AND d.mount=?2 AND d.owner=?3 AND d.serial=?4 AND d.closed=0";
 
 /// The fence of one native visit: the Workspace row, its native connection
 /// and the kernel's own reference on the inode the request names, in one

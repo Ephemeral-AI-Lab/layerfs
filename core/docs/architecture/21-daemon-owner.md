@@ -350,7 +350,7 @@ counters, and `Lane::slots` selects the one a class is admitted against:
 | Counter | Classes | Bound per lane |
 | --- | --- | --- |
 | `lifecycle` | Lifecycle | `lifecycle_jobs_per_namespace` (2) |
-| `source` | Source: `AcquireBaseSource`, the native `Source`, `FileSource`, `HandleSource` and `OpenSource`, and the directory `Read` | `jobs_per_namespace` (16) |
+| `source` | Source: `AcquireBaseSource`, the native `Source`, `FileSource` and `OpenSource` | `jobs_per_namespace` (16) |
 | `ordinary` | Read, Mutation, Capture and OperationRecord together | `jobs_per_namespace` (16) |
 
 `try_submit` refuses `AdmissionFull` at the matching bound and otherwise

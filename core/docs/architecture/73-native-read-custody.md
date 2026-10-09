@@ -43,7 +43,32 @@ R7 update, 2026-10-09 (OPENDIR): OPENDIR takes the same visit
 (`Workspace::native_opendir_visit`, `Overlay::opendir_native_visit`); see
 [directory custody](74-native-directory-custody.md). `NativeReadPlan` and
 the `Overlay::observe_native*` transactions are no longer reached by any
-filesystem request. Mounted consequence for the proofs: a reader whose name
+filesystem request.
+
+R7 update, 2026-10-09 (batch 3b change 3, deletion): the source-holding
+OPEN, OPENDIR and data observation is removed. Deleted: Overlay
+`observe_native`, `observe_native_open`, `observe_native_directory`,
+`retained_native_read` and `acquire_native_handle_source` (with the
+`NATIVE_HANDLE_HELD` statement); the `Open`, `Opendir` and `Data` branches of
+`NativeReadJob::perform` (`native_read_plan` now refuses those operations);
+`NativeJob::HandleSource` and `NativeJob::RetainedRead`; the port's
+`release_read` and the handle argument of `source`; and in Fuse the request's
+source, read, view and plan fields with their release, so
+`ReadFailure::retained_source` and `retained_read` no longer exist. What
+remains of the source-holding path is `Overlay::observe_native_attributes`
+with `NativeReadPlan` for `Lookup` and `Getattr`, the ports `source`, `view`,
+`immutable`, `observe` and `release_source`, and the write path's
+`open_source`, `prepare` and `mutate`. No filesystem request reaches them
+either; they are kept in this step because component tests and the write
+path still share them. The `native_read` table has no writer left; it stays
+because `release_file_read`, the attribute observation and revocation still
+read it, and removing those statements moves pinned counts.
+`Command::ReleaseFileRead`, `retain_serial_read`, `read_file_window` and
+`readlink_window` are the ordinary Workspace read and are unchanged.
+[`read_cost.rs`](../../crates/layerfs-daemon/tests/read_cost.rs) asserts at
+the end of every test that no Source-class job ran and no source row exists.
+
+Mounted consequence for the proofs: a reader whose name
 was looked up is no longer parked in its OPEN when no Store reader is free;
 it is parked in its first READ of base bytes
 ([`mounted_parking.rs`](../../crates/layerfs-daemon/tests/mounted_parking.rs),

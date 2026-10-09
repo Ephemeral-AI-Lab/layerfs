@@ -342,8 +342,6 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
                         let _ = send.send(Some((
                             failure.fenced(),
                             failure.base_demand().map(|marker| marker.cause().clone()),
-                            failure.retained_source().is_some(),
-                            failure.retained_read().is_some(),
                         )));
                         end(failure).await
                     }
@@ -351,14 +349,14 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
             }))
             .unwrap();
     }
-    let (fenced, cause, source, read) = observed
+    let (fenced, cause) = observed
         .recv_timeout(WAIT)
         .unwrap()
         .expect("a lookup served by the uncertain session was answered");
     let cause = cause.expect("the failure is a failed base demand");
     // A lookup is served by owner visits that record no request source: the
-    // failed demand found it holding nothing.
-    assert_eq!((fenced, source, read), (false, false, false));
+    // failed demand found it holding nothing, and it was not fenced.
+    assert!(!fenced);
     until("the request left the lane", || {
         rig.queue.work().unwrap().admitted == 0
     });
@@ -547,7 +545,6 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     };
     stopped(failure.base_demand().unwrap().cause());
     assert!(!failure.fenced());
-    assert!(failure.retained_source().is_none() && failure.retained_read().is_none());
     assert_eq!(failure.data_input(), Some(window));
     wait(failure.relinquish()).unwrap();
     let after = rig.owner_work();
@@ -572,7 +569,6 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     };
     stopped(failure.base_demand().unwrap().cause());
     assert!(!failure.fenced());
-    assert!(failure.retained_source().is_none() && failure.retained_read().is_none());
     let admitted = rig.owner_work().admitted;
     wait(failure.relinquish()).unwrap();
     // Giving it up admits no owner job.

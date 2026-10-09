@@ -9,9 +9,7 @@ use layerfs_fuse::ports::{
     ServiceReply,
 };
 use layerfs_history::HistoryError;
-use layerfs_overlay::{
-    BaseSource, FileRead, NativeCookieOffer, NativeMount, OpenFile, Publication,
-};
+use layerfs_overlay::{BaseSource, NativeCookieOffer, NativeMount, OpenFile, Publication};
 use layerfs_workspace::{
     BaseView, MutationInputFailure, MutationPlan, NativeDirectoryWindow, NativeMutationJob,
     NativeMutationOutcome, NativeReadJob, NativeReadOperation, NativeReadOutcome,
@@ -276,20 +274,11 @@ impl RequestServices for FilesystemPort {
         mount: NativeMount,
         request: u64,
         serial: u64,
-        handle: Option<u64>,
     ) -> ServiceFuture<'_, ServiceReply<BaseSource>> {
-        let command = match handle {
-            Some(handle) => NativeJob::HandleSource {
-                mount,
-                request,
-                serial,
-                handle,
-            },
-            None => NativeJob::Source {
-                mount,
-                request,
-                serial,
-            },
+        let command = NativeJob::Source {
+            mount,
+            request,
+            serial,
         };
         self.acquire(Command::Native(command), |response| match response {
             Response::Native(NativeReply::Source(source)) => Some(*source),
@@ -390,9 +379,6 @@ impl RequestServices for FilesystemPort {
             ),
             Err(error) => Box::pin(async move { Err(Box::new(error) as ServiceError) }),
         }
-    }
-    fn release_read(&self, read: FileRead) -> ServiceFuture<'_, ServiceReply<()>> {
-        self.dispose(Command::ReleaseFileRead(read), done)
     }
     fn release_source(&self, source: BaseSource) -> ServiceFuture<'_, ServiceReply<()>> {
         self.dispose(Command::ReleaseBaseSource(source), done)

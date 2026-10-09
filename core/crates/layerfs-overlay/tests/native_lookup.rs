@@ -45,27 +45,22 @@ impl Fixture {
             .db
             .acquire_native_source(self.mount, request, 1)
             .unwrap();
-        let outcome = self
-            .db
-            .observe_native(self.mount, source, true, |_, protected| {
-                assert_eq!(protected, 1);
-                Ok(NativeDecision::Finished {
-                    inode: Some(inode(serial)),
-                    value: serial,
-                })
-            });
+        let outcome =
+            self.db
+                .observe_native_attributes(self.mount, source, true, |_, protected| {
+                    assert_eq!(protected, 1);
+                    Ok(NativeDecision::Finished {
+                        inode: Some(inode(serial)),
+                        value: serial,
+                    })
+                });
         assert_eq!(outcome.decision, Some(serial));
-        let read = outcome.result.unwrap().unwrap();
-        assert_eq!(outcome.candidate, Some(read));
-        assert_eq!(
-            self.db.retained_native_read(self.mount, request).unwrap(),
-            Some(read)
-        );
-        self.db.release_file_read(read).unwrap();
-        // This source already decided, even though its result reader is gone.
+        assert_eq!(outcome.result.unwrap(), None);
+        assert_eq!(outcome.candidate, None);
+        // This source already decided.
         assert!(matches!(
             self.db
-                .observe_native(
+                .observe_native_attributes(
                     self.mount,
                     source,
                     true,
@@ -101,16 +96,14 @@ fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
     f.lookup(1, 2);
     let mut files = Vec::new();
     for (request, writable) in [(u64::MAX, false), (u64::MAX - 1, true)] {
-        let source = f.db.acquire_native_source(f.mount, request, 2).unwrap();
         let outcome =
-            f.db.observe_native_open(f.mount, source, writable, |_, serial| {
-                assert_eq!(serial, 2);
+            f.db.open_native_visit(f.mount, request, 2, writable, |_, _| {
                 Ok(NativeDecision::Finished {
                     inode: Some(inode(2)),
                     value: 2,
                 })
             });
-        let read = outcome.result.unwrap().unwrap();
+        assert_eq!(outcome.result.unwrap(), None);
         let file = outcome.open_candidate.unwrap();
         assert_eq!(
             f.db.retained_native_file(f.mount, request).unwrap(),
@@ -120,8 +113,6 @@ fn native_file_keys_retain_exact_open_owners_and_independent_processing() {
         assert_eq!(file.writable(), writable);
         assert_eq!(f.db.check_file(file, true).is_ok(), writable);
         assert!(f.db.native_file(f.mount, 3, file.owner_id()).is_err());
-        f.db.release_file_read(read).unwrap();
-        f.db.release_base_source(source).unwrap();
         files.push(file);
     }
     assert_ne!(files[0].owner_id(), files[1].owner_id());
@@ -162,9 +153,8 @@ fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody(
     let f = Fixture::new();
     f.lookup(1, 2);
     // A directory answer acquires nothing.
-    let source = f.db.acquire_native_source(f.mount, 2, 2).unwrap();
     let before = f.db.resources(Some(f.mount.route())).unwrap().counts;
-    let outcome = f.db.observe_native_open(f.mount, source, true, |_, _| {
+    let outcome = f.db.open_native_visit(f.mount, 2, 2, true, |_, _| {
         Ok(NativeDecision::Finished {
             inode: Some(Inode {
                 kind: InodeKind::Directory,
@@ -182,11 +172,9 @@ fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody(
         f.db.resources(Some(f.mount.route())).unwrap().counts,
         before
     );
-    f.db.release_base_source(source).unwrap();
     // A file whose last name is gone is still referenced by the kernel
     // lookup that protects this request: it opens, with exact open custody.
-    let source = f.db.acquire_native_source(f.mount, 3, 2).unwrap();
-    let outcome = f.db.observe_native_open(f.mount, source, true, |_, _| {
+    let outcome = f.db.open_native_visit(f.mount, 3, 2, true, |_, _| {
         Ok(NativeDecision::Finished {
             inode: Some(Inode {
                 kind: InodeKind::File,
@@ -196,11 +184,9 @@ fn native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody(
             value: 3_u64,
         })
     });
-    let read = outcome.result.unwrap().unwrap();
+    assert_eq!(outcome.result.unwrap(), None);
     let file = outcome.open_candidate.expect("removed file opened");
     assert_eq!(f.db.retained_native_file(f.mount, 3).unwrap(), Some(file));
-    f.db.release_file_read(read).unwrap();
-    f.db.release_base_source(source).unwrap();
     f.db.close_native_file(f.mount, 2, file.owner_id()).unwrap();
     assert_eq!(f.db.retained_native_file(f.mount, 3).unwrap(), None);
     f.db.forget_native(f.mount, 2, 1).unwrap();
@@ -238,7 +224,6 @@ fn attribute_only_decision_counts_the_lookup_and_retains_no_read() {
         let work = work.total();
         assert_eq!(outcome.result.unwrap(), None);
         assert_eq!(outcome.candidate, None);
-        assert_eq!(f.db.retained_native_read(f.mount, request).unwrap(), None);
         // The source decided once; nothing else is owed after its release.
         assert!(matches!(
             f.db.observe_native_attributes(
@@ -260,21 +245,7 @@ fn attribute_only_decision_counts_the_lookup_and_retains_no_read() {
     assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(1));
     let getattr = attributes(2, false);
     assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(1));
-    // The same decision with a retained read runs strictly more statements.
-    let source = f.db.acquire_native_source(f.mount, 3, 1).unwrap();
-    let before = f.db.diagnostics();
-    let outcome = f.db.observe_native(f.mount, source, false, |_, _| {
-        Ok(NativeDecision::Finished {
-            inode: Some(inode(1)),
-            value: (),
-        })
-    });
-    let with_read = f.db.diagnostics().since(&before).total().executions;
-    f.db.release_file_read(outcome.result.unwrap().unwrap())
-        .unwrap();
-    f.db.release_base_source(source).unwrap();
-    assert!(getattr < with_read, "{getattr} >= {with_read}");
-    println!("ATTRIBUTE-ONLY statements lookup={lookup} getattr={getattr} with_read={with_read}");
+    println!("ATTRIBUTE-ONLY statements lookup={lookup} getattr={getattr}");
     f.db.forget_native(f.mount, 9, 1).unwrap();
     f.db.revoke_native_mount(f.mount).unwrap();
 }
@@ -314,7 +285,7 @@ fn aggregate_forget_is_checked_and_implicit_root_is_independent() {
 }
 
 #[test]
-fn source_and_read_fence_revocation_and_request_keys_keep_all_u64_bits() {
+fn a_source_fences_revocation_and_request_keys_keep_all_u64_bits() {
     let f = Fixture::new();
     let source = f.db.acquire_native_source(f.mount, u64::MAX, 1).unwrap();
     assert_eq!(
@@ -326,25 +297,21 @@ fn source_and_read_fence_revocation_and_request_keys_keep_all_u64_bits() {
         f.db.revoke_native_mount(f.mount),
         Err(OverlayError::BaseSourcesPending)
     ));
-    let outcome = f.db.observe_native(f.mount, source, true, |_, _| {
-        Ok(NativeDecision::Finished {
-            inode: Some(inode(2)),
-            value: (),
-        })
-    });
-    let read = outcome.result.unwrap().unwrap();
-    f.db.release_base_source(source).unwrap();
-    f.db.forget_native(f.mount, 2, 1).unwrap();
-    assert!(f.db.source_inode(read.source(), 2).unwrap().is_none());
-    assert_eq!(
-        f.db.retained_native_read(f.mount, u64::MAX).unwrap(),
-        Some(read)
-    );
+    let outcome =
+        f.db.observe_native_attributes(f.mount, source, true, |_, _| {
+            Ok(NativeDecision::Finished {
+                inode: Some(inode(2)),
+                value: (),
+            })
+        });
+    assert_eq!(outcome.result.unwrap(), None);
+    // The decided source still fences revocation until it is released.
     assert!(matches!(
         f.db.revoke_native_mount(f.mount),
         Err(OverlayError::BaseSourcesPending)
     ));
-    f.db.release_file_read(read).unwrap();
+    f.db.release_base_source(source).unwrap();
+    f.db.forget_native(f.mount, 2, 1).unwrap();
     f.db.revoke_native_mount(f.mount).unwrap();
     assert_eq!(
         f.db.native_mount_state(f.mount).unwrap(),
@@ -365,9 +332,10 @@ fn need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence
     let f = Fixture::new();
     let source = f.db.acquire_native_source(f.mount, 7, 1).unwrap();
     let before = f.db.resources(Some(f.mount.route())).unwrap().counts;
-    let need = f.db.observe_native(f.mount, source, true, |_, _| {
-        Ok(NativeDecision::Needs("base fact"))
-    });
+    let need =
+        f.db.observe_native_attributes(f.mount, source, true, |_, _| {
+            Ok(NativeDecision::Needs("base fact"))
+        });
     assert_eq!(need.decision, Some("base fact"));
     assert!(matches!(need.result, Ok(None)));
     assert_eq!(need.candidate, None);
@@ -378,12 +346,13 @@ fn need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence
     let original = Arc::new("original semantic value");
     let retained = original.clone();
     let start = f.db.diagnostics();
-    let failed = f.db.observe_native(f.mount, source, true, |_, _| {
-        Ok(NativeDecision::Finished {
-            inode: Some(inode(0)),
-            value: original,
-        })
-    });
+    let failed =
+        f.db.observe_native_attributes(f.mount, source, true, |_, _| {
+            Ok(NativeDecision::Finished {
+                inode: Some(inode(0)),
+                value: original,
+            })
+        });
     assert!(failed.result.is_err());
     assert!(Arc::ptr_eq(failed.decision.as_ref().unwrap(), &retained));
     assert_eq!(
@@ -412,7 +381,7 @@ fn foreign_engine_or_mount_cannot_consume_ownership() {
     ));
     let source = f.db.acquire_native_source(f.mount, 1, 1).unwrap();
     assert!(matches!(
-        f.db.observe_native(
+        f.db.observe_native_attributes(
             other.mount,
             source,
             false,

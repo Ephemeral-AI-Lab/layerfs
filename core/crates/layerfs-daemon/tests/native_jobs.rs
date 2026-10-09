@@ -8,7 +8,10 @@ use layerfs_daemon::{
 };
 use layerfs_history::WorkspaceId;
 use layerfs_overlay::{ProfileConfig, Route, StatementKind};
-use layerfs_workspace::{NativeReadOperation, NativeReadStage};
+use layerfs_workspace::{
+    BaseView, NativeReadDecision, NativeReadOperation, NativeReadOutcome, NativeReadStage,
+    NativeReadVisit, VisitFacts,
+};
 use std::{
     future::Future,
     pin::Pin,
@@ -37,6 +40,38 @@ fn finish(mut pending: Pending) -> Completion {
 }
 fn job(client: &OwnerClient, route: Route, command: Command) -> Completion {
     finish(client.try_submit(Some(route), command).unwrap())
+}
+/// An OPEN or OPENDIR owner visit until it decides, reading outside the
+/// owner the base facts an undecided visit names.
+fn visit(
+    client: &OwnerClient,
+    route: Route,
+    base: &BaseView,
+    make: impl Fn(Arc<VisitFacts>) -> NativeReadVisit,
+) -> (Arc<NativeReadOutcome>, Completion) {
+    let mut facts = VisitFacts::default();
+    for _ in 0..4 {
+        let done = job(
+            client,
+            route,
+            Command::Native(NativeJob::ObserveVisit(Box::new(make(Arc::new(
+                facts.clone(),
+            ))))),
+        );
+        let original = match done.result() {
+            Ok(Response::Native(NativeReply::Observed(original))) => original.clone(),
+            other => panic!("{other:?}"),
+        };
+        match &original.decision {
+            Some(NativeReadDecision::Value(_)) => return (original, done),
+            Some(NativeReadDecision::Needs(needs)) => {
+                drop(done);
+                facts.supply(base, needs, None).unwrap();
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    panic!("bounded visit fact rounds")
 }
 fn dir_job(client: &OwnerClient, route: Route, command: NativeDirectoryJob) -> Completion {
     job(
@@ -171,50 +206,23 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
         .result()
         .is_ok());
     drop(receipt);
-    let done = job(
-        &client,
-        route,
-        Command::Native(NativeJob::Source {
-            mount,
-            request: u64::MAX - 1,
-            serial,
-        }),
-    );
-    let source = match done.result() {
-        Ok(Response::Native(NativeReply::Source(source))) => *source,
-        other => panic!("{other:?}"),
-    };
-    drop(done);
-    let view = operation.workspace().view_for_source(source).unwrap();
-    let mut plan = view
-        .native_read_plan(
-            mount,
-            NativeReadOperation::Open {
+    // OPEN is one owner visit that records no request source: the visit
+    // that decides the file writes its descriptor.
+    let base = operation.workspace().base().unwrap();
+    let (original, receipt) = visit(&client, route, &base, |facts| {
+        operation
+            .workspace()
+            .native_open_visit(
+                operation.resident(),
+                mount,
+                u64::MAX - 1,
                 serial,
-                writable: false,
-            },
-        )
-        .unwrap();
-    let mut opened = None;
-    for _ in 0..4 {
-        let receipt = job(
-            &client,
-            route,
-            Command::Native(NativeJob::Observe(Box::new(plan.job().unwrap().clone()))),
-        );
-        let original = match receipt.result() {
-            Ok(Response::Native(NativeReply::Observed(original))) => original.clone(),
-            other => panic!("{other:?}"),
-        };
-        if let Some(value) = plan.accept(original).unwrap() {
-            opened = Some((value, receipt));
-            break;
-        }
-        drop(receipt);
-        plan.supply(&view).unwrap();
-    }
-    let (value, receipt) = opened.expect("bounded open fact rounds");
-    let file = value.file.unwrap();
+                false,
+                facts,
+            )
+            .unwrap()
+    });
+    let file = original.open_candidate.unwrap();
     assert!(!file.writable());
     assert_eq!(
         receipt
@@ -246,17 +254,7 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
         matches!(done.result(), Ok(Response::Native(NativeReply::RetainedFile(Some(retained)))) if *retained == file)
     );
     drop(done);
-    assert!(job(
-        &client,
-        route,
-        Command::ReleaseFileRead(value.read.unwrap())
-    )
-    .result()
-    .is_ok());
-    assert!(job(&client, route, Command::ReleaseBaseSource(source))
-        .result()
-        .is_ok());
-    drop((value, receipt));
+    drop((original, receipt));
     assert!(job(
         &client,
         route,
@@ -315,55 +313,15 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     assert!(job(&client, route, Command::ReleaseBaseSource(processing))
         .result()
         .is_ok());
-    let done = job(
-        &client,
-        route,
-        Command::Native(NativeJob::Source {
-            mount,
-            request: 100,
-            serial: root,
-        }),
-    );
-    let source = match done.result() {
-        Ok(Response::Native(NativeReply::Source(source))) => *source,
-        other => panic!("{other:?}"),
-    };
-    drop(done);
-    let view = operation.workspace().view_for_source(source).unwrap();
-    let mut plan = view
-        .native_read_plan(mount, NativeReadOperation::Opendir { serial: root })
-        .unwrap();
-    let mut opened = None;
-    for _ in 0..4 {
-        let done = job(
-            &client,
-            route,
-            Command::Native(NativeJob::Observe(Box::new(plan.job().unwrap().clone()))),
-        );
-        let original = match done.result() {
-            Ok(Response::Native(NativeReply::Observed(original))) => original.clone(),
-            other => panic!("{other:?}"),
-        };
-        if let Some(value) = plan.accept(original).unwrap() {
-            opened = Some((value, done));
-            break;
-        }
-        drop(done);
-        plan.supply(&view).unwrap();
-    }
-    let (value, opened) = opened.expect("bounded directory open rounds");
-    let directory = value.directory.unwrap();
-    assert!(job(
-        &client,
-        route,
-        Command::ReleaseFileRead(value.read.unwrap())
-    )
-    .result()
-    .is_ok());
-    assert!(job(&client, route, Command::ReleaseBaseSource(source))
-        .result()
-        .is_ok());
-    drop((value, opened));
+    // OPENDIR is the same visit and writes the directory's descriptor.
+    let (original, opened) = visit(&client, route, &base, |facts| {
+        operation
+            .workspace()
+            .native_opendir_visit(operation.resident(), mount, 100, root, facts)
+            .unwrap()
+    });
+    let directory = original.directory_candidate.unwrap();
+    drop((original, opened));
     // READDIR is a reading visit, the request's own merge and fill, and a
     // publishing visit of the accepted names. Neither job reaches the Store.
     let visit = operation

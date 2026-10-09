@@ -32,56 +32,42 @@ impl Fixture {
             .db
             .acquire_native_source(self.mount, request, 1)
             .unwrap();
-        let outcome = self.db.observe_native(self.mount, source, true, |_, _| {
-            Ok(NativeDecision::Finished {
-                inode: Some(inode(serial, InodeKind::File)),
-                value: (),
-            })
-        });
-        self.db
-            .release_file_read(outcome.result.unwrap().unwrap())
-            .unwrap();
-        self.db.release_base_source(source).unwrap();
-    }
-    /// A completed OPEN whose RELEASE is never delivered.
-    fn open_file(&self, request: u64, serial: u64) {
-        let source = self
-            .db
-            .acquire_native_source(self.mount, request, serial)
-            .unwrap();
         let outcome = self
             .db
-            .observe_native_open(self.mount, source, false, |_, serial| {
+            .observe_native_attributes(self.mount, source, true, |_, _| {
                 Ok(NativeDecision::Finished {
                     inode: Some(inode(serial, InodeKind::File)),
                     value: (),
                 })
             });
-        self.db
-            .release_file_read(outcome.result.unwrap().unwrap())
-            .unwrap();
-        assert!(outcome.open_candidate.is_some());
+        assert_eq!(outcome.result.unwrap(), None);
         self.db.release_base_source(source).unwrap();
     }
-    /// A completed OPENDIR whose RELEASEDIR is never delivered.
-    fn open_directory(&self, request: u64) {
-        let source = self
-            .db
-            .acquire_native_source(self.mount, request, 1)
-            .unwrap();
+    /// A completed OPEN whose RELEASE is never delivered.
+    fn open_file(&self, request: u64, serial: u64) {
         let outcome = self
             .db
-            .observe_native_directory(self.mount, source, |_, serial| {
+            .open_native_visit(self.mount, request, serial, false, |_, _| {
                 Ok(NativeDecision::Finished {
-                    inode: Some(inode(serial, InodeKind::Directory)),
+                    inode: Some(inode(serial, InodeKind::File)),
                     value: (),
                 })
             });
-        self.db
-            .release_file_read(outcome.result.unwrap().unwrap())
-            .unwrap();
+        assert_eq!(outcome.result.unwrap(), None);
+        assert!(outcome.open_candidate.is_some());
+    }
+    /// A completed OPENDIR whose RELEASEDIR is never delivered.
+    fn open_directory(&self, request: u64) {
+        let outcome = self
+            .db
+            .opendir_native_visit(self.mount, request, 1, |_, _| {
+                Ok(NativeDecision::Finished {
+                    inode: Some(inode(1, InodeKind::Directory)),
+                    value: (),
+                })
+            });
+        assert_eq!(outcome.result.unwrap(), None);
         assert!(outcome.directory_candidate.is_some());
-        self.db.release_base_source(source).unwrap();
     }
 }
 impl Drop for Fixture {

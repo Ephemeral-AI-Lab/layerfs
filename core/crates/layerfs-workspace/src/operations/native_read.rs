@@ -90,37 +90,17 @@ impl NativeReadJob {
     pub const fn source(&self) -> BaseSource {
         self.source
     }
-    /// Whether a positive answer comes with an independent read.
-    const fn retains_read(&self) -> bool {
-        !matches!(
-            self.operation,
-            NativeReadOperation::Lookup { .. } | NativeReadOperation::Getattr { .. }
-        )
-    }
     pub fn charge(&self) -> usize {
         self.facts.charge() + 255
     }
-    /// One owner transaction contains current local reads, the positive lookup
-    /// increment and its independent processing owner. Provider I/O is absent.
+    /// One owner transaction contains current local reads and the positive
+    /// lookup increment. Provider I/O is absent. Only LOOKUP and GETATTR are
+    /// planned this way; every other request is an owner visit.
     pub fn perform(&self, db: &Overlay) -> NativeReadOutcome {
         let lookup = matches!(self.operation, NativeReadOperation::Lookup { .. });
-        if let NativeReadOperation::Open { writable, .. } = self.operation {
-            db.observe_native_open(self.mount, self.source, writable, |rows, protected| {
-                self.decide_on(rows, protected)
-            })
-        } else if matches!(self.operation, NativeReadOperation::Opendir { .. }) {
-            db.observe_native_directory(self.mount, self.source, |rows, protected| {
-                self.decide_on(rows, protected)
-            })
-        } else if matches!(self.operation, NativeReadOperation::Data { .. }) {
-            db.observe_native(self.mount, self.source, false, |rows, protected| {
-                self.decide_on(rows, protected)
-            })
-        } else {
-            db.observe_native_attributes(self.mount, self.source, lookup, |rows, protected| {
-                self.decide_on(rows, protected)
-            })
-        }
+        db.observe_native_attributes(self.mount, self.source, lookup, |rows, protected| {
+            self.decide_on(rows, protected)
+        })
     }
     fn decide_on(
         &self,
@@ -222,6 +202,12 @@ impl SourceView {
         if mount.route() != self.source.route() || mount.root_serial() != self.root_serial() {
             return Err(OverlayError::Stale.into());
         }
+        if !matches!(
+            operation,
+            NativeReadOperation::Lookup { .. } | NativeReadOperation::Getattr { .. }
+        ) {
+            return Err(OverlayError::Invalid("native read plan operation").into());
+        }
         Ok(NativeReadPlan {
             job: NativeReadJob {
                 source: self.source,
@@ -253,13 +239,10 @@ impl NativeReadPlan {
         let previous = std::mem::replace(&mut self.stage, NativeReadStage::Finished);
         if previous == NativeReadStage::Owner {
             match (&original.result, &original.decision) {
-                (Ok(read), Some(NativeReadDecision::Value(inode)))
-                    if read.is_some() == self.job.retains_read()
-                        && read.is_none_or(|read| read.serial() == inode.serial) =>
-                {
+                (Ok(None), Some(NativeReadDecision::Value(inode))) => {
                     return Ok(Some(NativeReadValue {
                         stat: inode.clone().into(),
-                        read: *read,
+                        read: None,
                         file: original.open_candidate,
                         directory: original.directory_candidate,
                         original,

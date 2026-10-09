@@ -1,8 +1,8 @@
 //! Native custody jobs on the existing fair owner, independent of fuser types.
 use crate::{NativeDirectoryJob, NativeDirectoryReply, ServiceClass};
 use layerfs_overlay::{
-    BaseSource, FileRead, NativeMount, NativeMountState, OpenFile, Overlay, OverlayError,
-    OverlayResult, Route,
+    BaseSource, NativeMount, NativeMountState, OpenFile, Overlay, OverlayError, OverlayResult,
+    Route,
 };
 use layerfs_workspace::{
     NativeDataVisit, NativeMutationJob, NativeMutationOutcome, NativeMutationVisit, NativeReadJob,
@@ -25,17 +25,7 @@ pub enum NativeJob {
         mount: NativeMount,
         request: u64,
     },
-    RetainedRead {
-        mount: NativeMount,
-        request: u64,
-    },
     FileSource {
-        mount: NativeMount,
-        request: u64,
-        serial: u64,
-        handle: u64,
-    },
-    HandleSource {
         mount: NativeMount,
         request: u64,
         serial: u64,
@@ -86,7 +76,6 @@ pub enum NativeReply {
     RetainedMount(Option<NativeMount>),
     Source(BaseSource),
     RetainedSource(Option<BaseSource>),
-    RetainedRead(Option<FileRead>),
     RetainedFile(Option<OpenFile>),
     File(OpenFile),
     Observed(Arc<NativeReadOutcome>),
@@ -100,10 +89,9 @@ pub enum NativeReply {
 impl NativeJob {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
-            Self::Source { .. }
-            | Self::FileSource { .. }
-            | Self::HandleSource { .. }
-            | Self::OpenSource { .. } => ServiceClass::Source,
+            Self::Source { .. } | Self::FileSource { .. } | Self::OpenSource { .. } => {
+                ServiceClass::Source
+            }
             Self::Observe(_) | Self::ObserveVisit(_) | Self::ReadVisit(_) => ServiceClass::Read,
             Self::Mutate(_) | Self::MutateVisit(_) => ServiceClass::Mutation,
             Self::Directory(job) => job.class(),
@@ -151,9 +139,7 @@ impl NativeJob {
         let expected = match &self {
             Self::Source { mount, .. }
             | Self::RetainedSource { mount, .. }
-            | Self::RetainedRead { mount, .. }
             | Self::FileSource { mount, .. }
-            | Self::HandleSource { mount, .. }
             | Self::RetainedFile { mount, .. }
             | Self::File { mount, .. }
             | Self::CloseFile { mount, .. }
@@ -173,14 +159,6 @@ impl NativeJob {
             return Err(OverlayError::Stale);
         }
         match self {
-            Self::HandleSource {
-                mount,
-                request,
-                serial,
-                handle,
-            } => db
-                .acquire_native_handle_source(mount, request, serial, handle)
-                .map(NativeReply::Source),
             Self::Mount { root } => db.create_native_mount(route, root).map(NativeReply::Mount),
             Self::RetainedMount => db
                 .retained_native_mount(route)
@@ -195,9 +173,6 @@ impl NativeJob {
             Self::RetainedSource { mount, request } => db
                 .retained_native_source(mount, request)
                 .map(NativeReply::RetainedSource),
-            Self::RetainedRead { mount, request } => db
-                .retained_native_read(mount, request)
-                .map(NativeReply::RetainedRead),
             Self::FileSource {
                 mount,
                 request,

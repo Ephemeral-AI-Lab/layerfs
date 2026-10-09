@@ -650,7 +650,6 @@ fn a_request_between_two_visits_fences_no_revocation_and_its_next_visit_is_refus
         Ok(_) => panic!("a lookup was answered on a revoked mount"),
     };
     assert!(!failure.fenced() && failure.base_demand().is_none());
-    assert!(failure.retained_source().is_none() && failure.retained_read().is_none());
     let observation = failure.observation().expect("the refused visit's result");
     assert!(matches!(observation.result, Err(OverlayError::Stale)));
     assert!(observation.decision.is_none());

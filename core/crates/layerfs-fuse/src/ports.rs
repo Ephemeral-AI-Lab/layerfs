@@ -1,7 +1,5 @@
 //! External engine/Store boundaries; all waiting returns to the native pool.
-use layerfs_overlay::{
-    BaseSource, FileRead, NativeCookieOffer, NativeMount, OpenFile, Publication,
-};
+use layerfs_overlay::{BaseSource, NativeCookieOffer, NativeMount, OpenFile, Publication};
 use layerfs_workspace::{
     BaseView, MutationInputFailure, MutationPlan, NativeDirectoryWindow, NativeMutationJob,
     NativeMutationOutcome, NativeReadJob, NativeReadOperation, NativeReadOutcome,
@@ -215,7 +213,6 @@ pub trait RequestServices: Send + Sync {
         mount: NativeMount,
         request: u64,
         serial: u64,
-        handle: Option<u64>,
     ) -> ServiceFuture<'_, ServiceReply<BaseSource>>;
     fn view(&self, source: BaseSource) -> Result<SourceView, ServiceError>;
     /// Await actual reader admission before obtaining a provider-capable view.
@@ -255,7 +252,6 @@ pub trait RequestServices: Send + Sync {
         &self,
         request: NativeVisitRequest,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>>;
-    fn release_read(&self, read: FileRead) -> ServiceFuture<'_, ServiceReply<()>>;
     fn release_source(&self, source: BaseSource) -> ServiceFuture<'_, ServiceReply<()>>;
     fn forget(
         &self,

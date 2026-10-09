@@ -3,10 +3,10 @@ use crate::{
     ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
-use layerfs_overlay::{BaseSource, FileRead, NativeMount};
+use layerfs_overlay::NativeMount;
 use layerfs_workspace::{
-    NativeReadDecision, NativeReadFailure, NativeReadOperation, NativeReadOutcome, NativeReadPlan,
-    NativeReadValue, Refusal, SourceView, VisitFacts,
+    NativeReadDecision, NativeReadFailure, NativeReadOperation, NativeReadOutcome, NativeReadValue,
+    Refusal, VisitFacts,
 };
 use std::{fmt, sync::Arc};
 
@@ -18,21 +18,18 @@ pub(super) struct Custody {
     handle: Option<u64>,
     operation: NativeReadOperation,
     pub data_input: Option<super::ReadDataInput>,
-    source: Option<BaseSource>,
-    read: Option<FileRead>,
-    pub view: Option<SourceView>,
-    pub plan: Option<NativeReadPlan>,
     // Retain engine completion credit through every cloned outcome consumer.
     pub receipt: Option<ServiceReply<Arc<NativeReadOutcome>>>,
 }
-/// A deciding answer still owns processing references until reply consumers end.
-/// The kernel's lookup/open/directory owners persist independently afterwards.
+/// A deciding answer and the completion credit of the visit that decided it.
+/// The request holds nothing else in the engine; the kernel's lookup, open
+/// and directory owners persist independently.
 pub struct NativeRead {
     pub(super) value: Result<NativeReadValue, Refusal>,
     pub(super) custody: Custody,
 }
-/// Exact failed step, original request identity and still-owned engine references.
-/// No destructor issues SQL, guesses whether a job ran, or releases these owners.
+/// Exact failed step and original request identity. A visit records no
+/// request source, so a failure owns nothing in the engine.
 pub struct ReadFailure {
     pub reason: ServiceError,
     pub provider: Option<ServiceError>,
@@ -47,8 +44,6 @@ impl fmt::Debug for ReadFailure {
             .field("request", &self.custody.request)
             .field("operation", &self.custody.operation)
             .field("data_input", &self.custody.data_input)
-            .field("source", &self.custody.source)
-            .field("read", &self.custody.read)
             .finish_non_exhaustive()
     }
 }
@@ -92,12 +87,6 @@ impl ReadFailure {
     pub const fn data_input(&self) -> Option<super::ReadDataInput> {
         self.custody.data_input
     }
-    pub const fn retained_source(&self) -> Option<BaseSource> {
-        self.custody.source
-    }
-    pub const fn retained_read(&self) -> Option<FileRead> {
-        self.custody.read
-    }
     pub fn observation(&self) -> Option<&NativeReadOutcome> {
         self.custody
             .receipt
@@ -112,15 +101,14 @@ impl ReadFailure {
     pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
         self.reason.downcast_ref()
     }
-    /// Ends a request that was fenced or whose base demand failed: its read
-    /// and source are released once through the disposal calls, which the
-    /// fence never refuses. Nothing is demanded again. Any other failure is
-    /// returned unchanged, and a failed release keeps what remains.
+    /// Ends a request that was fenced or whose base demand failed. It holds
+    /// nothing in the engine, so nothing is released and no job is
+    /// submitted. Any other failure is returned unchanged.
     pub async fn relinquish(self) -> Result<(), ReadFailure> {
         if !self.fenced() && self.base_demand().is_none() {
             return Err(self);
         }
-        self.custody.dispose().await
+        Ok(())
     }
 }
 impl NativeRead {
@@ -133,7 +121,7 @@ impl NativeRead {
         operation: NativeReadOperation,
     ) -> Result<Self, ReadFailure> {
         let mut custody = Custody::unowned(services, mount, request, protected, handle, operation);
-        match custody.prepare().await {
+        match custody.visit().await {
             Ok(value) => Ok(Self { value, custody }),
             Err(reason) => Err(ReadFailure::new(reason, custody)),
         }
@@ -149,11 +137,11 @@ impl NativeRead {
         ReadFailure::new(reason, custody)
     }
     /// Called only after the single reply attempt and disposal of its payload.
-    /// Processing releases use original tokens once; kernel owners stay live.
+    /// It returns the visit's completion credit; nothing is released in the
+    /// engine and the kernel's owners stay live.
     pub async fn dispose(self) -> Result<(), ReadFailure> {
-        let Self { value, custody } = self;
-        drop(value);
-        custody.dispose().await
+        drop(self);
+        Ok(())
     }
 }
 impl Custody {
@@ -174,24 +162,11 @@ impl Custody {
             handle,
             operation,
             data_input: None,
-            source: None,
-            read: None,
-            view: None,
-            plan: None,
             receipt: None,
         }
     }
     pub(super) const fn target(&self) -> (NativeMount, u64, Option<u64>) {
         (self.mount, self.protected, self.handle)
-    }
-    pub async fn dispose(mut self) -> Result<(), ReadFailure> {
-        self.plan = None;
-        self.view = None;
-        self.receipt = None;
-        match self.release().await {
-            Ok(()) => Ok(()),
-            Err(reason) => Err(ReadFailure::new(reason, self)),
-        }
     }
     /// LOOKUP, GETATTR, OPEN and OPENDIR are served by owner visits that
     /// record no request source: nothing is acquired, so nothing is released
@@ -247,19 +222,5 @@ impl Custody {
             }
             NextTurn::default().await;
         }
-    }
-    async fn prepare(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
-        self.visit().await
-    }
-    async fn release(&mut self) -> Result<(), ServiceError> {
-        if let Some(read) = self.read {
-            drop(self.services.release_read(read).await?);
-            self.read = None;
-        }
-        if let Some(source) = self.source {
-            drop(self.services.release_source(source).await?);
-            self.source = None;
-        }
-        Ok(())
     }
 }

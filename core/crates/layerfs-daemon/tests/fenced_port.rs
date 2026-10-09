@@ -304,7 +304,7 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     let reply = wait(services.directory_visit(mount, root, directory.owner_id(), 2, None)).unwrap();
     let offer = reply.get().offer.clone().expect("offsets for the reply");
     drop(reply);
-    let reply = wait(services.source(mount, 6, root, None)).unwrap();
+    let reply = wait(services.source(mount, 6, root)).unwrap();
     let source = *reply.get();
     drop(reply);
     let view = services.view(source).unwrap();
@@ -351,11 +351,7 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     rig.queue.stop_service().unwrap();
     assert!(fence.stopped());
 
-    refused("source", services.source(mount, 10, root, None));
-    refused(
-        "handle source",
-        services.source(mount, 11, serial, Some(handle)),
-    );
+    refused("source", services.source(mount, 10, root));
     refused(
         "open_source",
         services.open_source(mount, 12, serial, handle),
@@ -431,7 +427,7 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     // The port itself replies to nothing.
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "FENCED-CALLS refused=14 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=4"
+        "FENCED-CALLS refused=13 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=4"
     );
     drop((view, services));
     rig.revoke_and_stop();
@@ -491,14 +487,7 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
                         RequestDisposition::Complete
                     }
                     Err(failure) => {
-                        let _ = send.send((
-                            302,
-                            Some((
-                                failure.fenced(),
-                                failure.retained_source().is_some(),
-                                failure.retained_read().is_some(),
-                            )),
-                        ));
+                        let _ = send.send((302, Some(failure.fenced())));
                         match failure.relinquish().await {
                             Ok(()) => RequestDisposition::Complete,
                             Err(failure) => RequestDisposition::Retained(Box::new(failure)),
@@ -537,14 +526,7 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
                         }
                     }
                     Err(failure) => {
-                        let _ = send.send((
-                            request,
-                            Some((
-                                failure.fenced(),
-                                failure.retained_source().is_some(),
-                                failure.retained_read().is_some(),
-                            )),
-                        ));
+                        let _ = send.send((request, Some(failure.fenced())));
                         // What the request driver does after its terminal reply.
                         match failure.relinquish().await {
                             Ok(()) => RequestDisposition::Complete,
@@ -566,11 +548,11 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
     // test keeps, so one more acquisition waits before it is submitted.
     let bound = OwnerConfig::default().jobs_per_namespace;
     let holders: Vec<_> = (0..bound)
-        .map(|index| wait(services.source(mount, 100 + index as u64, root, None)).unwrap())
+        .map(|index| wait(services.source(mount, 100 + index as u64, root)).unwrap())
         .collect();
     assert_eq!(rig.owner_work().outstanding, bound);
     let admitted = rig.owner_work().admitted;
-    let mut blocked = services.source(mount, 200, root, None);
+    let mut blocked = services.source(mount, 200, root);
     assert!(stepper.poll(blocked.as_mut()).is_pending());
     assert!(stepper.poll(blocked.as_mut()).is_pending());
     assert_eq!(rig.owner_work().admitted, admitted);
@@ -600,11 +582,7 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
     seen.sort();
     assert_eq!(
         seen,
-        [
-            (300, Some((true, false, false))),
-            (301, Some((true, false, false))),
-            (302, Some((true, false, false)))
-        ]
+        [(300, Some(true)), (301, Some(true)), (302, Some(true))]
     );
     until("the fenced requests left the lane", || {
         rig.queue.work().unwrap().admitted == 0
@@ -886,7 +864,6 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
         Poll::Pending => panic!("the OPENDIR reader wait survived the stop"),
     };
     assert!(failure.fenced());
-    assert!(failure.retained_source().is_none() && failure.retained_read().is_none());
     wait(failure.relinquish()).unwrap();
     assert_eq!(rig.owner_work().admitted, admitted);
     assert_eq!(rig.store.read_work().waiting, 0);

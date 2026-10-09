@@ -159,7 +159,7 @@ consults it only before an attempt, at three kinds of point:
 Acquiring calls are gated: `source`, `open_source`, `observe`, `mutate`,
 `read_visit`, `immutable`, `base`, `reserve_serial`, `directory_visit` and
 `publish_cookies`. Disposal calls are
-never gated: `release_read`, `release_source`, `reply_attempted`, `close_file`,
+never gated: `release_source`, `reply_attempted`, `close_file`,
 `close_directory` and `forget`. A stopped mount starts nothing new and still
 gives back what it holds. `Fenced` is produced only before submission: once a
 job is admitted its `Pending` is awaited to the original result, and the
