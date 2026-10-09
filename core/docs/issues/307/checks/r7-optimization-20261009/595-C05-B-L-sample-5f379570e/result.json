@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "5f379570e1d970a25545420b2640d0df7a00f0ef",
+  "source_tree": "e59629b7f5102858ee057c4b3ef4598d103ade54",
+  "worktree_status": "?? core/docs/issues/307/HANDOFF-R7-BEAT-A2-20261009-2.md\n?? core/docs/issues/307/checks/r7-optimization-20261009/580-L-source-seal-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/581-runtime-release-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/582-daemon-release-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/583-build-provenance-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/584-C01-L-volume-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/585-C01-L-clone-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/586-C01-L-configuration-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/587-C01-B-L-sample-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/588-C04-L-volume-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/589-C04-L-clone-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/590-C04-L-configuration-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/591-C04-B-L-sample-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/592-C05-L-volume-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/593-C05-L-clone-5f379570e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/594-C05-L-configuration-5f379570e/",
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-m",
+    "r7.runner",
+    "--config",
+    "/tmp/layerfs-r7-C05-L-inputs-5f379570e-20261009/L-config.json",
+    "--selection",
+    "C05:B:L",
+    "--output",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/595-C05-B-L-sample-5f379570e/sample",
+    "--claims",
+    "/tmp/layerfs-r7-treatment-claims-20261009"
+  ],
+  "limit_seconds": 30,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 5587210375,
+  "status": "PASS"
+}

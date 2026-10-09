@@ -2076,3 +2076,86 @@ attempt, COMMIT 10.8 µs (32.3 ms for 3000), the Lease family 37.5 ms for
 attempts, 61 executions, 3 write transactions, service 175 µs, and about
 243 µs outside the owner. Command against target: 420.5 ms against 183.4 ms,
 2.29 times.
+
+## Verifier fix — F01: a directory reports 2 + its child directories
+
+Cause: C04, C05 and C12 are FAIL at `fdc24ef3f` (539, 543, 571) on one
+compared field. The product projected `st_nlink` 2 for every named directory
+(`layerfs-fuse/src/attributes.rs`); the native references record 2 plus the
+number of child directories (11 directories differ in C04 and C05, 6 in C12,
+where the complete Git index already agreed). The canonical format stores no
+such count: a directory's reference count is 1 and a directory row is a name
+and a serial without a kind.
+
+Change (commit `82c51a439`, written by a subagent to this lead's brief and
+reviewed here): the overlay inode row carries `subdirs`, the absolute number
+of child directories, beside `entries` (schema 22, no statement added);
+mkdir, rmdir, a directory moved between parents and a rename replacing an
+empty directory move it in the publishing transaction; a base directory's
+count is derived outside the owner by listing it in windows of 256 rows with
+one batch kind read per window and is remembered in a fixed memo of 16,384
+entries per daemon keyed by the directory's content root; an owner visit that
+does not find it stays undecided and writes nothing; the reply is 0 for a
+removed directory and otherwise 2 + `subdirs`. Commit stores nothing new.
+
+Design choice recorded (this lead's, under the earlier delegation): a bounded
+memory memo, not a per-namespace table, holds the derived base count, so a
+fresh Workspace per tool call reuses it. The analysis in
+`r7-open/read-directory-path-summary-fdc24ef3f.md` proposed the table with a
+carry-over at generation retirement; that alternative removes the one
+derivation after each install that changes a directory and is listed in the
+second handoff. A Store-side derived count would remove the derivation
+altogether and needs an owner decision.
+
+Big-O: no statement, job or request added on any path of these cells (counts
+below are equal). A base directory with n bindings costs one O(n) derivation
+per directory version per daemon, in bounded windows, never inside an owner
+job and never per GETATTR; a base directory whose count is not remembered
+costs one extra visit. Resident state added: the fixed memo (1,441,792
+logical bytes at capacity).
+
+Checks: host suites of overlay (26 binaries), workspace (27), fuse (4) and
+daemon (59) under `330-links-*`; Linux suites of fuse, overlay and daemon in
+the pinned image under `331-links-*`, including the new `mounted_links` and
+the restaged `mounted_commit` and `mounted_install`, which compare
+`st_nlink` through the kernel on fresh mounts after a Commit; Clippy
+`-D warnings` host and Linux; fmt; boundary guard (861 files). Failures:
+`complete_installed_roots` (host and Linux), `host_handoff` (host),
+`shared_processes` (Linux) — the known precondition-missing cases. Restaged
+assertions: fuse `tests/attributes.rs` (2 kept for no children, 7 for five),
+daemon `tests/support/mounted_commit.rs` (`== 2` became 2 + the model's own
+child-directory count), three schema version assertions 21 → 22. Earlier
+`330-links-*` attempts are kept.
+
+**580–599 at `5f379570e`** (the fix plus a documentation commit; one build,
+one sample each of C01, C04, C05 and C12, class B, arm L). All four rows
+DIAGNOSTIC, verifier PASS, custody KNOWN_STOP, cleanup Gone, gaps none.
+
+| Cell | Before | After | Verifier before → after | Command ms before → after | A2 ms | Ratio after | Requests / owner jobs (both) | Statement attempts before → after |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| C04 | 539 | 591 | FAIL (nlink, 11 dirs) → PASS | 809.3 → 848.8 | 952.6 | 0.89 | 5342 / 5382 | 79559 → 46225 |
+| C05 | 543 | 595 | FAIL (nlink) → PASS | 917.3 → 912.2 | 949.6 | 0.96 | 5889 / 7264 | 107775 → 72139 |
+| C12 | 571 | 599 | FAIL (nlink, 6 dirs) → PASS | 325.6 → 311.2 | 189.3 | 1.64 | 3436 / 4622 | 64079 → 48643 |
+| C01 | 579 | 587 | PASS → PASS | 420.5 → 444.9 | 183.4 | 2.43 | 5001 / 5001 | 48003 → 48003 |
+
+Requests, owner jobs, write transactions and reader grants are equal before
+and after in every cell (C04 3250 transactions, C05 4476 and 222 grants, C12
+2868 and 121 grants, C01 3000 and 0), so the fix added no work to them. The
+fall in statement attempts for C04, C05 and C12 is step 10 (their "before"
+is the `fdc24ef3f` baseline); C01, whose "before" is after step 10, is
+unchanged at 48003 attempts and 61004 executions. Overlay and Store bytes are
+unchanged in all four (overlay logical 458752, 458752, 405504, 557056).
+Command times are single samples inside the spread; C01's 420.5 → 444.9 ms
+is not a regression claim or a denial of one, the counts are equal.
+
+FIXED: no verifier difference remains in any sampled cell. C04 and C05 are
+below the A2 command time in these single diagnostic samples; the rows are
+exploratory, and no storage comparison against A2's own bytes was made.
+C12 passes the verifier's whole scope (tree bytes and metadata, and the
+semantic Git index); nothing beyond that scope was checked.
+
+State of the eight sample containers retained by the runner for the earlier
+FAIL and NOT_RUN rows: stopped with `docker stop` before sample 579, not
+removed (C04 `639c0b705e12`, C05 `79e9319bbcf0`, C06 `418c877cf0bb`, C07
+`3aa5f55771fb`, C08 `b875beacbf42`, C10 `716925accad5`, C11 `bc65a9ccd3ea`,
+C12 `bbbc4b4c5610`).

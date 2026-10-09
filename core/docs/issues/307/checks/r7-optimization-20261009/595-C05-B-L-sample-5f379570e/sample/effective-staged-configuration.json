@@ -1,0 +1,83 @@
+{
+  "base_fixture_inventory": {
+    "content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+    "path": "/tmp/layerfs-r7-empty-inventory-20261009.jsonl",
+    "sha256": "a5695e32c5f1d0521272ea9794f5467c62a433f163aae9bfda2cc1be0bf31a33"
+  },
+  "build_profile": "release",
+  "cache_observer_inside": "/code/residency.py",
+  "compilation_provenance": {
+    "path": "/tmp/layerfs-r7-build-provenance-5f379570e-20261009.json",
+    "sha256": "2eeb352967936a4372c315717edf920fae4141b3b3cda31b60a0f7af627e4d7e"
+  },
+  "container_setup": {
+    "implementation_sha256": "5210b2730f535471145e112eef0b66744f4b171390d0b3ae11e35d5eb21ae0d9",
+    "manifest": "/tmp/layerfs-r7-C05-L-inputs-5f379570e-20261009/L-plan.json",
+    "manifest_sha256": "107f37e90ee3393227cbe04bfb83e6eb886abf8da2015f0e5e3dae8bfb36e6c1",
+    "wall_stop_seconds": 300
+  },
+  "daemon_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-linux-release/release/layerfs-daemon",
+  "daemon_sha256": "696f9fc90660f7c06655fdcaaa2b94fc11c9ef9f2c93dec7c8995d9417581a00",
+  "declared_interference": "Single checkout and serialized commands; unrelated retained containers share Docker VM; their CPU/I/O interference is unquantified",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exclusive_observer_scope": true,
+  "fixture_kind": "empty",
+  "gid": 20,
+  "identities": {
+    "binary_sha256": "696f9fc90660f7c06655fdcaaa2b94fc11c9ef9f2c93dec7c8995d9417581a00",
+    "compilation": "2eeb352967936a4372c315717edf920fae4141b3b3cda31b60a0f7af627e4d7e",
+    "dependency": "acf6f3059d703004d3dbaec8ffddd453fa18c8027fa2de080fa8011a64d80f5e",
+    "fixture": "e746c74f1d0d0a652059f89c782379d8977f4d956e5495125c3a7e0dbcd30406",
+    "harness": "717f39b93ef7defc27e6920b0aa7dcd1397252781e25d28747d19c8e61b5309a",
+    "image_id": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "oracle": "68f81c2bc4e2a6421e0699f685e7f5504748ee1f180ddf74bbcb30ddadd74a27",
+    "product": "2024afe5a9ee133405f64eddd3d676658ad72f28",
+    "report_generator": "3b1bf384c6615e77e937025946c2d59f220933eb76980149637dd270848bd9fc",
+    "source_commit": "5f379570e1d970a25545420b2640d0df7a00f0ef",
+    "source_tree": "e59629b7f5102858ee057c4b3ef4598d103ade54",
+    "workload": "cf432b9ee6dce623884758b85bd3fca7dd972828a668661c815313c8b402199d"
+  },
+  "manifest": "/private/tmp/layerfs-r7-empty-installed-20261009.manifest",
+  "manifest_sha256": "baddd3c679fef34763ac5d98c308bc10d2a88d4586d9dd43eda0d3dd63ff7123",
+  "native_root": "/native",
+  "oracle_fixture_identity": {
+    "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+    "fixture_kind": "empty",
+    "installed_manifest_sha256": "baddd3c679fef34763ac5d98c308bc10d2a88d4586d9dd43eda0d3dd63ff7123",
+    "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+    "reduced_fixture_cut_identity": null
+  },
+  "oracle_recipe": {
+    "bundle": "/tmp/layerfs-r7-C05-packaged-code-20261009-3ae26648f-r417/code/oracles/C05-B",
+    "closed_sha256": "68f81c2bc4e2a6421e0699f685e7f5504748ee1f180ddf74bbcb30ddadd74a27"
+  },
+  "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+  "phase_count_selectors": [
+    {
+      "before": "measured_mount_attach",
+      "end": "command_end_status",
+      "label": "measured command"
+    },
+    {
+      "before": "warmup_unmount",
+      "end": "measured_mount_attach",
+      "label": "measured mount after warm terminal"
+    }
+  ],
+  "prepared_store_file": "/tmp/layerfs-r7-empty-sealed-20261009.sqlite",
+  "runtime_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-release/release/layerfs-r7-runtime",
+  "runtime_sha256": "a2280440442a486c2c9e29cc12139c6cd3ed0da18b6cd665d66cfbd563a3453c",
+  "setup_method": "clone",
+  "socket": "/Users/yifanxu/.docker/run/docker.sock",
+  "source_clean": true,
+  "source_dirty": false,
+  "source_inventory": {
+    "path": "/tmp/layerfs-r7-source-L-5f379570e-20261009.json",
+    "sha256": "f9a89a060305bb0957529dcf392a88e54cc82bf6454b06e6f9a13945c3c52194",
+    "source_set_sha256": "5af490d51802f237c64dfb3068912be3b4740c1fa192625704a5c950faa70fcc"
+  },
+  "store_profile": "Disposable/WAL/OFF",
+  "uid": 501,
+  "volume": "layerfs-r7-C05-L-5f379570e-20261009",
+  "volume_clone_identity": "21de1db0dfadae504f73de8e31862b6ef126d13292c522de90539188ced57f35"
+}

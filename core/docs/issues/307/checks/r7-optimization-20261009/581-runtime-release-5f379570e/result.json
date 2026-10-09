@@ -1,0 +1,27 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "build",
+  "source_commit": "5f379570e1d970a25545420b2640d0df7a00f0ef",
+  "source_tree": "e59629b7f5102858ee057c4b3ef4598d103ade54",
+  "worktree_status": "?? core/docs/issues/307/HANDOFF-R7-BEAT-A2-20261009-2.md\n?? core/docs/issues/307/checks/r7-optimization-20261009/580-L-source-seal-5f379570e/",
+  "command": [
+    "env",
+    "CARGO_TARGET_DIR=core/target/r7-host-release",
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/benchmark/r7-runtime/Cargo.toml",
+    "--locked",
+    "--offline",
+    "--release"
+  ],
+  "limit_seconds": 560,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 303835334,
+  "status": "PASS"
+}
