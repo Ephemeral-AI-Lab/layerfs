@@ -1,0 +1,24 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "952e0b3bb9253709eb50bb4bf06579dd78bf95c5",
+  "source_tree": "6e07948667d74401b8c51d8cda6a92fdffc44d5d",
+  "worktree_status": "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/234-L-source-seal-952e0b3bb/\n?? core/docs/issues/307/checks/r7-optimization-20261009/235-runtime-release-952e0b3bb/\n?? core/docs/issues/307/checks/r7-optimization-20261009/236-daemon-release-952e0b3bb/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-seal-build.py",
+    "/tmp/layerfs-r7-source-L-952e0b3bb-20261009.json",
+    "235-runtime-release-952e0b3bb",
+    "236-daemon-release-952e0b3bb",
+    "/tmp/layerfs-r7-build-provenance-952e0b3bb-20261009.json"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 654790875,
+  "status": "PASS"
+}

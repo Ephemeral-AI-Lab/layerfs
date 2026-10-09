@@ -1288,3 +1288,66 @@ Host Clippy `-D warnings` for overlay, workspace, fuse and daemon,
 `fmt --check` and the boundary guard passed. Tests that used GETATTR to obtain
 bytes now use `Data`; tests that released a lookup's read now assert there is
 none. Not run for this step: the full suites and Linux Clippy.
+
+## Step 2 result — KEPT on counts; wall time not confirmed
+
+Commit 15 is `952e0b3bb`, tree `6e07948667d74401b8c51d8cda6a92fdffc44d5d`;
+LOC records `r7-loc-14-*` agree. Production LOC 185918 -> 185969 (delta +51).
+Iteration receipts 234–241, one attempt each, all PASS.
+
+**241 — C01:B:L at `952e0b3bb`, one sample, exploratory.** Row INCOMPLETE for
+the same harness gap. Verifier PASS, custody KNOWN_STOP, cleanup Gone.
+
+| Measure | 232 at `9244dc8c6` | 241 at `952e0b3bb` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 2004655833 | 2202119833 | +197464000 (+9.9 %) |
+| Owner jobs | 16002 | 15002 | −1000 |
+| — Lifecycle | 6001 | 5001 | −1000 |
+| Statement executions | 334017 | 302017 | −32000 |
+| — Lease | 174005 | 150005 | −24000 |
+| Owner queue wait ns | 533576694 | 503679525 | −29897169 |
+| Owner service ns | 1272420214 | 1258286490 | −14133724 |
+| — Read class service ns (3002 jobs) | 189971383 | 122174715 | −67796668 |
+| — Mutation class service ns (3000 jobs) | 452526206 | 559054418 | +106528212 |
+| Command minus owner wait and service | 198658925 | 440153818 | +241494893 |
+| Verifier ns (separate process) | 1512690958 | 1624371042 | +111680084 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 557056 / 268992512 | 557056 / 268992512 | 0 |
+| `peak_credited_bytes` | 48565 | 53643 | +5078 (223 read 53643) |
+| Daemon VmHWM | 46686208 | 46661632 | −24576 |
+
+The counts dropped exactly as predicted. The command wall rose. Diagnosis
+from the receipts, as the loop requires before keeping a change whose time
+got worse:
+
+- The class the change touches got faster: Read service fell by 67.8 ms for
+  the same 3002 jobs.
+- Work the change does not touch got slower in this run: the 3000 Mutation
+  jobs execute the same statements as in 232 and took 106.5 ms longer
+  (+23.5 %); the verifier, a separate process, took 111.7 ms longer (+7.4 %);
+  the sample wrapper took 12.3 s against 8.9 s.
+- Each receipt also holds the class-B warm-up command, the same body on the
+  same daemon just before the measured one. Warm-up / measured command ns:
+  223 2145483417 / 2226041875; 232 2000521833 / 2004655833;
+  241 2085859541 / 2202119833. Identical work differs by 0.2 % to 5.6 %
+  inside one run.
+
+Conclusion: the rise is run-level variation on the shared Docker VM (four
+unrelated containers are running; interference is declared and unquantified),
+not a cost of the change. It is kept on its exact counts and on the service
+time of its own class. What is **not** established: a wall-time gain for
+step 2. With one sample per identity, wall differences below roughly 10 %
+cannot be told from this variation; job and statement counts and per-class
+service time are the usable signals for a step of this size.
+
+New observation for triage: the command wall minus owner wait and service is
+59 ms, 199 ms and 440 ms in 223, 232 and 241. That remainder is the path
+back from the owner to the request task and the kernel round trip, which no
+counter times. Together with a queue wait of 17–61 µs per job on an owner
+that is idle between jobs, it points at thread wake-up latency per owner job
+(one wake to the owner, one back) as a cost of the same order as the SQL
+work. This is a hypothesis with no direct instrument yet; it strengthens the
+case for fewer jobs per request and is recorded as candidate D04.
+
+Ratios after step 2: 15 owner jobs per created file, 2.14 per FUSE request,
+3.0 per handed-off request; 302 statements per created file.
