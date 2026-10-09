@@ -6,6 +6,24 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (accounting triggers write one row, decision C3,
+overlay schema 24). Implemented: every accounting trigger updates the
+`accounting` row of its own namespace only. The daemon aggregate that
+`Overlay::resources(None)` returns is the sum of those rows, read by one
+statement over the primary key (`WHERE ns>0`): one row per namespace the
+engine still holds, live or closed and not yet reclaimed, on a path that
+only reports run. No job on the request path reads the aggregate and no
+admission or quota check uses it. One count stays maintained in the row of
+namespace zero: `orphan_rows` of the whole engine, by the two orphan
+triggers, because `orphans_deleted` reads it in one row after a job
+deletes orphans to keep `orphan_seen` exact. The triggers stay inside their
+statements, so what a failed statement or `SQLITE_FULL` rolls back is
+unchanged. Trigger programs run as often as before; each changes one row
+instead of two (a 128 KiB write into a fresh file changes 8 payload-family
+rows where it changed 12). The aggregate against the stored rows at 1, 3
+and 8 namespaces, live, closed, partly reclaimed and reclaimed, is in
+[`accounting_reference.rs`](../../crates/layerfs-overlay/tests/accounting_reference.rs).
+
 R7 update, 2026-10-09 (payload rows of several cells, decisions P1 to P5,
 overlay schema 23). Implemented:
 

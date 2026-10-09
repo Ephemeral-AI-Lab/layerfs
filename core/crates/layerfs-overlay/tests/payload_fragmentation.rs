@@ -49,12 +49,13 @@ fn dense_fragmentation_does_not_enlarge_a_later_request() {
     assert_eq!((over_fresh.0, over_fresh.2), (14, 2));
     // The same over 32 masked cells: per 32 KiB one read of the shapes, one
     // range delete of eight cells and one insert, each row change with its
-    // accounting trigger program. The cost is fixed by the window, not by
-    // the 65,536 earlier writes. It was (74, 98) as well.
+    // accounting trigger program, which updates one row. The cost is fixed
+    // by the window, not by the 65,536 earlier writes. It was (74, 98) as
+    // well.
     let over_dense = work(&db, || dense.write(0, &window));
     assert_eq!(
         (over_dense.0, over_dense.2),
-        (10 + 4 * (3 + 8 + 1), 2 + 3 * (32 + 4))
+        (10 + 4 * (3 + 8 + 1), 2 + 2 * (32 + 4))
     );
     dense.check();
     // The fragments are gone: the window is rows of 32 KiB like the fresh

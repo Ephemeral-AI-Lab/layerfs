@@ -171,11 +171,12 @@ fn one_write_window_costs_the_same_statements_at_either_file_size_and_beside_ano
     // (Payload attempts, Payload executions, Payload rows changed, attempts
     // of the whole job). A fresh window is four rows of 32 KiB: per row one
     // read of the slot's shapes and one insert with its accounting trigger
-    // program, which updates two rows. Before rows of several cells this
-    // was (32, 64, 96, 42): 32 cell upserts and their trigger programs.
+    // program, which updates the namespace's row (it updated the daemon's
+    // too: 12 rows). Before rows of several cells this was (32, 64, 96, 42):
+    // 32 cell upserts and their trigger programs.
     // An overwrite writes the four rows where they lie: four shape reads,
     // no row changed, no trigger; it was (32, 64, 96, 42) as well.
-    let (first, fresh, over) = ((8, 12, 12, 19), (8, 12, 12, 18), (4, 4, 0, 14));
+    let (first, fresh, over) = ((8, 12, 8, 19), (8, 12, 8, 18), (4, 4, 0, 14));
     assert_eq!((seen[0].0, seen[0].1, seen[0].2), (first, over, over));
     assert_eq!((seen[1].0, seen[1].1, seen[1].2), (fresh, over, over));
     // Stored rows of the file and of the two files beside it.

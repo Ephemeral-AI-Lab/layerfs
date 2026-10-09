@@ -1,0 +1,36 @@
+{
+  "first_parent": "e555b771fd56fdf4f4ffa6b71956371a1c3252e1",
+  "counted_tree": "5e999f25a92c964e6070f1a27773061b3c0c80c9",
+  "mode": "staged",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "Independent parent/final git archive extractions; pinned tools/production_loc.py scan/per_file; first-party Rust and shipped SQL, excluding comments/blanks/inline/transitive tests/docs/tools/third-party; exact Cargo member path classification",
+  "before": {
+    "combined": 188442,
+    "core": 123025,
+    "subtotals": {
+      "active": 80151,
+      "excluded_predecessors": 38878,
+      "excluded_integration": 3996,
+      "reference": 65417
+    },
+    "product_trees": {
+      "core/crates": "70697cda1cce25b3dfdaeb41123e0665386ae654",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "after": {
+    "combined": 188401,
+    "core": 122984,
+    "subtotals": {
+      "active": 80110,
+      "excluded_predecessors": 38878,
+      "excluded_integration": 3996,
+      "reference": 65417
+    },
+    "product_trees": {
+      "core/crates": "d0a8555afa9760e5dfc98ea1890e3f30903de548",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "delta": -41
+}

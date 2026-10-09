@@ -512,7 +512,9 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
     );
     // Three inodes, one dropped name, one rebound name, one state row and
     // the targeted unlinked-payload cleanup item introduced in S6. The
-    // dropped name and the new cleanup item each update two counts. The
-    // job's reply ticket is issued in the engine's memory: no row, no count.
-    assert_eq!(totals[0].2, 11);
+    // dropped name and the new cleanup item each update the namespace's
+    // count, one row each; they updated the daemon's too, 11 rows in all.
+    // The job's reply ticket is issued in the engine's memory: no row, no
+    // count.
+    assert_eq!(totals[0].2, 9);
 }

@@ -1,0 +1,17 @@
+accounting_reference-142c438420264de2 exit=0 seconds=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+cleanup_control-77ab369a54fc49db exit=0 seconds=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+compound-015a16aad54419dc exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+costs-349e2bf53982389c exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+device_capacity-a6d3fe900b7eb2fe exit=0 seconds=1 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+device_capacity-a8dab39510750df3 exit=0 seconds=0 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+job_cost-6806228384655850 exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+native_data-4af220d29365b065 exit=0 seconds=1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+native_unlink_cost-bcded746609cf3eb exit=0 seconds=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+native_visit-3cf70db899407a5e exit=0 seconds=0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+native_visit_cost-31891792959c0ed4 exit=0 seconds=1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.37s
+native_visit_fence-05a8e2ec310cfb42 exit=0 seconds=0 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+owner-dff6c9b96cdb7d0c exit=0 seconds=1 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+read_cost-106cc8ee0ca7784d exit=0 seconds=1 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+resources-d5629cf95337a133 exit=0 seconds=1 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+resources_observation-cfff9454e2fa8457 exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+transactions-b47653736df2ab57 exit=0 seconds=0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
