@@ -77,6 +77,51 @@ fn source_retains_selected_base_and_exact_close_custody_without_a_generation_pin
     assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Gone);
 }
 #[test]
+fn reply_attempt_and_source_release_are_one_transaction_or_nothing() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.0.join("db"), ProfileConfig::default()).unwrap();
+    let route = db.open_workspace([1; 32], [2; 32]).unwrap();
+    let source = db.acquire_base_source(route, 7).unwrap();
+    let p = db.publish(route, &inode(), None, None).unwrap();
+    // One transaction (freelist read, BEGIN, COMMIT) instead of two.
+    let before = db.diagnostics();
+    db.reply_attempted_and_release(p, source).unwrap();
+    let work = db.diagnostics().since(&before);
+    assert_eq!(work.statements[StatementKind::Begin as usize].executions, 1);
+    assert_eq!(
+        work.statements[StatementKind::Commit as usize].executions,
+        1
+    );
+    assert_eq!(db.state(route).unwrap().base_readers, 0);
+    assert_eq!(db.retained_base_source(route, 7).unwrap(), None);
+    // Both are gone: the ticket no longer holds back a capture.
+    assert!(db.capture_ready(route).unwrap());
+    assert!(matches!(
+        db.reply_attempted_and_release(p, source),
+        Err(OverlayError::Stale)
+    ));
+
+    // A source that is no longer held fails the whole job: the ticket of the
+    // second publication stays owed and its own release still works.
+    let held = db.acquire_base_source(route, 8).unwrap();
+    let q = db.publish(route, &inode(), None, None).unwrap();
+    assert!(matches!(
+        db.reply_attempted_and_release(q, source),
+        Err(OverlayError::Stale)
+    ));
+    assert!(!db.capture_ready(route).unwrap());
+    assert_eq!(db.retained_base_source(route, 8).unwrap(), Some(held));
+    // A ticket that is not owed fails the whole job: the source stays held.
+    assert!(matches!(
+        db.reply_attempted_and_release(p, held),
+        Err(OverlayError::Stale)
+    ));
+    assert_eq!(db.state(route).unwrap().base_readers, 1);
+    db.reply_attempted_and_release(q, held).unwrap();
+    assert!(db.capture_ready(route).unwrap());
+    assert_eq!(db.state(route).unwrap().base_readers, 0);
+}
+#[test]
 fn source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows() {
     let temp = Temp::new();
     let db = Overlay::create(&temp.0.join("db"), ProfileConfig::default()).unwrap();

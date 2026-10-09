@@ -1061,3 +1061,138 @@ What is still true after the commit and must not be blurred:
 - Zero complete baseline samples and zero kept optimizations exist.
 - Linux suite: 174 PASS, 034 FAIL retained, next unrun index 175.
 
+
+## Commit 12 and the first complete C01:B:L sample
+
+Commit 12 is `82780f72e19d1b5b4a7adfc9a93575241cdb5069`, tree
+`264053e03ba847ea0215072ace577b05c3079059`; staged and committed LOC records
+`core/target/r7-loc-11-*` agree. Production LOC 185857 -> 185857 (delta +0).
+
+Preparation at that identity, each one attempt, all PASS:
+
+| Receipt | What | Result |
+| --- | --- | --- |
+| 218 | L source seal | 994 files, set `bb2089f4…`, artifact `63c36c42…` |
+| 219 | Build provenance by reuse | 963 compiled inputs byte-identical to the `af92886c7` seal; only `r7/runner.py` differs; runtime `a2280440…` and daemon `1ca4d9c2…` unchanged. No build ran |
+| 220, 221 | Fresh volume and independent clone of the empty master | Store `0c3de5a5…`, 172032 bytes |
+| 222 | Sealed configuration | config `a6b050ec…`, plan `e753732a…`, preflight PASS |
+
+**223 — C01:B:L at `82780f72e`, one sample, exploratory, not admission-eligible.**
+Attempted 1, completed 1. Row status INCOMPLETE with one gap: the second
+declared count interval ("measured mount after warm terminal") is UNAVAILABLE
+because per-connection opcode counters restart at the new mount. Everything
+else is present: verifier PASS (scoped tree oracle, timestamps not claimed),
+custody KNOWN_STOP, cleanup Gone, numeric correlation PASS.
+
+| Phase | ns |
+| --- | ---: |
+| Mount to Ready | 9537958 |
+| Command (1000 × `echo $i > f$i`) | 2226041875 |
+| Streams (inside command; do not sum) | 2218097000 |
+| Unmount to reply | 7247292 |
+| Cleanup to Gone | 56433583 |
+| Verifier (separate) | 1523316250 |
+| Priced total (`complete_command_ns`) / bound | 2325269208 / 15000000000 |
+
+Storage and memory after the phase: Store 213072 logical / 217088 allocated
+bytes; overlay 557056 logical / 268992512 allocated (the allocated figure is
+the 256 MiB reserved tail plus headroom, not data); daemon VmHWM 30273536
+(lifetime high water).
+
+Counted work in the measured command interval, identical to failed sample 212:
+
+| Counter | Total | Per created file |
+| --- | ---: | ---: |
+| FUSE requests (5000 handed off, 2000 inline) | 7000 | 7 |
+| Owner jobs (after the Resources observer credit) | 18002 | 18 |
+| — Lifecycle / Source / Read / Mutation | 8001 / 4000 / 3001 / 3000 | 8 / 4 / 3 / 3 |
+| Store reader grants | 2001 | 2 |
+| Store object demands (class B predicate) | 0 | 0 |
+| Overlay statement executions, all families | about 344000 | about 344 |
+
+Ratios: 2.57 owner jobs per FUSE request; 2.2 ms of command wall per created
+file. No N or P timing exists yet for this cell, so no gap is stated.
+
+Sample 212 keeps its FAIL. 223 is a new treatment (new harness identity), not
+a rerun.
+
+## Owner direction during the resumed run — 2026-10-09
+
+Received mid-run, quoted: "do it in small step, do not batch full thing";
+"we want no multiple sampling, one sample is enough because we want fast
+iteration"; "420s is too ridiculous" (the wrapper limit of sample 223, copied
+from 212). Applied from here on: one candidate per step, one scoped check set,
+one timed sample, then report; sample wrappers are bounded at 30 s. Decision
+taken under this direction: the first optimization step starts from the one
+complete cell (C01:B:L) instead of waiting for the full 222-selection
+baseline, N/P timings and the K/W runners. Those stay open and are added
+cell by cell.
+
+## Where the C01 command time goes (from 223, no new sample)
+
+Owner class deltas between the measured Mount and the end-of-command Status,
+from the original cumulative owner scalars (indices 14–31):
+
+| Class | Jobs | Queue wait ns | Service ns | Wait / job | Service / job |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Lifecycle | 8001 | 300116116 | 505001765 | 37.5 µs | 63.1 µs |
+| Source | 4000 | 242837518 | 211827441 | 60.7 µs | 53.0 µs |
+| Read | 3002 | 143199521 | 204160356 | 47.7 µs | 68.0 µs |
+| Mutation | 3000 | 51118766 | 508570072 | 17.0 µs | 169.5 µs |
+| Sum | 18003 | 737271921 | 1429559634 | | |
+
+Wait plus service is 2166831555 ns of the 2226041875 ns command: the command
+is one serial chain through the single owner thread. Overlay statements in
+the interval: 342017 executions, about 342 per created file and 19 per job
+(Lease 174005, Workspace 68005, Inode 22004, Begin/Commit/freelist 17001
+each, DirectoryEntry 16000, Frontier 8000, Payload 3000). Service time per
+statement execution is about 4.2 µs inclusive.
+
+Per-file request sequence (opcode counters): LOOKUP, CREATE, GETATTR, WRITE,
+FLUSH ×2 (inline), RELEASE. Owner jobs per handed-off request, from source:
+LOOKUP source + observe ×2 (one immutable round) + release; GETATTR source +
+observe + release; CREATE source + mutate ×2 (one immutable round) + ticket
+release + source release; WRITE source + mutate + ticket release + source
+release; RELEASE close.
+
+Refuted hypothesis, kept for the record: the per-transaction physical
+reservation (`fallocate` on every admission plus four identity observations)
+was suspected as the fixed per-job cost. Measured in the pinned image on the
+container filesystem (20000 iterations each, Python ctypes, lock held):
+`fstat`+`lstat` 1347 ns, `fallocate` KEEP_SIZE over an allocated 128 MiB
+range 1443 ns, 256 MiB 1751 ns. That is about 7 µs of a 55–63 µs job, roughly
+126 ms of the 2226 ms command. It is a minor constant, not the cause; no
+change was made to the reservation.
+
+## Step 1 — C02a: one owner job for a mutation's post-reply release
+
+Candidate: after its single reply attempt a mutation submitted two Lifecycle
+jobs, `ReplyAttempted(ticket)` then `ReleaseBaseSource(source)`. They are
+now one job, `Command::Replied`, running
+`Overlay::reply_attempted_and_release` in one transaction. Expected count:
+CREATE and WRITE each lose one job, 2 of 18 per created file (18002 → about
+16002), with their Begin/Commit/freelist and repeated state statements.
+
+Failure scope: both releases are recorded or neither; a failed job leaves the
+ticket and the source with the request (previously a failed second job left
+the source alone). Read-class requests and a mutation that published nothing
+are unchanged.
+
+Gates by source review: no new resident state (one enum variant carrying two
+existing `Copy` tokens, Lifecycle charge unchanged); no new table, index,
+column or file; the same rows are deleted by the same statements.
+
+Checks, one attempt each, all PASS:
+
+| Receipt | Scope | Result |
+| --- | --- | --- |
+| `224-step1-attempt1-source.txt` | host, overlay `source` | 5 passed; new test asserts one Begin and one Commit and both-or-neither |
+| `224-step1-attempt1-fenced_port.txt` | host, daemon `fenced_port` | 4 passed; disposal jobs after stop 9 → 8, replied mutation admits exactly 1 |
+| `224-step1-attempt1-linux-fenced_port.txt` | Linux | 4 passed |
+| `224-step1-attempt1-linux-native_mutation.txt` | Linux, real mount | 2 passed |
+| `224-step1-attempt1-linux-native_coherence.txt` | Linux, real mount | 6 passed |
+
+Host Clippy `-D warnings` for overlay, fuse and daemon, `fmt --check` and the
+boundary guard passed. One Linux build attempt stopped at the stale-source
+check (Docker file sharing served an old `tests/source.rs`); the next attempt
+built. Not run for this step: the full suites and Linux Clippy.

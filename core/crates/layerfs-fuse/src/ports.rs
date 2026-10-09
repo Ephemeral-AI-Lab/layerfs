@@ -178,8 +178,8 @@ pub trait MountServices: Send + Sync {
 /// `directory`, `directory_read`, `directory_page`, `directory_cookies` and
 /// `publish_cookies`. A job already submitted is awaited to its original
 /// result. The disposal calls are never refused by the fence:
-/// `release_read`, `release_source`, `reply_attempted`, `close_file`,
-/// `close_directory` and `forget`.
+/// `release_read`, `release_source`, `reply_attempted`, `replied`,
+/// `close_file`, `close_directory` and `forget`.
 pub trait RequestServices: Send + Sync {
     fn directory(
         &self,
@@ -283,4 +283,11 @@ pub trait RequestServices: Send + Sync {
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>>;
     /// Releases one publication ticket after its single reply attempt.
     fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>>;
+    /// The same release together with the request's processing source, as
+    /// one owner job. A failure leaves both in the caller's custody.
+    fn replied(
+        &self,
+        publication: Publication,
+        source: BaseSource,
+    ) -> ServiceFuture<'_, ServiceReply<()>>;
 }

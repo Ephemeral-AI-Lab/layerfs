@@ -69,3 +69,14 @@ Current branch rows store(maxserial,childID), not per-child count/fill proof. Au
 Pending zero-added-state/disk candidate: ordered batch consumers use .position()==0 then Vec::remove(0), shifting C(C-1)/2 descriptors. Reconstructed shifts15/561/6523; maximum8001 at inode fanout127 and32640 at general batch cap256. Consume the same Vec with into_iter().next() or reverse/pop while preserving identity checks, decode/check/edit/shrink/drop ordering, narrowing/lease/read_batch and the existing bound. This is neither a committed plan nor an implemented optimization.
 
 Second pending candidate: inode_leaf decode validates each73-byte value into InodeValue but keeps rawrows; CompactInodes decodes again into a second typed Vec. A shared streaming grammar visitor may remove intermediate rawrow storage/second decode with the same framing/order/kind/length failure contract and canonical bytes. Existing PoolingLeaf still owns rawrow Vec; it is not already a nonallocating summary reader. Reusing rehydrated neighbors needs proof of an existing equivalent frame/lease; new caches/pages are not assumed allowed. No exact leaf-decode/move/site counters, allocator/phase RSS or VFS/device bytes are retained. Scratch103646/320972/667280 is simultaneous charged reservation under4MiB, not RSS. All candidates remain pending and unaccepted.
+
+## Candidates opened after the resume (2026-10-09)
+
+| ID | Candidate | Counter: start → floor | Outcome |
+| --- | --- | --- | --- |
+| C02a | One owner job for a mutation's ticket and source release | Owner jobs per created file in C01: 18 → 16 by this step; class floor is one job per handed-off request | Implemented in step 1; timed confirmation pending |
+| C02b | Fold source acquisition into the first deciding job | 4 Source jobs per created file → 0 | Open; needs the plan to be built inside the job |
+| C02c | Release a read-class request's source in its deciding job when no immutable round follows | 2 Lifecycle jobs per created file (LOOKUP, GETATTR) → 0 | Open; needs the custody proof that no consumer uses the source after the decision |
+| C03 | Lease-family statements per job | 174 Lease executions per created file, about 10 per job | Open; needs the per-call statement list |
+| B03 | GETATTR after CREATE | 1 of 7 requests per created file | Open; compare with the P arm before changing attribute validity |
+| D03 | Per-transaction reservation syscalls | about 7 µs per job measured | Measured minor; not pursued now |

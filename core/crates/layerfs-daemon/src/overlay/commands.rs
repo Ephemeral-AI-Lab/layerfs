@@ -198,6 +198,11 @@ pub enum Command {
         cell: Option<Cell>,
     },
     ReplyAttempted(Publication),
+    /// A mutation's reply attempt and the release of its processing source.
+    Replied {
+        publication: Publication,
+        source: BaseSource,
+    },
     Capture,
     /// Caller has established definite nonpublication and fenced the exact
     /// capture's external work. Unknown history must retain that capture.
@@ -313,6 +318,7 @@ impl Command {
             | Self::ReleaseClosedCapture(_)
             | Self::ResolveFailed(_)
             | Self::ReplyAttempted(_)
+            | Self::Replied { .. }
             | Self::Acquire(_)
             | Self::Release(_) => ServiceClass::Lifecycle,
             Self::Inode(_)
@@ -792,6 +798,16 @@ impl Command {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
                 db.reply_attempted(publication).map(|_| Response::Done)
+            }
+            Self::Replied {
+                publication,
+                source,
+            } => {
+                if publication.route() != route || source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.reply_attempted_and_release(publication, source)
+                    .map(|_| Response::Done)
             }
             Self::Capture => db.capture(route).map(Response::Captured),
             Self::ResolveFailed(capture) => {

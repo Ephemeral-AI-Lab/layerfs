@@ -370,18 +370,20 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     assert_eq!(rig.store.read_work().outstanding, 0);
 
     // Every disposal call still runs: ticket, reads, sources, handles, lookup.
+    // A replied mutation gives back its ticket and its source in one job.
     wait(published.replied()).unwrap();
+    assert_eq!(rig.owner_work().admitted, admitted + 1);
     wait(held.dispose()).unwrap();
     drop(wait(services.release_source(source)).unwrap());
     drop(wait(services.release_source(directory_read.source())).unwrap());
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
     drop(wait(services.close_directory(directory)).unwrap());
     drop(wait(services.forget(mount, serial, 1)).unwrap());
-    assert_eq!(rig.owner_work().admitted, admitted + 9);
+    assert_eq!(rig.owner_work().admitted, admitted + 8);
     // The port itself replies to nothing.
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "FENCED-CALLS refused=13 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 disposal_jobs_after_stop=9"
+        "FENCED-CALLS refused=13 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 disposal_jobs_after_stop=8"
     );
     drop((view, services));
     rig.revoke_and_stop();

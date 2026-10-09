@@ -94,12 +94,16 @@ impl Overlay {
     /// One exact release after the request/provider continuation is fenced.
     /// Original errors leave this source in custody; no hidden Drop SQL/retry.
     pub fn release_base_source(&self, source: BaseSource) -> OverlayResult<()> {
+        self.release_class(source)?;
+        self.atomic_cleanup(|| self.release_source_inner(source))
+    }
+    pub(crate) fn release_class(&self, source: BaseSource) -> OverlayResult<()> {
         if !matches!(source.class, 0 | 2) {
             return Err(OverlayError::Invalid(
                 "file read source requires file-read release",
             ));
         }
-        self.atomic_cleanup(|| self.release_source_inner(source))
+        Ok(())
     }
     pub(crate) fn release_source_inner(&self, source: BaseSource) -> OverlayResult<()> {
         self.source_state(source)?;

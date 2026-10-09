@@ -423,6 +423,19 @@ impl RequestServices for FilesystemPort {
     fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>> {
         self.dispose(Command::ReplyAttempted(publication), done)
     }
+    fn replied(
+        &self,
+        publication: Publication,
+        source: BaseSource,
+    ) -> ServiceFuture<'_, ServiceReply<()>> {
+        self.dispose(
+            Command::Replied {
+                publication,
+                source,
+            },
+            done,
+        )
+    }
 }
 /// The allocator's immediate admission refusal: nothing was reserved.
 fn writer_contended(error: &WorkspaceError) -> bool {

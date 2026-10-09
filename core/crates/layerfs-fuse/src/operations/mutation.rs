@@ -216,8 +216,9 @@ impl NativeMutation {
         MutationFailure::new(reason, custody)
     }
     /// Called only after the single reply attempt returned. The publication
-    /// ticket is released first, then the processing source; each exactly
-    /// once. Kernel lookup and open owners persist independently.
+    /// ticket and the processing source are released together in one owner
+    /// job, each exactly once; a mutation that published nothing releases
+    /// its source alone. Kernel lookup and open owners persist independently.
     pub async fn replied(self) -> Result<(), MutationFailure> {
         let Self { value, mut custody } = self;
         drop(value);
@@ -370,6 +371,12 @@ impl Custody {
         }
     }
     async fn release(&mut self) -> Result<(), ServiceError> {
+        if let (Some(publication), Some(source)) = (self.publication, self.source) {
+            drop(self.services.replied(publication, source).await?);
+            self.publication = None;
+            self.source = None;
+            return Ok(());
+        }
         if let Some(publication) = self.publication {
             drop(self.services.reply_attempted(publication).await?);
             self.publication = None;

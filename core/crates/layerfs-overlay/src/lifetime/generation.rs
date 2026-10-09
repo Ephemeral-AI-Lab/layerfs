@@ -1,7 +1,7 @@
 //! Fixed captured membership and publication/reply-attempt ordering primitives.
 use crate::{
-    db::integer, inode, sql, Capture, Generation, Inode, Overlay, OverlayError, OverlayResult,
-    Publication, Route, StatementKind,
+    db::integer, inode, sql, BaseSource, Capture, Generation, Inode, Overlay, OverlayError,
+    OverlayResult, Publication, Route, StatementKind,
 };
 
 impl Overlay {
@@ -139,22 +139,43 @@ impl Overlay {
     /// inode/name/byte state and never claims kernel delivery.
     pub fn reply_attempted(&self, publication: Publication) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
-            self.state(publication.route)?;
-            let changed = self.execute(
-                StatementKind::Frontier,
-                "DELETE FROM request WHERE ns=?1 AND revision=?2 AND gen=?3",
-                &[
-                    &publication.route.ns,
-                    &publication.revision,
-                    &publication.generation.0,
-                ],
-                24,
-            )?;
-            if changed != 1 {
-                return Err(OverlayError::Stale);
-            }
+            self.reply_attempted_inner(publication)?;
             self.queue_closed(publication.route)
         })
+    }
+    /// The reply attempt and the release of the same request's processing
+    /// source, in one transaction: both are recorded or neither is, so a
+    /// failure leaves the ticket and the source in the caller's custody.
+    pub fn reply_attempted_and_release(
+        &self,
+        publication: Publication,
+        source: BaseSource,
+    ) -> OverlayResult<()> {
+        if source.route() != publication.route {
+            return Err(OverlayError::Stale);
+        }
+        self.release_class(source)?;
+        self.atomic_cleanup(|| {
+            self.reply_attempted_inner(publication)?;
+            self.release_source_inner(source)
+        })
+    }
+    fn reply_attempted_inner(&self, publication: Publication) -> OverlayResult<()> {
+        self.state(publication.route)?;
+        let changed = self.execute(
+            StatementKind::Frontier,
+            "DELETE FROM request WHERE ns=?1 AND revision=?2 AND gen=?3",
+            &[
+                &publication.route.ns,
+                &publication.revision,
+                &publication.generation.0,
+            ],
+            24,
+        )?;
+        if changed != 1 {
+            return Err(OverlayError::Stale);
+        }
+        Ok(())
     }
     /// Seals existing rows without copying them. The daemon parks capture until
     /// earlier reply attempts settle; this method does not block a SQL owner.

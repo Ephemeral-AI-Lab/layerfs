@@ -32,7 +32,11 @@ publishing Overlay owner job:
    publishes them, marks the request source decided, and acquires the kernel
    custody the reply hands over, all in one transaction.
 4. The reply is composed only from that job's result, attempted once, and only
-   then are the publication ticket and the processing source released.
+   then are the publication ticket and the processing source released. Both
+   are released by one owner job in one transaction
+   (`Overlay::reply_attempted_and_release`): either both are recorded or the
+   request keeps both. A mutation that published nothing releases its source
+   alone.
 
 `Overlay::apply` is the same checked body inside its own transaction;
 `apply_native` adds the native effects to it. A second publication through one
@@ -88,7 +92,8 @@ connection, so the kernel updates its caches from the reply:
   ([`coherence::pages`](../../crates/layerfs-fuse/src/coherence/pages.rs)).
   A size change makes the kernel drop the affected pages itself.
 - **Reply order.** [`coherence::reply_order`](../../crates/layerfs-fuse/src/coherence/reply_order.rs)
-  releases the ticket, then the source, only after the single attempt.
+  releases the ticket and the source, in one owner job, only after the
+  single attempt.
 
 A link count is the engine's namespace reference count for a file. A
 directory's count is projected: 2 while it has a name, 0 once removed.
