@@ -55,6 +55,7 @@
 - [Optimization guide](general/optimization-guide.md): binding performance-engineering rules
 - [Optimization handbook](general/optimization-handbook.md): diagnostic groups, existing counters, scaling checks, procedure and the current candidate list
 - [Benchmark rules](general/benchmark_rules.md)
+- [Benchmark instruction: the optimization iteration and its metrics](general/benchmark_instruction.md)
 - [Release policy](general/release-policy.md)
 - [Documentation policy](general/documentation-policy.md)
 
