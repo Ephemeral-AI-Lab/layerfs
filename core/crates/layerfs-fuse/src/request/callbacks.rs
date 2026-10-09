@@ -25,10 +25,10 @@ use layerfs_content::filesystem::PathName;
 use layerfs_workspace::NativeReadOperation;
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::Path, time::SystemTime};
 
-/// FLUSH, FSYNC and FSYNCDIR: the declared acknowledgement, with no work.
-fn acknowledge(reply: ReplyEmpty) {
+/// FLUSH, FSYNC and FSYNCDIR: the declared answer, with no work.
+fn unsynchronized() -> Errno {
     match flush::synchronize() {
-        flush::Synchronize::Acknowledge => reply.ok(),
+        flush::Synchronize::NotImplemented => Errno::ENOSYS,
     }
 }
 /// `ENOSYS` for a request no capability was negotiated for.
@@ -255,16 +255,17 @@ impl Filesystem for NativeFilesystem {
         self.release_directory(req, inode, handle, reply);
     }
 
-    // Declared in operations/flush.rs: success with no engine job; nothing is
-    // buffered here to flush and no durability is claimed.
+    // Declared in operations/flush.rs: nothing is buffered here to flush and
+    // no durability is claimed. `ENOSYS` is sticky per connection: the kernel
+    // answers every later one itself, with success.
     fn flush(&self, _: &Request, _: INodeNo, _: FileHandle, _: LockOwner, reply: ReplyEmpty) {
-        self.inline(Opcode::Flush, reply, ReplyEmpty::error, acknowledge);
+        self.refuse(Opcode::Flush, reply, ReplyEmpty::error, unsynchronized());
     }
     fn fsync(&self, _: &Request, _: INodeNo, _: FileHandle, _: bool, reply: ReplyEmpty) {
-        self.inline(Opcode::Fsync, reply, ReplyEmpty::error, acknowledge);
+        self.refuse(Opcode::Fsync, reply, ReplyEmpty::error, unsynchronized());
     }
     fn fsyncdir(&self, _: &Request, _: INodeNo, _: FileHandle, _: bool, reply: ReplyEmpty) {
-        self.inline(Opcode::Fsyncdir, reply, ReplyEmpty::error, acknowledge);
+        self.refuse(Opcode::Fsyncdir, reply, ReplyEmpty::error, unsynchronized());
     }
     fn statfs(&self, _: &Request, _: INodeNo, reply: ReplyStatfs) {
         self.inline(

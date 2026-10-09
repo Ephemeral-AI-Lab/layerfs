@@ -80,12 +80,14 @@ received unit is counted once by
 | Disposition | Operations |
 | --- | --- |
 | Handoff to the shared dispatcher | LOOKUP, GETATTR, OPEN, READ, READLINK, OPENDIR, READDIR, RELEASE, RELEASEDIR, FORGET units; and the mutations SETATTR, MKNOD (regular), MKDIR, UNLINK, RMDIR, SYMLINK, RENAME, LINK, WRITE, CREATE |
-| Inline success, no engine job | FLUSH, FSYNC, FSYNCDIR, STATFS |
-| `ENOSYS` | extended attributes, ACCESS, READDIRPLUS, locks, BMAP, IOCTL, POLL, LSEEK, FALLOCATE, COPY_FILE_RANGE |
+| Inline success, no engine job | STATFS |
+| `ENOSYS` | FLUSH, FSYNC, FSYNCDIR (R7, 2026-10-09: the kernel then returns success to every caller and stops asking); extended attributes, ACCESS, READDIRPLUS, locks, BMAP, IOCTL, POLL, LSEEK, FALLOCATE, COPY_FILE_RANGE |
 | Refused at processing, no engine custody | MKNOD of a FIFO, socket or device, set-id bits and foreign ownership (`EPERM`); exchange and whiteout renames (`EINVAL`) |
 
-Inline FSYNC answers success and claims no durability; Disposable backing is
-never synchronized. STATFS reports fixed declared values, not physical capacity,
+`fsync`, `fdatasync` and `close` still succeed for the caller: the kernel
+answers them itself once FSYNC, FSYNCDIR or FLUSH has been answered `ENOSYS` on
+the connection. No durability is claimed; Disposable backing is never
+synchronized. STATFS reports fixed declared values, not physical capacity,
 and is never an admission signal. No operation answers `EROFS` any more.
 `Terminal` counts a reply-bearing
 unit that met stopped admission and received one error attempt. `Unadmitted`

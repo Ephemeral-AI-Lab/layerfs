@@ -1,0 +1,19 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 1a4aeaee8, uncommitted product/test paths=3, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/store_read_service-4d41e1d21a873d56 --test-threads=1 
+
+running 10 tests
+test a_reader_grant_cannot_be_charged_to_a_different_workspace ... ok
+test bind_reads_snapshot_while_the_original_writer_session_is_occupied ... ok
+test cancellation_capacity_and_stop_dispose_only_unattempted_admission ... ok
+test diagnostic_reader_snapshots_leave_admission_and_provider_work_unchanged ... ok
+test idle_selection_and_replaced_wakeup_do_not_wait_on_a_busy_reader ... ok
+test last_quarantine_wakes_waiters_with_terminal_no_reader_disposition ... ok
+test original_reader_release_races_future_registration_without_polling ... ok
+test quarantined_session_keeps_original_failure_and_only_healthy_reader_is_reused ... ok
+test waiting_operation_has_no_failure_lock_and_its_failures_do_not_poison_other_requests ... ok
+test workspace_rotation_and_fifo_prevent_a_hot_lane_owning_the_next_reader ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

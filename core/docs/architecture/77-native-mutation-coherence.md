@@ -146,8 +146,10 @@ Decided before any engine custody
 | Exchange and whiteout renames | `EINVAL` |
 | A name over 255 bytes; a symlink target of a page or more | `ENAMETOOLONG` |
 
-FLUSH, FSYNC and FSYNCDIR answer success inline with no engine or durability
-work. An engine reservation refusal is `ENOSPC` with no effect.
+FLUSH, FSYNC and FSYNCDIR are answered `ENOSYS` once per connection (R7,
+2026-10-09), with no engine or durability work; the kernel reports success to
+the caller of that and every later `close`, `fsync` and `fdatasync` and sends
+the request no more. An engine reservation refusal is `ENOSPC` with no effect.
 
 ## Accounting
 

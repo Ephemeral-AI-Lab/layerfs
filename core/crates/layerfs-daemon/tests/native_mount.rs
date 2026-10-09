@@ -207,7 +207,9 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
     println!("BACKING_READ_BY_COMMAND status={:?}", backing.status.code());
 
     let served = h.status(token).native.unwrap().work.unwrap();
-    assert!(served.handoffs > 0 && served.inline >= 4 && served.refused >= 3);
+    // FLUSH, FSYNC and FSYNCDIR are refused once each with ENOSYS, beside
+    // the three refusals of `mutating::refusals`; none is an inline reply.
+    assert!(served.handoffs > 0 && served.refused >= 6, "{served:?}");
     assert_eq!(
         (served.terminal, served.unadmitted, served.retained),
         (0, 0, 0)

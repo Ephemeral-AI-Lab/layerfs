@@ -533,6 +533,10 @@ fn size_never_shrinks_under_concurrent_append_and_refusals_stay_refused() {
     assert_eq!(count(Opcode::Setxattr), 1, "{receipt}");
     assert_eq!(count(Opcode::Fallocate), 1, "{receipt}");
     assert_eq!(count(Opcode::Listxattr) + count(Opcode::Removexattr), 0);
+    // Every close of the 200 appends succeeded, and only the first FLUSH of
+    // the connection reached the daemon; likewise at most one FSYNC.
+    assert_eq!(count(Opcode::Flush), 1, "{receipt}");
+    assert!(count(Opcode::Fsync) <= 1, "{receipt}");
     h.stop();
     f.cleanup();
 }

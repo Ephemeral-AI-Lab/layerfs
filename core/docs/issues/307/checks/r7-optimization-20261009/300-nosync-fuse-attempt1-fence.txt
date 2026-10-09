@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 1a4aeaee8, uncommitted product/test paths=4, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/fence-29996ff71b442d8c --test-threads=1  (cwd core/crates/layerfs-fuse)
+
+running 4 tests
+test a_request_running_through_the_stop_gets_its_turn_afterwards ... ok
+test stop_admission_stops_no_fence_and_turns_no_parked_request ... ok
+test stop_service_gives_every_parked_request_one_turn_and_stops_the_fence ... ok
+test stop_service_wakes_every_receive_capacity_waiter ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

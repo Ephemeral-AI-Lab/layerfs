@@ -1,0 +1,27 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 1a4aeaee8, uncommitted product/test paths=3, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_mount-cfafdd4a617043fd --test-threads=1 
+
+running 3 tests
+test attach_refusals_have_no_effect_and_a_failed_attach_returns_to_unattached ... ok
+test ready_mount_serves_the_complete_root_to_unregistered_access_then_drains ... FAILED
+test two_workspaces_share_one_dispatcher_and_unmount_independently ... ok
+
+failures:
+
+---- ready_mount_serves_the_complete_root_to_unregistered_access_then_drains stdout ----
+Q1_INIT shape=Mixed entries=28 sealed_bytes=180224 host_sqlite=3.53.2
+Q1_INSTALL shape=Mixed bytes=180224 records=3 max_record=65519 daemon_sqlite=3.53.2
+BACKING_READ_BY_COMMAND status=Some(1)
+
+thread 'ready_mount_serves_the_complete_root_to_unregistered_access_then_drains' panicked at crates/layerfs-daemon/tests/native_mount.rs:210:5:
+assertion failed: served.handoffs > 0 && served.inline >= 4 && served.refused >= 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    ready_mount_serves_the_complete_root_to_unregistered_access_then_drains
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 101
