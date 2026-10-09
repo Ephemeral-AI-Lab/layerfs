@@ -64,7 +64,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(any("retired host-mediated" in message for _, message in findings), relative)
 
     def test_retired_packages_cannot_return(self):
-        self.assertEqual(RETIRED_PACKAGES, ("layerfs-server", "layerfs-fuse-legacy"))
+        self.assertEqual(RETIRED_PACKAGES, ("layerfs-server", "layerfs-fuse-legacy", "layerfs-sandbox-legacy"))
         for name in RETIRED_PACKAGES:
             findings = violations(Path("core/crates") / name / "src/lib.rs", "pub use std::io::Read;")
             self.assertTrue(any("retired package" in message for _, message in findings), name)
@@ -86,7 +86,7 @@ class ProductBoundaryTests(unittest.TestCase):
         prefix='[package]\nname="layerfs-sandbox"\n[dependencies]\n'
         for dependency in ("layerfs-api-core","layerfs-server","layerfs-daemon","layerfs-persistence","layerfs-sdk"):
             self.assertTrue(dependency_violations(prefix+f'{dependency}={{path="../{dependency}"}}'))
-        self.assertFalse(dependency_violations('[package]\nname="layerfs-sandbox-legacy"\n[dependencies]\nlayerfs-api-core={path="../layerfs-api/core"}'))
+        self.assertTrue(dependency_violations('[package]\nname="layerfs-sandbox-legacy"\n[dependencies]\nlayerfs-api-core={path="../layerfs-api/core"}'))
 
     def test_bridge_control_reuses_domain_records_without_engine_edges(self):
         prefix = '[package]\nname="layerfs-bridge"\n[dependencies]\n'

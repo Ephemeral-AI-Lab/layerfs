@@ -71,8 +71,12 @@ process ownership remains outside the filesystem daemon, and teardown never
 implicitly signals caller-owned processes.
 
 Excluded old Sandbox source/test bytes were moved intact to
-`layerfs-sandbox-legacy`, with only its package manifest name adjusted. It is
-unbuilt reference integration, not a replacement dependency or fallback. The
+`layerfs-sandbox-legacy`, with only its package manifest name adjusted, while
+the replacement was built. It was unbuilt reference integration, never a
+replacement dependency or fallback. R7-retire removed that directory on
+2026-10-10 as retirement, 1106 production lines, after its
+[coverage audit](../issues/307/checks/r7-retire-20261010/12-layerfs-sandbox-legacy.md);
+its last source is at `5bc23bbcb`. The
 replacement has no API-core/Server/host-data-runtime edge. The later owned lifecycle uses the existing Bridge dependency and concrete
 SDK SandboxApi; see [lifecycle architecture](72-owned-sandbox-lifecycle.md).
 
