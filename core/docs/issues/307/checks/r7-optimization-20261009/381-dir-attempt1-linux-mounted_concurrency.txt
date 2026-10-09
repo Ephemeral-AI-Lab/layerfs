@@ -1,0 +1,14 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 900231d0a, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_concurrency-4d1808e271b4d3d0 --test-threads=1 
+
+running 5 tests
+test r6_1_twenty_four_processes_read_and_write_through_three_commits ... ok
+test r6_2_a_commit_against_twenty_writers_holds_an_exact_prefix_of_each ... ok
+test r6_3_a_commit_on_one_workspace_while_its_sibling_writes ... ok
+test r6_6_finite_arrivals_on_two_workspaces_both_finish ... ok
+test readers_on_two_workspaces_read_exact_bytes_while_one_is_written ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.51s
+
+R4_WALL seconds<=15 limit=115s lock_wait=0s
+EXIT 0
