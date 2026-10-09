@@ -331,64 +331,35 @@ The previous lead's own audit of steps 4 to 10 and the fix:
 
 ## Fast iteration: what cost time, and how to avoid it
 
-**The loop.**
+The method is in the [benchmark instruction](../../../../docs/general/benchmark_instruction.md),
+written from this run with its measured times:
 
-- One C01 iteration is about 25 s of wall time: seal under 1 s, two release
-  builds about 12 s, provenance, volume, clone and configuration about 2 s,
-  the sample 6–7 s. One build serves every cell at that HEAD
-  (`r7-iterate-all.sh <n> C01 C04 …`), 4 receipts per further cell.
+- [Loop time: three tiers](../../../../docs/general/benchmark_instruction.md#loop-time-three-tiers):
+  a 9 s count tier after every edit, a 2 to 4 minute commit tier, the
+  10 minute gate and the samples once per batch.
+- [Finding the cost](../../../../docs/general/benchmark_instruction.md#finding-the-cost-scaling-round-trips-and-one-ranked-batch):
+  the round-trip ladder with floors and unit costs, the ratios that expose a
+  bad scaling factor, the ranked opportunity list, and how to apply it as
+  one batch with one commit and one counter per row.
+- [Root-cause analysis of a time](../../../../docs/general/benchmark_instruction.md#root-cause-analysis-of-a-time):
+  the decomposition tree and the traps this run met.
+
+Specific to this checkout:
+
 - The sample needs a clean HEAD. Commit pending documents first; untracked
   files did not block the seal, a modified tracked file was not tried.
 - Stop sample containers retained from FAIL or NOT_RUN rows before
   measuring; they hold idle daemons.
-- Suites: the daemon's Linux suite is 59 binaries and 6–8 minutes, one
-  bounded run each; overlay 26 and fuse 4 take under a minute. Run only the
-  changed packages. Build with `--no-run` first so compilation is not
-  mistaken for a slow test.
-- One writer in the tree at a time. Research agents read with
-  `git show <commit>:<path>` while an implementer edits; receipts and
-  documents can be committed meanwhile by staging explicit paths.
-
-**Reading a sample (in this order).**
-
-1. `r7-summary.py <receipt.json>`: row and verifier, then requests by
-   opcode, jobs by class, statements by family, owner wait and service.
-2. Divide by the unit of work and by requests; compute time outside the
-   owner. Whichever of the four multipliers is largest (requests per unit,
-   jobs per request, statements per job, cost per statement) is the target.
-3. `r7-statements.py`: time and VM steps per family. Statement count is a
-   weak proxy; trigger runs are executions minus statements; COMMIT is three
-   VM steps and 10.8 µs.
-4. A FAIL row: the verifier's differences are in
-   `sample/runtime.events.artifacts/*-verify.stdout`; the full comparison
-   file is inside the retained container (`docker cp`).
-5. A NOT_RUN row: the reason is in `sample/cache.stdout`.
-
-**Finding the change.**
-
-- Have a read-only agent build the per-request model from source and require
-  it to reproduce the receipt's counts exactly. Each took 15–30 minutes and
-  several ran in parallel; every kept step came from one.
-- Give an implementer a brief with the decided design, the items, the proof
-  required, the helper commands and **stages that each leave the tree
-  green**. That is what allowed step 10 to be cut to its first stage cleanly
-  when the owner changed direction.
-- Before changing a constant or a count, search the tests for it. Changing
-  the receive loops broke eight test binaries that asserted the old number;
-  moving the reply ticket broke three exact-count tests.
-- Exact-count tests (`costs.rs`, `compound.rs`, `transactions.rs`,
-  `native_visit_cost.rs`, `job_cost.rs`) are the fastest regression signal:
-  restage them with the true new number, never loosen them.
-- Run `fmt` before the suites, not after.
-
-**Known noise.**
-
+- Give an implementer a brief with the decided design, the rows, the proof
+  required, the helper commands and stages that each leave the tree green.
+  That is what allowed step 10 to be cut to its first stage cleanly when the
+  owner changed direction.
 - Docker can serve a stale test binary after a small edit (the rebuild
   finishes in two seconds and the old assertion still fails): `touch` the
   file, rebuild, use the next attempt number.
 - "RECEIPT EXISTS" for the second `layerfs_daemon` unit binary is harmless.
 - zsh expands unquoted globs in `grep --include=*.rs`; quote them.
-- One-sample time spread is about 10 %; peak resident memory is bimodal.
+- Peak resident memory is bimodal between identical samples.
 
 ## Not measured at all
 

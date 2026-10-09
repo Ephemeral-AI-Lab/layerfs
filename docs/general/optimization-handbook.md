@@ -445,8 +445,12 @@ a retained layer per Commit.
 5. **Write the cause sentence.** If it cannot be written with numbers, go
    back to step 4.
 6. **Write the candidate list** before changing anything.
-7. **Apply one candidate.** Recount; rerun the group's proofs; take one timed
-   sample at the new identity; keep or revert.
+7. **Apply one candidate per commit.** Recount; rerun the group's proofs;
+   take one timed sample at the new identity; keep or revert. Owner direction
+   2026-10-09: several ranked candidates, each its own commit with its own
+   predicted counter, may share one final proof and one sample at the tip of
+   the batch, as the
+   [benchmark instruction](benchmark_instruction.md#one-batch) describes.
 8. **Check scaling** on the changed path and add a count test.
 9. **Record** what was kept, rejected and proposed.
 10. **End when the list is exhausted.** Bring the measured gaps to the owner,
