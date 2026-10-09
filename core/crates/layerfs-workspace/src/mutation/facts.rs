@@ -1,5 +1,5 @@
 //! Immutable base facts for one owned source, fetched outside the SQL owner.
-use crate::{SourceView, WorkspaceError, WorkspaceResult};
+use crate::{BaseView, SourceView, WorkspaceError, WorkspaceResult};
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::InodeKind as BaseKind;
 use layerfs_content::ContentError;
@@ -41,6 +41,12 @@ impl BaseFacts {
             + self.directory_entries.capacity()
                 * (std::mem::size_of::<(u64, PathName, Option<u64>)>() + 255)
     }
+    fn has(&self, need: &Need) -> bool {
+        match need {
+            Need::Inode(serial) => self.inode(*serial).is_some(),
+            Need::Name(parent, name) => self.name(*parent, name).is_some(),
+        }
+    }
     fn make_room(&mut self) {
         if self.inodes.len() + self.directory_entries.len() >= FACT_WINDOW {
             self.inodes.clear();
@@ -49,10 +55,62 @@ impl BaseFacts {
     }
 }
 impl SourceView {
+    /// Provider/content demand for the facts one evaluation asked for.
+    pub(crate) fn supply(
+        &self,
+        facts: &mut BaseFacts,
+        needs: &[Need],
+        path: Option<&[PathName]>,
+    ) -> WorkspaceResult<()> {
+        self.base.supply(facts, needs, path)
+    }
+}
+/// Base facts of one native request that holds no source, read outside the
+/// owner for one base root. An owner visit uses them only while the
+/// Workspace still has that base.
+#[derive(Clone, Debug, Default)]
+pub struct VisitFacts {
+    root: Option<[u8; 32]>,
+    facts: BaseFacts,
+}
+impl VisitFacts {
+    /// The facts, when they were read from `root`.
+    pub(crate) fn of(&self, root: [u8; 32]) -> Option<&BaseFacts> {
+        (self.root == Some(root)).then_some(&self.facts)
+    }
+    pub fn charge(&self) -> usize {
+        self.facts.charge()
+    }
+    /// Reads what an undecided visit asked for from the Workspace's current
+    /// base. Facts of another base are dropped first. Needs this base already
+    /// answered mean the visit did not accept them: the binding and the
+    /// owner disagree about the base, and nothing is read again.
+    pub fn supply(
+        &mut self,
+        base: &BaseView,
+        needs: &[Need],
+        path: Option<&[PathName]>,
+    ) -> WorkspaceResult<()> {
+        let root = base.identity().0.to_bytes();
+        if self.root != Some(root) {
+            *self = Self {
+                root: Some(root),
+                facts: BaseFacts::default(),
+            };
+        } else if needs.iter().all(|need| self.facts.has(need)) {
+            return Err(WorkspaceError::BaseChanged {
+                expected: root,
+                actual: root,
+            });
+        }
+        base.supply(&mut self.facts, needs, path)
+    }
+}
+impl BaseView {
     /// The base inode as a complete local value, or None when the base has no
     /// such serial. Directory entry counts come from the directory root page.
     fn base_inode(&self, serial: u64) -> WorkspaceResult<Option<Inode>> {
-        let stat = match self.base.stat(serial) {
+        let stat = match self.stat(serial) {
             Ok(stat) => stat,
             Err(WorkspaceError::Content(ContentError::PathNotFound)) => return Ok(None),
             Err(error) => return Err(error),
@@ -60,7 +118,7 @@ impl SourceView {
         let (kind, entries) = match stat.value.kind {
             BaseKind::RegularFile => (InodeKind::File, 0),
             BaseKind::Symlink => (InodeKind::Symlink, 0),
-            BaseKind::Directory => (InodeKind::Directory, self.base.entries(stat.value)?),
+            BaseKind::Directory => (InodeKind::Directory, self.entries(stat.value)?),
         };
         Ok(Some(Inode {
             serial,
@@ -77,7 +135,7 @@ impl SourceView {
         }))
     }
     fn base_child(&self, parent: u64, name: &PathName) -> WorkspaceResult<Option<u64>> {
-        match self.base.child(parent, name) {
+        match self.child(parent, name) {
             Ok(child) => Ok(Some(child.serial)),
             // An absent or non-directory base parent binds no such name.
             Err(ContentError::PathNotFound | ContentError::WrongLogicalRole) => Ok(None),

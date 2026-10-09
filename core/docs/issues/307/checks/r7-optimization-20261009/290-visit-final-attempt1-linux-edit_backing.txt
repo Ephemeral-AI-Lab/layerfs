@@ -1,0 +1,13 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/edit_backing-3324040c17aee12c --test-threads=1 
+
+running 4 tests
+test canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup ... ok
+test direct_overlay_port_keeps_deciding_and_unadmitted_inputs_without_owner_release ... ok
+test oversized_unattempted_input_and_stopped_owner_retain_first_cause ... ok
+test terminal_refusal_keeps_original_completion_and_other_scope_progresses ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

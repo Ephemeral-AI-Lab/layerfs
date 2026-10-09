@@ -1,0 +1,19 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_control-8af8303c5679864b --test-threads=1 
+
+running 10 tests
+test a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown ... ok
+test an_original_unknown_blocks_another_commit_and_normal_unmount ... ok
+test an_unresolved_moved_head_failure_is_answered_and_not_dropped ... ok
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... ok
+test forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect ... ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... ok
+test product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_up_to_date ... ok
+test status_retains_known_publication_when_the_engine_is_unavailable ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

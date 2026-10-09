@@ -1,0 +1,15 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-overlay IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/resources-02edd44b56461e54 --test-threads=1 
+
+running 6 tests
+test last_generation_release_is_fixed_work_and_wakes_retirements_in_bounded_pages ... ok
+test lost_backing_path_quarantines_without_sql_or_releasing_published_capture ... ok
+test physical_reserve_counts_allocation_separately_from_logical_rows_and_reusable_pages ... ok
+test real_backing_corruption_retains_original_sql_cause_and_quarantines_custody ... ok
+test repeated_resource_snapshots_do_not_reprepare_expired_metadata_statements ... ok
+test retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_duplication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

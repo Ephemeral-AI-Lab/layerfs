@@ -81,6 +81,14 @@ impl Overlay {
         source: BaseSource,
         state: WorkspaceState,
     ) -> OverlayResult<WorkspaceState> {
+        // A visit's own source names no row: it is the current base itself.
+        if source.class == 3 {
+            return if state.base_root == source.root && state.installed == source.installed {
+                Ok(state)
+            } else {
+                Err(OverlayError::Stale)
+            };
+        }
         if state.base_root != source.root
             || self.base_source_by_owner(
                 source.route,

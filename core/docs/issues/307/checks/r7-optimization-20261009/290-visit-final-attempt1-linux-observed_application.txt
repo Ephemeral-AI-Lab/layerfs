@@ -1,0 +1,13 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/observed_application-667353e132ba6f06 --test-threads=1 
+
+running 4 tests
+test diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind ... ok
+test equal_calls_and_reused_slot_have_distinct_public_observation_identity ... ok
+test observer_job_is_charged_and_cardinality_does_not_follow_unrelated_workspaces ... ok
+test resource_and_output_failure_preserve_original_status_reply ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

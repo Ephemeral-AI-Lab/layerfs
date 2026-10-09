@@ -2,6 +2,12 @@
 
 > **Status:** Implemented S3/R5 checkpoint after `6e84b9181`; effective view/native/runtime and full R1–R8 acceptance remain unfinished.
 
+R7 update, 2026-10-09: native LOOKUP, GETATTR and mutations no longer open a
+base-source window. They are served by owner visits that record no source;
+see [native read custody](73-native-read-custody.md). The windows described
+here remain for caller sources, file reads, OPEN, OPENDIR and directory
+enumeration.
+
 Schema6 adds `base_source(ns,owner,base_root)` and a maintained Workspace
 `base_readers` count. Acquire/release update both atomically. Tokens contain the
 engine-qualified route, exact operation owner and selected root. Observation uses

@@ -17,11 +17,21 @@ impl Overlay {
     ) -> OverlayResult<BaseSource> {
         self.atomic(|| {
             let state = self.check_native_mount(mount)?;
-            let rows = self.query(StatementKind::Lease,
-                "SELECT 1 FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 AND n.owner=?3 AND f.serial=?4 UNION ALL SELECT 1 FROM native_directory d WHERE d.ns=?1 AND d.mount=?2 AND d.owner=?3 AND d.serial=?4 AND d.closed=0",
-                &[&mount.route.ns, &integer(mount.owner)?, &integer(handle)?, &integer(serial)?],
-                32, |_| Ok(()))?;
-            if rows.len() != 1 { return Err(OverlayError::Stale); }
+            let rows = self.query(
+                StatementKind::Lease,
+                crate::sql::NATIVE_HANDLE_HELD,
+                &[
+                    &mount.route.ns,
+                    &integer(mount.owner)?,
+                    &integer(handle)?,
+                    &integer(serial)?,
+                ],
+                32,
+                |_| Ok(()),
+            )?;
+            if rows.len() != 1 {
+                return Err(OverlayError::Stale);
+            }
             self.retain_native_source(mount, state, request, serial)
         })
     }
@@ -33,6 +43,15 @@ impl Overlay {
         handle: u64,
     ) -> OverlayResult<OpenFile> {
         self.check_native_attached(mount)?;
+        self.native_file_row(mount, serial, handle)
+    }
+    /// The same descriptor inside a job that already checked its mount.
+    pub(crate) fn native_file_row(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    ) -> OverlayResult<OpenFile> {
         self.query(StatementKind::Lease,
             "SELECT f.writable FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=?1 AND n.mount=?2 AND n.owner=?3 AND f.serial=?4",
             &[&mount.route.ns, &integer(mount.owner)?, &integer(handle)?, &integer(serial)?], 32,

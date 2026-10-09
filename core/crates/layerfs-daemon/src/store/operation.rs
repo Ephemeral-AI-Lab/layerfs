@@ -65,6 +65,10 @@ impl StoreOperation {
     pub fn client(&self) -> &CanonicalClient {
         &self.client
     }
+    /// The Store's memory-only client, for base facts read inside an owner job.
+    pub fn resident(&self) -> Arc<CanonicalClient> {
+        self.ports.resident()
+    }
     pub fn ports(&self) -> &StorePorts {
         &self.ports
     }

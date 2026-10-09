@@ -77,6 +77,12 @@ impl Cache {
         self.ages.insert((*age, id), ());
         Ok(Some(value.clone()))
     }
+    /// Whether the object is cached and no longer than `limit`.
+    pub(crate) fn within(&self, id: ObjectId, limit: usize) -> bool {
+        self.objects
+            .get(&id)
+            .is_some_and(|(value, _)| value.len() <= limit)
+    }
     pub(crate) fn insert(&mut self, id: ObjectId, value: &[u8]) -> u64 {
         // Charge canonical bytes and a conservative bookkeeping allowance.
         // This is logical accounting, not a measured allocator/RSS bound.

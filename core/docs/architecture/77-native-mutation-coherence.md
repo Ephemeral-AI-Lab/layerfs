@@ -10,6 +10,18 @@ forced unmount and timing qualification are not part of it. Scope, receipts,
 failed attempts and open decisions are in the
 [R3 completion record](../issues/307/R3-COMPLETION-20261008.md).
 
+R7 update, 2026-10-09: a native mutation no longer acquires a processing
+source. Steps 1 and 3 to 5 below are one owner visit
+([`NativeMutationVisit`](../../crates/layerfs-workspace/src/operations/native_visit.rs)):
+it resolves the kernel reference or the handle, decides over current rows
+with base facts read from resident objects, and publishes with the reply's
+kernel custody in one transaction. An undecided visit changes nothing; the
+request reads the needed facts outside the owner and visits again, holding
+nothing in between. After the reply only the publication's ticket is
+released (`ReplyAttempted`). The serial of a creating operation is reserved
+before the first visit. See
+[native read custody](73-native-read-custody.md) for the visit rules.
+
 ## One engine, one publishing job
 
 There is no native mutation engine. Every mutating kernel request becomes one

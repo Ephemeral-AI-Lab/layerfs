@@ -5,8 +5,8 @@ use crate::{
 };
 use layerfs_overlay::{BaseSource, FileRead, NativeMount};
 use layerfs_workspace::{
-    NativeReadDecision, NativeReadOperation, NativeReadOutcome, NativeReadPlan, NativeReadValue,
-    Refusal, SourceView,
+    NativeReadDecision, NativeReadFailure, NativeReadOperation, NativeReadOutcome, NativeReadPlan,
+    NativeReadValue, Refusal, SourceView, VisitFacts,
 };
 use std::{fmt, sync::Arc};
 
@@ -184,7 +184,66 @@ impl Custody {
             Err(reason) => Err(ReadFailure::new(reason, self)),
         }
     }
+    /// LOOKUP and GETATTR are served by owner visits that record no request
+    /// source: nothing is acquired, so nothing is released afterwards. An
+    /// undecided visit changed nothing; the base facts it asked for are read
+    /// here, outside the owner, before the next visit.
+    async fn visit(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
+        let mut facts = Arc::new(VisitFacts::default());
+        loop {
+            let receipt = self
+                .services
+                .observe_visit(
+                    self.mount,
+                    self.protected,
+                    self.handle,
+                    self.operation.clone(),
+                    facts.clone(),
+                )
+                .await?;
+            let original = receipt.get().clone();
+            let needs = match (&original.result, &original.decision) {
+                (Ok(None), Some(NativeReadDecision::Value(inode))) => {
+                    let stat = inode.clone().into();
+                    self.receipt = Some(receipt);
+                    return Ok(Ok(NativeReadValue {
+                        stat,
+                        read: None,
+                        file: None,
+                        directory: None,
+                        original,
+                    }));
+                }
+                (Ok(None), Some(NativeReadDecision::Refused(refusal))) => return Ok(Err(*refusal)),
+                (Ok(None), Some(NativeReadDecision::Needs(needs))) if !needs.is_empty() => needs,
+                _ => {
+                    self.receipt = Some(receipt);
+                    return Err(Box::new(NativeReadFailure {
+                        reason: "native read visit did not produce a usable original answer",
+                        original,
+                    }));
+                }
+            };
+            // The job and its credit are gone before any provider wait.
+            drop(receipt);
+            // Provider reads never run on the loop that received the request.
+            crate::LeaveReceiver::default().await;
+            let base = self.services.base().await?;
+            let result = Arc::make_mut(&mut facts).supply(&base, needs, None);
+            drop(base); // Return the actual reader before another SQL wait.
+            if let Err(error) = result {
+                return Err(self.services.failed_base_read(error.into()));
+            }
+            NextTurn::default().await;
+        }
+    }
     async fn prepare(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
+        if matches!(
+            self.operation,
+            NativeReadOperation::Lookup { .. } | NativeReadOperation::Getattr { .. }
+        ) {
+            return self.visit().await;
+        }
         let granted = self
             .services
             .source(self.mount, self.request, self.protected, self.handle)

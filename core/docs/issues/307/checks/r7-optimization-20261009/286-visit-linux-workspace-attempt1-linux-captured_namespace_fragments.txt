@@ -1,0 +1,18 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-workspace IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/captured_namespace_fragments-f55a010417f70662 --test-threads=1 
+
+running 9 tests
+test a_hole_and_written_zeros_are_the_same_bytes ... ok
+test a_store_after_a_shrink_is_clipped_to_the_new_size ... ok
+test a_truncate_between_pieces_cuts_what_was_written_before_it ... ok
+test a_truncate_to_zero_then_appends_holds_only_the_appended_bytes ... ok
+test fragmented_writes_around_a_hole_of_a_new_file_give_one_root ... ok
+test fragmented_writes_of_a_base_file_give_one_root ... ok
+test mapped_stores_land_only_below_the_current_size ... ok
+test pieces_crossing_the_end_of_a_base_file_give_one_root ... ok
+test shrinking_and_regrowing_across_cells_never_returns_cut_bytes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

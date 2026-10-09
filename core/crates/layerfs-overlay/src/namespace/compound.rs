@@ -11,6 +11,7 @@ use crate::{
 /// The single owner runs a job to completion, so these point reads and the
 /// job's one `apply` observe the same state without holding a transaction
 /// across caller logic. It must not outlive its job.
+#[derive(Clone, Copy)]
 pub struct SourceRows<'a> {
     db: &'a Overlay,
     source: BaseSource,

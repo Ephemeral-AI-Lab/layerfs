@@ -1,0 +1,12 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-workspace IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/payload-3686855493e22400 --test-threads=1 
+
+running 3 tests
+test fragmented_inherited_bytes_are_read_as_one_base_range ... ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

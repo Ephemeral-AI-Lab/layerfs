@@ -1,0 +1,14 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_install-b9263bb8ea32cca1 --test-threads=1 
+
+running 5 tests
+test a_directory_of_more_than_one_name_window_is_listed ... ok
+test a_later_commit_overwrites_the_branch_head_and_keeps_its_captured_parent ... ok
+test retained_descriptors_and_kernel_caches_are_unchanged_by_install ... ok
+test writes_during_a_commit_stay_live_and_reach_the_next_commit ... ok
+test writes_during_a_commit_stay_live_and_reach_the_next_commit_fifty_to_a_directory ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.25s
+
+R4_WALL seconds<=9 limit=115s lock_wait=0s
+EXIT 0

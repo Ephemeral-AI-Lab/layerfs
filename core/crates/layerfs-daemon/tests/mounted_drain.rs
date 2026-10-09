@@ -1070,7 +1070,7 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
         })
     };
     let again = receiver.recv_timeout(HELD).ok();
-    let second = settled(&rig, token, |now| now.parked == 2);
+    let second = settled(&rig, token, |now| now.completed == parked.completed + 1);
     let both = rig.harness.engine(helper);
     println!(
         "FP-31 partial hold: reclaim_requests={first_requests} forget_units={} parked_forget=1 second_lookup={again:?} handoffs={}->{} parked={} admitted={} owner_rows(baseline={} looked={} while_parked={})",
@@ -1086,11 +1086,16 @@ fn fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder() {
     checks.that(again == Some(Ok(inode)), || {
         format!("FP-31: the second LOOKUP did not return the same inode while the FORGET was parked: {again:?} {second:?}")
     });
-    // `owner_rows` here also counts the processing owners of the LOOKUP whose
-    // source release is parked; the lookup rows are compared once it is quiet.
+    // The LOOKUP is one owner visit that records no request source: it
+    // completed whole, with no release left to park beside the FORGET unit
+    // and no processing owner row beside the one lookup row.
     checks.that(
-        second.handoffs == parked.handoffs + 1 && second.forget_units == 1 && second.parked == 2,
-        || format!("FP-31: not exactly one more request beside the parked unit: {parked:?} -> {second:?}, {both:?}"),
+        second.handoffs == parked.handoffs + 1
+            && second.forget_units == 1
+            && (second.parked, second.admitted) == (1, 1)
+            && second.completed == parked.completed + 1
+            && both.owner_rows == looked.owner_rows,
+        || format!("FP-31: not exactly one more request, completed, beside the parked unit: {parked:?} -> {second:?}, {both:?}"),
     );
 
     credits.release();

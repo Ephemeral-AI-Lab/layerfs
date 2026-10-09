@@ -4,7 +4,7 @@ mod support;
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::{
     bootstrap::open_store, store::BindRequest, Command, NativeJob, NativeReply, Owner, OwnerConfig,
-    OwnerError, Response,
+    OwnerError, Response, ServiceClass,
 };
 use layerfs_fuse::{
     operations::{DirectoryStep, DirectoryStream, NativeRead, ReadFailure},
@@ -278,8 +278,12 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     wait(data.dispose()).unwrap();
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
 
-    // A definite missing-name refusal still owns its source until the caller
-    // disposes the reply; it is not confused with an uncertain SQL failure.
+    // A definite missing-name refusal of a lookup is not confused with an
+    // uncertain SQL failure, and owns nothing: the lookup was two owner
+    // visits around one base read, with no source and no retained result, so
+    // disposing the reply admits no job.
+    let before = client.diagnostics().unwrap();
+    let grants = store.read_work().grants;
     let missing = wait(NativeRead::prepare(
         bound.request(&Fence::default()).unwrap(),
         mount,
@@ -293,9 +297,53 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     ))
     .unwrap();
     assert!(matches!(missing.value(), Err(Refusal::Missing)));
-    assert_eq!(client.diagnostics().unwrap().outstanding, 1);
+    let visited = client.diagnostics().unwrap();
+    assert_eq!(visited.outstanding, 0);
+    assert_eq!(visited.admitted, before.admitted + 2);
+    assert_eq!(
+        visited.completed[ServiceClass::Read as usize],
+        before.completed[ServiceClass::Read as usize] + 2
+    );
+    assert_eq!(
+        visited.completed[ServiceClass::Source as usize],
+        before.completed[ServiceClass::Source as usize]
+    );
+    assert_eq!(store.read_work().grants, grants + 1);
     wait(missing.dispose()).unwrap();
-    assert_eq!(client.diagnostics().unwrap().outstanding, 0);
+    let disposed = client.diagnostics().unwrap();
+    assert_eq!(
+        (disposed.outstanding, disposed.admitted),
+        (0, visited.admitted)
+    );
+    // A definite refusal of a request that records a source still owns that
+    // source and its original result until the caller disposes the reply:
+    // OPEN of a directory.
+    let refused = wait(NativeRead::prepare(
+        bound.request(&Fence::default()).unwrap(),
+        mount,
+        8,
+        root,
+        None,
+        NativeReadOperation::Open {
+            serial: root,
+            writable: false,
+        },
+    ))
+    .unwrap();
+    assert!(matches!(refused.value(), Err(Refusal::IsDirectory)));
+    let held = client.diagnostics().unwrap();
+    assert_eq!(held.outstanding, 1);
+    assert_eq!(
+        held.completed[ServiceClass::Source as usize],
+        disposed.completed[ServiceClass::Source as usize] + 1
+    );
+    wait(refused.dispose()).unwrap();
+    let released = client.diagnostics().unwrap();
+    // Exactly the release of that source.
+    assert_eq!(
+        (released.outstanding, released.admitted),
+        (0, held.admitted + 1)
+    );
     let done = wait(
         client
             .try_submit(
@@ -379,61 +427,91 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
     })
     .unwrap();
     let queue = pool.register(mount).unwrap();
-    let services = bound.request(&Fence::default()).unwrap();
     owner.stop().unwrap();
     let before = client.diagnostics().unwrap().admitted;
-    queue
-        .receive()
-        .unwrap()
-        .admit(0)
-        .unwrap()
-        .handoff(Box::pin(async move {
-            match NativeRead::prepare(
-                services,
-                mount,
-                u64::MAX,
-                root,
-                None,
-                NativeReadOperation::Lookup {
-                    parent: root,
-                    name: PathName::new("file-000000").unwrap(),
-                },
-            )
-            .await
-            {
-                Err(error) => RequestDisposition::Retained(Box::new(error)),
-                Ok(_) => panic!("stopped owner cannot publish a new source"),
-            }
-        }))
-        .unwrap();
-    until(|| queue.work().unwrap().retained == 1);
-    queue
-        .inspect_retained(0, |failure| {
-            let FailureView::Request(error) = failure else {
-                panic!("expected original owner error")
-            };
-            let error = error.downcast_ref::<ReadFailure>().unwrap();
-            assert_eq!(error.request(), u64::MAX);
-            assert_eq!(error.retained_source(), None);
-            assert_eq!(error.protected(), root);
-            assert!(
-                matches!(error.operation(), NativeReadOperation::Lookup { parent, name }
-                if *parent == root && name.as_bytes() == b"file-000000")
-            );
-            let original = error.reason.downcast_ref::<OwnerError>().unwrap();
-            let OwnerError::Unattempted { cause, command } = original else {
-                panic!("{original:?}")
-            };
-            assert!(matches!(cause.as_ref(), OwnerError::Stopped));
-            assert!(matches!(
-                command.as_ref(),
-                Command::Native(NativeJob::Source {
-                    request: u64::MAX,
-                    ..
-                })
-            ));
-        })
-        .unwrap();
+    // A lookup's first owner job is its visit; an OPENDIR's is the
+    // acquisition of its recorded source. Each is retained in its own slot.
+    let requests = [
+        (
+            u64::MAX,
+            NativeReadOperation::Lookup {
+                parent: root,
+                name: PathName::new("file-000000").unwrap(),
+            },
+        ),
+        (u64::MAX - 1, NativeReadOperation::Opendir { serial: root }),
+    ];
+    // Both are admitted before either runs: the first retained failure makes
+    // the lane terminal, which refuses later admission and not a handoff.
+    let permits = requests
+        .iter()
+        .map(|_| queue.receive().unwrap().admit(0).unwrap())
+        .collect::<Vec<_>>();
+    for (slot, (permit, (request, operation))) in permits
+        .into_iter()
+        .zip(requests.iter().cloned())
+        .enumerate()
+    {
+        let services = bound.request(&Fence::default()).unwrap();
+        permit
+            .handoff(Box::pin(async move {
+                match NativeRead::prepare(services, mount, request, root, None, operation).await {
+                    Err(error) => RequestDisposition::Retained(Box::new(error)),
+                    Ok(_) => panic!("a stopped owner cannot run a new job"),
+                }
+            }))
+            .unwrap();
+        until(|| queue.work().unwrap().retained == slot + 1);
+    }
+    for (slot, (request, operation)) in requests.iter().enumerate() {
+        queue
+            .inspect_retained(slot, |failure| {
+                let FailureView::Request(error) = failure else {
+                    panic!("expected original owner error")
+                };
+                let error = error.downcast_ref::<ReadFailure>().unwrap();
+                assert_eq!(error.request(), *request);
+                assert_eq!(error.retained_source(), None);
+                assert_eq!(error.retained_read(), None);
+                assert_eq!(error.protected(), root);
+                match (error.operation(), operation) {
+                    (
+                        NativeReadOperation::Lookup { parent, name },
+                        NativeReadOperation::Lookup { .. },
+                    ) => assert!(*parent == root && name.as_bytes() == b"file-000000"),
+                    (
+                        NativeReadOperation::Opendir { serial },
+                        NativeReadOperation::Opendir { .. },
+                    ) => assert_eq!(*serial, root),
+                    other => panic!("retained another operation: {other:?}"),
+                }
+                let original = error.reason.downcast_ref::<OwnerError>().unwrap();
+                let OwnerError::Unattempted { cause, command } = original else {
+                    panic!("{original:?}")
+                };
+                assert!(matches!(cause.as_ref(), OwnerError::Stopped));
+                // The command that was never submitted comes back unchanged.
+                match (command.as_ref(), operation) {
+                    (
+                        Command::Native(NativeJob::ObserveVisit(visit)),
+                        NativeReadOperation::Lookup { .. },
+                    ) => assert_eq!(visit.mount(), mount),
+                    (
+                        Command::Native(NativeJob::Source {
+                            mount: sourced,
+                            request: sourced_request,
+                            serial,
+                        }),
+                        NativeReadOperation::Opendir { .. },
+                    ) => assert_eq!(
+                        (*sourced, *sourced_request, *serial),
+                        (mount, *request, root)
+                    ),
+                    other => panic!("unattempted another command: {other:?}"),
+                }
+            })
+            .unwrap();
+    }
     assert_eq!(client.diagnostics().unwrap().admitted, before);
     drop(pool);
     drop(queue);

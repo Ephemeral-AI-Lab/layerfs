@@ -1,0 +1,18 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_holds-bdf606503a60b022 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 7 tests
+test a_base_directory_removed_while_held_is_absent_and_keeps_its_whiteout ... ok
+test a_base_file_held_written_unlinked_and_written_again_is_never_constructed ... ok
+test a_directory_created_filled_emptied_and_removed_while_held_is_dropped ... R3 row 7 held fresh directory: captured name rows under the tombstone = false, headers_dropped = 0
+ok
+test a_file_created_held_written_unlinked_and_written_again_is_never_constructed ... R3 row 1 next capture: inode_rows=0 entry_rows=0 tombstones_skipped=0
+ok
+test a_stored_file_replaced_by_rename_while_open_leaves_only_the_new_inode ... ok
+test files_and_a_symlink_held_only_by_a_lookup_are_absent_after_their_unlink ... ok
+test fresh_and_looked_up_inodes_replaced_by_rename_leave_only_the_new_inodes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

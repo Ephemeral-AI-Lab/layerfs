@@ -1,0 +1,14 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/namespace_view-cabfc696f47bb082 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 5 tests
+test a_rebound_name_between_owner_rounds_is_resolved_before_the_one_attempt ... ok
+test enumeration_returns_every_persistent_name_once_across_mutation_and_resume ... ok
+test known_install_folds_a_capture_and_keeps_later_namespace_changes ... ok
+test name_and_inode_counts_have_no_cap_and_every_window_stays_bounded ... ok
+test opposing_directory_moves_cannot_form_a_cycle_between_owner_rounds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

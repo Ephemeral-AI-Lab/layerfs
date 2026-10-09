@@ -1,0 +1,9 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/mounted_commit_failures-2bada99386a11c62 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

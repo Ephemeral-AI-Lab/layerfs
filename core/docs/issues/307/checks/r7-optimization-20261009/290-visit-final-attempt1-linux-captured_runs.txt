@@ -1,0 +1,12 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/captured_runs-16c06c4b1009b1f7 --test-threads=1 
+
+running 3 tests
+test actual_owner_returns_bounded_window_with_original_root_after_install_and_close ... ok
+test captured_inode_point_retains_old_metadata_and_forward_seek_bounds ... ok
+test original_attempted_and_unattempted_run_errors_keep_custody_and_other_scope_progress ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

@@ -82,6 +82,9 @@ impl StorePorts {
             self.store.cache.clone(),
         ))
     }
+    pub fn resident(&self) -> Arc<CanonicalClient> {
+        self.store.resident.clone()
+    }
     pub fn client(self: &Arc<Self>) -> Arc<CanonicalClient> {
         Arc::new(CanonicalClient::with_cache(
             self.clone(),

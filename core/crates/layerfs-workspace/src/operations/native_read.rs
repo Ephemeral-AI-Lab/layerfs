@@ -127,77 +127,87 @@ impl NativeReadJob {
         rows: SourceRows<'_>,
         protected: u64,
     ) -> OverlayResult<NativeDecision<NativeReadDecision>> {
-        let wanted = match self.operation {
-            NativeReadOperation::Lookup { parent, .. } => parent,
-            NativeReadOperation::Getattr { serial }
-            | NativeReadOperation::Data { serial }
-            | NativeReadOperation::Open { serial, .. }
-            | NativeReadOperation::Opendir { serial } => serial,
-        };
-        if wanted != protected {
-            return Err(OverlayError::Stale);
-        }
-        let mut eval = Eval {
-            rows,
-            facts: &self.facts,
-            root: self.mount.root_serial(),
-            open_serial: None,
-            native: None,
-            needs: Vec::new(),
-        };
-        let decision = match self.decide(&mut eval) {
-            Ok(Some(inode)) => NativeReadDecision::Value(inode),
-            Ok(None) if !eval.needs.is_empty() => NativeReadDecision::Needs(eval.needs),
-            Ok(None) => NativeReadDecision::Failed(
-                ContentError::InvalidRecord("empty native read needs").into(),
-            ),
-            Err(WorkspaceError::Overlay(error)) => return Err(error),
-            Err(WorkspaceError::Refused(refusal)) => NativeReadDecision::Refused(refusal),
-            Err(error) => NativeReadDecision::Failed(error),
-        };
-        Ok(match decision {
-            NativeReadDecision::Needs(_) => NativeDecision::Needs(decision),
-            NativeReadDecision::Value(ref inode) => NativeDecision::Finished {
-                inode: Some(inode.clone()),
-                value: decision,
-            },
-            _ => NativeDecision::Finished {
-                inode: None,
-                value: decision,
-            },
-        })
+        decide_read(&self.operation, &self.facts, self.mount, rows, protected)
     }
-    fn decide(&self, eval: &mut Eval<'_>) -> WorkspaceResult<Option<Inode>> {
-        match &self.operation {
-            // The source's independent read reference permits removed metadata.
-            NativeReadOperation::Getattr { serial } | NativeReadOperation::Data { serial } => {
-                eval.target(*serial)
-            }
-            NativeReadOperation::Opendir { serial } => eval.directory(*serial),
-            // The kernel names an inode it still references. A file whose
-            // last name is gone stays openable under that reference, so a
-            // path open racing an unlink or replacement gets the old file.
-            NativeReadOperation::Open { serial, .. } => {
-                let inode = eval.target(*serial)?;
-                match inode {
-                    Some(inode) if inode.kind == InodeKind::File => Ok(Some(inode)),
-                    Some(inode) if inode.kind == InodeKind::Directory => {
-                        Err(WorkspaceError::Refused(Refusal::IsDirectory))
-                    }
-                    Some(_) => Err(WorkspaceError::Refused(Refusal::Invalid)),
-                    None => Ok(None),
+}
+/// One evaluation of a native read over current rows and supplied facts.
+pub(crate) fn decide_read(
+    operation: &NativeReadOperation,
+    facts: &BaseFacts,
+    mount: NativeMount,
+    rows: SourceRows<'_>,
+    protected: u64,
+) -> OverlayResult<NativeDecision<NativeReadDecision>> {
+    let wanted = match *operation {
+        NativeReadOperation::Lookup { parent, .. } => parent,
+        NativeReadOperation::Getattr { serial }
+        | NativeReadOperation::Data { serial }
+        | NativeReadOperation::Open { serial, .. }
+        | NativeReadOperation::Opendir { serial } => serial,
+    };
+    if wanted != protected {
+        return Err(OverlayError::Stale);
+    }
+    let mut eval = Eval {
+        rows,
+        facts,
+        root: mount.root_serial(),
+        open_serial: None,
+        native: None,
+        needs: Vec::new(),
+    };
+    let decision = match decide(operation, &mut eval) {
+        Ok(Some(inode)) => NativeReadDecision::Value(inode),
+        Ok(None) if !eval.needs.is_empty() => NativeReadDecision::Needs(eval.needs),
+        Ok(None) => NativeReadDecision::Failed(
+            ContentError::InvalidRecord("empty native read needs").into(),
+        ),
+        Err(WorkspaceError::Overlay(error)) => return Err(error),
+        Err(WorkspaceError::Refused(refusal)) => NativeReadDecision::Refused(refusal),
+        Err(error) => NativeReadDecision::Failed(error),
+    };
+    Ok(match decision {
+        NativeReadDecision::Needs(_) => NativeDecision::Needs(decision),
+        NativeReadDecision::Value(ref inode) => NativeDecision::Finished {
+            inode: Some(inode.clone()),
+            value: decision,
+        },
+        _ => NativeDecision::Finished {
+            inode: None,
+            value: decision,
+        },
+    })
+}
+fn decide(operation: &NativeReadOperation, eval: &mut Eval<'_>) -> WorkspaceResult<Option<Inode>> {
+    match operation {
+        // The source's independent read reference permits removed metadata.
+        NativeReadOperation::Getattr { serial } | NativeReadOperation::Data { serial } => {
+            eval.target(*serial)
+        }
+        NativeReadOperation::Opendir { serial } => eval.directory(*serial),
+        // The kernel names an inode it still references. A file whose
+        // last name is gone stays openable under that reference, so a
+        // path open racing an unlink or replacement gets the old file.
+        NativeReadOperation::Open { serial, .. } => {
+            let inode = eval.target(*serial)?;
+            match inode {
+                Some(inode) if inode.kind == InodeKind::File => Ok(Some(inode)),
+                Some(inode) if inode.kind == InodeKind::Directory => {
+                    Err(WorkspaceError::Refused(Refusal::IsDirectory))
                 }
+                Some(_) => Err(WorkspaceError::Refused(Refusal::Invalid)),
+                None => Ok(None),
             }
-            NativeReadOperation::Lookup { parent, name } => {
-                let directory = eval.directory(*parent)?;
-                let layers = eval.layers(*parent, name)?;
-                let bound = eval.bound(*parent, directory.as_ref(), name, layers);
-                let (Some(_), Some(bound)) = (directory, bound) else {
-                    return Ok(None);
-                };
-                let serial = bound.ok_or(WorkspaceError::Refused(Refusal::Missing))?;
-                eval.target(serial)
-            }
+        }
+        NativeReadOperation::Lookup { parent, name } => {
+            let directory = eval.directory(*parent)?;
+            let layers = eval.layers(*parent, name)?;
+            let bound = eval.bound(*parent, directory.as_ref(), name, layers);
+            let (Some(_), Some(bound)) = (directory, bound) else {
+                return Ok(None);
+            };
+            let serial = bound.ok_or(WorkspaceError::Refused(Refusal::Missing))?;
+            eval.target(serial)
         }
     }
 }

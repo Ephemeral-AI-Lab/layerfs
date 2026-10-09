@@ -6,6 +6,9 @@ use std::sync::Arc;
 const DEMAND_IDS: usize = 4096;
 const DEMAND_BYTES: usize = 32 * 1024 * 1024;
 const CANONICAL_BYTES: usize = 16 * 1024 * 1024;
+/// Largest object a memory-only read copies. Such a read runs inside an owner
+/// job; a larger object is left to the ordinary demand outside it.
+const RESIDENT_BYTES: usize = 64 * 1024;
 
 /// Bounded cumulative object observations; no hidden namespace inventory.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -25,8 +28,31 @@ pub struct CanonicalClient {
     source: Arc<dyn AuthenticatedObjects + Send + Sync>,
     cache: Arc<CanonicalCache>,
     lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
+    /// Answers only from the cache: no upstream demand is ever made.
+    resident: bool,
 }
+/// The upstream of a memory-only client. It is never asked.
+struct NoUpstream;
+impl AuthenticatedObjects for NoUpstream {
+    fn read_canonical_batch(&self, _: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        Err(NOT_RESIDENT)
+    }
+}
+const NOT_RESIDENT: ContentError = ContentError::ProviderFailure {
+    what: "base object not resident",
+};
 impl CanonicalClient {
+    /// A client over objects already in `cache`, with no provider and no
+    /// length provider. A demand for anything else fails without I/O, and
+    /// without counting a miss: the ordinary demand that follows counts it.
+    pub fn resident(cache: Arc<CanonicalCache>) -> Self {
+        Self {
+            source: Arc::new(NoUpstream),
+            cache,
+            lengths: None,
+            resident: true,
+        }
+    }
     /// Selects a cache allowance. A large object can bypass cache without refusal.
     pub fn new(source: Arc<dyn AuthenticatedObjects + Send + Sync>, cache_bytes: usize) -> Self {
         Self::with_cache(source, None, Arc::new(CanonicalCache::new(cache_bytes)))
@@ -59,6 +85,7 @@ impl CanonicalClient {
             source,
             cache,
             lengths,
+            resident: false,
         }
     }
     pub(crate) fn file_length(&self, id: ObjectId) -> crate::WorkspaceResult<u64> {
@@ -93,6 +120,9 @@ impl AuthenticatedObjects for CanonicalClient {
                     what: "base cache owner",
                 })?;
             for (index, id) in ids.iter().enumerate() {
+                if self.resident && !state.cache.within(*id, RESIDENT_BYTES) {
+                    return Err(NOT_RESIDENT);
+                }
                 if let Some(value) = state.cache.get(*id, DEMAND_BYTES - cached_bytes)? {
                     cached_bytes += value.len();
                     values[index] = Some(value);

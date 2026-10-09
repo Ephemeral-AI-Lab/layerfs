@@ -14,8 +14,9 @@ use layerfs_overlay::{
     NativeDirectoryRead, NativeMount, OpenFile, Publication,
 };
 use layerfs_workspace::{
-    MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome, NativeReadJob,
-    NativeReadOutcome, Operation, SourceView, Time, WorkspaceError,
+    BaseView, MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome,
+    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, Operation,
+    SourceView, Time, VisitFacts, WorkspaceError,
 };
 use std::{
     future::{poll_fn, Future},
@@ -111,6 +112,32 @@ impl FilesystemPort {
                 None => Err(Box::new(original) as ServiceError),
             }
         })
+    }
+    /// One admitted Store reader as this request's canonical client. A reader
+    /// that cannot be had is a failed base demand of this request: nothing
+    /// was read and nothing is asked again.
+    async fn admitted(&self) -> Result<Arc<layerfs_workspace::CanonicalClient>, ServiceError> {
+        self.fenced(true)?;
+        let lease = {
+            let mut ticket = self
+                .0
+                .ports()
+                .read_ticket()
+                .map_err(|cause| self.demand(cause))?;
+            // Leaving this block on a stop cancels the unstarted ticket.
+            poll_fn(|cx| match self.fenced(true) {
+                Ok(()) => Pin::new(&mut ticket)
+                    .poll(cx)
+                    .map_err(|error| self.demand(Arc::new(PortError::ReadAdmission(error)))),
+                Err(fenced) => Poll::Ready(Err(fenced)),
+            })
+            .await?
+        };
+        // A reader of another Store or Workspace is a wiring failure,
+        // not this request's base demand.
+        self.0
+            .admitted_client(lease)
+            .map_err(|cause| -> ServiceError { Box::new(cause) })
     }
     /// A call that acquires: refused by a stopped fence before its attempt.
     fn acquire<T: Send + 'static>(
@@ -299,34 +326,19 @@ impl RequestServices for FilesystemPort {
     fn view(&self, source: BaseSource) -> Result<SourceView, ServiceError> {
         Ok(self.0.workspace().view_for_source(source)?)
     }
-    fn immutable<'a>(&'a self, view: &'a SourceView) -> ServiceFuture<'a, SourceView> {
+    fn base(&self) -> ServiceFuture<'_, BaseView> {
         Box::pin(async move {
-            self.fenced(true)?;
-            // A reader that cannot be had is a failed base demand of this
-            // request: nothing was read and nothing is asked again.
-            let lease = {
-                let mut ticket = self
-                    .0
-                    .ports()
-                    .read_ticket()
-                    .map_err(|cause| self.demand(cause))?;
-                // Leaving this block on a stop cancels the unstarted ticket.
-                poll_fn(|cx| match self.fenced(true) {
-                    Ok(()) => Pin::new(&mut ticket)
-                        .poll(cx)
-                        .map_err(|error| self.demand(Arc::new(PortError::ReadAdmission(error)))),
-                    Err(fenced) => Poll::Ready(Err(fenced)),
-                })
-                .await?
-            };
-            // A reader of another Store or Workspace is a wiring failure,
-            // not this request's base demand.
-            let client = self
+            let client = self.admitted().await?;
+            let base = self
                 .0
-                .admitted_client(lease)
+                .workspace()
+                .base()
                 .map_err(|cause| -> ServiceError { Box::new(cause) })?;
-            Ok(view.with_client(client))
+            Ok(base.with_client(client))
         })
+    }
+    fn immutable<'a>(&'a self, view: &'a SourceView) -> ServiceFuture<'a, SourceView> {
+        Box::pin(async move { Ok(view.with_client(self.admitted().await?)) })
     }
     fn failed_base_read(&self, step: ServiceError) -> ServiceError {
         // The canonical read ran in Fuse on the admitted view; whether the
@@ -347,6 +359,59 @@ impl RequestServices for FilesystemPort {
                 _ => None,
             },
         )
+    }
+    fn observe_visit(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: Option<u64>,
+        operation: NativeReadOperation,
+        facts: Arc<VisitFacts>,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>> {
+        // A stopped mount refuses before anything about the request is read.
+        if let Err(fenced) = self.fenced(true) {
+            return Box::pin(async move { Err(fenced) });
+        }
+        let visit = self.0.workspace().native_read_visit(
+            self.0.resident(),
+            mount,
+            serial,
+            handle,
+            operation,
+            facts,
+        );
+        match visit {
+            Ok(visit) => self.acquire(
+                Command::Native(NativeJob::ObserveVisit(Box::new(visit))),
+                |response| match response {
+                    Response::Native(NativeReply::Observed(value)) => Some(value.clone()),
+                    _ => None,
+                },
+            ),
+            Err(error) => Box::pin(async move { Err(Box::new(error) as ServiceError) }),
+        }
+    }
+    fn mutate_visit(
+        &self,
+        request: NativeVisitRequest,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>> {
+        if let Err(fenced) = self.fenced(true) {
+            return Box::pin(async move { Err(fenced) });
+        }
+        let visit = self
+            .0
+            .workspace()
+            .native_mutation_visit(self.0.resident(), request);
+        match visit {
+            Ok(visit) => self.acquire(
+                Command::Native(NativeJob::MutateVisit(Box::new(visit))),
+                |response| match response {
+                    Response::Native(NativeReply::Mutated(value)) => Some(value.clone()),
+                    _ => None,
+                },
+            ),
+            Err(error) => Box::pin(async move { Err(Box::new(error) as ServiceError) }),
+        }
     }
     fn release_read(&self, read: FileRead) -> ServiceFuture<'_, ServiceReply<()>> {
         self.dispose(Command::ReleaseFileRead(read), done)

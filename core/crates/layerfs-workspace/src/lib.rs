@@ -44,7 +44,7 @@ pub use construction::{
     EditBackingCustody as ConstructionBackingCustody, EditBackingWork as ConstructionBackingWork,
     EditInputRefusal as ConstructionInputRefusal, IndexedEditRecords as IndexedConstructionRecords,
 };
-pub use facts::{BaseFacts, Need};
+pub use facts::{BaseFacts, Need, VisitFacts};
 pub use install::PreparedBase;
 pub use job::{JobOutcome, NamespaceJob};
 pub use list::ViewListing;
@@ -55,6 +55,9 @@ pub use operations::native_mutation::{NativeMutationJob, NativeMutationOutcome};
 pub use operations::native_read::{
     NativeReadDecision, NativeReadFailure, NativeReadJob, NativeReadOperation, NativeReadOutcome,
     NativeReadPlan, NativeReadStage, NativeReadValue,
+};
+pub use operations::native_visit::{
+    NativeInput, NativeMutationVisit, NativeReadVisit, NativeVisitRequest,
 };
 pub use port::OverlayCapturedNamespace;
 pub use port::{FileLengths, OverlayCapturedRuns, OverlayFileRead, OverlayJobs, OverlayRead};

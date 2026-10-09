@@ -7,7 +7,7 @@ use layerfs_history::{HistoryCatalog, WorkspaceId};
 use layerfs_storage::{
     port::PackPersistence, ReservationBlocks, Storage, StorageError, StoragePolicy, StorageResult,
 };
-use layerfs_workspace::{CanonicalCache, ClientWork};
+use layerfs_workspace::{CanonicalCache, CanonicalClient, ClientWork};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
@@ -40,6 +40,8 @@ pub struct Store {
     policy: StoragePolicy,
     reservations: ReservationBlocks,
     pub(super) cache: Arc<CanonicalCache>,
+    /// Reads objects already in `cache` and nothing else: no reader, no I/O.
+    pub(super) resident: Arc<CanonicalClient>,
     pub(super) counts: Arc<Counts>,
 }
 impl Store {
@@ -58,6 +60,7 @@ impl Store {
             return Err(StorageError::Integrity("Store read set or policy"));
         }
         let counts = Arc::new(Counts::default());
+        let cache = Arc::new(CanonicalCache::new(cache_bytes));
         let readers = ReadPool::new(readers, read_limits, counts.clone())
             .map_err(|_| StorageError::Integrity("Store read admission limits"))?;
         Ok(Self {
@@ -66,7 +69,8 @@ impl Store {
             readers,
             policy,
             reservations,
-            cache: Arc::new(CanonicalCache::new(cache_bytes)),
+            resident: Arc::new(CanonicalClient::resident(cache.clone())),
+            cache,
             counts,
         })
     }

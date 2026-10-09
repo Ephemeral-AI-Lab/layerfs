@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/e2_startup_receipts-a708b161baea43e4 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 7 tests
+test actual_default_startup_records_then_stops_without_creating_a_route ... ok
+test bounded_external_encoder_escapes_and_refuses_growth ... ok
+test existing_output_is_not_truncated_and_startup_is_unattempted ... ok
+test external_receipt_identities_exist_before_any_startup_attempt ... ok
+test failed_schema_attempt_retains_real_sql_and_created_artifact ... ok
+test pre_creation_refusal_keeps_original_error_and_emits_unavailable_work ... ok
+test reused_external_streaming_hash_matches_independent_standard_vectors ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

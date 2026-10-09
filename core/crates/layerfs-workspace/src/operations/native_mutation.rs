@@ -38,29 +38,38 @@ impl NativeMutationJob {
     pub fn charge(&self) -> usize {
         self.job.charge()
     }
-    /// The kernel custody an applied reply creates. Every entry-bearing
-    /// operation takes exactly one lookup reference on the bound inode.
     fn effect(&self) -> NativeEffect {
-        let entry = |serial, parent, directory| NativeEffect::Entry {
-            serial,
-            parent,
-            directory,
-        };
-        match (&self.job.operation, self.job.serial) {
-            (Operation::Create { parent, .. }, Some(serial)) => match self.open {
-                Some(writable) => NativeEffect::Open {
-                    serial,
-                    parent: *parent,
-                    writable,
-                },
-                None => entry(serial, *parent, false),
-            },
-            (Operation::Mkdir { parent, .. }, Some(serial)) => entry(serial, *parent, true),
-            (Operation::Symlink { parent, .. }, Some(serial)) => entry(serial, *parent, false),
-            (Operation::Link { serial, parent, .. }, _) => entry(*serial, *parent, false),
-            _ => NativeEffect::None,
-        }
+        effect(&self.job.operation, self.job.serial, self.open)
     }
+}
+/// The kernel custody an applied reply creates. Every entry-bearing
+/// operation takes exactly one lookup reference on the bound inode.
+pub(crate) fn effect(
+    operation: &Operation,
+    fresh: Option<u64>,
+    open: Option<bool>,
+) -> NativeEffect {
+    let entry = |serial, parent, directory| NativeEffect::Entry {
+        serial,
+        parent,
+        directory,
+    };
+    match (operation, fresh) {
+        (Operation::Create { parent, .. }, Some(serial)) => match open {
+            Some(writable) => NativeEffect::Open {
+                serial,
+                parent: *parent,
+                writable,
+            },
+            None => entry(serial, *parent, false),
+        },
+        (Operation::Mkdir { parent, .. }, Some(serial)) => entry(serial, *parent, true),
+        (Operation::Symlink { parent, .. }, Some(serial)) => entry(serial, *parent, false),
+        (Operation::Link { serial, parent, .. }, _) => entry(*serial, *parent, false),
+        _ => NativeEffect::None,
+    }
+}
+impl NativeMutationJob {
     /// One owner job. Evaluation reads current rows; the single publication
     /// and its lookup/open acquisition are one transaction, never replayed.
     pub fn perform(&self, db: &Overlay) -> NativeMutationOutcome {

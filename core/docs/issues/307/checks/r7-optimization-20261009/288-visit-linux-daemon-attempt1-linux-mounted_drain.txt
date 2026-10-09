@@ -1,0 +1,33 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=28, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_drain-5c15ce76d3942f4a --test-threads=1 
+
+running 5 tests
+test fp21_a_parked_release_keeps_unmount_draining_until_its_credits_return_inside_the_window ... ok
+test fp21_credits_held_past_the_window_leave_unmount_retained_at_requests_with_a_live_engine_mount ... ok
+test fp29_a_parked_read_spans_the_release_of_a_sibling_handle_and_the_removal_of_its_name ... ok
+test fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder ... FAILED
+test fp31_batched_forget_is_exact_and_outstanding_lookups_retire_in_bounded_turns_after_detach ... ok
+
+failures:
+
+---- fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder stdout ----
+FP-31 reclaim scope: membership="0::/" file=/sys/fs/cgroup/memory.reclaim
+FP-31 partial hold: reclaim_requests=1 forget_units=1 parked_forget=1 second_lookup=Some(Ok(3)) handoffs=3->4 parked=1 admitted=1 owner_rows(baseline=1 looked=2 while_parked=2)
+DRAIN_DEVIATION FP-31: not exactly one more request beside the parked unit: NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 2, handoffs: 3, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 } -> NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 3, handoffs: 4, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 }, StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 2, source_rows: 0, owner_details: 6, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }
+FP-31 partial: count 1 -> 2 (second lookup) -> 1 (unit of 1, row kept: owner_rows=2) -> 0 (unit of 1, row returned: owner_rows=1) forget_units=2 reclaim_requests=1+2+1 retained=0 receipt_opcodes(lookup=2 forget_frames=2 batch_frames=0)
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+
+thread 'fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder' panicked at crates/layerfs-daemon/tests/mounted_drain.rs:139:9:
+FP-31 partial decrement: 1 expectations did not hold: [
+    "FP-31: not exactly one more request beside the parked unit: NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 2, handoffs: 3, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 } -> NativeWork { loops_configured: 2, loops_entered: 2, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 1, retained: 0, completed: 3, handoffs: 4, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 }, StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 2, source_rows: 0, owner_details: 6, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }",
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    fp31_a_forget_unit_smaller_than_the_held_count_leaves_the_exact_remainder
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.43s
+
+R4_WALL seconds<=24 limit=115s lock_wait=0s
+EXIT 101

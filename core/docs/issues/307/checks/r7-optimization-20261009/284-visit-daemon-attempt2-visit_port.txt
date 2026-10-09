@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/visit_port-80e4d2704ca0c1cc --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test a_create_is_one_mutation_job_and_one_reply_attempt_job ... ok
+test a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

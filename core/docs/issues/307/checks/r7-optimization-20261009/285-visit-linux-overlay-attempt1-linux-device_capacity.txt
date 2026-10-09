@@ -1,0 +1,10 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-overlay IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/device_capacity-7071dfaa290c647a --test-threads=1 
+
+running 1 test
+test real_device_enospc_refuses_before_sql_and_retains_cleanup_headroom ... ignored, requires exclusively owned Linux ext4 loop fixture; use device_fixture.sh
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

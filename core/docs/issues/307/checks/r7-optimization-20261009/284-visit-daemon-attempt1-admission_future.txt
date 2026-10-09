@@ -1,0 +1,16 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/admission_future-619a33efae12e5ef --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 7 tests
+test a_command_larger_than_the_entire_budget_is_refused_without_waiting ... ok
+test credit_release_races_registration_without_a_polling_fallback ... ok
+test fixed_registrations_replace_wakers_and_cancel_without_losing_input ... ok
+test held_completion_release_wakes_and_admits_original_once ... ok
+test release_before_first_poll_is_observed_without_future_event ... ok
+test stopped_waiter_returns_the_same_unattempted_input ... ok
+test worker_loss_fences_admission_and_retains_the_original_join_failure ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

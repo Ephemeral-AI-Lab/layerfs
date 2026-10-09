@@ -278,6 +278,14 @@ semantic refusals release their processing source after the reply attempt.
 Unknown/failed steps retain request identity, source/read candidates, observation
 and exact service/provider failures without guessed cleanup.
 
+R7 update, 2026-10-09: for LOOKUP and GETATTR the paragraph above describes
+the earlier flow. They, and every mutation, now take owner visits that record
+no source ([native read custody](73-native-read-custody.md)): a decided visit
+is the whole request in the owner, and an undecided one leaves the receive
+loop, reads its base facts through `RequestServices::base` and visits again.
+Nothing is released after these replies except a publication's ticket. The
+flow above still applies to OPEN, OPENDIR and data reads.
+
 READ and READLINK consume their metadata answer before requesting a local window.
 The original metadata value/Arc and Completion are disposed; independent FileRead
 and source capabilities remain owned. This prevents sixteen metadata consumers

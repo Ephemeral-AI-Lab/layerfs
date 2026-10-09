@@ -21,3 +21,4 @@ mod native_directory_read;
 mod native_file;
 mod native_mutation;
 mod native_observation;
+mod native_visit;

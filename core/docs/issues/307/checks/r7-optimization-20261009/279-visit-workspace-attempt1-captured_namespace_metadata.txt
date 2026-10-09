@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=26, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_namespace_metadata-f14dc8757fd8e3bd --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 2 tests
+test a_metadata_patch_keeps_every_other_key_and_its_value_root ... ok
+test the_walker_compares_the_complete_attribute_key_set ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

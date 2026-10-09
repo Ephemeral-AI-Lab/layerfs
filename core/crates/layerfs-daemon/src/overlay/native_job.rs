@@ -5,7 +5,8 @@ use layerfs_overlay::{
     OverlayResult, Route,
 };
 use layerfs_workspace::{
-    NativeMutationJob, NativeMutationOutcome, NativeReadJob, NativeReadOutcome,
+    NativeMutationJob, NativeMutationOutcome, NativeMutationVisit, NativeReadJob,
+    NativeReadOutcome, NativeReadVisit,
 };
 use std::sync::Arc;
 
@@ -55,6 +56,10 @@ pub enum NativeJob {
         handle: u64,
     },
     Observe(Box<NativeReadJob>),
+    /// LOOKUP or GETATTR decided in this one job, with no request source.
+    ObserveVisit(Box<NativeReadVisit>),
+    /// A native mutation decided and published in this one job.
+    MutateVisit(Box<NativeMutationVisit>),
     /// A handle-addressed mutation's descriptor and request source.
     OpenSource {
         mount: NativeMount,
@@ -96,8 +101,8 @@ impl NativeJob {
             | Self::FileSource { .. }
             | Self::HandleSource { .. }
             | Self::OpenSource { .. } => ServiceClass::Source,
-            Self::Observe(_) => ServiceClass::Read,
-            Self::Mutate(_) => ServiceClass::Mutation,
+            Self::Observe(_) | Self::ObserveVisit(_) => ServiceClass::Read,
+            Self::Mutate(_) | Self::MutateVisit(_) => ServiceClass::Mutation,
             Self::Directory(job) => job.class(),
             _ => ServiceClass::Lifecycle,
         }
@@ -114,6 +119,18 @@ impl NativeJob {
             // and at most one reply of needed names or one changed inode.
             Self::Mutate(job) => (
                 std::mem::size_of::<NativeMutationJob>() + job.charge(),
+                std::mem::size_of::<NativeMutationOutcome>()
+                    + layerfs_overlay::PAGE_ROWS
+                        * (std::mem::size_of::<layerfs_workspace::Need>() + 255),
+            ),
+            Self::ObserveVisit(job) => (
+                std::mem::size_of::<NativeReadVisit>() + job.charge(),
+                std::mem::size_of::<NativeReadOutcome>()
+                    + 4 * (std::mem::size_of::<layerfs_workspace::Need>() + 255)
+                    + 2 * std::mem::size_of::<usize>(),
+            ),
+            Self::MutateVisit(job) => (
+                std::mem::size_of::<NativeMutationVisit>() + job.charge(),
                 std::mem::size_of::<NativeMutationOutcome>()
                     + layerfs_overlay::PAGE_ROWS
                         * (std::mem::size_of::<layerfs_workspace::Need>() + 255),
@@ -138,6 +155,8 @@ impl NativeJob {
             | Self::Revoke(mount) => Some(mount.route()),
             Self::Observe(job) => Some(job.source().route()),
             Self::Mutate(job) => Some(job.source().route()),
+            Self::ObserveVisit(job) => Some(job.mount().route()),
+            Self::MutateVisit(job) => Some(job.mount().route()),
             Self::Directory(job) => Some(job.route()),
             Self::Mount { .. } | Self::RetainedMount => None,
         };
@@ -203,6 +222,8 @@ impl NativeJob {
                 .acquire_native_open_source(mount, request, serial, handle)
                 .map(|(source, file)| NativeReply::OpenSource(source, file)),
             Self::Mutate(job) => Ok(NativeReply::Mutated(Arc::new(job.perform(db)))),
+            Self::ObserveVisit(job) => Ok(NativeReply::Observed(Arc::new(job.perform(db)))),
+            Self::MutateVisit(job) => Ok(NativeReply::Mutated(Arc::new(job.perform(db)))),
             Self::Directory(job) => job.perform(db).map(NativeReply::Directory),
             Self::Forget {
                 mount,

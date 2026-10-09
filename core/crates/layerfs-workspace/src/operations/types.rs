@@ -141,7 +141,7 @@ impl Operation {
             Self::Create { .. } | Self::Mkdir { .. } | Self::Symlink { .. }
         )
     }
-    pub(crate) fn destination_path(&self) -> Option<&[PathName]> {
+    pub fn destination_path(&self) -> Option<&[PathName]> {
         match self {
             Self::Rename {
                 destination_path, ..

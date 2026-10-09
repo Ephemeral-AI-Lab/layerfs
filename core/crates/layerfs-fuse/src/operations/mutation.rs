@@ -1,36 +1,20 @@
-//! One native mutation over Workspace's resumable plan: source, fact rounds,
-//! a single publishing owner job, then exact post-reply ticket/source release.
+//! One native mutation: owner visits that record no request source, fact
+//! reads between undecided visits, a single publishing visit, then the exact
+//! post-reply release of its ticket.
 use crate::{
     ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply},
     NextTurn,
 };
-use layerfs_overlay::{BaseSource, NativeMount, OpenFile, OverlayError, Publication};
+use layerfs_overlay::{NativeMount, OpenFile, OverlayError, Publication};
 use layerfs_workspace::{
-    MutationInputFailure, MutationPlan, NativeMutationOutcome, Operation, Outcome, Position,
-    Refusal, SourceView, Time, ViewStat, WorkspaceError, WriteData,
+    JobOutcome, NativeMutationOutcome, NativeVisitRequest, Refusal, Time, ViewStat, VisitFacts,
+    WorkspaceError,
 };
 use std::{fmt, sync::Arc};
 
 /// What the kernel asked for, before a handle's descriptor is resolved.
-#[derive(Clone, Debug)]
-pub enum MutationInput {
-    /// Addressed by serials and names under the request's lookup custody.
-    Named(Operation),
-    /// WRITE through a handle, always at the kernel's offset. `cached` is the
-    /// per-request page-cache flag of a shared-mapping store.
-    Write {
-        offset: u64,
-        data: WriteData,
-        cached: bool,
-    },
-    /// SETATTR through a handle.
-    Attributes {
-        mode: Option<u32>,
-        mtime: Option<Time>,
-        size: Option<u64>,
-    },
-}
-/// One received kernel mutation with the identities that protect it.
+/// What a native mutation was asked to do, before its descriptor is known.
+pub use layerfs_workspace::NativeInput as MutationInput;
 #[derive(Clone, Debug)]
 pub struct MutationRequest {
     pub mount: NativeMount,
@@ -66,18 +50,13 @@ pub struct Published {
 pub(super) struct Custody {
     services: Arc<dyn RequestServices>,
     request: MutationRequest,
-    source: Option<BaseSource>,
-    file: Option<OpenFile>,
-    view: Option<SourceView>,
-    plan: Option<MutationPlan>,
     // Retain engine completion credit through every consumer of the outcome.
     receipt: Option<ServiceReply<Arc<NativeMutationOutcome>>>,
     /// Published and not yet released: exactly one reply attempt is owed.
     publication: Option<Publication>,
-    refused_input: Option<Box<MutationInputFailure>>,
 }
-/// A decided mutation. It still owns its publication ticket and processing
-/// source until the single reply attempt has returned.
+/// A decided mutation. It still owns its publication ticket until the single
+/// reply attempt has returned.
 pub struct NativeMutation {
     value: Result<Published, Declined>,
     custody: Custody,
@@ -109,10 +88,7 @@ impl fmt::Debug for MutationFailure {
             .field("reason", &self.reason)
             .field("provider", &self.provider)
             .field("request", &self.custody.request)
-            .field("source", &self.custody.source)
-            .field("file", &self.custody.file)
             .field("publication", &self.custody.publication)
-            .field("refused_input", &self.custody.refused_input)
             .finish_non_exhaustive()
     }
 }
@@ -141,9 +117,6 @@ impl MutationFailure {
     pub fn request(&self) -> &MutationRequest {
         &self.custody.request
     }
-    pub const fn retained_source(&self) -> Option<BaseSource> {
-        self.custody.source
-    }
     /// A ticket still owed its reply-attempt release. The mutation it covers
     /// is published and stays published.
     pub const fn publication(&self) -> Option<Publication> {
@@ -163,18 +136,15 @@ impl MutationFailure {
     pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
         self.reason.downcast_ref()
     }
-    /// Ends a mutation that was fenced or whose base demand failed: its
-    /// source is released once through the disposal call, which the fence
-    /// never refuses. Both kinds of step precede the publishing job, so no
-    /// ticket can be owed; a failure that holds one anyway, or that is of
+    /// Ends a mutation that was fenced or whose base demand failed. Both
+    /// kinds of step precede the publishing visit, so it holds nothing and
+    /// no job is issued; a failure that owes a ticket anyway, or that is of
     /// neither kind, is returned unchanged.
     pub async fn relinquish(self) -> Result<(), MutationFailure> {
         if (!self.fenced() && self.base_demand().is_none()) || self.custody.publication.is_some() {
             return Err(self);
         }
         let Self { mut custody, .. } = self;
-        custody.plan = None;
-        custody.view = None;
         custody.receipt = None;
         match custody.release().await {
             Ok(()) => Ok(()),
@@ -192,13 +162,8 @@ impl NativeMutation {
         let mut custody = Custody {
             services,
             request,
-            source: None,
-            file: None,
-            view: None,
-            plan: None,
             receipt: None,
             publication: None,
-            refused_input: None,
         };
         match custody.decide().await {
             Ok(value) => Ok(Self { value, custody }),
@@ -209,21 +174,19 @@ impl NativeMutation {
         self.value.as_ref().map_err(|declined| *declined)
     }
     /// Keeps a decided mutation whose reply could not be composed. Its ticket
-    /// and source stay owned; the publication is not undone.
+    /// stays owned; the publication is not undone.
     pub fn retain(self, reason: ServiceError) -> MutationFailure {
         let Self { value, custody } = self;
         drop(value);
         MutationFailure::new(reason, custody)
     }
     /// Called only after the single reply attempt returned. The publication
-    /// ticket and the processing source are released together in one owner
-    /// job, each exactly once; a mutation that published nothing releases
-    /// its source alone. Kernel lookup and open owners persist independently.
+    /// ticket is released in one owner job, exactly once; a mutation that
+    /// published nothing has nothing to release and issues no job. Kernel
+    /// lookup and open owners persist independently.
     pub async fn replied(self) -> Result<(), MutationFailure> {
         let Self { value, mut custody } = self;
         drop(value);
-        custody.plan = None;
-        custody.view = None;
         custody.receipt = None;
         match custody.release().await {
             Ok(()) => Ok(()),
@@ -232,43 +195,11 @@ impl NativeMutation {
     }
 }
 impl Custody {
-    fn operation(&self) -> Result<Operation, Declined> {
-        let invalid = Declined::Refused(Refusal::Invalid);
-        Ok(match (&self.request.input, self.file) {
-            (MutationInput::Named(operation), None) => operation.clone(),
-            (
-                MutationInput::Write {
-                    offset,
-                    data,
-                    cached,
-                },
-                Some(file),
-            ) => {
-                if *cached {
-                    Operation::StoreOpen {
-                        file,
-                        offset: *offset,
-                        data: data.clone(),
-                    }
-                } else {
-                    Operation::WriteOpen {
-                        file,
-                        position: Position::At(*offset),
-                        data: data.clone(),
-                    }
-                }
-            }
-            (MutationInput::Attributes { mode, mtime, size }, Some(file)) => {
-                Operation::SetOpenAttributes {
-                    file,
-                    mode: *mode,
-                    mtime: *mtime,
-                    size: *size,
-                }
-            }
-            _ => return Err(invalid),
-        })
-    }
+    /// A mutation is served by owner visits that record no request source.
+    /// A visit that publishes also takes the kernel custody of its reply; an
+    /// undecided visit changed nothing, and the base facts it asked for are
+    /// read here, outside the owner, before the next visit. The only thing
+    /// left to release is the reply ticket of a publication.
     async fn decide(&mut self) -> Result<Result<Published, Declined>, ServiceError> {
         let MutationRequest {
             mount,
@@ -280,92 +211,65 @@ impl Custody {
             ..
         } = self.request;
         let by_handle = !matches!(self.request.input, MutationInput::Named(_));
-        match handle.filter(|_| by_handle) {
-            Some(handle) => {
-                let granted = self
-                    .services
-                    .open_source(mount, request, protected, handle)
-                    .await?;
-                let (source, file) = *granted.get();
-                self.source = Some(source);
-                self.file = Some(file);
+        let fresh = match &self.request.input {
+            MutationInput::Named(operation) if operation.creates() => {
+                match self.services.reserve_serial()? {
+                    Some(serial) => Some(serial),
+                    None => return Ok(Err(Declined::Contended)),
+                }
             }
-            None => {
-                let granted = self
-                    .services
-                    .source(mount, request, protected, None)
-                    .await?;
-                self.source = Some(*granted.get());
-            }
-        }
-        let source = self.source.expect("acquired native source");
-        let operation = match self.operation() {
-            Ok(operation) => operation,
-            Err(declined) => return Ok(Err(declined)),
+            _ => None,
         };
-        let serial = if operation.creates() {
-            match self.services.reserve_serial()? {
-                Some(serial) => Some(serial),
-                None => return Ok(Err(Declined::Contended)),
-            }
-        } else {
-            None
-        };
-        let view = self.services.view(source)?;
-        match self.services.prepare(&view, operation, now, serial) {
-            Ok(plan) => self.plan = Some(plan),
-            Err(refused) => {
-                let reason = format!("native mutation preparation: {:?}", refused.error);
-                self.refused_input = Some(refused);
-                return Err(reason.into());
-            }
-        }
-        self.view = Some(view);
+        let mut facts = Arc::new(VisitFacts::default());
         loop {
-            let job = self
-                .plan
-                .as_ref()
-                .and_then(|plan| plan.native_job(mount, open))
-                .expect("native mutation owner stage");
-            self.receipt = Some(self.services.mutate(job).await?);
+            let visit = NativeVisitRequest {
+                mount,
+                request,
+                serial: protected,
+                handle: handle.filter(|_| by_handle),
+                input: self.request.input.clone(),
+                open,
+                now,
+                fresh,
+                facts: facts.clone(),
+            };
+            self.receipt = Some(self.services.mutate_visit(visit).await?);
             let original = self.receipt.as_ref().unwrap().get().clone();
-            let outcome = match &original.result {
-                Ok(outcome) => outcome.clone(),
+            let needs = match &original.result {
+                Ok(JobOutcome::Applied { publication, inode }) => {
+                    self.publication = Some(*publication);
+                    return Ok(Ok(Published {
+                        stat: inode.clone().map(Into::into),
+                        file: original.file,
+                        changed: true,
+                    }));
+                }
+                Ok(JobOutcome::Unchanged { inode }) => {
+                    return Ok(Ok(Published {
+                        stat: inode.clone().map(Into::into),
+                        file: None,
+                        changed: false,
+                    }))
+                }
+                Ok(JobOutcome::Refused(refusal)) => return Ok(Err(Declined::Refused(*refusal))),
+                Ok(JobOutcome::Needs(needs)) if !needs.is_empty() => needs,
                 // The engine's reservation refuses before any statement of
                 // the transaction: a definite answer with no effect.
                 Err(WorkspaceError::Overlay(OverlayError::Reservation { .. })) => {
                     return Ok(Err(Declined::NoSpace))
                 }
-                Err(_) => return Err(Box::new(Attempted(original))),
+                _ => return Err(Box::new(Attempted(original))),
             };
-            match self.plan.as_mut().unwrap().accept(Ok(outcome)) {
-                Ok(Some(Outcome::Applied { publication, stat })) => {
-                    self.publication = Some(publication);
-                    return Ok(Ok(Published {
-                        stat,
-                        file: original.file,
-                        changed: true,
-                    }));
-                }
-                Ok(Some(Outcome::Unchanged { stat })) => {
-                    return Ok(Ok(Published {
-                        stat,
-                        file: None,
-                        changed: false,
-                    }))
-                }
-                Ok(None) => {}
-                Err(WorkspaceError::Refused(refusal)) => {
-                    return Ok(Err(Declined::Refused(refusal)))
-                }
-                Err(error) => return Err(Box::new(error)),
-            }
             self.receipt = None;
             // Provider reads never run on the loop that received the request.
             crate::LeaveReceiver::default().await;
-            let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
-            let result = self.plan.as_mut().unwrap().supply(&immutable);
-            drop(immutable); // Return the actual reader before another SQL wait.
+            let base = self.services.base().await?;
+            let path = match &self.request.input {
+                MutationInput::Named(operation) => operation.destination_path(),
+                _ => None,
+            };
+            let result = Arc::make_mut(&mut facts).supply(&base, needs, path);
+            drop(base); // Return the actual reader before another SQL wait.
             if let Err(error) = result {
                 return Err(self.services.failed_base_read(error.into()));
             }
@@ -373,19 +277,9 @@ impl Custody {
         }
     }
     async fn release(&mut self) -> Result<(), ServiceError> {
-        if let (Some(publication), Some(source)) = (self.publication, self.source) {
-            drop(self.services.replied(publication, source).await?);
-            self.publication = None;
-            self.source = None;
-            return Ok(());
-        }
         if let Some(publication) = self.publication {
             drop(self.services.reply_attempted(publication).await?);
             self.publication = None;
-        }
-        if let Some(source) = self.source {
-            drop(self.services.release_source(source).await?);
-            self.source = None;
         }
         Ok(())
     }

@@ -1,0 +1,13 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-fuse IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/fence-9fcd7e42e0ef7615 --test-threads=1 
+
+running 4 tests
+test a_request_running_through_the_stop_gets_its_turn_afterwards ... ok
+test stop_admission_stops_no_fence_and_turns_no_parked_request ... ok
+test stop_service_gives_every_parked_request_one_turn_and_stops_the_fence ... ok
+test stop_service_wakes_every_receive_capacity_waiter ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

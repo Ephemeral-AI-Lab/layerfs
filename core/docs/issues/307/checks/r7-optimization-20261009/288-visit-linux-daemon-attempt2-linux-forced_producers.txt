@@ -1,0 +1,15 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/forced_producers-d87c1e70a582dd8a --test-threads=1 
+
+running 6 tests
+test fp32_a_known_publication_is_forced_with_its_original_outcome ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_its_local_install ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_publication ... ok
+test fp32_force_is_busy_while_a_commit_is_held_before_save_finish ... ok
+test fp32_held_lifecycle_credits_keep_an_attempted_write_and_the_teardown_retained ... ok
+test fp32_unknown_commit_custody_is_forced_only_when_relinquished_and_stays_unknown ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.19s
+
+R4_WALL seconds<=5 limit=115s lock_wait=0s
+EXIT 0

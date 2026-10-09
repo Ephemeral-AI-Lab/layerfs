@@ -14,6 +14,7 @@ use layerfs_daemon::{
         BindRequest, BoundWorkspace, PortError, ReadAdmissionError, ReadLimits, Store, StoreReader,
     },
     Command, Completion, NativeJob, NativeReply, Owner, OwnerClient, OwnerConfig, Response,
+    ServiceClass,
 };
 use layerfs_fuse::{
     operations::{
@@ -307,6 +308,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     quarantine(&rig.readers[bad], rig.object);
     assert_eq!(rig.store.read_work().quarantined, 0);
 
+    let before = rig.owner_work();
     let (send, observed) = mpsc::channel();
     {
         let services = rig.services(&fence);
@@ -354,7 +356,9 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
         .unwrap()
         .expect("a lookup served by the uncertain session was answered");
     let cause = cause.expect("the failure is a failed base demand");
-    assert_eq!((fenced, source, read), (false, true, false));
+    // A lookup is served by owner visits that record no request source: the
+    // failed demand found it holding nothing.
+    assert_eq!((fenced, source, read), (false, false, false));
     until("the request left the lane", || {
         rig.queue.work().unwrap().admitted == 0
     });
@@ -365,10 +369,27 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     );
     assert!(!fence.stopped());
     assert_eq!(fence.terminal_replies(), 0);
-    // Its source went back through the disposal call.
     until("the request's owner results were returned", || {
         rig.owner_work().outstanding == 0
     });
+    // Its whole owner work was the one undecided visit before the demand:
+    // no source was acquired, so no disposal call followed the failure.
+    let after = rig.owner_work();
+    let class =
+        |work: &layerfs_daemon::OwnerWork, class: ServiceClass| work.completed[class as usize];
+    assert_eq!(after.admitted, before.admitted + 1);
+    assert_eq!(
+        class(&after, ServiceClass::Read),
+        class(&before, ServiceClass::Read) + 1
+    );
+    assert_eq!(
+        class(&after, ServiceClass::Source),
+        class(&before, ServiceClass::Source)
+    );
+    assert_eq!(
+        class(&after, ServiceClass::Lifecycle),
+        class(&before, ServiceClass::Lifecycle)
+    );
 
     // The session is excluded and reported with the same original failure
     // the mount's record holds: one allocation, not a copy or a text.
@@ -392,7 +413,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     assert!(Arc::ptr_eq(&first.unwrap(), &cause));
     assert!(std::ptr::eq(port_error(&latest), failures[0].1.as_ref()));
     println!(
-        "COLD-DEMAND request=(base_demand,source_held,no_read)->Complete lane=(completed 1, retained 0, terminal false) quarantined=1 record=(count 1, latest={})",
+        "COLD-DEMAND request=(base_demand,no_source,no_read)->Complete owner_jobs=(1 visit, 0 source, 0 release) lane=(completed 1, retained 0, terminal false) quarantined=1 record=(count 1, latest={})",
         port_error(&latest)
     );
 
@@ -474,7 +495,9 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
 
     // A base demand that fails without quarantining anything: read admission
     // is stopped, so each driver's next demand is refused a reader. Whatever
-    // those requests hold was acquired while readers were still granted.
+    // the prepared requests hold was acquired while readers were still
+    // granted; a request that starts afterwards still gets its source from
+    // the owner, which stopped reads do not touch.
     let held = rig.read(
         services.clone(),
         5,
@@ -520,6 +543,28 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     let window = failure.retained_read().is_some();
     wait(failure.relinquish()).unwrap();
 
+    // A metadata request that still records a source: OPENDIR needs the
+    // directory's base inode, is refused a reader, and holds its source.
+    let failure = match wait(NativeRead::prepare(
+        services.clone(),
+        mount,
+        9,
+        root,
+        None,
+        NativeReadOperation::Opendir { serial: root },
+    )) {
+        Err(failure) => failure,
+        Ok(_) => panic!("a directory was opened without its base fact"),
+    };
+    stopped(failure.base_demand().unwrap().cause());
+    assert!(!failure.fenced());
+    assert!(failure.retained_source().is_some() && failure.retained_read().is_none());
+    let admitted = rig.owner_work().admitted;
+    wait(failure.relinquish()).unwrap();
+    // Exactly the release of that source.
+    assert_eq!(rig.owner_work().admitted, admitted + 1);
+
+    let before = rig.owner_work();
     let failure = match wait(NativeMutation::perform(
         services.clone(),
         MutationRequest {
@@ -537,8 +582,16 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     };
     stopped(failure.base_demand().unwrap().cause());
     assert!(!failure.fenced());
-    assert!(failure.retained_source().is_some() && failure.publication().is_none());
+    // A mutation records no request source, and this one published nothing:
+    // it holds nothing, and giving it up admits no owner job.
+    assert!(failure.publication().is_none());
     wait(failure.relinquish()).unwrap();
+    let after = rig.owner_work();
+    assert_eq!(after.admitted, before.admitted + 1);
+    assert_eq!(
+        after.completed[ServiceClass::Mutation as usize],
+        before.completed[ServiceClass::Mutation as usize] + 1
+    );
 
     let failure = match wait(stream.next()) {
         Err(failure) => failure,
@@ -548,14 +601,14 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     assert!(!failure.fenced() && failure.retained_source().is_some());
     wait(failure.relinquish()).unwrap();
 
-    // Fixed slots: the count grew by three; the first original cause is
+    // Fixed slots: the count grew by four; the first original cause is
     // still the quarantined reader's failure and the latest is the last one.
     let FailedDemands {
         count,
         first,
         latest,
     } = fence.failed_demands();
-    assert_eq!(count, 4);
+    assert_eq!(count, 5);
     assert!(std::ptr::eq(
         port_error(&first.unwrap()),
         rig.store.reader_failures()[0].1.as_ref()
@@ -567,7 +620,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     assert!(!fence.stopped());
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "COLD-ADMISSION read=(base_demand,source_held,read_held={window})->released mutation=(base_demand,source_held,no_ticket)->released directory=(base_demand,source_held)->released quarantined=1 record=(count 4, first=quarantined reader failure, latest=ReadAdmission(Stopped))"
+        "COLD-ADMISSION read=(base_demand,source_held,read_held={window})->released opendir=(base_demand,source_held,no_read)->released mutation=(base_demand,no_source,no_ticket)->nothing held directory=(base_demand,source_held)->released quarantined=1 record=(count 5, first=quarantined reader failure, latest=ReadAdmission(Stopped))"
     );
 
     drop(wait(services.close_file(mount, serial, handle)).unwrap());

@@ -3,6 +3,36 @@
 > **Status:** Implemented R2 component on parent78374ced6,2026-10-08.
 > Native Fuse activation, Ready and normal drain remain open.
 
+R7 update, 2026-10-09: **LOOKUP, GETATTR and every native mutation are
+served by owner visits that record no request source.** One visit is one owner
+job ([overlay](../../crates/layerfs-overlay/src/lifetime/native_visit.rs),
+[workspace](../../crates/layerfs-workspace/src/operations/native_visit.rs)):
+it checks the live mount and the kernel's own reference on the inode or
+descriptor the request names, decides over current rows, and, when it
+decides, takes the reply's kernel custody or publishes in the same
+transaction. The job is the request's whole window in the owner: install,
+revoke, close and reclamation are owner jobs too and cannot run inside it, so
+it writes no `native_source`, `base_source`, `lease(5)` or reader count and
+there is nothing to release after the reply. Inside the job the base is a
+turn-local source (class 3) that names no row; it is accepted only while the
+Workspace still has the same base root and install frontier.
+
+Base facts a visit needs are read inside the job from canonical objects
+already resident in the Store's cache, through a memory-only client that never
+asks a provider and copies no object above 64 KiB. A fact that is not
+resident leaves the visit undecided and unchanged. The request then reads it
+outside the owner, from the Workspace's current base over an admitted Store
+reader, tags it with that base root and visits again. A visit uses carried
+facts only of the base the Workspace has at that moment, so an install
+between two visits costs another read and never a stale answer; a base that
+answers the same needs twice is reported as `BaseChanged` rather than read
+again. Between visits the request holds nothing in the owner. Consequences:
+`base_readers` no longer counts these requests, so they do not hold back a
+prepared-base install; a revoke between two visits is not refused on their
+account, and the next visit fails `Stale`; the kernel's reference keeps the
+parent or target inode as before. OPEN, OPENDIR, file data, symbolic-link
+data and directory enumeration still record a source, as described below.
+
 Overlay schema17 adds one engine-minted NativeMount per Workspace and indexed
 native_lookup, native_source and native_read associations in the existing Overlay.
 The mount retains its authenticated root serial. Its implicit root lookup owner

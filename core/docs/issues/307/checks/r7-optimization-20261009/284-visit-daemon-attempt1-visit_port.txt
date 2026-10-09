@@ -1,0 +1,25 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 63f4bb78d, uncommitted product/test paths=32, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/visit_port-80e4d2704ca0c1cc --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test a_create_is_one_mutation_job_and_one_reply_attempt_job ... ok
+test a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant ... FAILED
+
+failures:
+
+---- a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant stdout ----
+
+thread 'a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant' panicked at crates/layerfs-daemon/tests/visit_port.rs:275:5:
+assertion `left == right` failed
+  left: Counted { completed: [2, 0, 0, 4, 0, 0], admitted: 6, grants: 11 }
+ right: Counted { completed: [3, 0, 0, 4, 0, 0], admitted: 7, grants: 12 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 101

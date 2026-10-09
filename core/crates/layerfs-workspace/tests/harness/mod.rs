@@ -6,8 +6,9 @@ use layerfs_content::filesystem::PathName;
 use layerfs_content::ContentError;
 use layerfs_overlay::{Overlay, ProfileConfig, Route};
 use layerfs_workspace::{
-    CanonicalClient, InodeSerials, JobOutcome, NamespaceJob, Operation, Outcome, OverlayJobs,
-    OverlayRead, Refusal, SourceView, Time, ViewStat, Workspace, WorkspaceError, WorkspaceResult,
+    CanonicalCache, CanonicalClient, InodeSerials, JobOutcome, NamespaceJob, Operation, Outcome,
+    OverlayJobs, OverlayRead, Refusal, SourceView, Time, ViewStat, Workspace, WorkspaceError,
+    WorkspaceResult,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -41,6 +42,8 @@ pub struct Bench {
     pub fixture: Fixture,
     pub overlay: Overlay,
     pub workspace: Workspace,
+    /// The canonical cache of the Workspace's own client.
+    pub cache: Arc<CanonicalCache>,
     pub allocator: Allocator,
     pub rounds: Cell<u64>,
     /// Runs once, after the first owner round of the next operation.
@@ -124,10 +127,11 @@ impl Bench {
     }
     /// The same harness over another content-built root.
     pub fn over(tag: &str, fixture: Fixture, cache: usize) -> Self {
-        let client = Arc::new(CanonicalClient::with_lengths(
+        let cache = Arc::new(CanonicalCache::new(cache));
+        let client = Arc::new(CanonicalClient::with_cache(
             Arc::new(fixture.store.clone()),
-            Arc::new(fixture.store.clone()),
-            cache,
+            Some(Arc::new(fixture.store.clone())),
+            cache.clone(),
         ));
         let path = std::env::temp_dir().join(format!(
             "layerfs-namespace-{tag}-{}.sqlite",
@@ -140,6 +144,7 @@ impl Bench {
             fixture,
             overlay,
             workspace,
+            cache,
             allocator: Allocator {
                 next: AtomicU64::new(1000),
                 calls: AtomicU64::new(0),

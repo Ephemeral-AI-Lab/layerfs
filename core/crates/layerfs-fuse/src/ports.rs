@@ -4,8 +4,9 @@ use layerfs_overlay::{
     NativeDirectoryRead, NativeMount, OpenFile, Publication,
 };
 use layerfs_workspace::{
-    MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome, NativeReadJob,
-    NativeReadOutcome, Operation, SourceView, Time,
+    BaseView, MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome,
+    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, Operation,
+    SourceView, Time, VisitFacts,
 };
 use std::{
     error::Error,
@@ -245,6 +246,25 @@ pub trait RequestServices: Send + Sync {
         &self,
         job: NativeReadJob,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>>;
+    /// LOOKUP or GETATTR as one owner job with no request source. An
+    /// undecided outcome has changed nothing and holds nothing.
+    fn observe_visit(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: Option<u64>,
+        operation: NativeReadOperation,
+        facts: Arc<VisitFacts>,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>>;
+    /// The Workspace's current base over an admitted Store reader, for the
+    /// facts an undecided visit asked for. It acquires nothing in the owner.
+    fn base(&self) -> ServiceFuture<'_, BaseView>;
+    /// A native mutation as one owner job with no request source. An
+    /// undecided outcome has changed nothing and holds nothing.
+    fn mutate_visit(
+        &self,
+        request: NativeVisitRequest,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeMutationOutcome>>>;
     fn release_read(&self, read: FileRead) -> ServiceFuture<'_, ServiceReply<()>>;
     fn release_source(&self, source: BaseSource) -> ServiceFuture<'_, ServiceReply<()>>;
     fn forget(

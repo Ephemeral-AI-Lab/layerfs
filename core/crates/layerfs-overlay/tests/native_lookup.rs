@@ -1,7 +1,8 @@
 //! Public engine native ownership, atomicity and bounded indexed retirement.
 use layerfs_overlay::{
-    CleanupState, Inode, InodeKind, MaintenanceCursor, NativeDecision, NativeMount,
-    NativeMountState, Overlay, OverlayError, ProfileConfig, StatementKind,
+    BaseSource, Binding, Changes, CleanupState, DatabaseWork, DirectoryEntryChange, Inode,
+    InodeKind, MaintenanceCursor, NativeDecision, NativeEffect, NativeMount, NativeMountState,
+    Overlay, OverlayError, ProfileConfig, StatementKind, StoredCounts,
 };
 use std::{
     path::PathBuf,
@@ -480,4 +481,421 @@ fn revoked_lookup_retirement_is_bounded_indexed_and_allows_closed_cleanup() {
         "NATIVE_RETIRE lookups=131 maximum_window={maximum_rows} work={:?}",
         f.db.diagnostics().since(&start)
     );
+}
+
+/// What one owner visit may leave behind: transaction statements, ownership
+/// rows and the Workspace's reader count.
+struct Before {
+    work: DatabaseWork,
+    counts: StoredCounts,
+    revision: i64,
+}
+impl Fixture {
+    fn before(&self) -> Before {
+        let route = self.mount.route();
+        Before {
+            counts: self.db.resources(Some(route)).unwrap().counts,
+            revision: self.db.state(route).unwrap().revision,
+            work: self.db.diagnostics(),
+        }
+    }
+    /// (BEGIN, COMMIT, ROLLBACK) statements executed since `before`.
+    fn transactions(&self, before: &Before) -> (u64, u64, u64) {
+        let work = self.db.diagnostics().since(&before.work);
+        let ran = |kind: StatementKind| work.statements[kind as usize].executions;
+        (
+            ran(StatementKind::Begin),
+            ran(StatementKind::Commit),
+            ran(StatementKind::Rollback),
+        )
+    }
+    /// A visit that wrote nothing: no transaction, no row, no reader count.
+    fn unchanged(&self, before: &Before) {
+        assert_eq!(self.transactions(before), (0, 0, 0));
+        let route = self.mount.route();
+        assert_eq!(
+            self.db.resources(Some(route)).unwrap().counts,
+            before.counts
+        );
+        let state = self.db.state(route).unwrap();
+        assert_eq!((state.revision, state.base_readers), (before.revision, 0));
+    }
+    /// The file `serial` created under the root by one publishing visit.
+    fn created(&self, source: BaseSource, serial: u64, name: &[u8]) -> Changes {
+        let active = self.db.source_rows(source).unwrap().active().number() as u64;
+        Changes {
+            inodes: vec![
+                Inode {
+                    kind: InodeKind::Directory,
+                    mode: 0o755,
+                    entries: 1,
+                    ..inode(1)
+                },
+                Inode {
+                    born: active,
+                    ..inode(serial)
+                },
+            ],
+            directory_entries: vec![DirectoryEntryChange {
+                parent: 1,
+                name: name.to_vec(),
+                binding: Binding::Bound {
+                    serial,
+                    inherited: false,
+                },
+            }],
+            ..Changes::default()
+        }
+    }
+}
+
+#[test]
+fn a_read_visit_records_no_source_and_writes_only_a_positive_lookup_reference() {
+    let f = Fixture::new();
+    let route = f.mount.route();
+    assert_eq!(f.db.resources(Some(route)).unwrap().counts.source_rows, 0);
+
+    // A negative LOOKUP: decided, with nothing to acquire.
+    let before = f.before();
+    let missing = f.db.observe_native_visit(f.mount, 1, None, true, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: None,
+            value: "missing",
+        })
+    });
+    assert_eq!(missing.decision, Some("missing"));
+    assert!(matches!(missing.result, Ok(None)));
+    assert!(missing.candidate.is_none() && missing.open_candidate.is_none());
+    assert!(missing.directory_candidate.is_none());
+    f.unchanged(&before);
+
+    // GETATTR of the inode the kernel holds.
+    let before = f.before();
+    let attributes = f.db.observe_native_visit(f.mount, 1, None, false, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(Inode {
+                kind: InodeKind::Directory,
+                ..inode(1)
+            }),
+            value: "attributes",
+        })
+    });
+    assert_eq!(attributes.decision, Some("attributes"));
+    assert!(matches!(attributes.result, Ok(None)));
+    f.unchanged(&before);
+    assert_eq!(f.db.native_lookup_count(f.mount, 1).unwrap(), Some(0));
+
+    // An undecided visit: the needed fact is its whole outcome.
+    let before = f.before();
+    let undecided = f.db.observe_native_visit(f.mount, 1, None, true, |_, _| {
+        Ok(NativeDecision::Needs("base fact"))
+    });
+    assert_eq!(undecided.decision, Some("base fact"));
+    assert!(matches!(undecided.result, Ok(None)));
+    f.unchanged(&before);
+
+    // A positive LOOKUP takes exactly one kernel reference, in the one
+    // transaction of the visit that answered, and still records no source.
+    for held in 1..=2 {
+        let before = f.before();
+        let found = f.db.observe_native_visit(f.mount, 1, None, true, |_, _| {
+            Ok(NativeDecision::Finished {
+                inode: Some(inode(9)),
+                value: 9_u64,
+            })
+        });
+        assert_eq!(found.decision, Some(9));
+        assert!(matches!(found.result, Ok(None)));
+        assert!(found.candidate.is_none());
+        assert_eq!(f.transactions(&before), (1, 1, 0));
+        assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(held));
+        let counts = f.db.resources(Some(route)).unwrap().counts;
+        assert_eq!(counts.source_rows, before.counts.source_rows);
+        assert_eq!(counts.reply_tickets, 0);
+        // Only the first reference adds its ownership rows.
+        assert_eq!(counts == before.counts, held == 2);
+        assert_eq!(f.db.state(route).unwrap().base_readers, 0);
+    }
+
+    // A decision the visit refuses leaves its original value and no write:
+    // attributes of another inode, and a lookup answer that has no name left.
+    let before = f.before();
+    let other = f.db.observe_native_visit(f.mount, 1, None, false, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(inode(9)),
+            value: "other",
+        })
+    });
+    assert_eq!(other.decision, Some("other"));
+    assert!(matches!(
+        other.result,
+        Err(OverlayError::Invalid("native observation serial"))
+    ));
+    let removed = f.db.observe_native_visit(f.mount, 1, None, true, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(Inode {
+                nlink: 0,
+                ..inode(9)
+            }),
+            value: "removed",
+        })
+    });
+    assert!(matches!(removed.result, Err(OverlayError::Missing)));
+    f.unchanged(&before);
+    assert_eq!(f.db.native_lookup_count(f.mount, 9).unwrap(), Some(2));
+
+    // Nothing was recorded for a request, so nothing fences revocation.
+    f.db.forget_native(f.mount, 9, 2).unwrap();
+    f.db.revoke_native_mount(f.mount).unwrap();
+}
+
+#[test]
+fn a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source() {
+    let f = Fixture::new();
+    let route = f.mount.route();
+    const REQUEST: u64 = u64::MAX - 7;
+
+    // A callback that decides without changes writes nothing.
+    let before = f.before();
+    let declined =
+        f.db.mutate_native_visit(f.mount, REQUEST, 1, None, |_, file| {
+            assert_eq!(file, None);
+            Ok(None)
+        })
+        .unwrap();
+    assert_eq!(declined, None);
+    f.unchanged(&before);
+    assert_eq!(f.db.retained_native_file(f.mount, REQUEST).unwrap(), None);
+
+    // CREATE with an open descriptor: publication, lookup reference,
+    // descriptor and reply ticket in the visit's one transaction.
+    let before = f.before();
+    let applied =
+        f.db.mutate_native_visit(f.mount, REQUEST, 1, None, |source, file| {
+            assert_eq!(file, None);
+            Ok(Some((
+                f.created(source, 50, b"made"),
+                NativeEffect::Open {
+                    serial: 50,
+                    parent: 1,
+                    writable: true,
+                },
+            )))
+        })
+        .unwrap()
+        .expect("published");
+    assert_eq!(f.transactions(&before), (1, 1, 0));
+    let file = applied.file.expect("the created file is open");
+    assert_eq!((file.serial(), file.writable()), (50, true));
+    // native_lookup, file_handle and native_file.
+    assert_eq!(f.db.native_lookup_count(f.mount, 50).unwrap(), Some(1));
+    f.db.check_file(file, true).unwrap();
+    assert_eq!(
+        f.db.native_file(f.mount, 50, file.owner_id()).unwrap(),
+        file
+    );
+    assert_eq!(
+        f.db.retained_native_file(f.mount, REQUEST).unwrap(),
+        Some(file)
+    );
+    // The reply ticket.
+    assert_eq!(
+        f.db.pending_publications(route, 0).unwrap(),
+        vec![applied.publication]
+    );
+    let state = f.db.state(route).unwrap();
+    assert_eq!(
+        (state.revision, state.base_readers),
+        (before.revision + 1, 0)
+    );
+    // No request source: neither a native_source nor a base_source row.
+    assert_eq!(f.db.retained_native_source(f.mount, REQUEST).unwrap(), None);
+    let counts = f.db.resources(Some(route)).unwrap().counts;
+    assert_eq!(counts.source_rows, before.counts.source_rows);
+    assert_eq!(counts.reply_tickets, before.counts.reply_tickets + 1);
+    assert_eq!(f.db.inode(route, 50).unwrap().unwrap().nlink, 1);
+
+    // A handle-addressed visit is given its exact descriptor.
+    let before = f.before();
+    let seen =
+        f.db.mutate_native_visit(
+            f.mount,
+            REQUEST - 1,
+            50,
+            Some(file.owner_id()),
+            |_, open| {
+                assert_eq!(open, Some(file));
+                Ok(None)
+            },
+        )
+        .unwrap();
+    assert_eq!(seen, None);
+    // Another handle, or this handle on another inode, is not that
+    // descriptor: the callback is never reached.
+    for (serial, handle) in [(50, file.owner_id() + 1), (1, file.owner_id())] {
+        assert!(matches!(
+            f.db.mutate_native_visit(f.mount, REQUEST - 2, serial, Some(handle), |_, _| {
+                panic!("a wrong handle reached the decision")
+            }),
+            Err(OverlayError::Stale)
+        ));
+    }
+    // Without the kernel's reference on the named inode there is no visit.
+    assert!(matches!(
+        f.db.mutate_native_visit(f.mount, REQUEST - 3, 77, None, |_, _| {
+            panic!("an unreferenced inode reached the decision")
+        }),
+        Err(OverlayError::Stale)
+    ));
+    let unreferenced = f.db.observe_native_visit(
+        f.mount,
+        77,
+        None,
+        false,
+        |_, _| -> Result<NativeDecision<()>, OverlayError> {
+            panic!("an unreferenced inode reached the decision")
+        },
+    );
+    assert!(matches!(unreferenced.result, Err(OverlayError::Stale)));
+    assert_eq!(unreferenced.decision, None);
+    // A read visit through a handle needs that handle on that inode.
+    let through =
+        f.db.observe_native_visit(f.mount, 50, Some(file.owner_id()), false, |_, _| {
+            Ok(NativeDecision::Finished {
+                inode: Some(inode(50)),
+                value: (),
+            })
+        });
+    assert!(matches!(through.result, Ok(None)));
+    let wrong = f.db.observe_native_visit(
+        f.mount,
+        1,
+        Some(file.owner_id()),
+        false,
+        |_, _| -> Result<NativeDecision<()>, OverlayError> {
+            panic!("a wrong handle reached the decision")
+        },
+    );
+    assert!(matches!(wrong.result, Err(OverlayError::Stale)));
+    f.unchanged(&before);
+
+    // A publication that fails after its first write is rolled back whole:
+    // the effect names an inode the changes do not create.
+    let before = f.before();
+    assert!(matches!(
+        f.db.mutate_native_visit(f.mount, REQUEST - 4, 1, None, |source, _| {
+            Ok(Some((
+                f.created(source, 51, b"unmade"),
+                NativeEffect::Entry {
+                    serial: 52,
+                    parent: 1,
+                    directory: false,
+                },
+            )))
+        }),
+        Err(OverlayError::Invalid("native entry final"))
+    ));
+    assert_eq!(f.transactions(&before), (1, 0, 1));
+    assert_eq!(f.db.resources(Some(route)).unwrap().counts, before.counts);
+    assert_eq!(f.db.state(route).unwrap().revision, before.revision);
+    assert_eq!(f.db.inode(route, 51).unwrap(), None);
+    assert_eq!(f.db.native_lookup_count(f.mount, 51).unwrap(), None);
+
+    // The reply attempt is the only release a publishing visit owes.
+    f.db.reply_attempted(applied.publication).unwrap();
+    assert!(f.db.pending_publications(route, 0).unwrap().is_empty());
+    // A revoked mount is visited by nothing.
+    f.db.revoke_native_mount(f.mount).unwrap();
+    assert!(matches!(
+        f.db.mutate_native_visit(f.mount, REQUEST - 5, 1, None, |_, _| {
+            panic!("a revoked mount reached the decision")
+        }),
+        Err(OverlayError::Stale)
+    ));
+    let revoked = f.db.observe_native_visit(
+        f.mount,
+        1,
+        None,
+        true,
+        |_, _| -> Result<NativeDecision<()>, OverlayError> {
+            panic!("a revoked mount reached the decision")
+        },
+    );
+    assert!(matches!(revoked.result, Err(OverlayError::Stale)));
+}
+
+#[test]
+fn a_visit_source_names_no_row_and_is_stale_once_the_base_or_frontier_moves() {
+    let f = Fixture::new();
+    let route = f.mount.route();
+    // The turn-local source of a visit, carried out of its callback.
+    let smuggle = || {
+        let mut source = None;
+        let outcome =
+            f.db.observe_native_visit(f.mount, 1, None, false, |rows, own| {
+                assert_eq!(rows.source(), own);
+                source = Some(own);
+                Ok(NativeDecision::Needs(()))
+            });
+        assert!(matches!(outcome.result, Ok(None)));
+        source.expect("the visit reached its decision")
+    };
+    let before = f.before();
+    let first = smuggle();
+    assert_eq!(first.route(), route);
+    assert_eq!(first.root(), f.db.state(route).unwrap().base_root);
+    // It is not a recorded source: it cannot be released, and nothing changed.
+    assert!(matches!(
+        f.db.release_base_source(first),
+        Err(OverlayError::Invalid(_))
+    ));
+    assert_eq!(
+        f.db.retained_base_source(route, first.owner()).unwrap(),
+        None
+    );
+    f.unchanged(&before);
+    // Each visit has its own, and neither fences the install below.
+    let second = smuggle();
+    assert_ne!(first.owner(), second.owner());
+    // While the Workspace still has that base and frontier it reads as the
+    // current base.
+    assert_eq!(f.db.source_inode(first, 1).unwrap(), None);
+
+    // The install frontier moves under the same base root.
+    let capture = f.db.capture(route).unwrap();
+    assert!(f.db.install_ready(capture).unwrap());
+    f.db.install(capture, first.root()).unwrap();
+    assert_eq!(f.db.state(route).unwrap().base_root, first.root());
+    for stale in [first, second] {
+        assert!(matches!(
+            f.db.source_inode(stale, 1),
+            Err(OverlayError::Stale)
+        ));
+        assert!(matches!(f.db.source_rows(stale), Err(OverlayError::Stale)));
+        assert!(matches!(
+            f.db.apply(stale, &f.created(smuggle(), 60, b"stale")),
+            Err(OverlayError::Stale)
+        ));
+    }
+    assert_eq!(f.db.inode(route, 60).unwrap(), None);
+
+    // The base root moves.
+    let third = smuggle();
+    assert_eq!(f.db.source_inode(third, 1).unwrap(), None);
+    let capture = f.db.capture(route).unwrap();
+    f.db.install(capture, [23; 32]).unwrap();
+    assert!(matches!(
+        f.db.source_inode(third, 1),
+        Err(OverlayError::Stale)
+    ));
+    assert!(matches!(
+        f.db.release_base_source(third),
+        Err(OverlayError::Invalid(_))
+    ));
+    // A visit after the install is over the new base.
+    let current = smuggle();
+    assert_eq!(current.root(), [23; 32]);
+    assert_eq!(f.db.source_inode(current, 1).unwrap(), None);
+    assert_eq!(f.db.state(route).unwrap().base_readers, 0);
+    f.db.revoke_native_mount(f.mount).unwrap();
 }
