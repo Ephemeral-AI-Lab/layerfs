@@ -204,6 +204,30 @@ class ExactSubtraction(unittest.TestCase):
         values["2"][1]["values"][0] = 99
         self.assertEqual(counts.phase_counts(values,before,end,exclusive_observer_scope=True)["status"],"UNAVAILABLE")
 
+    def connection(self, rows, *, detached, requests):
+        native = [0] * len(counts.NATIVE)
+        native[counts.NATIVE.index("owner_id")] = 1
+        native[counts.NATIVE.index("detached")] = int(detached)
+        opcodes = [requests] + [0] * 38 + [requests] + [0] * 6
+        header = rows[0]
+        for section, values in ((12,native),(26,opcodes)):
+            rows.append({**header, "section": section, "index": 0, "available": True, "values": values})
+
+    def test_opcodes_of_a_later_connection_count_from_its_start(self):
+        values,before,end = self.fixtures()
+        self.connection(values["0"],detached=True,requests=7000)
+        self.connection(values["2"],detached=False,requests=3)
+        result = counts.phase_counts(values,before,end,exclusive_observer_scope=True)
+        self.assertEqual(result["status"],"AVAILABLE")
+        self.assertEqual(result["raw"]["opcodes"]["by_opcode"][0],3)
+        self.assertIn("later mount connection",result["raw"]["opcodes"]["scope"])
+
+    def test_opcodes_decreasing_on_one_connection_stay_unavailable(self):
+        values,before,end = self.fixtures()
+        self.connection(values["0"],detached=False,requests=7000)
+        self.connection(values["2"],detached=False,requests=3)
+        self.assertEqual(counts.phase_counts(values,before,end,exclusive_observer_scope=True)["status"],"UNAVAILABLE")
+
     def test_original_counts_independent_of_observer_count_at_two_sizes(self):
         adjusted = []
         for last in (2,4):

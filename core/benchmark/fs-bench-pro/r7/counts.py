@@ -290,10 +290,19 @@ def phase_counts(groups, before_identity, end_identity, *, exclusive_observer_sc
             result["raw"]["reader"] = difference(before["reader"],end["reader"],("grants",))
         if "native" in before and "native" in end and before["native"]["owner_id"] == end["native"]["owner_id"] and "opcodes" in before and "opcodes" in end:
             left, right = before["opcodes"], end["opcodes"]
-            require(all(last >= first and last != 2**64-1 and first != 2**64-1 for first,last in zip(left["by_opcode"],right["by_opcode"])), "opcode counters decreased or saturated")
-            result["raw"]["opcodes"] = {"by_opcode": [last-first for first,last in zip(left["by_opcode"],right["by_opcode"])],
-                    "disposition": difference(left["disposition"],right["disposition"],OPCODE_DISPOSITION),
-                    "scope": "one original mount connection; control diagnostic counts are not FUSE requests"}
+            if before["native"]["detached"] and not end["native"]["detached"]:
+                # Opcode counters belong to one connection and start at zero.
+                # The before endpoint's connection had already detached, so the
+                # end endpoint's own counters are the whole interval.
+                require(all(last != 2**64-1 for last in right["by_opcode"]), "opcode counters saturated")
+                result["raw"]["opcodes"] = {"by_opcode": list(right["by_opcode"]),
+                        "disposition": difference(dict.fromkeys(OPCODE_DISPOSITION,0),right["disposition"],OPCODE_DISPOSITION),
+                        "scope": "a later mount connection counted from its own start; the before endpoint's connection was detached"}
+            else:
+                require(all(last >= first and last != 2**64-1 and first != 2**64-1 for first,last in zip(left["by_opcode"],right["by_opcode"])), "opcode counters decreased or saturated")
+                result["raw"]["opcodes"] = {"by_opcode": [last-first for first,last in zip(left["by_opcode"],right["by_opcode"])],
+                        "disposition": difference(left["disposition"],right["disposition"],OPCODE_DISPOSITION),
+                        "scope": "one original mount connection; control diagnostic counts are not FUSE requests"}
     except (ValueError, KeyError, TypeError, IndexError) as error:
         result["status"] = "UNAVAILABLE"
         result["reason"] = str(error)
