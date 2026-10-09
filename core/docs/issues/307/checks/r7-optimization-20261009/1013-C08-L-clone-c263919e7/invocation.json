@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "c263919e79cda4afb0c12f640d59cb227b171d31",
+  "source_tree": "4a9ff98f5d03e2c80e22b5a2c02d56af1cb1630f",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/1000-C05-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1001-C05-L-clone-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1002-C05-L-configuration-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1003-C05-B-L-sample-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1004-C06-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1005-C06-L-clone-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1006-C06-L-configuration-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1007-C06-B-L-sample-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1008-C07-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1009-C07-L-clone-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1010-C07-L-configuration-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1011-C07-B-L-sample-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1012-C08-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/980-L-source-seal-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/981-runtime-release-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/982-daemon-release-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/983-build-provenance-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/984-C01-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/985-C01-L-clone-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/986-C01-L-configuration-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/987-C01-B-L-sample-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/988-C02-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/989-C02-L-clone-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/990-C02-L-configuration-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/991-C02-B-L-sample-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/992-C03-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/993-C03-L-clone-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/994-C03-L-configuration-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/995-C03-B-L-sample-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/996-C04-L-volume-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/997-C04-L-clone-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/998-C04-L-configuration-c263919e7/\n?? core/docs/issues/307/checks/r7-optimization-20261009/999-C04-B-L-sample-c263919e7/",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r7-C08-L-copy-c263919e7",
+    "--network",
+    "none",
+    "-v",
+    "layerfs-r7-empty-master-20261009-2ac7cc762:/source:ro",
+    "-v",
+    "layerfs-r7-C08-L-c263919e7-20261009:/dest",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "/bin/bash",
+    "-euo",
+    "pipefail",
+    "-c",
+    "test ! -e /dest/global; test ! -s /source/global/store.sqlite-wal; test ! -s /source/global/store.sqlite-journal; mkdir -m 700 /dest/global; cp --reflink=never --sparse=never --preserve=mode,ownership,timestamps /source/global/store.sqlite /dest/global/store.sqlite; cmp /source/global/store.sqlite /dest/global/store.sqlite; chmod --reference=/source/global /dest/global; chown --reference=/source/global /dest/global; touch -r /source/global /dest/global; sha256sum /source/global/store.sqlite /dest/global/store.sqlite; stat -c \"%n %s %b %B %a %u %g\" /source/global/store.sqlite /dest/global/store.sqlite"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

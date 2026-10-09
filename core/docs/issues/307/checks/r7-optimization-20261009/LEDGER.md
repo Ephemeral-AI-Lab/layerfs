@@ -2599,3 +2599,42 @@ parked for the whole hold now fails the test). The revision and
 retained/terminal expectations are unchanged. `345-scope-attempt2`: PASS,
 engine `Some((0, 0)) -> Some((0, 0))`.
 
+### First merges from the worktrees sampled at `c263919e7`: receipts 980–1031
+
+Main now holds, merged with `--no-ff`: `dc0c0a6f7` of batch 3a (a visit
+job reads an inode row once and writes it with no layer probe: per created
+file 48 → 41 statement attempts; schema 23; a job-scoped stack value of
+four inode rows, about 0.5 KiB, no resident structure; production LOC
++161) and `1fe0ed54b` of batch 3b (OPENDIR one visit, RELEASEDIR one job;
+production LOC +23). One merge re-pin: `directory_cost.rs` OPENDIR_BASE
+Inode (2, 2) → (1, 1), the same statement the first commit takes out of
+OPEN_BASE. Lead's count tiers on the merged trees: `346-lead-merge-b4a-count`
+(10 ok), `347-lead-merge-b3a-count` and `-2`.
+
+The sample held the three worktree locks. All twelve rows DIAGNOSTIC,
+verifier PASS. Host load average fell from 17 to 5 during the run.
+
+| Cell | Receipt | Command ms before → after | A2 ms | Ratio | Owner jobs | Statement executions | Owner wait / service ms before → after | Container CPU ms |
+| --- | --- | --- | ---: | ---: | --- | --- | --- | --- |
+| C01 | 987 | 435.7 → 379.5 | 183.4 | 2.07 | 5001 → 5001 | 61004 → 54002 | 2.0 / 187.9 → 1.8 / 151.1 | 397 → 337 |
+| C02 | 991 | 971.0 → 930.5 | 965.0 | 0.96 | 6002 → 6002 | 63006 → 56004 | 2.2 / 191.2 → 2.4 / 158.4 | 950 → 881 |
+| C03 | 995 | 674.6 → 654.2 | 410.8 | 1.59 | 9108 → 9104 | 131715 → 121643 | 5.9 / 316.5 → 6.2 / 291.3 | 590 → 566 |
+| C04 | 999 | 889.4 → 799.9 | 952.6 | 0.84 | 5382 → 5342 | 59076 → 52914 | 3.5 / 190.9 → 2.9 / 155.4 | 912 → 814 |
+| C05 | 1003 | 1004.7 → 851.5 | 949.6 | 0.90 | 7264 → 6776 | 90226 → 76224 | 14.7 / 259.3 → 13.0 / 200.6 | 1051 → 884 |
+| C06 | 1007 | 262.7 → 245.8 | 78.6 | 3.13 | 517 → 517 | 36918 → 36398 | 0.2 / 154.9 → 0.2 / 152.9 | 271 → 257 |
+| C07 | 1011 | 564.4 → 475.7 | 171.6 | 2.77 | 1549 → 1549 | 77958 → 76407 | 0.9 / 370.8 → 0.6 / 308.2 | 563 → 456 |
+| C08 | 1015 | 284.1 → 246.1 | 106.1 | 2.32 | 521 → 521 | 36945 → 36425 | 0.3 / 170.3 → 0.2 / 147.6 | 308 → 255 |
+| C09 | 1019 | 111.9 → 110.0 | 106.2 | 1.04 | 517 → 517 | 1068 → 1065 | 0.2 / 4.8 → 0.3 / 5.3 | 125 → 120 |
+| C10 | 1023 | 248.0 → 240.4 | 178.2 | 1.35 | 1545 → 1545 | 42083 → 41048 | 0.3 / 165.7 → 0.3 / 155.7 | 292 → 268 |
+| C11 | 1027 | 272.2 → 225.7 | 85.8 | 2.63 | 517 → 517 | 36911 → 36394 | 0.2 / 166.9 → 0.2 / 141.8 | 285 → 234 |
+| C12 | 1031 | 299.0 → 254.4 | 189.3 | 1.34 | 3495 → 3475 | 32467 → 29706 | 2.3 / 96.4 → 1.9 / 76.5 | 273 → 232 |
+
+Verdict by counts: both KEPT. Statements fell in every cell: C01 −7002
+(7 per created file, as the count test pins), C02 −7002, C03 −10072,
+C04 −6162, C05 −14002 with owner jobs −488 (the OPENDIR and RELEASEDIR
+of `find`), C07 −1551, C12 −2761. The times moved the same way in every
+cell, but the host also went quiet during this run, so the size of the
+time change is not attributed. C02, C04 and C05 are below A2 in this
+sample; C09 is 3.8 ms above it at unchanged counts. Storage: logical bytes
+equal in every cell.
+

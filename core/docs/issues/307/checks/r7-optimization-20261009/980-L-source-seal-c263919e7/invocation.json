@@ -1,0 +1,24 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "c263919e79cda4afb0c12f640d59cb227b171d31",
+  "source_tree": "4a9ff98f5d03e2c80e22b5a2c02d56af1cb1630f",
+  "worktree_status": "",
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/fs-bench-pro",
+    "python3",
+    "-B",
+    "-m",
+    "r7.source_inventory",
+    "--arm",
+    "L",
+    "--output",
+    "/tmp/layerfs-r7-source-L-c263919e7-20261009.json"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}
