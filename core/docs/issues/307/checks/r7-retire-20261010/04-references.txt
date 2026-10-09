@@ -1,0 +1,103 @@
+# r7-retire receipt 04: tracked references to the seven excluded packages outside their own directories, HEAD a6655ef45
+# command: git grep -n -E 'layerfs-(bridge|daemon|fuse|sandbox|sdk|workspace)-legacy|layerfs-server|layerfs_server' -- <area>, with the seven directories and this checks directory excluded
+
+## core/Cargo.toml core/Cargo.lock Cargo.toml Cargo.lock .cargo
+core/Cargo.toml:28:    "crates/layerfs-sdk-legacy",
+core/Cargo.toml:29:    "crates/layerfs-sandbox-legacy",
+core/Cargo.toml:30:    "crates/layerfs-daemon-legacy",
+core/Cargo.toml:31:    "crates/layerfs-fuse-legacy",
+core/Cargo.toml:32:    "crates/layerfs-workspace-legacy",
+core/Cargo.toml:33:    "crates/layerfs-bridge-legacy",
+core/Cargo.toml:34:    "crates/layerfs-server",
+(end of area)
+
+## core/crates
+(end of area)
+
+## core/tools tools
+core/tools/check_product_boundary.py:66:    "layerfs-server", "layerfs-sdk", "layerfs-api-core",
+core/tools/test_check_product_boundary.py:68:        self.assertTrue(violations(path, "use layerfs_server::Server;"))
+core/tools/test_check_product_boundary.py:79:        for dependency in ("layerfs-api-core","layerfs-server","layerfs-daemon","layerfs-persistence","layerfs-sdk"):
+core/tools/test_check_product_boundary.py:81:        self.assertFalse(dependency_violations('[package]\nname="layerfs-sandbox-legacy"\n[dependencies]\nlayerfs-api-core={path="../layerfs-api/core"}'))
+core/tools/test_check_product_boundary.py:93:        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
+core/tools/test_check_product_boundary.py:105:        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../layerfs-server"}'))
+core/tools/test_check_product_boundary.py:119:            self.assertTrue(violations(path,"use layerfs_server::Server;"))
+(end of area)
+
+## core/benchmark benchmark
+core/benchmark/fs-bench-pro/diagnostics/baseline_init.rs:5:use layerfs_server::{Service,StoreAccess,Grant};
+core/benchmark/fs-bench-pro/diagnostics/run_namespace_cause.py:38:        build=['cargo','+1.85.1','build','--manifest-path','core/Cargo.toml','--release','--locked','-p','layerfs-sdk','--example','cause_reference_namespace','-p',
+core/benchmark/fs-bench-pro/diagnostics/sqlite_reference_init.rs:4:use layerfs_server::{Service,StoreAccess,Grant};
+core/benchmark/fs-bench-pro/families/phase7_sqlite.py:315:        if arm=='baseline':command+=['-p','layerfs-server']
+core/benchmark/fs-bench-pro/families/phase7_storage.py:60:        command += ['-p', 'layerfs-server']
+core/benchmark/fs-bench-pro/families/workspace_write.py:167:                      "-p", "layerfs-server", "--example", "verify_checkpoint5"]),
+core/benchmark/fs-bench-pro/runner.py:40:         "-p", "layerfs-sdk", "-p", "layerfs-server",
+core/benchmark/fs-bench-pro/shared/evidence_registration.py:77:        if not path.startswith("core/crates/") or "-legacy/" in path or "/layerfs-server/" in path:
+core/benchmark/fs-bench-pro/shell_package.py:186:        ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-server", "--example", "verify_shell"],
+(end of area)
+
+## AGENTS.md core/AGENTS.md cluster_one_handbook.md cas_cdc_deltaencoding_handbook.md benchmark_agent_report.md docs/general
+AGENTS.md:111:  unmount). Do not revive `layerfs-server` or build a host/server adapter in
+core/AGENTS.md:25:  unfinished. See [S6 audit](docs/issues/307/S6-EXIT-AUDIT.md). Its temporarily relocated `layerfs-workspace-legacy` source remains
+core/AGENTS.md:89:  Its intact predecessor is excluded under `layerfs-fuse-legacy`. The daemon
+core/AGENTS.md:121:  their loops or inherit their retired topology. Do not revive `layerfs-server`.
+(end of area)
+
+## core/docs/architecture/*.md core/docs/api core/docs/benchmark
+core/docs/api/operations.md:25:[Service](../../crates/layerfs-server/src/service/handler.rs) has a
+core/docs/architecture/03-files.md:15:The #252 Service input adapter in `layerfs-server/src/service/save/file_stream.rs`
+core/docs/architecture/14-service-runtime.md:461:`layerfs-server` package: `service/handler.rs` owns admission and dispatch;
+core/docs/architecture/14-service-runtime.md:472:sandbox owner together. `src/bin/layerfs-server.rs` is the only process
+core/docs/architecture/14-service-runtime.md:1256:The replacement-product package `layerfs-server` now owns both the authorized
+core/docs/architecture/16-history.md:128:layerfs-history ◄── layerfs-server    (composition, authorization, bootstrap)
+core/docs/architecture/20-workspace-base.md:61:`core/crates/layerfs-workspace-legacy/`, as allowed by the implementation plan.
+core/docs/architecture/21-daemon-owner.md:119:The dormant daemon is temporarily relocated at `layerfs-daemon-legacy`, excluded,
+core/docs/architecture/22-sdk-runtime.md:85:The old SDK is preserved byte-for-byte under `layerfs-sdk-legacy`, excluded, with
+core/docs/architecture/23-native-bridge.md:91:The predecessor is preserved intact in excluded layerfs-bridge-legacy, with only
+core/docs/architecture/71-ordinary-engine-runtime-foundation.md:74:`layerfs-sandbox-legacy`, with only its package manifest name adjusted. It is
+core/docs/architecture/75-native-request-service.md:14:The former excluded Fuse is preserved byte-for-byte in `layerfs-fuse-legacy`;
+core/docs/architecture/proposal/service-daemon-transport/07-public-operations.md:109:and [the service's streaming edit input](../../../../crates/layerfs-server/src/service/save/edit_stream.rs).
+core/docs/benchmark/fs-bench-pro/exec2edit.md:37:per-case clone → layerfs-server open      WorkspaceApi::exec(command)
+core/docs/benchmark/fs-bench-pro/exec2edit.md:77:`layerfs-server`: keep its Service handler, move the native listener module
+(end of area)
+
+## core/docs/architecture/proposal/service-daemon-transport
+core/docs/architecture/proposal/service-daemon-transport/07-public-operations.md:109:and [the service's streaming edit input](../../../../crates/layerfs-server/src/service/save/edit_stream.rs).
+(end of area)
+
+## core/reference-tests core/patches core/vendor
+(end of area)
+
+## historical records, count of files only
+core/docs/issues: 534 files
+docs/roadmap: 0 files
+docs/issues: 0 files
+core/docs/architecture/proposal: 1 files
+core/docs/architecture/deferred: 0 files
+
+## source includes that leave their own crate: #[path] or include! with ../../
+core/crates/layerfs-daemon/examples/e2_startup.rs:2:#[path = "../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]
+core/crates/layerfs-daemon/tests/captured_namespace.rs:2:#[path = "../../layerfs-overlay/tests/payload_support/mod.rs"]
+core/crates/layerfs-daemon/tests/captured_runs.rs:1:#[path = "../../layerfs-overlay/tests/payload_support/mod.rs"]
+core/crates/layerfs-daemon/tests/e2_startup_receipts.rs:2:#[path = "../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]
+core/crates/layerfs-daemon/tests/edit_backing.rs:2:#[path = "../../layerfs-content/tests/support/mod.rs"]
+core/crates/layerfs-daemon/tests/root_qualification.rs:3:#[path = "../../layerfs-content/tests/support/mod.rs"]
+core/crates/layerfs-persistence/tests/atomic_publication.rs:2:#[path = "../../layerfs-daemon/tests/support/held_writer.rs"]
+core/crates/layerfs-persistence/tests/sqlite_ordinal_lookahead.rs:187:#[path = "../../layerfs-daemon/tests/support/held_writer.rs"]
+core/crates/layerfs-project/examples/cause_namespace.rs:27:#[path="../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]mod digest;
+core/crates/layerfs-project/examples/history_support/support.rs:3:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/support/window.rs"]
+core/crates/layerfs-project/examples/history_support/support.rs:6:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/support/instruments.rs"]
+core/crates/layerfs-project/examples/history_support/support.rs:9:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/support/phases.rs"]
+core/crates/layerfs-project/examples/history_support/workload.rs:3:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]
+core/crates/layerfs-project/examples/history_support/workload.rs:8:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/workload/json.rs"]
+core/crates/layerfs-project/examples/history_support/workload.rs:11:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/workload/gitoid.rs"]
+core/crates/layerfs-project/examples/history_support/workload.rs:16:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/workload/history.rs"]
+core/crates/layerfs-project/examples/history_support/workload.rs:21:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/workload/providers.rs"]
+core/crates/layerfs-project/examples/history_support/workload.rs:25:#[path="../../../../benchmark/fs-bench-pro-storage-content/src/workload/oracle.rs"]
+core/crates/layerfs-project/tests/support/mod.rs:26:#[path = "../../../layerfs-storage/tests/support/memory_metadata.rs"]
+(none of the lines above reaches one of the seven directories)
+
+## the same search inside the seven directories, for includes that reach an active crate
+core/crates/layerfs-fuse-legacy/tests/kernel_resize.rs:3:#[path = "../../layerfs-workspace/tests/support/native_workspace.rs"]
+core/crates/layerfs-fuse-legacy/tests/kernel_write.rs:3:#[path = "../../layerfs-workspace/tests/support/native_workspace.rs"]
+core/crates/layerfs-fuse-legacy/tests/mount_failure.rs:3:#[path = "../../layerfs-workspace/tests/support/native_workspace.rs"]

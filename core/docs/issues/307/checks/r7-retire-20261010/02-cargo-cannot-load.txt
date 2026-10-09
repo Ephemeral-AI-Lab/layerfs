@@ -1,0 +1,98 @@
+# r7-retire receipt 02: can Cargo load or select the seven excluded packages at HEAD cf5bd62ce?
+# host macOS arm64, cargo +1.85.1; metadata/pkgid only, nothing is built and no test is run
+
+$ cargo +1.85.1 metadata --no-deps --format-version 1 --manifest-path core/crates/layerfs-bridge-legacy/Cargo.toml
+error: failed to parse manifest at `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge-legacy/Cargo.toml`
+
+Caused by:
+  error inheriting `edition` from workspace root manifest's `workspace.package.edition`
+
+Caused by:
+  failed to find a workspace root
+EXIT 101
+
+$ cargo +1.85.1 metadata --no-deps --format-version 1 --manifest-path core/crates/layerfs-daemon-legacy/Cargo.toml
+error: failed to parse manifest at `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon-legacy/Cargo.toml`
+
+Caused by:
+  error inheriting `edition` from workspace root manifest's `workspace.package.edition`
+
+Caused by:
+  failed to find a workspace root
+EXIT 101
+
+$ cargo +1.85.1 metadata --no-deps --format-version 1 --manifest-path core/crates/layerfs-fuse-legacy/Cargo.toml
+error: failed to parse manifest at `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse-legacy/Cargo.toml`
+
+Caused by:
+  error inheriting `edition` from workspace root manifest's `workspace.package.edition`
+
+Caused by:
+  failed to find a workspace root
+EXIT 101
+
+$ cargo +1.85.1 metadata --no-deps --format-version 1 --manifest-path core/crates/layerfs-sandbox-legacy/Cargo.toml
+error: failed to parse manifest at `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox-legacy/Cargo.toml`
+
+Caused by:
+  error inheriting `edition` from workspace root manifest's `workspace.package.edition`
+
+Caused by:
+  failed to find a workspace root
+EXIT 101
+
+$ cargo +1.85.1 metadata --no-deps --format-version 1 --manifest-path core/crates/layerfs-sdk-legacy/Cargo.toml
+error: failed to parse manifest at `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sdk-legacy/Cargo.toml`
+
+Caused by:
+  error inheriting `edition` from workspace root manifest's `workspace.package.edition`
+
+Caused by:
+  failed to find a workspace root
+EXIT 101
+
+$ cargo +1.85.1 metadata --no-deps --format-version 1 --manifest-path core/crates/layerfs-workspace-legacy/Cargo.toml
+error: failed to parse manifest at `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace-legacy/Cargo.toml`
+
+Caused by:
+  error inheriting `edition` from workspace root manifest's `workspace.package.edition`
+
+Caused by:
+  failed to find a workspace root
+EXIT 101
+
+$ cargo +1.85.1 metadata --no-deps --format-version 1 --manifest-path core/crates/layerfs-server/Cargo.toml
+error: failed to parse manifest at `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-server/Cargo.toml`
+
+Caused by:
+  error inheriting `edition` from workspace root manifest's `workspace.package.edition`
+
+Caused by:
+  failed to find a workspace root
+EXIT 101
+
+$ cargo +1.85.1 pkgid --manifest-path core/Cargo.toml -p layerfs-server
+error: package ID specification `layerfs-server` did not match any packages
+
+$ cargo +1.85.1 pkgid --manifest-path core/Cargo.toml -p layerfs-sdk-legacy
+error: package ID specification `layerfs-sdk-legacy` did not match any packages
+
+$ cargo +1.85.1 pkgid --manifest-path core/Cargo.toml -p layerfs-workspace-legacy
+error: package ID specification `layerfs-workspace-legacy` did not match any packages
+
+$ cargo +1.85.1 pkgid --manifest-path core/Cargo.toml -p layerfs-bridge-legacy
+error: package ID specification `layerfs-bridge-legacy` did not match any packages
+
+$ cargo +1.85.1 pkgid --manifest-path core/Cargo.toml -p layerfs-daemon-legacy
+error: package ID specification `layerfs-daemon-legacy` did not match any packages
+
+$ cargo +1.85.1 pkgid --manifest-path core/Cargo.toml -p layerfs-sandbox-legacy
+error: package ID specification `layerfs-sandbox-legacy` did not match any packages
+
+$ ls core/crates/layerfs-api   # path dependency ../layerfs-api/core of sdk-legacy, sandbox-legacy and layerfs-server
+cli
+mcp
+sdk
+
+$ grep -c legacy/server core/Cargo.lock
+0
