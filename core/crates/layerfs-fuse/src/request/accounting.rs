@@ -52,8 +52,10 @@ pub const OPCODES: usize = Opcode::CopyFileRange as usize + 1;
 #[repr(usize)]
 pub enum Disposal {
     /// An owned bounded unit entered the shared dispatcher with its reply.
+    /// Its first step, and with it the reply, may still run on the loop.
     Handoff,
-    /// Replied on the receive loop; no engine job, durability or SQL work.
+    /// Replied on the receive loop with no dispatcher slot; no engine job,
+    /// durability or SQL work.
     Inline,
     /// A declared refusal or invalid identity, replied on the receive loop.
     Refused,

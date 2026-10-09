@@ -30,8 +30,9 @@ Explicit normal stop refuses Busy without effect while any mount remains.
 
 Each fixed mount lane has sixteen admitted slots, a bounded runnable FIFO and
 two borrowed receive guards. A receiver enters accounting before copying names
-or data. Only the wait for one of the sixteen slots can block it; that condition
-wait releases the scheduler mutex. An admission refusal retains its receive
+or data. The wait for one of the sixteen slots is its only wait; that condition
+wait releases the scheduler mutex. (Since the R7 update below it also runs the
+admitted request's first bounded step, which never waits.) An admission refusal retains its receive
 guard until the caller attempts its terminal reply or no-reply disposal. Already
 admitted requests retain their original continuations through terminal fencing:
 `stop_admission`, the fence of the normal path, revokes new handoff and wakes
@@ -59,7 +60,9 @@ is signalled only while one waits. A worker that requeues its own step takes
 it on its next turn and wakes another worker only when more than that step is
 queued.
 
-Workers select one bounded continuation step in round-robin mount order. They
+Workers select one bounded continuation step in round-robin mount order; a
+request's first step is not selected, it runs on its receive thread. Shutdown
+waits for a first step still running before it counts retained requests. They
 poll outside scheduler and future-storage locks. Pending work parks with a
 notification; wakes during polling are coalesced into one later runnable turn.
 `NextTurn` yields between completed bounded windows even when all prerequisites

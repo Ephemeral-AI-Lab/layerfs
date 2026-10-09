@@ -8,6 +8,7 @@ use crate::{
 use layerfs_overlay::{DatabaseProfile, Overlay, OverlayError, ProfileConfig, Route};
 use std::{
     fmt, io,
+    panic::{catch_unwind, AssertUnwindSafe},
     path::Path,
     sync::{atomic::AtomicUsize, mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
@@ -75,11 +76,15 @@ impl std::error::Error for OwnerError {
 }
 
 /// Worker loss closes admission and disposes only queued, unattempted jobs.
-/// The joining owner retains the original panic; published outcomes stay intact.
+/// The joining owner retains the original panic, of the owner thread or of a
+/// submitting thread's turn; published outcomes stay intact. The connection
+/// closes with its owner thread, after any turn a submitting thread holds.
 struct ExitFence<'a>(&'a Shared);
 impl Drop for ExitFence<'_> {
     fn drop(&mut self) {
         self.0.stop();
+        let closed = self.0.connection().take();
+        drop(closed);
     }
 }
 
@@ -164,10 +169,6 @@ impl Owner {
                     if ready.send((Ok(profile), startup)).is_ok() {
                         run(&owner_shared);
                     }
-                    // The connection closes with its owner thread, after any
-                    // turn a submitting thread still holds.
-                    let closed = owner_shared.connection().take();
-                    drop(closed);
                 })
                 .map_err(OwnerError::Io)?;
             let profile = match receiver.recv() {
@@ -228,7 +229,11 @@ impl Owner {
             .take()
             .ok_or(OwnerError::Stopped)?
             .join()
-            .map_err(|payload| OwnerError::WorkerPanicked(Mutex::new(payload)))
+            .map_err(|payload| OwnerError::WorkerPanicked(Mutex::new(payload)))?;
+        match self.client.shared.panicked() {
+            Some(payload) => Err(OwnerError::WorkerPanicked(Mutex::new(payload))),
+            None => Ok(()),
+        }
     }
 }
 impl Drop for Owner {
@@ -345,7 +350,8 @@ impl OwnerClient {
         // With nothing else queued and the connection free, this thread
         // takes the turn itself: the same selection, readiness and service
         // as the owner thread's, without a hand-off to it and back.
-        let turn = if !state.busy && state.work.queued == 1 {
+        // Pending maintenance is never held back by more than eight turns.
+        let turn = if !state.busy && state.work.queued == 1 && !state.maintenance_due() {
             state.take()
         } else {
             None
@@ -437,18 +443,10 @@ fn ready(db: &Overlay, job: &mut Job) -> Result<bool, OverlayError> {
 }
 /// A turn taken by the submitting thread. A panic in the job leaves the
 /// connection in an unknown state: admission closes, queued jobs get their
-/// commands back unattempted, and the turn is never returned.
-struct SubmittedTurn<'a>(&'a Shared, bool);
-impl Drop for SubmittedTurn<'_> {
-    fn drop(&mut self) {
-        if !self.1 {
-            self.0.stop();
-        }
-    }
-}
+/// commands back unattempted, the turn is never returned and the panic is
+/// kept for `Owner::stop`. The submitter's own result reads disconnected.
 fn serve_submitted(shared: &Shared, job: Box<Job>) {
-    let mut turn = SubmittedTurn(shared, false);
-    let maintenance = {
+    let served = catch_unwind(AssertUnwindSafe(|| {
         let connection = shared.connection();
         match connection.as_deref() {
             Some(db) => {
@@ -460,9 +458,14 @@ fn serve_submitted(shared: &Shared, job: Box<Job>) {
                 false
             }
         }
-    };
-    turn.1 = true;
-    shared.idle(maintenance, false);
+    }));
+    match served {
+        Ok(maintenance) => shared.idle(maintenance, false),
+        Err(payload) => {
+            shared.stop();
+            shared.panic(payload);
+        }
+    }
 }
 /// One job on the connection, from its readiness check to its published
 /// outcome. The caller holds the turn.

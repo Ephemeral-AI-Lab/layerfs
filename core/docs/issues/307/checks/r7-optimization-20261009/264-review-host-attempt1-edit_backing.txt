@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 6c3283336, uncommitted product/test paths=9, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/edit_backing-2bee8b6565d25697 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 4 tests
+test canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup ... ok
+test direct_overlay_port_keeps_deciding_and_unadmitted_inputs_without_owner_release ... ok
+test oversized_unattempted_input_and_stopped_owner_retain_first_cause ... ok
+test terminal_refusal_keeps_original_completion_and_other_scope_progresses ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

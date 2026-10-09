@@ -9,7 +9,8 @@ use std::{
     path::Path,
 };
 
-/// Daemon-local engine. The daemon schedules short jobs on its owning thread.
+/// Daemon-local engine. The daemon runs short jobs on it one exclusive turn
+/// at a time, on its owner thread or on the thread that submitted the job.
 pub struct Overlay {
     pub(crate) identity: u64,
     pub(crate) connection: Connection,

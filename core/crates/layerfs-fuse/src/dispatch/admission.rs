@@ -1,4 +1,5 @@
-//! Callback-entry R+N accounting; only this borrowed handoff wait may block.
+//! Callback-entry R+N accounting. The borrowed handoff wait is the only wait
+//! of a receive loop; an admitted request then runs its first bounded step there.
 use super::{
     queue::{Phase, Shared, Slot},
     task::Task,
@@ -280,6 +281,7 @@ impl Permit {
         } else {
             entry.phase = Phase::Running(false);
             lane.work.steps = lane.work.steps.saturating_add(1);
+            state.receiving += 1;
             drop(state);
             super::task::advance(task, &self.mount.shared, true);
             Ok(())

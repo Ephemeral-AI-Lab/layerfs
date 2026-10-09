@@ -53,7 +53,7 @@ impl NativeFilesystem {
     ) -> Option<(Permit, ReadReply)> {
         self.admit_reply(opcode, bytes, reply, ReadReply::error)
     }
-    /// Only this handoff-capacity wait may occupy a receive loop. A refusal
+    /// This handoff-capacity wait is the only wait of a receive loop. A refusal
     /// makes exactly one error attempt on the still-borrowed reply.
     pub(super) fn admit_reply<R>(
         &self,
@@ -83,8 +83,9 @@ impl NativeFilesystem {
     }
     /// Even a shutdown-racing handoff retains this exact future and reply.
     pub(super) fn handoff(&self, permit: Permit, future: RequestFuture) {
-        let _ = permit.handoff(future);
+        // Counted before the first step, which may reply on this thread.
         self.accounting.disposed(Disposal::Handoff);
+        let _ = permit.handoff(future);
     }
     /// An admitted unit decided on the loop: its permit returns unused.
     pub(super) fn serial<R>(

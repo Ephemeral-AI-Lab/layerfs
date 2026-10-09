@@ -1,6 +1,6 @@
 //! Race-safe runnable notifications and original continuation retention.
 use super::{
-    queue::{Phase, Shared},
+    queue::{Phase, Shared, State},
     types::Failure,
     RequestDisposition, RequestFuture,
 };
@@ -122,9 +122,31 @@ impl Drop for Receiving {
         RECEIVING.set(self.0);
     }
 }
+/// A first step running on its receive thread. Shutdown waits for it before
+/// it counts the requests it retains.
+struct FirstStep<'a>(Option<&'a Shared>);
+impl FirstStep<'_> {
+    /// Ends the step under the lock its last state change already holds.
+    fn end(&mut self, state: &mut State) {
+        if let Some(shared) = self.0.take() {
+            state.receiving -= 1;
+            shared.announce(state);
+        }
+    }
+}
+impl Drop for FirstStep<'_> {
+    fn drop(&mut self) {
+        if let Some(shared) = self.0.take() {
+            let mut state = shared.lock();
+            state.receiving -= 1;
+            shared.announce(&state);
+        }
+    }
+}
 /// One bounded step of a request. `receiving` is the first step, taken on
 /// the thread that received the request; every later step runs on a worker.
 pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
+    let mut first = FirstStep(receiving.then_some(shared));
     let future = task
         .future
         .lock()
@@ -168,6 +190,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
             } else {
                 entry.phase = Phase::Parked;
             }
+            first.end(&mut state);
             return;
         }
     };
@@ -186,6 +209,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
             .expect("retained native slot")
             .phase = Phase::Retained;
         lane.work.terminal = true;
+        first.end(&mut state);
         shared.announce(&state);
         return;
     }
@@ -202,6 +226,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
             .expect("retained native lane");
         lane.tasks[task.slot].as_mut().unwrap().phase = Phase::Retained;
         lane.work.terminal = true;
+        first.end(&mut state);
         shared.announce(&state);
         return;
     }
@@ -212,6 +237,7 @@ pub(crate) fn advance(task: Arc<Task>, shared: &Shared, receiving: bool) {
     lane.tasks[task.slot] = None;
     lane.work.admitted -= 1;
     lane.work.completed = lane.work.completed.saturating_add(1);
+    first.end(&mut state);
     shared.announce(&state);
 }
 

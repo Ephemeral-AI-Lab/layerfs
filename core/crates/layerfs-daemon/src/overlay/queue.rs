@@ -6,6 +6,7 @@ use crate::{
 };
 use layerfs_overlay::{Overlay, Route};
 use std::{
+    any::Any,
     collections::VecDeque,
     mem::size_of,
     sync::{Arc, Condvar, Mutex, MutexGuard},
@@ -185,6 +186,10 @@ pub(crate) struct State {
     pub maintenance: bool,
 }
 impl State {
+    /// Possible maintenance has waited for the owner thread's bound of turns.
+    pub fn maintenance_due(&self) -> bool {
+        self.maintenance && self.served >= 8
+    }
     /// The next runnable job in namespace rotation, with every lane fence.
     pub fn take(&mut self) -> Option<Box<Job>> {
         for _ in 0..self.rotation.len() {
@@ -226,6 +231,8 @@ pub(crate) struct Shared {
     /// The one engine connection. `State::busy` grants a turn before this
     /// lock is taken, so the lock itself is never waited for in service.
     pub connection: Mutex<Option<Box<Overlay>>>,
+    /// The panic of a turn taken by a submitting thread.
+    pub panic: Mutex<Option<Box<dyn Any + Send>>>,
 }
 impl Shared {
     pub fn job_capacity(&self, class: ServiceClass, work: &OwnerWork) -> usize {
@@ -304,6 +311,7 @@ impl Shared {
             config,
             admission,
             connection: Mutex::new(None),
+            panic: Mutex::new(None),
         }
     }
     pub fn scheduler_bytes(&self) -> usize {
@@ -335,8 +343,8 @@ impl Shared {
         let due = state.served >= 8 || job.is_none();
         if due {
             state.served = 0;
+            state.maintenance = false;
         }
-        state.maintenance = false;
         Some((job, state.event, due))
     }
     /// Ends a turn. The owner thread is woken only for work it must do: a
@@ -346,7 +354,8 @@ impl Shared {
             return;
         };
         state.busy = false;
-        state.maintenance |= maintenance;
+        // After a maintenance error no further turn is attempted.
+        state.maintenance |= maintenance && state.maintenance_error.is_none();
         let wanted = state.work.queued != 0 || state.maintenance;
         drop(state);
         if wanted && !owner {
@@ -387,7 +396,15 @@ impl Shared {
     pub fn maintenance_failed(&self, error: layerfs_overlay::OverlayError) {
         if let Ok(mut state) = self.state.lock() {
             state.maintenance_error = Some(Arc::new(error));
+            state.maintenance = false;
         }
+    }
+    pub fn panic(&self, payload: Box<dyn Any + Send>) {
+        let mut panic = self.panic.lock().unwrap_or_else(|p| p.into_inner());
+        panic.get_or_insert(payload);
+    }
+    pub fn panicked(&self) -> Option<Box<dyn Any + Send>> {
+        self.panic.lock().unwrap_or_else(|p| p.into_inner()).take()
     }
     pub fn stopped(&self) -> bool {
         self.state.lock().map_or(true, |state| state.stopping)

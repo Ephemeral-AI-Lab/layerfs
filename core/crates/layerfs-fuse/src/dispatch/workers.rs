@@ -68,6 +68,7 @@ impl Dispatch {
                 live: 0,
                 idle: 0,
                 observers: 0,
+                receiving: 0,
             }),
             changed: Condvar::new(),
             runnable: Condvar::new(),
@@ -208,6 +209,11 @@ fn stop_workers(shared: &Shared) {
 fn join_workers(shared: &Shared, threads: &mut Vec<JoinHandle<()>>) -> Shutdown {
     let joins = threads.drain(..).map(JoinHandle::join).collect();
     let mut state = shared.lock();
+    // A first step still running on its receive thread ends itself; the
+    // requests left after it are the retained ones.
+    while state.receiving != 0 {
+        state = shared.wait(state);
+    }
     let reason = if state.failed {
         DispatchError::Failed
     } else {

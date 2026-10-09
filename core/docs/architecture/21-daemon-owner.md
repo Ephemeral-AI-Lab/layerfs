@@ -309,8 +309,14 @@ credit until all Publisher/Pending/Completion owners are gone.
 The SQL thread's exit fence now stops admission and returns original unattempted
 queued jobs on normal exit or unwind. It does not rewrite a result already
 published before a callback panic. Explicit `Owner::stop` retains the original
-join panic in `OwnerError::WorkerPanicked`; its mutex preserves Send/Sync error
-custody for a payload that is only Send. Owner Drop remains best-effort cleanup;
+panic in `OwnerError::WorkerPanicked`, whether the owner thread or a
+submitting thread's turn panicked; its mutex preserves Send/Sync error custody
+for a payload that is only Send. A panic in a submitting thread's turn does
+not unwind into the submitter: admission closes, the turn is never returned
+and that job's result reads disconnected. The fence also closes the
+connection, after any turn a submitting thread still holds. Possible
+maintenance is never held back by more than eight served jobs: a submitter
+does not take its own turn while that bound is reached. Owner Drop remains best-effort cleanup;
 call explicit stop when the result must be observed. This component is not the
 native session/namespace drain conjunction.
 

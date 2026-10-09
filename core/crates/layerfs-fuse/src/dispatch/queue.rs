@@ -1,4 +1,5 @@
-//! Fixed mount slots and per-mount FIFO, with one step per round-robin turn.
+//! Fixed mount slots and per-mount FIFO, with one step per round-robin turn
+//! for every step after the first, which the receiving thread takes itself.
 use super::{diagnostics::MountWork, task::Task, types::HANDOFFS, DispatchError};
 use crate::ports::Fence;
 use layerfs_overlay::NativeMount;
@@ -69,6 +70,8 @@ pub(crate) struct State {
     pub idle: usize,
     /// Receive, start and drain observers waiting for a state change.
     pub observers: usize,
+    /// First steps running on the threads that received their requests.
+    pub receiving: usize,
 }
 pub(crate) struct Shared {
     pub state: Mutex<State>,

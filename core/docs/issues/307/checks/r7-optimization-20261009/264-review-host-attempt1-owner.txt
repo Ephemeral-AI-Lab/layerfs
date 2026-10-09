@@ -1,0 +1,18 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 6c3283336, uncommitted product/test paths=9, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/owner-dff6c9b96cdb7d0c --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 9 tests
+test failed_capture_waits_for_readers_while_later_writes_and_idle_composition_progress ... ok
+test idle_cleanup_runs_without_an_explicit_reclaim_or_status_job ... ok
+test known_install_fences_later_sources_while_existing_reads_mutations_and_other_work_progress ... ok
+test last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work ... ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0
