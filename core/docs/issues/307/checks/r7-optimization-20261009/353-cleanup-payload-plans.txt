@@ -1,0 +1,43 @@
+
+running 1 test
+test payload_plans_do_not_use_the_namespace_row_index ... FAILED
+
+failures:
+
+---- payload_plans_do_not_use_the_namespace_row_index stdout ----
+FK-SCAN payload opens: ["OpenRead payload_namespace_row"]
+FK-SCAN payload opens: ["OpenRead payload_generation"]
+PLAN sqlite=3.51.0 CELL_COVER: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)"]
+PLAN sqlite=3.51.0 CELL_SHAPES: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)"]
+PLAN sqlite=3.51.0 CELL_PUT: []
+PLAN sqlite=3.51.0 CELL_DROP: ["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"]
+PLAN sqlite=3.51.0 CELLS_DROP: ["SEARCH payload USING COVERING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)"]
+PLAN sqlite=3.51.0 ROW_DROP: ["SEARCH payload USING INTEGER PRIMARY KEY (rowid=?)"]
+PLAN sqlite=3.51.0 ROW_KEEP: ["SEARCH payload USING INTEGER PRIMARY KEY (rowid=?)"]
+PLAN sqlite=3.51.0 ROW_MOVE: ["SEARCH payload USING INTEGER PRIMARY KEY (rowid=?)"]
+PLAN sqlite=3.51.0 ROW_SLICE: ["SEARCH payload USING INTEGER PRIMARY KEY (rowid=?)"]
+PLAN sqlite=3.51.0 CELL_RANGE: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)"]
+PLAN sqlite=3.51.0 CAPTURED_CELL_METADATA: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)"]
+PLAN sqlite=3.51.0 composition.rs:200 / orphan.rs:235 next cell: ["SEARCH payload USING COVERING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>?)"]
+PLAN sqlite=3.51.0 orphan.rs:295: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=?)"]
+PLAN sqlite=3.51.0 orphan.rs:376: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=?)"]
+PLAN sqlite=3.51.0 garbage.rs:15: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND (serial,cell_offset)>(?,?))"]
+PLAN sqlite=3.51.0 garbage.rs:131: ["SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>?)"]
+PLAN sqlite=3.51.0 garbage.rs:141: ["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"]
+PLAN sqlite=3.51.0 reclaim.rs:43: ["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=?)"]
+PLAN sqlite=3.51.0 reclaim.rs:44: ["SEARCH payload USING COVERING INDEX sqlite_autoindex_payload_1 (ns=? AND (serial,gen,cell_offset)<(?,?,?))"]
+PLAN sqlite=3.51.0 trigger payload_account_delete subselect: ["SEARCH payload USING INTEGER PRIMARY KEY (rowid=?)"]
+
+thread 'payload_plans_do_not_use_the_namespace_row_index' panicked at crates/layerfs-overlay/tests/zz_payload_plans_oneoff.rs:81:9:
+report
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    payload_plans_do_not_use_the_namespace_row_index
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 101

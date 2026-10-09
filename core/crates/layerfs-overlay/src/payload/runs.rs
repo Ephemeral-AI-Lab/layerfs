@@ -166,7 +166,6 @@ impl Overlay {
         if !self.writing() {
             return Err(OverlayError::Invalid("in-place write before admission"));
         }
-        let start = std::time::Instant::now();
         let written = match blob {
             Some(open) => open.reopen(row),
             None => self
@@ -178,13 +177,6 @@ impl Overlay {
             Some(open) => open.write_at(bytes, at as usize),
             None => Err(rusqlite::Error::InvalidQuery),
         });
-        let mut observed = self.payload_work.get();
-        observed.in_place_writes = observed.in_place_writes.saturating_add(1);
-        observed.in_place_bytes = observed.in_place_bytes.saturating_add(bytes.len() as u64);
-        observed.in_place_ns = observed
-            .in_place_ns
-            .saturating_add(start.elapsed().as_nanos().min(u64::MAX as u128) as u64);
-        self.payload_work.set(observed);
         written.map_err(|cause| self.failed(cause.into()))
     }
     /// Removes cells `[from, to)` from one live dense row. What it holds

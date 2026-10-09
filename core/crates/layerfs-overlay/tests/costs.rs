@@ -24,7 +24,6 @@ fn complete_mutation_reports_triggers_blob_delivery_and_physical_reservation() {
     // A whole cell is bound from the caller's slice: the engine copies none.
     assert_eq!(copies.cell_copy_bytes, 0);
     assert_eq!(copies.cell_zeroed_bytes, 0);
-    assert_eq!(copies.in_place_writes, 0);
     // File::write includes the mutation and its reply attempt. Only the
     // mutation writes: the attempt returns a ticket held in the engine's
     // memory, and its owner turn finds a live Workspace with nothing to
@@ -156,11 +155,9 @@ fn one_write_window_costs_the_same_statements_at_either_file_size_and_beside_ano
         let first = window_cost(&db, || file.write(0, &rewritten));
         let copies = db.payload_work().since(copies);
         assert_eq!(copies.write_input_bytes, 3 * WRITE_WINDOW as u64);
-        // The two overwrites: one positioning of the row handle per row.
-        assert_eq!(
-            (copies.in_place_writes, copies.in_place_bytes),
-            (8, 2 * WRITE_WINDOW as u64)
-        );
+        // The two overwrites are written where their rows lie: the counts
+        // pinned below show four shape reads and no row changed for each,
+        // and `check` reads the new bytes back.
         assert_eq!((copies.cell_copy_bytes, copies.cell_zeroed_bytes), (0, 0));
         file.check();
         let rows = db.resources(Some(route)).unwrap().counts;

@@ -156,5 +156,6 @@ impl Overlay {
     }
 }
 /// Published replies one RELEASEDIR deletes in its own job, and one
-/// maintenance turn retires: a window of the same statement.
+/// maintenance turn retires: a window of the same statement. The LIMIT of
+/// `sql::COOKIE_PAGES` is this value plus one, kept equal by hand.
 pub(crate) const INLINE_PAGES: usize = 8;

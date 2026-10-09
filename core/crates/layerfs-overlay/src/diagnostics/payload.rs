@@ -10,12 +10,6 @@ pub struct PayloadWork {
     pub cell_zeroed_bytes: u64,
     pub read_window_zeroed_bytes: u64,
     pub read_local_copy_bytes: u64,
-    /// Writes into a stored row where it lies. They are not statements, so
-    /// no statement family counts them: positionings of the row handle, the
-    /// bytes written and their wall time.
-    pub in_place_writes: u64,
-    pub in_place_bytes: u64,
-    pub in_place_ns: u64,
 }
 impl PayloadWork {
     pub fn since(self, before: Self) -> Self {
@@ -37,9 +31,6 @@ impl PayloadWork {
             read_local_copy_bytes: self
                 .read_local_copy_bytes
                 .saturating_sub(before.read_local_copy_bytes),
-            in_place_writes: self.in_place_writes.saturating_sub(before.in_place_writes),
-            in_place_bytes: self.in_place_bytes.saturating_sub(before.in_place_bytes),
-            in_place_ns: self.in_place_ns.saturating_sub(before.in_place_ns),
         }
     }
     pub fn accumulate(&mut self, delta: Self) {
@@ -60,8 +51,5 @@ impl PayloadWork {
         self.read_local_copy_bytes = self
             .read_local_copy_bytes
             .saturating_add(delta.read_local_copy_bytes);
-        self.in_place_writes = self.in_place_writes.saturating_add(delta.in_place_writes);
-        self.in_place_bytes = self.in_place_bytes.saturating_add(delta.in_place_bytes);
-        self.in_place_ns = self.in_place_ns.saturating_add(delta.in_place_ns);
     }
 }

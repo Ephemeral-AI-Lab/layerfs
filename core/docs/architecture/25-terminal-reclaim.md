@@ -21,8 +21,15 @@ metadata table, the 65,536-byte value window for operation records, and for
 payload one maintenance page of 14 cells of bytes (a row of several cells
 counts as its cells, so one 32 KiB row is a step while the next row is
 another). The payload page and delete use the unique key
-`(ns,serial,gen,cell_offset)`; `payload_namespace_row` has no reader left and
-is kept in this change. A table that holds nothing for the namespace is
+`(ns,serial,gen,cell_offset)`; no statement of the engine names or plans
+`payload_namespace_row` any more. It still has one reader (checked
+2026-10-09 under the bundled SQLite, receipt
+`353-cleanup-payload-plans.txt`): with `foreign_keys=ON`, the final
+`DELETE FROM workspace WHERE ns=?1 AND lifecycle=1` checks every child
+table by `ns`, and its program opens `payload_namespace_row` for that scan
+of `payload`. Without the index the same scan opens `payload_generation`.
+The index is therefore kept; dropping it is a decision about that scan,
+not the removal of an unread index. A table that holds nothing for the namespace is
 passed in the same step: a step deletes one page of the first table that
 still holds rows, or the final ready and workspace rows, so an empty table
 costs one page read and no transaction of its own (at most 12 empty page

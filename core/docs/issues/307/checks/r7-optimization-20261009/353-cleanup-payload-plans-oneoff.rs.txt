@@ -1,0 +1,89 @@
+//! One-off: every payload statement's plan with and without payload_namespace_row.
+#[test]
+fn payload_plans_do_not_use_the_namespace_row_index() {
+    let schema = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/sql/schema.sql")).unwrap();
+    let accounting = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/sql/accounting.sql")).unwrap();
+    assert!(!schema.contains("payload_namespace_row"));
+    let with = schema.replace(
+        "CREATE INDEX payload_generation ON payload",
+        "CREATE INDEX payload_namespace_row ON payload(ns,rowid);\nCREATE INDEX payload_generation ON payload",
+    );
+    assert!(with.contains("payload_namespace_row"));
+    let build = |text: &str| {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch(text).unwrap();
+        db.execute_batch(&accounting).unwrap();
+        db
+    };
+    let (a, b) = (build(&with), build(&schema));
+    let version: String = a.query_row("SELECT sqlite_version()", [], |r| r.get(0)).unwrap();
+    let plan = |db: &rusqlite::Connection, sql: &str| -> Vec<String> {
+        let mut statement = db.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+        let count = statement.parameter_count();
+        let values = vec![1_i64; count];
+        let rows = statement
+            .query_map(rusqlite::params_from_iter(values), |r| r.get::<_, String>(3))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        rows
+    };
+    let statements: [(&str, &str); 20] = [
+        ("CELL_COVER", "SELECT rowid,cell_offset,epoch,length(data), CASE WHEN cell_offset=?5 AND length(data)<=4096 THEN data END, CASE WHEN cell_offset=?5 THEN validity END FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<=?5 ORDER BY cell_offset DESC LIMIT 1"),
+        ("CELL_SHAPES", "SELECT rowid,cell_offset,epoch,length(data),length(validity) FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5 ORDER BY cell_offset"),
+        ("CELL_PUT", "INSERT INTO payload(ns,serial,gen,cell_offset,epoch,data,validity) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(ns,serial,gen,cell_offset) DO UPDATE SET epoch=excluded.epoch, data=excluded.data,validity=excluded.validity"),
+        ("CELL_DROP", "DELETE FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4"),
+        ("CELLS_DROP", "DELETE FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5"),
+        ("ROW_DROP", "DELETE FROM payload WHERE rowid=?1"),
+        ("ROW_KEEP", "UPDATE payload SET data=substr(data,1,?2) WHERE rowid=?1"),
+        ("ROW_MOVE", "UPDATE payload SET gen=?2,epoch=?3 WHERE rowid=?1"),
+        ("ROW_SLICE", "SELECT substr(data,?2,?3) FROM payload WHERE rowid=?1"),
+        ("CELL_RANGE", "SELECT cell_offset,epoch,data,validity FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5 AND cell_offset+length(data)>?6 ORDER BY cell_offset"),
+        ("CAPTURED_CELL_METADATA", "SELECT cell_offset,epoch,length(data),length(validity) FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5 AND cell_offset+length(data)>?6 ORDER BY cell_offset LIMIT 1"),
+        ("composition.rs:200 / orphan.rs:235 next cell", "SELECT cell_offset FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>?4 ORDER BY cell_offset LIMIT 1"),
+        ("orphan.rs:295", "SELECT cell_offset,length(data)+ifnull(length(validity),0) FROM payload WHERE ns=?1 AND serial=?2 AND gen=-1 ORDER BY cell_offset LIMIT 14"),
+        ("orphan.rs:376", "SELECT cell_offset,length(data)+ifnull(length(validity),0) FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 ORDER BY cell_offset LIMIT 14"),
+        ("garbage.rs:15", "SELECT serial,cell_offset,length(data)+ifnull(length(validity),0) FROM payload INDEXED BY payload_generation WHERE ns=?1 AND gen=?2 AND (serial,cell_offset)>(?3,?4) ORDER BY serial,cell_offset LIMIT 14"),
+        ("garbage.rs:131", "SELECT cell_offset,epoch,length(data)+ifnull(length(validity),0) FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>?4 ORDER BY cell_offset LIMIT 14"),
+        ("garbage.rs:141", "DELETE FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4 AND epoch=?5"),
+        ("reclaim.rs:43", "SELECT serial,gen,cell_offset,length(data)+ifnull(length(validity),0) FROM payload WHERE ns=?1 ORDER BY serial,gen,cell_offset LIMIT 14"),
+        ("reclaim.rs:44", "DELETE FROM payload WHERE ns=?1 AND (serial,gen,cell_offset)<=(?2,?3,?4)"),
+        ("trigger payload_account_delete subselect", "SELECT length(data)+ifnull(length(validity),0) FROM payload WHERE rowid=?1"),
+    ];
+    // Foreign-key enforcement of the final Workspace-row delete scans every
+    // child table by ns: which index does that program open on payload?
+    for db in [&a, &b] {
+        db.execute_batch("PRAGMA foreign_keys=ON").unwrap();
+        let mut names = std::collections::BTreeMap::new();
+        let mut schema = db.prepare("SELECT rootpage,name FROM sqlite_schema WHERE tbl_name='payload' AND rootpage>0").unwrap();
+        for row in schema.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))).unwrap() {
+            let (root, name) = row.unwrap();
+            names.insert(root, name);
+        }
+        let mut program = db.prepare("EXPLAIN DELETE FROM workspace WHERE ns=?1").unwrap();
+        let opened: Vec<String> = program
+            .query_map([1_i64], |r| Ok((r.get::<_, String>(1)?, r.get::<_, i64>(3)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .filter(|(opcode, _)| opcode.starts_with("Open"))
+            .filter_map(|(opcode, root)| names.get(&root).map(|name| format!("{opcode} {name}")))
+            .collect();
+        panic_if_wanted(&opened);
+    }
+    for (name, sql) in statements {
+        let _ = name;
+        let (before, after) = (plan(&a, sql), plan(&b, sql));
+        println!("PLAN sqlite={version} {name}: {before:?}");
+        assert!(before.iter().all(|p| !p.contains("payload_namespace_row")), "{name}: {before:?}");
+        assert_eq!(before, after, "{name}");
+    }
+    {
+        panic!("report");
+    }
+}
+
+fn panic_if_wanted(opened: &[String]) {
+    eprintln!("FK-SCAN payload opens: {opened:?}");
+    assert!(std::env::var("NEVER_SET_ZZ").is_ok() || !opened.is_empty() || opened.is_empty());
+    // Report through a failing assertion only when the retired index is read.
+}

@@ -97,7 +97,8 @@ pub(crate) const COOKIE_PAGE: &str = "SELECT first_cookie,names FROM native_cook
 pub(crate) const COOKIE_PAGE_AFTER: &str = "SELECT first_cookie,names FROM native_cookie
     INDEXED BY native_cookie_after WHERE ns=?1 AND owner=?2 AND after=?3
     ORDER BY first_cookie DESC LIMIT 1";
-/// At most one more than the replies a RELEASEDIR deletes in its own job.
+/// At most one more than the replies a RELEASEDIR deletes in its own job:
+/// the LIMIT is `lifetime::INLINE_PAGES + 1`, kept equal by hand.
 pub(crate) const COOKIE_PAGES: &str = "SELECT first_cookie,length(names) FROM native_cookie
     WHERE ns=?1 AND owner=?2 AND first_cookie>?3 ORDER BY first_cookie LIMIT 9";
 pub(crate) const CAPTURED_DIRECTORY_ENTRY: &str =

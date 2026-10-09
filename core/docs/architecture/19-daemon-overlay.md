@@ -105,11 +105,15 @@ overlay schema 26). Implemented:
   128 KiB write into a fresh file is 8 Payload statements (12 executions,
   12 changed rows) where it was 32 (64, 96); the same window overwritten is
   4 reads and 4 in-place writes.
-- **In-place writes are counted and fenced (P4).** `PayloadWork` gains
-  `in_place_writes`, `in_place_bytes` and `in_place_ns`. `write_in_place`
-  refuses unless the job's transaction has begun, which the inode upsert
-  before every payload write does; the handle is closed before the job
-  returns. The daemon's diagnostic rows do not carry the three counters.
+- **In-place writes are fenced (P4).** `write_in_place` refuses unless the
+  job's transaction has begun, which the inode upsert before every payload
+  write does; the handle is closed before the job returns. Its three
+  `PayloadWork` counters (`in_place_writes`, `in_place_bytes`,
+  `in_place_ns`) and the two clock reads per write that fed the last were
+  removed on 2026-10-09: nothing read the time, and
+  [`costs.rs`](../../crates/layerfs-overlay/tests/costs.rs) shows an
+  overwrite in place by its pinned statements (four shape reads, no row
+  changed) and by reading the new bytes back.
 - **Shrink, sparse put, raw cell.** A shrink cuts the one dense row that
   holds the boundary with `substr` statements (its whole cells below the
   boundary cell stay one row, the boundary cell's kept bytes become a cell

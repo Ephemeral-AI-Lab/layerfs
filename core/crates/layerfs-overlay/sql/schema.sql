@@ -1,4 +1,5 @@
--- Disposable overlay schema v25. All owner relations lead with Workspace ns.
+-- Disposable overlay schema; its version is the user_version at the end.
+-- All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
