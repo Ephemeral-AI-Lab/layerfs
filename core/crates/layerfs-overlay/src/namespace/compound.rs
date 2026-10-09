@@ -297,16 +297,6 @@ impl Overlay {
                 vec![&ns, &1_i64, &state.active.0],
             ),
             ("update-inode", sql::INODE_UPDATE, row.clone()),
-            (
-                "resize-inode",
-                sql::INODE_RESIZE,
-                vec![&ns, &1_i64, &state.active.0, &0_i64, &0_i64, &0_i64],
-            ),
-            (
-                "recount-inode",
-                sql::INODE_RECOUNT,
-                vec![&ns, &1_i64, &state.active.0, &0_i64, &0_i64, &0_i64, &0_i64],
-            ),
         ] {
             plans.extend(self.query(
                 StatementKind::Explain,

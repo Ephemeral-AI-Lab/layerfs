@@ -382,27 +382,22 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
     let other = db.open_workspace([8; 32], [9; 32]).unwrap();
     let source = db.acquire_base_source(route, 1).unwrap();
     let plans = db.explain_compound(source).unwrap();
-    // Ten: the active and lower rows of one name are read by one statement
+    // Eight: the active and lower rows of one name are read by one statement
     // (`name-layers`), which is listed with the seeks it replaced on the
-    // request path, and an inode is written by a plain insert or by one of
-    // three updates of the row its key names. Eight query plans, then the
-    // VM programs of the two inserts.
-    assert_eq!(plans.len(), 10);
+    // request path, and an inode is written by a plain insert or by the one
+    // update of the row its key names. Six query plans, then the VM programs
+    // of the two inserts.
+    assert_eq!(plans.len(), 8);
     assert!(plans[1].starts_with("name-layers: SEARCH"), "{}", plans[1]);
-    for (plan, label) in plans[5..8]
-        .iter()
-        .zip(["update-inode", "resize-inode", "recount-inode"])
-    {
-        assert!(plan.starts_with(label), "{plan}");
-    }
-    assert!(plans[9].starts_with("insert-inode"), "{}", plans[9]);
-    for plan in &plans[..8] {
+    assert!(plans[5].starts_with("update-inode"), "{}", plans[5]);
+    assert!(plans[7].starts_with("insert-inode"), "{}", plans[7]);
+    for plan in &plans[..6] {
         assert!(
             plan.contains("SEARCH") && !plan.contains("SCAN") && !plan.contains("TEMP"),
             "{plan}"
         );
     }
-    for plan in &plans[8..] {
+    for plan in &plans[6..] {
         assert!(plan.ends_with("btree-scan-opcodes=0"), "{plan}");
     }
     // Both parents already have active rows, so every scale replaces the same

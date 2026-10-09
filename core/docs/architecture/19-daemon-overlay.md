@@ -231,11 +231,13 @@ and writes over it. Nothing is kept across jobs. A serial past the four
 places, an orphan-domain row and every job that is not a visit read and
 write by the indexed statements as before (`LAYER_ACTIVE`, then
 `LAYER_LOWER`); nothing is refused. The upsert `INODE_PUT` is gone. A row is
-written by `INODE_INSERT` (no row of the serial in the generation) or by an
-update of the row its key names: `INODE_RESIZE` (time and size) or
-`INODE_RECOUNT` (time, `entries`, `subdirs`) when the other columns are the
-ones the job read and the layer columns did not move, `INODE_UPDATE` (every
-column) otherwise. An update that changes no row fails the job. A serial
+written by `INODE_INSERT` (no row of the serial in the generation) or by
+`INODE_UPDATE`, which sets every column of the row its key names. The two
+column-subset updates this change first added (`INODE_RESIZE`,
+`INODE_RECOUNT`) were removed later the same day: every statement count was
+equal without them, and their one measured effect, 62 fewer VM steps in the
+five jobs of a created file (1571 against 1633), is pinned by no test. An
+update that changes no row fails the job. A serial
 named by `Changes::created` is inserted with no read; a row that already
 has it in the active generation is a constraint failure that rolls the job
 back, never an update. `CHECK(kind IN (1,2,3))` on `inode` and the

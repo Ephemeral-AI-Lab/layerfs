@@ -1,0 +1,4 @@
+compound-f27037c54631a7cf exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+costs-f1b14bc809c7fae2 exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+engine-b4fac0808988bc6c exit=0 seconds=1 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.21s
+job_rows-a0ed17362d26b78e exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s

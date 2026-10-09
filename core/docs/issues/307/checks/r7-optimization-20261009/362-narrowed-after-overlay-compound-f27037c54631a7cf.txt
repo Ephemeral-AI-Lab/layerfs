@@ -1,0 +1,25 @@
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... FAILED
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+failures:
+
+---- compound_statements_keep_point_work_as_the_namespace_grows stdout ----
+
+thread 'compound_statements_keep_point_work_as_the_namespace_grows' panicked at crates/layerfs-overlay/tests/compound.rs:390:5:
+assertion `left == right` failed
+  left: 8
+ right: 10
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    compound_statements_keep_point_work_as_the_namespace_grows
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 101

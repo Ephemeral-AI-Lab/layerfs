@@ -60,26 +60,6 @@ pub(crate) fn check(inode: &Inode) -> OverlayResult<()> {
     }
     Ok(())
 }
-/// The columns one update writes when the others are the ones its job read.
-enum Narrowed {
-    /// Time and size: a write, a truncate that cuts nothing off, a time change.
-    Size,
-    /// Time and entry counts: a binding gained or lost by a directory.
-    Counts,
-}
-/// The narrower update that carries `new` over the row value `old`. The
-/// cutoff a caller supplies is ignored: the row keeps the engine's.
-fn narrowed(old: &Inode, new: &Inode) -> Option<Narrowed> {
-    if (old.kind, old.mode, old.nlink, old.born) != (new.kind, new.mode, new.nlink, new.born) {
-        None
-    } else if (old.entries, old.subdirs) == (new.entries, new.subdirs) {
-        Some(Narrowed::Size)
-    } else if old.size == new.size {
-        Some(Narrowed::Counts)
-    } else {
-        None
-    }
-}
 pub(crate) fn check_name(parent: u64, name: &[u8]) -> OverlayResult<i64> {
     if name.is_empty() || name.len() > 255 || parent == 0 {
         return Err(OverlayError::Invalid("directory_entry window"));
@@ -179,20 +159,18 @@ impl Overlay {
             _ => None,
         };
         let fresh = (inode.inherited_cutoff, inode.inherited_cutoff, 0, 0);
-        // The active row's value as this job read it, when it did.
-        let mut read = None;
         let (active, (size, cutoff, epoch, height)) = match known {
             _ if created => (false, fresh),
-            Some(Some(row)) if row.gen == gen => {
-                let layer = (
+            // The active row's value as this job read it.
+            Some(Some(row)) if row.gen == gen => (
+                true,
+                (
                     row.inode.size,
                     row.inode.inherited_cutoff,
                     row.epoch,
                     row.height,
-                );
-                read = Some(row.inode);
-                (true, layer)
-            }
+                ),
+            ),
             // The latest row is a lower generation's: its length is inherited.
             Some(Some(row)) => (false, (row.inode.size, row.inode.size, 0, 0)),
             Some(None) => (false, fresh),
@@ -235,68 +213,32 @@ impl Overlay {
             self.shrink(route.ns, serial, &mut layer, inode.size)?;
         }
         layer.size = inode.size;
-        let time = (inode.mtime_seconds, i64::from(inode.mtime_nanoseconds));
-        // The columns that differ from the row this job read, when its layer
-        // columns are the ones that row has.
-        let narrowed = read
-            .filter(|_| (layer.cutoff, layer.epoch, layer.height) == (cutoff, epoch, height))
-            .and_then(|old| narrowed(&old, inode));
-        let key: [&dyn rusqlite::ToSql; 5] = [&route.ns, &serial, &gen, &time.0, &time.1];
-        let changed = match narrowed {
-            Some(Narrowed::Size) => self.execute(
-                StatementKind::Inode,
-                sql::INODE_RESIZE,
-                &[
-                    key[0],
-                    key[1],
-                    key[2],
-                    key[3],
-                    key[4],
-                    &integer(inode.size)?,
-                ],
-                48,
-            )?,
-            Some(Narrowed::Counts) => self.execute(
-                StatementKind::Inode,
-                sql::INODE_RECOUNT,
-                &[
-                    key[0],
-                    key[1],
-                    key[2],
-                    key[3],
-                    key[4],
-                    &integer(inode.entries)?,
-                    &integer(inode.subdirs)?,
-                ],
-                56,
-            )?,
-            None => self.execute(
-                StatementKind::Inode,
-                if active {
-                    sql::INODE_UPDATE
-                } else {
-                    sql::INODE_INSERT
-                },
-                &[
-                    key[0],
-                    key[1],
-                    key[2],
-                    &(inode.kind as i64),
-                    &i64::from(inode.mode),
-                    key[3],
-                    key[4],
-                    &integer(inode.nlink)?,
-                    &integer(inode.size)?,
-                    &integer(layer.cutoff)?,
-                    &integer(inode.born)?,
-                    &integer(inode.entries)?,
-                    &integer(inode.subdirs)?,
-                    &layer.epoch,
-                    &layer.height,
-                ],
-                120,
-            )?,
-        };
+        let changed = self.execute(
+            StatementKind::Inode,
+            if active {
+                sql::INODE_UPDATE
+            } else {
+                sql::INODE_INSERT
+            },
+            &[
+                &route.ns,
+                &serial,
+                &gen,
+                &(inode.kind as i64),
+                &i64::from(inode.mode),
+                &inode.mtime_seconds,
+                &i64::from(inode.mtime_nanoseconds),
+                &integer(inode.nlink)?,
+                &integer(inode.size)?,
+                &integer(layer.cutoff)?,
+                &integer(inode.born)?,
+                &integer(inode.entries)?,
+                &integer(inode.subdirs)?,
+                &layer.epoch,
+                &layer.height,
+            ],
+            120,
+        )?;
         if changed != 1 {
             return Err(OverlayError::Invalid("inode row of the running job"));
         }
