@@ -1943,3 +1943,59 @@ Open: the 44 µs per request outside the owner. The handbook quotes a FUSE
 round trip here at 44 µs across CPUs and 5 µs on one CPU, unpinned A2 at
 26 µs a request; the product's own share of that is not divided by any
 counter yet.
+
+## Baseline of every C cell at `fdc24ef3f` (receipts 520–571)
+
+One sample of each C cell, class B, arm L, same build (520–523), each from
+its own cloned volume and closed oracle. No product change between 516 and
+these samples: `fdc24ef3f` differs from `6703a9ad9` in tests, notes and
+comments only. C01 here is 452.5 ms against 416.4 ms in 516 with equal
+counts: that is the spread of one sample on this host, so a change of less
+than about 10 % is decided by counts, not by one command time.
+
+| Cell | Receipt | Row | Command ms | A2 ms | Ratio | Requests | Owner jobs | Note |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| C01 | 527 | DIAGNOSTIC, verifier PASS | 452.5 | 183.4 | 2.47 | 5001 | 5001 | |
+| C02 | 531 | DIAGNOSTIC, verifier PASS | 1156.5 | 965.0 | 1.20 | 6002 | 6002 | each `stat` is one GETATTR, one Read job |
+| C03 | 535 | DIAGNOSTIC, verifier PASS | 782.5 | 410.8 | 1.90 | 9021 | 9108 | Forget 1000, Unlink 1000, Getattr 3001; owner wait 62 ms; Reclaim statements 7002 |
+| C04 | 539 | FAIL | 809.3 | 952.6 | 0.85 | 5342 | 5382 | verifier: `nlink` differs on 11 directories |
+| C05 | 543 | FAIL | 917.3 | 949.6 | 0.97 | 5889 | 7264 | verifier: `nlink`; reader grants 222 |
+| C06 | 547 | NOT_RUN | — | 78.6 | — | — | — | cache predicate UNAVAILABLE |
+| C07 | 551 | NOT_RUN | — | 171.6 | — | — | — | cache predicate UNAVAILABLE |
+| C08 | 555 | NOT_RUN | — | 106.1 | — | — | — | cache predicate UNAVAILABLE |
+| C09 | 559 | DIAGNOSTIC, verifier PASS | 152.6 | 106.2 | 1.44 | 517 | 3082 | 512 READ; reader grants 1026; statements 44681 |
+| C10 | 563 | NOT_RUN | — | 178.2 | — | — | — | cache predicate UNAVAILABLE |
+| C11 | 567 | NOT_RUN | — | 85.8 | — | — | — | cache predicate UNAVAILABLE |
+| C12 | 571 | FAIL | 325.6 | 189.3 | 1.72 | 3436 | 4622 | verifier: index PASS; tree `nlink` differs on 6 directories |
+
+No cell is beaten. Three causes cover the rows that are not plain misses:
+
+1. **Directory link count (C04, C05, C12 FAIL).** The product reports 2 for
+   every named directory; the native oracle has 2 plus the number of
+   subdirectories. Every other compared field and, in C12, the complete Git
+   index agree. Candidate F01.
+2. **Reclamation still writing after unmount (C06, C07, C08, C10, C11
+   NOT_RUN).** The class-B observer (`core/benchmark/r7-cache/residency.py`)
+   requires `overlay.sqlite` to keep one size, allocation, mtime and ctime
+   across its pass. After the 64 MiB warm-up's unmount the daemon is still
+   deleting that Workspace's payload rows in bounded maintenance steps, each
+   one a transaction that writes the file, so the pass sees the file change
+   and reports "file identity changed during residency attestation". The
+   observer is right and is not changed: a measured mount that starts while
+   64 MiB of rows are being deleted would be paying for the previous
+   Workspace. The cause is the product's cost of dropping payload: one row
+   delete per 4 KiB cell, three index entries and an overflow page each.
+   Candidate G01 (payload layout) with reclamation of a closed namespace.
+3. **Read path (C09).** One 128 KiB READ costs about 6 owner jobs, 4 write
+   transactions, 2 Store reader grants and 87 statements, against one visit
+   and 5 statements for GETATTR. Candidate H01 (READ, OPEN, RELEASE and the
+   directory requests as owner visits).
+
+Eight sample containers are retained by the runner for the FAIL and NOT_RUN
+rows (C04, C05, C06, C07, C08, C10, C11, C12). They are kept, not removed;
+they are stopped before the next measurement so that idle daemons do not
+share its CPUs.
+
+`core/target/r7-summary.py` (git-ignored helper) failed on the C12 receipt
+because a verifier difference can be a plain string; it now prints both
+forms. No receipt was rewritten.

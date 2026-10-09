@@ -1,0 +1,31 @@
+{
+  "cause": "original command exit is not known zero: 1",
+  "cause_type": "OriginalFailure",
+  "child_event_receipts": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/543-C05-B-L-sample-fdc24ef3f/sample/runtime.events.jsonl"
+  ],
+  "container": "79e9319bbcf0dd9bda3ce4e531aeaaee9efffd4df1ca203951f842c1b000c056",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "8f78b9371ce46899edccee280a3082e07cb63008bdcef29e17499800f6837e01",
+    "8f78b9371ce46899edccee280a3082e07cb63008bdcef29e17499800f6837e01",
+    "4d83b73089c72ecbbf9bc0f6efb0ef8bbfb28f47d6c192a7f80d62981bd061b9",
+    "4d83b73089c72ecbbf9bc0f6efb0ef8bbfb28f47d6c192a7f80d62981bd061b9",
+    "c175486f15a14965e77759e93cc09ffbf66140493ea9a5a1424dcc50c75c8b61",
+    "c175486f15a14965e77759e93cc09ffbf66140493ea9a5a1424dcc50c75c8b61"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 48791,
+  "host_signal": "ORIGINAL_SIGKILL_ATTEMPT",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [
+    {
+      "cause": "[Errno 1] Operation not permitted",
+      "phase": "host_group_fence",
+      "type": "PermissionError"
+    }
+  ],
+  "observed_host_exit": 1,
+  "original_operations_replayed": false,
+  "original_phase": null
+}

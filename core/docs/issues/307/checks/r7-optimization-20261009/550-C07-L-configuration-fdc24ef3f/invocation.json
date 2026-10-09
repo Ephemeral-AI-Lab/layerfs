@@ -1,0 +1,22 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "fdc24ef3fc5955935eadc9062601c8c83b2d6596",
+  "source_tree": "7d2c69920aeef81ee2e70bd141f4c87202c1117a",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/520-L-source-seal-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/521-runtime-release-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/522-daemon-release-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/523-build-provenance-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/524-C01-L-volume-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/525-C01-L-clone-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/526-C01-L-configuration-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/527-C01-B-L-sample-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/528-C02-L-volume-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/529-C02-L-clone-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/530-C02-L-configuration-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/531-C02-B-L-sample-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/532-C03-L-volume-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/533-C03-L-clone-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/534-C03-L-configuration-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/535-C03-B-L-sample-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/536-C04-L-volume-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/537-C04-L-clone-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/538-C04-L-configuration-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/539-C04-B-L-sample-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/540-C05-L-volume-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/541-C05-L-clone-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/542-C05-L-configuration-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/543-C05-B-L-sample-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/544-C06-L-volume-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/545-C06-L-clone-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/546-C06-L-configuration-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/547-C06-B-L-sample-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/548-C07-L-volume-fdc24ef3f/\n?? core/docs/issues/307/checks/r7-optimization-20261009/549-C07-L-clone-fdc24ef3f/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-configure-cell.py",
+    "C07",
+    "/tmp/layerfs-r7-build-provenance-fdc24ef3f-20261009.json",
+    "/tmp/layerfs-r7-C07-L-inputs-fdc24ef3f-20261009",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/549-C07-L-clone-fdc24ef3f/result.json",
+    "layerfs-r7-C07-L-fdc24ef3f-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

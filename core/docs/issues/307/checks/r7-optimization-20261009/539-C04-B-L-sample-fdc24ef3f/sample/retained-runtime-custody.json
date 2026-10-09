@@ -1,0 +1,24 @@
+{
+  "cause": "original command exit is not known zero: 1",
+  "cause_type": "OriginalFailure",
+  "child_event_receipts": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/539-C04-B-L-sample-fdc24ef3f/sample/runtime.events.jsonl"
+  ],
+  "container": "639c0b705e1254986b3a6332226dd761f2908277d95dc3e07a9c6b56b8ccca0c",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "bad067e9dc1a59392266a3496a787f8df67f834aade5568d0297e74f41eb9a98",
+    "bad067e9dc1a59392266a3496a787f8df67f834aade5568d0297e74f41eb9a98",
+    "718c1150a4078071f566b5888759d5f9ac00ff8e1b0e4efbb883c89b0868893b",
+    "718c1150a4078071f566b5888759d5f9ac00ff8e1b0e4efbb883c89b0868893b",
+    "62dfaf91b6eaac6728035a92dab824cbb8418843fde12b58ec3c538e7f945d92",
+    "62dfaf91b6eaac6728035a92dab824cbb8418843fde12b58ec3c538e7f945d92"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 48717,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": null
+}

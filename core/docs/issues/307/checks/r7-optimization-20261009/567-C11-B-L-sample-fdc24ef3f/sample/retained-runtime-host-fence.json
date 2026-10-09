@@ -1,0 +1,21 @@
+{
+  "cause": "pre-attempt cache predicate UNAVAILABLE: file identity changed during residency attestation",
+  "cause_type": "OriginalFailure",
+  "child_event_receipts": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/567-C11-B-L-sample-fdc24ef3f/sample/runtime.events.jsonl"
+  ],
+  "container": "bc65a9ccd3ea4b4792e470398582eb48d55a1a0fcbc897685d35f0c94c43b0c0",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "4bfd2637e4dc6451fd9b74c750262e42370fa47030e1b6e5368256275bdedd4e",
+    "4bfd2637e4dc6451fd9b74c750262e42370fa47030e1b6e5368256275bdedd4e"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 49225,
+  "host_signal": "ORIGINAL_SIGKILL_SENT",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "observed_host_exit": -9,
+  "original_operations_replayed": false,
+  "original_phase": null
+}

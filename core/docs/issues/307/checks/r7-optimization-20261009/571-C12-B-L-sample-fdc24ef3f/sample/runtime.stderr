@@ -1,0 +1,1 @@
+Error: "original external command exit: ExecInspection { container: ContainerId(\"bbbc4b4c5610fec4d5dde9c519e70b7637ec476055fef5815bd80e667caad773\"), exec: ExecId(\"b9b68698b2ea81ced3201cffa1a7ef4ffd98ad5060abb76cf2eb71b3b69eb2d0\"), running: false, exit_code: Some(1), pid: Some(35736) }"

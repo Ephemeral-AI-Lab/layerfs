@@ -1,0 +1,183 @@
+{
+  "argv": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-release/release/layerfs-r7-runtime",
+    "serve",
+    "--socket",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "--volume",
+    "layerfs-r7-C01-L-fdc24ef3f-20261009",
+    "--daemon",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-linux-release/release/layerfs-daemon",
+    "--manifest",
+    "/private/tmp/layerfs-r7-empty-installed-20261009.manifest",
+    "--receipt",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/527-C01-B-L-sample-fdc24ef3f/sample/runtime.events.jsonl",
+    "--uid",
+    "501",
+    "--gid",
+    "20",
+    "--environment-file",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/527-C01-B-L-sample-fdc24ef3f/sample/environment.txt",
+    "--observation-scope",
+    "189d4cc90fe733b9bcd510bb1ff54a058948444560ffdbe29ec346cdbfc3b710"
+  ],
+  "case": {
+    "case_id": "C01",
+    "classes": [
+      "B",
+      "C"
+    ],
+    "complete_command_wall_stop_ns": 15000000000,
+    "fixture": "empty",
+    "label": "C01",
+    "not_run_reason": null,
+    "numeric_budget_verdict": true,
+    "oracle_scope": "complete-declared-root",
+    "prerequisites": [
+      "release binary and pinned image",
+      "closed independently writable setup clone or qualified shared Store"
+    ],
+    "set": "write-churn",
+    "verifier_wall_stop_ns": 9500000000,
+    "workload": {
+      "argv": [
+        "/bin/bash",
+        "-o",
+        "pipefail",
+        "-c",
+        "{ for i in $(seq 1 1000); do echo $i > f$i; done; } >/dev/null"
+      ],
+      "command_sha256": "eb02a56c9a3fdc7955ab9bd7c5b4383dad120d3a926f76a6c51e712bcee2a85a",
+      "environment": {
+        "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+        "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+        "GIT_AUTHOR_NAME": "Experiment",
+        "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+        "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+        "GIT_COMMITTER_NAME": "Experiment",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "HOME": "/tmp",
+        "LANG": "C",
+        "LAYERFS_CONSTRUCTION_WORKERS": "1",
+        "LC_ALL": "C",
+        "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+      },
+      "gid": "declared fixture owner",
+      "historical_gid": 1000,
+      "historical_source": {
+        "commit": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+        "path": "core/experiment/real-tree/runner.py"
+      },
+      "historical_uid": 1000,
+      "oracle": "full-tree SHA-256 and metadata; complete for declared empty-base scenario",
+      "oracle_argv": [
+        "python3",
+        "/code/oracle.py",
+        "observe",
+        "--case",
+        "C01",
+        "--root",
+        "{verification_root}",
+        "--output",
+        "{fresh_oracle_output}"
+      ],
+      "oracle_unavailable_reason": null,
+      "preparation_command": "",
+      "related_root_preparation_argv": null,
+      "uid": "declared fixture owner"
+    }
+  },
+  "configuration": {
+    "base_fixture_inventory": {
+      "content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+      "path": "/tmp/layerfs-r7-empty-inventory-20261009.jsonl",
+      "sha256": "a5695e32c5f1d0521272ea9794f5467c62a433f163aae9bfda2cc1be0bf31a33"
+    },
+    "build_profile": "release",
+    "cache_observer_inside": "/code/residency.py",
+    "compilation_provenance": {
+      "path": "/tmp/layerfs-r7-build-provenance-fdc24ef3f-20261009.json",
+      "sha256": "b78d09229ddfea0b2adc6f729ddb1b7a42a3209281c7711ead67ffb880270384"
+    },
+    "container_setup": {
+      "implementation_sha256": "5210b2730f535471145e112eef0b66744f4b171390d0b3ae11e35d5eb21ae0d9",
+      "manifest": "/tmp/layerfs-r7-C01-L-inputs-fdc24ef3f-20261009/L-plan.json",
+      "manifest_sha256": "e753732a65a460ffe1cf554e2040ce95b1358f05e9a56fc94cc5f2c706690f03",
+      "wall_stop_seconds": 300
+    },
+    "daemon_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-linux-release/release/layerfs-daemon",
+    "daemon_sha256": "432eb588c2103c172bff3017897242d43b620bae3982662f98564dd10f4919c5",
+    "declared_interference": "Single checkout and serialized commands; unrelated retained containers share Docker VM; their CPU/I/O interference is unquantified",
+    "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+    "exclusive_observer_scope": true,
+    "fixture_kind": "empty",
+    "gid": 20,
+    "identities": {
+      "binary_sha256": "432eb588c2103c172bff3017897242d43b620bae3982662f98564dd10f4919c5",
+      "compilation": "b78d09229ddfea0b2adc6f729ddb1b7a42a3209281c7711ead67ffb880270384",
+      "dependency": "acf6f3059d703004d3dbaec8ffddd453fa18c8027fa2de080fa8011a64d80f5e",
+      "fixture": "e746c74f1d0d0a652059f89c782379d8977f4d956e5495125c3a7e0dbcd30406",
+      "harness": "717f39b93ef7defc27e6920b0aa7dcd1397252781e25d28747d19c8e61b5309a",
+      "image_id": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "oracle": "70e22efd0cf99404183d702869b39fff7a9a8162b64c90c0171ac4c41c39c9be",
+      "product": "9fa2548d04f28a646e3caeff5012991d6df8e5d9",
+      "report_generator": "3b1bf384c6615e77e937025946c2d59f220933eb76980149637dd270848bd9fc",
+      "source_commit": "fdc24ef3fc5955935eadc9062601c8c83b2d6596",
+      "source_tree": "7d2c69920aeef81ee2e70bd141f4c87202c1117a",
+      "workload": "eb02a56c9a3fdc7955ab9bd7c5b4383dad120d3a926f76a6c51e712bcee2a85a"
+    },
+    "manifest": "/private/tmp/layerfs-r7-empty-installed-20261009.manifest",
+    "manifest_sha256": "baddd3c679fef34763ac5d98c308bc10d2a88d4586d9dd43eda0d3dd63ff7123",
+    "native_root": "/native",
+    "oracle_fixture_identity": {
+      "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+      "fixture_kind": "empty",
+      "installed_manifest_sha256": "baddd3c679fef34763ac5d98c308bc10d2a88d4586d9dd43eda0d3dd63ff7123",
+      "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+      "reduced_fixture_cut_identity": null
+    },
+    "oracle_recipe": {
+      "bundle": "/tmp/layerfs-r7-C01-packaged-code-host-group-20261009-1b028a24a/code/oracles/C01-B",
+      "closed_sha256": "70e22efd0cf99404183d702869b39fff7a9a8162b64c90c0171ac4c41c39c9be"
+    },
+    "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+    "phase_count_selectors": [
+      {
+        "before": "measured_mount_attach",
+        "end": "command_end_status",
+        "label": "measured command"
+      },
+      {
+        "before": "warmup_unmount",
+        "end": "measured_mount_attach",
+        "label": "measured mount after warm terminal"
+      }
+    ],
+    "prepared_store_file": "/tmp/layerfs-r7-empty-sealed-20261009.sqlite",
+    "runtime_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-release/release/layerfs-r7-runtime",
+    "runtime_sha256": "a2280440442a486c2c9e29cc12139c6cd3ed0da18b6cd665d66cfbd563a3453c",
+    "setup_method": "clone",
+    "socket": "/Users/yifanxu/.docker/run/docker.sock",
+    "source_clean": true,
+    "source_dirty": false,
+    "source_inventory": {
+      "path": "/tmp/layerfs-r7-source-L-fdc24ef3f-20261009.json",
+      "sha256": "038b1bbfdfdc5aeee2f4bb1d459aa244211f8d6e1c4eaef45cb561a8fb3d735b",
+      "source_set_sha256": "d724b74dcb1461e4e852fab22e00152851941ae5fd13480a8317688fc7ef480e"
+    },
+    "store_profile": "Disposable/WAL/OFF",
+    "uid": 501,
+    "volume": "layerfs-r7-C01-L-fdc24ef3f-20261009",
+    "volume_clone_identity": "9fd120b7debf6474d785e7d807a5b0912c47615d36a5f5d16761cafb0a663102"
+  },
+  "selection": {
+    "admission_eligible": false,
+    "arm": "L",
+    "cache_class": "B",
+    "case_id": "C01",
+    "reason": "prospectively registered; not attempted",
+    "sample_count": 0,
+    "selection_id": "C01:B:L",
+    "status": "NOT_RUN"
+  }
+}
