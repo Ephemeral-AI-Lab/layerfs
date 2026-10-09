@@ -74,7 +74,7 @@ Second pending candidate: inode_leaf decode validates each73-byte value into Ino
 
 | ID | Candidate | Counter: start → floor | Outcome |
 | --- | --- | --- | --- |
-| C02a | One owner job for a mutation's ticket and source release | Owner jobs per created file in C01: 18 → 16 by this step; class floor is one job per handed-off request | Implemented in step 1; timed confirmation pending |
+| C02a | One owner job for a mutation's ticket and source release | Owner jobs per created file in C01: 18 → 16 by this step; class floor is one job per handed-off request | KEPT, commit `9244dc8c6`: jobs 18002 → 16002, command 2226041875 → 2004655833 ns (receipts 223, 232), disk equal |
 | C02b | Fold source acquisition into the first deciding job | 4 Source jobs per created file → 0 | Open; needs the plan to be built inside the job |
 | C02c | Release a read-class request's source in its deciding job when no immutable round follows | 2 Lifecycle jobs per created file (LOOKUP, GETATTR) → 0 | Open; needs the custody proof that no consumer uses the source after the decision |
 | C03 | Lease-family statements per job | 174 Lease executions per created file, about 10 per job | Open; needs the per-call statement list |

@@ -1196,3 +1196,54 @@ Host Clippy `-D warnings` for overlay, fuse and daemon, `fmt --check` and the
 boundary guard passed. One Linux build attempt stopped at the stale-source
 check (Docker file sharing served an old `tests/source.rs`); the next attempt
 built. Not run for this step: the full suites and Linux Clippy.
+
+## Step 1 result — KEPT
+
+Commit 13 is `9244dc8c624f28f9dc1ceafd70e25f149247dc46`, tree
+`4b68b76bfdef5c08fd790d39fceba5828ad225e7`; LOC records `r7-loc-12-*` agree.
+Production LOC 185857 -> 185918 (delta +61).
+
+Iteration receipts 225–232 at that identity, one attempt each, all PASS: L
+source seal, host runtime release build (unchanged binary), Linux daemon
+release build (13.2 s incremental), build provenance, fresh volume, independent
+clone, configuration, sample. They are produced by
+`core/target/r7-iterate-C01.sh <first-number>`, which bounds the sample
+wrapper at 30 s.
+
+**232 — C01:B:L at `9244dc8c6`, one sample, exploratory.** Row INCOMPLETE for
+the same single harness gap as 223 (second count interval). Verifier PASS,
+custody KNOWN_STOP, cleanup Gone.
+
+| Measure | 223 at `82780f72e` | 232 at `9244dc8c6` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 2226041875 | 2004655833 | −221386042 (−9.9 %) |
+| Mount ns | 9537958 | 8906958 | |
+| Unmount ns | 7247292 | 6980792 | |
+| Cleanup to Gone ns | 56433583 | 60244625 | |
+| Owner jobs | 18002 | 16002 | −2000 |
+| — Lifecycle | 8001 | 6001 | −2000 |
+| Statement executions | 342017 | 334017 | −8000 |
+| Owner queue wait ns | 737271921 | 533576694 | −203695227 |
+| Owner service ns | 1429559634 | 1272420214 | −157139420 |
+| FUSE requests | 7000 | 7000 | 0 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 557056 / 268992512 | 557056 / 268992512 | 0 |
+| `peak_credited_bytes` | 53643 | 48565 | −5078 |
+| `scheduler_bytes` | 25848 | 25848 | 0 |
+| Daemon VmHWM | 30273536 | 46686208 | +16412672 |
+
+One sample per identity: the time difference is an observation, not a
+repeatability claim. The job and statement counts are exact.
+
+Gates. Disk: equal, logical and allocated, Store and overlay. Memory: the
+credited and scheduler byte counters did not rise. VmHWM is higher than in
+223 but equal within 4096 bytes to failed sample 212 (46682112), which ran
+the same daemon binary as 223. The lifetime high water therefore already
+varied between about 30 MiB and 46 MiB with no source change; together with
+the source review (no new resident state) the increase is attributed to that
+existing variation and not to this change. This attribution rests on two
+earlier samples, not on a controlled measurement; what makes VmHWM bimodal is
+not diagnosed.
+
+Ratios after step 1: 16 owner jobs per created file, 2.29 per FUSE request,
+3.2 per handed-off request; 334 statements per created file.
