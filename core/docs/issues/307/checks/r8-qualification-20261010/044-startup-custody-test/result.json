@@ -1,0 +1,24 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "63fe77e3df76a169a878286e25271e221f469bbb",
+  "source_tree": "2a84f5dd35e3a6d20b29b9200483b0c1a6398bf2",
+  "worktree_status": "M  core/benchmark/r8-tools/run_full_oracle.py\nAM core/benchmark/r8-tools/tests/test_full_controller.py\nA  core/docs/issues/307/checks/r8-qualification-20261010/040-owned-shared-volume/invocation.json\nA  core/docs/issues/307/checks/r8-qualification-20261010/040-owned-shared-volume/manifest.json\nA  core/docs/issues/307/checks/r8-qualification-20261010/040-owned-shared-volume/result.json\nA  core/docs/issues/307/checks/r8-qualification-20261010/040-owned-shared-volume/stderr.txt\nA  core/docs/issues/307/checks/r8-qualification-20261010/040-owned-shared-volume/stdout.txt\nA  core/docs/issues/307/checks/r8-qualification-20261010/041-proof-binary-identities.json\nA  core/docs/issues/307/checks/r8-qualification-20261010/042-controller-custody-tests/invocation.json\nA  core/docs/issues/307/checks/r8-qualification-20261010/042-controller-custody-tests/manifest.json\nA  core/docs/issues/307/checks/r8-qualification-20261010/042-controller-custody-tests/result.json\nA  core/docs/issues/307/checks/r8-qualification-20261010/042-controller-custody-tests/stderr.txt\nA  core/docs/issues/307/checks/r8-qualification-20261010/042-controller-custody-tests/stdout.txt\nAM core/docs/issues/307/checks/r8-qualification-20261010/043-fresh-review.md\n?? core/benchmark/fs-bench-pro/registry/r8-integrated-qualification-v1.json\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md",
+  "command": [
+    "env",
+    "PYTHONPATH=core/benchmark/r8-tools/tests",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_full_controller.ControllerCustody.test_startup_no_child_custody_preserves_original_and_writes_receipt"
+  ],
+  "limit_seconds": 100,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 234863292,
+  "status": "PASS"
+}

@@ -49,14 +49,32 @@ def checked(args, timeout=10, **kwargs):
 
 def export_oracle(runtime, output, result, deadline):
     result["oracle_export_attempted"] = True
-    for source, name in (("/tmp/r8-full-oracle.json", "oracle.json"),
-                         ("/tmp/r8-full-oracle.json.artifacts", "oracle.artifacts")):
+    failures = []
+    # Partial rows/scratch exist even when a timeout prevents the final JSON.
+    # Each independent original copy is attempted once and recorded separately.
+    for source, name in (("/tmp/r8-full-oracle.json.artifacts", "oracle.artifacts"),
+                         ("/tmp/r8-full-oracle.json", "oracle.json")):
         left = deadline - time.monotonic()
         if left <= 0:
-            raise TimeoutError("no oracle export after proof deadline")
-        checked(["docker", "cp", runtime.container + ":" + source, str(output / name)],
-                timeout=min(5, left))
+            failures.append("no oracle export after proof deadline: " + source)
+            continue
+        try:
+            checked(["docker", "cp", runtime.container + ":" + source, str(output / name)],
+                    timeout=min(5, left))
+            result.setdefault("exported_oracle_members", []).append(name)
+        except Exception as copying:
+            failures.append(str(copying))
+    if failures:
+        result["oracle_export_failures"] = failures
+        raise RuntimeError("; ".join(failures))
     result["oracle_artifacts"] = "oracle.json and oracle.artifacts retained before terminal teardown"
+
+
+def validate_exported_rows(output, observed):
+    for name, key in (("expected.jsonl", "expected_sha256"),
+                      ("observed.jsonl", "observed_sha256")):
+        if lifecycle.sha(output / "oracle.artifacts" / name) != observed[key]:
+            raise OriginalFailure("exported forensic row hash differs: " + name)
 
 
 def prepare(output):
@@ -159,6 +177,7 @@ def proof(args):
         export_oracle(runtime, args.output, result, deadline)
         if json.loads((args.output / "oracle.json").read_text()) != observed:
             raise OriginalFailure("exported oracle differs from original stdout")
+        validate_exported_rows(args.output, observed)
         lifecycle.attempt(runtime, result, "unmount", key, None, 5, deadline, controls=1)
         lifecycle.cleanup(runtime, result, key, deadline)
         lifecycle.attempt(runtime, result, "stop", "", None, 5, deadline)
@@ -182,8 +201,9 @@ def proof(args):
             result["custody"] = runtime.retain(original)
     finally:
         if runtime is not None:
+            process = getattr(runtime, "process", None)
             for stream in (runtime.selector, runtime.raw, runtime.stderr,
-                           runtime.process.stdin, runtime.process.stdout):
+                           getattr(process, "stdin", None), getattr(process, "stdout", None)):
                 if stream is not None:
                     try:
                         stream.close()

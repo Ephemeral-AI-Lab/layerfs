@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "63fe77e3df76a169a878286e25271e221f469bbb",
+  "source_tree": "2a84f5dd35e3a6d20b29b9200483b0c1a6398bf2",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md",
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "layerfs-r8-shared-proof-20261010-63fe77e3d"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 217066417,
+  "status": "PASS"
+}

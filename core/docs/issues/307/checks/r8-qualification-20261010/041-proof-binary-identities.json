@@ -1,0 +1,38 @@
+{
+  "host:complete_installed_roots": {
+    "executable": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/complete_installed_roots-e76bd78a0eded4e2",
+    "host_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/complete_installed_roots-e76bd78a0eded4e2",
+    "sha256": "39778e51e90d66a9b9f8c1016a634634bfacf549bc451cf1c05114ef845dd9f8",
+    "build_receipt": "core/docs/issues/307/checks/r8-qualification-20261010/011-host-proof-build/result.json"
+  },
+  "host:host_handoff": {
+    "executable": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/host_handoff-a4c4b3d19848e0be",
+    "host_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/host_handoff-a4c4b3d19848e0be",
+    "sha256": "fb08373426ba6b123b149cae0ceb2aef680f2afea9420f254e20979099acc8e1",
+    "build_receipt": "core/docs/issues/307/checks/r8-qualification-20261010/011-host-proof-build/result.json"
+  },
+  "host:shared_processes": {
+    "executable": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/shared_processes-e69f83730386774d",
+    "host_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/shared_processes-e69f83730386774d",
+    "sha256": "12eb99eb69f1fde2e8b1235d7c79bc52290a5763ca75980a5fc56ca7a6b4ad83",
+    "build_receipt": "core/docs/issues/307/checks/r8-qualification-20261010/011-host-proof-build/result.json"
+  },
+  "linux:complete_installed_roots": {
+    "executable": "/work/core/target/cluster2-linux/debug/deps/complete_installed_roots-b8a4f28c1707b846",
+    "host_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/deps/complete_installed_roots-b8a4f28c1707b846",
+    "sha256": "5f5aca425b9218734dd595a2d5b2cfaed4d407a0ff54b11d69a6bbbcb4a7cb24",
+    "build_receipt": "core/docs/issues/307/checks/r8-qualification-20261010/013-linux-proof-build/result.json"
+  },
+  "linux:host_handoff": {
+    "executable": "/work/core/target/cluster2-linux/debug/deps/host_handoff-f5838c7100750c80",
+    "host_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/deps/host_handoff-f5838c7100750c80",
+    "sha256": "6420638a8d6054695454add8911f68e037ec46c6bafb4ea57f5e1faa07328a17",
+    "build_receipt": "core/docs/issues/307/checks/r8-qualification-20261010/013-linux-proof-build/result.json"
+  },
+  "linux:shared_processes": {
+    "executable": "/work/core/target/cluster2-linux/debug/deps/shared_processes-498c7928b7fbb8cc",
+    "host_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/deps/shared_processes-498c7928b7fbb8cc",
+    "sha256": "154499b22f8dd83a48544315cfcd995c074498552bae0ba7528c5fe6e642dbe2",
+    "build_receipt": "core/docs/issues/307/checks/r8-qualification-20261010/013-linux-proof-build/result.json"
+  }
+}

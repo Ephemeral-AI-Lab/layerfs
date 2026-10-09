@@ -1,0 +1,23 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "63fe77e3df76a169a878286e25271e221f469bbb",
+  "source_tree": "2a84f5dd35e3a6d20b29b9200483b0c1a6398bf2",
+  "worktree_status": "M core/benchmark/r8-tools/run_full_oracle.py\n?? core/benchmark/fs-bench-pro/registry/r8-integrated-qualification-v1.json\n?? core/benchmark/r8-tools/tests/test_full_controller.py\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/040-owned-shared-volume/\n?? core/docs/issues/307/checks/r8-qualification-20261010/041-proof-binary-identities.json",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/benchmark/r8-tools/tests",
+    "-p",
+    "test_full_controller.py"
+  ],
+  "limit_seconds": 100,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

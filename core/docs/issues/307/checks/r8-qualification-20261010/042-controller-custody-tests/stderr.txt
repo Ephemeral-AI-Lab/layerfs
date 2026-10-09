@@ -1,0 +1,18 @@
+..F.
+======================================================================
+FAIL: test_startup_no_child_custody_preserves_original_and_writes_receipt (test_full_controller.ControllerCustody.test_startup_no_child_custody_preserves_original_and_writes_receipt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r8-tools/tests/test_full_controller.py", line 75, in test_startup_no_child_custody_preserves_original_and_writes_receipt
+    self.assertEqual(receipt["original_failure"], str(original))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "'manifest'" != 'original Popen refusal without child'
+- 'manifest'
++ original Popen refusal without child
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.007s
+
+FAILED (failures=1)
+R4_WALL seconds<=1 limit=100s lock_wait=0s
