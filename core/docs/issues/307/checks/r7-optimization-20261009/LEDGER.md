@@ -2176,6 +2176,8 @@ B (fresh mount on a warm daemon), arm L, one sample.
 | L4-2 | A READ or READLINK records no SQL custody row (no `native_source`, `base_source`, lease, `file_read`, `native_read`, no `base_readers` count). It is accounted by the Fuse dispatcher lane (admitted until its future ends) and the fence gates, and is linearized at its one owner visit | Six owner jobs, four write transactions and two reader grants per READ existed only to record and release that custody (691: 517 requests, 3082 jobs). The condition was that drain and forced unmount still account for an in-flight READ; the implementer staged that on a real mount (`forced_unmount.rs`, `fenced_port.rs`) and the lead checks it before this row is called kept | commit `16fa316ee`; `core/docs/architecture` notes it updates |
 | L4-3 | Payload run rows hold at most 32 KiB (`RUN_BYTES`) | The largest bound for which no write shape costs more than today's one row per 4 KiB cell; a cold random 4 KiB read of a full run copies about 4 µs more in scratch, which is stated, not hidden. Not fitted to a cell: the cells write 128 KiB windows | [payload model](../../r7-open/payload-run-rows-63c48d8dc.md); not implemented yet |
 | L4-4 | Fast path, by owner direction in conversation on 2026-10-09 ("update the docs/notes and continue to follow this fast iteration path"): one stage per implementer assignment; a stage commit needs the count tier and the touched test binaries only; every cell is sampled at every stage commit; full suites at the hand-back and the gate at the batch tip; rows ordered by risk as well as saving; exact counts kept in one cost-test file per operation; no receipt per intermediate attempt. The mounted concurrency, forced-unmount, parking and install-race binaries are not dropped | The first change ran about 90 minutes with no sample (five chained stages, both full daemon suites per stage, pins restaged over several attempts). A 12-cell sample is about 2 minutes (652–703: 16:55:19 to 16:57:10) | [benchmark instruction, loop time](../../../../../docs/general/benchmark_instruction.md#loop-time-three-tiers) |
+| L4-5 | By owner direction in conversation on 2026-10-09 ("i prefer not to apply one by one sequentially, we need to be faster"): the remaining rows are applied as three batches by code area, each one implementer assignment of several commits with no hand-back between them; all 12 cells are sampled once at the batch tip and the package suites run once per batch. An intermediate commit is sampled only when the tip's counts are right and its time is worse | Sampling is 2 minutes; the time went into hand-offs between single-commit assignments (three of them took 11, 17 and about 30 minutes of implementation plus a lead turn each). The cut points stay: one commit and one counter per change | this table; batches listed under "Batches" below |
+| L4-6 | OWNER decision, not delegated: "yes, i allow parallel worktree" (conversation, 2026-10-09, in answer to the lead's statement that the assignment forbids another worktree). Batches run in parallel in git worktrees beside the main checkout: `layerfs-r7-b2` (branch `r7-batch2`, write path), `layerfs-r7-b3` (branch `r7-batch3b`, directory visits and old-path deletion), and one for the create path. Each has its own Cargo targets, lock file and container names; the main checkout is the lead's integration tree (merge with `git merge --no-ff`, so each commit keeps its parent and its Production LOC line; samples and the gate run only there). A sample holds every worktree's lock, so no build overlaps a measurement. Nothing is pushed | The assignment's "another worktree" prohibition is lifted by the owner for this purpose only; every other prohibition stands (push, pull request, publish, Durable, and the rest) | this table |
 
 ### Samples 600–651 at `c126f742e` (product source equal to `82c51a439`)
 
@@ -2507,4 +2509,22 @@ Verdict by counts: KEPT, with the cell's time not improved.
 - The ten cells with identical counts moved between −17 % (C02) and +12 %
   (C07) against 800–851. C02, C04, C05 and C09 are below A2 in this sample.
 - Storage: logical bytes equal in every cell.
+
+### Batches (decision L4-5)
+
+Written before decision L4-6: in the single checkout the batches would have
+run one after another. With the owner's worktrees, batch 2, 3a and 3b run
+at the same time and the lead merges them into main.
+
+| Batch | Area | Commits, in order | Cells | State |
+| --- | --- | --- | --- | --- |
+| 1 | release and reclamation (overlay lifetime, maintenance) | lean FORGET (O6); inline custody delete when no orphan row exists (O2) | C03, C07, C12; cleanup after every unmount | committed `36e2ec328`, `2a23b82f2` on main |
+| 2 | write path (overlay payload, SQL) | payload run rows of at most 32 KiB, schema 22 → 23; accounting triggers write the namespace row only; closed-namespace reclamation by key range with a payload delete trigger that does not load the blob (O7, O8) | C06, C07, C08, C10, C11; every write; cleanup of large files | running in worktree `layerfs-r7-b2` |
+| 3a | create path (overlay inode and custody statements) | inode statements; custody rows of kinds 7 and 9; `native_file` folded into `file_handle` | C01, C02, C03, C07 | worktree `layerfs-r7-b4` |
+| 3b | directory requests (overlay cookies, workspace, fuse, daemon) | OPENDIR and RELEASEDIR as one visit each; READDIR as a reading and a publishing visit with one cookie row per page (cookie reuse kept: no visible contract change); deletion of the old source-holding read path | C05, C12; production LOC | running in worktree `layerfs-r7-b3` |
+| 4, only if still needed | fuse, daemon | BATCH_FORGET as one job per 64 units; COPY_FILE_RANGE if C10 is still above its target | C10; tree removal | undecided |
+
+After batch 3: the gate once (four packages on host and in Linux, Clippy
+on both, `fmt --check`, guard), the benchmark-fitting audit, and the final
+table.
 
