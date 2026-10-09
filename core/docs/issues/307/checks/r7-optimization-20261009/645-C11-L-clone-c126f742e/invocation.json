@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "c126f742e56390616341f743143bb4500877865a",
+  "source_tree": "ab7e49734879f11ba2472bc40bc6a5a9d3c4457d",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/600-L-source-seal-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/601-runtime-release-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/602-daemon-release-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/603-build-provenance-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/604-C01-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/605-C01-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/606-C01-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/607-C01-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/608-C02-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/609-C02-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/610-C02-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/611-C02-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/612-C03-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/613-C03-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/614-C03-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/615-C03-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/616-C04-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/617-C04-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/618-C04-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/619-C04-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/620-C05-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/621-C05-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/622-C05-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/623-C05-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/624-C06-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/625-C06-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/626-C06-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/627-C06-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/628-C07-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/629-C07-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/630-C07-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/631-C07-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/632-C08-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/633-C08-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/634-C08-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/635-C08-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/636-C09-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/637-C09-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/638-C09-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/639-C09-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/640-C10-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/641-C10-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/642-C10-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/643-C10-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/644-C11-L-volume-c126f742e/",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-r7-C11-L-copy-c126f742e",
+    "--network",
+    "none",
+    "-v",
+    "layerfs-r7-big-master-20261009-b8d76c0a3:/source:ro",
+    "-v",
+    "layerfs-r7-C11-L-c126f742e-20261009:/dest",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "/bin/bash",
+    "-euo",
+    "pipefail",
+    "-c",
+    "test ! -e /dest/global; test ! -s /source/global/store.sqlite-wal; test ! -s /source/global/store.sqlite-journal; mkdir -m 700 /dest/global; cp --reflink=never --sparse=never --preserve=mode,ownership,timestamps /source/global/store.sqlite /dest/global/store.sqlite; cmp /source/global/store.sqlite /dest/global/store.sqlite; chmod --reference=/source/global /dest/global; chown --reference=/source/global /dest/global; touch -r /source/global /dest/global; sha256sum /source/global/store.sqlite /dest/global/store.sqlite; stat -c \"%n %s %b %B %a %u %g\" /source/global/store.sqlite /dest/global/store.sqlite"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

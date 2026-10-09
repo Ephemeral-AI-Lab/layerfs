@@ -1,0 +1,241 @@
+{
+  "admission_eligible": false,
+  "attempted_operation_count": 0,
+  "completed_operation_count": 0,
+  "container_setup_receipt": "setup/receipt.json",
+  "effective_treatment": {
+    "binaries": {
+      "daemon": "696f9fc90660f7c06655fdcaaa2b94fc11c9ef9f2c93dec7c8995d9417581a00",
+      "runtime": "a2280440442a486c2c9e29cc12139c6cd3ed0da18b6cd665d66cfbd563a3453c"
+    },
+    "deployment_implementation": "5210b2730f535471145e112eef0b66744f4b171390d0b3ae11e35d5eb21ae0d9",
+    "environment": {
+      "GIT_AUTHOR_DATE": "2026-10-03T00:00:00Z",
+      "GIT_AUTHOR_EMAIL": "experiment@example.invalid",
+      "GIT_AUTHOR_NAME": "Experiment",
+      "GIT_COMMITTER_DATE": "2026-10-03T00:00:00Z",
+      "GIT_COMMITTER_EMAIL": "experiment@example.invalid",
+      "GIT_COMMITTER_NAME": "Experiment",
+      "GIT_CONFIG_NOSYSTEM": "1",
+      "HOME": "/tmp",
+      "LANG": "C",
+      "LAYERFS_CONSTRUCTION_WORKERS": "1",
+      "LC_ALL": "C",
+      "PATH": "/opt/node/bin:/usr/local/bin:/usr/bin:/bin"
+    },
+    "gid": 20,
+    "git_index_oracle": {},
+    "image_id": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "inputs": [
+      {
+        "content_metadata_set_sha256": "ce33a3d279a5f55d874a8e0c334743a53f469d4b821cda93765f7f24715b9ef0",
+        "target": "/code"
+      }
+    ],
+    "manifest_sha256": "baddd3c679fef34763ac5d98c308bc10d2a88d4586d9dd43eda0d3dd63ff7123",
+    "native_root": null,
+    "oracle_recipe_sha256": "50fb9a87258369c8e41ce1ee6a038026bf19479c2836613cc109cf2df9aba24a",
+    "oracle_scripts": {},
+    "oracle_variant": null,
+    "passthrough_profile": null,
+    "peers": null,
+    "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+    "schema": "r7-effective-treatment-v1",
+    "source_set_sha256": "5af490d51802f237c64dfb3068912be3b4740c1fa192625704a5c950faa70fcc",
+    "uid": 501,
+    "workload": "e3bdfada4401077e0603d92f0340c5134f8e0448d0f3411a9ca4aeaf5d97fb14"
+  },
+  "execution_asset_binding": {
+    "generate_manifest.py": "04829f21a2cf0fb6606594c8f471e3a2ec1312d4ed6bb0a9f05d5f5fb91ab422",
+    "residency.py": "14bcc138deebff58b85eb105d44ee118b6f3b4dc68f67dfb6e123b96949d7e73",
+    "stream_manifest.py": "50e1f02fb9d1165ed0561a2e6bb9e01df5f8e63d00f4fa7d2ce5adba491a1214"
+  },
+  "family_id": "r7-optimization",
+  "mode": "exploratory",
+  "numeric_correlation_status": "PASS",
+  "oracle_deployment_binding": {
+    "oracle.py": "10ede337fdc7033ec812846288dd196d616ba7bc4c180e44bb05a2004427b5fa",
+    "oracle_prepare.py": "ecbc4eb1ad5ccc6f28f84d0fc48e05fe84f1fa13a38bcce7e59071f30b9acfeb",
+    "oracles/C08-B/expectation.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "oracles/C08-B/expected.jsonl": "86fef57156b0d3258c05a7a054a02273579e519493c787b0811662cc7e2bc317",
+    "oracles/C08-B/expected.verify.sh": "11304e40ff6f797b417dafb39a636830351f4f7bf1c021fcc614155a231c2b2f",
+    "r7_deployment.py": "5210b2730f535471145e112eef0b66744f4b171390d0b3ae11e35d5eb21ae0d9",
+    "workload.py": "300fbd9c86b631c0c075536e9bc5aba7e135e49f0b003dfa6f940ae9eb103b8a"
+  },
+  "original_endpoint_bindings": {
+    "warmup_unmount": {
+      "event": "unmount",
+      "event_sequence": 15,
+      "position": "last"
+    }
+  },
+  "original_failure": {
+    "cause": "pre-attempt cache predicate UNAVAILABLE: file identity changed during residency attestation",
+    "independent_close_failures": [],
+    "phase": null,
+    "type": "OriginalFailure"
+  },
+  "phase_counts": [
+    {
+      "label": "measured command",
+      "reason": "'measured_mount_attach'",
+      "selectors": {
+        "before": "measured_mount_attach",
+        "end": "command_end_status",
+        "label": "measured command"
+      },
+      "status": "UNAVAILABLE"
+    },
+    {
+      "before_identity": [
+        [
+          14561571549343114573,
+          17585022298923082620,
+          18141789618331747544,
+          2737752915454575218
+        ],
+        [
+          15055430414702154385,
+          6296058638611285501,
+          9633270279425011655,
+          14501494371130717648
+        ],
+        4
+      ],
+      "before_original": {
+        "event": "unmount",
+        "event_sequence": 15,
+        "position": "last"
+      },
+      "label": "measured mount after warm terminal",
+      "reason": "'measured_mount_attach'",
+      "selectors": {
+        "before": "warmup_unmount",
+        "end": "measured_mount_attach",
+        "label": "measured mount after warm terminal"
+      },
+      "status": "UNAVAILABLE"
+    }
+  ],
+  "phase_selector_resolution": [
+    {
+      "label": "measured command",
+      "reason": "'measured_mount_attach'",
+      "selectors": {
+        "before": "measured_mount_attach",
+        "end": "command_end_status",
+        "label": "measured command"
+      },
+      "status": "UNAVAILABLE"
+    },
+    {
+      "before_identity": [
+        [
+          14561571549343114573,
+          17585022298923082620,
+          18141789618331747544,
+          2737752915454575218
+        ],
+        [
+          15055430414702154385,
+          6296058638611285501,
+          9633270279425011655,
+          14501494371130717648
+        ],
+        4
+      ],
+      "before_original": {
+        "event": "unmount",
+        "event_sequence": 15,
+        "position": "last"
+      },
+      "label": "measured mount after warm terminal",
+      "reason": "'measured_mount_attach'",
+      "selectors": {
+        "before": "warmup_unmount",
+        "end": "measured_mount_attach",
+        "label": "measured mount after warm terminal"
+      },
+      "status": "UNAVAILABLE"
+    }
+  ],
+  "raw_artifacts": {
+    "cache.invocation.json": "cf6adc134d64f1caea9ef4331decbe266daa5d2369a67e6d146306de260730a6",
+    "cache.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "cache.stdout": "05f88b9eb7ad323c939430b8016938fcbc1ed0452b99af6bad002db2ee9b6da7",
+    "control-call-correlation.json": "8707a647fbd8a57e23ccbfac27939adf6a00bea69ea02234f8c5c3301609c2ee",
+    "daemon.logs.stderr": "91e833ec0ca0f39d24cd2049c6609238ffa1b75b99028f5f1539aed156d39153",
+    "daemon.logs.stdout": "ed15a93fefde77b97678c71fd9b18f2daee328432e4601361bd73de88737cab2",
+    "effective-staged-configuration.json": "42757d5d88920bde0fb7727bb3edac5e5d877b38bc7dd35c76666828f2c88520",
+    "environment.txt": "15a96efb00a95b6c1c6e62e229c4500f5b4401d28fddc55f69b022c82fafc9cb",
+    "numeric-observation-validation.json": "63fb0ef5ffafa079bf4a565ee21e127515ff5ebe9c2ecc0ffcc6b5f5d5cdbaa3",
+    "retained-runtime-custody.json": "9a45e33ebbe492b948af28f0309a4768caa79c25def2a7f89685a57d66a6e870",
+    "retained-runtime-host-fence.json": "5edd80e0d69af1d69a212e6918671f1e022d807fd4be1270faff22a053fd2406",
+    "runtime.events.artifacts/000008-command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime.events.artifacts/000008-command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime.events.jsonl": "bbd205c2fe71f7941668bd2fe718548b34e8fbdf1622e4421be57c70e63ac196",
+    "runtime.host-custody.json": "71121e520989a97643e9a445f15d779cdfb241d7a29aa4130f0d3b9055309259",
+    "runtime.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime.stdout": "bbd205c2fe71f7941668bd2fe718548b34e8fbdf1622e4421be57c70e63ac196",
+    "selection.json": "4c26cea6545b121ae8bb37a6179c525f8468bc1783cb6f37571ab94f0a3b554d",
+    "setup/001-prepare.attempt.json": "49f9b2604e545ce7bcdf73341e0ce974f874aab41c9d8295ebcd6faa76e4c29f",
+    "setup/001-prepare.completion.json": "0282774f70d4cdd6b34e78c73f463e058fba89b558d316bf8f788ef1e75418e3",
+    "setup/001-prepare.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/001-prepare.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/002-copy-0.attempt.json": "21b5eabae2ce27e52ac4eca6dbdaab32efd77d6d1f56114fb0ef68ccaf6b121b",
+    "setup/002-copy-0.completion.json": "6d30efbf307bcdd7abbf1a46b4d2e01619f291e567535296df88df7273da3c22",
+    "setup/002-copy-0.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/002-copy-0.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/003-inventory-0.attempt.json": "79ed5bede27212c315e98cd96fd7c9f47a46cea50e2bbb007e18086efc7aee81",
+    "setup/003-inventory-0.completion.json": "5616c01593cb63449752da2f14c0242f3cd068ec8f4ce2d9e474e26e7fb43369",
+    "setup/003-inventory-0.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/003-inventory-0.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/004-bootstrap-sha.attempt.json": "d64a211e25fe53ea5ad0ecd9c48b02b09206f888c3b17cd12d61bc835df3a10e",
+    "setup/004-bootstrap-sha.completion.json": "da6b318223062dc922f8b0b64f68dcb7d54f400c1ee56e0f874338e706c4298b",
+    "setup/004-bootstrap-sha.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/004-bootstrap-sha.stdout": "b323c584dab165c382959b43ac4c168b8dd98ddad769cce0eb2792d5dd40f887",
+    "setup/005-verify-0.attempt.json": "d0107a6872f1a5883fde3f1c12687cc5578423adc25630bb0f1d24edf5836b84",
+    "setup/005-verify-0.completion.json": "917ee4dc614ab8813f117fab15838d02145eee8b211fb674b3935541050b95d9",
+    "setup/005-verify-0.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "setup/005-verify-0.stdout": "6f2b74b3bdfefdaf11af250260b7005e489fc56ba9124ae999078bff22767baa",
+    "setup/receipt.json": "67f447f03bf5f2c428194d060c782bade0c85e33a85ff4cc82167b2c77eb0f40",
+    "warmup.sh": "d039d9afc57fd431e702c0b4a3f6eb23675d6baf61d92a2b2f1ece3a677d9882"
+  },
+  "reason": "pre-attempt cache predicate UNAVAILABLE: file identity changed during residency attestation",
+  "receipt_validation": "PASS",
+  "registry_identity": "1092d2dc5b7c6dca3bd27e5594e8d406ada34c945e87ec93993f7f23a4dd9dad",
+  "retained_host_custody": {
+    "cause": "pre-attempt cache predicate UNAVAILABLE: file identity changed during residency attestation",
+    "cause_type": "OriginalFailure",
+    "child_event_receipts": [
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/635-C08-B-L-sample-c126f742e/sample/runtime.events.jsonl"
+    ],
+    "container": "3af5f79e50e7c83a6b686ca847a415052149cc262931e4455e82d8e0670e3e44",
+    "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+    "exec_ids": [
+      "1191c4963f35bd90aa6fe7948a6dca6c31d48124c74d4698b4a09f54024e3f0f",
+      "1191c4963f35bd90aa6fe7948a6dca6c31d48124c74d4698b4a09f54024e3f0f"
+    ],
+    "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+    "host_pid": 95224,
+    "host_signal": "ORIGINAL_SIGKILL_SENT",
+    "host_wait_stop_seconds": 1,
+    "independent_failures": [],
+    "observed_host_exit": -9,
+    "original_operations_replayed": false,
+    "original_phase": null
+  },
+  "row_status": "NOT_RUN",
+  "sample_count": 0,
+  "schema": "r7-optimization-receipt-v1",
+  "selection_id": "C08:B:L",
+  "setup_attempted_operation_count": 1,
+  "source_inventory_verification": {
+    "arm": "L",
+    "files": 998,
+    "inventory_sha256": "3cc19fed5240669a490cddeb59304fb317446d94eab544e1d9a7d60778369b55",
+    "scope_policy": "r7-relevant-source-v1",
+    "source_set_sha256": "5af490d51802f237c64dfb3068912be3b4740c1fa192625704a5c950faa70fcc",
+    "status": "PASS"
+  }
+}

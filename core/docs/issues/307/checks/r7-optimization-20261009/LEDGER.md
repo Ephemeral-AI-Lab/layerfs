@@ -2159,3 +2159,44 @@ FAIL and NOT_RUN rows: stopped with `docker stop` before sample 579, not
 removed (C04 `639c0b705e12`, C05 `79e9319bbcf0`, C06 `418c877cf0bb`, C07
 `3aa5f55771fb`, C08 `b875beacbf42`, C10 `716925accad5`, C11 `bc65a9ccd3ea`,
 C12 `bbbc4b4c5610`).
+
+## Fourth lead — 2026-10-09: owner assignment of five points
+
+The assignment is [PROMPT-R7-NEXT-AGENT-20261009.md](../../PROMPT-R7-NEXT-AGENT-20261009.md);
+the owner pasted it as this run's task. Its five points govern: subagents,
+ranked batches, generic and no cheating, iterate without stopping or asking,
+storage and memory not traded for speed. Every time in this section is class
+B (fresh mount on a warm daemon), arm L, one sample.
+
+### Delegated decisions of this run
+
+| # | Decision | Reason | Where it is recorded |
+| --- | --- | --- | --- |
+| L4-1 | The class-B runner waits for the warm-up Workspace's own `cleanup` observation to report `Gone` before the residency attestation (bounded by the existing `cleanup_wall_seconds`; the duration is stored as `cache.warmup_cleanup_to_gone_ns`) | Assignment item 2: "wait for the product's own readiness signal in the harness; do not weaken the predicate". The predicate in `r7-cache/residency.py` is unchanged. Before this, a measured mount of C01–C05 also overlapped the previous Workspace's reclamation (1125 maintenance jobs inside the "measured mount" interval of 611) | this section; `fs-bench-pro/r7/runner.py` |
+
+### Samples 600–651 at `c126f742e` (product source equal to `82c51a439`)
+
+One build (600–603). The runner refused C01, C04, C05 and C12 as "unchanged
+treatment already claimed; no replay/resample": their product, binaries and
+harness are those of 587, 591, 595 and 599, which stand. C06, C07, C08, C10
+and C11 are NOT_RUN again for the same cause (627, 631, 635, 643, 647).
+
+| Cell | Receipt | Row / verifier | Command ms | A2 ms | Ratio | Requests | Owner jobs | Statement attempts | Owner wait / service ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| C02 | 611 | DIAGNOSTIC / PASS | 941.5 | 965.0 | 0.98 | 6002 | 6002 | 63006 | 2.4 / 175.9 |
+| C03 | 615 | DIAGNOSTIC / PASS | 717.8 | 410.8 | 1.75 | 9021 | 9108 | 127399 | 55.5 / 294.3 |
+| C09 | 639 | DIAGNOSTIC / PASS | 165.9 | 106.2 | 1.56 | 517 | 3082 | 42610 | 7.3 / 75.5 |
+
+Storage in all three is equal to the `fdc24ef3f` baseline rows (Store
+213072/217088 and overlay 557056/268992512 for C02 and C03; Store
+204800/204800 and overlay 278528/268713984 for C09).
+
+Reading: C02 is inside the one-sample spread of its target (not "beaten":
+one diagnostic sample). C02 is C01's 1000 creates plus 1000 `stat`
+processes; with C01 at 444.9 ms the `stat` half costs about 500 ms here,
+while A2's own C02 minus C01 is 782 ms. A2's column was taken under another
+envelope (the first handoff says so); per-request comparisons against it are
+therefore not exact, and the passthrough arm in this harness is the floor to
+measure. C03's owner wait (Read 25.8 ms, Lifecycle 24.2 ms) is requests
+queued behind reclamation steps. C09 is unchanged in shape: 6 owner jobs and
+2 reader grants per READ.

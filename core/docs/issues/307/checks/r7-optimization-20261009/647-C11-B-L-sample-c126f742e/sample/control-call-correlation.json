@@ -1,0 +1,69 @@
+{
+  "calls": [
+    {
+      "after_records": 3,
+      "before_records": 1,
+      "event": "mount",
+      "event_sequence": 7,
+      "identities": [
+        [
+          [
+            16052432949150827911,
+            9412156170825774120,
+            13236100191756720037,
+            18011707630052988740
+          ],
+          [
+            5436121181276028430,
+            8754108091026143923,
+            1487117729389099968,
+            4219023751262474242
+          ],
+          2
+        ],
+        [
+          [
+            16052432949150827911,
+            9412156170825774120,
+            13236100191756720037,
+            18011707630052988740
+          ],
+          [
+            5436121181276028430,
+            8754108091026143923,
+            1487117729389099968,
+            4219023751262474242
+          ],
+          3
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    },
+    {
+      "after_records": 4,
+      "before_records": 3,
+      "event": "unmount",
+      "event_sequence": 15,
+      "identities": [
+        [
+          [
+            16052432949150827911,
+            9412156170825774120,
+            13236100191756720037,
+            18011707630052988740
+          ],
+          [
+            5436121181276028430,
+            8754108091026143923,
+            1487117729389099968,
+            4219023751262474242
+          ],
+          4
+        ]
+      ],
+      "span_scope": "instrumented complete SDK; observer acquisition/format/transport included"
+    }
+  ],
+  "schema": "r7-original-control-correlation-v1",
+  "scope": "successful original numeric send ranges; failed calls are never inferred successful"
+}

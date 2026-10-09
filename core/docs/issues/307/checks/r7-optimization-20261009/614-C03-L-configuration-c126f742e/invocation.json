@@ -1,0 +1,22 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "c126f742e56390616341f743143bb4500877865a",
+  "source_tree": "ab7e49734879f11ba2472bc40bc6a5a9d3c4457d",
+  "worktree_status": "?? core/docs/issues/307/checks/r7-optimization-20261009/600-L-source-seal-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/601-runtime-release-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/602-daemon-release-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/603-build-provenance-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/604-C01-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/605-C01-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/606-C01-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/607-C01-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/608-C02-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/609-C02-L-clone-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/610-C02-L-configuration-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/611-C02-B-L-sample-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/612-C03-L-volume-c126f742e/\n?? core/docs/issues/307/checks/r7-optimization-20261009/613-C03-L-clone-c126f742e/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-configure-cell.py",
+    "C03",
+    "/tmp/layerfs-r7-build-provenance-c126f742e-20261009.json",
+    "/tmp/layerfs-r7-C03-L-inputs-c126f742e-20261009",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/r7-optimization-20261009/613-C03-L-clone-c126f742e/result.json",
+    "layerfs-r7-C03-L-c126f742e-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

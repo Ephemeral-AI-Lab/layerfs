@@ -867,6 +867,22 @@ def one(config, selection, output, claims):
             warm_unmount = runtime.send("unmount", warm_key, deadline=time.monotonic() + budget)
             bind_endpoint("warmup_unmount",warm_unmount)
             mounts.pop(warm_key)
+            # Readiness wait on the product's own signal: the warm-up Workspace's
+            # automatic reclamation writes overlay.sqlite until it reports Gone.
+            # The residency predicate below is unchanged; an attestation taken
+            # while that reclamation runs would charge the measured mount with
+            # the previous Workspace's cleanup. Read-only observations, no replay.
+            warm_cleanup_start = time.monotonic_ns()
+            warm_cleanup_deadline = time.monotonic() + config.get("cleanup_wall_seconds", 5)
+            while True:
+                observed = runtime.send("cleanup", warm_key, deadline=warm_cleanup_deadline)
+                row.setdefault("warmup_cleanup_observations", []).append(observed)
+                if observed.get("fields", {}).get("state") == "Gone":
+                    break
+                if time.monotonic() >= warm_cleanup_deadline:
+                    raise TimeoutError("bounded readiness observation: warm-up physical cleanup not Gone; zero attempts")
+                time.sleep(min(0.005, max(0, warm_cleanup_deadline - time.monotonic())))
+            cache["warmup_cleanup_to_gone_ns"] = time.monotonic_ns() - warm_cleanup_start
             cache.update(warmup_terminal_unmount=True, history_read_residency="per-file observer receipt before measured mount")
         if peers:
             lines = ["set -e"]
