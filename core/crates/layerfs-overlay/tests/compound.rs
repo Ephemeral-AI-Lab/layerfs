@@ -70,6 +70,7 @@ fn directory_entries(directory_entries: Vec<DirectoryEntryChange>) -> Changes {
     Changes {
         open: None,
         detached: None,
+        created: None,
         moved_directory: None,
         directory_entries,
         ..Changes::default()
@@ -98,6 +99,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     let changes = Changes {
         open: None,
         detached: None,
+        created: None,
         moved_directory: None,
         inodes: vec![directory(10, 1), file(20, active)],
         directory_entries: vec![bound(10, b"bin\xff\0name", 20)],
@@ -139,6 +141,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     let refused = Changes {
         open: None,
         detached: None,
+        created: None,
         moved_directory: None,
         inodes: vec![file(30, active), file(31, active + 1)],
         directory_entries: vec![bound(10, b"later", 30)],
@@ -168,6 +171,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes {
             open: None,
             detached: None,
+            created: None,
             moved_directory: None,
             inodes: (40..45).map(|serial| file(serial, 0)).collect(),
             ..Changes::default()
@@ -175,6 +179,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes {
             open: None,
             detached: None,
+            created: None,
             moved_directory: None,
             inodes: vec![file(40, 0), file(40, 0)],
             ..Changes::default()
@@ -192,6 +197,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes {
             open: None,
             detached: None,
+            created: None,
             moved_directory: None,
             inodes: vec![Inode {
                 entries: 1,
@@ -202,6 +208,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes {
             open: None,
             detached: None,
+            created: None,
             moved_directory: None,
             inodes: vec![file(40, 0)],
             cell: Some((
@@ -374,14 +381,18 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
     let other = db.open_workspace([8; 32], [9; 32]).unwrap();
     let source = db.acquire_base_source(route, 1).unwrap();
     let plans = db.explain_compound(source).unwrap();
-    assert_eq!(plans.len(), 6);
-    for plan in &plans[..4] {
+    // Seven since the active and lower rows of one name are read by one
+    // statement (`name-layers`), which is listed with the seeks it replaced
+    // on the request path; five query plans, then two VM programs.
+    assert_eq!(plans.len(), 7);
+    assert!(plans[1].starts_with("name-layers: SEARCH"), "{}", plans[1]);
+    for plan in &plans[..5] {
         assert!(
             plan.contains("SEARCH") && !plan.contains("SCAN") && !plan.contains("TEMP"),
             "{plan}"
         );
     }
-    for plan in &plans[4..] {
+    for plan in &plans[5..] {
         assert!(plan.ends_with("btree-scan-opcodes=0"), "{plan}");
     }
     // Both parents already have active rows, so every scale replaces the same
@@ -393,6 +404,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
             &Changes {
                 open: None,
                 detached: None,
+                created: None,
                 moved_directory: None,
                 inodes: vec![directory(1, 0), directory(2, 0)],
                 ..Changes::default()
@@ -435,6 +447,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                 &Changes {
                     open: None,
                     detached: None,
+                    created: None,
                     moved_directory: None,
                     inodes: vec![file(count, 0), file(count + 1, 0)],
                     directory_entries: vec![bound(1, &from, count), bound(1, &to, count + 1)],
@@ -457,6 +470,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                 &Changes {
                     open: None,
                     detached: None,
+                    created: None,
                     moved_directory: None,
                     inodes: vec![
                         directory(1, count),

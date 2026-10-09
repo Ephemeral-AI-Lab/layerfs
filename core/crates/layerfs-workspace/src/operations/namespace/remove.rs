@@ -51,6 +51,7 @@ pub(crate) fn remove(
     }
     Ok(Some(Changes {
         open: None,
+        created: None,
         detached: None,
         moved_directory: None,
         inodes: vec![

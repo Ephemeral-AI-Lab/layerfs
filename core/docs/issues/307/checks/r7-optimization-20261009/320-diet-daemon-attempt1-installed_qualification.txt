@@ -1,0 +1,11 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/installed_qualification-e44a264657784b2e --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test namespace_size_scales_explicit_qualification_but_not_mount ... ok
+test native_installed_mixed_root_is_qualified_as_an_explicit_paid_step ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

@@ -90,15 +90,45 @@ impl NamespaceJob {
         if self.now.nanoseconds >= 1_000_000_000 {
             return Ok(Decided::Final(JobOutcome::Refused(Refusal::Invalid)));
         }
-        let open = self.operation.file();
-        if let Some(file) = open {
+        if let Some(file) = self.operation.file() {
             if file.route() != self.source.route() {
                 return Err(layerfs_overlay::OverlayError::Stale.into());
             }
             db.check_file(file, true)?;
         }
+        self.decide_over(db, db.source_rows(self.source)?, native)
+    }
+    /// The same evaluation inside a visit, over the rows of the Workspace row
+    /// the visit's fence read. That fence also read the operation's
+    /// descriptor, so only its access mode is checked here.
+    pub(crate) fn decide_visit(
+        &self,
+        db: &Overlay,
+        rows: layerfs_overlay::SourceRows<'_>,
+        native: NativeMount,
+    ) -> WorkspaceResult<Decided> {
+        if self.now.nanoseconds >= 1_000_000_000 {
+            return Ok(Decided::Final(JobOutcome::Refused(Refusal::Invalid)));
+        }
+        if let Some(file) = self.operation.file() {
+            if file.route() != self.source.route() {
+                return Err(layerfs_overlay::OverlayError::Stale.into());
+            }
+            if !file.writable() {
+                return Err(layerfs_overlay::OverlayError::Invalid("read-only descriptor").into());
+            }
+        }
+        self.decide_over(db, rows, Some(native))
+    }
+    fn decide_over(
+        &self,
+        db: &Overlay,
+        rows: layerfs_overlay::SourceRows<'_>,
+        native: Option<NativeMount>,
+    ) -> WorkspaceResult<Decided> {
+        let open = self.operation.file();
         let mut eval = Eval {
-            rows: db.source_rows(self.source)?,
+            rows,
             facts: &self.facts,
             root: self.root,
             open_serial: open.map(|file| file.serial()),

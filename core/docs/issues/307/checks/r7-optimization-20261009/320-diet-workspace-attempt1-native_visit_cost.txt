@@ -1,0 +1,23 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_visit_cost-6727ef9358d162d7 --test-threads=1 --nocapture (cwd core/crates/layerfs-workspace)
+
+running 1 test
+test the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size ... NATIVE_VISIT_COST file=10 jobs=[[("Workspace", 1, 1), ("Inode", 1, 1)], [("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)]] total=StatementWork { attempts: 48, executions: 61, rows_returned: 18, rows_changed: 41, direct_rows_changed: 16, returned_blob_bytes: 160, returned_value_bytes: 1256, vm_steps: 2838, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 1585, sql_bytes: 7210, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 292037 }
+NATIVE_VISIT_COST file=4000 jobs=[[("Workspace", 1, 1), ("Inode", 1, 1)], [("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)]] total=StatementWork { attempts: 48, executions: 61, rows_returned: 18, rows_changed: 41, direct_rows_changed: 16, returned_blob_bytes: 160, returned_value_bytes: 1256, vm_steps: 2838, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 1599, sql_bytes: 7210, statement_memory_samples: 0, statement_memory_sample_bytes: 0, elapsed_ns: 282958 }
+
+thread 'the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size' panicked at crates/layerfs-workspace/tests/native_visit_cost.rs:244:9:
+assertion `left == right` failed: job 1 of file 10
+  left: [("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)]
+ right: [("Workspace", 1, 1), ("Inode", 1, 1), ("DirectoryEntry", 1, 1)]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.40s
+
+R4_WALL seconds<=5 limit=100s lock_wait=0s
+EXIT 101

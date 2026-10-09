@@ -1,0 +1,15 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_visit_fence-2501e5e8970fe9c1 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 6 tests
+test a_closed_workspace_refuses_visits_and_still_releases_descriptors ... ok
+test a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole ... ok
+test a_descriptor_of_another_mount_or_inode_and_a_missing_reference_are_stale ... ok
+test a_read_only_descriptor_cannot_publish_and_begins_no_transaction ... ok
+test a_revoked_or_replaced_mount_is_stale_for_every_fenced_job ... ok
+test every_visit_statement_is_an_indexed_seek ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0

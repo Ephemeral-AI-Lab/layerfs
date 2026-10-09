@@ -1,7 +1,7 @@
 //! Exact open and read-processing owners; no descriptor pins a generation chain.
 use crate::{
     db::integer, inode, sql, BaseSource, FileRead, Inode, InodeKind, LeaseKind, OpenFile, Overlay,
-    OverlayError, OverlayResult, Route, StatementKind,
+    OverlayError, OverlayResult, Route, StatementKind, WorkspaceState,
 };
 
 impl Overlay {
@@ -35,11 +35,14 @@ impl Overlay {
         if add {
             self.execute(StatementKind::Lease, increment, &[&ns, &serial], 16)?;
         } else {
-            let changed = self.execute(StatementKind::Lease, decrement, &[&ns, &serial], 16)?;
-            if changed != 1 {
-                return Err(OverlayError::Stale);
-            }
-            if self.file_refs(ns, serial)? == 0 {
+            // The decrement returns what remains; no reference means Stale.
+            let left = self
+                .query(StatementKind::Lease, decrement, &[&ns, &serial], 16, |r| {
+                    crate::db::unsigned(r, 0)
+                })?
+                .pop()
+                .ok_or(OverlayError::Stale)?;
+            if left == 0 {
                 self.enqueue(ns, crate::maintenance::ORPHAN, serial, -1)?;
                 self.wake_orphan(ns, serial)?;
             }
@@ -95,25 +98,37 @@ impl Overlay {
         serial: u64,
         writable: bool,
     ) -> OverlayResult<OpenFile> {
+        let file = self.retain_file_row(route, request, serial, writable)?;
+        self.file_ref(route.ns, integer(serial)?, LeaseKind::FileHandle, true)?;
+        Ok(file)
+    }
+    /// The descriptor's rows without its file reference, which the caller
+    /// takes in the same transaction.
+    pub(crate) fn retain_file_row(
+        &self,
+        route: Route,
+        request: i64,
+        serial: u64,
+        writable: bool,
+    ) -> OverlayResult<OpenFile> {
         let owner = self.mint_owner()?;
-        let serial = integer(serial)?;
+        let key = integer(serial)?;
         self.execute(
             StatementKind::Lease,
             "INSERT INTO file_handle VALUES(?1,?2,?3,?4,?5)",
-            &[&route.ns, &request, &integer(owner)?, &serial, &writable],
+            &[&route.ns, &request, &integer(owner)?, &key, &writable],
             33,
         )?;
         self.execute(
             StatementKind::Lease,
             "INSERT INTO lease VALUES(?1,7,?2,?3)",
-            &[&route.ns, &integer(owner)?, &serial],
+            &[&route.ns, &integer(owner)?, &key],
             24,
         )?;
-        self.file_ref(route.ns, serial, LeaseKind::FileHandle, true)?;
         Ok(OpenFile {
             route,
             owner,
-            serial: serial as u64,
+            serial,
             writable,
         })
     }
@@ -139,7 +154,11 @@ impl Overlay {
     }
     /// Validates actual descriptor custody; read-only descriptors cannot write.
     pub fn check_file(&self, file: OpenFile, write: bool) -> OverlayResult<()> {
-        self.state(file.route)?;
+        self.checked_file(file, write).map(|_| ())
+    }
+    /// The same check, returning the Workspace row it read.
+    fn checked_file(&self, file: OpenFile, write: bool) -> OverlayResult<WorkspaceState> {
+        let state = self.state(file.route)?;
         let found = self
             .query(
                 StatementKind::Lease,
@@ -160,7 +179,7 @@ impl Overlay {
         if write && !file.writable {
             return Err(OverlayError::Invalid("read-only descriptor"));
         }
-        Ok(())
+        Ok(state)
     }
     /// Exact close after this descriptor's native/request continuations finish.
     /// Read-processing windows keep their own independent references.
@@ -168,8 +187,16 @@ impl Overlay {
         self.atomic_cleanup(|| self.close_file_inner(file))
     }
     pub(crate) fn close_file_inner(&self, file: OpenFile) -> OverlayResult<()> {
-        self.check_file(file, false)?;
-        self.execute(
+        let state = self.checked_file(file, false)?;
+        self.close_held_file(file, &state)
+    }
+    /// Closes a descriptor whose row and Workspace row this job has read.
+    pub(crate) fn close_held_file(
+        &self,
+        file: OpenFile,
+        state: &WorkspaceState,
+    ) -> OverlayResult<()> {
+        let closed = self.execute(
             StatementKind::Lease,
             "DELETE FROM file_handle WHERE ns=?1 AND owner=?2 AND serial=?3",
             &[
@@ -179,6 +206,9 @@ impl Overlay {
             ],
             24,
         )?;
+        if closed != 1 {
+            return Err(OverlayError::Stale);
+        }
         self.execute(
             StatementKind::Lease,
             "DELETE FROM lease WHERE ns=?1 AND kind=7 AND owner=?2 AND resource=?3",
@@ -195,7 +225,7 @@ impl Overlay {
             LeaseKind::FileHandle,
             false,
         )?;
-        self.queue_closed(file.route)
+        self.queue_closed_at(file.route, state)
     }
 
     /// Acquires an independently owned read window under a current source.

@@ -1,7 +1,7 @@
 //! One atomic bounded namespace job: several inode/name finals, one ticket.
 use crate::{
     db::integer,
-    inode::{check, check_name, optional_serial},
+    inode::{check, check_name},
     sql, BaseSource, Binding, Changes, Generation, Inode, NameLayers, Overlay, OverlayError,
     OverlayResult, Publication, StatementKind, WorkspaceState, COMPOUND_DIRECTORY_ENTRIES,
     COMPOUND_INODES,
@@ -47,7 +47,10 @@ impl Overlay {
     /// and leaves no ticket. Exactly one reply-attempt ticket covers the job.
     pub fn apply(&self, source: BaseSource, changes: &Changes) -> OverlayResult<Publication> {
         let checked = self.check_changes(changes)?;
-        self.atomic(|| self.apply_checked(source, changes, &checked))
+        self.atomic(|| {
+            let state = self.source_state(source)?;
+            self.apply_checked(source, state, None, changes, &checked)
+        })
     }
     /// Window and grammar checks of one compound job, before any transaction.
     pub(crate) fn check_changes(&self, changes: &Changes) -> OverlayResult<CheckedChanges> {
@@ -64,6 +67,14 @@ impl Overlay {
                 .any(|i| i.serial == serial && i.nlink == 0)
         }) {
             return Err(OverlayError::Invalid("removed inode final"));
+        }
+        if changes.created.is_some_and(|serial| {
+            !changes
+                .inodes
+                .iter()
+                .any(|i| i.serial == serial && i.nlink != 0)
+        }) {
+            return Err(OverlayError::Invalid("created inode final"));
         }
         let moved_directory = changes.moved_directory.map(|(serial, parent)| {
             if serial == parent || !changes.directory_entries.iter().any(|entry| {
@@ -127,9 +138,14 @@ impl Overlay {
     }
     /// The transaction body of one checked compound job. The caller owns the
     /// transaction, so native kernel custody can commit with the publication.
+    /// `state` is the Workspace row this job read when it checked the
+    /// source's custody, and `held` the descriptor its fence read: neither is
+    /// read again here.
     pub(crate) fn apply_checked(
         &self,
         source: BaseSource,
+        state: WorkspaceState,
+        held: Option<crate::OpenFile>,
         changes: &Changes,
         checked: &CheckedChanges,
     ) -> OverlayResult<Publication> {
@@ -137,7 +153,6 @@ impl Overlay {
             keys,
             moved_directory,
         } = checked;
-        let state = self.source_state(source)?;
         if state.closed {
             return Err(OverlayError::Closed);
         }
@@ -150,7 +165,11 @@ impl Overlay {
             {
                 return Err(OverlayError::Invalid("descriptor mutation domain"));
             }
-            self.check_file(file, true)?;
+            if held != Some(file) {
+                self.check_file(file, true)?;
+            } else if !file.writable {
+                return Err(OverlayError::Invalid("read-only descriptor"));
+            }
         }
         let mut inodes = 0_i64;
         let mut layers = Vec::with_capacity(changes.inodes.len());
@@ -172,18 +191,12 @@ impl Overlay {
             let inherited = match change.binding {
                 Binding::Bound { inherited, .. } | Binding::Removed { inherited } => inherited,
             };
-            let (_, cutoff) =
+            // Computed once: it decides the row and is the value the row records.
+            let (added, lower) =
                 self.name_inheritance(&state, route.ns, *parent, &change.name, inherited)?;
-            let whiteout = target.is_some() || cutoff;
-            if whiteout {
-                directory_entries += i64::from(self.put_directory_entry(
-                    route,
-                    &state,
-                    *parent,
-                    &change.name,
-                    *target,
-                    inherited,
-                )?);
+            if target.is_some() || lower {
+                self.bind_name(route.ns, &state, *parent, &change.name, *target, lower)?;
+                directory_entries += i64::from(added);
             } else {
                 // Nothing below binds this name: no row is the final state.
                 directory_entries -= self.execute(
@@ -221,24 +234,7 @@ impl Overlay {
         }
         self.settle(route, &state, inodes, directory_entries)
     }
-    fn lower_name(
-        &self,
-        state: &WorkspaceState,
-        ns: i64,
-        parent: i64,
-        name: &[u8],
-    ) -> OverlayResult<Option<Option<u64>>> {
-        Ok(self
-            .query(
-                StatementKind::DirectoryEntry,
-                sql::DIRECTORY_ENTRY_LOOKUP,
-                &[&ns, &parent, &name, &(state.active.0 - 1), &state.installed],
-                32 + name.len() as u64,
-                |row| optional_serial(row.get(0)?, 0),
-            )?
-            .pop())
-    }
-    /// Plans of the compound job's exact statements: lower-name seek, active
+    /// Plans of the compound job's exact statements: the name seeks, active
     /// row probes, upserts and the no-row delete. INSERT plans are VM programs.
     pub fn explain_compound(&self, source: BaseSource) -> OverlayResult<Vec<String>> {
         let state = self.source_state(source)?;
@@ -257,6 +253,11 @@ impl Overlay {
                     &state.active.0,
                     &state.installed,
                 ],
+            ),
+            (
+                "name-layers",
+                sql::NAME_LAYERS,
+                vec![&ns, &1_i64, &name, &state.active.0, &state.installed],
             ),
             (
                 "active-name",
@@ -310,34 +311,44 @@ impl Overlay {
             ),
         ];
         for (label, statement, params) in programs {
-            // (opcode, cursor) rows of the actual program. Constant CHECK IN-lists
-            // iterate ephemeral cursors; only persistent b-tree cursors can scan.
-            let program = self.query(
-                StatementKind::Explain,
-                &format!("EXPLAIN {statement}"),
-                &params,
-                32,
-                |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(2)?)),
-            )?;
-            let tables: Vec<i64> = program
-                .iter()
-                .filter(|(op, _)| op == "OpenRead" || op == "OpenWrite")
-                .map(|(_, cursor)| *cursor)
-                .collect();
-            let scans = program
-                .iter()
-                .filter(|(op, cursor)| {
-                    matches!(op.as_str(), "Rewind" | "Next" | "Prev" | "Last")
-                        && tables.contains(cursor)
-                })
-                .count();
-            plans.push(format!(
-                "{label}: vm-program opcodes={} btree-cursors={} btree-scan-opcodes={scans}",
-                program.len(),
-                tables.len()
-            ));
+            plans.push(self.explain_program(label, statement, &params)?);
         }
         Ok(plans)
+    }
+    /// One line for the VM program of a statement that has no query-plan
+    /// row: (opcode, cursor) rows of the actual program. Constant CHECK
+    /// IN-lists iterate ephemeral cursors; only persistent b-tree cursors
+    /// can scan.
+    pub(crate) fn explain_program(
+        &self,
+        label: &str,
+        statement: &str,
+        params: &[&dyn rusqlite::ToSql],
+    ) -> OverlayResult<String> {
+        let program = self.query(
+            StatementKind::Explain,
+            &format!("EXPLAIN {statement}"),
+            params,
+            32,
+            |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(2)?)),
+        )?;
+        let tables: Vec<i64> = program
+            .iter()
+            .filter(|(op, _)| op == "OpenRead" || op == "OpenWrite")
+            .map(|(_, cursor)| *cursor)
+            .collect();
+        let scans = program
+            .iter()
+            .filter(|(op, cursor)| {
+                matches!(op.as_str(), "Rewind" | "Next" | "Prev" | "Last")
+                    && tables.contains(cursor)
+            })
+            .count();
+        Ok(format!(
+            "{label}: vm-program opcodes={} btree-cursors={} btree-scan-opcodes={scans}",
+            program.len(),
+            tables.len()
+        ))
     }
 }
 impl SourceRows<'_> {
@@ -357,25 +368,15 @@ impl SourceRows<'_> {
             self.state.installed,
         )
     }
-    /// Two point seeks: the active row and the latest lower row of one name.
+    /// The active row and the latest lower row of one name, in one seek.
     pub fn name(&self, parent: u64, name: &[u8]) -> OverlayResult<NameLayers> {
         let key = check_name(parent, name)?;
-        let ns = self.source.route.ns;
-        let active = self
-            .db
-            .query(
-                StatementKind::DirectoryEntry,
-                sql::DIRECTORY_ENTRY_ACTIVE,
-                &[&ns, &key, &name, &self.state.active.0],
-                24 + name.len() as u64,
-                |row| Ok((optional_serial(row.get(0)?, 0)?, row.get::<_, bool>(1)?)),
-            )?
-            .pop();
-        let lower = self.db.lower_name(&self.state, ns, key, name)?;
-        Ok(NameLayers {
-            active: active.map(|r| r.0),
-            active_inherited: active.map(|r| r.1),
-            lower,
-        })
+        self.db.name_layers(
+            self.source.route.ns,
+            key,
+            name,
+            self.state.active.0,
+            self.state.installed,
+        )
     }
 }

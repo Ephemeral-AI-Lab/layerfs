@@ -254,6 +254,23 @@ impl Overlay {
         implicit: bool,
         count: u64,
     ) -> OverlayResult<()> {
+        self.insert_native_lookup_row(mount, serial, implicit, count)?;
+        self.file_ref(
+            mount.route.ns,
+            integer(serial)?,
+            LeaseKind::LookupOwner,
+            true,
+        )
+    }
+    /// The lookup rows without their file reference, which the caller takes
+    /// in the same transaction. A row that already exists is a failure.
+    pub(crate) fn insert_native_lookup_row(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        implicit: bool,
+        count: u64,
+    ) -> OverlayResult<()> {
         let owner = self.mint_owner()?;
         self.execute(
             StatementKind::Lease,
@@ -274,12 +291,7 @@ impl Overlay {
             &[&mount.route.ns, &integer(owner)?, &integer(serial)?],
             24,
         )?;
-        self.file_ref(
-            mount.route.ns,
-            integer(serial)?,
-            LeaseKind::LookupOwner,
-            true,
-        )
+        Ok(())
     }
     pub(crate) fn add_native_lookup(&self, mount: NativeMount, serial: u64) -> OverlayResult<()> {
         if let Some((_, count, _)) = self.native_lookup_row(mount, serial)? {

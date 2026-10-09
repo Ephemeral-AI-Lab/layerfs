@@ -109,6 +109,10 @@ pub struct Changes {
     pub moved_directory: Option<(u64, u64)>,
     /// Exact descriptor authority for mutations of independently owned orphans.
     pub open: Option<crate::OpenFile>,
+    /// The serial this job creates. Its caller reserved it, so no row of it
+    /// and no kernel reference on it exists: its first rows are inserted,
+    /// never merged, and a row that already exists fails the whole job.
+    pub created: Option<u64>,
     pub inodes: Vec<Inode>,
     pub directory_entries: Vec<DirectoryEntryChange>,
     /// One payload cell of a changed inode, published in the same transaction.

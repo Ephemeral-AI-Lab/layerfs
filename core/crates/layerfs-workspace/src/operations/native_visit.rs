@@ -270,7 +270,8 @@ impl NativeMutationVisit {
         } = self.request;
         let mut decided = None;
         let mut published = None;
-        let applied = db.mutate_native_visit(mount, request, serial, handle, |source, file| {
+        let applied = db.mutate_native_visit(mount, request, serial, handle, |rows, file| {
+            let source = rows.source();
             let Some(operation) = self.request.input.operation(file) else {
                 decided = Some(Ok(JobOutcome::Refused(Refusal::Invalid)));
                 return Ok(None);
@@ -285,7 +286,7 @@ impl NativeMutationVisit {
             };
             let mut round = 0;
             loop {
-                match job.decide(db, Some(mount)) {
+                match job.decide_visit(db, rows, mount) {
                     Ok(Decided::Final(JobOutcome::Needs(needs)))
                         if round < ROUNDS
                             && supply(

@@ -25,8 +25,8 @@ impl Overlay {
     ) -> OverlayResult<NativeApplied> {
         let checked = self.check_changes(changes)?;
         self.atomic(|| {
-            let (request, _, _) = self.check_native_source(mount, source)?;
-            let publication = self.apply_checked(source, changes, &checked)?;
+            let (request, _, state) = self.check_native_source(mount, source)?;
+            let publication = self.apply_checked(source, state, None, changes, &checked)?;
             self.execute(
                 StatementKind::Lease,
                 "UPDATE native_source SET decided=1 WHERE ns=?1 AND owner=?2",
@@ -73,15 +73,39 @@ impl Overlay {
         }) {
             return Err(OverlayError::Invalid("native entry final"));
         }
-        self.add_native_lookup(mount, serial)?;
+        // An inode this job created has no kernel reference yet: its row is
+        // inserted without a read, and a duplicate is a definite failure.
+        let created = changes.created == Some(serial);
+        let key = -integer(source.owner)?;
+        let opened = match (created, open) {
+            (true, Some(writable)) => {
+                // One custody row write covers the lookup and the descriptor.
+                self.insert_native_lookup_row(mount, serial, false, 1)?;
+                let file = self.retain_file_row(mount.route, key, serial, writable)?;
+                self.execute(
+                    StatementKind::Lease,
+                    crate::sql::FILE_OPEN_LOOKUP_ADD,
+                    &[&mount.route.ns, &integer(serial)?],
+                    16,
+                )?;
+                Some(file)
+            }
+            (true, None) => {
+                self.insert_native_lookup(mount, serial, false, 1)?;
+                None
+            }
+            (false, open) => {
+                self.add_native_lookup(mount, serial)?;
+                open.map(|writable| self.retain_file(mount.route, key, serial, writable))
+                    .transpose()?
+            }
+        };
         if directory {
             self.set_native_parent(mount, serial, parent)?;
         }
-        let file = match open {
+        let file = match opened {
             None => None,
-            Some(writable) => {
-                let file =
-                    self.retain_file(mount.route, -integer(source.owner)?, serial, writable)?;
+            Some(file) => {
                 self.execute(
                     StatementKind::Lease,
                     "INSERT INTO native_file VALUES(?1,?2,?3,?4)",

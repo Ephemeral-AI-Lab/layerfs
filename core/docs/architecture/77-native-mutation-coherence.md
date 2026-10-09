@@ -10,6 +10,17 @@ forced unmount and timing qualification are not part of it. Scope, receipts,
 failed attempts and open decisions are in the
 [R3 completion record](../issues/307/R3-COMPLETION-20261008.md).
 
+R7 update, 2026-10-09 (statement diet): the mutation visit evaluates and
+publishes over the Workspace row its fence read, and a handle-addressed
+mutation over the descriptor that fence read; a read-only descriptor is
+still refused with `Invalid("read-only descriptor")` before anything is
+evaluated. A creating operation states its reserved serial in
+`Changes::created`: the kernel lookup row of that inode is inserted without
+a read (a duplicate fails and rolls back the whole job), and CREATE's lookup
+reference and descriptor are one `file_custody` row write. LINK still reads
+the count the kernel already holds. See the
+[overlay note](19-daemon-overlay.md).
+
 R7 update, 2026-10-09: a native mutation no longer acquires a processing
 source. Steps 1 and 3 to 5 below are one owner visit
 ([`NativeMutationVisit`](../../crates/layerfs-workspace/src/operations/native_visit.rs)):

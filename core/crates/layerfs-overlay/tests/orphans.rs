@@ -414,3 +414,94 @@ fn three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlin
     maintain(&db);
     assert_eq!(db.inode(route, 7).unwrap().unwrap().nlink, 0);
 }
+
+#[test]
+fn inode_reads_probe_the_orphan_domain_only_once_an_orphan_was_created() {
+    let temp = Temp::new();
+    let db = temp.db();
+    let route = db.open_workspace([141; 32], [142; 32]).unwrap();
+    let other = db.open_workspace([143; 32], [144; 32]).unwrap();
+    let source = db.acquire_base_source(route, 1).unwrap();
+    let elsewhere = db.acquire_base_source(other, 1).unwrap();
+    // One inode observation and the Inode-family statements it attempted.
+    let read = |source: BaseSource, serial: u64| {
+        let before = db.diagnostics();
+        let inode = db.source_inode(source, serial).unwrap();
+        let work = db.diagnostics().since(&before);
+        (
+            inode,
+            work.statements[StatementKind::Inode as usize].attempts,
+        )
+    };
+    let unlink = |file: &File<'_>| {
+        let mut removed = file.inode(file.expect.len() as u64);
+        removed.nlink = 0;
+        let publication = db
+            .apply(
+                source,
+                &Changes {
+                    inodes: vec![removed],
+                    ..Changes::default()
+                },
+            )
+            .unwrap();
+        db.reply_attempted(publication).unwrap();
+    };
+    let mut kept = File::new(&db, source, 7, Vec::new());
+    kept.write(0, b"kept");
+    let mut unowned = File::new(&db, source, 8, Vec::new());
+    unowned.write(0, b"gone");
+
+    // No orphan has been created by this engine: one seek per inode.
+    assert_eq!(read(source, 7).1, 1);
+    assert_eq!(read(source, 9), (None, 1));
+    assert_eq!(read(elsewhere, 7), (None, 1));
+    // An unlink with no owner creates none either: its row is a tombstone.
+    unlink(&unowned);
+    let (tombstone, attempts) = read(source, 8);
+    assert_eq!((tombstone.unwrap().nlink, attempts), (0, 1));
+    assert_eq!(read(source, 7).1, 1);
+
+    // The last unlink of an open file creates the first orphan.
+    let open = db.open_file(source, 1, &kept.inode(4), true).unwrap();
+    unlink(&kept);
+    // Its orphan-domain row is found by the probe, which answers alone.
+    let (orphan, attempts) = read(source, 7);
+    let orphan = orphan.expect("the orphan keeps its metadata");
+    assert_eq!((orphan.nlink, orphan.size, attempts), (0, 4, 1));
+    // From now on every inode read of this engine probes first, in every
+    // namespace: a miss costs the probe and the seek.
+    assert_eq!(read(source, 9), (None, 2));
+    assert_eq!(read(source, 8).1, 2);
+    assert_eq!(read(elsewhere, 7), (None, 2));
+
+    // A descriptor write lands in the orphan domain and is read back from it.
+    let publication = db
+        .apply(
+            source,
+            &Changes {
+                open: Some(open),
+                inodes: vec![Inode { size: 6, ..orphan }],
+                write: Some(PayloadWrite {
+                    serial: 7,
+                    offset: 4,
+                    data: Arc::from(b"+2".as_slice()),
+                }),
+                ..Changes::default()
+            },
+        )
+        .unwrap();
+    db.reply_attempted(publication).unwrap();
+    let (orphan, attempts) = read(source, 7);
+    assert_eq!((orphan.unwrap().size, attempts), (6, 1));
+    let window = db.acquire_file_read(source, open, 50).unwrap();
+    assert_eq!(bytes(&db, window, &[]), b"kept+2");
+    db.release_file_read(window).unwrap();
+
+    // The orphan is reclaimed after its last owner; the probe stays on,
+    // finds nothing and the ordinary seek decides.
+    db.close_file(open).unwrap();
+    maintain(&db);
+    assert_eq!(read(source, 7).1, 2);
+    assert_eq!(read(source, 9), (None, 2));
+}

@@ -1,0 +1,13 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/visit_port-829dce2ead39b88e --test-threads=1 
+
+running 4 tests
+test a_capture_parked_behind_the_ticket_is_owed_exactly_one_settling_job ... ok
+test a_create_is_one_mutation_job_and_its_reply_attempt_is_no_owner_job ... ok
+test a_lookup_over_resident_objects_is_one_read_job_and_no_reader_grant ... ok
+test a_request_between_two_visits_fences_no_revocation_and_its_next_visit_is_refused ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

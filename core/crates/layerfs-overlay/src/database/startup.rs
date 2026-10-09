@@ -155,6 +155,7 @@ pub(crate) fn create(path: &Path, config: ProfileConfig) -> Creation {
             quarantined: Cell::new(false),
             maintenance_ready: Cell::new(false),
             closed_ready: Cell::new(false),
+            orphan_seen: Cell::new(false),
             transaction: Cell::new(super::connection::Transaction::None),
             next_owner: Cell::new(1),
             tickets: std::sync::Arc::new(crate::ReplyTickets::new(identity)),

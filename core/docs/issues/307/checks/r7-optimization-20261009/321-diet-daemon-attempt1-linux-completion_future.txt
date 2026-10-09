@@ -1,0 +1,14 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/completion_future-719d155a8ec3951f --test-threads=1 
+
+running 5 tests
+test concurrent_publication_and_registration_never_require_polling_for_progress ... ok
+test publication_before_registration_is_ready_without_another_event ... ok
+test publication_wakes_the_parked_future_and_keeps_credit_until_disposal ... ok
+test repoll_replaces_the_task_and_publication_releases_the_registration ... ok
+test stop_wakes_a_future_with_its_original_unattempted_command ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

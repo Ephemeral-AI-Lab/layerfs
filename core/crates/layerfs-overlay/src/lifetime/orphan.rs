@@ -37,7 +37,12 @@ impl Overlay {
             .orphan(ns, serial)?
             .is_some_and(|o| gen > o.floor && gen <= o.top))
     }
+    /// The orphan-domain row of one serial. No orphan has ever been created
+    /// by this engine while `orphan_seen` is false, so nothing is read then.
     pub(crate) fn orphan_inode(&self, ns: i64, serial: i64) -> OverlayResult<Option<Inode>> {
+        if !self.orphan_seen.get() {
+            return Ok(None);
+        }
         self.query(StatementKind::Inode,"SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries
             FROM inode WHERE ns=?1 AND serial=?2 AND gen=-1",&[&ns,&serial],16,inode::decode).map(|mut rows|rows.pop())
     }
@@ -60,6 +65,8 @@ impl Overlay {
         if orphan.is_some() || self.file_refs(route.ns, serial)? == 0 {
             return Ok(());
         }
+        // From here an orphan-domain row may exist: inode reads probe for it.
+        self.orphan_seen.set(true);
         self.execute(
             StatementKind::Lease,
             "INSERT INTO orphan VALUES(?1,?2,?3,?4,?5)",

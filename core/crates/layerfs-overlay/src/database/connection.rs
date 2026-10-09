@@ -23,6 +23,11 @@ pub struct Overlay {
     /// possible work. A rolled-back enqueue can leave only a false positive.
     pub(crate) maintenance_ready: Cell<bool>,
     pub(crate) closed_ready: Cell<bool>,
+    /// Whether this engine has ever attempted to create an orphan. Set before
+    /// the only statement that inserts one and never cleared, so false is
+    /// exact: no orphan row and no orphan-domain inode row exists in any
+    /// namespace. A rolled-back insert leaves only a false positive.
+    pub(crate) orphan_seen: Cell<bool>,
     /// What the running atomic job has asked of this connection.
     pub(super) transaction: Cell<Transaction>,
     /// Next owner identity of this engine. The database is created by this

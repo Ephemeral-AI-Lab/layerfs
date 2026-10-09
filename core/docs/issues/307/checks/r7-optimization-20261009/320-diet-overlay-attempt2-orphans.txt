@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/orphans-7a988e93ca86f715 --test-threads=1 --nocapture (cwd core/crates/layerfs-overlay)
+
+running 8 tests
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... S6_CUSTODY_PROFILE unrelated=128 open=(12, 451, 9) unlink=(20, 1078, 14) acquire_read=(15, 536, 11) read=(8, 200, 0) descriptor_append=(17, 597, 5) fullscan=0 sorts=0 autoindex=0 reprepare=0
+S6_CUSTODY_PROFILE unrelated=1024 open=(12, 451, 9) unlink=(20, 1078, 14) acquire_read=(15, 536, 11) read=(8, 200, 0) descriptor_append=(17, 597, 5) fullscan=0 sorts=0 autoindex=0 reprepare=0
+S6_CUSTODY_PROFILE unrelated=4096 open=(12, 451, 9) unlink=(20, 1078, 14) acquire_read=(15, 536, 11) read=(8, 200, 0) descriptor_append=(17, 597, 5) fullscan=0 sorts=0 autoindex=0 reprepare=0
+ok
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+test inode_reads_probe_the_orphan_domain_only_once_an_orphan_was_created ... ok
+test logical_close_refuses_new_captured_owners_and_keeps_existing_consumers ... ok
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_operation_record ... ok
+test three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlink_reader ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

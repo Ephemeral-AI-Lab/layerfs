@@ -1,0 +1,21 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/engine-b4fac0808988bc6c --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 12 tests
+test backed_owner_and_operation_record_pages_have_no_total_record_limit ... ok
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+test closed_capture_retains_its_existing_rows_until_explicit_known_release ... ok
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test payload_name_operation_record_and_owner_access_keep_indexed_scope ... ok
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+test reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_operation_record_values ... ok
+test terminal_cleanup_waits_for_exact_owners_and_reply_attempts ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.14s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

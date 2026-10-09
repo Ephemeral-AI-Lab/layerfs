@@ -127,6 +127,16 @@ impl Overlay {
     }
     pub(crate) fn queue_closed(&self, route: Route) -> OverlayResult<()> {
         let state = self.state(route)?;
+        self.queue_closed_at(route, &state)
+    }
+    /// The same decision over the Workspace row this job already read. The
+    /// job must not have changed that row's lifecycle, capture or base
+    /// readers since.
+    pub(crate) fn queue_closed_at(
+        &self,
+        route: Route,
+        state: &crate::WorkspaceState,
+    ) -> OverlayResult<()> {
         if !state.closed || state.captured.is_some() || state.base_readers != 0 {
             return Ok(());
         }

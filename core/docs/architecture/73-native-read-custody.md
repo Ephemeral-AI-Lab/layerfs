@@ -3,6 +3,17 @@
 > **Status:** Implemented R2 component on parent78374ced6,2026-10-08.
 > Native Fuse activation, Ready and normal drain remain open.
 
+R7 update, 2026-10-09 (statement diet): the visit's three checks below (live
+Workspace, attached mount, the kernel's reference) are **one statement**,
+`Overlay::native_fence`, with the same outcomes: `Closed` for a closed
+Workspace, `Stale` for a missing Workspace, a foreign or revoked mount, or a
+reference that is not held. RELEASE (`close_native_file`) uses the same fence
+without the `Closed` refusal, so a closed Workspace still releases its
+descriptors, and it does not read the descriptor or the Workspace row a
+second time. The orphan-domain probe before an inode read is skipped until
+the engine has created its first orphan. See the
+[overlay note](19-daemon-overlay.md).
+
 R7 update, 2026-10-09: **LOOKUP, GETATTR and every native mutation are
 served by owner visits that record no request source.** One visit is one owner
 job ([overlay](../../crates/layerfs-overlay/src/lifetime/native_visit.rs),

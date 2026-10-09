@@ -1,8 +1,8 @@
 //! Public engine native ownership, atomicity and bounded indexed retirement.
 use layerfs_overlay::{
-    BaseSource, Binding, Changes, CleanupState, DatabaseWork, DirectoryEntryChange, Inode,
-    InodeKind, MaintenanceCursor, NativeDecision, NativeEffect, NativeMount, NativeMountState,
-    Overlay, OverlayError, ProfileConfig, StatementKind, StoredCounts,
+    Binding, Changes, CleanupState, DatabaseWork, DirectoryEntryChange, Inode, InodeKind,
+    MaintenanceCursor, NativeDecision, NativeEffect, NativeMount, NativeMountState, Overlay,
+    OverlayError, ProfileConfig, StatementKind, StoredCounts,
 };
 use std::{
     path::PathBuf,
@@ -520,10 +520,12 @@ impl Fixture {
         let state = self.db.state(route).unwrap();
         assert_eq!((state.revision, state.base_readers), (before.revision, 0));
     }
-    /// The file `serial` created under the root by one publishing visit.
-    fn created(&self, source: BaseSource, serial: u64, name: &[u8]) -> Changes {
-        let active = self.db.source_rows(source).unwrap().active().number() as u64;
+    /// The file `serial` created under the root by one publishing visit at
+    /// the active generation `active`.
+    fn created(&self, active: i64, serial: u64, name: &[u8]) -> Changes {
+        let active = active as u64;
         Changes {
+            created: Some(serial),
             inodes: vec![
                 Inode {
                     kind: InodeKind::Directory,
@@ -671,10 +673,10 @@ fn a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source() {
     // descriptor and reply ticket in the visit's one transaction.
     let before = f.before();
     let applied =
-        f.db.mutate_native_visit(f.mount, REQUEST, 1, None, |source, file| {
+        f.db.mutate_native_visit(f.mount, REQUEST, 1, None, |rows, file| {
             assert_eq!(file, None);
             Ok(Some((
-                f.created(source, 50, b"made"),
+                f.created(rows.active().number(), 50, b"made"),
                 NativeEffect::Open {
                     serial: 50,
                     parent: 1,
@@ -783,9 +785,9 @@ fn a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source() {
     // the effect names an inode the changes do not create.
     let before = f.before();
     assert!(matches!(
-        f.db.mutate_native_visit(f.mount, REQUEST - 4, 1, None, |source, _| {
+        f.db.mutate_native_visit(f.mount, REQUEST - 4, 1, None, |rows, _| {
             Ok(Some((
-                f.created(source, 51, b"unmade"),
+                f.created(rows.active().number(), 51, b"unmade"),
                 NativeEffect::Entry {
                     serial: 52,
                     parent: 1,
@@ -879,7 +881,10 @@ fn a_visit_source_names_no_row_and_is_stale_once_the_base_or_frontier_moves() {
         ));
         assert!(matches!(f.db.source_rows(stale), Err(OverlayError::Stale)));
         assert!(matches!(
-            f.db.apply(stale, &f.created(smuggle(), 60, b"stale")),
+            f.db.apply(
+                stale,
+                &f.created(f.db.state(route).unwrap().active.number(), 60, b"stale")
+            ),
             Err(OverlayError::Stale)
         ));
     }

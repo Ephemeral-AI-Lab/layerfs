@@ -87,6 +87,8 @@ pub(crate) fn create(
     });
     let changes = Changes {
         open: None,
+        // The serial was reserved for this job: nothing holds a row of it.
+        created: Some(fresh.serial),
         detached: None,
         moved_directory: None,
         inodes: vec![inode.clone(), touched(&directory, now, true, false)?],
@@ -124,6 +126,7 @@ pub(crate) fn link(
     };
     let changes = Changes {
         open: None,
+        created: None,
         detached: None,
         moved_directory: None,
         inodes: vec![file.clone(), touched(&directory, now, true, false)?],

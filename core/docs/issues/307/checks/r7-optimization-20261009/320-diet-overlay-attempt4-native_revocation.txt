@@ -1,0 +1,10 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_revocation-fc8c86afe4e80996 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 1 test
+test revocation_retires_unreleased_handles_in_bounded_indexed_turns ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

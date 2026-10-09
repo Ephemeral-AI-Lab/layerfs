@@ -78,6 +78,14 @@ The windows bound one job; they are not totals. `Overlay::source_rows` gives the
 job consistent point reads: an inode's latest row, and for a name both its
 active row and its latest lower row.
 
+R7 update, 2026-10-09 (statement diet): `SourceRows::name` reads both rows
+of a name with one seek of the name's rows (`NAME_LAYERS`, newest first,
+at most two rows), and the compound job computes a name's inheritance once
+per name instead of once to decide the row and again to write it.
+`Changes::created` names the one serial a creating job reserved; it must be
+one of the job's live inode finals. See the
+[overlay note](19-daemon-overlay.md).
+
 R2 directory custody extension2026-10-08: a cross-parent directory rename also
 supplies `Changes::moved_directory`. The same transaction validates its final
 binding and updates the indexed retained native parent, if present, without

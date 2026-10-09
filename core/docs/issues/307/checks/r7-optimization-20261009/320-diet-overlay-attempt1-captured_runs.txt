@@ -1,0 +1,14 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/captured_runs-8a277034d9ba40d7 --test-threads=1  (cwd core/crates/layerfs-overlay)
+
+running 5 tests
+test absent_local_cells_are_inherited_and_wrong_size_retains_original_reader ... ok
+test interleaved_live_and_stale_cells_keep_each_seek_and_trimmed_start_once ... ok
+test masked_cells_and_shrink_regrow_match_independent_final_bytes_after_install ... ok
+test sparse_cutoff_gap_above_four_gib_avoids_payload_windows_and_pays_root_metadata ... ok
+test stale_metadata_has_bounded_continuations_and_monotone_seek_work ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

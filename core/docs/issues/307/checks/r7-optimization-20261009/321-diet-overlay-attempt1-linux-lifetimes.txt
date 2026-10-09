@@ -1,0 +1,12 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-overlay IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/lifetimes-e42cda054b91563c --test-threads=1 
+
+running 3 tests
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

@@ -4,6 +4,24 @@ use crate::{
     WorkspaceState,
 };
 
+/// The Workspace row in the column order of `state` and of every native fence.
+pub(crate) fn decode(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceState> {
+    let root: Vec<u8> = r.get(3)?;
+    let base_root = root.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?;
+    Ok(WorkspaceState {
+        active: Generation(r.get(0)?),
+        captured: r.get::<_, Option<i64>>(1)?.map(Generation),
+        captured_revision: r.get(8)?,
+        installed: r.get(7)?,
+        revision: r.get(2)?,
+        base_root,
+        dirty_inodes: unsigned(r, 4)?,
+        dirty_directory_entries: unsigned(r, 5)?,
+        closed: r.get::<_, i64>(6)? != 0,
+        base_readers: unsigned(r, 9)?,
+        consolidating: r.get::<_, Option<i64>>(10)?.map(Generation),
+    })
+}
 impl Overlay {
     /// Binds one complete root without opening another database or scanning it.
     /// Authority/root validation is performed by the Workspace/runtime caller.
@@ -39,23 +57,7 @@ impl Overlay {
              ,consolidating FROM workspace WHERE ns=?1 AND incarnation=?2",
             &[&route.ns, &route.incarnation.as_slice()],
             40,
-            |r| {
-                let root: Vec<u8> = r.get(3)?;
-                let base_root = root.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?;
-                Ok(WorkspaceState {
-                    active: Generation(r.get(0)?),
-                    captured: r.get::<_, Option<i64>>(1)?.map(Generation),
-                    captured_revision: r.get(8)?,
-                    installed: r.get(7)?,
-                    revision: r.get(2)?,
-                    base_root,
-                    dirty_inodes: unsigned(r, 4)?,
-                    dirty_directory_entries: unsigned(r, 5)?,
-                    closed: r.get::<_, i64>(6)? != 0,
-                    base_readers: unsigned(r, 9)?,
-                    consolidating: r.get::<_, Option<i64>>(10)?.map(Generation),
-                })
-            },
+            decode,
         )?
         .pop()
         .ok_or(OverlayError::Stale)

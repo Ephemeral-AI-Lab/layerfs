@@ -1,0 +1,12 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_directory-a2554d3c325012f1 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 3 tests
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test next_directory_read_observes_parent_moved_by_the_atomic_namespace_job ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

@@ -95,8 +95,21 @@ impl Overlay {
         handle: u64,
     ) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
-            let file = self.native_file(mount, serial, handle)?;
-            self.close_file_inner(file)
+            // The fence read this descriptor's row and the Workspace row;
+            // a closed Workspace still releases its descriptors.
+            let (state, writable) = self.native_fence(
+                mount,
+                serial,
+                super::native_visit::Held::File(handle),
+                false,
+            )?;
+            let file = OpenFile {
+                route: mount.route,
+                owner: handle,
+                serial,
+                writable,
+            };
+            self.close_held_file(file, &state)
         })
     }
 }

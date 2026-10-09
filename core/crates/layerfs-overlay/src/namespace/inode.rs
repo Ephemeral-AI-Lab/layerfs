@@ -2,8 +2,8 @@
 use crate::layers::Layer;
 use crate::{
     db::{integer, unsigned},
-    sql, Cell, DirectoryEntry, Generation, Inode, InodeKind, Overlay, OverlayError, OverlayResult,
-    Publication, Route, StatementKind, WorkspaceState,
+    sql, Cell, DirectoryEntry, Generation, Inode, InodeKind, NameLayers, Overlay, OverlayError,
+    OverlayResult, Publication, Route, StatementKind, WorkspaceState,
 };
 
 pub(crate) fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Inode> {
@@ -181,8 +181,45 @@ impl Overlay {
         )?;
         Ok((added && !orphan, layer))
     }
-    /// Binds or whiteouts one name at the active generation inside the caller's
-    /// transaction; true when the active generation gained a row.
+    /// The active row and the latest lower row of one name within
+    /// `(floor, top]`, in one seek of the name's rows.
+    pub(crate) fn name_layers(
+        &self,
+        ns: i64,
+        parent: i64,
+        name: &[u8],
+        top: i64,
+        floor: i64,
+    ) -> OverlayResult<NameLayers> {
+        let mut rows = self
+            .query(
+                StatementKind::DirectoryEntry,
+                sql::NAME_LAYERS,
+                &[&ns, &parent, &name, &top, &floor],
+                32 + name.len() as u64,
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        optional_serial(row.get(1)?, 1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                },
+            )?
+            .into_iter();
+        let (active, lower) = match rows.next() {
+            Some(row) if row.0 == top => (Some(row), rows.next()),
+            row => (None, row),
+        };
+        Ok(NameLayers {
+            active: active.map(|row| row.1),
+            active_inherited: active.map(|row| row.2),
+            lower: lower.map(|row| row.1),
+        })
+    }
+    /// Whether binding one name adds a row to the active generation, and
+    /// whether the view below that generation binds the name: an active row
+    /// has recorded it, a lower local row decides it, and otherwise the
+    /// caller's base fact does.
     pub(crate) fn name_inheritance(
         &self,
         state: &WorkspaceState,
@@ -191,29 +228,33 @@ impl Overlay {
         name: &[u8],
         base: bool,
     ) -> OverlayResult<(bool, bool)> {
-        let active = self
-            .query(
-                StatementKind::DirectoryEntry,
-                sql::DIRECTORY_ENTRY_ACTIVE,
-                &[&ns, &parent, &name, &state.active.0],
-                24 + name.len() as u64,
-                |r| r.get::<_, bool>(1),
-            )?
-            .pop();
-        if let Some(inherited) = active {
-            return Ok((false, inherited));
-        }
-        let lower = self
-            .query(
-                StatementKind::DirectoryEntry,
-                sql::DIRECTORY_ENTRY_LOOKUP,
-                &[&ns, &parent, &name, &(state.active.0 - 1), &state.installed],
-                32 + name.len() as u64,
-                |r| r.get::<_, Option<i64>>(0),
-            )?
-            .pop();
-        Ok((true, lower.map_or(base, |serial| serial.is_some())))
+        let layers = self.name_layers(ns, parent, name, state.active.0, state.installed)?;
+        Ok(match layers.active_inherited {
+            Some(inherited) => (false, inherited),
+            None => (true, layers.lower.map_or(base, |serial| serial.is_some())),
+        })
     }
+    /// Writes one name row at the active generation: a binding or a whiteout,
+    /// with the inheritance its job computed once.
+    pub(crate) fn bind_name(
+        &self,
+        ns: i64,
+        state: &WorkspaceState,
+        parent: i64,
+        name: &[u8],
+        target: Option<i64>,
+        inherited: bool,
+    ) -> OverlayResult<()> {
+        self.execute(
+            StatementKind::DirectoryEntry,
+            sql::DIRECTORY_ENTRY_PUT,
+            &[&ns, &parent, &name, &state.active.0, &target, &inherited],
+            33 + name.len() as u64,
+        )?;
+        Ok(())
+    }
+    /// Binds or whiteouts one name at the active generation inside the caller's
+    /// transaction; true when the active generation gained a row.
     pub(crate) fn put_directory_entry(
         &self,
         route: Route,
@@ -224,19 +265,7 @@ impl Overlay {
         base: bool,
     ) -> OverlayResult<bool> {
         let (added, inherited) = self.name_inheritance(state, route.ns, parent, name, base)?;
-        self.execute(
-            StatementKind::DirectoryEntry,
-            sql::DIRECTORY_ENTRY_PUT,
-            &[
-                &route.ns,
-                &parent,
-                &name,
-                &state.active.0,
-                &target,
-                &inherited,
-            ],
-            33 + name.len() as u64,
-        )?;
+        self.bind_name(route.ns, state, parent, name, target, inherited)?;
         Ok(added)
     }
     /// One reply-attempt ticket and revision for a whole atomic job.

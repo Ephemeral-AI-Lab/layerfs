@@ -1,0 +1,19 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-overlay IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/captured_namespace-48b24598b46c101b --test-threads=1 
+
+running 5 tests
+test inode_page_and_point_agree_and_a_folded_failed_capture_is_read_by_the_next_reader ... ok
+test later_active_rows_install_and_close_leave_reader_answers_until_exact_release ... ok
+test parent_cursor_and_name_point_answer_exactly_the_sealed_rows_of_each_parent ... ok
+test reader_name_and_symlink_jobs_seek_their_sealed_domain_while_the_active_generation_grows ... READER_NAMESPACE_PLAN ["parent-names: SEARCH directory_entry USING INDEX directory_entry_capture (ns=? AND gen=? AND parent=? AND name>?)", "name-point: SEARCH directory_entry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)"]
+READER_SYMLINK_PLAN ["layers: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "cell-window: SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)"]
+READER_NAMESPACE_WORK later_active_rows=128 cursor_vm=849 cursor_rows=64 point_vm=18 point_rows=1 absent_point_vm=15 absent_rows=0 symlink_layers_vm=29 symlink_cells_vm=28 job_total_vm=[896, 65, 62, 104] job_statements=[3, 3, 3, 4] fullscan=0 sorts=0 autoindex=0 reprepare=0
+READER_NAMESPACE_WORK later_active_rows=1024 cursor_vm=849 cursor_rows=64 point_vm=18 point_rows=1 absent_point_vm=15 absent_rows=0 symlink_layers_vm=29 symlink_cells_vm=28 job_total_vm=[896, 65, 62, 104] job_statements=[3, 3, 3, 4] fullscan=0 sorts=0 autoindex=0 reprepare=0
+READER_NAMESPACE_WORK later_active_rows=4096 cursor_vm=849 cursor_rows=64 point_vm=18 point_rows=1 absent_point_vm=15 absent_rows=0 symlink_layers_vm=29 symlink_cells_vm=28 job_total_vm=[896, 65, 62, 104] job_statements=[3, 3, 3, 4] fullscan=0 sorts=0 autoindex=0 reprepare=0
+ok
+test symlink_target_is_the_exact_local_bytes_of_a_live_symlink_or_missing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

@@ -133,6 +133,7 @@ pub(crate) fn rename(
     // row for anything beneath a moved directory.
     Ok(Some(Some(Changes {
         open: None,
+        created: None,
         detached: None,
         moved_directory: (moved.kind == InodeKind::Directory && !same)
             .then_some((moved.serial, action.new_parent)),

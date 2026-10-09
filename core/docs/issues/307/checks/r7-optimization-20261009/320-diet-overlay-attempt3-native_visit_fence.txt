@@ -1,0 +1,37 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 889488dfb, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_visit_fence-2501e5e8970fe9c1 --test-threads=1 --nocapture (cwd core/crates/layerfs-overlay)
+
+running 6 tests
+test a_closed_workspace_refuses_visits_and_still_releases_descriptors ... ok
+test a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole ... ok
+test a_descriptor_of_another_mount_or_inode_and_a_missing_reference_are_stale ... ok
+test a_read_only_descriptor_cannot_publish_and_begins_no_transaction ... ok
+test a_revoked_or_replaced_mount_is_stale_for_every_fenced_job ... ok
+test every_visit_statement_is_an_indexed_seek ... NATIVE_VISIT_PLANS [
+    "fence-lookup: SEARCH w USING INTEGER PRIMARY KEY (rowid=?)",
+    "fence-lookup: SEARCH m USING INTEGER PRIMARY KEY (rowid=?) LEFT-JOIN",
+    "fence-lookup: CORRELATED SCALAR SUBQUERY 1",
+    "fence-lookup: SEARCH l USING PRIMARY KEY (ns=? AND mount=? AND serial=?)",
+    "fence-file: SEARCH w USING INTEGER PRIMARY KEY (rowid=?)",
+    "fence-file: SEARCH m USING INTEGER PRIMARY KEY (rowid=?) LEFT-JOIN",
+    "fence-file: CORRELATED SCALAR SUBQUERY 1",
+    "fence-file: SEARCH f USING PRIMARY KEY (ns=? AND owner=?)",
+    "fence-file: SEARCH n USING PRIMARY KEY (ns=? AND mount=? AND owner=?)",
+    "fence-handle: SEARCH w USING INTEGER PRIMARY KEY (rowid=?)",
+    "fence-handle: SEARCH m USING INTEGER PRIMARY KEY (rowid=?) LEFT-JOIN",
+    "fence-handle: CORRELATED SCALAR SUBQUERY 1",
+    "fence-handle: SEARCH f USING PRIMARY KEY (ns=? AND owner=?)",
+    "fence-handle: SEARCH n USING PRIMARY KEY (ns=? AND mount=? AND owner=?)",
+    "fence-handle: CORRELATED SCALAR SUBQUERY 2",
+    "fence-handle: SEARCH d USING PRIMARY KEY (ns=? AND owner=?)",
+    "drop-open: SEARCH file_custody USING PRIMARY KEY (ns=? AND serial=?)",
+    "drop-lookup: SEARCH file_custody USING PRIMARY KEY (ns=? AND serial=?)",
+    "drop-reader: SEARCH file_custody USING PRIMARY KEY (ns=? AND serial=?)",
+    "open-and-lookup: vm-program opcodes=160 btree-cursors=5 btree-scan-opcodes=0",
+]
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

@@ -6,6 +6,35 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (statement diet, schema unchanged at 21): **a job
+reads a row once.** A native visit's fence is one statement
+(`FENCE_LOOKUP`, `FENCE_FILE`, `FENCE_HANDLE` in
+[`statements.rs`](../../crates/layerfs-overlay/src/database/statements.rs)):
+the Workspace row, its `native_mount` row and the kernel's own reference on
+the named inode, each reached by key, with the earlier outcomes (no row, a
+foreign or revoked mount or a missing reference is `Stale`; a closed
+Workspace is `Closed` first). The Workspace row it returns is the one the
+visit's evaluation, its `apply_checked` and the terminal-cleanup decision of
+a RELEASE use; none of them reads it again. The descriptor the fence read is
+not re-validated: only its access mode is checked, in memory. The active and
+the latest lower row of one name come from one seek (`NAME_LAYERS`), and a
+publication computes a name's inheritance once. A file-reference decrement
+returns the references that remain (`UPDATE ... RETURNING`), and the kernel
+lookup reference and descriptor of a created-and-opened file are one custody
+row write. `Changes::created` names the serial a job creates: its kernel
+lookup row is inserted without a read, and a row that already exists fails
+the whole job. The orphan-domain probe of an inode read runs only after this
+engine has attempted its first `INSERT INTO orphan` (`Overlay::orphan_seen`,
+set before that statement and never cleared; the database is never
+reopened, and a rolled-back insert leaves only a probe that finds nothing).
+Per created file the five request jobs now attempt 48 statements (61
+executions) instead of 88 (101), exact per job and family in
+[`native_visit_cost.rs`](../../crates/layerfs-workspace/tests/native_visit_cost.rs);
+plans are `Overlay::explain_native_visit` and the `name-layers` line of
+`explain_compound`. Not changed: transaction framing, the `lease` rows, the
+accounting triggers, the layer reads of `put_inode_domain` and the second
+evaluation of a visit that needed a resident base fact.
+
 R7 update, 2026-10-09 (overlay schema 21): **reply tickets are held in the
 engine's memory**, not in a `request` row
 ([`ReplyTickets`](../../crates/layerfs-overlay/src/lifetime/tickets.rs)). The

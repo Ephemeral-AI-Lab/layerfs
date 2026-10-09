@@ -676,6 +676,111 @@ fn a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source() 
 }
 
 #[test]
+fn a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing() {
+    let b = Bench::new("native-visit-read-only");
+    let mount = b.overlay.create_native_mount(b.route(), 1).unwrap();
+    // The root's objects become resident through the ordinary client.
+    VisitFacts::default()
+        .supply(
+            &b.workspace.base().unwrap(),
+            &[Need::Inode(1), Need::Name(1, name("opened"))],
+            None,
+        )
+        .unwrap();
+    let serial = b.workspace.next_serial(&b.allocator).unwrap();
+    let opened = mutate(
+        &b,
+        resident(&b),
+        NativeVisitRequest {
+            open: Some(false),
+            ..named(
+                mount,
+                1,
+                create(1, "opened"),
+                Some(serial),
+                T1,
+                &VisitFacts::default(),
+            )
+        },
+    );
+    let Ok(JobOutcome::Applied { publication, .. }) = opened.result else {
+        panic!("the file was not created: {opened:?}")
+    };
+    b.overlay.reply_attempted(publication).unwrap();
+    let file = opened.file.expect("the created file is open");
+    assert!(!file.writable());
+
+    // The visit's fence read this descriptor with its access mode. A write
+    // or a truncation through it is refused before anything is evaluated or
+    // written, exactly as the stored row refused it.
+    let through = |request, input| NativeVisitRequest {
+        mount,
+        request,
+        serial,
+        handle: Some(file.owner_id()),
+        input,
+        open: None,
+        now: T2,
+        fresh: None,
+        facts: Arc::new(VisitFacts::default()),
+    };
+    let before = snapshot(&b);
+    for input in [
+        NativeInput::Write {
+            offset: 0,
+            data: b"refused".as_slice().into(),
+            cached: false,
+        },
+        NativeInput::Write {
+            offset: 0,
+            data: b"refused".as_slice().into(),
+            cached: true,
+        },
+        NativeInput::Attributes {
+            mode: None,
+            mtime: None,
+            size: Some(3),
+        },
+    ] {
+        let outcome = mutate(&b, resident(&b), through(2, input));
+        assert!(
+            matches!(
+                outcome.result,
+                Err(WorkspaceError::Overlay(OverlayError::Invalid(
+                    "read-only descriptor"
+                )))
+            ),
+            "{outcome:?}"
+        );
+        assert_eq!(outcome.file, None);
+    }
+    assert_eq!(snapshot(&b), before);
+    assert_eq!(b.content(serial), b"");
+    // The descriptor still reads attributes and closes.
+    let stat = b
+        .workspace
+        .native_read_visit(
+            resident(&b),
+            mount,
+            serial,
+            Some(file.owner_id()),
+            NativeReadOperation::Getattr { serial },
+            Arc::new(VisitFacts::default()),
+        )
+        .unwrap()
+        .perform(&b.overlay);
+    assert!(matches!(
+        stat.decision,
+        Some(NativeReadDecision::Value(ref inode)) if inode.serial == serial
+    ));
+    b.overlay
+        .close_native_file(mount, serial, file.owner_id())
+        .unwrap();
+    b.overlay.forget_native(mount, serial, 1).unwrap();
+    b.overlay.revoke_native_mount(mount).unwrap();
+}
+
+#[test]
 fn a_resident_client_answers_only_from_memory_and_only_small_objects() {
     const LIMIT: usize = 64 * 1024;
     let f = common::fixture();
