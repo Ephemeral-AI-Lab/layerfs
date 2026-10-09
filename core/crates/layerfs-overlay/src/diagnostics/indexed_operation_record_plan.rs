@@ -85,6 +85,18 @@ impl Overlay {
                 namespace_params.as_slice(),
                 8,
             ),
+            (
+                "operation-cleanup-delete",
+                sql::INDEXED_OPERATION_RECORD_DELETE_OPERATION,
+                point.as_slice(),
+                64,
+            ),
+            (
+                "namespace-cleanup-delete",
+                sql::INDEXED_OPERATION_RECORD_DELETE_NAMESPACE,
+                point.as_slice(),
+                64,
+            ),
         ] {
             plans.extend(self.query(
                 StatementKind::Explain,

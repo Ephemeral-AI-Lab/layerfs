@@ -4,7 +4,7 @@ use crate::{OverlayCapturedRuns, OverlayOperationRecords};
 use layerfs_content::{ContentError, ContentResult, FileRun};
 use layerfs_overlay::{
     CapturedGap, CapturedReader, CapturedRunCursor, CapturedRunStep, InodeKind, LocalRead,
-    CELL_BYTES, MASK_BYTES,
+    RUN_BYTES,
 };
 
 enum Pending {
@@ -142,9 +142,9 @@ impl Scan {
                     if valid(next)
                         && read.offset == at
                         && !read.data.is_empty()
-                        && read.data.len() <= CELL_BYTES
-                        && read.data.capacity() <= CELL_BYTES
-                        && read.inherited.capacity() <= MASK_BYTES
+                        && read.data.len() <= RUN_BYTES
+                        && read.data.capacity() <= RUN_BYTES
+                        && read.inherited.capacity() <= RUN_BYTES / 8
                         && read.kind == InodeKind::File
                         && read.size == self.size
                         && read.base_root == Some(self.reader.root())

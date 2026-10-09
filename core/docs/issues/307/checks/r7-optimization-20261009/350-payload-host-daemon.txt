@@ -1,0 +1,16 @@
+captured_commit-c468159080794d7a exit=0 seconds=15 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.21s
+captured_namespace-e5b58a877c39c78b exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+captured_runs-46f1d8c9926e66aa exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+cleanup_control-77ab369a54fc49db exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+construction_cursor-4e15dcfbcb2391a6 exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+device_capacity-a6d3fe900b7eb2fe exit=0 seconds=0 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+edit_backing-2bee8b6565d25697 exit=0 seconds=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+filesystem_port-9a367c3ce80975d4 exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+job_cost-6806228384655850 exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+native_jobs-80237cf905513ccf exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+owner-dff6c9b96cdb7d0c exit=0 seconds=0 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+product_commit-83014499aa024abb exit=0 seconds=4 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.69s
+product_commit_cost-d529d07479e9d877 exit=0 seconds=5 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.65s
+read_cost-106cc8ee0ca7784d exit=0 seconds=0 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+resources_observation-cfff9454e2fa8457 exit=0 seconds=1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+visit_port-80e4d2704ca0c1cc exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s

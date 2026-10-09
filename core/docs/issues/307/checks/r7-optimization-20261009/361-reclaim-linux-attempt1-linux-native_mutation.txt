@@ -1,0 +1,11 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 95a9ddde0, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/native_mutation-c38a1a719dd23650 --test-threads=1 
+
+running 2 tests
+test namespace_mutations_are_visible_at_once_and_refusals_stay_refused ... ok
+test write_append_and_truncate_are_exact_in_cache_and_daemon ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

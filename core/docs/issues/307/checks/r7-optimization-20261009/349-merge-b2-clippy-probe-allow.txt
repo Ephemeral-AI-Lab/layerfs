@@ -1,0 +1,9 @@
+# Probe, not the committed tree: the merged tree with one line added above
+# core/crates/layerfs-overlay/src/namespace/job_rows.rs:20, #[allow(clippy::type_complexity)],
+# then removed again (the file is byte-identical to main's). Same command as 349-merge-b2-clippy.txt.
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.00s
+R4_WALL seconds<=11 limit=560s lock_wait=0s

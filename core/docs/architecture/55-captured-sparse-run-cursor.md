@@ -5,6 +5,13 @@
 > in the [component checkpoint](../issues/307/SPARSE-SERIAL-PROGRESS-20261007.md). This supplies retained local input
 > discovery, not captured edit normalization, Save/history/install or S10.
 
+R7 update, 2026-10-09 (schema 26): a metadata row may be a dense row of
+several cells (at most `RUN_BYTES`, inside one aligned slot). A probe starts
+at the slot of its position, its seek passes over rows that end before the
+cursor's cell, the next seek starts at the row's end, and a window ends with
+the widest row that holds its first byte, so its length and mask are bounded
+by `RUN_BYTES` and `RUN_BYTES/8` instead of one cell.
+
 `CapturedRunCursor` retains the exact engine-minted CapturedReader, serial,
 checked caller-supplied logical size, current position and fixed per-layer
 metadata lookahead. It acquires/releases no reader or operation. When a local

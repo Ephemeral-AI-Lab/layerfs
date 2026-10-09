@@ -36,7 +36,7 @@ fn collect(db: &Overlay, mut cursor: CapturedRunCursor, base: &[u8]) -> (Vec<u8>
                 cursor = next;
             }
             CapturedRunStep::Window { read, next } => {
-                assert!(read.data.len() <= CELL_BYTES);
+                assert!(read.data.len() <= RUN_BYTES);
                 assert_eq!(read.offset, cursor.offset());
                 assert_eq!(read.base_root, Some(cursor.reader().root()));
                 assert_eq!(next.reader(), cursor.reader());
@@ -262,5 +262,65 @@ fn interleaved_live_and_stale_cells_keep_each_seek_and_trimmed_start_once() {
     let (bytes, work) = collect(&db, cursor, &[]);
     assert_eq!(bytes, file.expect[offset..]);
     assert_eq!((work.metadata_rows, work.stale_rows), (19, 9));
+    db.release_captured_reader(reader).unwrap();
+}
+
+#[test]
+fn a_row_of_several_cells_is_one_metadata_row_and_one_window() {
+    let temp = Temp::new();
+    let db = temp.db();
+    let route = db.open_workspace([149; 32], [150; 32]).unwrap();
+    let source = db.acquire_base_source(route, 1).unwrap();
+    let mut file = File::new(&db, source, 23, Vec::new());
+    // Four rows of 32 KiB in the sealed generation.
+    file.write(0, &pattern(WRITE_WINDOW, 7));
+    db.release_base_source(source).unwrap();
+    let capture = db.capture(route).unwrap();
+    let reader = db.acquire_captured_reader(capture, 1).unwrap();
+    let size = WRITE_WINDOW as u64;
+    let windows = |from: u64| {
+        let mut cursor = CapturedRunCursor::new(reader, 23, from, size).unwrap();
+        let (mut seen, mut rows) = (Vec::new(), 0);
+        for _ in 0..64 {
+            let reply = db.captured_run_step(cursor).unwrap();
+            rows += reply.work.metadata_rows;
+            match reply.step {
+                CapturedRunStep::End => return (seen, rows),
+                CapturedRunStep::Continue(next) => cursor = next,
+                CapturedRunStep::Gap { .. } => panic!("no gap in a dense file"),
+                CapturedRunStep::Window { read, next } => {
+                    let at = read.offset as usize;
+                    assert_eq!(read.data, file.expect[at..at + read.data.len()]);
+                    assert!(read.inherited.is_empty());
+                    seen.push((read.offset, read.data.len()));
+                    cursor = next;
+                }
+            }
+        }
+        panic!("cursor did not finish");
+    };
+    // From the start: each row is found once and returned once, whole.
+    let run = RUN_BYTES as u64;
+    assert_eq!(
+        windows(0),
+        (
+            (0..4).map(|row| (row * run, RUN_BYTES)).collect::<Vec<_>>(),
+            4
+        )
+    );
+    // From inside a row: the row that holds the first byte starts before
+    // it and is still found by one seek; the window ends with the row.
+    let from = run + 3 * CELL_BYTES as u64 + 17;
+    assert_eq!(
+        windows(from),
+        (
+            vec![
+                (from, (2 * run - from) as usize),
+                (2 * run, RUN_BYTES),
+                (3 * run, RUN_BYTES)
+            ],
+            3
+        )
+    );
     db.release_captured_reader(reader).unwrap();
 }

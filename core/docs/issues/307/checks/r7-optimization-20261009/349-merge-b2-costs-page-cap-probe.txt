@@ -1,0 +1,56 @@
+# Probe, not the committed tree: tests/costs.rs failed_atomic_job_... run with a temporary loop over
+# max_pages 60..109 in the merged tree (loop removed again). create fails up to 62, the 128 KiB
+# mutation fails with SQLITE_FULL from 63 to 94 and fits from 95.
+PROBE pages=60 create=ERR
+PROBE pages=61 create=ERR
+PROBE pages=62 create=ERR
+PROBE pages=63 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=64 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=65 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=66 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=67 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=68 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=69 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=70 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=71 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=72 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=73 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=74 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=75 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=76 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=77 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=78 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=79 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=80 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=81 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=82 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=83 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=84 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=85 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=86 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=87 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=88 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=89 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=90 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=91 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=92 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=93 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=94 write=ERR Sql(SqliteFailure(Error { code: DiskFull, ext
+PROBE pages=95 write=OK
+PROBE pages=96 write=OK
+PROBE pages=97 write=OK
+PROBE pages=98 write=OK
+PROBE pages=99 write=OK
+PROBE pages=100 write=OK
+PROBE pages=101 write=OK
+PROBE pages=102 write=OK
+PROBE pages=103 write=OK
+PROBE pages=104 write=OK
+PROBE pages=105 write=OK
+PROBE pages=106 write=OK
+PROBE pages=107 write=OK
+PROBE pages=108 write=OK
+PROBE pages=109 write=OK
+# Schema pages at 4 KiB (python sqlite3 3.51.2, schema.sql + accounting.sql): base 36e2ec328 68,
+# main a5effb708 65, r7-batch2 67, merged 63. Payload table pages of 131072 bytes: 32 rows of
+# 4096 = 36, 4 rows of 32768 = 32. main 65+36=101, branch 67+32=99, merged 63+32=95.

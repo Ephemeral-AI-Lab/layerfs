@@ -1,5 +1,5 @@
 //! Fixed retained-input cursor; no backing rows or ownership acquisition.
-use crate::{CapturedReader, LocalRead, OverlayError, OverlayResult, CELL_BYTES};
+use crate::{CapturedReader, LocalRead, OverlayError, OverlayResult, RUN_BYTES};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CellMetadata {
@@ -39,7 +39,8 @@ impl CapturedRunCursor {
         if serial == 0 || offset > logical_size {
             return Err(OverlayError::Invalid("captured run input"));
         }
-        let after = offset - offset % CELL_BYTES as u64;
+        // A row that holds the first byte starts no earlier than its slot.
+        let after = offset - offset % RUN_BYTES as u64;
         Ok(Self {
             reader,
             serial,
@@ -103,7 +104,7 @@ impl CapturedRunCursor {
     }
     pub(crate) fn advance(mut self, to: u64) -> Self {
         self.at = to;
-        let floor = to - to % CELL_BYTES as u64;
+        let floor = to - to % RUN_BYTES as u64;
         for probe in &mut self.probes {
             if probe
                 .cell

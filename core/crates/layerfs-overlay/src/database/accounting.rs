@@ -30,6 +30,8 @@ pub struct Resources {
     /// Declared logical bytes/metadata upper bound, not exclusive physical debt.
     pub debt_upper_bytes: u64,
 }
+const COUNTS: &str = "SELECT namespaces,inode_rows,directory_entry_rows,payload_cells,payload_bytes,shrink_rows,operation_record_rows,operation_record_bytes,orphan_rows,owner_rows,source_rows,owner_details,retire_targets,maintenance_targets,ready_targets,wait_refs FROM accounting WHERE ns=?1";
+const TOTALS: &str = "SELECT ifnull(sum(namespaces),0),ifnull(sum(inode_rows),0),ifnull(sum(directory_entry_rows),0),ifnull(sum(payload_cells),0),ifnull(sum(payload_bytes),0),ifnull(sum(shrink_rows),0),ifnull(sum(operation_record_rows),0),ifnull(sum(operation_record_bytes),0),ifnull(sum(orphan_rows),0),ifnull(sum(owner_rows),0),ifnull(sum(source_rows),0),ifnull(sum(owner_details),0),ifnull(sum(retire_targets),0),ifnull(sum(maintenance_targets),0),ifnull(sum(ready_targets),0),ifnull(sum(wait_refs),0) FROM accounting WHERE ns>?1";
 impl Overlay {
     /// None is the daemon aggregate; a route reads one namespace's exact counts.
     /// Page/file observations remain shared and never imply exclusive attribution.
@@ -41,27 +43,38 @@ impl Overlay {
         } else {
             0
         };
-        let counts=self.query(StatementKind::Startup,
-            "SELECT namespaces,inode_rows,directory_entry_rows,payload_cells,payload_bytes,shrink_rows,operation_record_rows,operation_record_bytes,orphan_rows,owner_rows,source_rows,owner_details,retire_targets,maintenance_targets,ready_targets,wait_refs FROM accounting WHERE ns=?1",&[&ns],8,
-            |r|Ok(StoredCounts {
-                wait_refs:unsigned(r,15)?,
-                namespaces:unsigned(r,0)?,
-                inode_rows:unsigned(r,1)?,
-                directory_entry_rows:unsigned(r,2)?,
-                payload_cells:unsigned(r,3)?,
-                payload_bytes:unsigned(r,4)?,
-                shrink_rows:unsigned(r,5)?,
-                operation_record_rows:unsigned(r,6)?,
-                operation_record_bytes:unsigned(r,7)?,
-                orphan_rows:unsigned(r,8)?,
-                owner_rows:unsigned(r,9)?,
-                source_rows:unsigned(r,10)?,
-                owner_details:unsigned(r,11)?,
-                reply_tickets:0,
-                retire_targets:unsigned(r,12)?,
-                maintenance_targets:unsigned(r,13)?,
-                ready_targets:unsigned(r,14)?,
-            }))?.pop().unwrap_or_default();
+        // The triggers write each namespace's own row. The aggregate is the
+        // sum of those rows, one per namespace the engine still holds.
+        let counts = self
+            .query(
+                StatementKind::Startup,
+                if route.is_some() { COUNTS } else { TOTALS },
+                &[&ns],
+                8,
+                |r| {
+                    Ok(StoredCounts {
+                        wait_refs: unsigned(r, 15)?,
+                        namespaces: unsigned(r, 0)?,
+                        inode_rows: unsigned(r, 1)?,
+                        directory_entry_rows: unsigned(r, 2)?,
+                        payload_cells: unsigned(r, 3)?,
+                        payload_bytes: unsigned(r, 4)?,
+                        shrink_rows: unsigned(r, 5)?,
+                        operation_record_rows: unsigned(r, 6)?,
+                        operation_record_bytes: unsigned(r, 7)?,
+                        orphan_rows: unsigned(r, 8)?,
+                        owner_rows: unsigned(r, 9)?,
+                        source_rows: unsigned(r, 10)?,
+                        owner_details: unsigned(r, 11)?,
+                        reply_tickets: 0,
+                        retire_targets: unsigned(r, 12)?,
+                        maintenance_targets: unsigned(r, 13)?,
+                        ready_targets: unsigned(r, 14)?,
+                    })
+                },
+            )?
+            .pop()
+            .unwrap_or_default();
         // Reply tickets are held in the engine's memory, not in a row.
         let counts = StoredCounts {
             reply_tickets: self.tickets.count(route.map(|route| route.namespace())),
@@ -100,7 +113,16 @@ impl Overlay {
         })
     }
     pub fn explain_accounting(&self) -> OverlayResult<Vec<String>> {
-        self.query(StatementKind::Explain,"EXPLAIN QUERY PLAN SELECT payload_cells,payload_bytes,maintenance_targets FROM accounting WHERE ns=?1",
-            &[&0_i64],8,|r|r.get(3))
+        let mut plans = Vec::new();
+        for statement in [COUNTS, TOTALS] {
+            plans.extend(self.query(
+                StatementKind::Explain,
+                &format!("EXPLAIN QUERY PLAN {statement}"),
+                &[&0_i64],
+                8,
+                |r| r.get(3),
+            )?);
+        }
+        Ok(plans)
     }
 }

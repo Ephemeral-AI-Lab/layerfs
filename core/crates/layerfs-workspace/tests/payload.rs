@@ -296,3 +296,80 @@ fn truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install() 
     assert_eq!(b.content(2), b"oriGINal\0\xff");
     assert_eq!(b.lookup(1, "alias").unwrap().kind, InodeKind::RegularFile);
 }
+
+/// Incompressible bytes: a 64-bit xorshift stream.
+fn noise(length: usize, seed: u64) -> Vec<u8> {
+    let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+    (0..length)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 24) as u8
+        })
+        .collect()
+}
+
+#[test]
+fn whole_windows_overwrites_and_cuts_inside_them_read_back_exactly() {
+    let b = Bench::with_cache("payload-windows", 0);
+    let mut expect = b.fixture.bytes.clone();
+    let window = noise(WRITE_WINDOW, 1);
+    let put_at = |b: &Bench, expect: &mut Vec<u8>, offset: usize, data: &[u8]| {
+        b.applied(write(LARGE, offset as u64, data), T1);
+        put(expect, offset, data);
+    };
+    // Windows over inherited bytes, aligned and straddling every boundary.
+    put_at(&b, &mut expect, 0, &window);
+    put_at(&b, &mut expect, 131_072, &window[..100_000]);
+    put_at(&b, &mut expect, 100_001, &noise(WRITE_WINDOW, 2));
+    assert_eq!(b.content(LARGE), expect);
+    // Overwrites inside one window: a cell, one byte at a cell boundary, a
+    // span across 32 KiB and 64 KiB boundaries.
+    put_at(&b, &mut expect, 8_192, &noise(4_096, 3));
+    put_at(&b, &mut expect, 12_288, &[0xA7]);
+    put_at(&b, &mut expect, 28_672, &noise(12_288, 4));
+    put_at(&b, &mut expect, 65_534, &noise(5, 5));
+    assert_eq!(b.content(LARGE), expect);
+    for (to, back) in [(20_000, 70_000), (16_384, 40_000), (32_768, 300_000)] {
+        put_at(&b, &mut expect, 0, &window);
+        b.applied(resize(LARGE, to as u64), T2);
+        expect.truncate(to);
+        assert_eq!(b.content(LARGE), expect);
+        b.applied(resize(LARGE, back as u64), T2);
+        expect.resize(back, 0);
+        assert_eq!(b.content(LARGE), expect);
+        put_at(&b, &mut expect, to + 3, &noise(9_000, 6));
+        assert_eq!(b.content(LARGE), expect);
+    }
+    // The same over a sealed generation.
+    let capture = b.overlay.capture(b.route()).unwrap();
+    let sealed = expect.clone();
+    put_at(&b, &mut expect, 40_960, &noise(4_096, 7));
+    put_at(&b, &mut expect, 70_001, &noise(40_000, 8));
+    b.applied(resize(LARGE, 50_000), T2);
+    expect.truncate(50_000);
+    put_at(&b, &mut expect, 60_000, &noise(70_000, 9));
+    assert_eq!(b.content(LARGE), expect);
+    let mut offset = 0;
+    while offset < sealed.len() {
+        let local = b
+            .overlay
+            .captured_read(capture, LARGE, offset as u64, READ_WINDOW as u32)
+            .unwrap()
+            .unwrap();
+        for (slot, byte) in local.data.iter().enumerate() {
+            let inherit = local
+                .inherited
+                .get(slot / 8)
+                .is_some_and(|bits| bits & (1 << (slot % 8)) != 0);
+            let got = if inherit {
+                b.fixture.bytes[offset + slot]
+            } else {
+                *byte
+            };
+            assert_eq!(got, sealed[offset + slot], "sealed byte {}", offset + slot);
+        }
+        offset += local.data.len();
+    }
+}

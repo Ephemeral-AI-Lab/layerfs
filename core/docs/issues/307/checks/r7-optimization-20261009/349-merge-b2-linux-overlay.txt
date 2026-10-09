@@ -1,0 +1,3 @@
+costs-893e557d5aed5d1d exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+payload_runs-c01a6433ae31582c exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+reclaim_cost-e2861e95ba8b543a exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s

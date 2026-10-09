@@ -1,12 +1,9 @@
 //! Definite failure resolution and bounded cell/name transfer into active state.
 use crate::{
-    cells::Window,
     db::integer,
     inode,
-    layers::Layer,
     maintenance::{Item, FOLD, RETIRE},
     sql, Capture, Generation, Overlay, OverlayError, OverlayResult, Route, StatementKind,
-    CELL_BYTES,
 };
 
 impl Overlay {
@@ -213,17 +210,19 @@ impl Overlay {
             )?
             .pop();
         if let Some(cell) = cell {
+            // One row a step: it moves, or its effective bytes are merged
+            // below the active ones, and it leaves the folded layer.
             let bytes = if top.nlink == 0 {
+                self.execute(
+                    StatementKind::Reclaim,
+                    sql::CELL_DROP,
+                    &[&item.ns, &serial, &item.target, &cell],
+                    32,
+                )?;
                 0
             } else {
-                self.compose_cell(item.ns, serial, bottom, &top, cell)?
+                self.transfer_row(item.ns, serial, bottom, &top, cell)?
             };
-            self.execute(
-                StatementKind::Reclaim,
-                sql::CELL_DROP,
-                &[&item.ns, &serial, &item.target, &cell],
-                32,
-            )?;
             self.advance_item(item, 1, serial, cell, &[])?;
             return Ok((1, bytes, false));
         }
@@ -242,56 +241,5 @@ impl Overlay {
         )?;
         self.advance_item(item, 1, serial, -1, &[])?;
         Ok((1, 0, false))
-    }
-    /// Copies only effective lower bytes into unwritten upper positions. This
-    /// runs atomically with the caller's source/reference advance; upper shrink
-    /// and write stamps are re-read each turn, never saved in a work item.
-    pub(crate) fn compose_cell(
-        &self,
-        ns: i64,
-        serial: i64,
-        lower: &Layer,
-        upper: &Layer,
-        cell: i64,
-    ) -> OverlayResult<u64> {
-        let Some(old) = self.stored(ns, serial, lower.gen, cell)? else {
-            return Ok(0);
-        };
-        if self.stale(ns, serial, lower, cell, old.epoch)? {
-            return Ok(0);
-        };
-        let mut window = match self.stored(ns, serial, upper.gen, cell)? {
-            Some(current) if !self.stale(ns, serial, upper, cell, current.epoch)? => {
-                current.expand(&self.payload_work)?
-            }
-            _ => Window::empty(&self.payload_work),
-        };
-        let end = old.data.len().min(
-            lower
-                .size
-                .min(upper.cutoff)
-                .saturating_sub(cell as u64)
-                .min(CELL_BYTES as u64) as usize,
-        );
-        let mut copied = 0_u64;
-        for at in 0..end {
-            if old.valid(at) && window.mask[at / 8] & (1 << (at % 8)) == 0 {
-                window.data[at] = old.data[at];
-                copied += 1;
-                window.set(at, at + 1);
-            }
-        }
-        let mut observed = self.payload_work.get();
-        observed.cell_copy_bytes = observed.cell_copy_bytes.saturating_add(copied);
-        self.payload_work.set(observed);
-        self.store(
-            ns,
-            serial,
-            upper.gen,
-            cell,
-            upper.epoch,
-            window.trim(&self.payload_work),
-        )?;
-        Ok(end as u64)
     }
 }

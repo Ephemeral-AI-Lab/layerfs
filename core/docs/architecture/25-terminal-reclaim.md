@@ -12,6 +12,32 @@ terminal maintenance. Subsequent [live composition](32-live-composition.md) and
 cleanup and repeated definite-failure composition. Physical headroom admission
 and complete S6/S8 exits remain open.
 
+R7 update, 2026-10-09 (reclamation by key range, decision U4). Implemented:
+a step of a closed namespace reads one page of one terminal table in
+primary-key order and deletes it with ONE statement,
+`DELETE ... WHERE ns=?1 AND (key columns)<=(last key of the page)`, in place
+of one delete per row. The pages keep their bounds: 64 rows for every
+metadata table, the 65,536-byte value window for operation records, and for
+payload one maintenance page of 14 cells of bytes (a row of several cells
+counts as its cells, so one 32 KiB row is a step while the next row is
+another). The payload page and delete use the unique key
+`(ns,serial,gen,cell_offset)`; `payload_namespace_row` has no reader left and
+is kept in this change. A table that holds nothing for the namespace is
+passed in the same step: a step deletes one page of the first table that
+still holds rows, or the final ready and workspace rows, so an empty table
+costs one page read and no transaction of its own (at most 12 empty page
+reads in a step). Indexed operation records are deleted the same way, also
+after an operation's last owner releases. Each further step is three
+statements whatever its rows: the ready queue, the page, the delete.
+Exact counts at two sizes beside a live namespace are in
+[`reclaim_cost.rs`](../../crates/layerfs-overlay/tests/reclaim_cost.rs).
+Since overlay schema 28 the payload delete trigger accounts from the
+stored lengths and the delete does not load the row's bytes
+([daemon overlay](19-daemon-overlay.md)).
+The paragraphs below that describe a delete per row and "Actual
+ready/payload SQL explicitly uses them" for `payload_namespace_row` are
+historical.
+
 [Close](../../crates/layerfs-overlay/src/lifetime/close.rs) revokes new mutations/acquisitions
 in one short transaction. Existing exact releases, published reply-send-attempt
 tickets and already allocated captures remain owned. Closed captures stay readable;

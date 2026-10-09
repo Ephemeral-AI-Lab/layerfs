@@ -4,17 +4,22 @@ use crate::{
     db::integer,
     layers::Layer,
     sql, BaseSource, Capture, InodeKind, LocalRead, Overlay, OverlayError, OverlayResult,
-    StatementKind, CELL_BYTES, READ_WINDOW,
+    StatementKind, CELL_BYTES, READ_WINDOW, RUN_BYTES,
 };
+use rusqlite::blob::Blob;
 
 const CELL: u64 = CELL_BYTES as u64;
+const RUN: u64 = RUN_BYTES as u64;
 
 impl Overlay {
     /// Writes `bytes` at `offset` into one layer inside the caller's
-    /// transaction. Each intersecting cell is handled alone: a fully covered
-    /// cell is one upsert with no read, a partly covered one is one point read,
-    /// an in-memory merge of at most one cell, and one upsert. Prior
-    /// fragmentation of the range does not change the work.
+    /// transaction. Whole cells are written one aligned slot of `RUN_BYTES`
+    /// at a time: one read of the row shapes of that slot, then the bytes
+    /// replace a live dense row in place or become one new row bound from
+    /// the caller's slice. A partly covered cell is one point read and
+    /// either an in-place write into a wide row or a merge of at most one
+    /// cell and one upsert. Prior fragmentation of the range does not
+    /// enlarge the work.
     pub(crate) fn write_cells(
         &self,
         ns: i64,
@@ -32,37 +37,151 @@ impl Overlay {
             .write_input_bytes
             .saturating_add(bytes.len() as u64);
         self.payload_work.set(observed);
-        let mut cell = offset - offset % CELL;
-        while cell < end {
-            let from = offset.max(cell);
-            let to = end.min(cell + CELL);
-            let source = &bytes[(from - offset) as usize..(to - offset) as usize];
-            let (low, high) = ((from - cell) as usize, (to - cell) as usize);
-            let key = cell as i64;
+        // One handle serves every in-place write of this window. A commit
+        // needs it closed, so it never outlives this call.
+        let mut blob = None;
+        let mut at = offset;
+        while at < end {
+            let cell = at - at % CELL;
+            let whole = at == cell && end - at >= CELL;
+            let to = if whole {
+                let stop = end.min(cell - cell % RUN + RUN);
+                stop - stop % CELL
+            } else {
+                end.min(cell + CELL)
+            };
+            let source = &bytes[(at - offset) as usize..(to - offset) as usize];
             let mut observed = self.payload_work.get();
-            observed.write_cells = observed.write_cells.saturating_add(1);
-            observed.cell_copy_bytes = observed.cell_copy_bytes.saturating_add(source.len() as u64);
+            observed.write_cells = observed
+                .write_cells
+                .saturating_add((to - cell).div_ceil(CELL));
             observed.partial_write_cells = observed
                 .partial_write_cells
-                .saturating_add(u64::from(low != 0 || high != CELL_BYTES));
+                .saturating_add(u64::from(!whole));
             self.payload_work.set(observed);
-            let stored = if low == 0 && high == CELL_BYTES {
-                Some((source.to_vec(), None))
+            if whole {
+                self.write_whole(ns, serial, layer, at as i64, source, &mut blob)?;
             } else {
-                let mut window = match self.stored(ns, serial, layer.gen, key)? {
-                    Some(old) if !self.stale(ns, serial, layer, key, old.epoch)? => {
-                        old.expand(&self.payload_work)?
-                    }
-                    _ => Window::empty(&self.payload_work),
-                };
-                window.data[low..high].copy_from_slice(source);
-                window.set(low, high);
-                window.trim(&self.payload_work)
-            };
-            self.store(ns, serial, layer.gen, key, layer.epoch, stored)?;
-            cell += CELL;
+                let low = (at - cell) as usize;
+                self.write_part(ns, serial, layer, cell as i64, low, source, &mut blob)?;
+            }
+            at = to;
         }
+        match blob {
+            Some(open) => open.close().map_err(|cause| self.failed(cause.into())),
+            None => Ok(()),
+        }
+    }
+    /// Whole cells `[from, from + source.len())` inside one slot.
+    fn write_whole<'a>(
+        &'a self,
+        ns: i64,
+        serial: i64,
+        layer: &Layer,
+        from: i64,
+        source: &[u8],
+        blob: &mut Option<Blob<'a>>,
+    ) -> OverlayResult<()> {
+        let to = from + source.len() as i64;
+        let part = |low: i64, high: i64| &source[(low - from) as usize..(high - from) as usize];
+        let (mut low, mut high) = (from, to);
+        // Rows that start inside the range, and the one that is exactly it.
+        let (mut inside, mut same) = (0, None);
+        for shape in self.shapes(ns, serial, layer.gen, from, to)? {
+            let live = !self.stale(ns, serial, layer, shape.offset, shape.epoch)?;
+            if shape.offset < from {
+                // Only a wide row reaches a later cell. A stale one is
+                // garbage in the way; a live one takes its part in place.
+                if live {
+                    low = shape.end().min(to);
+                    self.write_in_place(blob, shape.row, from - shape.offset, part(from, low))?;
+                } else {
+                    self.drop_row(shape.row)?;
+                }
+            } else if live && shape.wide() && shape.end() > to {
+                high = shape.offset;
+                self.write_in_place(blob, shape.row, 0, part(high, to))?;
+            } else {
+                inside += 1;
+                same = (live && !shape.masked).then_some(shape);
+            }
+        }
+        if low >= high {
+            return Ok(());
+        }
+        if let Some(shape) =
+            same.filter(|shape| inside == 1 && shape.offset == low && shape.length == high - low)
+        {
+            return self.write_in_place(blob, shape.row, 0, part(low, high));
+        }
+        if inside != 0 {
+            self.execute(
+                StatementKind::Payload,
+                sql::CELLS_DROP,
+                &[&ns, &serial, &layer.gen, &low, &high],
+                40,
+            )?;
+        }
+        self.execute(
+            StatementKind::Payload,
+            sql::CELL_PUT,
+            &[
+                &ns,
+                &serial,
+                &layer.gen,
+                &low,
+                &layer.epoch,
+                &part(low, high),
+                &None::<Vec<u8>>,
+            ],
+            40 + (high - low) as u64,
+        )?;
         Ok(())
+    }
+    /// Bytes `[low, low + source.len())` of one partly covered cell.
+    #[allow(clippy::too_many_arguments)]
+    fn write_part<'a>(
+        &'a self,
+        ns: i64,
+        serial: i64,
+        layer: &Layer,
+        cell: i64,
+        low: usize,
+        source: &[u8],
+        blob: &mut Option<Blob<'a>>,
+    ) -> OverlayResult<()> {
+        let mut old = None;
+        if let Some((shape, stored)) = self.covering(ns, serial, layer.gen, cell)? {
+            let live = !self.stale(ns, serial, layer, shape.offset, shape.epoch)?;
+            if shape.wide() {
+                if live {
+                    let at = cell - shape.offset + low as i64;
+                    return self.write_in_place(blob, shape.row, at, source);
+                }
+                // The upsert replaces a row of one cell, not a wider one.
+                self.drop_row(shape.row)?;
+            } else if live {
+                old = stored;
+            }
+        }
+        let mut window = match old {
+            Some(old) => old.expand(&self.payload_work)?,
+            None => Window::empty(&self.payload_work),
+        };
+        let high = low + source.len();
+        window.data[low..high].copy_from_slice(source);
+        window.set(low, high);
+        let mut observed = self.payload_work.get();
+        observed.cell_copy_bytes = observed.cell_copy_bytes.saturating_add(source.len() as u64);
+        self.payload_work.set(observed);
+        self.store(
+            ns,
+            serial,
+            layer.gen,
+            cell,
+            layer.epoch,
+            window.trim(&self.payload_work),
+        )
     }
     /// Local layers of one window over an owned source, composed in this one
     /// owner job. None means no local row: the file is entirely inherited.
@@ -194,10 +313,11 @@ impl Overlay {
                     &ns,
                     &serial,
                     &layer.gen,
-                    &((start - start % CELL) as i64),
+                    &((start - start % RUN) as i64),
                     &(end as i64),
+                    &(start as i64),
                 ],
-                40,
+                48,
                 |row| Ok((row.get::<_, i64>(0)?, Stored::decode(row, 1)?)),
             )?;
             for (cell, stored) in rows {
@@ -264,13 +384,27 @@ impl Overlay {
                 sql::LAYER_LOWER,
                 vec![&ns, &one, &gen, &floor],
             ),
-            ("cell", sql::CELL_LOOKUP, vec![&ns, &one, &gen, &one]),
+            ("cell", sql::CELL_COVER, vec![&ns, &one, &gen, &one, &one]),
+            (
+                "shapes",
+                sql::CELL_SHAPES,
+                vec![&ns, &one, &gen, &one, &one],
+            ),
             (
                 "cell-window",
                 sql::CELL_RANGE,
-                vec![&ns, &one, &gen, &one, &one],
+                vec![&ns, &one, &gen, &one, &one, &one],
             ),
             ("drop-cell", sql::CELL_DROP, vec![&ns, &one, &gen, &one]),
+            (
+                "drop-cells",
+                sql::CELLS_DROP,
+                vec![&ns, &one, &gen, &one, &one],
+            ),
+            ("drop-row", sql::ROW_DROP, vec![&one]),
+            ("cut-row", sql::ROW_KEEP, vec![&one, &one]),
+            ("move-row", sql::ROW_MOVE, vec![&one, &one, &one]),
+            ("row-cell", sql::ROW_SLICE, vec![&one, &one, &one]),
             ("step", sql::STEP_GET, vec![&ns, &one, &gen, &one]),
         ] {
             plans.extend(self.query(

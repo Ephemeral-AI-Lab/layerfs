@@ -3,6 +3,13 @@
 > **Status:** Current general guide. Implemented S5 work after `f5558fc22`;
 > release, native FUSE and integrated Commit qualification remain separate.
 
+R7 update, 2026-10-09 (schema 26): a payload row may hold several whole
+cells, up to 32 KiB inside one aligned slot. Whole cells of a write become
+or overwrite such rows, a shrink cuts the row that holds its boundary, and
+the statement counts and page figures below describe one cell per row. The
+current rules and numbers are in
+[the daemon overlay note](19-daemon-overlay.md).
+
 The selected [payload derivation](../issues/307/S5-PAYLOAD-CONTRACT.md) describes
 schema v8. Each live inode generation has a lower-view cutoff, shrink epoch and
 indexed shrink staircase. Cells store bytes only through their last valid byte;

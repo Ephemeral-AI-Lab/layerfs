@@ -445,7 +445,8 @@ fn a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue() {
     db.reply_attempted(p).unwrap();
     let counts = || db.resources(None).unwrap().counts;
     let (cells, queued) = (counts().payload_cells, counts().maintenance_targets);
-    assert_eq!((counts().orphan_rows, cells, queued), (1, 3, 1));
+    // Two whole cells in one row and the tail in another.
+    assert_eq!((counts().orphan_rows, cells, queued), (1, 2, 1));
 
     // The last reference leaves with no owner step in between. Its job
     // releases both lower layers and deletes the orphan and its queued
@@ -459,7 +460,7 @@ fn a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue() {
             after.maintenance_targets,
             after.ready_targets
         ),
-        (0, 3, 1, 0)
+        (0, 2, 1, 0)
     );
     assert_eq!(db.maintain(MaintenanceCursor::default()).unwrap(), None);
     assert!(!db.maintenance_pending());
@@ -595,10 +596,12 @@ fn a_closed_namespace_that_takes_the_last_orphan_stops_the_probe() {
         assert_eq!(db.source_inode(elsewhere, 9).unwrap(), None);
         db.diagnostics().since(&before).statements[StatementKind::Inode as usize].attempts
     };
-    // More cells than the one page its last owner's release drops itself.
+    // More cells than the one page its last owner's release drops itself:
+    // rows of eight and six cells are exactly that page, and one more row.
     const SIZE: u64 = 15 * 4096;
     let mut file = File::new(&db, source, 7, Vec::new());
-    file.write(0, &pattern(SIZE as usize, 3));
+    file.write(0, &pattern(14 * 4096, 3));
+    file.write(14 * 4096, &pattern(4096, 4));
     let open = db.open_file(source, 1, &file.inode(SIZE), true).unwrap();
     let mut removed = file.inode(SIZE);
     removed.nlink = 0;

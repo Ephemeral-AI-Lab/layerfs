@@ -16,8 +16,10 @@ const READY: &str = "SELECT ns,kind,resource,target,phase,cursor,aux,name FROM m
     INDEXED BY maintenance_ready WHERE ready=1 AND (ns,kind,resource,target)>(?1,?2,?3,?4)
     ORDER BY ns,kind,resource,target LIMIT 1";
 /// What a step of an orphan or of a layer's retirement may still drop:
-/// payload cells, and rows of any kind. The statements select one whole
-/// page; a caller that has spent part of it drops fewer.
+/// payload cells, and rows of any kind. A row wider than one cell counts as
+/// the cells it holds, so a page is the same bytes however its rows are
+/// shaped. The statements select one whole page; a caller that has spent
+/// part of it drops fewer.
 #[derive(Clone, Copy)]
 pub(crate) struct Page {
     pub cells: usize,
@@ -28,6 +30,26 @@ pub(crate) const PAGE: Page = Page {
     cells: 14,
     rows: 64,
 };
+// A whole page holds the widest row: every step of a fresh page progresses.
+const _: () = assert!(crate::RUN_BYTES / crate::CELL_BYTES <= PAGE.cells);
+impl Page {
+    /// The leading rows this page can still drop, and the cells they hold.
+    /// `stored` is each selected row's stored bytes, in order. None fits
+    /// only a page that is partly spent.
+    pub(crate) fn fit(self, stored: impl Iterator<Item = u64>) -> (usize, usize) {
+        let (mut rows, mut cells) = (0, 0);
+        for bytes in stored {
+            // A row of one cell may carry a mask beside its bytes.
+            let held = (bytes as usize / crate::CELL_BYTES).max(1);
+            if rows == self.rows || cells + held > self.cells {
+                break;
+            }
+            rows += 1;
+            cells += held;
+        }
+        (rows, cells)
+    }
+}
 
 /// Fixed scheduler cursor, independent of the number of maintenance targets.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

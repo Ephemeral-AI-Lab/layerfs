@@ -1,0 +1,13 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 95a9ddde0, uncommitted product/test paths=0, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-overlay IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/payload_runs-c01a6433ae31582c --test-threads=1 
+
+running 4 tests
+test a_maintenance_page_is_fourteen_cells_of_bytes_whatever_the_rows ... ok
+test an_orphan_keeps_every_byte_while_rows_of_several_cells_move_into_its_domain ... ok
+test rows_of_several_cells_match_a_reference_model_through_every_writer_and_reader ... ok
+test worst_case_shapes_report_their_stored_rows_bytes_and_pages ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+
+R4_WALL seconds<=3 limit=115s lock_wait=0s
+EXIT 0

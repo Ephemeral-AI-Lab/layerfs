@@ -4,8 +4,11 @@ use crate::{
     db::{integer, unsigned},
     layers::Layer,
     sql, CapturedGap, CapturedRunCursor, CapturedRunReply, CapturedRunStep, CapturedRunWork,
-    InodeKind, Overlay, OverlayError, OverlayResult, StatementKind, CELL_BYTES,
+    InodeKind, Overlay, OverlayError, OverlayResult, StatementKind, CELL_BYTES, RUN_BYTES,
 };
+
+const CELL: u64 = CELL_BYTES as u64;
+const RUN: u64 = RUN_BYTES as u64;
 
 impl Overlay {
     /// Consume at most one metadata row per relevant retained layer (the
@@ -68,8 +71,9 @@ impl Overlay {
                     &layer.gen,
                     &integer(probe.after)?,
                     &integer(layer.size)?,
+                    &integer(cursor.at - cursor.at % CELL)?,
                 ],
-                40,
+                48,
                 |row| {
                     let offset = unsigned(row, 0)?;
                     let epoch: i64 = row.get(1)?;
@@ -78,11 +82,15 @@ impl Overlay {
                         .get::<_, Option<i64>>(3)?
                         .map(|v| u64::try_from(v).map_err(|_| rusqlite::Error::InvalidQuery))
                         .transpose()?;
-                    if offset % CELL_BYTES as u64 != 0
+                    // One cell at most, or a dense row of whole cells.
+                    if offset % CELL != 0
                         || length == 0
-                        || length > CELL_BYTES as u64
                         || epoch < 0
                         || mask.is_some_and(|bytes| bytes != length.div_ceil(8))
+                        || (length > CELL
+                            && (mask.is_some()
+                                || length % CELL != 0
+                                || offset % RUN + length > RUN))
                     {
                         return Err(rusqlite::Error::InvalidQuery);
                     }
@@ -96,7 +104,7 @@ impl Overlay {
                     // The next exclusive seek never revisits this physical row.
                     probe.after = cell
                         .offset
-                        .checked_add(CELL_BYTES as u64)
+                        .checked_add(cell.length.div_ceil(CELL) * CELL)
                         .ok_or(OverlayError::Invalid("captured cell boundary"))?;
                     if self.stale(ns, serial, layer, integer(cell.offset)?, epoch)? {
                         work.stale_rows += 1;
@@ -113,19 +121,21 @@ impl Overlay {
                 work,
             });
         }
-        let mut window = false;
+        // A window ends with the widest row that holds its first byte, so a
+        // row is composed once, not once for each of its cells.
+        let mut window = None;
         for probe in &cursor.probes[..needed] {
             if let Some(cell) = probe.cell {
                 if cell.offset <= cursor.at {
-                    window = true;
+                    let cells = cell.length.div_ceil(CELL) * CELL;
+                    window = window.max(Some(cell.offset + cells));
                 } else {
                     end = end.min(cell.offset);
                 }
             }
         }
-        let step = if window {
-            let cell_end = cursor.at - cursor.at % CELL_BYTES as u64 + CELL_BYTES as u64;
-            let to = cursor.size.min(cell_end);
+        let step = if let Some(row_end) = window {
+            let to = cursor.size.min(row_end);
             let mut read = self
                 .compose_layers(ns, serial, cursor.at, (to - cursor.at) as u32, layers)?
                 .ok_or(OverlayError::Invalid("captured run layers"))?;

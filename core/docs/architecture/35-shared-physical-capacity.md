@@ -72,8 +72,11 @@ processing operation records, bounded source wake and cursor work. It is a conse
 format/source bound, not measured page amplification or process residency.
 
 [Accounting SQL](../../crates/layerfs-overlay/sql/accounting.sql) maintains one
-namespace row and namespace0 aggregate in the same transaction as product state.
-Insert/delete/count/byte triggers use two primary-key updates. They include
+row per namespace in the same transaction as product state. Since schema 27
+each insert/delete/count/byte trigger uses one primary-key update, of its own
+namespace's row; the daemon aggregate is the sum of those rows where
+`resources(None)` reads it, and namespace 0 keeps only the engine's maintained
+`orphan_rows` (see [the daemon overlay note](19-daemon-overlay.md)). They include
 namespace/inode/name/payload/mask/shrink/operation records/orphan rows, sources, leases,
 file/lookup/captured/operation and reference detail rows, reply tickets, source
 waits and ready/retirement/maintenance targets. Resource observations do not sweep

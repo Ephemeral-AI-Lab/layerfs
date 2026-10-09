@@ -1,0 +1,18 @@
+captured_file_edits-c95644d018d26b22 exit=0 seconds=2 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+cleanup_control-77ab369a54fc49db exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+compound-015a16aad54419dc exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+costs-349e2bf53982389c exit=0 seconds=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+job_cost-6806228384655850 exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+native_data-4af220d29365b065 exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+native_unlink_cost-bcded746609cf3eb exit=0 seconds=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+native_visit-3cf70db899407a5e exit=0 seconds=0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+native_visit_cost-31891792959c0ed4 exit=0 seconds=2 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.47s
+native_visit_fence-05a8e2ec310cfb42 exit=0 seconds=1 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+nonfile-28a8adee57dd5795 exit=0 seconds=1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+owner-dff6c9b96cdb7d0c exit=0 seconds=1 test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+payload-45b7c35ebea33766 exit=0 seconds=0 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+payload-5e10f41645f9ece5 exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+read_cost-106cc8ee0ca7784d exit=0 seconds=0 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+reclaim_cost-e5be1256e7244ff0 exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+resources_observation-cfff9454e2fa8457 exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+transactions-b47653736df2ab57 exit=0 seconds=0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s

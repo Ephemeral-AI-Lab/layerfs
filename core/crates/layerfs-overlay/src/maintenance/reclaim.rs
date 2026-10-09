@@ -2,28 +2,112 @@
 use crate::{
     close::CLOSE_KEY,
     db::{integer, unsigned},
-    sql, Overlay, OverlayResult, StatementKind,
+    Overlay, OverlayResult, StatementKind,
 };
+use rusqlite::{types::Value, ToSql};
 const BYTES: u64 = 65536;
 const READY:&str="SELECT ns,cursor FROM reclaim INDEXED BY reclaim_ready WHERE queue_key=?1 AND ns>?2 ORDER BY ns LIMIT 1";
-const PAYLOAD:&str="SELECT rowid,length(data)+ifnull(length(validity),0) FROM payload INDEXED BY payload_namespace_row WHERE ns=?1 ORDER BY rowid LIMIT 14";
-/// Fixed page and delete statements of one terminal table.
-const ORPHAN: [&str; 2] = [
-    "SELECT serial FROM orphan WHERE ns=?1 ORDER BY serial LIMIT 64",
-    "DELETE FROM orphan WHERE ns=?1 AND serial=?2",
+/// One terminal table. `page` reads a fixed number of leading rows of one
+/// namespace in primary-key order: `keys` key columns, then the bytes the
+/// step counts for the row. `through` deletes every row of the namespace up
+/// to one key: one statement for the page, whatever its rows.
+struct Terminal {
+    page: &'static str,
+    through: &'static str,
+    keys: usize,
+    take: Take,
+}
+/// How much of a page one step deletes.
+#[derive(Clone, Copy)]
+enum Take {
+    /// Every row of the page.
+    Rows,
+    /// Leading rows inside the value-byte window; always the first.
+    Bytes,
+    /// Leading rows inside one maintenance page of payload cells.
+    Cells,
+}
+const fn table(page: &'static str, through: &'static str, keys: usize, take: Take) -> Terminal {
+    Terminal {
+        page,
+        through,
+        keys,
+        take,
+    }
+}
+// The page of earlier queue rows names the close key as a literal.
+const _: () = assert!(CLOSE_KEY == i64::MAX);
+/// The terminal tables in the order of the namespace's reclaim cursor.
+const PHASES: [Terminal; 11] = [
+    table(
+        "SELECT serial,gen,cell_offset,length(data)+ifnull(length(validity),0) FROM payload WHERE ns=?1 ORDER BY serial,gen,cell_offset LIMIT 14",
+        "DELETE FROM payload WHERE ns=?1 AND (serial,gen,cell_offset)<=(?2,?3,?4)",
+        3,
+        Take::Cells,
+    ),
+    table(
+        "SELECT parent,name,gen,length(name) FROM directory_entry WHERE ns=?1 ORDER BY parent,name,gen LIMIT 64",
+        "DELETE FROM directory_entry WHERE ns=?1 AND (parent,name,gen)<=(?2,?3,?4)",
+        3,
+        Take::Rows,
+    ),
+    table(
+        "SELECT serial,gen,0 FROM inode WHERE ns=?1 ORDER BY serial,gen LIMIT 64",
+        "DELETE FROM inode WHERE ns=?1 AND (serial,gen)<=(?2,?3)",
+        2,
+        Take::Rows,
+    ),
+    table(
+        "SELECT operation,kind,key,length(value) FROM operation_record WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64",
+        "DELETE FROM operation_record WHERE ns=?1 AND (operation,kind,key)<=(?2,?3,?4)",
+        3,
+        Take::Bytes,
+    ),
+    table(
+        "SELECT queue_key,0 FROM reclaim WHERE ns=?1 AND queue_key<9223372036854775807 ORDER BY queue_key LIMIT 64",
+        "DELETE FROM reclaim WHERE ns=?1 AND queue_key<=?2",
+        1,
+        Take::Rows,
+    ),
+    table(
+        "SELECT serial,gen,depth,0 FROM shrink WHERE ns=?1 ORDER BY serial,gen,depth LIMIT 64",
+        "DELETE FROM shrink WHERE ns=?1 AND (serial,gen,depth)<=(?2,?3,?4)",
+        3,
+        Take::Rows,
+    ),
+    table(
+        "SELECT kind,resource,target,0 FROM maintenance WHERE ns=?1 ORDER BY kind,resource,target LIMIT 64",
+        "DELETE FROM maintenance WHERE ns=?1 AND (kind,resource,target)<=(?2,?3,?4)",
+        3,
+        Take::Rows,
+    ),
+    table(
+        "SELECT serial,0 FROM orphan WHERE ns=?1 ORDER BY serial LIMIT 64",
+        "DELETE FROM orphan WHERE ns=?1 AND serial<=?2",
+        1,
+        Take::Rows,
+    ),
+    table(
+        "SELECT serial,0 FROM file_custody WHERE ns=?1 ORDER BY serial LIMIT 64",
+        "DELETE FROM file_custody WHERE ns=?1 AND serial<=?2",
+        1,
+        Take::Rows,
+    ),
+    table(
+        "SELECT operation,kind,key,length(value) FROM owned_operation_record WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64",
+        "DELETE FROM owned_operation_record WHERE ns=?1 AND (operation,kind,key)<=(?2,?3,?4)",
+        3,
+        Take::Bytes,
+    ),
+    table(
+        "SELECT gen,serial,0 FROM orphan_wait WHERE ns=?1 ORDER BY gen,serial LIMIT 64",
+        "DELETE FROM orphan_wait WHERE ns=?1 AND (gen,serial)<=(?2,?3)",
+        2,
+        Take::Rows,
+    ),
 ];
-const FILE_CUSTODY: [&str; 2] = [
-    "SELECT serial FROM file_custody WHERE ns=?1 ORDER BY serial LIMIT 64",
-    "DELETE FROM file_custody WHERE ns=?1 AND serial=?2",
-];
-const OPERATION_RECORD: [&str; 2] = [
-    "SELECT operation,kind,key,length(value) FROM operation_record WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64",
-    sql::OPERATION_RECORD_DELETE,
-];
-const OWNED_OPERATION_RECORD: [&str; 2] = [
-    "SELECT operation,kind,key,length(value) FROM owned_operation_record WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64",
-    sql::OWNED_OPERATION_RECORD_DELETE,
-];
+/// The cursor of the orphan table, whose deletion updates the engine's hint.
+const ORPHANS: i64 = 7;
 
 /// One short physical cleanup step. Bytes count payload, names and raw operation_record
 /// values, not structured identity keys or pages. SQL work records delivered
@@ -65,52 +149,51 @@ impl Overlay {
                 self.closed_ready.set(false);
                 return Ok(None);
             };
-            let (count, bytes) = match phase {
-                0 => self.delete_payload(ns)?,
-                1 => self.delete_names(ns)?,
-                2 => self.delete_inodes(ns)?,
-                3 => self.delete_operation_record(ns, OPERATION_RECORD)?,
-                4 => self.delete_old_reclaim(ns)?,
-                5 => self.delete_steps(ns)?,
-                6 => self.delete_maintenance(ns)?,
-                7 => {
-                    let deleted = self.delete_orphan_metadata(ns, ORPHAN)?;
-                    if deleted.0 != 0 {
-                        self.orphans_deleted()?;
+            // Tables that hold nothing for this namespace are passed in the
+            // same step: one step deletes one page of the first table that
+            // still holds rows, or ends the namespace.
+            let mut at = phase;
+            let (count, bytes) = loop {
+                let deleted = match usize::try_from(at).ok() {
+                    Some(table) if table < PHASES.len() => self.delete_page(ns, &PHASES[table])?,
+                    Some(table) if table == PHASES.len() => {
+                        self.delete_indexed_operation_record(ns, None)?
                     }
-                    deleted
+                    _ => {
+                        self.execute(
+                            StatementKind::Reclaim,
+                            "DELETE FROM reclaim WHERE ns=?1 AND queue_key=?2",
+                            &[&ns, &CLOSE_KEY],
+                            16,
+                        )?;
+                        self.execute(
+                            StatementKind::Reclaim,
+                            "DELETE FROM workspace WHERE ns=?1 AND lifecycle=1",
+                            &[&ns],
+                            8,
+                        )?;
+                        return Ok(Some(ReclaimStep {
+                            namespace: ns as u64,
+                            rows: 2,
+                            data_bytes: 0,
+                            done: true,
+                        }));
+                    }
+                };
+                if deleted.0 != 0 {
+                    break deleted;
                 }
-                8 => self.delete_orphan_metadata(ns, FILE_CUSTODY)?,
-                9 => self.delete_operation_record(ns, OWNED_OPERATION_RECORD)?,
-                10 => self.delete_wait(ns)?,
-                11 => self.delete_indexed_operation_record(ns, None)?,
-                _ => {
-                    self.execute(
-                        StatementKind::Reclaim,
-                        "DELETE FROM reclaim WHERE ns=?1 AND queue_key=?2",
-                        &[&ns, &CLOSE_KEY],
-                        16,
-                    )?;
-                    self.execute(
-                        StatementKind::Reclaim,
-                        "DELETE FROM workspace WHERE ns=?1 AND lifecycle=1",
-                        &[&ns],
-                        8,
-                    )?;
-                    return Ok(Some(ReclaimStep {
-                        namespace: ns as u64,
-                        rows: 2,
-                        data_bytes: 0,
-                        done: true,
-                    }));
-                }
+                at += 1;
             };
-            if count == 0 {
+            if at == ORPHANS {
+                self.orphans_deleted()?;
+            }
+            if at != phase {
                 self.execute(
                     StatementKind::Reclaim,
-                    "UPDATE reclaim SET cursor=cursor+1 WHERE ns=?1 AND queue_key=?2",
-                    &[&ns, &CLOSE_KEY],
-                    16,
+                    "UPDATE reclaim SET cursor=?3 WHERE ns=?1 AND queue_key=?2",
+                    &[&ns, &CLOSE_KEY, &at],
+                    24,
                 )?;
             }
             Ok(Some(ReclaimStep {
@@ -121,7 +204,7 @@ impl Overlay {
             }))
         })
     }
-    /// Query plans for the actual ready queue and terminal payload cursor.
+    /// Query plans of the ready queue and of every terminal page and delete.
     pub fn explain_closed_reclaim(&self) -> OverlayResult<Vec<String>> {
         let mut plans = self.query(
             StatementKind::Explain,
@@ -130,195 +213,59 @@ impl Overlay {
             16,
             |r| r.get(3),
         )?;
-        plans.extend(self.query(
-            StatementKind::Explain,
-            &format!("EXPLAIN QUERY PLAN {PAYLOAD}"),
-            &[&0_i64],
-            8,
-            |r| r.get::<_, String>(3),
-        )?);
+        let zero: [&dyn ToSql; 5] = [&0_i64; 5];
+        for table in &PHASES {
+            for (sql, bound) in [(table.page, 1), (table.through, 1 + table.keys)] {
+                plans.extend(self.query(
+                    StatementKind::Explain,
+                    &format!("EXPLAIN QUERY PLAN {sql}"),
+                    &zero[..bound],
+                    8 * bound as u64,
+                    |r| r.get::<_, String>(3),
+                )?);
+            }
+        }
         Ok(plans)
     }
-    fn delete_orphan_metadata(
-        &self,
-        ns: i64,
-        [page, delete]: [&str; 2],
-    ) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(StatementKind::Reclaim, page, &[&ns], 8, |r| {
-            r.get::<_, i64>(0)
-        })?;
-        for serial in &rows {
-            self.execute(StatementKind::Reclaim, delete, &[&ns, serial], 16)?;
-        }
-        Ok((rows.len() as u64, 0))
-    }
-    fn delete_wait(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(
-            StatementKind::Reclaim,
-            "SELECT gen,serial FROM orphan_wait WHERE ns=?1 ORDER BY gen,serial LIMIT 64",
-            &[&ns],
-            8,
-            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
-        )?;
-        for (gen, serial) in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                "DELETE FROM orphan_wait WHERE ns=?1 AND gen=?2 AND serial=?3",
-                &[&ns, gen, serial],
-                24,
-            )?;
-        }
-        Ok((rows.len() as u64, 0))
-    }
-    fn delete_payload(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(StatementKind::Reclaim, PAYLOAD, &[&ns], 8, |r| {
-            Ok((r.get::<_, i64>(0)?, unsigned(r, 1)?))
-        })?;
-        let mut bytes = 0;
-        for (row, size) in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                "DELETE FROM payload WHERE rowid=?1 AND ns=?2",
-                &[row, &ns],
-                16,
-            )?;
-            bytes += size;
-        }
-        Ok((rows.len() as u64, bytes))
-    }
-    fn delete_steps(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(
-            StatementKind::Reclaim,
-            "SELECT serial,gen,depth FROM shrink WHERE ns=?1 ORDER BY serial,gen,depth LIMIT 64",
-            &[&ns],
-            8,
-            |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, i64>(1)?,
-                    r.get::<_, i64>(2)?,
-                ))
-            },
-        )?;
-        for (serial, gen, depth) in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                "DELETE FROM shrink WHERE ns=?1 AND serial=?2 AND gen=?3 AND depth=?4",
-                &[&ns, serial, gen, depth],
-                32,
-            )?;
-        }
-        Ok((rows.len() as u64, 0))
-    }
-    fn delete_names(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(
-            StatementKind::Reclaim,
-            "SELECT parent,name,gen FROM directory_entry WHERE ns=?1 ORDER BY parent,name,gen LIMIT 64",
-            &[&ns],
-            8,
-            |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, Vec<u8>>(1)?,
-                    r.get::<_, i64>(2)?,
-                ))
-            },
-        )?;
-        let mut bytes = 0;
-        for (parent, name, gen) in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                "DELETE FROM directory_entry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4",
-                &[&ns, parent, name, gen],
-                24 + name.len() as u64,
-            )?;
-            bytes += name.len() as u64;
-        }
-        Ok((rows.len() as u64, bytes))
-    }
-    fn delete_inodes(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(
-            StatementKind::Reclaim,
-            "SELECT serial,gen FROM inode WHERE ns=?1 ORDER BY serial,gen LIMIT 64",
-            &[&ns],
-            8,
-            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
-        )?;
-        for (serial, gen) in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                "DELETE FROM inode WHERE ns=?1 AND serial=?2 AND gen=?3",
-                &[&ns, serial, gen],
-                24,
-            )?;
-        }
-        Ok((rows.len() as u64, 0))
-    }
-    fn delete_operation_record(
-        &self,
-        ns: i64,
-        [page, delete]: [&str; 2],
-    ) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(StatementKind::Reclaim, page, &[&ns], 8, |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, i64>(1)?,
-                r.get::<_, i64>(2)?,
-                unsigned(r, 3)?,
-            ))
-        })?;
-        let mut count = 0;
-        let mut bytes = 0;
-        for (operation, kind, key, size) in &rows {
-            if count != 0 && bytes + size > BYTES {
-                break;
+    /// Deletes one page of one terminal table with one statement and returns
+    /// its rows and counted bytes.
+    fn delete_page(&self, ns: i64, table: &Terminal) -> OverlayResult<(u64, u64)> {
+        let rows = self.query(StatementKind::Reclaim, table.page, &[&ns], 8, |r| {
+            let mut key = Vec::with_capacity(table.keys);
+            for column in 0..table.keys {
+                key.push(r.get::<_, Value>(column)?);
             }
-            self.execute(
-                StatementKind::Reclaim,
-                delete,
-                &[&ns, operation, kind, key],
-                32,
-            )?;
-            count += 1;
-            bytes += size;
+            Ok((key, unsigned(r, table.keys)?))
+        })?;
+        let sizes = rows.iter().map(|row| row.1);
+        let taken = match table.take {
+            Take::Rows => rows.len(),
+            Take::Cells => crate::maintenance::PAGE.fit(sizes).0,
+            Take::Bytes => {
+                let (mut count, mut held) = (0, 0);
+                for size in sizes {
+                    if count != 0 && held + size > BYTES {
+                        break;
+                    }
+                    count += 1;
+                    held += size;
+                }
+                count
+            }
+        };
+        let Some((last, _)) = taken.checked_sub(1).and_then(|last| rows.get(last)) else {
+            return Ok((0, 0));
+        };
+        let mut bound: Vec<&dyn ToSql> = vec![&ns];
+        let mut bytes = 8;
+        for value in last {
+            bytes += match value {
+                Value::Blob(name) => name.len() as u64,
+                _ => 8,
+            };
+            bound.push(value);
         }
-        Ok((count, bytes))
-    }
-    fn delete_old_reclaim(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows=self.query(StatementKind::Reclaim,"SELECT queue_key FROM reclaim WHERE ns=?1 AND queue_key<?2 ORDER BY queue_key LIMIT 64",&[&ns,&CLOSE_KEY],16,|r|r.get::<_,i64>(0))?;
-        for key in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                "DELETE FROM reclaim WHERE ns=?1 AND queue_key=?2",
-                &[&ns, key],
-                16,
-            )?;
-        }
-        Ok((rows.len() as u64, 0))
-    }
-    fn delete_maintenance(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows = self.query(
-            StatementKind::Reclaim,
-            "SELECT kind,resource,target FROM maintenance
-            WHERE ns=?1 ORDER BY kind,resource,target LIMIT 64",
-            &[&ns],
-            8,
-            |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, i64>(1)?,
-                    r.get::<_, i64>(2)?,
-                ))
-            },
-        )?;
-        for (kind, resource, target) in &rows {
-            self.execute(
-                StatementKind::Reclaim,
-                "DELETE FROM maintenance WHERE ns=?1 AND kind=?2 AND resource=?3 AND target=?4",
-                &[&ns, kind, resource, target],
-                32,
-            )?;
-        }
-        Ok((rows.len() as u64, 0))
+        let deleted = self.execute(StatementKind::Reclaim, table.through, &bound, bytes)?;
+        Ok((deleted, rows[..taken].iter().map(|row| row.1).sum()))
     }
 }

@@ -1,6 +1,7 @@
 //! Plan/program of the actual metadata seek; physical I/O remains separate.
 use crate::{
     db::integer, sql, CapturedRunCursor, Overlay, OverlayResult, StatementKind, CELL_BYTES,
+    RUN_BYTES,
 };
 
 impl Overlay {
@@ -12,8 +13,9 @@ impl Overlay {
         let serial = integer(cursor.serial())?;
         let generation = cursor.reader().capture().generation.number();
         let offset = integer(cursor.offset() - cursor.offset() % CELL_BYTES as u64)?;
+        let after = integer(cursor.offset() - cursor.offset() % RUN_BYTES as u64)?;
         let size = integer(cursor.logical_size())?;
-        let params: [&dyn rusqlite::ToSql; 5] = [&ns, &serial, &generation, &offset, &size];
+        let params: [&dyn rusqlite::ToSql; 6] = [&ns, &serial, &generation, &after, &size, &offset];
         let mut rows = self.query(
             StatementKind::Explain,
             &format!("EXPLAIN QUERY PLAN {}", sql::CAPTURED_CELL_METADATA),

@@ -1,0 +1,36 @@
+===== costs-893e557d5aed5d1d (cwd /work/core/crates/layerfs-overlay)
+
+running 3 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+test one_write_window_costs_the_same_statements_at_either_file_size_and_beside_another_file ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== payload_runs-c01a6433ae31582c (cwd /work/core/crates/layerfs-overlay)
+
+running 4 tests
+test a_maintenance_page_is_fourteen_cells_of_bytes_whatever_the_rows ... ok
+test an_orphan_keeps_every_byte_while_rows_of_several_cells_move_into_its_domain ... ok
+test rows_of_several_cells_match_a_reference_model_through_every_writer_and_reader ... ok
+test worst_case_shapes_report_their_stored_rows_bytes_and_pages ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0
+===== reclaim_cost-e2861e95ba8b543a (cwd /work/core/crates/layerfs-overlay)
+
+running 2 tests
+test a_closed_namespace_is_reclaimed_in_pages_of_one_delete_beside_a_live_namespace ... ok
+test deleting_payload_rows_reads_their_lengths_and_never_their_bytes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+R4_WALL seconds<=1 limit=110s lock_wait=0s
+
+EXIT 0

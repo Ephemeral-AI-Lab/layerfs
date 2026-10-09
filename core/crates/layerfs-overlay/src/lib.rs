@@ -63,5 +63,5 @@ pub use types::{
     DirectoryEntryWindow, Generation, Inode, InodeKind, Lease, LeaseKind, LocalRead, NameLayers,
     OperationRecord, PayloadWrite, Publication, Route, WorkspaceState, CELL_BYTES,
     COMPOUND_DIRECTORY_ENTRIES, COMPOUND_INODES, MASK_BYTES, OPERATION_RECORD_BYTES, PAGE_ROWS,
-    READ_WINDOW, WRITE_WINDOW,
+    READ_WINDOW, RUN_BYTES, WRITE_WINDOW,
 };

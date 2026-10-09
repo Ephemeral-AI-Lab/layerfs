@@ -25,6 +25,8 @@ pub(crate) enum Next {
 pub(crate) struct Step {
     rows: u64,
     bytes: u64,
+    /// Payload cells of the page this step spent.
+    cells: usize,
     next: Next,
     released: Option<i64>,
 }
@@ -32,8 +34,18 @@ fn step(rows: u64, bytes: u64, next: Next) -> Step {
     Step {
         rows,
         bytes,
+        cells: 0,
         next,
         released: None,
+    }
+}
+/// A step that dropped the leading `fit` of a layer's selected payload
+/// rows. When what is left of the page holds none of them, the page is
+/// spent: the rows stay for the next step.
+fn dropped(page: Page, fit: (usize, usize), bytes: u64) -> Step {
+    Step {
+        cells: if fit.0 == 0 { page.cells } else { fit.1 },
+        ..step(fit.0 as u64, bytes, Next::Ready)
     }
 }
 impl Overlay {
@@ -67,11 +79,8 @@ impl Overlay {
         let spent = |calls, page: Page| calls == RELEASE_CALLS || page.cells == 0 || page.rows == 0;
         let charge = |page: &mut Page, step: &Step| {
             if !matches!(step.next, Next::Done) {
-                // A page of cells reports its bytes, one of shrink rows none.
                 page.rows -= step.rows as usize;
-                if step.bytes != 0 {
-                    page.cells -= step.rows as usize;
-                }
+                page.cells -= step.cells;
             }
         };
         // Each call of the orphan's step releases at most one layer.
@@ -227,7 +236,9 @@ impl Overlay {
                     WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>?4 ORDER BY cell_offset LIMIT 1",
                     &[&ns,&serial,&lower.gen,&if cursor.0==lower.gen {cursor.1}else{-1}],32,|r|r.get::<_,i64>(0))?.pop();
                 if let Some(cell) = cell {
-                    let bytes = self.move_orphan_cell(ns, serial, &lower, &upper, cell)?;
+                    // Snapshot owners are fenced above: the row moves into
+                    // the orphan's domain, keeping its physical custody.
+                    let bytes = self.transfer_row(ns, serial, &lower, &upper, cell)?;
                     return Ok(step(1, bytes, Next::From(lower.gen, cell)));
                 }
                 self.execute(StatementKind::Inode,"UPDATE inode SET inherited_cutoff=min(inherited_cutoff,?3) WHERE ns=?1 AND serial=?2 AND gen=-1",
@@ -279,7 +290,7 @@ impl Overlay {
                 });
             }
         }
-        let mut rows = self.query(
+        let rows = self.query(
             StatementKind::Reclaim,
             "SELECT cell_offset,length(data)+ifnull(length(validity),0) FROM payload
             WHERE ns=?1 AND serial=?2 AND gen=-1 ORDER BY cell_offset LIMIT 14",
@@ -287,10 +298,10 @@ impl Overlay {
             16,
             |r| Ok((r.get::<_, i64>(0)?, crate::db::unsigned(r, 1)?)),
         )?;
-        rows.truncate(page.cells.min(page.rows));
         if !rows.is_empty() {
+            let fit = page.fit(rows.iter().map(|row| row.1));
             let mut bytes = 0;
-            for (cell, size) in &rows {
+            for (cell, size) in &rows[..fit.0] {
                 self.execute(
                     StatementKind::Reclaim,
                     sql::CELL_DROP,
@@ -299,7 +310,7 @@ impl Overlay {
                 )?;
                 bytes += size;
             }
-            return Ok(step(rows.len() as u64, bytes, Next::Ready));
+            return Ok(dropped(page, fit, bytes));
         }
         let mut steps = self.query(
             StatementKind::Reclaim,
@@ -360,7 +371,7 @@ impl Overlay {
         {
             return Ok(step(0, 0, Next::Held));
         }
-        let mut rows = self.query(
+        let rows = self.query(
             StatementKind::Reclaim,
             "SELECT cell_offset,length(data)+ifnull(length(validity),0) FROM payload
             WHERE ns=?1 AND serial=?2 AND gen=?3 ORDER BY cell_offset LIMIT 14",
@@ -368,10 +379,10 @@ impl Overlay {
             24,
             |r| Ok((r.get::<_, i64>(0)?, crate::db::unsigned(r, 1)?)),
         )?;
-        rows.truncate(page.cells.min(page.rows));
         if !rows.is_empty() {
+            let fit = page.fit(rows.iter().map(|row| row.1));
             let mut bytes = 0;
-            for (cell, size) in &rows {
+            for (cell, size) in &rows[..fit.0] {
                 self.execute(
                     StatementKind::Reclaim,
                     sql::CELL_DROP,
@@ -380,7 +391,7 @@ impl Overlay {
                 )?;
                 bytes += size;
             }
-            return Ok(step(rows.len() as u64, bytes, Next::Ready));
+            return Ok(dropped(page, fit, bytes));
         }
         let mut steps = self.query(
             StatementKind::Reclaim,

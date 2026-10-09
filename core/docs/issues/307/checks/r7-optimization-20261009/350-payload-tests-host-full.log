@@ -1,0 +1,50 @@
+===== costs-f1b14bc809c7fae2 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b2/core/crates/layerfs-overlay)
+
+running 3 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+test one_write_window_costs_the_same_statements_at_either_file_size_and_beside_another_file ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== payload-68ae5eb9eeaeeafc (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b2/core/crates/layerfs-overlay)
+
+running 4 tests
+test a_tall_shrink_staircase_keeps_logarithmic_lookups_and_exact_bytes ... ok
+test holes_cost_no_rows_and_tiny_and_dense_files_report_measured_pages ... ok
+test layered_reads_match_a_reference_model_across_writes_resizes_capture_and_install ... ok
+test shrink_work_is_independent_of_discarded_data_and_regrow_reads_zero ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== payload_runs-dceb2975487b213e (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b2/core/crates/layerfs-overlay)
+
+running 3 tests
+test an_orphan_keeps_every_byte_while_rows_of_several_cells_move_into_its_domain ... ok
+test rows_of_several_cells_match_a_reference_model_through_every_writer_and_reader ... ok
+test worst_case_shapes_report_their_stored_rows_bytes_and_pages ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== payload-380151c238c09f96 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs-r7-b2/core/crates/layerfs-workspace)
+
+running 4 tests
+test fragmented_inherited_bytes_are_read_as_one_base_range ... ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+test whole_windows_overwrites_and_cuts_inside_them_read_back_exactly ... ok
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0

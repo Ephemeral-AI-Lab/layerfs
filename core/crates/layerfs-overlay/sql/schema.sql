@@ -52,7 +52,9 @@ CREATE TABLE payload (
     gen INTEGER NOT NULL CHECK(gen=-1 OR gen>0),
     cell_offset INTEGER NOT NULL CHECK(cell_offset>=0 AND cell_offset%4096=0),
     epoch INTEGER NOT NULL CHECK(epoch>=0),
-    data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 4096),
+    -- One cell at most, or a dense run of whole cells inside one aligned 32768-byte slot.
+    data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 32768 AND (length(data)<=4096 OR
+        (validity IS NULL AND length(data)%4096=0 AND cell_offset/32768=(cell_offset+length(data)-1)/32768))),
     validity BLOB CHECK(validity IS NULL OR length(validity)=(length(data)+7)/8),
     UNIQUE(ns,serial,gen,cell_offset)
 ) STRICT;
@@ -275,4 +277,4 @@ CREATE TABLE native_cookie (
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_cookie_name ON native_cookie(ns,owner,name,cookie);
-PRAGMA user_version=25;
+PRAGMA user_version=28;

@@ -131,12 +131,19 @@ fn shrink_work_is_independent_of_discarded_data_and_regrow_reads_zero() {
     let pages_before = db.pages().unwrap();
     let shrink_small = work(&db, || small.resize(5));
     let shrink_large = work(&db, || large.resize(5));
-    assert_eq!(shrink_large, shrink_small, "no discarded cell is visited");
-    // Discarded cells are debt, not foreground work: only the two trimmed
-    // boundary cells gave anything back.
+    assert_eq!(
+        (shrink_large.0, shrink_large.2),
+        (shrink_small.0, shrink_small.2),
+        "no discarded row is visited"
+    );
+    // The boundary row of the large file is 32 KiB and is cut without being
+    // loaded; the small file's one-cell row is returned by its lookup.
+    assert!(shrink_large.1 <= shrink_small.1, "{shrink_large:?}");
+    // Discarded rows are debt, not foreground work: only the two cut
+    // boundary rows gave anything back, one cell and one row of eight.
     let pages_after = db.pages().unwrap();
     assert_eq!(pages_after.0, pages_before.0);
-    assert!(pages_after.1 - pages_before.1 <= 2, "{pages_after:?}");
+    assert!(pages_after.1 - pages_before.1 <= 1 + 8, "{pages_after:?}");
     for file in [&mut small, &mut large] {
         file.check();
         // Regrow far past the old data: neither the stale local cells nor the

@@ -1,7 +1,7 @@
 //! Per-generation payload layers and the shrink staircase of one inode.
 use crate::{
-    cells::Stored, db::unsigned, sql, InodeKind, Overlay, OverlayError, OverlayResult,
-    StatementKind, CELL_BYTES,
+    db::unsigned, sql, InodeKind, Overlay, OverlayError, OverlayResult, StatementKind, CELL_BYTES,
+    RUN_BYTES,
 };
 
 const CELL: u64 = CELL_BYTES as u64;
@@ -89,23 +89,6 @@ impl Overlay {
         }
         Ok(stamp < newest)
     }
-    pub(crate) fn stored(
-        &self,
-        ns: i64,
-        serial: i64,
-        gen: i64,
-        cell: i64,
-    ) -> OverlayResult<Option<Stored>> {
-        Ok(self
-            .query(
-                StatementKind::Payload,
-                sql::CELL_LOOKUP,
-                &[&ns, &serial, &gen, &cell],
-                32,
-                |row| Stored::decode(row, 0),
-            )?
-            .pop())
-    }
     pub(crate) fn store(
         &self,
         ns: i64,
@@ -136,10 +119,12 @@ impl Overlay {
         }
         Ok(())
     }
-    /// Shrinks one layer to `to` inside the caller's transaction: the boundary
-    /// cell loses its bytes at or above `to`, later cells become stale through
-    /// one new staircase step, and the lower view is cut off. Work is one cell,
-    /// one step row and a binary search; no discarded cell is visited.
+    /// Shrinks one layer to `to` inside the caller's transaction: the row
+    /// that holds the boundary loses its bytes at or above `to`, later rows
+    /// become stale through one new staircase step, and the lower view is
+    /// cut off. Work is one row of at most `RUN_BYTES`, one step row and a
+    /// binary search; no discarded row is visited. A row is afterwards wholly
+    /// below the boundary or wholly stale.
     pub(crate) fn shrink(
         &self,
         ns: i64,
@@ -148,17 +133,36 @@ impl Overlay {
         to: u64,
     ) -> OverlayResult<()> {
         let inside = to % CELL;
-        if inside != 0 {
+        // No row crosses a slot boundary: nothing straddles one.
+        if to % RUN_BYTES as u64 != 0 {
             let cell = (to - inside) as i64;
-            if let Some(stored) = self.stored(ns, serial, layer.gen, cell)? {
-                let kept = if self.stale(ns, serial, layer, cell, stored.epoch)? {
-                    None
-                } else {
-                    let mut window = stored.expand(&self.payload_work)?;
-                    window.cut(inside as usize);
-                    window.trim(&self.payload_work)
-                };
-                self.store(ns, serial, layer.gen, cell, stored.epoch, kept)?;
+            let found = self
+                .covering(ns, serial, layer.gen, cell)?
+                .filter(|(shape, _)| inside != 0 || shape.offset < cell);
+            if let Some((shape, stored)) = found {
+                let stale = self.stale(ns, serial, layer, shape.offset, shape.epoch)?;
+                match stored.filter(|_| shape.masked && !stale) {
+                    Some(stored) => {
+                        let mut window = stored.expand(&self.payload_work)?;
+                        window.cut(inside as usize);
+                        let kept = window.trim(&self.payload_work);
+                        self.store(ns, serial, layer.gen, cell, stored.epoch, kept)?;
+                    }
+                    // A stale wide row stays wholly stale under the new step.
+                    None if stale && !shape.wide() => self.drop_row(shape.row)?,
+                    None if stale => {}
+                    None if to as i64 - shape.offset >= shape.length => {}
+                    // A dense row keeps its whole cells below the boundary
+                    // cell and that cell's bytes below `to`, with its stamp.
+                    None if shape.offset < cell => {
+                        if inside != 0 {
+                            let layer = (ns, serial, layer.gen);
+                            self.part(layer, &shape, cell, inside as i64)?;
+                        }
+                        self.keep(&shape, cell - shape.offset)?;
+                    }
+                    None => self.keep(&shape, inside as i64)?,
+                }
             }
         }
         let boundary = to.div_ceil(CELL).checked_mul(CELL).map(i64::try_from);

@@ -35,14 +35,15 @@ impl Overlay {
         }
         self.query(
             StatementKind::Explain,
-            &format!("EXPLAIN QUERY PLAN {}", sql::CELL_LOOKUP),
+            &format!("EXPLAIN QUERY PLAN {}", sql::CELL_COVER),
             &[
                 &route.ns,
                 &integer(serial)?,
                 &generation.0,
+                &crate::payload::runs::slot(integer(offset)?),
                 &integer(offset)?,
             ],
-            32,
+            40,
             |row| row.get(3),
         )
     }

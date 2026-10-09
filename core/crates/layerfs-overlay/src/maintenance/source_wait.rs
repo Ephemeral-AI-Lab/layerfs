@@ -1,7 +1,6 @@
 //! Indexed snapshot-source readiness and bounded orphan cell moves.
 use super::ready::WAKE_ORPHAN;
 use crate::{
-    layers::Layer,
     maintenance::{Item, ORPHAN},
     Overlay, OverlayResult, StatementKind,
 };
@@ -66,50 +65,5 @@ impl Overlay {
             self.finish_item(item)?;
         }
         Ok((rows.len() as u64, 0, rows.is_empty()))
-    }
-    /// Snapshot owners are fenced by the caller. Reuse the existing payload row
-    /// when no upper byte or cutoff needs merging, preserving physical custody;
-    /// otherwise compose one cell and release its lower physical row atomically.
-    pub(crate) fn move_orphan_cell(
-        &self,
-        ns: i64,
-        serial: i64,
-        lower: &Layer,
-        upper: &Layer,
-        cell: i64,
-    ) -> OverlayResult<u64> {
-        let old = self.stored(ns, serial, lower.gen, cell)?;
-        let current = self.stored(ns, serial, upper.gen, cell)?;
-        let stale_upper = match current {
-            Some(ref c) => self.stale(ns, serial, upper, cell, c.epoch)?,
-            None => true,
-        };
-        if let Some(ref old) = old {
-            if stale_upper
-                && !self.stale(ns, serial, lower, cell, old.epoch)?
-                && (cell as u64).saturating_add(old.data.len() as u64)
-                    <= lower.size.min(upper.cutoff)
-            {
-                if current.is_some() {
-                    self.execute(
-                        StatementKind::Reclaim,
-                        crate::sql::CELL_DROP,
-                        &[&ns, &serial, &upper.gen, &cell],
-                        32,
-                    )?;
-                }
-                self.execute(StatementKind::Payload,"UPDATE payload SET gen=?5,epoch=?6 WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4",
-                    &[&ns,&serial,&lower.gen,&cell,&upper.gen,&upper.epoch],48)?;
-                return Ok(old.data.len() as u64);
-            }
-        }
-        let bytes = self.compose_cell(ns, serial, lower, upper, cell)?;
-        self.execute(
-            StatementKind::Reclaim,
-            crate::sql::CELL_DROP,
-            &[&ns, &serial, &lower.gen, &cell],
-            32,
-        )?;
-        Ok(bytes)
     }
 }
