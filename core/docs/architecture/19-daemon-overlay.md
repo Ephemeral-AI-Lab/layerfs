@@ -312,3 +312,45 @@ when FORGET arrives first, 7 when the owner runs first), in
 [`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs).
 Not changed: what is enqueued at UNLINK and FORGET, the steps themselves and
 closed-namespace reclamation.
+
+R7 update, 2026-10-09 (the releasing job finishes a small orphan, decision
+U1, report items O3 and O4, schema unchanged at 22). Implemented:
+
+- **UNLINK queues only what can run.** `detach_orphan` reads the file's
+  references once. With none it queues the retirement of the active layer, as
+  before. With any it creates the orphan and no longer queues that
+  retirement, which the orphan held until the step that releases the layer
+  queued it again. The orphan's own item is queued only while a descriptor
+  or a reader holds the file (`opens+readers > 0`). Under kernel lookups
+  alone nothing is queued and `maintenance_pending()` stays false; the first
+  later descriptor or reader of such a file queues the item
+  (`Overlay::file_ref`, add branch, one probe only while `orphan_seen`).
+- **The last reference finishes the release.** In the `left == 0` branch of
+  `Overlay::file_ref` the item is queued and made ready as before, the exact
+  fallback. If the serial has an orphan row, `Overlay::finish_release` then
+  runs, in the same transaction, the existing steps `maintain_orphan` and
+  `retire_serial` on the serial's ready items in the owner's order (the
+  orphan's item, each ready layer retirement, around again), read from the
+  ready queue itself. Every hold is the step's own check; a held item leaves
+  the ready queue and the loop as it does for the owner. Bound: at most 6
+  step calls, which together drop at most one step's page (`PAGE`: 14
+  payload cells, 64 rows of cells and shrink rows; a step that has less of
+  the page left drops fewer of the rows it selected). What remains stays
+  queued and ready for the owner thread. When the serial has nothing ready
+  left, `maintenance_ready` returns to the value it had before this job
+  queued the item, so no empty turn follows.
+- **One per job, never in a step.** `Overlay::release_step` (one flag per
+  engine) is set when an atomic job starts, cleared by the first last
+  reference that uses it and by `Overlay::maintain`. A job that drops
+  several last references finishes one and queues the rest; `retire_native`
+  (64 lookups or handles a step) finishes none.
+
+Not changed: a file with no orphan row still queues its `ORPHAN` item at the
+last reference (the custody row is deleted by that step); FORGET's own reads;
+closed-namespace reclamation; the daemon's wake rule. Counts, superseding
+those of the update above: UNLINK under the kernel's lookup 22 -> 20
+statement attempts, FORGET of a one-cell file 12 -> 47, maintenance steps
+afterwards 4 (FORGET first) or 7 (owner first) -> 0, the three together 81
+or 122 -> 67. A 56-cell file: the FORGET drops 14 cells and the queue ends
+it in 5 steps. Pinned in
+[`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs).

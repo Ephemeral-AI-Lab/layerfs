@@ -28,6 +28,11 @@ pub struct Overlay {
     /// deletes the last one, and restored when a job fails, so it is exact:
     /// while false no orphan row and no orphan-domain inode row exists.
     pub(crate) orphan_seen: Cell<bool>,
+    /// Whether the running atomic job may still finish one orphan's release
+    /// itself. Set when a job starts, cleared by the first last reference
+    /// that uses it and by every maintenance step, so one job does at most
+    /// one maintenance step's rows of inline reclamation.
+    pub(crate) release_step: Cell<bool>,
     /// What the running atomic job has asked of this connection.
     pub(super) transaction: Cell<Transaction>,
     /// Next owner identity of this engine. The database is created by this
@@ -218,6 +223,7 @@ impl Overlay {
             return Err(OverlayError::Invalid("nested transaction"));
         }
         self.transaction.set(Transaction::Wanted { cleanup });
+        self.release_step.set(true);
         let orphans = self.orphan_seen.get();
         let result = job();
         // A failed job's orphan rows are as they were before it.

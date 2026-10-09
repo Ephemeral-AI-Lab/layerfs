@@ -34,6 +34,14 @@ impl Overlay {
         };
         if add {
             self.execute(StatementKind::Lease, increment, &[&ns, &serial], 16)?;
+            // A file removed while only kernel lookups held it has no orphan
+            // item yet: its first descriptor or reader queues the migration.
+            if !matches!(kind, LeaseKind::Lookup | LeaseKind::LookupOwner)
+                && self.orphan_seen.get()
+                && self.orphan(ns, serial)?.is_some()
+            {
+                self.enqueue(ns, crate::maintenance::ORPHAN, serial, -1)?;
+            }
         } else {
             // The decrement returns what remains; no reference means Stale.
             let left = self
@@ -43,8 +51,18 @@ impl Overlay {
                 .pop()
                 .ok_or(OverlayError::Stale)?;
             if left == 0 {
+                let ready = self.maintenance_ready.get();
+                // The queued item is the exact fallback for whatever the
+                // inline steps below leave.
                 self.enqueue(ns, crate::maintenance::ORPHAN, serial, -1)?;
                 self.wake_orphan(ns, serial)?;
+                if self.orphan_seen.get()
+                    && self.release_step.get()
+                    && self.orphan(ns, serial)?.is_some()
+                {
+                    self.release_step.set(false);
+                    self.finish_release(ns, serial, ready)?;
+                }
             }
         }
         Ok(())

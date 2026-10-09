@@ -4,8 +4,10 @@
 //! removal leaves behind. The jobs run through the public visit API over a
 //! real canonical base and Overlay, beside N and 4N kept files, in an engine
 //! that has never made an orphan, in the same engine after its orphans were
-//! reclaimed, and in a second Workspace opened on it later. Reclamation of a closed namespace is
-//! not measured here.
+//! reclaimed, and in a second Workspace opened on it later. The job that
+//! drops the last reference reclaims the file itself when that fits one
+//! maintenance step's page; a larger file and a file removed while open are
+//! pinned beside it. Reclamation of a closed namespace is not measured here.
 mod common;
 mod harness;
 use common::name;
@@ -88,6 +90,18 @@ struct Removed {
     /// Inode-family attempts of the six jobs.
     inode: u64,
 }
+/// A removed file that is larger than one step's page, or open at its UNLINK.
+#[derive(Debug, Eq, PartialEq)]
+struct Special {
+    /// Whether maintenance was pending after UNLINK, then the steps and rows
+    /// the owner ran before the next request.
+    unlinked: (bool, u64, u64),
+    /// The file's payload cells before and after its FORGET.
+    cells: (u64, u64),
+    forget: Cost,
+    /// Whether maintenance was pending after FORGET, then its steps and rows.
+    forgotten: (bool, u64, u64),
+}
 impl Mounted<'_> {
     fn request(&self) -> u64 {
         self.requests.set(self.requests.get() + 1);
@@ -124,7 +138,7 @@ impl Mounted<'_> {
         }
     }
     /// A file that keeps its name and its kernel reference.
-    fn keep(&self, child: &str) {
+    fn keep(&self, child: &str) -> u64 {
         let overlay = &self.b.overlay;
         let serial = self.workspace.next_serial(&self.b.allocator).unwrap();
         let mut request = self.mutation(1, None, NativeInput::Named(create(1, child)));
@@ -142,6 +156,110 @@ impl Mounted<'_> {
         overlay
             .close_native_file(self.mount, serial, file.owner_id())
             .unwrap();
+        serial
+    }
+    /// A file removed under the kernel's lookup reference and not forgotten.
+    fn parked(&self, child: &str) -> u64 {
+        let overlay = &self.b.overlay;
+        let serial = self.keep(child);
+        let visit = self
+            .workspace
+            .native_mutation_visit(
+                self.resident.clone(),
+                self.mutation(1, None, NativeInput::Named(unlink(1, child))),
+            )
+            .unwrap();
+        let outcome = visit.perform(overlay);
+        let Ok(JobOutcome::Applied { publication, .. }) = outcome.result else {
+            panic!("UNLINK was not published: {outcome:?}")
+        };
+        overlay.reply_tickets().attempted(publication).unwrap();
+        serial
+    }
+    /// One file of `cells` payload cells, removed under the kernel's lookup
+    /// reference. With `open` its descriptor is released after the UNLINK,
+    /// once the owner has run; FORGET is the last reference either way.
+    fn special(&self, child: &str, cells: usize, open: bool) -> Special {
+        let overlay = &self.b.overlay;
+        let stored = || overlay.resources(None).unwrap().counts.payload_cells;
+        let base = stored();
+        let orphans = overlay.resources(None).unwrap().counts.orphan_rows;
+        let serial = self.workspace.next_serial(&self.b.allocator).unwrap();
+        let mut request = self.mutation(1, None, NativeInput::Named(create(1, child)));
+        (request.open, request.fresh) = (Some(true), Some(serial));
+        let visit = self
+            .workspace
+            .native_mutation_visit(self.resident.clone(), request)
+            .unwrap();
+        let outcome = visit.perform(overlay);
+        let Ok(JobOutcome::Applied { publication, .. }) = outcome.result else {
+            panic!("CREATE was not published: {outcome:?}")
+        };
+        overlay.reply_tickets().attempted(publication).unwrap();
+        let file: OpenFile = outcome.file.expect("the created file is open");
+        for cell in 0..cells as u64 {
+            let write = NativeInput::Write {
+                offset: cell * 4096,
+                data: vec![7; 4096].into(),
+                cached: false,
+            };
+            let visit = self
+                .workspace
+                .native_mutation_visit(
+                    self.resident.clone(),
+                    self.mutation(serial, Some(file.owner_id()), write),
+                )
+                .unwrap();
+            let outcome = visit.perform(overlay);
+            let Ok(JobOutcome::Applied { publication, .. }) = outcome.result else {
+                panic!("WRITE was not published: {outcome:?}")
+            };
+            overlay.reply_tickets().attempted(publication).unwrap();
+        }
+        let close = || {
+            overlay
+                .close_native_file(self.mount, serial, file.owner_id())
+                .unwrap()
+        };
+        if !open {
+            close();
+        }
+        assert_eq!(self.drain().0, 0);
+        let visit = self
+            .workspace
+            .native_mutation_visit(
+                self.resident.clone(),
+                self.mutation(1, None, NativeInput::Named(unlink(1, child))),
+            )
+            .unwrap();
+        let outcome = visit.perform(overlay);
+        let Ok(JobOutcome::Applied { publication, .. }) = outcome.result else {
+            panic!("UNLINK was not published: {outcome:?}")
+        };
+        overlay.reply_tickets().attempted(publication).unwrap();
+        let pending = overlay.maintenance_pending();
+        let (steps, rows, _) = self.drain();
+        let unlinked = (pending, steps, rows);
+        if open {
+            // The kernel's lookup reference still holds the file.
+            close();
+            assert_eq!((stored() - base, self.drain().0), (cells as u64, 0));
+        }
+        let before = stored() - base;
+        let ((), work) = measured(overlay, || {
+            overlay.forget_native(self.mount, serial, 1).unwrap()
+        });
+        let cells = (before, stored() - base);
+        let pending = overlay.maintenance_pending();
+        let (steps, rows, _) = self.drain();
+        let counts = overlay.resources(None).unwrap().counts;
+        assert_eq!((counts.orphan_rows, counts.payload_cells), (orphans, base));
+        Special {
+            unlinked,
+            cells,
+            forget: cost(&work),
+            forgotten: (pending, steps, rows),
+        }
     }
     /// One file created, written, closed, removed and forgotten. With
     /// `early` the owner's maintenance runs between UNLINK and FORGET, as it
@@ -230,6 +348,8 @@ impl Mounted<'_> {
         };
         jobs[4] = cost(&work);
         overlay.reply_tickets().attempted(publication).unwrap();
+        // Under the kernel's lookup alone the removal queues nothing.
+        assert!(!overlay.maintenance_pending());
         if early {
             let (s, r, work) = self.drain();
             (steps, rows) = (steps + s, rows + r);
@@ -244,6 +364,8 @@ impl Mounted<'_> {
             overlay.native_lookup_count(self.mount, serial).unwrap(),
             None
         );
+        // The FORGET reclaimed the file and left the owner nothing to do.
+        assert!(!overlay.maintenance_pending());
         let (s, r, work) = self.drain();
         (steps, rows) = (steps + s, rows + r);
         maintenance.accumulate(work);
@@ -328,6 +450,18 @@ fn one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans() 
     let later = two.removed("f0", false);
     println!("NATIVE_UNLINK_COST second Workspace {later:?}");
     assert_eq!(b.demand(), demand, "an owner visit asked the provider");
+    // The second Workspace keeps an orphan under its lookup while the first
+    // Workspace's releases reclaim: its rows are another namespace's.
+    let parked = two.parked("p");
+    let orphans = || b.overlay.resources(None).unwrap().counts.orphan_rows;
+    assert_eq!((orphans(), b.overlay.maintenance_pending()), (1, false));
+    let large = one.special("large", 4 * 14, false);
+    let open = one.special("open", 1, true);
+    println!("NATIVE_UNLINK_COST four pages {large:?}");
+    println!("NATIVE_UNLINK_COST open at unlink {open:?}");
+    assert_eq!(orphans(), 1);
+    b.overlay.forget_native(two.mount, parked, 1).unwrap();
+    assert_eq!((orphans(), b.overlay.maintenance_pending()), (0, false));
 
     // Four times as many kept files beside it: nothing changes.
     assert_eq!(sized[0], sized[1]);
@@ -342,18 +476,30 @@ fn one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans() 
     ];
     assert_eq!(fresh.jobs, expected);
     assert_eq!(fresh.inode, INODE);
+    // Neither order leaves the owner a step: the FORGET did the work.
     let turns = |removed: &Removed| (removed.steps, removed.rows, removed.maintenance.clone());
+    assert_eq!(turns(&fresh), (0, 0, Vec::new()));
+    assert_eq!(turns(early), (0, 0, Vec::new()));
+    // Four pages: the FORGET drops one page, the queue the other three.
     assert_eq!(
-        turns(&fresh),
-        (FORGET_FIRST.0, FORGET_FIRST.1, FORGET_FIRST.2.to_vec())
+        large,
+        Special {
+            unlinked: (false, 0, 0),
+            cells: (56, 42),
+            forget: FORGET_PAGE.to_vec(),
+            forgotten: (true, 5, 46),
+        }
     );
+    // Open at its UNLINK: the owner migrates the cell as before, then
+    // parks the orphan; the FORGET after RELEASE drops it.
     assert_eq!(
-        turns(early),
-        (
-            MAINTENANCE_FIRST.0,
-            MAINTENANCE_FIRST.1,
-            MAINTENANCE_FIRST.2.to_vec()
-        )
+        open,
+        Special {
+            unlinked: (true, 4, 3),
+            cells: (1, 0),
+            forget: FORGET_MIGRATED.to_vec(),
+            forgotten: (false, 0, 0),
+        }
     );
     // Inode reads probe the orphan domain only while the engine holds an
     // orphan. Each of these orphans was reclaimed, so the files after them
@@ -365,8 +511,9 @@ fn one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans() 
     b.overlay.revoke_native_mount(one.mount).unwrap();
     b.overlay.revoke_native_mount(two.mount).unwrap();
 }
-/// The six jobs' Inode-family attempts for one created and removed file.
-const INODE: u64 = 21;
+/// The six jobs' Inode-family attempts for one created and removed file:
+/// 21 of the requests' own, and the two of the reclamation in FORGET.
+const INODE: u64 = 23;
 /// The negative LOOKUP: the fence; the directory's row and one seek of the
 /// name's rows, for each of its two evaluations.
 const LOOKUP: [(&str, u64, u64); 3] = [
@@ -406,12 +553,10 @@ const RELEASE: [(&str, u64, u64); 5] = [
 /// layer row and its tombstone, the directory's and its update [4 Inode,
 /// the tombstone with its count trigger]; the name's rows and the binding's
 /// removal [2 DirectoryEntry, with its trigger]; the orphan's row, absent
-/// [Lease]; the retirement of the file's active layer, queued [Reclaim,
-/// with its trigger]; the file's references [Lease]; the orphan's row
-/// [Lease, with its trigger] and its orphan-domain inode row [Inode]; the
-/// orphan's own item, queued [Reclaim, with its trigger]; the frontier
-/// [Workspace].
-const UNLINK: [(&str, u64, u64); 8] = [
+/// [Lease]; the file's references [Lease]; the orphan's row [Lease, with
+/// its trigger] and its orphan-domain inode row [Inode]; the frontier
+/// [Workspace]. Nothing is queued: only the kernel's lookup holds the file.
+const UNLINK: [(&str, u64, u64); 7] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
@@ -419,55 +564,46 @@ const UNLINK: [(&str, u64, u64); 8] = [
     ("Inode", 8, 9),
     ("DirectoryEntry", 4, 5),
     ("Lease", 3, 4),
-    ("Reclaim", 2, 4),
 ];
-/// FORGET of the last kernel reference, in order: the Workspace's row and
-/// the mount's [Workspace, Lease]; the lookup's row, its deletion and its
-/// owner's [3 Lease, each deletion with its trigger]; the file reference
-/// dropped by a statement that returns what remains [Lease]; the orphan's
-/// item queued again, which conflicts, and made ready [2 Reclaim, the
-/// second with its trigger]; the Workspace's row for a pending close
-/// [Workspace].
-const FORGET: [(&str, u64, u64); 6] = [
+/// FORGET of the last kernel reference, which reclaims the one-cell file.
+/// Its own part: the Workspace's row and the mount's [Workspace, Lease];
+/// the lookup's row, its deletion and its owner's [3 Lease, each deletion
+/// with its trigger]; the file reference dropped by a statement that
+/// returns what remains [Lease]; the orphan's item queued and made ready
+/// [2 Reclaim]; the orphan's row [Lease]; the Workspace's row for a pending
+/// close [Workspace]. The four maintenance steps it runs, as the owner ran
+/// them: the orphan releases its lower layer, that layer's retirement drops
+/// the cell, the orphan deletes its inode row, its row and the custody row
+/// and reads the engine's count of orphan rows, and the retirement ends
+/// [2 Workspace, 2 Inode, 11 Lease, 13 Reclaim]; six seeks of the ready
+/// queue for this file's items [Reclaim].
+const FORGET: [(&str, u64, u64); 7] = [
+    ("Startup", 1, 1),
+    ("Begin", 1, 1),
+    ("Commit", 1, 1),
+    ("Workspace", 4, 4),
+    ("Inode", 2, 2),
+    ("Lease", 17, 21),
+    ("Reclaim", 21, 30),
+];
+/// FORGET of a file of four pages: the orphan releases its lower layer and
+/// that layer's retirement drops one page of 14 cells; the rest stays queued.
+const FORGET_PAGE: [(&str, u64, u64); 7] = [
     ("Startup", 1, 1),
     ("Begin", 1, 1),
     ("Commit", 1, 1),
     ("Workspace", 2, 2),
-    ("Lease", 5, 7),
-    ("Reclaim", 2, 3),
+    ("Inode", 1, 1),
+    ("Lease", 12, 14),
+    ("Reclaim", 23, 41),
 ];
-/// Maintenance when FORGET arrives before the owner's first step: steps,
-/// rows, and the SQL of every turn. The orphan releases its lower layer;
-/// that layer's retirement drops the file's cell; the orphan finds no cell
-/// of its own, then deletes its inode row, its row and the custody row and
-/// reads the engine's count of orphan rows.
-const FORGET_FIRST: (u64, u64, [(&str, u64, u64); 7]) = (
-    4,
-    5,
-    [
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 2, 2),
-        ("Inode", 2, 2),
-        ("Lease", 11, 13),
-        ("Reclaim", 20, 26),
-    ],
-);
-/// Maintenance when the owner runs between UNLINK and FORGET, as it does
-/// behind a serial client: the cell is first moved into the orphan domain
-/// and its lower layer retired, then deleted again after FORGET.
-const MAINTENANCE_FIRST: (u64, u64, [(&str, u64, u64); 8]) = (
-    7,
-    7,
-    [
-        ("Startup", 7, 7),
-        ("Begin", 7, 7),
-        ("Commit", 7, 7),
-        ("Workspace", 6, 6),
-        ("Inode", 6, 6),
-        ("Payload", 3, 4),
-        ("Lease", 19, 21),
-        ("Reclaim", 33, 43),
-    ],
-);
+/// FORGET of a file whose cell the owner had migrated while it was open:
+/// the orphan drops that cell, then deletes its rows.
+const FORGET_MIGRATED: [(&str, u64, u64); 6] = [
+    ("Startup", 1, 1),
+    ("Begin", 1, 1),
+    ("Commit", 1, 1),
+    ("Workspace", 2, 2),
+    ("Lease", 11, 15),
+    ("Reclaim", 14, 19),
+];

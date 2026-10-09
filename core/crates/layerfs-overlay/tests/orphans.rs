@@ -533,10 +533,12 @@ fn a_closed_namespace_that_takes_the_last_orphan_stops_the_probe() {
         assert_eq!(db.source_inode(elsewhere, 9).unwrap(), None);
         db.diagnostics().since(&before).statements[StatementKind::Inode as usize].attempts
     };
+    // More cells than the one page its last owner's release drops itself.
+    const SIZE: u64 = 15 * 4096;
     let mut file = File::new(&db, source, 7, Vec::new());
-    file.write(0, b"kept");
-    let open = db.open_file(source, 1, &file.inode(4), true).unwrap();
-    let mut removed = file.inode(4);
+    file.write(0, &pattern(SIZE as usize, 3));
+    let open = db.open_file(source, 1, &file.inode(SIZE), true).unwrap();
+    let mut removed = file.inode(SIZE);
     removed.nlink = 0;
     let publication = db
         .apply(
@@ -551,8 +553,9 @@ fn a_closed_namespace_that_takes_the_last_orphan_stops_the_probe() {
     assert_eq!(attempts(), 2);
 
     // The Workspace closes and its last owner leaves with no live
-    // maintenance turn in between: terminal reclamation deletes the orphan
-    // row, after the namespace's inode rows.
+    // maintenance turn in between. The release drops one page and leaves
+    // the orphan: terminal reclamation deletes the orphan row, after the
+    // namespace's inode rows.
     db.close(route).unwrap();
     db.release_base_source(source).unwrap();
     db.close_file(open).unwrap();

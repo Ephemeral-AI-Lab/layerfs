@@ -73,13 +73,27 @@ impl Overlay {
             return Ok(());
         }
         let serial = integer(inode.serial)?;
-        let orphan = self.orphan(route.ns, serial)?;
-        if orphan.is_none() {
-            self.enqueue(route.ns, SERIAL_RETIRE, serial, state.active.0)?;
-        }
-        if orphan.is_some() || self.file_refs(route.ns, serial)? == 0 {
+        if self.orphan(route.ns, serial)?.is_some() {
             return Ok(());
         }
+        // Every reference, and the ones that can read or write the file.
+        let (holders, users) = self
+            .query(
+                StatementKind::Lease,
+                "SELECT opens+lookups+readers,opens+readers FROM file_custody
+                WHERE ns=?1 AND serial=?2",
+                &[&route.ns, &serial],
+                16,
+                |r| Ok((crate::db::unsigned(r, 0)?, crate::db::unsigned(r, 1)?)),
+            )?
+            .pop()
+            .unwrap_or((0, 0));
+        if holders == 0 {
+            // Nothing holds the file: its active layer retires directly.
+            return self.enqueue(route.ns, SERIAL_RETIRE, serial, state.active.0);
+        }
+        // The orphan holds its lower layers, whose retirement is queued by
+        // the step that releases each of them.
         // From here an orphan-domain row may exist: inode reads probe for it
         // until the last orphan row of this engine is deleted.
         self.orphan_seen.set(true);
@@ -117,7 +131,13 @@ impl Overlay {
             ],
             120,
         )?;
-        self.enqueue(route.ns, ORPHAN, serial, DOMAIN)
+        // Migration serves a descriptor or a reader. Under kernel lookups
+        // alone nothing is queued: the last lookup's release queues the
+        // orphan's item and an earlier open or read queues it then.
+        if users != 0 {
+            self.enqueue(route.ns, ORPHAN, serial, DOMAIN)?;
+        }
+        Ok(())
     }
     pub(crate) fn orphan_layer(&self, ns: i64, serial: i64) -> OverlayResult<Layer> {
         self.layers(ns, serial, DOMAIN, DOMAIN - 1)?

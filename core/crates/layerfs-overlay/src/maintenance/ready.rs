@@ -15,6 +15,23 @@ pub(crate) const NATIVE_DIRECTORY: i64 = 11;
 const READY: &str = "SELECT ns,kind,resource,target,phase,cursor,aux,name FROM maintenance
     INDEXED BY maintenance_ready WHERE ready=1 AND (ns,kind,resource,target)>(?1,?2,?3,?4)
     ORDER BY ns,kind,resource,target LIMIT 1";
+/// The same queue, for the items of one kind and resource.
+const READY_OF: &str = "SELECT ns,kind,resource,target,phase,cursor,aux,name FROM maintenance
+    INDEXED BY maintenance_ready WHERE ready=1 AND ns=?1 AND kind=?2 AND resource=?3 AND target>?4
+    ORDER BY target LIMIT 1";
+/// What a step of an orphan or of a layer's retirement may still drop:
+/// payload cells, and rows of any kind. The statements select one whole
+/// page; a caller that has spent part of it drops fewer.
+#[derive(Clone, Copy)]
+pub(crate) struct Page {
+    pub cells: usize,
+    pub rows: usize,
+}
+/// The page of one maintenance step.
+pub(crate) const PAGE: Page = Page {
+    cells: 14,
+    rows: 64,
+};
 
 /// Fixed scheduler cursor, independent of the number of maintenance targets.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -84,6 +101,23 @@ impl Overlay {
         self.maintenance_ready.set(true);
         Ok(())
     }
+    /// The next ready item of one kind and resource after `target`.
+    pub(crate) fn ready_item(
+        &self,
+        ns: i64,
+        kind: i64,
+        resource: i64,
+        target: i64,
+    ) -> OverlayResult<Option<Item>> {
+        self.query(
+            StatementKind::Reclaim,
+            READY_OF,
+            &[&ns, &kind, &resource, &target],
+            32,
+            Item::decode,
+        )
+        .map(|mut rows| rows.pop())
+    }
     pub(crate) fn advance_item(
         &self,
         item: &Item,
@@ -150,6 +184,8 @@ impl Overlay {
             return Ok(None);
         }
         self.atomic_cleanup(|| {
+            // A step is already one bounded page: a release inside it queues.
+            self.release_step.set(false);
             let mut item = self
                 .query(
                     StatementKind::Reclaim,
@@ -183,12 +219,12 @@ impl Overlay {
                 match item.kind {
                     FOLD => self.fold_namespace(&item)?,
                     RETIRE => self.retire_generation(&item)?,
-                    ORPHAN => self.maintain_orphan(&item)?,
+                    ORPHAN => self.maintain_orphan(&item, PAGE)?,
                     WAKE_ORPHAN => self.wake_orphan_step(&item)?,
                     WAKE_GENERATION => self.wake_generation_step(&item)?,
                     NATIVE => self.retire_native(&item)?,
                     NATIVE_DIRECTORY => self.retire_native_directory(&item)?,
-                    SERIAL_RETIRE => self.retire_serial(&item)?,
+                    SERIAL_RETIRE => self.retire_serial(&item, PAGE)?,
                     STALE | STEPS | OPERATION_RECORD => self.clean_live_item(&item)?,
                     _ => return Err(OverlayError::Invalid("maintenance kind")),
                 }

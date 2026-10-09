@@ -2,11 +2,71 @@
 use crate::{
     db::integer,
     lifetime::orphan::DOMAIN,
-    maintenance::{Item, ORPHAN},
+    maintenance::{Item, Page, ORPHAN, PAGE, SERIAL_RETIRE},
     sql, Overlay, OverlayResult, StatementKind,
 };
+/// Step calls one releasing job makes: two for the orphan and two for each
+/// of its at most two lower layers.
+const RELEASE_CALLS: u32 = 6;
 impl Overlay {
-    pub(crate) fn maintain_orphan(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
+    /// The job that dropped an orphan's last reference runs, in its own
+    /// transaction, the steps the owner thread would run next for that
+    /// serial, in the owner's order: the orphan's item, then each ready
+    /// retirement of a layer it released, around again. Each call is the
+    /// existing step with its own hold checks, and a held item leaves the
+    /// ready queue as it does for the owner. All calls together drop at most
+    /// one step's page; whatever is left stays queued and ready. `ready` is
+    /// the hint before this job queued the orphan's item, restored when the
+    /// serial has nothing ready left.
+    pub(crate) fn finish_release(&self, ns: i64, serial: i64, ready: bool) -> OverlayResult<()> {
+        let mut page = PAGE;
+        let mut calls = 0;
+        loop {
+            // Every ready item of the serial is visited once a round: only
+            // the orphan's step readies another, and that one sorts after it.
+            let (mut kind, mut after, mut unfinished) = (ORPHAN, i64::MIN, false);
+            loop {
+                let Some(item) = self.ready_item(ns, kind, serial, after)? else {
+                    if kind == SERIAL_RETIRE {
+                        break;
+                    }
+                    kind = SERIAL_RETIRE;
+                    continue;
+                };
+                if calls == RELEASE_CALLS || page.cells == 0 || page.rows == 0 {
+                    return Ok(());
+                }
+                calls += 1;
+                let (rows, bytes, done) = if kind == ORPHAN {
+                    self.maintain_orphan(&item, page)?
+                } else {
+                    self.retire_serial(&item, page)?
+                };
+                if !done {
+                    unfinished = true;
+                    // A page of cells reports its bytes, one of shrink rows none.
+                    page.rows -= rows as usize;
+                    if bytes != 0 {
+                        page.cells -= rows as usize;
+                    }
+                }
+                if kind == ORPHAN {
+                    kind = SERIAL_RETIRE;
+                } else {
+                    after = item.target;
+                }
+            }
+            if !unfinished {
+                self.maintenance_ready.set(ready);
+                return Ok(());
+            }
+        }
+    }
+    pub(crate) fn maintain_orphan(
+        &self,
+        item: &Item,
+        page: Page,
+    ) -> OverlayResult<(u64, u64, bool)> {
         let (ns, serial) = (item.ns, item.resource);
         let Some(orphan) = self.orphan(ns, serial)? else {
             self.execute(
@@ -86,7 +146,7 @@ impl Overlay {
                 return Ok((0, 0, false));
             }
         }
-        let rows = self.query(
+        let mut rows = self.query(
             StatementKind::Reclaim,
             "SELECT cell_offset,length(data)+ifnull(length(validity),0) FROM payload
             WHERE ns=?1 AND serial=?2 AND gen=-1 ORDER BY cell_offset LIMIT 14",
@@ -94,6 +154,7 @@ impl Overlay {
             16,
             |r| Ok((r.get::<_, i64>(0)?, crate::db::unsigned(r, 1)?)),
         )?;
+        rows.truncate(page.cells.min(page.rows));
         if !rows.is_empty() {
             let mut bytes = 0;
             for (cell, size) in &rows {
@@ -107,13 +168,14 @@ impl Overlay {
             }
             return Ok((rows.len() as u64, bytes, false));
         }
-        let steps = self.query(
+        let mut steps = self.query(
             StatementKind::Reclaim,
             "SELECT depth FROM shrink WHERE ns=?1 AND serial=?2 AND gen=-1 ORDER BY depth LIMIT 64",
             &[&ns, &serial],
             16,
             |r| r.get::<_, i64>(0),
         )?;
+        steps.truncate(page.rows);
         if !steps.is_empty() {
             for depth in &steps {
                 self.execute(
@@ -147,13 +209,13 @@ impl Overlay {
         self.finish_item(item)?;
         Ok((3, 0, true))
     }
-    pub(crate) fn retire_serial(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
+    pub(crate) fn retire_serial(&self, item: &Item, page: Page) -> OverlayResult<(u64, u64, bool)> {
         let (ns, serial, gen) = (item.ns, item.resource, item.target);
         if self.generation_held(ns, gen)? || self.orphan_holds(ns, serial, gen)? {
             self.hold_item(item)?;
             return Ok((0, 0, false));
         }
-        let rows = self.query(
+        let mut rows = self.query(
             StatementKind::Reclaim,
             "SELECT cell_offset,length(data)+ifnull(length(validity),0) FROM payload
             WHERE ns=?1 AND serial=?2 AND gen=?3 ORDER BY cell_offset LIMIT 14",
@@ -161,6 +223,7 @@ impl Overlay {
             24,
             |r| Ok((r.get::<_, i64>(0)?, crate::db::unsigned(r, 1)?)),
         )?;
+        rows.truncate(page.cells.min(page.rows));
         if !rows.is_empty() {
             let mut bytes = 0;
             for (cell, size) in &rows {
@@ -174,13 +237,14 @@ impl Overlay {
             }
             return Ok((rows.len() as u64, bytes, false));
         }
-        let steps = self.query(
+        let mut steps = self.query(
             StatementKind::Reclaim,
             "SELECT depth FROM shrink WHERE ns=?1 AND serial=?2 AND gen=?3 ORDER BY depth LIMIT 64",
             &[&ns, &serial, &gen],
             24,
             |r| r.get::<_, i64>(0),
         )?;
+        steps.truncate(page.rows);
         if !steps.is_empty() {
             for depth in &steps {
                 self.execute(
