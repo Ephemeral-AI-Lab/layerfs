@@ -2568,3 +2568,34 @@ C12 −191 statements. The ten cells with identical counts moved between
 table is evidence for or against any of them. Storage: logical bytes equal
 in every cell.
 
+### Batch 1 suites at `45bec69af`, and one test observation corrected
+
+`343-lead-batch1-host-45bec69af` (overlay, workspace, daemon on host): 116
+binaries, 114 ok; the two failures are the known `complete_installed_roots`
+and `host_handoff`. `344-lead-batch1-linux-45bec69af` (the 21 mounted
+daemon binaries): 20 ok, `mounted_failure_scope` 1 of 2 failed:
+`a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_effect`
+reported "the refused create changed the engine: Some((0, 0)) -> None".
+
+Diagnosis from source and one bounded run (a read-only agent, receipts
+`345-scope-attempt1`, `345-scope-attempt2`): the test read the engine
+through control Status, which asks without waiting for one of the lane's
+two Lifecycle slots and answers without engine fields while both are in
+use. The listing the test makes just before leaves two requests that each
+hold a slot for a moment after `closedir` returns (the last READDIR
+releases its source after its reply; the kernel sends RELEASEDIR without
+waiting). Nothing in today's commits touches dispatch, READDIR, RELEASEDIR,
+Status or admission, and an R6 receipt shows the same two-in-flight state
+on a run where the read happened to succeed. It is a race in the test's
+observation, seen at host load 20; not a product defect, and nothing stays
+parked. The same test failed once in the first implementer's Linux run for
+the same reason.
+
+Correction, test only: the engine is observed after a bounded wait for a
+quiet connection (2 s under the held writer, inside the holder's 5 s), one
+Status supplies revision, dirty inodes, refusal and native work together,
+and one expectation is added (the connection becomes quiet, so a request
+parked for the whole hold now fails the test). The revision and
+retained/terminal expectations are unchanged. `345-scope-attempt2`: PASS,
+engine `Some((0, 0)) -> Some((0, 0))`.
+

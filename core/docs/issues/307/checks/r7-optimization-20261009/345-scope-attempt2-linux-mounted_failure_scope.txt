@@ -1,0 +1,14 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 7ffa0de15, uncommitted product/test paths=1, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_failure_scope-81d2baa09c7ec6f5 --test-threads=1 a_create_with_no_serial_range --nocapture
+
+running 1 test
+test a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_effect ... P_1 held writer: touch status=Some(1) stderr="touch: cannot touch 'contended.txt': Resource temporarily unavailable" | reservation attempts=[Err(Busy)] store_serial_reservations=1 | writer session statements 35 -> 36 write_transactions 0 -> 0 | name lookup=Err(NotFound) names=["README.md", "cold-0.bin", "cold-1.bin", "cold-2.bin", "cold-3.bin", "cold-4.bin", "cold-5.bin", "cold-6.bin", "cold-7.bin"] | engine (revision, dirty_inodes) Some((0, 0)) -> Some((0, 0)) refusal=None | quiet before=true held=true native_work=Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 14, handoffs: 14, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 })
+P_1 released: touch status=Some(0) stderr="" | reservation attempts=[Err(Busy), Ok(start=11 count=1024)] | second create status=Some(0) attempts=2 store_serial_reservations=2 | writer session write_transactions 0 -> 1 | names=["README.md", "another.txt", "cold-0.bin", "cold-1.bin", "cold-2.bin", "cold-3.bin", "cold-4.bin", "cold-5.bin", "cold-6.bin", "cold-7.bin", "contended.txt"]
+P2_UNMOUNT P-1: quiet_before=true unmounted=true answer=Unmounted(WorkspaceToken { workspace: WorkspaceId(0101010101010101010101010101010101010101010101010101010101010101), namespace: 1 })
+P2_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=1
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.08s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

@@ -181,9 +181,17 @@ impl Drop for Mounted {
         }
     }
 }
+/// The bound of a wait for a quiet connection while the external writer of
+/// P-1 is held. It ends well inside the holder's own five seconds, so a
+/// request parked for the whole hold is reported and not outwaited.
+const HELD_WAIT: Duration = Duration::from_secs(2);
+
 /// A bounded observation loop that reports instead of unwinding.
-fn eventually(mut condition: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + WAIT;
+fn eventually(condition: impl FnMut() -> bool) -> bool {
+    within(WAIT, condition)
+}
+fn within(limit: Duration, mut condition: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + limit;
     loop {
         if condition() {
             return true;
@@ -197,8 +205,11 @@ fn eventually(mut condition: impl FnMut() -> bool) -> bool {
 /// Two consecutive observations of a connection with nothing received or
 /// admitted and no request completed in between.
 fn quiet(harness: &Harness, token: WorkspaceToken) -> bool {
+    quiet_within(harness, token, WAIT)
+}
+fn quiet_within(harness: &Harness, token: WorkspaceToken, limit: Duration) -> bool {
     let mut last = None;
-    eventually(|| {
+    within(limit, || {
         let work = harness.status(token).native.unwrap().work.unwrap();
         let now = (work.received, work.admitted, work.completed);
         let settled = work.received == 0 && work.admitted == 0 && last == Some(now);
@@ -665,11 +676,26 @@ fn a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_eff
     let mount = root(&ready).to_path_buf();
     let token = ready.token;
     let mut checks = Checks::default();
-    let revision = |fx: &Fx| {
-        fx.harness
-            .status(token)
-            .local
-            .map(|local| (local.revision, local.dirty_inodes))
+    // Control Status asks the engine without waiting for one of the lane's
+    // two Lifecycle slots and answers without engine fields while both are
+    // in use. `names` leaves two requests that each use one for a moment
+    // after `closedir` has returned: the last READDIR releases its source
+    // after its reply, and the kernel sends RELEASEDIR without waiting for
+    // an answer. `344-lead-batch1-linux-45bec69af` is the receipt of an
+    // observation taken in that window. The engine is therefore observed on
+    // a connection that is quiet, with a bounded wait, and one Status gives
+    // the engine fields, their refusal and the connection's work together.
+    let observe = |fx: &Fx, limit: Duration| {
+        let quiet = quiet_within(&fx.harness, token, limit);
+        let status = fx.harness.status(token);
+        (
+            quiet,
+            status
+                .local
+                .map(|local| (local.revision, local.dirty_inodes)),
+            status.local_failure.map(|refusal| brief(&refusal)),
+            status.native.and_then(|native| native.work),
+        )
     };
 
     // No serial was reserved since the Store was opened, so the Workspace
@@ -677,7 +703,7 @@ fn a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_eff
     let opened = (fx.attempts().len(), fx.store.work().serial_reservations);
     assert_eq!(opened, (0, 0), "the Workspace starts with no serial range");
     let names_before = names(&mount);
-    let revision_before = revision(&fx);
+    let (quiet_before, revision_before, _, _) = observe(&fx, WAIT);
 
     // A real external process holds the Store's writer.
     let held = HeldWriter::acquire(&fx.fixture.config.path);
@@ -688,16 +714,11 @@ fn a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_eff
     let counted_held = fx.store.work().serial_reservations;
     let lookup_held = fs::symlink_metadata(mount.join("contended.txt")).map(|_| ());
     let names_held = names(&mount);
-    let revision_held = revision(&fx);
-    let work_held = fx
-        .harness
-        .status(token)
-        .native
-        .and_then(|native| native.work);
+    let (quiet_held, revision_held, refusal_held, work_held) = observe(&fx, HELD_WAIT);
     held.release();
     let stderr = String::from_utf8_lossy(&refused.stderr).into_owned();
     println!(
-        "P_1 held writer: touch status={:?} stderr={:?} | reservation attempts={attempts_held:?} store_serial_reservations={counted_held} | writer session statements {} -> {} write_transactions {} -> {} | name lookup={:?} names={names_held:?} | engine (revision, dirty_inodes) {revision_before:?} -> {revision_held:?} | native_work={work_held:?}",
+        "P_1 held writer: touch status={:?} stderr={:?} | reservation attempts={attempts_held:?} store_serial_reservations={counted_held} | writer session statements {} -> {} write_transactions {} -> {} | name lookup={:?} names={names_held:?} | engine (revision, dirty_inodes) {revision_before:?} -> {revision_held:?} refusal={refusal_held:?} | quiet before={quiet_before} held={quiet_held} native_work={work_held:?}",
         refused.status.code(),
         stderr.trim(),
         sql_before.statements,
@@ -737,8 +758,13 @@ fn a_create_with_no_serial_range_under_a_held_store_writer_is_eagain_with_no_eff
     );
     expect!(
         checks,
+        quiet_before && quiet_held,
+        "the connection was not quiet: before the hold {quiet_before}, within {HELD_WAIT:?} under the held writer {quiet_held}: {work_held:?}"
+    );
+    expect!(
+        checks,
         revision_held.is_some() && revision_held == revision_before,
-        "the refused create changed the engine: {revision_before:?} -> {revision_held:?}"
+        "the refused create changed the engine: {revision_before:?} -> {revision_held:?} ({refusal_held:?})"
     );
     expect!(
         checks,
