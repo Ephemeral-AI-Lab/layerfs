@@ -1,0 +1,36 @@
+===== mounted_store_read-ed029d1fc0e08cb5 (cwd /work/core/crates/layerfs-daemon)
+
+running 3 tests
+test a_detached_unmount_drains_behind_a_read_inside_its_store_read_before_it_revokes ... ok
+test force_beside_a_read_inside_its_store_read_stops_at_requests_and_revokes_nothing ... ok
+test unmount_is_busy_beside_a_read_inside_its_store_read_and_completes_after_its_reply ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.48s
+
+R4_WALL seconds<=5 limit=110s lock_wait=0s
+
+EXIT 0
+===== native_custody-5748f62babb0e016 (cwd /work/core/crates/layerfs-daemon)
+
+running 2 tests
+test an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it ... ok
+test kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+R4_WALL seconds<=1 limit=110s lock_wait=0s
+
+EXIT 0
+===== store_read_drain-5a36861136104c17 (cwd /work/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_read_inside_its_store_read_keeps_the_lane_undrained_until_it_replies ... ok
+test a_readdir_inside_its_store_read_keeps_the_lane_undrained_until_its_names_are_read ... ok
+test a_stopped_fence_does_not_end_a_read_inside_its_store_read ... ok
+test an_open_inside_its_store_read_keeps_the_lane_undrained_and_records_nothing_yet ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+R4_WALL seconds<=2 limit=110s lock_wait=0s
+
+EXIT 0

@@ -22,7 +22,11 @@ use layerfs_history::BranchId;
 use layerfs_overlay::{NativeMount, Route};
 use mounted::{mount_entry, until, Harness};
 use std::{
-    collections::BTreeMap, fs, io::Write, os::unix::fs::MetadataExt, path::Path,
+    collections::BTreeMap,
+    fs,
+    io::{Read, Write},
+    os::unix::fs::MetadataExt,
+    path::Path,
     process::Command as Process,
 };
 
@@ -176,22 +180,27 @@ fn kernel_forget_arrives_on_a_live_connection_with_its_exact_decrement() {
 #[test]
 fn an_unmount_that_cannot_revoke_stops_retained_and_later_replies_repeat_it() {
     let (f, h) = harness("-retained");
+    let helper = h.bind(1);
     let ready = h.mount(2);
     let token = ready.token;
     let root = Path::new(&ready.directory);
-    assert_eq!(
-        fs::read(root.join("ignored.bin")).unwrap(),
-        fixture::FILES[6].1
-    );
+    let mut file = fs::File::open(root.join("ignored.bin")).unwrap();
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).unwrap();
+    assert_eq!(bytes, fixture::FILES[6].1);
     // A service consumer outside the kernel connection: both of this
     // namespace's lifecycle slots are held by owner results the test keeps.
     // Connection drain cannot see them; the unmount's revocation is refused
     // unattempted and the unmount stops retained rather than waiting.
-    // The read's asynchronous RELEASE occupies a lifecycle slot; a nonwaiting
-    // test submission made before it finishes is refused unattempted.
-    until("read bookkeeping quiescent", || {
+    // The kernel sends the read's RELEASE after `close` returns, and it
+    // occupies a lifecycle slot: a nonwaiting test submission made before it
+    // is disposed is refused unattempted. Its arrival is observed as the
+    // descriptor row leaving the engine, read through another namespace.
+    let open = h.engine(helper).owner_details;
+    drop(file);
+    until("the read's RELEASE disposed", || {
         let work = h.status(token).native.unwrap().work.unwrap();
-        work.received == 0 && work.admitted == 0
+        h.engine(helper).owner_details < open && work.received == 0 && work.admitted == 0
     });
     let route = route(&h, token);
     let mount = engine_mount(&h, route);

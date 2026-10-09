@@ -1,0 +1,3 @@
+mounted_store_read-ed029d1fc0e08cb5 exit=0 seconds=3 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.48s
+native_custody-5748f62babb0e016 exit=0 seconds=0 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+store_read_drain-5a36861136104c17 exit=0 seconds=1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
