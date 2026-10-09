@@ -1,0 +1,31 @@
+
+running 26 tests
+test a_base_resident_directory_can_be_renamed_by_unbinding_first ... ok
+test a_base_resident_directory_cannot_gain_a_second_parent ... ok
+test a_base_resident_symlink_cannot_gain_a_second_parent ... ok
+test a_build_cycle_that_the_root_holds_is_refused ... ok
+test a_build_whose_root_is_not_declared_new_is_refused_up_front ... ok
+test a_build_with_a_disconnected_directory_cycle_is_refused ... ok
+test a_caller_asserted_count_is_never_trusted ... ok
+test a_cycle_formed_by_moving_a_directory_below_itself_is_refused ... ok
+test a_cycle_formed_inside_a_build_is_refused ... ok
+test a_cycle_through_a_fresh_directory_inside_the_moved_directory_is_refused ... ok
+test a_directory_or_symlink_cannot_have_two_parents ... ok
+test a_disconnected_new_record_is_refused ... ok
+test a_dropped_directory_emits_no_page_of_its_own ... ok
+test a_foreign_scope_or_profile_is_refused ... ok
+test a_fresh_directory_bound_only_inside_a_dropped_directory_is_refused_by_a_build ... ok
+test a_fresh_directory_bound_only_inside_a_dropped_directory_is_refused_by_an_update ... ok
+test a_header_for_a_directory_the_base_dropped_is_a_missing_inode ... ok
+test a_permutation_of_65_directory_bindings_is_one_linear_walk ... ok
+test a_reused_identity_is_refused ... ok
+test a_self_binding_is_refused ... ok
+test a_stored_directory_bound_again_inside_a_dropped_directory_is_refused ... ok
+test a_stored_directory_moved_only_into_a_dropped_directory_is_refused ... ok
+test a_stored_symlink_bound_again_inside_a_dropped_directory_has_two_parents ... ok
+test an_update_cycling_two_declared_new_directories_is_refused ... ok
+test an_update_with_a_disconnected_fresh_directory_cycle_is_refused ... ok
+test the_root_stays_a_zero_count_directory ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

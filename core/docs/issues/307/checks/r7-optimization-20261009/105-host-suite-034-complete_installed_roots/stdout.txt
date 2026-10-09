@@ -1,0 +1,9 @@
+
+running 4 tests
+test all_supported_native_paths_survive_install_with_full_oracles ... ok
+test dense_500000000_native_bytes_survive_install ... ok
+test prepare_huge_native_namespace ... ignored, explicit sealed preparation, not an independent proof or measurement
+test sparse_native_bytes_and_holes_survive_install ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 1 filtered out; finished in 10.44s
+

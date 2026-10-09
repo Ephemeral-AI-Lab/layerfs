@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "python3",
+    "/r7-proof.py",
+    "--mount",
+    "/p",
+    "--stage",
+    "mutation"
+  ],
+  "attempts": 1,
+  "gid": 20,
+  "pid": 19,
+  "uid": 501,
+  "wall_stop_ns": 9500000000
+}

@@ -1,0 +1,2 @@
+ConnectionFailure { slot: 0, received_bytes: None, original_kind: None, cause: Channel(Io(Kind(UnexpectedEof))), fence_error: None, diagnostic_error: None }
+R4_WALL seconds<=1 limit=20s lock_wait=0s

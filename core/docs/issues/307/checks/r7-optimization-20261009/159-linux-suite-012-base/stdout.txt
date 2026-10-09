@@ -1,0 +1,12 @@
+
+running 7 tests
+test actual_provider_wait_allows_shared_progress_and_actor_install_pairs_the_selected_base ... ok
+test effective_alias_metadata_whiteouts_and_three_way_pages_advance_with_bounded_hidden_work ... ok
+test full_root_binding_aliases_metadata_symlinks_and_eof_use_content_apis ... ok
+test known_install_advances_selected_base_and_preserves_retained_plans_and_later_rows ... ok
+test logical_workspace_open_binds_real_root_without_schema_or_namespace_import ... ok
+test retained_old_plan_and_new_root_use_exact_immutable_cache_identities ... ok
+test source_errors_and_unattempted_actor_install_preserve_exact_custody ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

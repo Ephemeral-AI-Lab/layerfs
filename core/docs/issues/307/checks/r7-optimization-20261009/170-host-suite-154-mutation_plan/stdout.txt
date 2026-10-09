@@ -1,0 +1,10 @@
+
+running 5 tests
+test different_source_and_failed_base_demand_finish_without_discarding_input ... ok
+test later_owner_round_rechecks_current_namespace_after_a_park ... ok
+test original_owner_error_is_returned_and_cannot_reenter_an_owner_round ... ok
+test preparation_and_owner_rounds_do_no_provider_work_and_publish_once ... ok
+test preparation_refusal_returns_original_input_before_provider_or_sql_effects ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+

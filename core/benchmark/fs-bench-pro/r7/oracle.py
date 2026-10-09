@@ -13,9 +13,37 @@ from pathlib import Path
 import stat
 
 
+class FileOwner:
+    """Selected oracle I/O; closing preserves the exact first original failure."""
+    def __init__(self, path, mode, phase):
+        self.phase = phase
+        try:
+            self.stream = Path(path).open(mode, buffering=0) if "b" in mode else Path(path).open(mode)
+        except BaseException as original:
+            if not hasattr(original, "original_phase"):
+                original.original_phase = phase + "_open"
+            raise
+
+    def __enter__(self):
+        return self.stream
+
+    def __exit__(self, kind, original, traceback):
+        if original is not None and not hasattr(original, "original_phase"):
+            original.original_phase = self.phase
+        try:
+            self.stream.close()
+        except OSError as closing:
+            if original is None:
+                if not hasattr(closing, "original_phase"):
+                    closing.original_phase = self.phase + "_close"
+                raise
+            original.independent_close_failures = [*getattr(original, "independent_close_failures", []), str(closing)]
+        return False
+
+
 def digest_file(path):
     digest = hashlib.sha256()
-    with Path(path).open("rb") as stream:
+    with FileOwner(path, "rb", "payload_read") as stream:
         for part in iter(lambda: stream.read(65536), b""):
             digest.update(part)
     return digest.hexdigest()
@@ -46,7 +74,11 @@ def selected(case, relative):
 def entries(root):
     root = Path(root)
     yield ".", root
-    for current, directories, files in os.walk(root, followlinks=False):
+    def walk_error(original):
+        if not hasattr(original, "original_phase"):
+            original.original_phase = "namespace_walk"
+        raise original
+    for current, directories, files in os.walk(root, followlinks=False, onerror=walk_error):
         directories.sort()
         files.sort()
         for name in sorted(directories + files):
@@ -63,7 +95,7 @@ def observe(root, case, output, tracked=None):
     paths = files = payload = 0
     # A live mount must remain mounted until this observer exits. Reading a
     # backing directory after terminal unmount cannot prove uncommitted state.
-    with output.open("x") as stream:
+    with FileOwner(output, "xb", "manifest_write") as stream:
         for relative, path in entries(root):
             if not selected(case, relative):
                 continue
@@ -83,7 +115,9 @@ def observe(root, case, output, tracked=None):
                 payload += info.st_size
             if kind == "symlink":
                 row["target"] = os.readlink(path)
-            stream.write(json.dumps(row, sort_keys=True) + "\n")
+            raw = (json.dumps(row, sort_keys=True) + "\n").encode()
+            if stream.write(raw) != len(raw):
+                raise ValueError("short original oracle manifest write; no resend")
             paths += 1
     return {"schema": "r7-scoped-oracle-observation-v1", "case_id": case,
             "oracle_scope": "complete-declared-root" if case.startswith("C") or case == "E02" else "scoped",
@@ -99,7 +133,7 @@ def compare(expected, actual, case):
     """Independent comparison of retained observations; no mutation/rerun."""
     def load(path):
         rows = {}
-        with Path(path).open() as stream:
+        with FileOwner(path, "r", "manifest_read") as stream:
             for line in stream:
                 row = json.loads(line)
                 if row["path"] in rows:
@@ -151,15 +185,30 @@ def main():
     stdout_parser.add_argument("--expected", type=Path, required=True)
     stdout_parser.add_argument("--actual", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "observe":
-        tracked = set(json.loads(args.tracked.read_text())) if args.tracked else None
-        row = observe(args.root, args.case, args.output, tracked)
-    elif args.command == "compare":
-        row = compare(args.expected, args.actual, args.case)
-    else:
-        row = {"schema": "r7-stdout-oracle-v1", "status": "PASS" if digest_file(args.expected) == digest_file(args.actual) else "FAIL",
-               "expected_sha256": digest_file(args.expected), "actual_sha256": digest_file(args.actual),
-               "scope": "stdout only; original exit status checked in independent envelope"}
+    try:
+        if args.command == "observe":
+            tracked = None
+            if args.tracked:
+                with FileOwner(args.tracked, "r", "tracked_paths_read") as stream:
+                    tracked = set(json.load(stream))
+            row = observe(args.root, args.case, args.output, tracked)
+        elif args.command == "compare":
+            row = compare(args.expected, args.actual, args.case)
+        else:
+            row = {"schema": "r7-stdout-oracle-v1", "status": "PASS" if digest_file(args.expected) == digest_file(args.actual) else "FAIL",
+                   "expected_sha256": digest_file(args.expected), "actual_sha256": digest_file(args.actual),
+                   "scope": "stdout only; original exit status checked in independent envelope"}
+    except Exception as original:
+        failure = dict(schema="r7-scoped-oracle-failure-v1", status="INCOMPLETE", command=args.command,
+                       original_failure_type=type(original).__name__, original_failure=str(original),
+                       original_phase=getattr(original, "original_phase", None),
+                       independent_close_failures=getattr(original, "independent_close_failures", []), retries=0)
+        try:
+            print(json.dumps(failure, sort_keys=True), flush=True)
+        except Exception as output_error:
+            original.independent_output_failures = [*getattr(original, "independent_output_failures", []), str(output_error)]
+            raise original from output_error
+        raise SystemExit(1) from original
     print(json.dumps(row, sort_keys=True))
     if row.get("status") == "FAIL":
         raise SystemExit(1)

@@ -1,0 +1,9 @@
+{
+  "entries": 130045,
+  "symlink_times_corrected": 0,
+  "ownership_corrected": 130045,
+  "ownership_mismatches": 0,
+  "mode_mismatches": 0,
+  "mtime_mismatches_after": 0,
+  "status": "PASS"
+}

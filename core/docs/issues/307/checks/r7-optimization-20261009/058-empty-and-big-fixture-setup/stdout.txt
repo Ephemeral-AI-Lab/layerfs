@@ -1,0 +1,28 @@
+{
+  "status": "PASS",
+  "kind": "untimed independent empty/64MiB setup",
+  "global_profile": "Disposable explicitly selected at upcoming Project Init",
+  "rows": [
+    {
+      "root": "/tmp/layerfs-r7-empty-fixture-20261009",
+      "uid": 501,
+      "gid": 20,
+      "mode": 493,
+      "entries": []
+    },
+    {
+      "root": "/tmp/layerfs-r7-big-fixture-20261009",
+      "uid": 501,
+      "gid": 20,
+      "mode": 493,
+      "entries": [
+        {
+          "name": "big",
+          "bytes": 67108864,
+          "allocated_bytes": 67108864,
+          "mtime_ns": 1791417600000000000
+        }
+      ]
+    }
+  ]
+}

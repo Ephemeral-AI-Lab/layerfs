@@ -1,0 +1,19 @@
+.......................................................................................................................................F...........
+======================================================================
+FAIL: test_bundle_root_symlink_refuses_before_recipe_read (test_verification.RecipeContract.test_bundle_root_symlink_refuses_before_recipe_read)
+----------------------------------------------------------------------
+ValueError: prospective staging wall stop must be exactly 300 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/test_verification.py", line 175, in test_bundle_root_symlink_refuses_before_recipe_read
+    with self.assertRaisesRegex(ValueError, "symlink"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "symlink" does not match "prospective staging wall stop must be exactly 300 seconds"
+
+----------------------------------------------------------------------
+Ran 147 tests in 6.763s
+
+FAILED (failures=1)
+R4_WALL seconds<=8 limit=90s lock_wait=0s

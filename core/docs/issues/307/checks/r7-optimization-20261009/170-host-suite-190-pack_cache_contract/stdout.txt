@@ -1,0 +1,8 @@
+
+running 3 tests
+test cohort_reservation_keeps_requested_hits_while_releasing_misses_space ... ok
+test pressure_evicts_only_cold_bodies_and_keeps_recent_siblings ... ok
+test singleton_is_isolated_and_new_owner_has_no_retained_input ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

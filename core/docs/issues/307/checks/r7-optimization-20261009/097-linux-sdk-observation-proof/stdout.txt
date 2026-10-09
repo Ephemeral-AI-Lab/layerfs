@@ -1,0 +1,8 @@
+
+running 3 tests
+test observed_facade_borrows_scope_with_same_two_pointer_layout ... ok
+test observed_reply_keeps_original_exact_token_validation ... ok
+test facade_observation_is_explicit_and_does_not_persist_on_channel ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

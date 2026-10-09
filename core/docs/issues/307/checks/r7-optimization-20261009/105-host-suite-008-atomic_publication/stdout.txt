@@ -1,0 +1,8 @@
+
+running 3 tests
+test an_existing_stage_is_preserved_on_refusal ... ok
+test overwrite_and_current_root_up_to_date_each_use_one_transaction ... ok
+test process_contention_is_busy_before_effect_and_later_explicit_call_succeeds ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

@@ -1,0 +1,11 @@
+
+running 6 tests
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test exact_stages_publish_in_order_with_their_captured_parents ... ok
+test stage_insertion_enforces_the_frozen_context ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

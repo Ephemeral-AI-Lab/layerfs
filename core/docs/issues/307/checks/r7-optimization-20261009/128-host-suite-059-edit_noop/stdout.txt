@@ -1,0 +1,12 @@
+
+running 7 tests
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test an_out_of_range_replacement_length_is_an_error ... ok
+test several_equal_replacements_are_all_recognised ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

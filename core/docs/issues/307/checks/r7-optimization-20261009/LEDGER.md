@@ -471,3 +471,466 @@ minus460c4910f018f231c051d0ec174a8ae58b48ecd11904acb158690b568aaf5188;
 replaye61f2b971af44b6ac851122e537887d6f111fade128d0bf98747fa8e6257c282.
 No rewriting116FAILED,115author replay, metadata normalization orfullfixture
 replacement. SeparateInit/install andactualSDKcopy proof are next.
+
+## Preparation after0782743f3
+
+Plan119/record committed0782743f371d8fbd8d421609ac294a3ffcb0c932; staged/committed
+confirmationsmatch368fb56cd285ce6f815936b1ab4c471a0666ebf4. ProductionLOC
+185857->185857(delta0), allsubtotalsunchanged; producttree6a03560d unchanged.
+S8P3 permitsnewscopedsemanticindex timingoracle, withnewappend-onlyschema and
+pairedverificationidentity; sourceindices/rawactualbytesstillroundtripunchanged.
+Independentreview corrected unsafechecksum assumption: gitls-filessuccess alone
+isnotchecksumproof; explicitdigest required, debugformatnotcompleteflagdecoder.
+Newgit_index_oracle.py/tests nowownedbypriorreviewer asimplementation; independent
+crossreview requiredafterfreeze. Actualowned indexDIRC2/14104/1839891 bytes,
+validSHA1trailer, TREEextension68699bytes; rawSHA
+068de3dd63083a2216a7d5b28259127f5ff60865ee25603ac7c958a02bcc4553.
+Regularconfig.worktree235bytes SHA
+6cc33b2c2a819a539e48703a4c0daa6588c61b587e451ddc29e40ef13e51e4c6;
+itsconfiguredpaths are notfollowed bysourceinspection.
+
+Linux118first8/263binaries passedonce; persistenceacquisition cases arehost-only
+cfgandseveralbinariesran0tests, notredundantLinuxcoverage. allocation_filesystem
+originalignoredtestrequires explicitownedincompatiblehost-share magic0x6a656a63;
+notrun. Host36/263passed, restpending. Allper-binarywall100s; Linuxinner90s.
+Freshvolumes120/121/122 createdonlybythisstage forcut-full/cut-minus/original-minus
+masters with0782743f3suffix. CutfullInit/install123 isrunningonce atitsnewfixture
+identity; fulloriginalInit/install remainsunrepeated.
+
+Cut-full Init/install123 passed once:119976entries,
+root0acca6f41f517785d85c2e917b9fa741bc4a2a7815d037dbad9e372be49518c3,
+sealed1410854912logical/allocatedbytes; hostInit44880654500ns,
+SDKinstall9413153416ns, complete setup56602969709ns. Installedmanifest
+/tmp/layerfs-r7-cut-full-installed-20261009.manifest, volume
+layerfs-r7-cut-full-master-20261009-0782743f3. Original setupcontainer
+3e1f310accc4fc3f7532c62713ee54467e046f8c655c35536707e740c8fb89b3
+explicitly stopped byharness. Theseare newreducedinputsetup identities, not
+algorithmicstorage reduction orperformancecomparisons withoriginalfull.
+Cut-minus Init/install124 isrunningonce; original-minus122volume stillempty.
+
+Cut-minus Init/install124 passed once:34997entries,
+roote4c96bea6eda1f814d7ceb1c3a9a6459951a8019bd430a29ce8fa290de714504,
+772677632logical/allocatedsealedbytes; hostInit14334723958ns,
+SDKinstall5077465208ns, complete setup21570710292ns. Manifest
+/tmp/layerfs-r7-cut-minus-installed-20261009.manifest andcut-minusmastervolume
+0782743f3suffix; originalsetupcontainer
+13543dab0f270181e13ddc423c5811362b0ac0ea00430092755e55801ac83579
+explicitlystopped byharness. Originalminus Init/install125 nowrunningonce at
+itsdistinct full-L dependency-base identity; itpreserves28originalsymlinks and
+neverpairs withsymlink-free nativecontrols. No performance samples.
+
+Original-minus Init/install125 passed once:35025 entries including28 original
+symlinks, rootdff2969975a8fd26fbc1e8038c0081a9d66a23080937642c0569b8ced8d73676;
+772825088 logical/allocatedsealedbytes; hostInit14746691250ns,
+SDKinstall5076763209ns; complete setup21838398459ns. Manifest
+/tmp/layerfs-r7-original-minus-installed-20261009.manifest; owned container
+b86f1f557ea5352b29d290d43f854ceb5ca77d51adc46b28568e533a698a6be7
+explicitlystopped byharness. Thisbase supports fullL dependency scenarios only,
+neverpaired with cutnativecontrols. No performance sample.
+
+Expandedharness test126 passed118 tests in6696490375ns/90s. Fresh-contextreview
+foundR7-H1 onceclaims notboundtoactualverifiedsource/binaries/user/profile;
+R7-H2 failed performance wall includedverifier; R7-H3 streamedP A validator
+returnedbeforefreshkernelconnection assertion. Lead tooknecessary frozenfile
+fixes aftersubagentfollowups/messages hittemporarythreadlimit. Actualeffective
+claim nowusesverifiedsource-set and actualexecution/input/artifactbytes rather
+thanfreedisplaylabels; explicitperformanceclock excludesfailedverifier time and
+fixes terminalboundary beforecleanup/stop; Passertion precedesrepresentations.
+Owningreview-fix127 passed124 tests in6729967875ns/90s. Additionalclaim-error
+retention beforeclaimwrite is now source-corrected andawaits nextaffectedcheck.
+
+IndependentGit-indexcrossreview (authorcrossreview, notfreshcontext) found root
+leafsymlink resolvedbeforeadmission, validTREE couldincludeintent-to-add, and
+validTREE couldomitindex-derivedimmediatechildren. Leadfixedoriginalrootleaf
+nofollowadmission, ITAancestor invalidation andvalid-nodechild-completeness.
+Three malformedvectors added;127includesactualowningproofs. Sourceprooflimits,
+actualpinned-index9.5s observation andLraw-byteCommit/remountremainpending.
+No productoptimizationorbenchmarktiming accepted.
+
+## Recipe integration and suite continuation at 0782743f3
+
+Stage 0 remains IN_PROGRESS: no performance sample or accepted optimization.
+Lead resumed the host binary inventory at index 36, without repeating indices
+0–35. Receipts 128-host-suite-036 through 095 each passed once under an explicit
+100-second wall stop. Thus 96/263 host binaries have run; Linux remains 8/263.
+Platform-gated zero-test binaries retain their actual output and establish no
+additional Linux/FUSE coverage. Compilation identities remain the retained
+104/114 builds; harness edits do not change their product source.
+
+The lead corrected the recipe module alias, a local verification-status shadow,
+and K terminal deadlines that accidentally charged previous checkpoint verifier
+intervals. Every independent verification has a PerformanceClock exclusion closed
+in finally. These integration changes await their affected checks.
+
+Fresh-context review of the new recipe integration found three further gaps:
+closed expected/helper/script hashes were not bound to actual deployed operands;
+workload/environment/input identities were insufficiently checked; and an empty
+expected list could skip mandatory tree comparison. The reviewer now owns only
+verification.py and its external tests to enforce these checks. Its implementation
+will require another independent review. No affected selection has been sampled.
+
+K cumulative count intervals include checkpoint verifier filesystem work. The
+lead added original command-end Status endpoints before each Commit and original
+after-verifier endpoints within the separate verifier interval. Only command:i
+to commit:i can attribute isolated Commit work; cross-checkpoint deltas remain
+cumulative and cannot be used as Commit-only ratios. Status/Resources costs use
+existing exact count subtraction; no verifier request cost is guessed away.
+The current source still needs actual K checkpoint/fresh-mount proof.
+
+Recursive assignments: product_arm extends the original K02/K03 argv and E12/E13
+expectations and authors oracle tests; stage0_final_review authors fresh small
+code/deployment inputs reusing closed large-cut inventories; stage0_harness_review
+implements its concrete loader findings. All work is disjoint, with execution,
+records, Git, LOC, source acceptance and measurements retained by the lead.
+
+## Closed-oracle and matched staging checks, receipts 129–138
+
+Host suite now has 116/263 binaries passed once, including 128 indices 096–115.
+`host_handoff` skipped only `macos_init_handoff_to_linux_daemon_has_no_host_data_path`
+because its explicit Linux child-binary precondition is absent. Linux remains
+8/263; no product source change or performance sample has occurred.
+
+129 passed 135 harness tests in 6978138125 ns (90-second stop). 130 passed 26
+oracle-author tests in 170052041 ns. New independent IO-custody review then found
+known-manifest/payload and JSON reads could lose a prior error through close.
+The author and shared oracle now preserve original errors and append independent
+close failures; shared directory enumeration forwards walk errors instead of
+quietly emitting a partial manifest. Generic stdlib directory-close custody is
+not claimed. Source proof does not establish the actual 9.5-second fixture bound
+or the cost of unbuffered manifest rows.
+
+131/132 created an independent empty-Store clone in
+`layerfs-r7-cut-staging-clone-20261009-0782743f3`; source/destination SHA
+0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c,
+172032 logical and allocated bytes. 133 authored fresh small code inputs once in
+29509031000 ns, with 13 files / 1973379 bytes and zero large-tree copies or Init.
+Code set 4a64a9cea11645154d68616f24d1a3b9662fe137056d5438775254430bfe80af;
+code inventory SHA 9bae799eab6dd6dd9fee65c0427baf1476cf494b4232e2f87ae86b23f663b51e.
+
+134 actual SDK staging PASSED_SETUP_ONLY, outer 126742096833 ns and staging
+123787646750 ns under its 300-second stop. Fifteen distinct once-only setup
+actions verified /code14 entries, /replay85387 entries / 71894 regular files /
+2169235378 logical regular bytes / 2379296768 allocated regular bytes, and
+/native119976 entries / 103108 regular files / 3475776149 logical regular bytes /
+3764051968 allocated regular bytes. All supported metadata and complete payloads
+matched the separate cut seals. Ordinary nonroot command had known exit 0 and
+zero Exec registrations. EndSession/explicit stop produced KNOWN_STOP for
+20586d26778f6ac52f15323a7e6811a5fbf28269e6abcfecea1d8841f853d797.
+No mount, cache treatment, reference oracle or performance sample occurred.
+Raw runtime/setup outputs remain /tmp/layerfs-r7-cut-staging-proof-20261009.
+Later helper source fixes require a fresh small code seal; they do not rewrite
+this original successful staging identity.
+
+135 passed 12 strengthened staging-author tests in 238317916 ns. Its first-read
+custody and namespace-bijection changes are setup-only; setup resident state is
+not a daemon/phase bound or an accepted optimization. 136 independently queried
+the pinned image tool: /usr/bin/git SHA
+6464b23aabeb8dcb55a67b68c911678041b1b62437eeddf779ac3f201f6a09c9,
+known-zero `git version 2.39.5`, no fixture/Store/FUSE access.
+
+The initial Git pin incorrectly treated absent core.untrackedCache as false.
+Taken under owner 2026-10-09: retain its actual documented default keep; actual
+UNTR extensions still refuse and enabled feature.manyFiles remains unsupported.
+Primary pinned sources: [core configuration](https://raw.githubusercontent.com/git/git/v2.39.5/Documentation/config/core.txt)
+and [feature defaults](https://raw.githubusercontent.com/git/git/v2.39.5/Documentation/config/feature.txt).
+Actual version/binary/default-source receipts remain required; no override or
+normalization changes the command.
+
+137 FAILED its new bundle-root alias vector: deployment.owned_input resolved
+symlinks before checking ownership, so the lead's attempted correction did not
+reject the caller alias. The exact failure is retained. Lead corrected the
+shared owned-input admission to reject leaf and nested symlinks before resolve
+and added both alias vectors. Fresh review also found missing K02/K03 semantic
+node-root/replay operand requirements, changed K checkpoints accepting UpToDate,
+and verifier deadlines without a complete controller-span verdict. Lead added
+operand gates, original typed Committed validation, pre-send/pre-launch expiry
+checks and full verifier interval accounting. Original overdue buffered replies
+retain their typed IDs/rows but cannot satisfy a budget. Every measured and warmup
+command now checks actual runtime body SHA against its supplied original script.
+These post-137 integration edits await affected tests and final review.
+
+138 passed 32 oracle-author/custody tests in 259448417 ns. K reference authoring
+has per-body setup stops; it does not claim cumulative K15 performance compliance.
+All measurements remain unrun and Stage 0 remains IN_PROGRESS.
+
+## Frozen acceptance and actual Git proof, receipts 139–152
+
+139 passed 154 harness tests (6993094500 ns). 140 closed the Git2.39.5 policy
+from six actual tagged primary-source byte streams in 4627716584 ns, with no
+fixture/Store access. Policy SHA cef5f89a3bd96643dd2d46b4aa12f18cb529f0b8d6a65974ea36858445f385b0;
+review SHA1692bf12cccce2ca502853c68ab80f67e984fe5a4dc8b53c1eed09a97eec974f.
+The original version/binary receipt136 and every source byte/hash remain retained.
+Actual object format and config presence/default provenance are independently
+queried in the mounted proof, not inferred from source-policy labels.
+
+141 passed172 harness/custody tests in6999056208ns;142 passed47 controller/author
+tests in333146917ns. Fresh-context agent stage0_frozen_acceptance found R7-FA1:
+actual deployed cache and P execution bytes lacked a tie to canonical source and
+verified host binary. Lead added canonical cache path and three helper SHA checks,
+selected P SHA binding, post-stage checks before warmup/cache, and cached-bytecode
+refusal. 143 passed four focused tests in168875416ns. Re-review found a mapping
+collision could replace a cache helper digest; lead rejected all three collisions
+and added the vector. 147 passed177 tests in7053726292ns. The independent Git
+proof now writes canonical E04 bytes verbatim. No benchmark sample exists.
+
+EventProcess partial-constructor ownership is now carried on the original error.
+Receipt failure cannot prevent its host-only fence; retention is idempotent, with
+one signal and one bounded wait. Original failure, completed raw acknowledgements
+and independent output/close/custody failures remain distinct. Git proof reuses
+that owner instead of signalling/waiting again. No container Stop, unmount or
+filesystem drain is inferred. Selected comparison and deployment payload IO now
+preserve the first error through independent close failures. Generic all-IO or
+stdlib directory-close custody is not claimed.
+
+144/145 created full-cut independent volume
+layerfs-r7-git-fullcut-clone-20261009-0782743f3. Closed master/source and destination
+SHAca310bddf95399595942a0ef3a2701ecd8fcec95912f44e4cc821ea30b75f5cd,
+1410854912 logical/allocatedbytes; copy/compare complete11622447000ns under15s.
+146 refreshed only small code assets at its new helper identity,34330179916ns
+setup, zero large-tree copies or Init; code13files1978115bytes,
+set156e3faee1a98b9de11b5912564759a836b511715396282d9c11df4f0b5c2b0d,
+inventory9cb4e5ba69e1a03fea4c4788e24773edd6447b850ba9e85337cd26a4d7d9d002.
+Adapted L config fdd0120174ef929a03e1486e70a34e78e849df8812898464882da8a867a8cae5
+references this same complete Store and has zero native materialization roots.
+
+148 FAILED the real functional Git survival proof. Initial mounted index parsed
+within801784917ns total independent controller interval (SDK743544500ns),
+DIRCv2/14104 entries/1839891rawbytes, actual SHA
+068de3dd63083a2216a7d5b28259127f5ff60865ee25603ac7c958a02bcc4553,
+verified SHA1 trailer6b8ce99d52a8ac1d67e528c24cbf0450d4a32974. Its9701961-byte
+original JSON artifact is retained without a64KiB cap. Supported mtime and
+portablectime both1790682026843860200. This establishes initial observation,
+not post-Git Commit/fresh-mount survival.
+
+The original E04 command reached its9.5s stop with no complete command event.
+Complete failed proof54862541625ns; outer55076629666ns. Exact retained container
+3c4e958e32336e29f6dd4171af33fa6ea365c08e8b3558c9c51c7dce66c4a94c;
+original Exec084aeeead5dbae7bdf7e0fc98dbdccdd94ee2b787f2aba6d9d2478bcd0e236d0.
+Only hostcontroller51258 was fenced (knownexit-9). No command replay, Commit,
+unmount, Gone or survival inference occurred. 149 exact-ID read-only inspection
+later returned Running=false,ExitCode0,PID90359; no actual exit timestamp was
+provided, and Bash exit does not prove descendant/descriptor/drain completion.
+150 explicit owned container Stop passed1547871833ns; container retained stopped.
+The original failed verdict is unchanged.
+
+Narrow source diagnosis by stage0_final_review: runtime previously published
+exec_start/streams/exec_status only after streamEOF and inspection. Last
+exec_start_attempt therefore did not isolate the blocking stage. Failed Create
+was2.286250ms; failed Start/EOF/inspect/actual-exit times are UNAVAILABLE. Earlier
+same-owner Start1.816292ms/1.684833ms and stream230.649542ms/737.900875ms show
+those earlier attaches returned before stream completion. Engine source makes
+three exchanges(Create/Start/Inspect), headers stop at emptyCRLF, Body::new reads
+nothing;8KiBBufReader permits read-ahead without requiring a fill. No transport
+defect or measured extra round trip is established.
+
+Lead authorized a scoped harness publication correction: emit each existing
+completed inner phase immediately before the next blocking stage. Successful
+event order/count and original operations/errors/bodies stay the same; no timeout,
+retry, producer or product-source change. Interrupted attempts retain completed
+phase evidence at the new harness identity. 151 fmt-check passed;152 release
+rebuild is in progress and its new binary/source pins remain required.
+
+Host116/263 and Linux8/263 full-suite binaries remain passed once; remaining
+binaries pending. Git timing integration remains pending, now assigned narrowly
+to E04/E18 first. Full non-Git native reference authors, actual K/W runner proofs,
+final source seals and Stage0 full-matrix baseline remain outstanding. ZERO
+accepted optimization iterations; Stage0 IN_PROGRESS, no completion claim.
+
+## Continued Git closure and suite work, receipts 153–155
+
+152 release rebuild PASSED in 1883232333 ns. New runtime binary SHA
+a2280440442a486c2c9e29cc12139c6cd3ed0da18b6cd665d66cfbd563a3453c.
+153 host runtime Clippy `-D warnings` PASSED in 1025234250 ns. This changes
+harness observability only; receipt148 remains failed and is not replayed.
+
+Taken under the owner's direction of 2026-10-09, stricter contract reading:
+E18 class C cannot both remain an unrefreshed-index workload and run its identical
+status warmup on the same mount. All three E18:C rows remain NOT_RUN, sample0,
+in the separate prospective Git variant; original registry and receipts retain
+their identities. No reset, refresh, normalization or revised command is used.
+154 passed four selection-contract tests in124069916 ns. A/B remain pending.
+
+Fresh-context recursive review of the frozen E04/E18 extension found a missing
+standalone workloads.py import asset and a declared expected-tree seal that was
+checked before actual queries but not after comparison. Both findings were
+verified against source and returned to product_arm for correction, helper
+closure and external tests. Lead is adding actual Git policy/query source assets
+to fresh staging authoring and integrating variant selection handling. No
+performance sample or post-Git raw-index survival verdict exists.
+
+155 host suite index116 indexed_operation_record PASSED once, six tests,
+1810820917 ns complete command. Host117/263 and Linux8/263 are now passed once;
+remaining binaries are still required. Stage0 remains IN_PROGRESS.
+
+## Git command wait localized; receipts 155–166
+
+155 host indices116–135 all PASSED once; host136/263 binaries complete. The
+library harnesses129–135 contain zero tests and establish only successful binary
+execution, not coverage of a behavior. 159 Linux indices008–023 all PASSED once;
+Linux24/263 complete. Existing build identities are unchanged. Linux13/18
+confirm the previously retained Commit/cursor count trends; they are functional
+count evidence, not a mounted timing baseline or a new optimization.
+
+156/157 created independent full-cut clone
+layerfs-r7-git-phase-clone-20261009-a22804404, source/destination SHA
+ca310bddf95399595942a0ef3a2701ecd8fcec95912f44e4cc821ea30b75f5cd,
+1410854912 logical/allocated bytes, 11635885875 ns copy/compare under15s.
+Clone receipt SHA650dfec00d9d355790bb40717b5716c1d854924b1792d85f876e6eee8d82bd8e.
+158 passed12 staging tests in195298417 ns. 160 passed9 Git-query tests in
+442653458 ns, including isolated standalone imports and the post-query declared
+tree mutation refusal. product_arm corrected both verified fresh-review findings
+and froze its Git helper source before authoring; loader integration is ongoing.
+
+161 fresh code assets PASSED_SETUP_ONLY in33915110750 ns,16files2009869 bytes,
+setacd546771622716d0dc47bd192a97b7dd03460a9ad0b619e5f0a4ee17b1371c8,
+inventory3c1d3dfae161e3addc6c3de5470301ea02d06a1a38e4731f42d2e5352dac6f61.
+Git-query source8d63d10df5451b72c118e2a481fc833abeffe87225681074c204301334b7e0b7;
+authorb93948f4f56764f1f136406190d68a5910257313ee5b9b5ae2b475b94051c6f7.
+It includes the actual qualified policy1790bytes and workloads.py dependency.
+No large-tree copy, Init or Store operation occurred in this author.
+162 prospectively selected only /code, native[], replay[] for the separate Git
+functional proof. The installed full-cut root is unchanged; that proof uses no
+replay operand. Confige0c2eb891f58309dc03401b4d3f9206ec68d1658274afb781dd9dc4bcd562920.
+Its stdin author body was present in the tool invocation but not captured by the
+command wrapper; this is an exact-command reproduction gap, not a sealed sample.
+
+163 FAILED the original9.5-second E04 command at the new runtime identity.
+Complete proof12447015000 ns, outer12616819083 ns under explicit120-second test
+stop; inner setup/command/verifier/lifecycle stops were not increased. Actual
+staging615430916 ns. Initial complete index observation792113125 ns, SDK733707792
+ns, same14104entries/1839891bytes/rawSHA068de3dd63083a2216a7d5b28259127f5ff60865ee25603ac7c958a02bcc4553.
+New phase evidence: failed command Create2023125 ns and Start1286417 ns completed;
+streamEOF and final inspection never completed in the original controller.
+Exact container0faa42b0254da3a6b6c7ee96ae9c7d6afa0a66bb3f3971c4fa40b728619c3922;
+Exec694dcd3d5e8a9ca4179b1dac2eaa7bfabe00a5bd04d174b9935ef135245a5e19.
+Only host56891 fenced once, observedexit-9. No Commit, normalunmount, Gone or
+fresh-mount survival occurred; no operation replay or performance sample.
+
+164 exact-ID read-only inspection later found Runningfalse/exit0/PID91968.
+165 fetched retained Engine events once for that exact owned container, no
+command replay. Correlated Exec start1791506729188284966 and die1791506764375245385
+give35186960419 ns (35.186960419s), original exitCode0, same Engine wall clock.
+This establishes a real command interval exceeding the proof stop; it does not
+attribute that duration to individual FUSE/owner work, establish transport EOF,
+prove descendants/descriptors/mappings drained, or qualify the failed proof.
+The start/stream distinction is now observed; a Start-blocking hypothesis is
+refuted for163. 166 explicit owned Stop PASSED5423883541 ns; container retained
+stopped. This is not a normal Unmounted/Gone or descriptor-drain proof.
+
+Remaining work includes complete native references, actual K/W runner proofs,
+mutable Git scopes, final harness/source seals, full matrix and optimization
+loop. Stage0 IN_PROGRESS; zero accepted optimization iterations.
+
+167 passed28 loader tests in898057083 ns. Lead source review confirms exact
+Git variant/helper/source closure, original query stream hashes/values/PIDs,
+paired pin/policy and semantic index/tree operands, generated script binding and
+comparison-result operand/schema checks. These are mocked/source checks, not
+actual reference or mounted verifier qualification.
+
+Recursive controller implementation found an actual setup path incompatibility:
+staging retained inventories under /tmp/r7-setup-*, whereas the reference author
+admits /tmp/layerfs-r7-* or /code only. Lead changed only the new evidence prefix
+to /tmp/layerfs-r7-setup-*. Historical paths/receipts remain unchanged. Native
+reference authoring will run its setup helper as root to read the private0700
+inventory directory; the existing helper drops every original command/query to
+501:20. No private directory permissions are weakened. This corrects the lead's
+earlier controller assignment that would have launched the setup helper itself
+as501 and failed private inventory admission. The separate measured commands
+remain ordinary nonroot unregistered Bash.
+
+168 passed193 integrated harness tests in7622946625 ns;169 passed35 author tests
+in266829500 ns. 170 host indices136–199 all PASSED once; host200/263 binaries
+complete, Linux24/263. Zero-test platform/library binaries remain explicit in
+their raw outputs; they are not substituted for Linux coverage.
+
+Fresh recursive child product_arm/git_loader_review accepted the frozen E04/E18
+loader at source scope with no concrete blocker. It identified remaining negative
+test coverage gaps, without claiming runtime qualification. The same fresh child
+then reviewed the native reference controller and found copied-author/expected
+Git operand binding, complete owner close, outer-deadline admission and iterator
+close-once defects. All were corrected in assigned harness files and re-reviewed.
+The lead's171 check captured10 tests/PASS279176125 ns. Correction: the agent had
+claimed a freeze/11 tests but subsequently edited during possible checks and
+misreported intermediate counts. Source coordination was stopped explicitly;
+the agent acknowledged the error, froze helpers, then completed only authorized
+unfreeze work outside checks. 173 final frozen18 tests PASSED402617333 ns.
+No171 result is relabelled as18-test coverage. Parent kept its turn active and
+used a fresh-context child for recursive review; a root followup attempt had
+previously failed with agent thread limit reached, while child spawn succeeded.
+
+172 passed17 deployment tests in246370416 ns. Lead fixed a verified first-cause
+gap: stage formerly retained only an error string then raised a new generic
+ValueError. It now preserves the exact original exception/type/phase, attaches
+the exact stage receipt/output, records independent receipt-output failures,
+and closes selected evidence owners once without replacing earlier causes.
+The native controller retains that carrier; no failure becomes success.
+
+174 passed10 event-custody tests in175526125 ns. Lead removed buffered raw/stderr
+evidence and buffered host protocol pipes, checked one original write's byte
+count, refused short writes without resend, and retained the received window
+before an evidence-write failure. This closes the concrete possibility of a
+later buffer flush resending a failed control/evidence tail. No product code,
+producer, timeout, allowance or successful operation/event sequence changed.
+
+175 FAILED an exclusive empty-inventory seal because the proposed output already
+exists. It wrote nothing and preserved that prior artifact. Lead is inspecting
+and validating its existing closed empty-root inventory for declared reuse;
+no repeated seal or overwritten evidence is authorized by this failure.
+Mutable Git E10/E11/C12 author/loader extension is assigned separately; E19
+related-root prerequisites remain pending. Actual native references and matrix
+measurements still have not run. Stage0 IN_PROGRESS, zero accepted optimization
+iterations.
+
+176 FAILED before verification: lead selected container-only verify-tree for a
+host root; its canonical top-level container-path guard correctly refused the
+/tmp source. This was the lead's wrong API choice, not a fixture defect.
+177 used the actual host closed-tree validator and PASSED94282875 ns, checking
+the existing inventory's full namespace, physical identity and supported
+metadata, with no new Init/reseal. Empty inventory SHA
+a5695e32c5f1d0521272ea9794f5467c62a433f163aae9bfda2cc1be0bf31a33,
+content/metadata set4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981,
+one root directory, zero files/bytes. Actual container full verification remains
+required. Historical inventory and both failed attempts remain unchanged.
+
+178 Linux indices024–033 PASSED once. Index034 complete_installed_roots FAILED
+exit101 in9983603166 ns: three supported mixed/dense/sparse full oracles passed,
+the preparation author was ignored, and huge_native_namespace_is_complete_after_install
+panicked before fixture construction because LAYERFS_Q1_PREPARED is absent.
+Lead mistakenly attached the previously required skip to target complete_root
+instead of complete_installed_roots. The exact source and prior host invocation
+confirm this is an unavailable external preparation, not a product failure.
+This original failure is preserved; the three passing tests are not rerun.
+Remaining Linux binaries resume at035. Full-suite completion must name this
+precondition gap and retain the failed binary verdict, without calling it PASS.
+
+178 remaining indices035–059 PASSED once. Linux60/263 binaries now executed:
+59PASS plus the retained034 failed precondition. Device-capacity tests remain
+ignored by their existing exclusive-ext4-loop requirements, named in raw outputs.
+No passing binary is rerun at this product identity.
+
+179 passed13 mutable-query tests in857044042 ns. 180 FAILED one new author vector
+in196459375 ns: it supplied unregistered A to E10/E11/C12; the author correctly
+refused. Only the vector changed to registeredB;181 passed40 tests293196667 ns.
+The loader now separately refuses any class outside the canonical case list.
+182 FAILED two of208 tests8488358708 ns because synthetic C12 tree rows lacked
+device/inode fields required by the unchanged complete hardlink oracle. Only
+the synthetic fixture gained coherent device1/inode2/nlink1. 184 passed208 tests
+8603177708 ns. 183 passed73 reference-tools tests532242084 ns; its synthetic
+fixture dependency/source snapshot is retained as invoked, not relabelled as the
+later184 fixture. Neither correction weakens a workload or oracle.
+
+Fresh child review accepted the extended frozen E04/E10/E11/E18/C12 source
+closure with no concrete blocker, then separately re-reviewed the membership
+gate and synthetic identity correction. It ran no tests. Mutable cases query
+actual configuration without an invented fsmonitor override. E10/E11 retain
+pre-body context; C12 checks actual emptiness and collects post-body context
+after its one canonical init/commit body. E11 binds its actual tracked-path
+asset through script/result/deployment closure; lead added corresponding native
+controller input and bundle checks. C12:C retains the original registry exclusion.
+E19 remains pending exact related-root/282-edit/known-Commit-or-two-root/stdout
+evidence; no preparation or fast-path outcome is guessed.
+
+The full core suites remain host200/263, Linux60/263 executed with the explicit
+034 gap. Current compiled Rust identities remain unchanged. Harness checkpoint,
+actual native references, K/W runner proofs, final source seals and Stage0 full
+matrix still pending. No performance sample or accepted optimization iteration.

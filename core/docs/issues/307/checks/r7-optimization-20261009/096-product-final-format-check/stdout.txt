@@ -1,0 +1,37 @@
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge/tests/observed_records.rs:19:
+ #[test]
+ fn actual_inline_initial_record_layout_has_no_large_variant_gap() {
+     use layerfs_bridge::{initial_record::InitialRecord, provision::StoreManifest};
+-    let request=std::mem::size_of::<Request>();
+-    let call=std::mem::size_of::<Call>();
+-    let install=std::mem::size_of::<StoreManifest>();
+-    let initial=std::mem::size_of::<InitialRecord>();
+-    let delta=install.abs_diff(call);
++    let request = std::mem::size_of::<Request>();
++    let call = std::mem::size_of::<Call>();
++    let install = std::mem::size_of::<StoreManifest>();
++    let initial = std::mem::size_of::<InitialRecord>();
++    let delta = install.abs_diff(call);
+     println!("INITIAL_RECORD_LAYOUT request={request} call={call} store_manifest={install} initial_record={initial} variant_delta={delta}");
+-    assert!(request>0 && call>0 && initial>0,"compiler layout must be available despite recursive boxed Request");
+-    assert!(delta<200,"actual inline variant size gap reaches the Clippy gate");
+-    let largest=call.max(install);
+-    assert!(initial>=largest);
+-    assert!(initial<=largest+std::mem::align_of::<InitialRecord>(),"unexpected enum stack overhead");
++    assert!(
++        request > 0 && call > 0 && initial > 0,
++        "compiler layout must be available despite recursive boxed Request"
++    );
++    assert!(
++        delta < 200,
++        "actual inline variant size gap reaches the Clippy gate"
++    );
++    let largest = call.max(install);
++    assert!(initial >= largest);
++    assert!(
++        initial <= largest + std::mem::align_of::<InitialRecord>(),
++        "unexpected enum stack overhead"
++    );
+ }
+ #[test]
+ fn one_checked_scoped_layer_preserves_point_request_capacity() {

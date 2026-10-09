@@ -1,0 +1,4 @@
+ca310bddf95399595942a0ef3a2701ecd8fcec95912f44e4cc821ea30b75f5cd  /source/global/store.sqlite
+ca310bddf95399595942a0ef3a2701ecd8fcec95912f44e4cc821ea30b75f5cd  /dest/global/store.sqlite
+/source/global/store.sqlite 1410854912 2755584 512 600 0 0
+/dest/global/store.sqlite 1410854912 2755584 512 600 0 0

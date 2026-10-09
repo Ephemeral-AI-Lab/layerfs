@@ -1,0 +1,10 @@
+test_actual_cache_and_p_bytes_bind_before_and_after_staging (test_execution_assets.ExecutionAssets.test_actual_cache_and_p_bytes_bind_before_and_after_staging) ... ok
+test_alternate_observer_and_precompiled_asset_cache_refuse (test_execution_assets.ExecutionAssets.test_alternate_observer_and_precompiled_asset_cache_refuse) ... ok
+test_different_sealed_cache_helper_cannot_use_canonical_source_label (test_execution_assets.ExecutionAssets.test_different_sealed_cache_helper_cannot_use_canonical_source_label) ... ok
+test_different_sealed_p_binary_cannot_use_verified_host_label (test_execution_assets.ExecutionAssets.test_different_sealed_p_binary_cannot_use_verified_host_label) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.015s
+
+OK
+R4_WALL seconds<=1 limit=90s lock_wait=0s

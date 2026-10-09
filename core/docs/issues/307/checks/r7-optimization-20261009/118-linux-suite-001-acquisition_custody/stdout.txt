@@ -1,0 +1,11 @@
+
+running 6 tests
+test a_backing_read_failure_is_definite_and_is_cleaned_up ... ok
+test a_definite_failure_removes_its_rows_and_its_record ... ok
+test a_failed_cleanup_after_a_failure_keeps_both_causes ... ok
+test a_failed_cleanup_reports_its_cause_and_the_rows_still_held ... ok
+test an_unknown_outcome_leaves_the_operation_untouched ... ok
+test backing_inside_source_is_refused_before_an_operation_begins ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+

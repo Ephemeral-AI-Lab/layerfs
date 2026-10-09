@@ -1,0 +1,24 @@
+...................................E
+======================================================================
+ERROR: test_runner (unittest.loader._FailedTest.test_runner)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_runner
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/test_runner.py", line 11, in <module>
+    from r7 import receipts, registry, runner
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/runner.py", line 393
+    active_key = None
+    ^^^^^^^^^^
+SyntaxError: expected 'except' or 'finally' block
+
+
+----------------------------------------------------------------------
+Ran 36 tests in 6.377s
+
+FAILED (errors=1)
+R4_WALL seconds<=8 limit=10s lock_wait=0s

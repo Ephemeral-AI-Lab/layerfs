@@ -1,0 +1,22 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "980c169e671721a513f3091ef4b7fc9d094aa023",
+  "source_tree": "314e9a88de470b398d8e1755e6cd2f12f15ef1fc",
+  "worktree_status": "M core/benchmark/r7-cache/README.md\n M core/benchmark/r7-cache/residency.py\n M core/benchmark/r7-cache/test_residency.py\n M core/benchmark/r7-passthrough/README.md\n M core/benchmark/r7-passthrough/proof.py\n M core/benchmark/r7-passthrough/src/callbacks.rs\n M core/benchmark/r7-passthrough/src/main.rs\n M core/benchmark/r7-passthrough/src/native.rs\n M core/benchmark/r7-runtime/src/args.rs\n M core/benchmark/r7-runtime/src/runtime.rs\n M core/benchmark/r7-runtime/src/session.rs\n M core/benchmark/r7-tools/fixture.py\n M core/benchmark/r7-tools/metadata.py\n M core/crates/layerfs-api/sdk/src/control/connection.rs\n M core/crates/layerfs-api/sdk/src/workspace/api.rs\n M core/crates/layerfs-api/sdk/src/workspace/attach.rs\n M core/crates/layerfs-api/sdk/src/workspace/binding.rs\n M core/crates/layerfs-api/sdk/src/workspace/commit.rs\n M core/crates/layerfs-api/sdk/src/workspace/status.rs\n M core/crates/layerfs-api/sdk/src/workspace/unmount.rs\n M core/crates/layerfs-bridge/src/control_request.rs\n M core/crates/layerfs-bridge/src/control_types.rs\n M core/crates/layerfs-daemon/src/application/connection.rs\n M core/crates/layerfs-daemon/src/application/mod.rs\n M core/crates/layerfs-daemon/src/bootstrap.rs\n M core/crates/layerfs-daemon/src/control/mod.rs\n M core/crates/layerfs-daemon/src/control/operations.rs\n?? core/benchmark/r7-passthrough/src/lifecycle.rs\n?? core/crates/layerfs-daemon/src/application/diagnostics.rs\n?? core/crates/layerfs-daemon/src/application/diagnostics/\n?? core/crates/layerfs-daemon/src/control/observation.rs\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/012-fixture-metadata/\n?? core/docs/issues/307/checks/r7-optimization-20261009/013-fixture-metadata-fixed/\n?? core/docs/issues/307/checks/r7-optimization-20261009/014-master-volume/\n?? core/docs/issues/307/checks/r7-optimization-20261009/015-full-fixture-init-install/\n?? core/docs/issues/307/checks/r7-optimization-20261009/016-installed-store-observation/",
+  "command": [
+    "docker",
+    "stop",
+    "--time",
+    "1",
+    "25eae7f3a4c9d4b9041fda7133329dbeb34de45eecfb909f6460535c2faf9a56"
+  ],
+  "limit_seconds": 20,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 1283274167,
+  "status": "PASS"
+}

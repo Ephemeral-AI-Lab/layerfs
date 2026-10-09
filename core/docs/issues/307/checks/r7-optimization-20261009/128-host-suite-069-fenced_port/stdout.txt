@@ -1,0 +1,9 @@
+
+running 4 tests
+test a_job_submitted_before_the_stop_is_awaited_to_its_original_result ... ok
+test a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call ... ok
+test a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted ... ok
+test fenced_mutation_and_directory_requests_give_back_the_source_they_hold ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

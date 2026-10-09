@@ -42,16 +42,28 @@ def main():
                   "FAILED_WALL_LIMIT" if result.returncode == 124 else
                   "PASS" if result.returncode == 0 else "FAILED")
     (args.output / "result.json").write_text(json.dumps(record, indent=2) + "\n")
-    manifest = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in sorted(args.output.iterdir()) if p.is_file()}
+    manifest = {}
+    for path in sorted(args.output.rglob("*")):
+        if not path.is_file():
+            continue
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(65536), b""):
+                digest.update(block)
+        manifest[path.relative_to(args.output).as_posix()] = digest.hexdigest()
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(json.dumps(record, indent=2))
+    print(json.dumps({key: value for key, value in record.items()
+                      if key != "worktree_status"}, indent=2))
     raw_stdout = (args.output / "stdout.txt").read_text(errors="replace")
     if args.kind != "test" and len(raw_stdout) > 20000:
         print(f"stdout retained in {args.output / 'stdout.txt'} ({len(raw_stdout)} characters)")
     else:
         print(raw_stdout)
-    print((args.output / "stderr.txt").read_text(errors="replace"))
+    raw_stderr = (args.output / "stderr.txt").read_text(errors="replace")
+    if args.kind != "test" and len(raw_stderr) > 20000:
+        print(f"stderr retained in {args.output / 'stderr.txt'} ({len(raw_stderr)} characters)")
+    else:
+        print(raw_stderr)
     raise SystemExit(result.returncode)
 
 

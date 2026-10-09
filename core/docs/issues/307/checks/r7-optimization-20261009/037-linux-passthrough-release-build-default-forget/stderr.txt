@@ -1,0 +1,21 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+   Compiling parking_lot_core v0.9.12
+   Compiling rustversion v1.0.23
+   Compiling memoffset v0.9.1
+   Compiling zerocopy v0.8.57
+   Compiling ref-cast v1.0.27
+   Compiling nix v0.31.3
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling syn v2.0.119
+   Compiling syn v3.0.5
+   Compiling page_size v0.6.0
+   Compiling parking_lot v0.12.5
+   Compiling ref-cast-impl v1.0.27
+   Compiling zerocopy-derive v0.8.57
+   Compiling num_enum_derive v0.7.6
+   Compiling num_enum v0.7.6
+   Compiling layerfs-r7-passthrough v0.1.0 (/work/core/benchmark/r7-passthrough)
+    Finished `release` profile [optimized] target(s) in 10.99s
+R4_WALL seconds<=12 limit=560s lock_wait=0s

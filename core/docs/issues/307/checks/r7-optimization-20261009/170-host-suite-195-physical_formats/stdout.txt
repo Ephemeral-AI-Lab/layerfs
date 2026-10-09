@@ -1,0 +1,15 @@
+
+running 10 tests
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test grouped_whole_file_versions_keep_their_own_body_offsets ... ok
+test new_pooled_placement_splits_before_the_quarter_pack_bound ... ok
+test ordinary_and_native_versions_keep_their_own_body_offsets ... ok
+test pooled_pack_versions_keep_their_own_size_bounds ... ok
+test the_lane_table_names_one_limit_per_lane ... ok
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

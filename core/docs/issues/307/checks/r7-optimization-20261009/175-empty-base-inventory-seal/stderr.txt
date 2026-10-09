@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 521, in <module>
+    main()
+    ~~~~^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 514, in main
+    result = seal_tree(args.root,args.output,fixture_rows=args.fixture_rows,fixture_rows_sha256=args.fixture_rows_sha256,expected_set=args.expected_set_sha256)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 215, in seal_tree
+    with output.open("xb") as sink:
+         ~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileExistsError: [Errno 17] File exists: '/tmp/layerfs-r7-empty-inventory-20261009.jsonl'
+R4_WALL seconds<=1 limit=15s lock_wait=0s

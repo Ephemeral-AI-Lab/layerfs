@@ -1,0 +1,5 @@
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-r7-runtime v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-runtime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.06s
+R4_WALL seconds<=2 limit=560s lock_wait=0s

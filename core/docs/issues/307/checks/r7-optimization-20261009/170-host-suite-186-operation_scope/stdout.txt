@@ -1,0 +1,9 @@
+
+running 4 tests
+test checked_base_client_override_performs_no_acquisition_and_uses_new_lengths ... ok
+test failed_operation_provider_does_not_poison_shared_cache_or_fresh_provider ... ok
+test fresh_clients_share_one_allowance_and_return_independent_bytes ... ok
+test scoped_views_share_original_install_serials_and_keep_original_provider ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

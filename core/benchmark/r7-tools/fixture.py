@@ -61,10 +61,13 @@ def main():
                 digest.update(str(metadata.st_size).encode() + b"\0")
             else:
                 raise RuntimeError(f"unsupported fixture kind: {source}")
+            os.chown(target, metadata.st_uid, metadata.st_gid, follow_symlinks=False)
         # Directory metadata is restored after children below.
     for directory, _, _ in os.walk(args.destination, topdown=False, followlinks=False):
         source = args.source / Path(directory).relative_to(args.destination)
         shutil.copystat(source, directory, follow_symlinks=False)
+        metadata = source.lstat()
+        os.chown(directory, metadata.st_uid, metadata.st_gid, follow_symlinks=False)
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=args.destination, text=True).strip()
     result = dict(schema="layerfs-r7-fixture-copy-v1", source=str(args.source),
                   destination=str(args.destination), copied_commit=commit,

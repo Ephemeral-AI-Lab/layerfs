@@ -1,0 +1,14 @@
+
+running 9 tests
+test actual_mismatched_inspection_and_http_error_body_remain_distinct_from_selector ... ok
+test before_effect_identity_refusal_has_no_engine_connection ... ok
+test chunked_metadata_accepts_split_unicode_and_rejects_conflicting_framing ... ok
+test escaped_deciding_duplicates_wrong_identity_and_truncated_json_refuse ... ok
+test partial_creation_id_and_lost_start_are_retained_without_replay ... ok
+test positive_delivery_and_maximal_truncated_frame_keep_original_pending_bytes ... ok
+test structural_inspection_ignores_giant_arguments_and_retains_null_exit ... ok
+test upgrade_read_ahead_preserves_frames_and_request_identity ... ok
+test wrong_upgrade_media_and_malformed_status_trailers_extensions_refuse ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

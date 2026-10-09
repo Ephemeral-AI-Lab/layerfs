@@ -37,16 +37,22 @@ def validate_path(path):
     return path
 
 
-def inspect_file(path, evict=False):
+def inspect_file(path, evict=False, *, open_scope=None, expected_identity=None):
     """One eviction attempt and one bounded mincore pass, with stable identity."""
     if platform.system() != 'Linux':
         raise RuntimeError('Linux posix_fadvise/mincore observer unavailable on this platform')
     path = validate_path(path)
-    fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    parent_fd = leaf = None
+    if open_scope is None:
+        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    else:
+        fd, parent_fd, leaf = open_scope.open(path)
     try:
         before = os.fstat(fd)
         if not stat.S_ISREG(before.st_mode):
             raise ValueError('regular file required')
+        if expected_identity is not None and identity(before) != expected_identity:
+            raise ValueError(f'sealed file identity differs before eviction: actual={identity(before)} expected={expected_identity}')
         if evict:
             # A dirty page may remain resident. No fsync and no global drop.
             os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
@@ -82,8 +88,13 @@ def inspect_file(path, evict=False):
                 if libc.munmap(address, length) != 0:
                     code = ctypes.get_errno()
                     raise OSError(code, os.strerror(code), path)
+            # Release this fixed vector before allocating the next window.
+            # Assignment otherwise allocates a replacement while the old
+            # vector is still live, doubling its stated peak.
+            del vector
         after = os.fstat(fd)
-        current = os.stat(path, follow_symlinks=False)
+        current = (os.stat(path, follow_symlinks=False) if parent_fd is None
+                   else os.stat(leaf, dir_fd=parent_fd, follow_symlinks=False))
         if identity(before) != identity(after) or identity(after) != identity(current):
             raise ValueError('file identity changed during residency attestation')
         return {'path': str(path), 'present': True, **identity(after),
@@ -95,6 +106,8 @@ def inspect_file(path, evict=False):
                 'vector_peak_bytes': min(pages, window // page_size)}
     finally:
         os.close(fd)
+        if parent_fd is not None:
+            os.close(parent_fd)
 
 
 def attest(paths, *, evict=False, optional=()):
@@ -144,6 +157,11 @@ def main():
     parser.add_argument('--store', type=Path)
     parser.add_argument('--overlay', type=Path)
     parser.add_argument('--file', type=Path, action='append', default=[])
+    parser.add_argument('--file-manifest', type=Path)
+    parser.add_argument('--file-manifest-sha256')
+    parser.add_argument('--root', type=Path)
+    parser.add_argument('--inventory-output', type=Path)
+    parser.add_argument('--allow-declared-aliases', action='store_true')
     parser.add_argument('--object-demands', type=int)
     parser.add_argument('--warmup-ended-monotonic-ns', type=int)
     args = parser.parse_args()
@@ -155,10 +173,23 @@ def main():
             sidecars = [Path(str(database) + suffix) for suffix in ('-wal', '-shm', '-journal')]
             paths.extend(sidecars)
             optional.extend(sidecars)
-    if not paths:
+    if args.file_manifest:
+        if paths or not all((args.file_manifest_sha256, args.root, args.inventory_output)):
+            parser.error('manifest mode requires sha256/root/inventory-output and no scalar input paths')
+    elif any((args.file_manifest_sha256, args.root, args.inventory_output, args.allow_declared_aliases)):
+        parser.error('manifest-only options require --file-manifest')
+    elif not paths:
         parser.error('at least one --store, --overlay or --file is required')
     try:
-        receipt = attest(paths, evict=args.cache_class == 'A', optional=optional)
+        if args.file_manifest:
+            from stream_manifest import attest_manifest
+            receipt = attest_manifest(args.file_manifest, args.file_manifest_sha256,
+                                      args.root, args.inventory_output,
+                                      inspect_file=inspect_file, validate_path=validate_path,
+                                      evict=args.cache_class == 'A',
+                                      allow_aliases=args.allow_declared_aliases)
+        else:
+            receipt = attest(paths, evict=args.cache_class == 'A', optional=optional)
         interval = (time.monotonic_ns() - args.warmup_ended_monotonic_ns
                     if args.warmup_ended_monotonic_ns is not None else None)
         status = class_status(args.cache_class, receipt,
@@ -167,9 +198,10 @@ def main():
                           'attempts': 0, 'warm_interval_ns': interval,
                           'exploratory': True, 'admission_eligible': False, **receipt}, sort_keys=True))
         return 3 if status == 'INELIGIBLE' else 0
-    except (OSError, ValueError, RuntimeError, AttributeError) as error:
+    except (OSError, ValueError, RuntimeError, AttributeError, TypeError) as error:
         print(json.dumps({'cache_class': args.cache_class, 'status': 'UNAVAILABLE',
                           'attempts': 0, 'error': str(error),
+                          **getattr(error, 'receipt', {}),
                           'errno': getattr(error, 'errno', errno.ENOSYS)}, sort_keys=True))
         return 4
 

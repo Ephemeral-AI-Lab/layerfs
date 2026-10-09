@@ -1,0 +1,14 @@
+
+running 9 tests
+test authenticated_duplex_records_stream_beyond_one_window_with_fixed_buffers ... ok
+test corrupted_authenticated_record_retains_the_crypto_failure_without_replay ... ok
+test malformed_record_quarantines_both_directions_before_body_allocation ... ok
+test oversized_unattempted_record_does_not_consume_a_nonce ... ok
+test successful_native_channels_enable_nodelay_on_both_authenticated_sockets ... ok
+test terminal_read_error_keeps_phase_and_original_fence_attempt ... ok
+test terminal_reply_retains_eof_and_original_platform_fence_outcome ... ok
+test terminal_trailing_input_keeps_original_byte_work_and_has_no_second_read ... ok
+test wrong_static_identity_fails_the_actual_handshake ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+

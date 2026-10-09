@@ -1,0 +1,18 @@
+test_actual_namespace_must_biject_closed_paths (test_prepare_staging.InventoryContract.test_actual_namespace_must_biject_closed_paths) ... ok
+test_complete_closed_names_pass_without_payload_reread (test_prepare_staging.InventoryContract.test_complete_closed_names_pass_without_payload_reread) ... ok
+test_duplicate_general_path_and_duplicate_root_are_refused (test_prepare_staging.InventoryContract.test_duplicate_general_path_and_duplicate_root_are_refused) ... ok
+test_inventory_record_read_is_bounded (test_prepare_staging.InventoryContract.test_inventory_record_read_is_bounded) ... ok
+test_missing_root_and_non_directory_root_refuse (test_prepare_staging.InventoryContract.test_missing_root_and_non_directory_root_refuse) ... ok
+test_unknown_kind_and_unsealed_trailing_footer_refuse (test_prepare_staging.InventoryContract.test_unknown_kind_and_unsealed_trailing_footer_refuse) ... ok
+test_close_only_failure_remains_failure (test_prepare_staging.OriginalInputCustody.test_close_only_failure_remains_failure) ... ok
+test_json_decode_error_survives_independent_close (test_prepare_staging.OriginalInputCustody.test_json_decode_error_survives_independent_close) ... ok
+test_json_reader_returns_digest_of_exact_decoded_bytes (test_prepare_staging.OriginalInputCustody.test_json_reader_returns_digest_of_exact_decoded_bytes) ... ok
+test_read_error_and_independent_close_keep_first_original (test_prepare_staging.OriginalInputCustody.test_read_error_and_independent_close_keep_first_original) ... ok
+test_short_write_and_close_keep_short_write_without_resend (test_prepare_staging.OriginalInputCustody.test_short_write_and_close_keep_short_write_without_resend) ... ok
+test_write_and_independent_close_keep_original_no_resend (test_prepare_staging.OriginalInputCustody.test_write_and_independent_close_keep_original_no_resend) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.018s
+
+OK
+R4_WALL seconds<=1 limit=90s lock_wait=0s

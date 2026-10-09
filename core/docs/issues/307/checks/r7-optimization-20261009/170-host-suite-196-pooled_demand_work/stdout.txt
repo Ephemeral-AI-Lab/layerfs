@@ -1,0 +1,8 @@
+
+running 3 tests
+test missing_catalogue_still_refuses_canonical_reconstruction ... ok
+test pooled_demand_reuses_one_checked_physical_reconstruction ... ok
+test save_exact_reuse_consumes_the_group_already_acquired_by_discovery ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

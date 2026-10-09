@@ -1,0 +1,6 @@
+   Compiling rustversion v1.0.23
+   Compiling num_enum v0.7.6
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling layerfs-r7-passthrough v0.1.0 (/work/core/benchmark/r7-passthrough)
+    Finished `release` profile [optimized] target(s) in 4.15s
+R4_WALL seconds<=5 limit=560s lock_wait=0s

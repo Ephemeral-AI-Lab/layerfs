@@ -1,0 +1,6 @@
+
+running 1 test
+test a_queued_install_and_the_sources_behind_it_leave_the_holder_a_slot ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

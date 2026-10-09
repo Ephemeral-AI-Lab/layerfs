@@ -1,0 +1,7 @@
+
+running 2 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

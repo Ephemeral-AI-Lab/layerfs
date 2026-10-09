@@ -1,0 +1,48 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+error: missing documentation for a struct field
+   --> crates/layerfs-bridge/src/control_types.rs:190:9
+    |
+190 |         token: WorkspaceToken,
+    |         ^^^^^^^^^^^^^^^^^^^^^
+    |
+note: the lint level is defined here
+   --> crates/layerfs-bridge/src/lib.rs:3:9
+    |
+3   | #![deny(missing_docs)]
+    |         ^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+   --> crates/layerfs-bridge/src/control_types.rs:191:9
+    |
+191 |         state: CleanupObservation,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a variant
+   --> crates/layerfs-bridge/src/control_types.rs:229:5
+    |
+229 |     Live,
+    |     ^^^^
+
+error: missing documentation for a variant
+   --> crates/layerfs-bridge/src/control_types.rs:230:5
+    |
+230 |     Held,
+    |     ^^^^
+
+error: missing documentation for a variant
+   --> crates/layerfs-bridge/src/control_types.rs:231:5
+    |
+231 |     Queued,
+    |     ^^^^^^
+
+error: missing documentation for a variant
+   --> crates/layerfs-bridge/src/control_types.rs:232:5
+    |
+232 |     Gone,
+    |     ^^^^
+
+error: could not compile `layerfs-bridge` (lib) due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-bridge` (lib test) due to 6 previous errors
+R4_WALL seconds<=16 limit=560s lock_wait=0s

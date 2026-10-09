@@ -1,0 +1,55 @@
+...............................................................................................................................................................................E.................E..............
+======================================================================
+ERROR: test_c12_nonrepeatable_warmup_and_nonempty_base_inventory_refuse (test_verification.RecipeContract.test_c12_nonrepeatable_warmup_and_nonempty_base_inventory_refuse)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/test_verification.py", line 282, in test_c12_nonrepeatable_warmup_and_nonempty_base_inventory_refuse
+    self.load(value)
+    ~~~~~~~~~^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/test_verification.py", line 210, in load
+    return verification.load(self.config, self.selection)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/verification.py", line 273, in load
+    require(git_index_oracle.compare_tree(member(root, expected["manifest"]), member(root, expected["manifest"]),
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            selection["case_id"], observation, observation)["status"] == "PASS", "expected tree/index raw metadata binding differs")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/git_index_oracle.py", line 403, in compare_tree
+    tree = oracle.compare(expected_tree, actual_tree, case)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/oracle.py", line 164, in compare
+    if aliases(want) != aliases(got):
+       ~~~~~~~^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/oracle.py", line 162, in aliases
+    groups.setdefault((row["device"], row["inode"]), []).append(path)
+                       ~~~^^^^^^^^^^
+KeyError: 'device'
+
+======================================================================
+ERROR: test_mutable_git_and_post_init_recipes_close_actual_case_context (test_verification.RecipeContract.test_mutable_git_and_post_init_recipes_close_actual_case_context)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/test_verification.py", line 263, in test_mutable_git_and_post_init_recipes_close_actual_case_context
+    plan = self.load(self.recipe(case=case,cache="B"))
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/test_verification.py", line 210, in load
+    return verification.load(self.config, self.selection)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/verification.py", line 273, in load
+    require(git_index_oracle.compare_tree(member(root, expected["manifest"]), member(root, expected["manifest"]),
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            selection["case_id"], observation, observation)["status"] == "PASS", "expected tree/index raw metadata binding differs")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/git_index_oracle.py", line 403, in compare_tree
+    tree = oracle.compare(expected_tree, actual_tree, case)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/oracle.py", line 164, in compare
+    if aliases(want) != aliases(got):
+       ~~~~~~~^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/oracle.py", line 162, in aliases
+    groups.setdefault((row["device"], row["inode"]), []).append(path)
+                       ~~~^^^^^^^^^^
+KeyError: 'device'
+
+----------------------------------------------------------------------
+Ran 208 tests in 8.204s
+
+FAILED (errors=2)
+R4_WALL seconds<=9 limit=90s lock_wait=0s

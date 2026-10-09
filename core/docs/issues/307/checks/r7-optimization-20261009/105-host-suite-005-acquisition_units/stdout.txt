@@ -1,0 +1,9 @@
+
+running 4 tests
+test a_tree_streams_in_acquisition_order_with_exact_charges_and_bounded_cleanup ... ok
+test a_wide_directory_is_placed_through_name_windows ... ok
+test every_statement_is_an_indexed_search_and_window_work_ignores_population ... ok
+test windows_owners_and_abandoned_operations_are_fenced ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

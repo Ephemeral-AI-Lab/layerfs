@@ -1,0 +1,1 @@
+{"remount_facts": {"ctime_ns": 1791494074012647011, "gid": 20, "inode": 964, "links": 2, "mode": 416, "mtime_ns": 1791494074009647011, "size": 200, "uid": 501}, "scope": "scoped external filesystem oracle", "stable_identity": true, "stage": "remount", "status": "PASS"}

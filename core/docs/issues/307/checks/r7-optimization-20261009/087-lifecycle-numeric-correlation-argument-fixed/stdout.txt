@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "calls": 10,
+  "events": 8,
+  "output": "/tmp/layerfs-r7-real-lifecycle-084-numeric.json"
+}

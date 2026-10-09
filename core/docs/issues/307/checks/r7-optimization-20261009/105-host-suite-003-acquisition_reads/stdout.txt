@@ -1,0 +1,7 @@
+
+running 2 tests
+test typed_reads_and_narrow_bindings_preserve_operation_isolation_order_and_bounds ... ok
+test valid_empty_missing_released_and_foreign_owners_remain_distinct ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

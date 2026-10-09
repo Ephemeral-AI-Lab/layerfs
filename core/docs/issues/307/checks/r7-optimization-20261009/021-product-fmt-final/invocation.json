@@ -1,0 +1,27 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "check",
+  "source_commit": "78edb4748343faa5cc0f5e5bbf27cba0ae8d297a",
+  "source_tree": "7093045929a324c831bb0ef6e7636c9a9a68ea2b",
+  "worktree_status": "M core/benchmark/fs-bench-pro/r7/receipts.py\n M core/benchmark/r7-cache/README.md\n M core/benchmark/r7-cache/residency.py\n M core/benchmark/r7-cache/test_residency.py\n M core/benchmark/r7-passthrough/README.md\n M core/benchmark/r7-passthrough/proof.py\n M core/benchmark/r7-passthrough/src/callbacks.rs\n M core/benchmark/r7-passthrough/src/main.rs\n M core/benchmark/r7-passthrough/src/native.rs\n M core/benchmark/r7-runtime/README.md\n M core/benchmark/r7-runtime/src/args.rs\n M core/benchmark/r7-runtime/src/events.rs\n M core/benchmark/r7-runtime/src/fixture.rs\n M core/benchmark/r7-runtime/src/main.rs\n M core/benchmark/r7-runtime/src/runtime.rs\n M core/benchmark/r7-runtime/src/session.rs\n M core/benchmark/r7-tools/fixture.py\n M core/benchmark/r7-tools/metadata.py\n M core/crates/layerfs-api/sdk/src/control/connection.rs\n M core/crates/layerfs-api/sdk/src/workspace/api.rs\n M core/crates/layerfs-api/sdk/src/workspace/attach.rs\n M core/crates/layerfs-api/sdk/src/workspace/binding.rs\n M core/crates/layerfs-api/sdk/src/workspace/commit.rs\n M core/crates/layerfs-api/sdk/src/workspace/mod.rs\n M core/crates/layerfs-api/sdk/src/workspace/status.rs\n M core/crates/layerfs-api/sdk/src/workspace/unmount.rs\n M core/crates/layerfs-bridge/src/control.rs\n M core/crates/layerfs-bridge/src/control_reply.rs\n M core/crates/layerfs-bridge/src/control_request.rs\n M core/crates/layerfs-bridge/src/control_types.rs\n M core/crates/layerfs-daemon/src/application/connection.rs\n M core/crates/layerfs-daemon/src/application/failure.rs\n M core/crates/layerfs-daemon/src/application/mod.rs\n M core/crates/layerfs-daemon/src/bootstrap.rs\n M core/crates/layerfs-daemon/src/control/mod.rs\n M core/crates/layerfs-daemon/src/control/operations.rs\n M core/crates/layerfs-daemon/src/control/types.rs\n M core/crates/layerfs-daemon/src/control/unmount.rs\n M core/crates/layerfs-daemon/src/overlay/admission.rs\n M core/crates/layerfs-daemon/src/overlay/commands.rs\n M core/crates/layerfs-daemon/src/overlay/owner.rs\n M core/crates/layerfs-overlay/src/lifetime/close.rs\n M core/docs/architecture/68-native-workspace-control.md\n M core/docs/architecture/70-daemon-application-startup-control.md\n?? core/benchmark/fs-bench-pro/r7/runner.py\n?? core/benchmark/fs-bench-pro/r7/test_runner.py\n?? core/benchmark/r7-passthrough/src/lifecycle.rs\n?? core/crates/layerfs-api/sdk/src/workspace/cleanup.rs\n?? core/crates/layerfs-api/sdk/tests/observed_control.rs\n?? core/crates/layerfs-bridge/tests/observed_records.rs\n?? core/crates/layerfs-daemon/src/application/diagnostics.rs\n?? core/crates/layerfs-daemon/src/application/diagnostics/\n?? core/crates/layerfs-daemon/src/control/cleanup.rs\n?? core/crates/layerfs-daemon/src/control/observation.rs\n?? core/crates/layerfs-daemon/tests/cleanup_control.rs\n?? core/crates/layerfs-daemon/tests/observed_application.rs\n?? core/crates/layerfs-overlay/tests/cleanup_observation.rs\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/012-fixture-metadata/\n?? core/docs/issues/307/checks/r7-optimization-20261009/013-fixture-metadata-fixed/\n?? core/docs/issues/307/checks/r7-optimization-20261009/014-master-volume/\n?? core/docs/issues/307/checks/r7-optimization-20261009/015-full-fixture-init-install/\n?? core/docs/issues/307/checks/r7-optimization-20261009/016-installed-store-observation/\n?? core/docs/issues/307/checks/r7-optimization-20261009/017-setup-container-stop/\n?? core/docs/issues/307/checks/r7-optimization-20261009/018-setup-daemon-logs/\n?? core/docs/issues/307/checks/r7-optimization-20261009/019-product-fmt/",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "fmt",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-bridge",
+    "-p",
+    "layerfs-sdk",
+    "-p",
+    "layerfs-daemon",
+    "-p",
+    "layerfs-overlay"
+  ],
+  "limit_seconds": 120,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

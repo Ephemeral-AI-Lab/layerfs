@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "980c169e671721a513f3091ef4b7fc9d094aa023",
+  "source_tree": "314e9a88de470b398d8e1755e6cd2f12f15ef1fc",
+  "worktree_status": "M core/benchmark/r7-tools/fixture.py\n M core/benchmark/r7-tools/metadata.py\n?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/012-fixture-metadata/",
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/r7-tools/metadata.py",
+    "--source",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-harness",
+    "--copy",
+    "/tmp/layerfs-r7-full-fixture-20261009"
+  ],
+  "limit_seconds": 120,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

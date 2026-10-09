@@ -1,0 +1,8 @@
+
+running 3 tests
+test assembly_reads_its_first_replacement_before_requesting_later_generated_rows ... ok
+test first_assembly_failure_stops_before_later_rows_or_final_emission ... ok
+test many_generated_deletions_retain_one_cursor_for_a_tiny_result ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

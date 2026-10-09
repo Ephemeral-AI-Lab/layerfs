@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from .registry import CACHE, COUNTERS, IMAGE, PHASES, cases, registry_identity, selections
+from . import registry_variant
 
 SCHEMA = "r7-optimization-receipt-v1"
 IDENTITIES = ["source_commit", "source_tree", "product", "compilation", "dependency",
@@ -55,7 +56,7 @@ def phase(row, label):
             and isinstance(value.get("end_event"), str), label + ": timing events required")
 
 
-def validate_cache(row, arm, attempts):
+def validate_cache(row, arm, attempts, ineligible=False):
     cls = row.get("class")
     require(cls in CACHE or cls is None, "unregistered cache class")
     require(isinstance(row.get("scopes"), dict) and set(row["scopes"]) == set(PHASES)
@@ -65,16 +66,54 @@ def validate_cache(row, arm, attempts):
         return
     if cls == "B":
         require(arm == "L", "class B is L-only")
-        require(integer(row.get("object_demands")) and row["object_demands"] == 0, "class B measured object demands must be zero")
+        require(integer(row.get("object_demands")) and (row["object_demands"] == 0 or ineligible), "class B measured object demands must be zero or explicitly INELIGIBLE")
         require(row.get("warmup_terminal_unmount") is True, "class B earlier terminal mount required")
         require(bool(row.get("history_read_residency")), "class B paid history residency required")
     if cls == "C":
-        require(integer(row.get("warmup_gap_ns")) and row["warmup_gap_ns"] < 60_000_000_000,
+        require(integer(row.get("warmup_gap_ns")) and (row["warmup_gap_ns"] < 60_000_000_000 or ineligible),
                 "class C cache lifetime exceeded or unknown")
         require(row.get("same_mount") is True and bool(row.get("warmup_receipt")), "class C same-mount warm-up required")
     if cls == "A":
+        if arm == "P":
+            require(row.get("fresh_kernel_connection") is True, "class A passthrough fresh connection required")
+        declared = row.get("declared_external_inputs",{})
+        auxiliary = row.get("auxiliary_residencies",[])
+        require(isinstance(auxiliary,list), "additional cold source predicates must be explicit")
+        replay = [item for item in auxiliary if item.get("role") == "replay"]
+        semantic = [item for item in auxiliary if item.get("role") == "semantic"]
+        require({item.get("root") for item in replay} == set(declared.get("replay_roots",[])), "all declared replay cold roots require independent predicates")
+        require(len(semantic) == bool(declared.get("semantic_files",[])), "all declared semantic cold files require independent predicate")
+        for component in auxiliary:
+            require(component.get("role") in {"replay","semantic"}, "unknown additional cold input role")
+            require(component.get("residency",{}).get("status") == "ELIGIBLE" or
+                    ineligible and attempts == 0 and component.get("residency",{}).get("status") == "INELIGIBLE",
+                    "additional cold predicate unavailable or not eligible")
+            if component["role"] == "replay":
+                require(component["residency"].get("schema") == "r7-residency-stream-v1" and
+                        component["residency"].get("input_manifest",{}).get("root") == component["root"],
+                        "additional replay manifest must cover that actual root")
+            view = dict(component,scopes=row["scopes"])
+            view["class"] = "A"
+            # These are additional native file sources. Main L Store/sidecar
+            # requirements are validated independently below, never replaced.
+            validate_cache(view,"N",attempts,ineligible)
+        if semantic:
+            require(set(semantic[0].get("required_residency_paths",[])) == set(declared["semantic_files"]), "semantic cold file coverage mismatch")
         residency = row.get("residency")
         require(isinstance(residency, dict) and residency.get("cache_class") == "A", "class A per-file residency required")
+        if residency.get("schema") == "r7-residency-stream-v1":
+            require(arm in {"N", "P"}, "streamed native inventory is not a Store-sidecar substitute")
+            inventory, manifest = residency.get("inventory", {}), residency.get("input_manifest", {})
+            require(inventory.get("created") is True and inventory.get("complete") is True, "complete streamed residency inventory required")
+            require(inventory.get("sha256") == row.get("stream_inventory_sha256") and bool(row.get("stream_inventory_artifact")), "stream inventory raw artifact identity required")
+            require(manifest.get("sha256") == manifest.get("expected_sha256") and bool(manifest.get("sha256")), "sealed native manifest identity mismatch")
+            require(integer(inventory.get("rows")) and inventory["rows"] == manifest.get("declared_files")
+                    and inventory.get("physical_files") == manifest.get("declared_physical_files"), "streamed residency cardinality mismatch")
+            require(integer(residency.get("resident_pages")) and residency.get("eviction_hint_attempts") == inventory.get("physical_files")
+                    and residency.get("payload_bytes_read") == 0 and residency.get("attempts") == 0, "actual streamed per-file hint/residency required")
+            require(residency["resident_pages"] == 0 or attempts == 0, "resident cold input attempted; must be INELIGIBLE with zero attempts")
+            require("mincore" in residency.get("method", "").lower(), "actual streamed mincore required")
+            return
         files = residency.get("files")
         require(isinstance(files, list) and bool(files), "class A no checked input files")
         paths = {item.get("path") for item in files}
@@ -103,9 +142,14 @@ def validate_cache(row, arm, attempts):
 def validate_receipt(row):
     require(row.get("schema") == SCHEMA and row.get("family_id") == "r7-optimization", "R7 receipt schema/family")
     require(row.get("mode") == "exploratory" and row.get("admission_eligible") is False, "exploratory receipt cannot be promoted")
-    require(row.get("registry_identity") == registry_identity(), "registry identity mismatch")
+    variant = row.get("oracle_variant")
+    require(variant in {None,registry_variant.NAME}, "unknown prospective oracle variant")
+    require(row.get("registry_identity") == (registry_variant.identity() if variant else registry_identity()), "registry identity mismatch")
     selected = next((item for item in selections() if item["selection_id"] == row.get("selection_id")), None)
     require(selected is not None, "unknown selection")
+    if variant:
+        require(selected["case_id"] in registry_variant.GIT_TREE_CASES, "new Git index oracle variant not selected for this case")
+        require(row.get("oracle_contract") == registry_variant.CONTRACT, "prospective Git index scoped oracle contract mismatch")
     require(row.get("row_status") in ROW_STATUSES, "invalid exploratory row status")
     require(integer(row.get("attempted_operation_count")) and integer(row.get("completed_operation_count")), "attempt/completion count required")
     attempts = row["attempted_operation_count"]
@@ -140,7 +184,11 @@ def validate_receipt(row):
     require(bool(row.get("declared_interference")) and bool(row.get("exact_command")), "command and interference custody required")
     for key in ("performance_status", "verification_status", "resource_status", "cleanup_status", "custody_status", "failure_class"):
         require(isinstance(row.get(key), str) and bool(row[key]), key + " required")
-    validate_cache(row.get("cache", {}), selected["arm"], attempts)
+    validate_cache(row.get("cache", {}), selected["arm"], attempts, row["row_status"] == "INELIGIBLE")
+    if selected["cache_class"] == "A" and selected["case_id"] in {"E12","E13"}:
+        require(row["cache"].get("declared_external_inputs",{}).get("replay_roots") == ["/replay"], "setup-warm replay must not credit a cold copy/link command")
+    if selected["cache_class"] == "A" and selected["case_id"] == "E14":
+        require(row["cache"].get("declared_external_inputs",{}).get("semantic_files") == ["/code/node-roots.json"], "setup-warm semantic input must not credit cold remove command")
     require(row["cache"]["class"] == selected["cache_class"], "cache class differs from registration")
     for name in PHASES:
         require(name in row.get("phases", {}), "missing phase " + name)

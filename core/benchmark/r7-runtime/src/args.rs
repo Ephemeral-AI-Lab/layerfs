@@ -16,6 +16,8 @@ pub struct Args {
     pub source: Option<PathBuf>,
     pub sealed: Option<PathBuf>,
     pub init_seconds: u64,
+    pub environment: Vec<String>,
+    pub observation_scope: [u8; 32],
 }
 impl Args {
     pub fn parse() -> Result<Self> {
@@ -48,13 +50,77 @@ impl Args {
         }
         let source = values.remove("--source-copy").map(PathBuf::from);
         let sealed = values.remove("--sealed").map(PathBuf::from);
-        let init_seconds = values.remove("--init-seconds").map(|v| v.parse()).transpose()?.unwrap_or(120);
+        let init_seconds = values
+            .remove("--init-seconds")
+            .map(|v| v.parse())
+            .transpose()?
+            .unwrap_or(120);
+        let environment = match values.remove("--environment-file") {
+            Some(path) => {
+                let body = std::fs::read_to_string(path)?;
+                let mut names = std::collections::BTreeSet::new();
+                let mut environment = Vec::new();
+                for row in body.lines() {
+                    let (name, _) = row
+                        .split_once('=')
+                        .ok_or("environment row must be NAME=value")?;
+                    if name.is_empty()
+                        || !name
+                            .bytes()
+                            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                        || !names.insert(name.to_owned())
+                    {
+                        return Err("invalid or duplicate environment name".into());
+                    }
+                    environment.push(row.to_owned());
+                }
+                if !environment
+                    .iter()
+                    .any(|row| row == "LAYERFS_CONSTRUCTION_WORKERS=1")
+                {
+                    return Err("environment must explicitly select one construction worker".into());
+                }
+                environment
+            }
+            None => vec!["LAYERFS_CONSTRUCTION_WORKERS=1".into()],
+        };
+        let observation_scope = match values.remove("--observation-scope") {
+            Some(value) => {
+                if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return Err("observation scope must be 64 hex digits".into());
+                }
+                let mut scope = [0; 32];
+                for (index, byte) in scope.iter_mut().enumerate() {
+                    *byte = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16)?;
+                }
+                if scope == [0; 32] {
+                    return Err("observation scope must be nonzero".into());
+                }
+                scope
+            }
+            None => layerfs_bridge::native::generate_keypair()?.public,
+        };
         if init_seconds == 0 {
             return Err("explicit positive setup wall stop required".into());
         }
         if !values.is_empty() {
             return Err(format!("unknown options: {:?}", values.keys()).into());
         }
-        Ok(Self { mode, socket, image, volume, executable, receipt, manifest, uid, gid, source, sealed, init_seconds })
+        Ok(Self {
+            mode,
+            socket,
+            image,
+            volume,
+            executable,
+            receipt,
+            manifest,
+            uid,
+            gid,
+            source,
+            sealed,
+            init_seconds,
+            environment,
+            observation_scope,
+        })
     }
 }

@@ -1,0 +1,11 @@
+
+running 5 tests
+INITIAL_RECORD_LAYOUT request=112 call=120 store_manifest=208 initial_record=208 variant_delta=88
+test actual_inline_initial_record_layout_has_no_large_variant_gap ... ok
+test cleanup_has_exact_additive_tags_and_checked_state ... ok
+test one_checked_scoped_layer_preserves_point_request_capacity ... ok
+test observed_lifecycle_and_nesting_are_rejected_before_inner_decode ... ok
+test zero_scope_is_rejected_before_inner_body_decode ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

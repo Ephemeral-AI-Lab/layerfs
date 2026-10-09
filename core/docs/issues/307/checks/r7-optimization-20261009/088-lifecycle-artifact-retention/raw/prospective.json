@@ -1,0 +1,53 @@
+{
+  "admission_eligible": false,
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "full_fixture_oracle": "NOT_CLAIMED",
+  "gid": 20,
+  "global_profile": "Disposable/WAL/OFF",
+  "host_fence_stop_ns": 1000000000,
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "manifest": "/tmp/layerfs-r7-empty-installed-20261009.manifest",
+  "observation_scope": "59f3bfb32a68f4dd3b83670a943d176a3bea799ee8610034ccb60445c2bc4dd8",
+  "operational_stop_ns": 59000000000,
+  "overall_wall_stop_ns": 60000000000,
+  "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+  "phases": [],
+  "proof_scope": "r7-survival exact contents/names/ownership/modes/link equivalence",
+  "schema": "r7-real-daemon-lifecycle-proof-v1",
+  "seals": {
+    "controller": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-tools/lifecycle_proof.py",
+      "sha256": "4848fae00e74435f84a7b77c30a55f6a62acc319c6df19cece7f60a97e5fafa7"
+    },
+    "daemon": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-linux-release/release/layerfs-daemon",
+      "sha256": "3485df1b1a93e54ca36b3b1a0f3d74029035b7c9069b431944ed281046d52d2a"
+    },
+    "manifest": {
+      "path": "/tmp/layerfs-r7-empty-installed-20261009.manifest",
+      "sha256": "baddd3c679fef34763ac5d98c308bc10d2a88d4586d9dd43eda0d3dd63ff7123"
+    },
+    "mutation": {
+      "path": "/tmp/layerfs-r7-real-lifecycle-084/mutation.sh",
+      "sha256": "1f5b2682b5308f825074ffd021790673f391528eeb02da357906945efa0d5da2"
+    },
+    "oracle": {
+      "path": "/tmp/layerfs-r7-real-lifecycle-084/independent-oracle.sh",
+      "sha256": "cd7a54c0873fa9020c2f1f1b5035c2e53eb7f18a20e28d672122cc93d9bbf515"
+    },
+    "runtime": {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-release/release/layerfs-r7-runtime",
+      "sha256": "28044ca491920b4583cf24a9004b0904c9a4985dc49d588a5b1ccb555928bd21"
+    }
+  },
+  "setup": "already installed independent owned byte-copy volume; no Init",
+  "setup_included": "serve/container creation, direct Store open and control readiness",
+  "status": "INCOMPLETE",
+  "timing_claim": "NOT_MEASURED",
+  "uid": 501,
+  "volume": "layerfs-r7-lifecycle-clone-20261009-2ac7cc762",
+  "workspace_keys": [
+    "bc29cc158e503a8b492cc490031d3954e93d65410506472bfa73a07642b720fc",
+    "1da8e72a62bc052381c311dc2ba603d15d16d0efabb05b21353bb26272ea1e8f"
+  ]
+}

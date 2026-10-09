@@ -1,0 +1,1 @@
+{"root": "/tmp/layerfs-r7-full-fixture-20261009", "tracked_paths": 14104, "kinds": {"32768": 14090, "40960": 14, "16384": 0}, "sha256": "181cfc8309081511265659215075d6fc8731fc2bd59b8708fc7f2834cddfa07c", "output": "/tmp/layerfs-r7-tracked-paths-20261009.json", "source_write": false}

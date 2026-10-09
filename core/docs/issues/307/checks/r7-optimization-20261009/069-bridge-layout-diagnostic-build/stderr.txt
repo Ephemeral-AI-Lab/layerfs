@@ -1,0 +1,4 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.53s
+  Executable tests/observed_records.rs (core/target/debug/deps/observed_records-1cdf99607ed1f58d)
+R4_WALL seconds<=3 limit=560s lock_wait=0s

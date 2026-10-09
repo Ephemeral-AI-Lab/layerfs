@@ -1,0 +1,58 @@
+   Compiling libc v0.2.189
+   Compiling generic-array v0.14.7
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling nix v0.31.3
+   Compiling rustversion v1.0.23
+   Compiling parking_lot_core v0.9.12
+   Compiling ref-cast v1.0.27
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling snow v0.9.6
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling syn v2.0.119
+   Compiling syn v3.0.5
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling page_size v0.6.0
+   Compiling rand_core v0.6.4
+   Compiling parking_lot v0.12.5
+   Compiling crypto-common v0.1.7
+   Compiling cipher v0.4.4
+   Compiling universal-hash v0.5.1
+   Compiling polyval v0.6.2
+   Compiling aead v0.5.2
+   Compiling digest v0.10.7
+   Compiling ghash v0.5.1
+   Compiling aes v0.8.4
+   Compiling chacha20 v0.9.1
+   Compiling ctr v0.9.2
+   Compiling blake3 v1.8.5
+   Compiling libsqlite3-sys v0.38.2
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling poly1305 v0.8.0
+   Compiling ref-cast-impl v1.0.27
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling blake2 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling num_enum_derive v0.7.6
+   Compiling zerocopy-derive v0.8.57
+   Compiling num_enum v0.7.6
+   Compiling zerocopy v0.8.57
+   Compiling layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 53.23s
+R4_WALL seconds<=55 limit=560s lock_wait=0s

@@ -1,0 +1,27 @@
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+error: large size difference between variants
+  --> crates/layerfs-bridge/src/initial_record.rs:8:1
+   |
+8  | / pub enum InitialRecord {
+9  | |     /// One original correlated control request.
+10 | |     Control(Call),
+   | |     ------------- the second-largest variant contains at least 0 bytes
+11 | |     /// One original provisioning request, decoded before the receiver is reused.
+12 | |     Install(StoreManifest),
+   | |     ---------------------- the largest variant contains at least 208 bytes
+13 | | }
+   | |_^ the entire enum is at least 0 bytes
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+   = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields to reduce the total size of the enum
+   |
+12 |     Install(Box<StoreManifest>),
+   |             ~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-bridge` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-bridge` (lib test) due to 1 previous error
+R4_WALL seconds<=2 limit=560s lock_wait=0s

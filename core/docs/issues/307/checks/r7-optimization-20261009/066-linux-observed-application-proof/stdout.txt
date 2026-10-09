@@ -1,0 +1,9 @@
+
+running 4 tests
+test diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind ... ok
+test resource_and_output_failure_preserve_original_status_reply ... ok
+test equal_calls_and_reused_slot_have_distinct_public_observation_identity ... ok
+test observer_job_is_charged_and_cardinality_does_not_follow_unrelated_workspaces ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+

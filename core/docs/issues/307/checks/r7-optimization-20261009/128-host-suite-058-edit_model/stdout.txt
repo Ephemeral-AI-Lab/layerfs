@@ -1,0 +1,11 @@
+
+running 6 tests
+test a_chunked_update_matches_the_model ... ok
+test a_deletion_that_merges_two_slices_stays_canonical ... ok
+test a_small_file_matches_the_model_and_a_fresh_construction ... ok
+test an_append_at_end_of_file_matches_the_model ... ok
+test conversions_match_the_model_and_their_fresh_construction ... ok
+test the_model_and_the_candidate_agree_on_degenerate_streams ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

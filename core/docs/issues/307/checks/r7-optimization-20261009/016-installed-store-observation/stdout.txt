@@ -1,0 +1,67 @@
+Name:	layerfs-daemon
+Umask:	0077
+State:	S (sleeping)
+Tgid:	1
+Ngid:	0
+Pid:	1
+PPid:	0
+TracerPid:	0
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+FDSize:	64
+Groups:	0 
+NStgid:	1
+NSpid:	1
+NSpgid:	1
+NSsid:	1
+Kthread:	0
+VmPeak:	  418092 kB
+VmSize:	  417044 kB
+VmLck:	       0 kB
+VmPin:	       0 kB
+VmHWM:	   12400 kB
+VmRSS:	   12400 kB
+RssAnon:	    5776 kB
+RssFile:	    6624 kB
+RssShmem:	       0 kB
+VmData:	   18556 kB
+VmStk:	     132 kB
+VmExe:	    6512 kB
+VmLib:	    2320 kB
+VmPTE:	     124 kB
+VmSwap:	       0 kB
+HugetlbPages:	       0 kB
+CoreDumping:	0
+THP_enabled:	1
+untag_mask:	0xffffffffffffff
+Threads:	6
+SigQ:	0/15665
+SigPnd:	0000000000000000
+ShdPnd:	0000000000000000
+SigBlk:	0000000000000000
+SigIgn:	0000000000001000
+SigCgt:	0000000100000440
+CapInh:	0000000000000000
+CapPrm:	00000000a82425fb
+CapEff:	00000000a82425fb
+CapBnd:	00000000a82425fb
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	2
+Seccomp_filters:	1
+Speculation_Store_Bypass:	vulnerable
+SpeculationIndirectBranch:	unknown
+Cpus_allowed:	ff
+Cpus_allowed_list:	0-7
+Mems_allowed:	1
+Mems_allowed_list:	0
+voluntary_ctxt_switches:	22
+nonvoluntary_ctxt_switches:	4
+/layerfs-store/global/store.sqlite 1417285632 2768144 512
+/layerfs-store/global/store.sqlite-wal 0 0 512
+/layerfs-store/global/store.sqlite-shm 32768 64 512
+/layerfs-store/global/store.sqlite-journal ABSENT
+/layerfs-local/overlay/overlay.sqlite 282624 524296 512
+/layerfs-local/overlay/overlay.sqlite-wal ABSENT
+/layerfs-local/overlay/overlay.sqlite-shm ABSENT
+/layerfs-local/overlay/overlay.sqlite-journal ABSENT

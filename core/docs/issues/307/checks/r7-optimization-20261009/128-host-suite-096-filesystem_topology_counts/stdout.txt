@@ -1,0 +1,21 @@
+
+running 16 tests
+test a_change_wider_than_one_window_keeps_one_window_resident_at_every_size ... ok
+test a_directory_moved_under_a_fresh_directory_of_a_stored_one_lists_only_its_own_subtree ... ok
+test larger_bases_bound_the_sorted_merge_inode_reads_by_the_branch_fan_out ... ok
+test one_directory_moved_under_a_fresh_root_directory_is_two_placements_and_no_walk ... ok
+test one_directory_moved_under_a_stored_directory_lists_only_its_own_subtree ... ok
+test one_directory_removal_releases_its_subtree_without_validation_walks ... ok
+test one_directory_rename_within_the_root_is_one_placement_and_no_walk ... ok
+test one_directory_renamed_in_place_under_a_stored_directory_walks_nothing ... ok
+test one_directory_renamed_with_its_old_name_recreated_walks_nothing ... ok
+test one_file_removal_is_one_demand ... ok
+test one_file_rename_is_two_demands_and_no_placement ... ok
+test one_file_value_update_costs_no_validation_work ... ok
+test one_hard_link_is_two_demands_and_no_placement ... ok
+test one_new_file_is_two_demands_and_no_placement ... ok
+test one_symlink_rename_is_two_demands_and_no_placement ... ok
+test the_bases_grow_and_the_work_subtree_does_not ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+

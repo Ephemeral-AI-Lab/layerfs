@@ -1,0 +1,14 @@
+
+running 9 tests
+test directory_completion_uses_only_directory_positions_and_is_atomic ... ok
+test directory_uniqueness_and_native_evidence_keep_the_first_refusal_after_a_prefix ... ok
+test entry_refusal_order_and_full_unit_rollback_survive_execution_windows ... ok
+test independent_entries_share_executions_and_population_work_stays_indexed ... ok
+test missing_and_repeated_roots_roll_back_the_window_and_report_first_failure ... ok
+test narrow_bindings_preserve_mixed_payloads_after_an_existing_alias_boundary ... ok
+test non_native_windows_skip_the_native_insert_without_losing_targets_or_charges ... ok
+test root_window_index_work_ignores_unrelated_population ... ok
+test windows_amortize_execution_without_losing_aliases_or_atomic_completion ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+

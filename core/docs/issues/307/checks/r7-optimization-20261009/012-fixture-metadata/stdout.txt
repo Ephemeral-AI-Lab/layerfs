@@ -1,0 +1,8 @@
+{
+  "entries": 146913,
+  "symlink_times_corrected": 10070,
+  "ownership_mismatches": 146913,
+  "mode_mismatches": 0,
+  "mtime_mismatches_after": 0,
+  "status": "FAILED_METADATA"
+}

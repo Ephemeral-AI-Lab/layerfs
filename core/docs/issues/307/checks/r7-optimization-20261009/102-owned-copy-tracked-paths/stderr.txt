@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import subprocess,json,hashlib; from pathlib import Path; root=Path("/tmp/layerfs-r7-full-fixture-20261009"); raw=subprocess.check_output(["git","-c","core.fsmonitor=false","ls-files","-z"],cwd=root); paths=sorted(p.decode() for p in raw.split(b"\0") if p); assert len(paths)==14090, len(paths); out=Path("/tmp/layerfs-r7-tracked-paths-20261009.json"); data=(json.dumps(paths,indent=2)+"\n").encode(); out.open("xb").write(data); print(json.dumps(dict(root=str(root),count=len(paths),sha256=hashlib.sha256(data).hexdigest(),output=str(out),source_write=False)))
+                                                                                                                                                                                                                                                                             ^^^^^^^^^^^^^^^^^
+AssertionError: 14104
+R4_WALL seconds<=1 limit=15s lock_wait=0s

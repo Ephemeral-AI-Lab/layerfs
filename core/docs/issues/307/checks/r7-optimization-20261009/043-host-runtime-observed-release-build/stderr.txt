@@ -1,0 +1,5 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-r7-runtime v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-runtime)
+    Finished `release` profile [optimized] target(s) in 2.66s
+R4_WALL seconds<=4 limit=560s lock_wait=0s

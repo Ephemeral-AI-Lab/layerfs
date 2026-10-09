@@ -1,0 +1,3 @@
+    Checking layerfs-r7-runtime v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-runtime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s
+R4_WALL seconds<=1 limit=560s lock_wait=0s

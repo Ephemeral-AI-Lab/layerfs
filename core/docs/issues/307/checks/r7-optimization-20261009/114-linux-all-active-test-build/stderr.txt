@@ -1,0 +1,12 @@
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-sandbox v0.1.6 (/work/core/crates/layerfs-sandbox)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 52s
+R4_WALL seconds<=115 limit=560s lock_wait=0s

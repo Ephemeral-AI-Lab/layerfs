@@ -1,0 +1,21 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0609]: no field `branch` on type `support::Fixture`
+  --> crates/layerfs-daemon/tests/cleanup_control.rs:20:30
+   |
+20 |             branch: f.native.branch,
+   |                              ^^^^^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+20 |             branch: f.native.project.manifest.branch,
+   |                              +++++++++++++++++
+
+For more information about this error, try `rustc --explain E0609`.
+error: could not compile `layerfs-daemon` (test "cleanup_control") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+R4_WALL seconds<=13 limit=560s lock_wait=0s

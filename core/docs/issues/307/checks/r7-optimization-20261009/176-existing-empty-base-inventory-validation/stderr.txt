@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 521, in <module>
+    main()
+    ~~~~^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 516, in main
+    result = verify_tree(args.root,args.inventory,reconcile=args.reconcile_metadata)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 257, in verify_tree
+    target_root(str(root),role)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 91, in target_root
+    require(isinstance(value,str) and value.startswith("/") and len(Path(value).parts) == 2 and value == str(Path(value)),
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            "deployment roots must be canonical top-level container paths")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/r7/deployment.py", line 26, in require
+    raise ValueError(reason)
+ValueError: deployment roots must be canonical top-level container paths
+R4_WALL seconds<=1 limit=15s lock_wait=0s

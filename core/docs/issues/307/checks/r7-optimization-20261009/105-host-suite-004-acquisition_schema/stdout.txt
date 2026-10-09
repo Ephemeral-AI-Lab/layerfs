@@ -1,0 +1,8 @@
+
+running 3 tests
+test a_changed_acquisition_definition_is_refused_at_open ... ok
+test a_read_only_store_refuses_to_begin ... ok
+test each_pack_layout_has_one_version_with_and_one_without_the_tables ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+

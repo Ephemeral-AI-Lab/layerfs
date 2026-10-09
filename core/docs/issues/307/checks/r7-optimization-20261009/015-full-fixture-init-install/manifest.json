@@ -1,0 +1,9 @@
+{
+  "000006-external_snapshot.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "000006-external_snapshot.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "events.jsonl": "0951a2667b12c8f72bf48b1b688d0acf9fef5735c3847a1e8226e7296a5a89da",
+  "invocation.json": "cdac7c63ad6234ad176f0a81d9d073f7ffd9c3b4506bffa510c41104fbbafa3d",
+  "result.json": "1a2370b4da19da14ab340be80db2cf29a4099e8085116c835ee4ee6313cb71f8",
+  "stderr.txt": "17c41f6f08f771261538a16bc4ff5cb424e60d6b26acae356dd3b2f19456a05a",
+  "stdout.txt": "0951a2667b12c8f72bf48b1b688d0acf9fef5735c3847a1e8226e7296a5a89da"
+}

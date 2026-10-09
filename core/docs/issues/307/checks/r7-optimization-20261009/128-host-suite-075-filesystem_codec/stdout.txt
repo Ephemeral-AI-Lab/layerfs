@@ -1,0 +1,14 @@
+
+running 9 tests
+test a_directory_leaf_never_exceeds_the_page_ceiling ... ok
+test attribute_pages_match_the_reference_bytes ... ok
+test both_inode_leaf_routes_are_one_grammar ... ok
+test directory_pages_match_the_reference_bytes ... ok
+test every_tree_role_checks_its_role_byte_and_its_flags ... ok
+test inode_pages_match_the_reference_bytes ... ok
+test malformed_and_reserved_input_is_rejected_once ... ok
+test roles_and_identity_are_not_interchangeable ... ok
+test roots_and_symlinks_match_the_reference_bytes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

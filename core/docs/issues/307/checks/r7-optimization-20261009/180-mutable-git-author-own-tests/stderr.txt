@@ -1,0 +1,19 @@
+.......................................E
+======================================================================
+ERROR: test_mutable_specs_require_sealed_tracked_or_empty_input_and_exact_body (test_oracle_prepare.Specification.test_mutable_specs_require_sealed_tracked_or_empty_input_and_exact_body)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-tools/test_oracle_prepare.py", line 266, in test_mutable_specs_require_sealed_tracked_or_empty_input_and_exact_body
+    result = author.emit_spec(SimpleNamespace(case=case,cache_class="A",inputs=path,inputs_sha256=author.sha(path),output=output))
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-tools/oracle_prepare.py", line 164, in emit_spec
+    require(cache in case["classes"], "cache class is not registered for this case")
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-tools/oracle_prepare.py", line 37, in require
+    raise ValueError(reason)
+ValueError: cache class is not registered for this case
+
+----------------------------------------------------------------------
+Ran 40 tests in 0.056s
+
+FAILED (errors=1)
+R4_WALL seconds<=2 limit=90s lock_wait=0s

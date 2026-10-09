@@ -1,0 +1,8 @@
+
+running 3 tests
+test commands_are_bounded_exact_and_reject_every_truncated_prefix ... ok
+test native_block_is_additive_and_bounded_fields_are_refused_before_send ... ok
+test replies_preserve_scoped_status_conflict_and_known_publication ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

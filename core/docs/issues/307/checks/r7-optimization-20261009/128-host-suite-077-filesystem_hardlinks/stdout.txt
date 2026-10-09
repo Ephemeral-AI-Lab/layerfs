@@ -1,0 +1,11 @@
+
+running 6 tests
+test a_child_moved_out_of_a_removed_subtree_survives ... ok
+test a_declared_new_inode_cannot_lose_a_binding ... ok
+test a_move_across_directories_keeps_the_count_and_the_inode ... ok
+test a_regular_file_keeps_at_least_one_binding ... ok
+test removing_one_alias_leaves_the_other_and_removing_the_last_removes_it ... ok
+test two_aliases_reach_one_derived_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

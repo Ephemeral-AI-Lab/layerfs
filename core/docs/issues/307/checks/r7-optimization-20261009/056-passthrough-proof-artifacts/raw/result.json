@@ -1,0 +1,349 @@
+{
+  "admission_eligible": false,
+  "binary": "/r7-passthrough",
+  "complete_proof_ns": 244063708,
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exploratory": true,
+  "gid": 20,
+  "global_store": "NOT_APPLICABLE; no Store executed",
+  "mount_present": false,
+  "oracle": "/r7-proof.py",
+  "overall_wall_stop_ns": 58000000000,
+  "owners": [
+    {
+      "joined": true,
+      "observed_host_exit": 0,
+      "pid": 15,
+      "unmount_attempts": 1
+    },
+    {
+      "joined": true,
+      "observed_host_exit": 0,
+      "pid": 21,
+      "unmount_attempts": 1
+    }
+  ],
+  "phases": [
+    {
+      "first_ready": {
+        "configured": 2,
+        "created": 2,
+        "entered": 2,
+        "event": "ready",
+        "exited": 0,
+        "joined": 0,
+        "phase": "Serving"
+      }
+    },
+    {
+      "mutation": {
+        "argv": [
+          "python3",
+          "/r7-proof.py",
+          "--mount",
+          "/p",
+          "--stage",
+          "mutation"
+        ],
+        "original": {
+          "expected_hex": "000102030405060708090a0b0c0d0e0f106368616e67656418191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "facts": {
+            "ctime_ns": 1791494074012647011,
+            "gid": 20,
+            "inode": 964,
+            "links": 2,
+            "mode": 416,
+            "mtime_ns": 1791494074009647011,
+            "size": 200,
+            "uid": 501
+          },
+          "relative": "r7-passthrough-proof/two/moved/renamed",
+          "scope": "scoped external filesystem oracle",
+          "stage": "mutation",
+          "status": "PASS"
+        },
+        "scope": "scoped independent functional proof",
+        "status": 0,
+        "wall_ns": 28257167,
+        "wall_stop_ns": 9500000000
+      }
+    },
+    {
+      "first_terminal": {
+        "drain": {
+          "batch_forget_kernel_requests": null,
+          "counter_domain": "implemented filesystem callbacks",
+          "default_callback_kernel_requests": null,
+          "event": "drain",
+          "held_handles": 0,
+          "held_nodes": 6,
+          "opcodes": [
+            0,
+            19,
+            1,
+            16,
+            3,
+            2,
+            1,
+            0,
+            0,
+            3,
+            1,
+            0,
+            2,
+            1,
+            5,
+            3,
+            4,
+            1,
+            7,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            7,
+            0,
+            3,
+            4,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "joined": {
+          "clean": true,
+          "event": "joined",
+          "original_outcome": "SessionOutcome { startup_error: None, receivers: [ReceiverOutcome { index: 0, result: Ok(()) }, ReceiverOutcome { index: 1, result: Ok(()) }], cleanup: Ok(()) }",
+          "snapshot": {
+            "configured": 2,
+            "created": 2,
+            "entered": 2,
+            "event": "final",
+            "exited": 2,
+            "joined": 2,
+            "phase": "Joined"
+          }
+        },
+        "opcode_completeness": "UNAVAILABLE: implemented callback domain; batch FORGET and default callbacks are not kernel request totals"
+      }
+    },
+    {
+      "second_ready": {
+        "configured": 2,
+        "created": 2,
+        "entered": 2,
+        "event": "ready",
+        "exited": 0,
+        "joined": 0,
+        "phase": "Serving"
+      }
+    },
+    {
+      "remount": {
+        "argv": [
+          "python3",
+          "/r7-proof.py",
+          "--mount",
+          "/p",
+          "--stage",
+          "remount",
+          "--original",
+          "/tmp/r7-p-proof-055/mutation.json"
+        ],
+        "original": {
+          "remount_facts": {
+            "ctime_ns": 1791494074012647011,
+            "gid": 20,
+            "inode": 964,
+            "links": 2,
+            "mode": 416,
+            "mtime_ns": 1791494074009647011,
+            "size": 200,
+            "uid": 501
+          },
+          "scope": "scoped external filesystem oracle",
+          "stable_identity": true,
+          "stage": "remount",
+          "status": "PASS"
+        },
+        "scope": "scoped independent functional proof",
+        "status": 0,
+        "wall_ns": 25163416,
+        "wall_stop_ns": 9500000000
+      }
+    },
+    {
+      "wide": {
+        "argv": [
+          "python3",
+          "/r7-proof.py",
+          "--mount",
+          "/p",
+          "--stage",
+          "wide"
+        ],
+        "original": {
+          "backend_buffer": "bounded libc DIR buffer",
+          "scope": "scoped external filesystem oracle",
+          "shape": "wide directory, 211-byte names",
+          "sizes": [
+            {
+              "files": 64,
+              "name_bytes": 13504,
+              "returned_entries": 66
+            },
+            {
+              "files": 128,
+              "name_bytes": 27008,
+              "returned_entries": 130
+            },
+            {
+              "files": 256,
+              "name_bytes": 54016,
+              "returned_entries": 258
+            }
+          ],
+          "stage": "wide",
+          "status": "PASS",
+          "timing": "NOT_MEASURED"
+        },
+        "scope": "scoped independent functional proof",
+        "status": 0,
+        "wall_ns": 178798917,
+        "wall_stop_ns": 9500000000
+      }
+    },
+    {
+      "second_terminal": {
+        "drain": {
+          "batch_forget_kernel_requests": null,
+          "counter_domain": "implemented filesystem callbacks",
+          "default_callback_kernel_requests": null,
+          "event": "drain",
+          "held_handles": 0,
+          "held_nodes": 458,
+          "opcodes": [
+            0,
+            464,
+            0,
+            456,
+            0,
+            1,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            3,
+            1,
+            0,
+            1,
+            451,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            451,
+            0,
+            3,
+            31,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            448,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "joined": {
+          "clean": true,
+          "event": "joined",
+          "original_outcome": "SessionOutcome { startup_error: None, receivers: [ReceiverOutcome { index: 0, result: Ok(()) }, ReceiverOutcome { index: 1, result: Ok(()) }], cleanup: Ok(()) }",
+          "snapshot": {
+            "configured": 2,
+            "created": 2,
+            "entered": 2,
+            "event": "final",
+            "exited": 2,
+            "joined": 2,
+            "phase": "Joined"
+          }
+        },
+        "opcode_completeness": "UNAVAILABLE: implemented callback domain; batch FORGET and default callbacks are not kernel request totals"
+      }
+    }
+  ],
+  "preservation": "only supplied owned empty backing/mount/output; no container or volume deletion",
+  "schema": "r7-passthrough-lifecycle-proof-v1",
+  "status": "PASS",
+  "timing_claim": "NOT_MEASURED",
+  "uid": 501
+}

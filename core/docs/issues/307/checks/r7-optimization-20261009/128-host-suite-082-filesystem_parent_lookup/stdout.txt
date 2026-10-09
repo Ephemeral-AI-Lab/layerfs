@@ -1,0 +1,10 @@
+
+running 5 tests
+test inherited_children_resolve_and_list_by_parent_identity ... ok
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+test partial_parent_batches_preserve_values_new_directories_and_removals ... ok
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

@@ -1,0 +1,9 @@
+
+running 4 tests
+test observed_lifecycle_and_nesting_are_rejected_before_inner_decode ... ok
+test cleanup_has_exact_additive_tags_and_checked_state ... ok
+test zero_scope_is_rejected_before_inner_body_decode ... ok
+test one_checked_scoped_layer_preserves_point_request_capacity ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

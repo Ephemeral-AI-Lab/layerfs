@@ -1,0 +1,8 @@
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+

@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "/r7-passthrough",
+    "/native",
+    "/p"
+  ],
+  "backing": "/native",
+  "pid": 15,
+  "target": "/p",
+  "timeout_disposition": "retain original mount/process; lead stops only this owned container",
+  "unmount_attempts": 0
+}

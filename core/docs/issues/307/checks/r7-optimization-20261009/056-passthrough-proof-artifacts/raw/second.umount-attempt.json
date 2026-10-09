@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "umount",
+    "/p"
+  ],
+  "attempts": 1,
+  "lazy": false,
+  "pid": 27,
+  "timeout_disposition": "original detach outcome unknown; never a second attempt"
+}

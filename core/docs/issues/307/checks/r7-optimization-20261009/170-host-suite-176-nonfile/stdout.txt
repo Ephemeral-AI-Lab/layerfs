@@ -1,0 +1,8 @@
+
+running 3 tests
+test failed_name_composition_drops_only_whiteouts_over_proven_absent_base_names ... ok
+test linked_symlink_targets_follow_effective_layers_through_repeated_failed_captures ... ok
+test non_file_lookup_and_processing_owners_preserve_removed_metadata_and_target ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+

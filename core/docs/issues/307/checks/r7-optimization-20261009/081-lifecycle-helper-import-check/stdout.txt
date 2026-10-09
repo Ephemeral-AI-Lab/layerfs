@@ -1,0 +1,19 @@
+usage: lifecycle_proof.py [-h] --runtime-binary RUNTIME_BINARY --daemon DAEMON
+                          --socket SOCKET --volume VOLUME --manifest MANIFEST
+                          --output OUTPUT [--uid UID] [--gid GID]
+
+One real release-daemon lifecycle proof over an already installed owned clone.
+Run under the lead's checkout lock and prospective 60-second functional stop.
+No Init, fixture copy, retry, performance qualification or container deletion.
+On failure only the host controller is fenced; the lead owns container stop.
+
+options:
+  -h, --help            show this help message and exit
+  --runtime-binary RUNTIME_BINARY
+  --daemon DAEMON
+  --socket SOCKET
+  --volume VOLUME
+  --manifest MANIFEST
+  --output OUTPUT
+  --uid UID
+  --gid GID

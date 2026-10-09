@@ -1,0 +1,9 @@
+
+running 4 tests
+test a_tall_shrink_staircase_keeps_logarithmic_lookups_and_exact_bytes ... ok
+test holes_cost_no_rows_and_tiny_and_dense_files_report_measured_pages ... ok
+test layered_reads_match_a_reference_model_across_writes_resizes_capture_and_install ... ok
+test shrink_work_is_independent_of_discarded_data_and_regrow_reads_zero ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+

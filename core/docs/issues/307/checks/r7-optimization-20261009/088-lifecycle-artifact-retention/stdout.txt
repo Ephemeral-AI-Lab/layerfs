@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "source": "/tmp/layerfs-r7-real-lifecycle-084",
+  "target": "core/docs/issues/307/checks/r7-optimization-20261009/088-lifecycle-artifact-retention/raw",
+  "claim": "retention only; no product rerun"
+}
