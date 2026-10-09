@@ -2179,6 +2179,8 @@ B (fresh mount on a warm daemon), arm L, one sample.
 | L4-5 | By owner direction in conversation on 2026-10-09 ("i prefer not to apply one by one sequentially, we need to be faster"): the remaining rows are applied as three batches by code area, each one implementer assignment of several commits with no hand-back between them; all 12 cells are sampled once at the batch tip and the package suites run once per batch. An intermediate commit is sampled only when the tip's counts are right and its time is worse | Sampling is 2 minutes; the time went into hand-offs between single-commit assignments (three of them took 11, 17 and about 30 minutes of implementation plus a lead turn each). The cut points stay: one commit and one counter per change | this table; batches listed under "Batches" below |
 | L4-6 | OWNER decision, not delegated: "yes, i allow parallel worktree" (conversation, 2026-10-09, in answer to the lead's statement that the assignment forbids another worktree). Batches run in parallel in git worktrees beside the main checkout: `layerfs-r7-b2` (branch `r7-batch2`, write path), `layerfs-r7-b3` (branch `r7-batch3b`, directory visits and old-path deletion), and one for the create path. Each has its own Cargo targets, lock file and container names; the main checkout is the lead's integration tree (merge with `git merge --no-ff`, so each commit keeps its parent and its Production LOC line; samples and the gate run only there). A sample holds every worktree's lock, so no build overlaps a measurement. Nothing is pushed | The assignment's "another worktree" prohibition is lifted by the owner for this purpose only; every other prohibition stands (push, pull request, publish, Durable, and the rest) | this table |
 | L4-7 | The foreign key from descriptor rows to `native_mount` is dropped with `native_file` (batch 3a, `e62685c59`) | Reported by the implementer, accepted by the lead: SQLite's child scan on mount deletion would not use the partial index and walked every descriptor of the namespace (4 VM steps per unrelated row, measured); keeping the key needs a third b-tree, which is storage for a check. The mount row is read by the inserting job's fence and deleted only by the job that has just read its descriptor window empty; `descriptor_request.rs` pins equal cost of retiring a mount beside 2 and beside 40 unrelated descriptors | commit `e62685c59`; `core/docs/architecture/19-daemon-overlay.md` |
+| L4-8 | OWNER decision: "we need fair comparison, either to exclude command time or include for both a2 and layerfs" (conversation, 2026-10-09). Lead's choice of the side: exclude launch for L. The class runner runs the measured cell command as one child Bash between two clock reads taken inside the container and stores the interval as `phases.command_in_container` (process start to exit: the clock of the A2 rows, `time.monotonic()` around `Popen` to pidfd exit on the experiment branch). The host span around Docker exec stays in `phases.command`; from the next sample the A2 ratio is computed on the in-container interval and both are printed | Including launch for A2 would need the A2 arm rebuilt from a branch that may only be read, or a constant added to its numbers. The filesystem requests of the command are unchanged; the harness identity changes, so every cell is sampled again | `fs-bench-pro/r7/runner.py` (`inner_timed`, `inner_clock_observation`) |
+| L4-9 | A READDIR offset keeps meaning "resume strictly after this name" and offsets handed out before a rewind stay valid (no visible contract change). Consequence accepted and recorded as an open risk: a handle that is rewound and listed again while its directory keeps changing stores one reply row (at most 16 KiB) per differing reply until RELEASEDIR, where the old layout stored one row per new name | Retiring earlier replies at offset 0 is permitted by POSIX but is a visible change and needs the owner's word. A directory listed once stores less (4000 names: 8000 → 126 b-tree entries) | `core/docs/architecture/74-native-directory-custody.md`; batch 3b |
 
 ### Samples 600–651 at `c126f742e` (product source equal to `82c51a439`)
 
@@ -2781,4 +2783,63 @@ Verdict by counts: KEPT.
 - C02 is mostly same-CPU in this sample (1019 : 3988) and C03 partly.
   C05 and C09 are above A2 here and were below it in the previous sample
   at identical counts and the same regime: one-sample spread.
+
+### How A2 was measured, and what the regimes are (research, read-only)
+
+Report: [scheduler-regimes](../../r7-open/scheduler-regimes-47ca8f80e.md).
+What it establishes, with its own grades:
+
+- **A2** (branch `codex/phase7-experiment-305`, read with `git show`):
+  timed inside the container, `time.monotonic()` around `Popen` to pidfd
+  exit; unpinned (`daemon_cpus` and `command_cpus` "0-7", `pinned_cpu`
+  null, no `--cpus` or cpuset); the same kernel and VM; two receive loops;
+  one record per cell and no scheduler data. Its C01 costs 21.7 µs per
+  request above native against 42 to 44 µs for the same shape today and
+  26.0 µs for that branch's pinned arm: indirect evidence that the record
+  was a same-CPU sample. It cannot be proved; the A2 column is probably a
+  mix of regimes.
+- **The regimes.** In Linux 6.12 both FUSE wakes are plain `wake_up()`;
+  each side normally returns to its own idle previous CPU, so the
+  cross-CPU regime is the stable one. Same-CPU running began almost only
+  when the receive thread had last run on CPU 0 (8 of the 9 samples with
+  any). Why it then persisted for a whole command is open: it needs the
+  VM's CPU topology and per-CPU load, which the snapshot does not record.
+- **The product wakes no other thread per request in C01**: every daemon
+  thread except the receive thread has 0 switches and 0 ns of run time; a
+  dispatch "handoff" is a request entering the dispatcher, not a thread
+  switch; every notify is guarded by a waiter count; no timer.
+- **Labels**, from the receive thread's involuntary share of its context
+  switches: SEPARATE below 0.02 (observed at most 0.004), STACKED above
+  0.90 (observed 0.968 to 0.997), otherwise MIXED (0.168 to 0.629).
+  Command time is compared within one label; counts across labels.
+- Its split of C01's 379.5 → 183.8 ms: about 54 ms product, about 142 ms
+  regime.
+
+Set aside from this research:
+
+| Idea | Why not |
+| --- | --- |
+| Force the same-CPU regime (pinning, a CPU limit on the container, spinning) | Pinning and spinning are forbidden; a CPU limit changes the envelope A2 was not measured under |
+| A READ whose window is wholly resident stays on the receive thread (today every READ is handed to a worker before provider I/O: 512 hand-offs in C09 and C10 with zero Store reads) | About 9 ms per cell by arithmetic, inside the spread; it moves read decoding onto the one receive loop, which lowers the ceiling for several readers at once; it reverses a stated design line. Recorded as a candidate, not done |
+
+### Batch 3b merged at `31e8ca0c5`
+
+`c54c25da8` names the row type in `job_rows.rs` (the Clippy failure; +1
+line). The merge brings `39e4ce766` (READDIR is a reading visit and a
+publishing visit; one reply row per page; a reply of 10 or of 64 names is
+2 jobs, 1 transaction, 10 statements where it was 6 jobs, 4 transactions
+and 114 or 384; the end reply 1 job, 0 transactions, 4 statements) and
+`900231d0a` (the source-holding read path deleted). Schema 29. Production
+LOC 188500 → 188177 (−323). Re-pinned at the merge, each equal to the
+composition of the two sides: `directory_cost.rs` RELEASEDIR_ONE_REPLY
+Lease (5, 8) → (4, 6) and RELEASEDIR_TWO_REPLIES (5, 9) → (4, 7) (the
+kind-7 lease delete is gone). One fixture of `descriptor_request.rs` moved
+from the deleted `observe_native` to `observe_native_attributes`, no
+assertion changed. Checks on the merged tree: host overlay 32/32, workspace
+30/30, fuse 4/4, daemon 59/61 (the two known); Linux 21/21 mounted daemon
+binaries; `fmt --check`; Clippy on host and in Linux; guard.
+
+Left by the batch for a cleanup commit: the `native_read` table has no
+writer but three readers; `observe_native_attributes` with its plan and
+several ports are reached only by component tests.
 

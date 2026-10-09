@@ -491,6 +491,35 @@ def phase_observation(event, provenance):
             "clock_domain": "host-monotonic" if event["event"].startswith("passthrough") or event["event"] in {"cleanup_to_Gone","container_setup","independent_verifier"} else "sdk-runtime-monotonic-relative-origin"}, "provenance": provenance}
 
 
+INNER_CLOCK_MARK = "R7_IN_CONTAINER_CLOCK_NS"
+
+
+def inner_timed(body):
+    """The measured body as one child Bash between two clock reads taken
+    inside the container: process start to exit, the clock of the A2
+    reference rows. The two reads and the marker line are outside it."""
+    return ("__r7_a=$(date +%s%N); /bin/bash -o pipefail -c " + shlex.quote(body) + "; __r7_s=$?; __r7_b=$(date +%s%N); "
+            "printf '" + INNER_CLOCK_MARK + " %s %s\\n' \"$__r7_a\" \"$__r7_b\" >&2; exit $__r7_s")
+
+
+def inner_clock_observation(event):
+    """The in-container interval the measured command printed after its child exited."""
+    path = event.get("fields", {}).get("stderr")
+    if not path:
+        return receipts.unavailable("measured command stderr custody missing")
+    found = None
+    with Path(path).open(errors="replace") as stream:
+        for line in stream:
+            parts = line.split()
+            if len(parts) == 3 and parts[0] == INNER_CLOCK_MARK and parts[1].isdigit() and parts[2].isdigit():
+                found = (int(parts[1]), int(parts[2]))
+    if found is None or found[1] < found[0]:
+        return receipts.unavailable("in-container clock marker absent from the measured command's stderr")
+    return {"status": "AVAILABLE", "value": {"start_ns": found[0], "end_ns": found[1], "duration_ns": found[1] - found[0],
+            "clock_domain": "container-realtime (date +%s%N), child Bash start to exit"},
+            "provenance": "measured command stderr; two clock reads around the child Bash that ran the cell command; excludes Docker exec create, start, stream and inspect"}
+
+
 def script(folder, name, body):
     path = Path(folder) / name
     with path.open("x") as stream:
@@ -1126,7 +1155,9 @@ def one(config, selection, output, claims):
                 # before the measured command; its pair is the snapshot taken
                 # after it. Outside the command span; no daemon call.
                 thread_before = runtime.send("observe", deadline=deadline)
-            measured_events.append(runtime.send("command", directory, script(output, "command.sh", body), deadline=deadline))
+            (Path(output) / "command.body.sh").write_text(body)
+            measured_events.append(runtime.send("command", directory, script(output, "command.sh", inner_timed(body)), deadline=deadline))
+            phases["command_in_container"] = inner_clock_observation(measured_events[-1])
         row["command_original_events"] = measured_events
         if case["case_id"].startswith("K"):
             row["checkpoint_verifier_count_scope"] = "Cumulative daemon counts include independent checkpoint verifier filesystem work. Isolated Commit selectors must use command:i -> commit:i; cross-checkpoint deltas are not Commit-only ratios. after_verifier:checkpoint-N records the original fence for subsequent command work."
