@@ -1,0 +1,29 @@
+# r7-retire closing checks at bc314e73d7788a869ed1982686dde0be0fa91ddf, host macOS arm64, cargo +1.85.1 --locked
+
+$ cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+R4_WALL seconds<=5 limit=120s lock_wait=0s
+EXIT 0
+
+$ python3 -B core/tools/check_product_boundary.py
+PASS: scanned 823 production Rust/SQL files; semantic review still required
+EXIT 0
+
+$ python3 -B -m unittest discover -s core/tools -p 'test_*.py'
+----------------------------------------------------------------------
+Ran 50 tests in 0.167s
+
+OK
+
+$ python3 -B core/tools/check_fuser_integrity.py   # not a required check of this stage; run for information
+{
+  "checked_manifests_locks_configs": 105,
+  "errors": [
+    "core/benchmark/r7-passthrough/Cargo.lock: locked fuser has a local/replacement source",
+    "core/benchmark/r7-passthrough/Cargo.toml: patch override of fuser is not the authorized timestamp patch"
+  ],
+  "authorized_patch_verified": false,
+  "registry_package_verified": false
+}
+EXIT 1
+# Both errors name core/benchmark/r7-passthrough, a harness of the R7 optimization run that this stage did not touch
+# (git diff cf5bd62ce..HEAD over core/benchmark, core/vendor, core/patches and the check itself is empty).

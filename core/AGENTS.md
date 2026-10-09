@@ -73,7 +73,15 @@ product mental model or campaign-specific benchmark procedures.
   the direct ports; see [native control](docs/architecture/68-native-workspace-control.md).
   The prior client/runtime, daemon upstream, Bridge logical data framing and
   excluded API-core are retired. Historical receipts keep their original topology
-  and verdicts; excluded predecessor crates and root reference remain intact.
+  and verdicts; the root reference remains intact. R7-retire (2026-10-10)
+  removed the excluded `layerfs-server`, `layerfs-fuse-legacy` and
+  `layerfs-sandbox-legacy` directories as retirement; the boundary guard
+  refuses their return. The excluded `layerfs-sdk-legacy`,
+  `layerfs-daemon-legacy`, `layerfs-bridge-legacy` and
+  `layerfs-workspace-legacy` remain, loadable by no Cargo command, because
+  they hold the pinned read-only view code whose future is the unanswered
+  owner question 303/08 O-10; see the
+  [R7-retire record](docs/issues/307/R7-RETIRE-COMPLETION-20261010.md).
   Project native import preserves opaque symlinks, complete membership and hard
   links, with indexed acquisition state. The accepted host WAL baseline retains
   its recorded speed FAIL; no new timing is implied by SDK composition.
@@ -86,7 +94,8 @@ product mental model or campaign-specific benchmark procedures.
   The replacement Fuse is now active with a fixed shared dispatcher, actual
   deferred Owner/Store ports, a read-path callback adapter with complete opcode
   accounting, direct mount/session ownership and connection drain.
-  Its intact predecessor is excluded under `layerfs-fuse-legacy`. The daemon
+  Its predecessor `layerfs-fuse-legacy` was removed by R7-retire; the last
+  commit holding that source is `15e33e22c`. The daemon
   composes Attach/Locate/Ready and reversible normal unmount; see
   [native request service](docs/architecture/75-native-request-service.md) and
   [native mount session](docs/architecture/76-native-mount-session.md).
