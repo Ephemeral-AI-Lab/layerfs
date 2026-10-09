@@ -181,7 +181,7 @@ was attempted and is counted either way. What can be held at a fenced step:
 | Request | Held when fenced | Released |
 | --- | --- | --- |
 | LOOKUP, GETATTR, OPEN | nothing: a visit records no source, and an undecided one wrote nothing | — |
-| OPENDIR | nothing, or its source (a fact round acquires no read) | source |
+| OPENDIR | nothing: a visit, as OPEN (R7 update, 2026-10-09) | — |
 | READ, READLINK | nothing: the visit records no row and its completion is dropped before the reader gate | — |
 | Mutation | nothing, or its source; never a publication ticket | source |
 | READDIR | nothing, or its source with a page or an unpublished cookie plan | page, listing and plan dropped, then source |
@@ -192,10 +192,12 @@ CREATE job before its reply, so a fenced request never owes a reply for an
 effect. A fenced mutation that nevertheless held a ticket would end `Retained`
 with it; nothing releases a ticket on this path. An unpublished cookie plan
 made no offset valid, and its read row goes with the source. FORGET and RELEASE
-use only disposal calls and are never fenced. RELEASEDIR differs from RELEASE:
-it first finds its handle through the gated `directory` call, so under a
-stopped fence it replies `ENOTCONN` and leaves the handle row for revocation to
-retire, while RELEASE still closes its file.
+use only disposal calls and are never fenced. R7 update, 2026-10-09:
+RELEASEDIR is the same. It is one owner job that finds and closes its open
+descriptor through the ungated `close_directory(mount, serial, handle)`, so
+under a stopped fence it still closes its directory, as RELEASE closes its
+file. (Before, it first found its handle through the gated `directory` call
+and a stopped fence left the handle row for revocation to retire.)
 
 The fence is not a drain. A request waiting for admission of a disposal call,
 or on a submitted job, stays admitted until that completes, and the connection
@@ -304,7 +306,9 @@ that release is recorded from the replying thread without an owner job
 since the OPEN update of [native read custody](73-native-read-custody.md):
 the visit that decides it writes its descriptor, `observe_visit` carries the
 kernel request the descriptor is recorded for, and nothing is released
-after its reply. The flow above still applies to OPENDIR.
+after its reply. OPENDIR takes the same visits since the OPENDIR update of
+[directory custody](74-native-directory-custody.md); no filesystem request
+uses the source-holding flow above any more.
 
 R7 update, 2026-10-09 (READ and READLINK): the next paragraph describes the
 earlier flow. A READ or READLINK is now one read-only owner visit

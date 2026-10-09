@@ -97,10 +97,9 @@ impl NativeFilesystem {
                     let serial =
                         serial.map_err(|error| io::Error::from_raw_os_error(error.code()))?;
                     let services = services.request(&fence)?;
-                    let receipt = services.directory(mount, serial, handle.0).await?;
-                    let directory = *receipt.get();
-                    drop(receipt);
-                    drop(services.close_directory(directory).await?);
+                    // One owner job finds the open descriptor and closes it.
+                    // It only gives back, so a stopped mount never refuses it.
+                    drop(services.close_directory(mount, serial, handle.0).await?);
                     Ok::<_, ServiceError>(())
                 }
                 .await;
@@ -108,12 +107,6 @@ impl NativeFilesystem {
                     Ok(()) => {
                         reply.ok();
                         RequestDisposition::Complete
-                    }
-                    // Finding the handle is an acquiring step: stopped before
-                    // it, the handle row stays for revocation to retire.
-                    Err(error) if terminal::fenced(&error) => {
-                        reply.error(terminal::STOPPED);
-                        terminal::unowned(&fence)
                     }
                     Err(error) => {
                         reply.error(Errno::EIO);

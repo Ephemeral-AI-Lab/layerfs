@@ -66,6 +66,7 @@ impl Overlay {
             for directory in &directories {
                 // Its cookies are swept by the directory's own bounded item.
                 self.close_native_directory_inner(*directory)?;
+                self.queue_closed(route)?;
             }
             return Ok((directories.len() as u64, 0, false));
         }

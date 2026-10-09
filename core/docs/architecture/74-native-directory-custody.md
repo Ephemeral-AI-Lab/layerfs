@@ -3,6 +3,47 @@
 > **Status:** Implemented R2 component on parent1da897903,2026-10-08.
 > Native kernel dispatch, mount Ready, permissions and full drain remain open.
 
+R7 update, 2026-10-09 (OPENDIR and RELEASEDIR, implemented; lead decision
+for batch 3b: directory requests are owner visits). **OPENDIR is one owner
+visit and RELEASEDIR is one owner job.**
+
+- OPENDIR is the visit LOOKUP, GETATTR and OPEN use (`NativeJob::ObserveVisit`,
+  class Read), made by `Workspace::native_opendir_visit` and run by
+  [`Overlay::opendir_native_visit`](../../crates/layerfs-overlay/src/lifetime/native_visit.rs)
+  in one transaction: the fence on the kernel's lookup reference
+  (`FENCE_LOOKUP`), the unchanged decision (`decide_read` for `Opendir`) over
+  current rows and facts carried or resident in memory, and, when it decides
+  the directory, the parent it was reached through (`native_parent`), the
+  `native_directory` row for the kernel request that receives it, its lease
+  and the open count. It records no request source and no processing read,
+  so nothing is released after the reply and a fenced or failed OPENDIR
+  holds nothing. An undecided visit writes nothing; the request reads the
+  fact outside the owner and visits again. A regular file is refused
+  `ENOTDIR` by the decision, with nothing written.
+- RELEASEDIR is `NativeDirectoryJob::Close { mount, serial, handle }` over
+  `Overlay::close_native_directory`: the fence statement on the open
+  directory descriptor (`FENCE_DIRECTORY`: Workspace row, mount attached and
+  not revoked, this handle open on this inode), then the unchanged close in
+  the same transaction. A file's descriptor, another inode's handle and a
+  closed or unknown handle are Stale and change nothing; a closed Workspace
+  still releases its descriptors. The port call `close_directory(mount,
+  serial, handle)` is a disposal call: unlike before, a stopped fence does
+  not refuse it, exactly as RELEASE. Cookie retirement is unchanged by this
+  step (the queued, indexed item below).
+
+Per request, from
+[`directory_cost.rs`](../../crates/layerfs-daemon/tests/directory_cost.rs)
+(jobs as Read/Lifecycle/Source; statement attempts/executions):
+
+| Request | Before | Now |
+| --- | --- | --- |
+| OPENDIR of a local directory | 1/2/1 jobs, 0 grants, 4 transactions, 58/75 | 1/0/0 jobs, 0 grants, 1 transaction, 9/11 |
+| OPENDIR of a base directory the daemon has seen | 2/2/1 jobs, 1 grant, 4 transactions, 64/81 | 1/0/0 jobs, 0 grants, 1 transaction, 10/12 |
+| RELEASEDIR | 0/2/0 jobs, 1 transaction, 15/17 | 0/1/0 jobs, 1 transaction, 9/11 |
+
+The description of OPENDIR's "independent reply-processing read" and of the
+`directory` lookup before RELEASEDIR below is the earlier flow.
+
 Overlay schema19 adds NativeDirectory ownership through the existing FileHandle
 lease/reference mechanism, with one backed header per actual directory open.
 NativeReadOperation::Opendir reuses Workspace's current evaluator and immutable

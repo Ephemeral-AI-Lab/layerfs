@@ -38,7 +38,12 @@ pub enum NativeDirectoryJob {
         plan: Arc<NativeCookiePlan>,
         accepted: usize,
     },
-    Close(NativeDirectory),
+    /// RELEASEDIR: the open descriptor is found and closed in this one job.
+    Close {
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    },
 }
 #[derive(Debug)]
 pub enum NativeDirectoryReply {
@@ -55,8 +60,9 @@ impl NativeDirectoryJob {
         match self {
             Self::Handle { mount, .. }
             | Self::Retained { mount, .. }
-            | Self::RetainedRead { mount, .. } => mount.route(),
-            Self::Read { directory, .. } | Self::Close(directory) => directory.mount().route(),
+            | Self::RetainedRead { mount, .. }
+            | Self::Close { mount, .. } => mount.route(),
+            Self::Read { directory, .. } => directory.mount().route(),
             Self::Page { read, .. } | Self::PrepareCookies { read, .. } => read.source().route(),
             Self::PublishCookies { plan, .. } => plan.read().source().route(),
         }
@@ -130,8 +136,12 @@ impl NativeDirectoryJob {
             Self::PublishCookies { plan, accepted } => db
                 .publish_native_cookies(&plan, accepted)
                 .map(|()| NativeDirectoryReply::Done),
-            Self::Close(directory) => db
-                .close_native_directory(directory)
+            Self::Close {
+                mount,
+                serial,
+                handle,
+            } => db
+                .close_native_directory(mount, serial, handle)
                 .map(|()| NativeDirectoryReply::Done),
         }
     }

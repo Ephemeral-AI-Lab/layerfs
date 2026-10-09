@@ -18,6 +18,15 @@ pub(crate) enum Held {
     File(u64),
     /// An open file or directory descriptor of the inode.
     Handle(u64),
+    /// An open directory descriptor of the inode.
+    Directory(u64),
+}
+/// The descriptor a deciding visit records for the kernel request that
+/// receives it.
+#[derive(Clone, Copy)]
+enum Opened {
+    File { request: u64, writable: bool },
+    Directory { request: u64 },
 }
 impl Overlay {
     /// The current base as this job's own source. It names no row and is
@@ -64,12 +73,12 @@ impl Overlay {
                 56,
                 decode,
             ),
-            Held::File(handle) | Held::Handle(handle) => self.query(
+            Held::File(handle) | Held::Handle(handle) | Held::Directory(handle) => self.query(
                 StatementKind::Workspace,
-                if matches!(held, Held::File(_)) {
-                    crate::sql::FENCE_FILE
-                } else {
-                    crate::sql::FENCE_HANDLE
+                match held {
+                    Held::File(_) => crate::sql::FENCE_FILE,
+                    Held::Directory(_) => crate::sql::FENCE_DIRECTORY,
+                    _ => crate::sql::FENCE_HANDLE,
                 },
                 &[
                     &mount.route.ns,
@@ -122,14 +131,24 @@ impl Overlay {
         writable: bool,
         decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
-        self.observe_visit(
-            mount,
-            serial,
-            None,
-            false,
-            Some((request, writable)),
-            decide,
-        )
+        let opened = Opened::File { request, writable };
+        self.observe_visit(mount, serial, None, false, Some(opened), decide)
+    }
+    /// OPENDIR in one visit, under the kernel's lookup reference on the
+    /// inode. When the same bounded decision finishes with the directory,
+    /// its descriptor (the handle row, its lease, the open count) is written
+    /// in the deciding transaction for the request that receives it. No
+    /// request source and no processing read are recorded, so the reply is
+    /// followed by no release.
+    pub fn opendir_native_visit<T>(
+        &self,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<NativeDecision<T>>,
+    ) -> NativeObservation<T> {
+        let opened = Opened::Directory { request };
+        self.observe_visit(mount, serial, None, false, Some(opened), decide)
     }
     fn observe_visit<T>(
         &self,
@@ -137,11 +156,12 @@ impl Overlay {
         serial: u64,
         handle: Option<u64>,
         lookup: bool,
-        open: Option<(u64, bool)>,
+        open: Option<Opened>,
         decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
         let mut decision = None;
         let mut open_candidate = None;
+        let mut directory_candidate = None;
         let result = self
             .atomic(|| {
                 let held = handle.map_or(Held::Lookup, Held::Handle);
@@ -170,8 +190,20 @@ impl Overlay {
                 } else if inode.serial != serial {
                     return Err(OverlayError::Invalid("native observation serial"));
                 }
-                let Some((request, writable)) = open else {
-                    return Ok(());
+                let (request, writable) = match open {
+                    None => return Ok(()),
+                    Some(Opened::File { request, writable }) => (request, writable),
+                    Some(Opened::Directory { request }) => {
+                        if inode.kind != InodeKind::Directory
+                            || (inode.nlink == 0 && inode.serial != mount.root)
+                        {
+                            return Err(OverlayError::Missing);
+                        }
+                        let request = request.to_be_bytes();
+                        directory_candidate =
+                            Some(self.retain_native_directory(mount, &request, serial)?);
+                        return Ok(());
+                    }
                 };
                 if inode.kind != InodeKind::File {
                     return Err(OverlayError::Missing);
@@ -200,7 +232,7 @@ impl Overlay {
             result,
             candidate: None,
             open_candidate,
-            directory_candidate: None,
+            directory_candidate,
         }
     }
     /// The local part of one READ window, through its descriptor, or of one
@@ -279,7 +311,7 @@ impl Overlay {
             .map(Some)
         })
     }
-    /// Plans of the statements a visit and its custody use: the three
+    /// Plans of the statements a visit and its custody use: the four
     /// fences, the file-reference decrements that return what remains, and
     /// the VM program of the created-and-opened file's one custody write.
     pub fn explain_native_visit(&self, mount: NativeMount) -> OverlayResult<Vec<String>> {
@@ -293,6 +325,7 @@ impl Overlay {
             ("fence-lookup", crate::sql::FENCE_LOOKUP, &fence[..4]),
             ("fence-file", crate::sql::FENCE_FILE, &fence[..]),
             ("fence-handle", crate::sql::FENCE_HANDLE, &fence[..]),
+            ("fence-directory", crate::sql::FENCE_DIRECTORY, &fence[..]),
             ("drop-open", crate::sql::FILE_OPENS_DROP, &custody[..]),
             ("drop-lookup", crate::sql::FILE_LOOKUPS_DROP, &custody[..]),
             ("drop-reader", crate::sql::FILE_READERS_DROP, &custody[..]),

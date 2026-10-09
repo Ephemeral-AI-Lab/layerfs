@@ -106,15 +106,30 @@ impl Overlay {
         )
         .map(|mut rows| rows.pop())
     }
-    /// Revokes new use, releases the descriptor lease and retains cookie/header
-    /// storage for existing independent read sources. No cookie sweep here.
-    pub fn close_native_directory(&self, directory: NativeDirectory) -> OverlayResult<()> {
+    /// RELEASEDIR in one visit: the fence reads this open descriptor's row
+    /// and the Workspace row, then the handle is closed and its lease
+    /// released. A closed Workspace still releases its descriptors. Cookie
+    /// and header storage stay for existing independent read sources; no
+    /// cookie sweep here.
+    pub fn close_native_directory(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    ) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
-            self.native_directory(directory.mount, directory.serial, directory.owner)?;
-            self.close_native_directory_inner(directory)
+            let held = super::native_visit::Held::Directory(handle);
+            let (state, _) = self.native_fence(mount, serial, held, false)?;
+            self.close_native_directory_inner(NativeDirectory {
+                mount,
+                owner: handle,
+                serial,
+            })?;
+            self.queue_closed_at(mount.route, &state)
         })
     }
-    /// The caller established that this exact handle row is still open.
+    /// The caller established that this exact handle row is still open, and
+    /// decides afterwards whether its closed Workspace can be reclaimed.
     pub(crate) fn close_native_directory_inner(
         &self,
         directory: NativeDirectory,
@@ -133,8 +148,7 @@ impl Overlay {
             24,
         )?;
         self.file_ref(ns, integer(directory.serial)?, LeaseKind::FileHandle, false)?;
-        self.queue_native_directory(ns, integer(directory.owner)?)?;
-        self.queue_closed(directory.mount.route)
+        self.queue_native_directory(ns, integer(directory.owner)?)
     }
     pub(crate) fn queue_native_directory(&self, ns: i64, owner: i64) -> OverlayResult<()> {
         let ready = self.query(StatementKind::Lease,

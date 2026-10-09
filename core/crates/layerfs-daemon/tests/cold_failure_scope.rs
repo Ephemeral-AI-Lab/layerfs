@@ -557,8 +557,8 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
         before.completed[ServiceClass::Read as usize] + 1
     );
 
-    // A metadata request that still records a source: OPENDIR needs the
-    // directory's base inode, is refused a reader, and holds its source.
+    // OPENDIR is a visit too: it needs the directory's base inode, is
+    // refused a reader, and holds nothing.
     let failure = match wait(NativeRead::prepare(
         services.clone(),
         mount,
@@ -572,11 +572,11 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     };
     stopped(failure.base_demand().unwrap().cause());
     assert!(!failure.fenced());
-    assert!(failure.retained_source().is_some() && failure.retained_read().is_none());
+    assert!(failure.retained_source().is_none() && failure.retained_read().is_none());
     let admitted = rig.owner_work().admitted;
     wait(failure.relinquish()).unwrap();
-    // Exactly the release of that source.
-    assert_eq!(rig.owner_work().admitted, admitted + 1);
+    // Giving it up admits no owner job.
+    assert_eq!(rig.owner_work().admitted, admitted);
 
     let before = rig.owner_work();
     let failure = match wait(NativeMutation::perform(
@@ -638,7 +638,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     );
 
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
-    drop(wait(services.close_directory(directory)).unwrap());
+    drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
     drop(wait(services.forget(mount, serial, 1)).unwrap());
     drop(services);
     rig.revoke_and_stop(false);
@@ -661,7 +661,7 @@ fn an_owner_job_failure_is_not_a_base_demand_and_is_still_retained() {
     );
     let directory = listed.value().unwrap().directory.unwrap();
     wait(listed.dispose()).unwrap();
-    drop(wait(services.close_directory(directory)).unwrap());
+    drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
     let through_closed = |request| {
         NativeRead::prepare(
             rig.services(&fence),

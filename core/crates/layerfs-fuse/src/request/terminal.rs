@@ -19,7 +19,7 @@
 use crate::{
     coherence::reply_order,
     operations::{DirectoryFailure, MutationFailure, ReadFailure},
-    ports::{Fence, Fenced, ServiceError},
+    ports::Fence,
     RequestDisposition,
 };
 use fuser::Errno;
@@ -35,14 +35,6 @@ pub(super) fn errno(fenced: bool) -> Errno {
     } else {
         Errno::EIO
     }
-}
-pub(super) fn fenced(reason: &ServiceError) -> bool {
-    reason.is::<Fenced>()
-}
-/// A fenced request that had acquired nothing.
-pub(super) fn unowned(fence: &Fence) -> RequestDisposition {
-    fence.replied();
-    RequestDisposition::Complete
 }
 pub(super) async fn read(fence: &Fence, failure: ReadFailure) -> RequestDisposition {
     if failure.fenced() {

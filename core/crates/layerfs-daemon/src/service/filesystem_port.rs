@@ -244,11 +244,18 @@ impl RequestServices for FilesystemPort {
             directory_done,
         )
     }
-    fn close_directory(&self, directory: NativeDirectory) -> ServiceFuture<'_, ServiceReply<()>> {
+    fn close_directory(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    ) -> ServiceFuture<'_, ServiceReply<()>> {
         self.dispose(
-            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Close(
-                directory,
-            )))),
+            Command::Native(NativeJob::Directory(Box::new(NativeDirectoryJob::Close {
+                mount,
+                serial,
+                handle,
+            }))),
             directory_done,
         )
     }
@@ -384,6 +391,9 @@ impl RequestServices for FilesystemPort {
         let visit = match operation {
             NativeReadOperation::Open { writable, .. } => {
                 workspace.native_open_visit(resident, mount, request, serial, writable, facts)
+            }
+            NativeReadOperation::Opendir { .. } => {
+                workspace.native_opendir_visit(resident, mount, request, serial, facts)
             }
             operation => {
                 workspace.native_read_visit(resident, mount, serial, handle, operation, facts)
