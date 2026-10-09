@@ -1,0 +1,26 @@
+{
+  "schema": "r8-final-verification-scope-v1",
+  "links_and_manifest_verification": "065 PASS:412 local links,33 raw manifests,90 functional/282 zero-attempt timing rows, unchanged product/reference/archive trees",
+  "source_docs_whitespace": "PASS",
+  "full_staged_diff_whitespace": "WARN \u2014 immutable raw stdout final blank lines retained",
+  "raw_whitespace_warnings": [
+    "core/docs/issues/307/checks/r8-qualification-20261010/056-host-wide-proof/stdout.txt:10: new blank line at EOF.",
+    "core/docs/issues/307/checks/r8-qualification-20261010/057-linux-wide-proof/stdout.txt:10: new blank line at EOF.",
+    "core/docs/issues/307/checks/r8-qualification-20261010/058-host-linux-handoff-proof/stdout.txt:19: new blank line at EOF.",
+    "core/docs/issues/307/checks/r8-qualification-20261010/059-linux-shared-process-proof/stdout.txt:50: new blank line at EOF."
+  ],
+  "raw_evidence": "Never rewritten to silence whitespace warnings",
+  "Rust_checks": "REUSED EXACT COVERING SOURCE: product/config/dependency unchanged from7999a6356; no new product/API/manifest source; all four missing-precondition proofs pass at current product",
+  "harness_checks": "14 retired-route tests, E04 covered assertions and37 repaired import cases,29 comparator cases, controller3 export plus1 repaired startup cases, independent inventory/final evidence checks",
+  "unverified": [
+    "full fixture oracle failed registered fence",
+    "complete functional/runtime/count/resource scopes",
+    "timing/storage/cold comparisons",
+    "content harness build failed removed APIs",
+    "P checker authorization",
+    "nondefault Docker endpoint",
+    "exhaustive per-reference-receipt recovery catalog"
+  ],
+  "no_ci_claim": true,
+  "no_release_claim": true
+}

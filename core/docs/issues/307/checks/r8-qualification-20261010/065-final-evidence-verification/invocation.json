@@ -1,0 +1,17 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "64609e47bfe3b856e57d693ad03d0176040e7b57",
+  "source_tree": "56d2f46afd69f9afab114aacd6f7b5422cee6b45",
+  "worktree_status": "M core/docs/issues/307/ROLLOUT-LEDGER-20261008.md\n?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/R8-COMPLETION-20261010.md\n?? core/docs/issues/307/R9-COMPLETION-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/\n?? core/docs/issues/307/checks/r8-qualification-20261010/054-full-proof-timeout-diagnosis.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/055-owned-proof-container-stop/\n?? core/docs/issues/307/checks/r8-qualification-20261010/056-host-wide-proof/\n?? core/docs/issues/307/checks/r8-qualification-20261010/057-linux-wide-proof/\n?? core/docs/issues/307/checks/r8-qualification-20261010/058-host-linux-handoff-proof/\n?? core/docs/issues/307/checks/r8-qualification-20261010/059-linux-shared-process-proof/\n?? core/docs/issues/307/checks/r8-qualification-20261010/060-own-empty-shared-volume-cleanup/\n?? core/docs/issues/307/checks/r8-qualification-20261010/061-outcomes.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/062-outcomes.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/063-commit-loc-confirmations.json\n?? core/docs/issues/307/checks/r8-qualification-20261010/064-retired-host-mediated-dispositions.json",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r8-final-verification.py"
+  ],
+  "limit_seconds": 100,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization"
+}

@@ -1,0 +1,19 @@
+
+running 1 test
+test macos_init_handoff_to_linux_daemon_has_no_host_data_path ... HOST_HANDOFF_DOCKER image=sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6 container=layerfs-pre-s8-install-1791570710132334000 volume=layerfs-pre-s8-install-1791570710132334000-store
+
+running 1 test
+test linux_daemon_install_role ... LAYERFS_INSTALL_LISTEN
+INSTALL_ROOT_ORACLE paths=6 full_regular_bytes=300048 hardlink=true raw_symlink=true host_sqlite=3.51.0 daemon_sqlite=3.53.2 work=InstallWork { records: 3, write_calls: 3, written: 180224, sync_calls: 0, peak_record_bytes: 65519 }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+HOST_HANDOFF_CLEANUP child_exit=0 container_auto_removed=true volume_removed=true
+HOST_HANDOFF manifest=StoreManifest { provider: Sqlite, locator: "/store/store.sqlite", profile: Disposable, binding: [110, 97, 116, 105, 118, 101, 45, 105, 110, 115, 116, 97, 108, 108], cursor_key: "[redacted]", stack: [49, 54, 54, 54, 54, 54, 54, 54, 54, 54, 54, 54, 54, 54, 54, 54, 54], branch: [17, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55], root: [141, 44, 144, 199, 247, 134, 38, 119, 236, 73, 80, 152, 157, 206, 90, 243, 237, 20, 147, 182, 73, 98, 174, 27, 121, 146, 195, 143, 171, 184, 174, 207], bytes: 180224, host_sqlite: "3.51.0", daemon_sqlite: Some("3.53.2") } work=InstallWork { read_calls: 4, read_bytes: 180224, sent_records: 3, sent_bytes: 180224, buffer_bytes: 65519 } source_removed=true sealed_removed=true
+HOST_HANDOFF_RETAINED_MANIFEST /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-native-install-49862-docker/installed.manifest
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+

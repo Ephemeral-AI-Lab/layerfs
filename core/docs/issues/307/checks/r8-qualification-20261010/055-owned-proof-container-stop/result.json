@@ -1,0 +1,22 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "64609e47bfe3b856e57d693ad03d0176040e7b57",
+  "source_tree": "56d2f46afd69f9afab114aacd6f7b5422cee6b45",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/\n?? core/docs/issues/307/checks/r8-qualification-20261010/054-full-proof-timeout-diagnosis.json",
+  "command": [
+    "docker",
+    "stop",
+    "--time",
+    "1",
+    "f52b51a15a6494e650bcfdf03c3f0c83685f1117efd258424e712afaedbfe8c9"
+  ],
+  "limit_seconds": 10,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 1541952000,
+  "status": "PASS"
+}

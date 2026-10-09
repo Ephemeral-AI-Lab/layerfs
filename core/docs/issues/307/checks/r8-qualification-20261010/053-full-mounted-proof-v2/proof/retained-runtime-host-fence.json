@@ -1,0 +1,21 @@
+{
+  "cause": "original command exit is not known zero: 124",
+  "cause_type": "OriginalFailure",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/proof/runtime.events.jsonl"
+  ],
+  "container": "f52b51a15a6494e650bcfdf03c3f0c83685f1117efd258424e712afaedbfe8c9",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "ed679e713fd5b06b964db1f5390658baada793488fbef2dd46b54f8c1d621c6c",
+    "ed679e713fd5b06b964db1f5390658baada793488fbef2dd46b54f8c1d621c6c"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 49415,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "observed_host_exit": 1,
+  "original_operations_replayed": false,
+  "original_phase": null
+}

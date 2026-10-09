@@ -1,0 +1,20 @@
+{
+  "invocation.json": "a9cd0ea27d3ce92dfde3c56be9c02dea8405a017de4de0ae28cc52564f30d59c",
+  "proof/controller-attempts.jsonl": "4c8e0ec71811ee9029468b119057691d3c8c455ef97518bbe72b74e0eb29ddc4",
+  "proof/full-oracle.sh": "caedf0df9baf6315b487b6ee929567e3ffba3dc640e3ba48725fb4a148634547",
+  "proof/oracle.artifacts/expected.jsonl": "c8af2043838481f5b3559adabd11ddc1324fdadf1ee17310d95f79406fdda4f3",
+  "proof/oracle.artifacts/expected.sqlite": "39b97f686a087d6256c4580a916b746399f91ce210beb878267c2be7d735f7d2",
+  "proof/oracle.artifacts/observed.jsonl": "db326080e6b1ebcab0b65c4487efa65db43b35e5c76bdf73f2e941fabcacb0c1",
+  "proof/proof.json": "9d7a7fef4cbc8470e4c3b490c87b4febe2ef5aa64346cde4ac66e00b3e0f23f6",
+  "proof/retained-runtime-custody.json": "9b25723851e0629ea72f4d934092de5997374ba6124d14992cf794419a1c7d25",
+  "proof/retained-runtime-host-fence.json": "d0577f9faa388508671a425a4aa197904b68dbafc6e9bcb780c1d3310b7afdc6",
+  "proof/runtime.events.artifacts/000008-verify.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "proof/runtime.events.artifacts/000008-verify.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "proof/runtime.events.jsonl": "0a022933f3ea70e8bd6cc30f5b850c9476d87b1b907d80d50497197d021ab58a",
+  "proof/runtime.host-custody.json": "78982f065d606c3500f1531548fe7e2c09b43face5b5595f266a812e5f2f05b1",
+  "proof/runtime.stderr": "805d1f9e3ddbe027d063d536f23e6f940110ca6ab0a9e602c1bbed526576294c",
+  "proof/runtime.stdout": "4386627eed5e342b03fe13a27aecfa854b9da2bee76263c84aeb5c769a21fe9f",
+  "result.json": "11992cc6a4d27e70e46b45b5432ff8b53654dd18938665d38c5a2e79b2ee3aec",
+  "stderr.txt": "a5b6d8b9248bd2632e0b2ba56e7b01e7eb470cf9e21a1e6304c3015e9167ba2a",
+  "stdout.txt": "8f868087d4c4f6d8a3231fb1da61c35f2490903567ac83115b132118807de37b"
+}

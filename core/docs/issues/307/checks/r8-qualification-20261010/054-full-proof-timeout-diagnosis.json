@@ -1,0 +1,29 @@
+{
+  "schema": "r8-full-proof-counted-timeout-diagnosis-v1",
+  "status": "FAILED \u2014 registered verifier wall stop",
+  "complete_command_ns": 87540538792,
+  "comparator_stop_seconds": 85,
+  "original_exit": 124,
+  "expected": {
+    "paths": 130046,
+    "regular_files": 103108,
+    "regular_bytes": 3475776149
+  },
+  "indexed_observed": {
+    "paths": 71302,
+    "regular_files": 58231,
+    "regular_bytes": 2824239039
+  },
+  "retained_observation_lines": 71300,
+  "retained_hashed_bytes": 2824199089,
+  "last_complete_observed_path": "node_modules/.pnpm/jsdom@29.1.1_@noble+hashes@2.3.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLIFrameElement-impl.js",
+  "partial_tail_bytes": null,
+  "final_oracle_json": "ABSENT: timeout before final result, original failed export retained",
+  "semantic_verdict": "Full oracle FAIL/INCOMPLETE; no full PASS; no mismatching row is in retained matched prefix",
+  "cause_attribution": "Declared wall fence reached with full namespace/content coverage unfinished. The exact final instruction is unobserved. Counts show progress, not exclusive SQL/FUSE/IO attribution; no correlated runtime profiler exists, so no such timing attribution is claimed.",
+  "source": [
+    "core/benchmark/r8-tools/full_oracle.py:load_expected/check_namespace/read_file",
+    "core/benchmark/r8-tools/run_full_oracle.py:85s external comparator fence"
+  ],
+  "rerun": "NOT_RUN \u2014 unchanged full proof is not resampled; no limit/workload/oracle relaxation or optimization in R8"
+}

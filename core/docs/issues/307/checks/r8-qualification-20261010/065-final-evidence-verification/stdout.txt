@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "local_links_checked": 412,
+  "link_errors": [],
+  "raw_receipt_manifests_verified": 33,
+  "functional_statuses": {
+    "FAIL": 1,
+    "NOT_RUN": 1,
+    "PARTIAL": 35,
+    "PASS": 45,
+    "WITHDRAWN": 8
+  },
+  "timing_rows": 282,
+  "timing_attempts": 0,
+  "product_reference_archived_test_trees": "UNCHANGED",
+  "checks_not_rerun": "Rust covering suite/Clippy/fmt/guard exact-source reuse; no product change, no aggregate CI"
+}

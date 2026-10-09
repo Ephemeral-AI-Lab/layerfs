@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-release/release/layerfs-r7-runtime",
+    "serve",
+    "--socket",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "--volume",
+    "layerfs-r8-full-proof-20261010-8d7d083aaa8d",
+    "--daemon",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-linux-release/release/layerfs-daemon",
+    "--manifest",
+    "/tmp/layerfs-r7-full-installed-20261009.manifest",
+    "--receipt",
+    "core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/proof/runtime.events.jsonl",
+    "--uid",
+    "501",
+    "--gid",
+    "20"
+  ],
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/proof/runtime.events.jsonl"
+  ],
+  "host_group": 49415,
+  "host_pid": 49415,
+  "timeout_disposition": "host timeout does not stop Docker exec/container; exact owned IDs retained; lead explicit cancellation/stop only"
+}

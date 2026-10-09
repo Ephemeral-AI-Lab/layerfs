@@ -1,0 +1,258 @@
+{
+  "schema": "r8-exact-commit-loc-confirmations-v1",
+  "rows": [
+    {
+      "commit": "9e4de35fcd69d7ec65ccb8479286f4f77239d57b",
+      "tree": "dce368b3e8511e9ebc45b5efec8f4cb361e03ee0",
+      "confirmed_first_parent": "f8a0a5ff1cd5f93b90bf16f964705b4c7d773615",
+      "exact_comparison": {
+        "first_parent": "f8a0a5ff1cd5f93b90bf16f964705b4c7d773615",
+        "counted_tree": "dce368b3e8511e9ebc45b5efec8f4cb361e03ee0",
+        "mode": "staged",
+        "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+        "method": "Independent parent/final git archive extractions; pinned tools/production_loc.py scan/per_file; first-party Rust and shipped SQL, excluding comments/blanks/inline/transitive tests/docs/tools/third-party; exact Cargo member path classification",
+        "before": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "after": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "delta": 0
+      },
+      "confirmation": "PASS: committed tree equals final staged counted tree"
+    },
+    {
+      "commit": "63fe77e3df76a169a878286e25271e221f469bbb",
+      "tree": "2a84f5dd35e3a6d20b29b9200483b0c1a6398bf2",
+      "confirmed_first_parent": "9e4de35fcd69d7ec65ccb8479286f4f77239d57b",
+      "exact_comparison": {
+        "first_parent": "9e4de35fcd69d7ec65ccb8479286f4f77239d57b",
+        "counted_tree": "2a84f5dd35e3a6d20b29b9200483b0c1a6398bf2",
+        "mode": "staged",
+        "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+        "method": "Independent parent/final git archive extractions; pinned tools/production_loc.py scan/per_file; first-party Rust and shipped SQL, excluding comments/blanks/inline/transitive tests/docs/tools/third-party; exact Cargo member path classification",
+        "before": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "after": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "delta": 0
+      },
+      "confirmation": "PASS: committed tree equals final staged counted tree"
+    },
+    {
+      "commit": "35971624f385d43142e592ff8dbdfbba0cb951b3",
+      "tree": "452ba129172661bca186a077f77814db89d60233",
+      "confirmed_first_parent": "63fe77e3df76a169a878286e25271e221f469bbb",
+      "exact_comparison": {
+        "first_parent": "63fe77e3df76a169a878286e25271e221f469bbb",
+        "counted_tree": "452ba129172661bca186a077f77814db89d60233",
+        "mode": "staged",
+        "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+        "method": "Independent parent/final git archive extractions; pinned tools/production_loc.py scan/per_file; first-party Rust and shipped SQL, excluding comments/blanks/inline/transitive tests/docs/tools/third-party; exact Cargo member path classification",
+        "before": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "after": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "delta": 0
+      },
+      "confirmation": "PASS: committed tree equals final staged counted tree"
+    },
+    {
+      "commit": "3748e37ce3806d2514323ab1d15614ab5cfa192e",
+      "tree": "506148aa755953482e60cea6a7864df5144f3183",
+      "confirmed_first_parent": "35971624f385d43142e592ff8dbdfbba0cb951b3",
+      "exact_comparison": {
+        "first_parent": "35971624f385d43142e592ff8dbdfbba0cb951b3",
+        "counted_tree": "506148aa755953482e60cea6a7864df5144f3183",
+        "mode": "staged",
+        "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+        "method": "Independent parent/final git archive extractions; pinned tools/production_loc.py scan/per_file; first-party Rust and shipped SQL, excluding comments/blanks/inline/transitive tests/docs/tools/third-party; exact Cargo member path classification",
+        "before": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "after": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "delta": 0
+      },
+      "confirmation": "PASS: committed tree equals final staged counted tree"
+    },
+    {
+      "commit": "3654bebc26fa422c5b956b057f0ff294aff6c1b9",
+      "tree": "c35f360836d7adb4e1f95f2ce42444a74045e376",
+      "confirmed_first_parent": "3748e37ce3806d2514323ab1d15614ab5cfa192e",
+      "exact_comparison": {
+        "first_parent": "3748e37ce3806d2514323ab1d15614ab5cfa192e",
+        "counted_tree": "c35f360836d7adb4e1f95f2ce42444a74045e376",
+        "mode": "staged",
+        "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+        "method": "Independent parent/final git archive extractions; pinned tools/production_loc.py scan/per_file; first-party Rust and shipped SQL, excluding comments/blanks/inline/transitive tests/docs/tools/third-party; exact Cargo member path classification",
+        "before": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "after": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "delta": 0
+      },
+      "confirmation": "PASS: committed tree equals final staged counted tree"
+    },
+    {
+      "commit": "64609e47bfe3b856e57d693ad03d0176040e7b57",
+      "tree": "56d2f46afd69f9afab114aacd6f7b5422cee6b45",
+      "confirmed_first_parent": "3654bebc26fa422c5b956b057f0ff294aff6c1b9",
+      "exact_comparison": {
+        "first_parent": "3654bebc26fa422c5b956b057f0ff294aff6c1b9",
+        "counted_tree": "56d2f46afd69f9afab114aacd6f7b5422cee6b45",
+        "mode": "staged",
+        "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+        "method": "Independent parent/final git archive extractions; pinned tools/production_loc.py scan/per_file; first-party Rust and shipped SQL, excluding comments/blanks/inline/transitive tests/docs/tools/third-party; exact Cargo member path classification",
+        "before": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "after": {
+          "combined": 144675,
+          "core": 79258,
+          "subtotals": {
+            "active": 79258,
+            "excluded_predecessors": 0,
+            "excluded_integration": 0,
+            "reference": 65417
+          },
+          "product_trees": {
+            "core/crates": "9a76077239b4db1955b83bb29e9134745efb963c",
+            "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+          }
+        },
+        "delta": 0
+      },
+      "confirmation": "PASS: committed tree equals final staged counted tree"
+    }
+  ],
+  "final_completion": "Exact comparison prepared after final staging, recorded in commit message and final handoff."
+}

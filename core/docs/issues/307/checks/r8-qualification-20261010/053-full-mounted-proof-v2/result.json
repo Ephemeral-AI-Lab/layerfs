@@ -1,0 +1,31 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "64609e47bfe3b856e57d693ad03d0176040e7b57",
+  "source_tree": "56d2f46afd69f9afab114aacd6f7b5422cee6b45",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md",
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/r8-tools/run_full_oracle.py",
+    "proof",
+    "--output",
+    "core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/proof",
+    "--inputs",
+    "/tmp/layerfs-r8-full-proof-inputs-v2-20261010/inputs.json",
+    "--registration",
+    "core/benchmark/fs-bench-pro/registry/r8-integrated-qualification-v2.json",
+    "--runtime",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-host-release/release/layerfs-r7-runtime",
+    "--daemon",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/r7-linux-release/release/layerfs-daemon"
+  ],
+  "limit_seconds": 100,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 1,
+  "complete_command_ns": 87540538792,
+  "status": "FAILED"
+}

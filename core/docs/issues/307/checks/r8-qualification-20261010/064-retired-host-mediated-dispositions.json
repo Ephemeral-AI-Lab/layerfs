@@ -1,0 +1,238 @@
+{
+  "families": [
+    {
+      "cases": [
+        {
+          "attempts": 0,
+          "case": "namespace-100-compact-v3",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "namespace-1000-compact-v3",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        }
+      ],
+      "family": "init_namespace",
+      "route": "retired-host-mediated",
+      "sample_count": 0,
+      "status": "NOT_RUN \u2014 mechanism removed"
+    },
+    {
+      "cases": [
+        {
+          "attempts": 0,
+          "case": "workspace-write-append-writes-100-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-append-writes-512-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-append-writes-4097-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-dispersed-writes-100-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-dispersed-writes-512-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-dispersed-writes-4097-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-repeated-writes-100-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-repeated-writes-512-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-write-repeated-writes-4097-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        }
+      ],
+      "family": "workspace_write",
+      "route": "retired-host-mediated",
+      "sample_count": 0,
+      "status": "NOT_RUN \u2014 mechanism removed"
+    },
+    {
+      "cases": [
+        {
+          "attempts": 0,
+          "case": "workspace-commit-clean-retained-writes-4097-v3",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-commit-one-edit-retained-writes-4097-v3",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        }
+      ],
+      "family": "workspace-commit",
+      "route": "retired-host-mediated",
+      "sample_count": 0,
+      "status": "NOT_RUN \u2014 mechanism removed"
+    },
+    {
+      "cases": [
+        {
+          "attempts": 0,
+          "case": "workspace-namespace-move-replace-descendants-3-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-namespace-deep-4097-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-namespace-components-270-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-namespace-retained-g1-replace-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        }
+      ],
+      "family": "workspace_namespace",
+      "route": "retired-host-mediated",
+      "sample_count": 0,
+      "status": "NOT_RUN \u2014 mechanism removed"
+    },
+    {
+      "cases": [
+        {
+          "attempts": 0,
+          "case": "workspace-mutations-mixed-ordinary-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-mutations-retained-g1-live-g2-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-mutations-known-posix-refusals-sdk-v1",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-mutations-shell-exit7-retained-explicit-commit-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        }
+      ],
+      "family": "workspace_mutations",
+      "route": "retired-host-mediated",
+      "sample_count": 0,
+      "status": "NOT_RUN \u2014 mechanism removed"
+    },
+    {
+      "cases": [
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-mixed-refresh-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-overwrite-4k-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-repeated-one-byte-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-many-128-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-many-129-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-many-257-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-many-1025-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        },
+        {
+          "attempts": 0,
+          "case": "workspace-shell-package-many-129-live-g2-sdk-v2",
+          "reason": "mechanism removed",
+          "status": "NOT_RUN"
+        }
+      ],
+      "family": "workspace_shell_package",
+      "route": "retired-host-mediated",
+      "sample_count": 0,
+      "status": "NOT_RUN \u2014 mechanism removed"
+    }
+  ],
+  "operation_attempts": 0,
+  "product_API": "This withdraws old Server-driven benchmark routes; current Project/Workspace/Sandbox APIs retain their actual implemented scope.",
+  "registration": "No attempted treatment; explicit current-source withdrawal alongside preserved historical cases/receipts",
+  "schema": "r8-host-mediated-dispositions-v1",
+  "source_commit": "3654bebc26fa422c5b956b057f0ff294aff6c1b9",
+  "source_sha256": "fbbcde5de63c9460cb94939547d10ce103acaf3827604e42484ca3490b853eee"
+}

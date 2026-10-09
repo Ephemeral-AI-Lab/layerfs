@@ -1,0 +1,73 @@
+{
+  "cache": "natural, setup copy warmth declared; functional only",
+  "construction_workers": 1,
+  "custody": {
+    "cause": "original command exit is not known zero: 124",
+    "cause_type": "OriginalFailure",
+    "child_event_receipts": [
+      "core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/proof/runtime.events.jsonl"
+    ],
+    "container": "f52b51a15a6494e650bcfdf03c3f0c83685f1117efd258424e712afaedbfe8c9",
+    "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+    "exec_ids": [
+      "ed679e713fd5b06b964db1f5390658baada793488fbef2dd46b54f8c1d621c6c",
+      "ed679e713fd5b06b964db1f5390658baada793488fbef2dd46b54f8c1d621c6c"
+    ],
+    "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+    "host_pid": 49415,
+    "host_signal": "NOT_ATTEMPTED",
+    "host_wait_stop_seconds": 1,
+    "independent_failures": [],
+    "observed_host_exit": 1,
+    "original_operations_replayed": false,
+    "original_phase": null
+  },
+  "exported_oracle_members": [
+    "oracle.artifacts"
+  ],
+  "full_byte_stop_seconds": 100,
+  "global_profile": "Disposable/WAL/OFF",
+  "independent_export_failure": "original command failed ['docker', 'cp', 'f52b51a15a6494e650bcfdf03c3f0c83685f1117efd258424e712afaedbfe8c9:/tmp/r8-full-oracle.json', 'core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/proof/oracle.json']: b'Error response from daemon: Could not find the file /tmp/r8-full-oracle.json in container f52b51a15a6494e650bcfdf03c3f0c83685f1117efd258424e712afaedbfe8c9\\n'",
+  "operation_attempts": 1,
+  "oracle_export_attempted": true,
+  "oracle_export_failures": [
+    "original command failed ['docker', 'cp', 'f52b51a15a6494e650bcfdf03c3f0c83685f1117efd258424e712afaedbfe8c9:/tmp/r8-full-oracle.json', 'core/docs/issues/307/checks/r8-qualification-20261010/053-full-mounted-proof-v2/proof/oracle.json']: b'Error response from daemon: Could not find the file /tmp/r8-full-oracle.json in container f52b51a15a6494e650bcfdf03c3f0c83685f1117efd258424e712afaedbfe8c9\\n'"
+  ],
+  "oracle_requested": true,
+  "original_failure": "original command exit is not known zero: 124",
+  "original_failure_type": "OriginalFailure",
+  "performance_samples": 0,
+  "phases": [
+    {
+      "host_end_ns": 844783041196208,
+      "host_start_ns": 844783023963000,
+      "key": "a7c070a95629e2c244b5198f4fc1d122a63ffd9d54c7af5f496b1c24d7e9d289",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 1108240209,
+        "elapsed_ns": 13380708,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 3,
+          "control_send_records_before": 1,
+          "directory": "/workspaces/1",
+          "key": "a7c070a95629e2c244b5198f4fc1d122a63ffd9d54c7af5f496b1c24d7e9d289"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 7,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 13380708,
+          "end_ns": 1108173917,
+          "start_ns": 1094793209
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(a7c070a95629e2c244b5198f4fc1d122a63ffd9d54c7af5f496b1c24d7e9d289), namespace: 1 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(a7c070a95629e2c244b5198f4fc1d122a63ffd9d54c7af5f496b1c24d7e9d289), namespace: 1 }, directory: \"/workspaces/1\", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    }
+  ],
+  "registration_sha256": "ebb44236581d641049b7e10e2b8338933a418b7638e9802911c83acdb2e8d853",
+  "schema": "r8-full-proof-controller-v1",
+  "source_commit": "3654bebc26fa422c5b956b057f0ff294aff6c1b9",
+  "status": "FAIL"
+}
