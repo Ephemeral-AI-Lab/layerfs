@@ -1,0 +1,521 @@
+{
+ "cells": {
+  "C01": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C01-packaged-code-host-group-20261009-1b028a24a/code/oracles/C01-B/closed.json",
+   "closed_sha256": "70e22efd0cf99404183d702869b39fff7a9a8162b64c90c0171ac4c41c39c9be",
+   "code_content_metadata_set_sha256": "d81fc53f3a99654cc7700cd4874d2f0097f4690fd9d9a2d9c90caa982acc426f",
+   "code_inventory_sha256": "84581bab622e10e94c24b78756799a3db62fd5c001fbb51f2f4d080196b4644b",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 1000
+   },
+   "expected_manifest_sha256": "265dc342d6a23580846d3ebeb887746bb07a02153e9614c545522e6433f4ddef",
+   "expected_paths": 1001,
+   "expected_regular_bytes": 3893,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C01",
+    "compare_case": "C01",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C01-packaged-code-host-group-20261009-1b028a24a",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "d320ea6b5c1fe1e67707799baebfb4f586701a194c008c070e53fc53551698c1",
+   "reference_receipt": "194-real-native-C01-reference",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C02": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C02-packaged-code-20261009-3ae26648f-r404/code/oracles/C02-B/closed.json",
+   "closed_sha256": "b6b1d43393fa926629cf749855c3fe20bf4f35ec8a80005ea6e4d23904d23999",
+   "code_content_metadata_set_sha256": "1b2e5d6b9f69838fe81bde74dd6258e00a65e091f1bb134eced6d8ece533d299",
+   "code_inventory_sha256": "f08ec816d400bc4bd02d135fbd9a3cb4cc110875a5b864597fda7cadbe789cd8",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 1000
+   },
+   "expected_manifest_sha256": "cb5f26ff4a2e5bb64e72340985035074169895b3c69a0cc0a18bf51f4f89843b",
+   "expected_paths": 1001,
+   "expected_regular_bytes": 3893,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C02",
+    "compare_case": "C02",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C02-packaged-code-20261009-3ae26648f-r404",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "2a15bc1bfb9df89007be823702243ac320b7e872d7dc1a2b518f7e2d95935410",
+   "reference_receipt": "405-C02-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C03": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C03-packaged-code-20261009-3ae26648f-r407/code/oracles/C03-B/closed.json",
+   "closed_sha256": "4f7d138a124cbb7547bd3b424b15a35e00ef864c224ea3f1307565dedb840c4e",
+   "code_content_metadata_set_sha256": "39c83174464e291ed1af8b248ba54837e86428a50ee78a62eae8259d8de596ab",
+   "code_inventory_sha256": "25c939674bdad4d1e53a33177a2e180555fd40a5f49a93a55af1ba2a2ad711d1",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1
+   },
+   "expected_manifest_sha256": "2ba99f0980c08bc5c12173f5cac9c133d53517671b8e5fbbd7357fa19dda630a",
+   "expected_paths": 1,
+   "expected_regular_bytes": 0,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C03",
+    "compare_case": "C03",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C03-packaged-code-20261009-3ae26648f-r407",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "159b1f8d9711aba873221ea2ec989d54c86f9e06d78110dd63fb6b0b86c20821",
+   "reference_receipt": "410-C03-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C04": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C04-packaged-code-20261009-3ae26648f-r412/code/oracles/C04-B/closed.json",
+   "closed_sha256": "9ae760916d67d78825b09a0f2761ac0525bc8a4cb6db2905f0fd5032710a0b19",
+   "code_content_metadata_set_sha256": "f625a8945339edc2882c5e76088dce0d0945e1a496f54c862d0e4c67f47f520e",
+   "code_inventory_sha256": "217901010a3c981b65b58808505e9a55e18b0d95137c7054c307959886134366",
+   "expected_directory_nlink": {
+    "12": 11,
+    "2": 100
+   },
+   "expected_kinds": {
+    "directory": 111,
+    "regular": 1000
+   },
+   "expected_manifest_sha256": "48589350e3efa65a7540eb8fd3f53e69658d6a7c7617ab0d57bd92372277a50a",
+   "expected_paths": 1111,
+   "expected_regular_bytes": 0,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C04",
+    "compare_case": "C04",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C04-packaged-code-20261009-3ae26648f-r412",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "ff161335d8d8b93fd19bdecaf0e53ead8c7ac315f0acef3b239e6507e2890e90",
+   "reference_receipt": "415-C04-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C05": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C05-packaged-code-20261009-3ae26648f-r417/code/oracles/C05-B/closed.json",
+   "closed_sha256": "68f81c2bc4e2a6421e0699f685e7f5504748ee1f180ddf74bbcb30ddadd74a27",
+   "code_content_metadata_set_sha256": "0794e2a64b1f58788fdc3ed5d0008bdc4944e5bda3df001fc0d6594f1d7b1021",
+   "code_inventory_sha256": "a075d6a908b055e267da832eb8584340f2fdd8bc6ed2f77e0a58021ae0d843cc",
+   "expected_directory_nlink": {
+    "12": 11,
+    "2": 100
+   },
+   "expected_kinds": {
+    "directory": 111,
+    "regular": 1000
+   },
+   "expected_manifest_sha256": "e9b7b00c1da9216ce16fc52072417ed7365ebc1f7fbfa3941816d7954f031f5f",
+   "expected_paths": 1111,
+   "expected_regular_bytes": 0,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C05",
+    "compare_case": "C05",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C05-packaged-code-20261009-3ae26648f-r417",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "2041c989a269fc4b8fd4db384c104eb9f0a349c8e3167ce454224f40229180f4",
+   "reference_receipt": "420-C05-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C06": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C06-packaged-code-20261009-3ae26648f-r422/code/oracles/C06-B/closed.json",
+   "closed_sha256": "1eda58ff733a22c41575fe11da603efd7b9de578335001b8de9c95e6884f469f",
+   "code_content_metadata_set_sha256": "db19af483f3d3fd046f3e8e9a9d79a5d1400180d03550d1dd49282f9e8e893a5",
+   "code_inventory_sha256": "dc562854bfec9ece690927d68c0610028587060c78bcc1667ee6cb2276165da4",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 1
+   },
+   "expected_manifest_sha256": "0c91324d122a410f84f9f326c2bb44cba6f06c9afa8eedc6c3c4f2d9ec575187",
+   "expected_paths": 2,
+   "expected_regular_bytes": 67108864,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C06",
+    "compare_case": "C06",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C06-packaged-code-20261009-3ae26648f-r422",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "baa78a97d32856546f0024999fdc80d92500671a27f8ad9a3faffe49494a2cc7",
+   "reference_receipt": "425-C06-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C07": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C07-packaged-code-20261009-3ae26648f-r427/code/oracles/C07-B/closed.json",
+   "closed_sha256": "89a557b4dcd835a19bf0684d83890fb86ebf50ca84f8a5a0c19cf0c6b91bccd9",
+   "code_content_metadata_set_sha256": "c1c9c1eab48166a94de83ba7e94496e75cabc9829ff0b0172daf40f9114cd6b0",
+   "code_inventory_sha256": "df4f352fbe31b54dca0227ce1b6947e3547a2b7b7f27778ecdd3a2d01f7353f1",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 2
+   },
+   "expected_manifest_sha256": "9d0825010a97975f438c04000b6867447b6f94a64494cea9a4d34c085614a1a1",
+   "expected_paths": 3,
+   "expected_regular_bytes": 134217728,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C07",
+    "compare_case": "C07",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C07-packaged-code-20261009-3ae26648f-r427",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "c0cfa3aaf9bde752f37d68697c15e1e09bb62346cb5ce681f93ed70bde3c1db0",
+   "reference_receipt": "430-C07-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C08": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C08-packaged-code-20261009-3ae26648f-r432/code/oracles/C08-B/closed.json",
+   "closed_sha256": "50fb9a87258369c8e41ce1ee6a038026bf19479c2836613cc109cf2df9aba24a",
+   "code_content_metadata_set_sha256": "ce33a3d279a5f55d874a8e0c334743a53f469d4b821cda93765f7f24715b9ef0",
+   "code_inventory_sha256": "670cdd2a31a32ad4f50819f4517d41f86f0abbce7274a204eef1fd1a2b567e28",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 1
+   },
+   "expected_manifest_sha256": "86fef57156b0d3258c05a7a054a02273579e519493c787b0811662cc7e2bc317",
+   "expected_paths": 2,
+   "expected_regular_bytes": 67108864,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C08",
+    "compare_case": "C08",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C08-packaged-code-20261009-3ae26648f-r432",
+   "packaged_files_rehashed": 27,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "bafa1a8accb250f026544d53cee5eba0e071d03147ea0593a889c918003b3332",
+   "reference_receipt": "435-C08-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C09": {
+   "base_content_metadata_set_sha256": "ac0772af4881dac88409d3438c79e15f758950020112b6ae47702ea96a991078",
+   "closed": "/tmp/layerfs-r7-C09-packaged-code-20261009-3ae26648f-r442/code/oracles/C09-B/closed.json",
+   "closed_sha256": "46e921afecab482d47cc1afdacd5340a29dc20e03d6a0109f3ee9b7309e766a8",
+   "code_content_metadata_set_sha256": "55a6e488e0b523505152c0522b0332409810cf4b8102e835cd87d54e191bf1bc",
+   "code_inventory_sha256": "2d7e6fae996b509c1b4de121798a5779b2b52c9f1cc3678fdbb7bf5784ccb3de",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 1
+   },
+   "expected_manifest_sha256": "5ff6b21d567c2dcfab1aaf69c719538807754c20debcd878b4009514015cb711",
+   "expected_paths": 2,
+   "expected_regular_bytes": 67108864,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-big-master-20261009-b8d76c0a3",
+   "observer": {
+    "case": "C09",
+    "compare_case": "C09",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C09-packaged-code-20261009-3ae26648f-r442",
+   "packaged_files_rehashed": 31,
+   "prepared_store_sha256": "0cccdbef5c43a7645a8d729e46c9c69e209565ac96ae189341ffd6214886b02a",
+   "reference_container": "f3af371b6023db00aa3c8e4a2d2f2ff718d9c37e5402229d4dc19d5cca29133c",
+   "reference_receipt": "445-C09-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "prerequisite",
+     0
+    ],
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C10": {
+   "base_content_metadata_set_sha256": "ac0772af4881dac88409d3438c79e15f758950020112b6ae47702ea96a991078",
+   "closed": "/tmp/layerfs-r7-C10-packaged-code-20261009-3ae26648f-r447/code/oracles/C10-B/closed.json",
+   "closed_sha256": "61738b83da78813423532c3a6d04dbf9a2370e31296f5aebfe1c1db64bfec40d",
+   "code_content_metadata_set_sha256": "7cd9d543695bd8406c5b15a714aa3ee18a40f41a06892b6dc01c2c6873eb23b9",
+   "code_inventory_sha256": "6c24a12fe9754cf27e2366badcaac05f11aea9a5aa8d0c0957d422f123ed4a12",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 2
+   },
+   "expected_manifest_sha256": "2f76c97c5775117b07547a7c8547d96a5b52ba2fa5750f4d781e80733753c4d9",
+   "expected_paths": 3,
+   "expected_regular_bytes": 134217728,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-big-master-20261009-b8d76c0a3",
+   "observer": {
+    "case": "C10",
+    "compare_case": "C10",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C10-packaged-code-20261009-3ae26648f-r447",
+   "packaged_files_rehashed": 31,
+   "prepared_store_sha256": "0cccdbef5c43a7645a8d729e46c9c69e209565ac96ae189341ffd6214886b02a",
+   "reference_container": "6d941109b759f6c25410964de0d6f2dc5642e434b2e992ac22f0b69c29189b67",
+   "reference_receipt": "450-C10-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "prerequisite",
+     0
+    ],
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C11": {
+   "base_content_metadata_set_sha256": "ac0772af4881dac88409d3438c79e15f758950020112b6ae47702ea96a991078",
+   "closed": "/tmp/layerfs-r7-C11-packaged-code-20261009-3ae26648f-r452/code/oracles/C11-B/closed.json",
+   "closed_sha256": "88539b646d79475e602231e4f56e1f16a746be69dae5cfa9ef8747ba0e98fd50",
+   "code_content_metadata_set_sha256": "815c821101bfec3afb2cd79fe35a97ae449940f9458a756339e58a4e2b80afd7",
+   "code_inventory_sha256": "6f34ebe56b8a0d34cfe5be2f5e03c2bfc6ceca1092e9dcd8f1ee76cbb5e85dd4",
+   "expected_directory_nlink": {
+    "2": 1
+   },
+   "expected_kinds": {
+    "directory": 1,
+    "regular": 1
+   },
+   "expected_manifest_sha256": "b7cb511596511bda75739649186bf01f654135bf5c0caed5e4c73107a2ce59ec",
+   "expected_paths": 2,
+   "expected_regular_bytes": 67108864,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-big-master-20261009-b8d76c0a3",
+   "observer": {
+    "case": "C11",
+    "compare_case": "C11",
+    "kind": "port"
+   },
+   "package": "/tmp/layerfs-r7-C11-packaged-code-20261009-3ae26648f-r452",
+   "packaged_files_rehashed": 31,
+   "prepared_store_sha256": "0cccdbef5c43a7645a8d729e46c9c69e209565ac96ae189341ffd6214886b02a",
+   "reference_container": "1fc03d5f92f94ce9779e7350598d4ed8eacd837ed19ec43efba2f265570a578c",
+   "reference_receipt": "455-C11-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "prerequisite",
+     0
+    ],
+    [
+     "expectation",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  },
+  "C12": {
+   "base_content_metadata_set_sha256": "4b195491b29514bc50dd07a339b9ad03b1c05744a9a85f76b3fcc30f30bac981",
+   "closed": "/tmp/layerfs-r7-C12-packaged-code-20261009-3ae26648f-r437/code/oracles/C12-B/closed.json",
+   "closed_sha256": "33f8c898df84bdb60fbc0d13935c7672fef7e99ae075625f42d9edc4ad7b788d",
+   "code_content_metadata_set_sha256": "7dc064079c95790372d2e6a951ae4512fdfb5d1f04f403ff01429613c460190e",
+   "code_inventory_sha256": "9ca60c7acc244540e829d533e8e1fc8d219f4dd3fadf8d3de582bbacf5f26a4a",
+   "expected_directory_nlink": {
+    "2": 92,
+    "3": 3,
+    "4": 1,
+    "8": 1,
+    "88": 1
+   },
+   "expected_kinds": {
+    "directory": 98,
+    "regular": 224
+   },
+   "expected_manifest_sha256": "f1a69be7ba74e7909adef96826ae587cf884f9b0467be91a344cbad0ac9407ef",
+   "expected_paths": 322,
+   "expected_regular_bytes": 36191,
+   "expected_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "master_volume": "layerfs-r7-empty-master-20261009-2ac7cc762",
+   "observer": {
+    "case": "C12",
+    "compare_case": "C12",
+    "kind": "git",
+    "oracle_schema": "r7-git-index-scoped-v2"
+   },
+   "package": "/tmp/layerfs-r7-C12-packaged-code-20261009-3ae26648f-r437",
+   "packaged_files_rehashed": 100,
+   "prepared_store_sha256": "0c3de5a5f52b54c58802d9b7d2897c3bd7e33d6ba7a402df68632eedadc7c29c",
+   "reference_container": "71f0bf570ab3ae66eabac5d103e30afb9c7868341b0ab4285c5c3bf6022a1e74",
+   "reference_receipt": "440-C12-native-reference-3ae26648f",
+   "reference_steps": [
+    [
+     "expectation",
+     0
+    ],
+    [
+     "git-context",
+     0
+    ],
+    [
+     "expected-observer",
+     0
+    ]
+   ]
+  }
+ },
+ "helper_source_sha256": {
+  "git_index_oracle.py": "cd509c2dbee1c3a444eeb33e181e12eedb88020cc2b325e987f648d095954213",
+  "git_queries.py": "702fcaf605440466f1099774978efb64b40e4dad0a31de26f07272a21e6f60ed",
+  "oracle.py": "10ede337fdc7033ec812846288dd196d616ba7bc4c180e44bb05a2004427b5fa",
+  "oracle_prepare.py": "ecbc4eb1ad5ccc6f28f84d0fc48e05fe84f1fa13a38bcce7e59071f30b9acfeb",
+  "r7_deployment.py": "5210b2730f535471145e112eef0b66744f4b171390d0b3ae11e35d5eb21ae0d9",
+  "workload.py": "300fbd9c86b631c0c075536e9bc5aba7e135e49f0b003dfa6f940ae9eb103b8a",
+  "workloads.py": "d94ab80a85c8ab0c1faff801cb7410cb9daf4c0eb5f6b4732dcde38d1ed96ead"
+ },
+ "performance_samples": 0,
+ "schema": "r7-cell-oracle-index-v1",
+ "status": "PASS",
+ "tools_sha256": {
+  "r7-cell-index.py": "0249b02a9f2243b5967537cbefdaa1dec5ba048c645e4e713e57defff2176908",
+  "r7-configure-C01.py": "88064ca275c5f037e3bdabf9ed952b97785e0aa2427d62a493b506754f60047f",
+  "r7-configure-cell.py": "699400d4d8badc5708aae698e5b2ca86d1f926783aa36f5a833bf96398ce7c25",
+  "r7-dry-proof.sh": "9d1aae73b20c427c758ecb7c2b909a7f72e7ff87f9859665f48f96fe54af9699",
+  "r7-iterate-C01.sh": "c26380217f18f5cd8caae720b270ba1f0543739af3cdb2e71a0a2f7e5ccfc8fe",
+  "r7-iterate-all.sh": "a4a0597f6ae69d755d310609aa104dff35707f250a71ba4f6049a6d623ad4ad4",
+  "r7-iterate-cell.sh": "09f6cbf491396e1666fa3b2e90cbfc34cf85fab1f1c299748390bd7fd820faa9",
+  "r7-package-reference.py": "ac9df0acb54296100de20ec3ad6d379b5d1947e6be7330b25526ee1a4e6de709",
+  "r7-prepare-oracle.sh": "5f383fd896222f0d31927dd94a06864007c0cfa45f272340fa3f032167c7e179",
+  "r7-reference-config.py": "940619edcb511527e5e94951f91ec17f7fba4a9f3d663542eb5267481d248482",
+  "r7-seal-build.py": "054bc44c353d066a459ee6f257c5f18b4ec752c139979569940096214eacccf1",
+  "r7-snapshot-binaries.py": "1b36851d9593cbabbcb9c1a1e252b81b811a61a686813a8fbd02faafd950cac6",
+  "r7-summary.py": "c07cd32864ed167708f3c426e467f74f3ff05f7ec4be305a4c47a0d976d1a176"
+ }
+}
