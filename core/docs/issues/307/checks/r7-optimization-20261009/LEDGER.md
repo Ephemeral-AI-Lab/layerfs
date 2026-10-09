@@ -2181,6 +2181,7 @@ B (fresh mount on a warm daemon), arm L, one sample.
 | L4-7 | The foreign key from descriptor rows to `native_mount` is dropped with `native_file` (batch 3a, `e62685c59`) | Reported by the implementer, accepted by the lead: SQLite's child scan on mount deletion would not use the partial index and walked every descriptor of the namespace (4 VM steps per unrelated row, measured); keeping the key needs a third b-tree, which is storage for a check. The mount row is read by the inserting job's fence and deleted only by the job that has just read its descriptor window empty; `descriptor_request.rs` pins equal cost of retiring a mount beside 2 and beside 40 unrelated descriptors | commit `e62685c59`; `core/docs/architecture/19-daemon-overlay.md` |
 | L4-8 | OWNER decision: "we need fair comparison, either to exclude command time or include for both a2 and layerfs" (conversation, 2026-10-09). Lead's choice of the side: exclude launch for L. The class runner runs the measured cell command as one child Bash between two clock reads taken inside the container and stores the interval as `phases.command_in_container` (process start to exit: the clock of the A2 rows, `time.monotonic()` around `Popen` to pidfd exit on the experiment branch). The host span around Docker exec stays in `phases.command`; from the next sample the A2 ratio is computed on the in-container interval and both are printed | Including launch for A2 would need the A2 arm rebuilt from a branch that may only be read, or a constant added to its numbers. The filesystem requests of the command are unchanged; the harness identity changes, so every cell is sampled again | `fs-bench-pro/r7/runner.py` (`inner_timed`, `inner_clock_observation`) |
 | L4-9 | A READDIR offset keeps meaning "resume strictly after this name" and offsets handed out before a rewind stay valid (no visible contract change). Consequence accepted and recorded as an open risk: a handle that is rewound and listed again while its directory keeps changing stores one reply row (at most 16 KiB) per differing reply until RELEASEDIR, where the old layout stored one row per new name | Retiring earlier replies at offset 0 is permitted by POSIX but is a visible change and needs the owner's word. A directory listed once stores less (4000 names: 8000 → 126 b-tree entries) | `core/docs/architecture/74-native-directory-custody.md`; batch 3b |
+| L4-10 | After the audit of the whole run: the in-place overwrite of a live dense payload row stays, although no cell exercises it (C08 and C11 overwrite inherited bytes, so they insert rows: 4096 Payload attempts, the same as C06) | It is generic and counted: an aligned overwrite of local bytes is 4 statements per 128 KiB window where delete and insert is 8, with no page freed and reallocated (`costs.rs`). It has no sampled time behind it; the auditor names dropping it as the simpler form. Kept on the count, listed for the owner in the completion document | [audit](../../r7-open/audit-ca51a0c37.md) section G |
 
 ### Samples 600–651 at `c126f742e` (product source equal to `82c51a439`)
 
@@ -2897,3 +2898,99 @@ Where the remaining time is, for the cells above A2 (C06, 1187, per
 statements (four 32 KiB rows), Workspace and Inode 9.2 µs. For C01 per
 created file (117 µs service): three transactions and 37 statements.
 
+
+### Audit of the whole run: `63c48d8dc..ca51a0c37`
+
+A read-only agent audited every product change of the run against the
+owner's rules (benchmark recognition, constants, memory, storage,
+semantics, forbidden mechanisms, simplicity). Report:
+[audit](../../r7-open/audit-ca51a0c37.md). Nothing was built or run by it.
+**No violation found.** The lead read the report and checked the items
+marked below against source at `ca51a0c37`.
+
+| Section | Verdict | What decides it | What the lead does |
+| --- | --- | --- | --- |
+| Benchmark recognition | clean | No added line and no file of the four crates recognises a workload: no path, name, command, size or content test. The one all-zero test in product source predates the run (Commit construction, canonical zero runs) | Nothing. Recorded limit: C06 to C11 write or read zeros only, so their Commit and Store figures are a best case; the overlay stores the zeros in full, so the overlay bytes of this ledger are not |
+| Constants and bounds | concern, low | `RUN_BYTES` 32 KiB raises three existing bounds eightfold (payload row CHECK, captured window, captured reply charge 4608 to 36864 bytes). Every other new bound degrades to an indexed or queued path; none equals a cell parameter | Decision L4-3 stands; listed for the owner |
+| Memory | clean | Nothing new is resident per file, handle, offset or directory. Per-job buffers exist once per daemon (one owner thread); per-request buffers at most 17 per mounted Workspace. The READDIR reply charge is about twice the former largest one (about 84 KiB, the auditor's arithmetic) | Recorded. Statement texts: 78 constants in overlay source against a prepared-statement cache of 256 (lead's count) |
+| Storage | concern | (1) index `payload_namespace_row` has no reader and is still written once per payload row; (2) table `native_read` has no writer; (3) reply rows of a rewound directory handle; (4) terminal reclamation frees 32 KiB a step where it freed 56 KiB (held longer, not more) | (1) and (2) are removed in the cleanup commits that follow. (3) below |
+| Semantics | concern | No permission check removed or reordered; nothing replies before its transaction commits. READ, READLINK, OPEN, OPENDIR and READDIR hold no SQL custody, so only the dispatcher's drain fences them (decision L4-2); the author did not stage a READ inside a Store read during unmount | A test-only assignment stages that case (below) |
+| Forbidden mechanisms | concern, minor | No thread, sleep, timer, retry, raised queue or timeout, cfg flag, dependency or vendor edit. Added surface read only by tests: `explain_close_held` (the 26th `explain_*`), `in_place_writes`, `in_place_bytes`, `ClientWork::file_lengths`, `DirectoryFailure::offered`; `in_place_ns` has no reader and costs two clock reads per in-place write | `in_place_ns` and its clock reads are removed in the cleanup; the counters go if the statement pins can carry the same assertion |
+| Simplicity | concern | The run added 692 production lines. Simpler forms the auditor sees: no in-place overwrite branch; delete the unreachable source-holding path; finish an orphan inline only when it fits one page with no lower layer | The second is the cleanup commit. The first is L4-10. The third is listed for the owner |
+
+Sharper statement of the L4-9 storage risk, from the audit and the lead's
+reading: reply rows are keyed by the name a reply resumes after. A name
+added early in a large directory moves every later window's boundary, so a
+handle that is rewound after such a change stores every window again: about
+N / 64 rows of up to 16 KiB for a directory of N names, where the old
+layout stored one row for the new name. It is bounded by the READDIR calls
+on that one open handle and released at RELEASEDIR; a directory listed once
+stores about 60 times fewer b-tree entries than before. Opening the
+directory again for each listing (what `ls`, `find`, `git` and the
+`scandir` family do) never meets it. The remedy is to retire a handle's
+earlier replies when it is read from offset 0, which POSIX permits and
+which changes what an offset taken before a rewind means; that is the
+owner's choice and is listed in the completion document. Not done.
+
+Warm state, as the measurement rules ask: the base-file length memory
+lives in the daemon's one immutable cache and survives a mount. In class B
+the warm-up Workspace of the same daemon fills it, so the measured command
+pays no length demand for a base file the warm-up touched. Base files exist
+only in C09, C10 and C11 (one 64 MiB file): the credit is one length demand
+per cell, and `read_cost.rs` pins the cold count (one demand for the file,
+where every READ paid one before the run). No class A oracle is prepared,
+so no class A sample exists; the statement is by count.
+
+Also recorded: a file removed while only kernel lookups reference it keeps
+its lower layers until FORGET (the kernel sends it when the inode is
+evicted, at once for an unlinked file with no open handle); one
+unlinked-but-open file anywhere in a daemon adds one probe statement to
+inode reads of every Workspace of that daemon (better than the sticky flag
+it replaced, which never cleared).
+
+Set aside after the last sample, with the reason:
+
+| Idea | Why not |
+| --- | --- |
+| A larger SQLite page for the overlay (COMMIT is one `pwrite` per 4 KiB page: 33 per 128 KiB WRITE, 42 µs; about 22 ms of C06) | The page size is part of the pinned overlay profile (`profile.rs` refuses any other), and the overlay has 38 tables and indexes with at least one page each: an empty overlay of 61 pages would grow with the page, in every cell that stores little (computed, not measured). Storage for speed |
+| Payload bytes outside SQLite | Contradicts the one-database rule of the product model |
+
+### Cleanup after the audit: `a591d05ff`, `96bb1835e`
+
+One implementer in the main checkout, two commits, no behaviour change, no
+existing pin moved.
+
+- `a591d05ff` deletes the source-holding request path that no Fuse request
+  reaches since batch 3b: nine Fuse ports, six daemon jobs with their
+  replies, the Workspace read and mutation plans built on them, the
+  overlay's request-source functions, and the tables `native_source` and
+  `native_read` with four accounting triggers. Schema 29 → 30. Production
+  LOC 188177 → 187498 (−679). `revoke_native_mount` is 7 statements and 8
+  executions (new exact pin in `native_revocation.rs`; the 8 and 9 before
+  are by source, not measured). Tests removed: Workspace
+  `native_read_plan.rs` and one overlay test of the deleted plan, each
+  with the visit test that covers it named in the commit. Restaged:
+  `native_custody.rs` (the unmount that cannot revoke is now refused
+  because the test holds both lifecycle slots, where it held a request
+  source), `fenced_port.rs`, `native_lookup.rs` and others listed in the
+  commit. Not confirmed by the implementer: that a hard-link alias under a
+  visit LOOKUP has a host test.
+- `96bb1835e` removes `in_place_ns` with its two clock reads per in-place
+  write and the two in-place counters (the statement pin `(4, 4, 0, 14)`
+  of `costs.rs` carries the assertion), and corrects two notes. Production
+  LOC 187498 → 187481 (−17).
+- Index `payload_namespace_row (ns, rowid)` was kept by that commit: none
+  of the 20 statements that touch `payload` uses it
+  (`353-cleanup-payload-plans.txt`), but the foreign-key check of the
+  final `DELETE FROM workspace` opens it to look for a payload row of the
+  namespace. The same receipt shows that without it the check opens
+  `payload_generation (ns, gen, serial, cell_offset)`, which starts with
+  the same column. The lead's reading: the index is one b-tree entry per
+  payload row with no use an existing index does not serve; a following
+  commit drops it.
+
+Checks on `96bb1835e`: host suites of the four packages 124 of 126
+binaries (`353-cleanup2-host.txt`; `complete_installed_roots` and
+`host_handoff` fail on their known prerequisites); Linux 21 of 21 mounted
+daemon binaries (`353-cleanup2-linux.txt`); `fmt --check`, Clippy on host
+and in Linux, guard.
