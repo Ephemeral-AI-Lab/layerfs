@@ -43,8 +43,10 @@ END;
 CREATE TRIGGER payload_account_insert AFTER INSERT ON payload BEGIN
     UPDATE accounting SET payload_cells=payload_cells+1,payload_bytes=payload_bytes+(length(NEW.data)+ifnull(length(NEW.validity),0)) WHERE ns=NEW.ns;
 END;
-CREATE TRIGGER payload_account_delete AFTER DELETE ON payload BEGIN
-    UPDATE accounting SET payload_cells=payload_cells-1,payload_bytes=payload_bytes-(length(OLD.data)+ifnull(length(OLD.validity),0)) WHERE ns=OLD.ns;
+-- Before the row goes, from its stored lengths: naming OLD.data or
+-- OLD.validity would make every delete load both values in full.
+CREATE TRIGGER payload_account_delete BEFORE DELETE ON payload BEGIN
+    UPDATE accounting SET payload_cells=payload_cells-1,payload_bytes=payload_bytes-(SELECT length(data)+ifnull(length(validity),0) FROM payload WHERE rowid=OLD.rowid) WHERE ns=OLD.ns;
 END;
 CREATE TRIGGER shrink_account_insert AFTER INSERT ON shrink BEGIN
     UPDATE accounting SET shrink_rows=shrink_rows+1 WHERE ns=NEW.ns;

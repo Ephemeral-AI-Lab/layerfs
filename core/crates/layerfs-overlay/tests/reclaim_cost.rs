@@ -206,3 +206,114 @@ fn a_closed_namespace_is_reclaimed_in_pages_of_one_delete_beside_a_live_namespac
         );
     }
 }
+
+/// Every `Column` instruction of one statement that reads a payload value
+/// column through a cursor on the payload table: whether it only takes the
+/// value's length. Trigger programs are listed after the statement, each
+/// with its own cursors.
+fn value_reads(raw: &rusqlite::Connection, statement: &str) -> Vec<bool> {
+    let root: i64 = raw
+        .query_row(
+            "SELECT rootpage FROM sqlite_schema WHERE name='payload'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let values: Vec<i64> = raw
+        .prepare("SELECT cid FROM pragma_table_info('payload') WHERE name IN('data','validity')")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(values.len(), 2);
+    let mut listing = raw.prepare(&format!("EXPLAIN {statement}")).unwrap();
+    let program = listing
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(6)?,
+            ))
+        })
+        .unwrap()
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+    let mut cursors = Vec::new();
+    let mut reads = Vec::new();
+    // The cursors of a program are opened anywhere in it: two passes.
+    let mut start = 0;
+    for end in 1..=program.len() {
+        if end != program.len() && program[end].0 != 0 {
+            continue;
+        }
+        let part = &program[start..end];
+        cursors.clear();
+        for (_, opcode, cursor, page, _) in part {
+            if matches!(opcode.as_str(), "OpenRead" | "OpenWrite") && *page == root {
+                cursors.push(*cursor);
+            }
+        }
+        for (_, opcode, cursor, column, flags) in part {
+            if opcode == "Column" && cursors.contains(cursor) && values.contains(column) {
+                // OPFLAG_LENGTHARG: the value is used by length() alone.
+                reads.push(flags & 0x40 != 0);
+            }
+        }
+        start = end;
+    }
+    reads
+}
+
+#[test]
+fn deleting_payload_rows_reads_their_lengths_and_never_their_bytes() {
+    let temp = Temp::new();
+    let db = temp.db();
+    let built = payload(&db, 2, 64, WRITE_WINDOW);
+    let stored = db.resources(Some(built.0)).unwrap().counts;
+    assert_eq!(
+        (stored.payload_cells, stored.payload_bytes),
+        (8, 64 * CELL_BYTES as u64)
+    );
+    drop(db);
+    let raw = rusqlite::Connection::open(temp.0.join("overlay.sqlite")).unwrap();
+    // The statements that delete payload rows: by row, by a range of one
+    // file's cells, and the terminal page of a closed namespace.
+    for statement in [
+        "DELETE FROM payload WHERE rowid=1",
+        "DELETE FROM payload WHERE ns=1 AND serial=7 AND gen=-1 AND cell_offset>=0 AND cell_offset<32768",
+        "DELETE FROM payload WHERE ns=1 AND (serial,gen,cell_offset)<=(7,1,0)",
+    ] {
+        let reads = value_reads(&raw, statement);
+        // The trigger takes both lengths; nothing loads a value.
+        assert_eq!(reads, [true, true], "{statement}");
+    }
+    // The same listing does see a statement that loads a value.
+    assert!(value_reads(&raw, "SELECT data FROM payload WHERE rowid=1").contains(&false));
+    // The counts follow the rows: deleting one row of eight cells.
+    raw.execute("DELETE FROM payload WHERE rowid=1", [])
+        .unwrap();
+    let left: (i64, i64) = raw
+        .query_row(
+            "SELECT payload_cells,payload_bytes FROM accounting WHERE ns=1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(left, (7, 56 * CELL_BYTES as i64));
+    // The trigger this one replaced named the old values, and the delete
+    // then loaded both in full.
+    raw.execute_batch(
+        "DROP TRIGGER payload_account_delete;
+        CREATE TRIGGER payload_account_delete AFTER DELETE ON payload BEGIN
+            UPDATE accounting SET payload_cells=payload_cells-1,payload_bytes=payload_bytes-(length(OLD.data)+ifnull(length(OLD.validity),0)) WHERE ns=OLD.ns;
+        END;",
+    )
+    .unwrap();
+    assert_eq!(
+        value_reads(&raw, "DELETE FROM payload WHERE rowid=2"),
+        [false, false]
+    );
+}

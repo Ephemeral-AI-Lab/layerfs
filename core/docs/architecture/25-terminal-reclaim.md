@@ -31,6 +31,9 @@ after an operation's last owner releases. Each further step is three
 statements whatever its rows: the ready queue, the page, the delete.
 Exact counts at two sizes beside a live namespace are in
 [`reclaim_cost.rs`](../../crates/layerfs-overlay/tests/reclaim_cost.rs).
+Since overlay schema 25 the payload delete trigger accounts from the
+stored lengths and the delete does not load the row's bytes
+([daemon overlay](19-daemon-overlay.md)).
 The paragraphs below that describe a delete per row and "Actual
 ready/payload SQL explicitly uses them" for `payload_namespace_row` are
 historical.

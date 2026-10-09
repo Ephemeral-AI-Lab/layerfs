@@ -6,6 +6,19 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (payload delete trigger reads lengths, decision U4,
+overlay schema 25, trigger text only). Implemented: `payload_account_delete`
+runs BEFORE the delete and subtracts
+`(SELECT length(data)+ifnull(length(validity),0) FROM payload WHERE rowid=OLD.rowid)`.
+It names only `OLD.rowid` and `OLD.ns`, so a statement that deletes payload
+rows no longer loads each row's `data` and `validity` in full for the
+trigger (up to 32768 + 4096 bytes and eight overflow pages a row); the
+trigger reads the two lengths from the row header. The counts stay exact
+and inside the deleting statement. The instruction listing of the three
+delete forms, and of the replaced trigger for contrast, is asserted in
+[`reclaim_cost.rs`](../../crates/layerfs-overlay/tests/reclaim_cost.rs).
+The update trigger still names old and new values.
+
 R7 update, 2026-10-09 (accounting triggers write one row, decision C3,
 overlay schema 24). Implemented: every accounting trigger updates the
 `accounting` row of its own namespace only. The daemon aggregate that
