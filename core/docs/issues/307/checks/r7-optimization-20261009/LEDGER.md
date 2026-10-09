@@ -2446,3 +2446,65 @@ All twelve DIAGNOSTIC, verifier PASS. Verdict by counts: KEPT.
   back to their baseline values) with no change in rows: host allocation,
   not the product.
 
+### The last release finishes a small orphan (`989bfa887`) sampled: receipts 860–911
+
+Row 3, second assignment (model items O3 and O4, decision U1), one commit
+in about 17 minutes. UNLINK queues nothing while only kernel lookups hold
+the file; the job that drops the last reference runs the existing
+`maintain_orphan` and `retire_serial` steps for that serial in its own
+transaction, at most six calls and one step's page (14 cells, 64 rows); the
+rest stays queued. New per-engine state: one `Cell<bool>` (`release_step`).
+Production LOC 187825 → 187934 (+109). Count test
+`native_unlink_cost.rs`: maintenance steps after one removed one-cell file
+4 or 7 → 0; UNLINK 22 → 20 attempts; FORGET 12 → 47; UNLINK + FORGET +
+maintenance 81 or 122 → 67.
+
+All twelve rows DIAGNOSTIC, verifier PASS. Host load average 6.4 to 7.2
+during the run (the same storage scan as in 800–851).
+
+| Cell | Receipt | Command ms before → after | A2 ms | Ratio | Statement executions | Owner wait / service ms before → after | Daemon cgroup CPU ms before → after |
+| --- | --- | --- | ---: | ---: | --- | --- | --- |
+| C01 | 867 | 422.8 → 407.8 | 183.4 | 2.22 | 61004 → 61004 | 2.0 / 177.1 → 1.9 / 177.5 | 376 → 375 |
+| C02 | 871 | 1101.5 → 919.5 | 965.0 | 0.95 | 63006 → 63006 | 2.7 / 202.8 → 2.1 / 171.8 | 1061 → 875 |
+| C03 | 875 | 694.6 → 726.2 | 410.8 | 1.77 | 116603 → 155715 | 63.8 / 309.5 → 6.3 / 356.8 | 787 → 639 |
+| C04 | 879 | 890.3 → 781.3 | 952.6 | 0.82 | 59076 → 59076 | 2.7 / 179.9 → 3.1 / 170.5 | 874 → 808 |
+| C05 | 883 | 988.1 → 869.7 | 949.6 | 0.92 | 90226 → 90226 | 14.4 / 248.3 → 20.4 / 226.6 | 1025 → 888 |
+| C06 | 887 | 252.0 → 235.7 | 78.6 | 3.00 | 36918 → 36918 | 0.2 / 157.4 → 0.2 / 151.3 | 265 → 250 |
+| C07 | 891 | 432.6 → 485.9 | 171.6 | 2.83 | 77958 → 77958 | 0.4 / 312.6 → 0.6 / 320.3 | 445 → 470 |
+| C08 | 895 | 274.9 → 254.7 | 106.1 | 2.40 | 36945 → 36945 | 0.3 / 163.8 → 0.2 / 156.3 | 298 → 269 |
+| C09 | 899 | 110.5 → 101.1 | 106.2 | 0.95 | 1068 → 1068 | 0.3 / 5.8 → 0.3 / 4.9 | 128 → 124 |
+| C10 | 903 | 314.9 → 303.0 | 178.2 | 1.70 | 42083 → 42083 | 0.6 / 188.3 → 0.6 / 184.7 | 355 → 336 |
+| C11 | 907 | 263.9 → 238.5 | 85.8 | 2.78 | 36911 → 36911 | 0.2 / 165.9 → 0.2 / 150.6 | 289 → 255 |
+| C12 | 911 | 244.8 → 302.8 | 189.3 | 1.60 | 32358 → 32658 | 2.3 / 81.4 → 2.3 / 104.9 | 239 → 292 |
+
+The cgroup CPU column is new (`observations.daemon_threads`, the per-thread
+snapshot added in `eb170b029`): the container's CPU between the snapshot
+before the command and the one after it, command processes included.
+
+Verdict by counts: KEPT, with the cell's time not improved.
+
+- **C03, what moved.** Owner queue wait 63.8 → 6.3 ms (predicted 2 to 4).
+  The owner thread's CPU 264 → 5 ms: the maintenance transactions during
+  the command are gone. Container CPU 787 → 639 ms (−19 %). The measured
+  command's statements rose 116603 → 155715 because the reclamation
+  statements moved from maintenance jobs (not in that column) into the
+  FORGET job; the model's total for one file fell 81 or 122 → 67.
+- **C03, what did not.** The command is 726.2 ms against 694.6, 721.0 and
+  715.9 in the three earlier samples: unchanged inside today's spread. The
+  model's 590 to 655 ms was wrong, and the per-thread numbers show why:
+  the receive thread's CPU rose 318 → 470 ms. Before, the owner thread did
+  the reclamation in parallel with the round trip of the next request and
+  the client paid only the collisions; now the request thread does it
+  inline. For one serial client the two cost about the same wall time; the
+  change removes a fifth of the CPU and all of the wake traffic, which is
+  what a second Workspace or a concurrent Exec on the same owner would
+  have waited behind. FORGET is now the dearest job of the cell (47
+  statements; Lifecycle service 139.7 ms for 2039 jobs), so the next
+  assignment makes the inline reclamation itself cheap (model item O6).
+- C12 +300 statements (its 8 FORGETs and unlinked lock files now reclaim
+  inline); its time moved +58 ms after −81 ms in the previous sample at
+  nearly equal counts, which is the host, not the product.
+- The ten cells with identical counts moved between −17 % (C02) and +12 %
+  (C07) against 800–851. C02, C04, C05 and C09 are below A2 in this sample.
+- Storage: logical bytes equal in every cell.
+

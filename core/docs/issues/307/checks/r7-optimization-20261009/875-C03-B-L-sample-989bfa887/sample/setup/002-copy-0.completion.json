@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "docker",
+    "--host",
+    "unix:///Users/yifanxu/.docker/run/docker.sock",
+    "cp",
+    "-a",
+    "/private/tmp/layerfs-r7-C03-packaged-code-20261009-3ae26648f-r407/code",
+    "d64ea57ac688f51c7c646b219eb489d6277459065c5b264241274a20c5113801:/code"
+  ],
+  "attempts": 1,
+  "container": "d64ea57ac688f51c7c646b219eb489d6277459065c5b264241274a20c5113801",
+  "duration_ns": 74256250,
+  "end_ns": 818848653114583,
+  "engine_operation_identity": "UNAVAILABLE through Docker CLI; no guessed Exec ID",
+  "exit_code": 0,
+  "label": "copy-0",
+  "sequence": 2,
+  "start_ns": 818848578858333
+}

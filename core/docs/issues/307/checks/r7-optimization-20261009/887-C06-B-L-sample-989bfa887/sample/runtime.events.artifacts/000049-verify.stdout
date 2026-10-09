@@ -1,0 +1,1 @@
+{"case_id": "C06", "differences": [], "observation_memory_scope": "independent verifier only; two selected path maps, not product memory", "schema": "r7-scoped-oracle-comparison-v1", "status": "PASS", "timestamp_identity_claim": "NOT_CLAIMED"}
