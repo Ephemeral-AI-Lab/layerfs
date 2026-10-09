@@ -6,6 +6,42 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (inode statements, lead decision C1, overlay schema
+23): **a visit job reads an inode row once and writes it without a second
+read.** `INODE_LOOKUP` also returns the generation that holds the row and
+its `epoch` and `height`. A visit (`observe_native_visit`,
+`open_native_visit`, `mutate_native_visit`) keeps the rows it read in
+`JobRows`
+([`job_rows.rs`](../../crates/layerfs-overlay/src/namespace/job_rows.rs)), a
+value on that job's stack with `COMPOUND_INODES` (4) places, about 0.5 KiB,
+gone when the job returns: a later evaluation round asks `SourceRows::inode`
+again and no statement runs, and `put_inode_domain` takes the row out of it
+and writes over it. Nothing is kept across jobs. A serial past the four
+places, an orphan-domain row and every job that is not a visit read and
+write by the indexed statements as before (`LAYER_ACTIVE`, then
+`LAYER_LOWER`); nothing is refused. The upsert `INODE_PUT` is gone. A row is
+written by `INODE_INSERT` (no row of the serial in the generation) or by an
+update of the row its key names: `INODE_RESIZE` (time and size) or
+`INODE_RECOUNT` (time, `entries`, `subdirs`) when the other columns are the
+ones the job read and the layer columns did not move, `INODE_UPDATE` (every
+column) otherwise. An update that changes no row fails the job. A serial
+named by `Changes::created` is inserted with no read; a row that already
+has it in the active generation is a constraint failure that rolls the job
+back, never an update. `CHECK(kind IN (1,2,3))` on `inode` and the
+eleven-value list on `maintenance.kind` are written `BETWEEN`: the same
+constraints, without the ephemeral table an IN-list of three or more values
+compiles to. `PRAGMA user_version` and its startup readback are 23. Per
+created file the five request jobs attempt 41 statements (54 executions)
+instead of 48 (61): LOOKUP's Inode family 2 -> 1, CREATE's 8 (9) -> 3 (4),
+WRITE's 3 -> 2; UNLINK's 8 (9) -> 5 (6). Exact per job in
+[`native_visit_cost.rs`](../../crates/layerfs-workspace/tests/native_visit_cost.rs)
+and
+[`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs);
+the stored rows, the four places and the collision in
+[`job_rows.rs`](../../crates/layerfs-overlay/tests/job_rows.rs); plans in
+`explain_compound`. Not changed: the name seeks of a second evaluation, the
+custody rows, the accounting triggers and transaction framing.
+
 R7 update, 2026-10-09 (directory link counts, overlay schema 22): the `inode`
 row gains `subdirs INTEGER NOT NULL CHECK(subdirs>=0 AND (kind=2 OR
 subdirs=0))`, the absolute number of child directories bound in a directory

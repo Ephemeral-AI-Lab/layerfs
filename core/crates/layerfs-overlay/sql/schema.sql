@@ -1,4 +1,4 @@
--- Disposable overlay schema v22. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v23. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -20,7 +20,7 @@ CREATE TABLE inode (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     serial INTEGER NOT NULL CHECK(serial>0),
     gen INTEGER NOT NULL CHECK(gen=-1 OR gen>0),
-    kind INTEGER NOT NULL CHECK(kind IN (1,2,3)),
+    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 3),
     mode INTEGER NOT NULL CHECK(mode>=0 AND ((kind=1 AND mode<=511) OR (kind=2 AND mode<=1023) OR (kind=3 AND mode=511))),
     mtime_seconds INTEGER NOT NULL,
     mtime_nanoseconds INTEGER NOT NULL CHECK(mtime_nanoseconds>=0 AND mtime_nanoseconds<1000000000),
@@ -102,7 +102,7 @@ CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
 CREATE INDEX lease_resource ON lease(ns,kind,resource,owner);
 CREATE TABLE maintenance (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7,8,9,10,11)),
+    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 11),
     resource INTEGER NOT NULL CHECK(resource>=0),
     target INTEGER NOT NULL CHECK(target<>0),
     phase INTEGER NOT NULL DEFAULT 0 CHECK(phase>=0),
@@ -280,4 +280,4 @@ CREATE TABLE native_cookie (
     FOREIGN KEY(ns,owner) REFERENCES native_directory(ns,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX native_cookie_name ON native_cookie(ns,owner,name,cookie);
-PRAGMA user_version=22;
+PRAGMA user_version=23;

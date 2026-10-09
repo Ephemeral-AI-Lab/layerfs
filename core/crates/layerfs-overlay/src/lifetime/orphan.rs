@@ -115,7 +115,7 @@ impl Overlay {
         )?;
         self.execute(
             StatementKind::Inode,
-            sql::INODE_PUT,
+            sql::INODE_INSERT,
             &[
                 &route.ns,
                 &serial,

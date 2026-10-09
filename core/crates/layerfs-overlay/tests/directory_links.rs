@@ -169,13 +169,13 @@ fn the_schema_check_refuses_a_negative_count_and_a_count_on_a_file() {
         let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
         let route = db.open_workspace([7; 32], [8; 32]).unwrap();
         publish(&db, route, &directory(8, 2, 1));
-        assert_eq!(db.profile().schema_version, 22);
+        assert_eq!(db.profile().schema_version, 23);
     }
     let raw = rusqlite::Connection::open(temp.db()).unwrap();
     let version: i64 = raw
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 22);
+    assert_eq!(version, 23);
     let stored: (i64, i64, i64) = raw
         .query_row(
             "SELECT entries,subdirs,nlink FROM inode WHERE serial=8",

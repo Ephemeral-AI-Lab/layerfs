@@ -1,0 +1,130 @@
+===== compound-015a16aad54419dc (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 0
+===== costs-349e2bf53982389c (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 2 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== job_cost-6806228384655850 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 1 test
+test completion_cost_matches_exclusive_owner_aggregate_and_retained_credit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== job_rows-d777c76c4ebfe5b5 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 3 tests
+test a_job_keeps_the_rows_it_can_publish_and_reads_the_rest_by_index ... ok
+test a_reserved_serial_that_already_has_a_row_fails_the_whole_job ... ok
+test a_row_the_job_read_is_written_as_the_indexed_path_writes_it ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_unlink_cost-bcded746609cf3eb (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_cost-31891792959c0ed4 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_fence-05a8e2ec310cfb42 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 8 tests
+test a_closed_workspace_refuses_visits_and_still_releases_descriptors ... ok
+test a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole ... ok
+test a_descriptor_of_another_mount_or_inode_and_a_missing_reference_are_stale ... ok
+test a_read_only_descriptor_cannot_publish_and_begins_no_transaction ... ok
+test a_read_window_writes_nothing_and_follows_its_descriptor_past_unlink_and_install ... ok
+test a_revoked_or_replaced_mount_is_stale_for_every_fenced_job ... ok
+test an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_file ... ok
+test every_visit_statement_is_an_indexed_seek ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== orphans-ac39fc227e494246 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 10 tests
+test a_closed_namespace_that_takes_the_last_orphan_stops_the_probe ... ok
+test a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue ... ok
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... ok
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+test inode_reads_probe_the_orphan_domain_only_while_an_orphan_exists ... ok
+test logical_close_refuses_new_captured_owners_and_keeps_existing_consumers ... ok
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_operation_record ... ok
+test three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlink_reader ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== read_cost-106cc8ee0ca7784d (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 5 tests
+test a_base_file_length_is_one_store_answer_per_daemon_and_costs_a_visit_when_not_remembered ... ok
+test a_window_reads_the_base_its_visit_named_whatever_is_installed_before_its_bytes ... ok
+test an_unlinked_open_file_still_reads_its_own_bytes_in_one_visit ... ok
+test read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows ... ok
+test without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== transactions-b47653736df2ab57 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 6 tests
+test a_failure_after_the_first_write_rolls_back_and_one_before_it_has_nothing_to_roll_back ... ok
+test a_read_only_atomic_job_begins_commits_and_admits_nothing ... ok
+test consecutive_writes_that_do_not_grow_the_file_allocate_at_most_once ... ok
+test linked_sqlite_classifies_reads_and_writes_as_the_engine_expects ... ok
+test owner_identities_are_unique_and_increasing_across_namespaces ... ok
+test reads_then_writes_are_one_transaction_begun_at_the_first_write ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
