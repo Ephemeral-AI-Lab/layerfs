@@ -1701,3 +1701,80 @@ Two things this sample shows that are not improvements:
   whether it persists.
 
 Command against target: 900.8 ms against A2's 183.4 ms, 4.9 times slower.
+
+## Step 6 — C05, C06: owner visits that record no request source
+
+Cause: C01's command spends 15 owner jobs per created file because each of
+four requests records a request source in one job, decides in one or two
+more and releases the source in a fourth after its reply, and because the
+base-directory parent forces a second deciding job and a Store reader grant
+for facts already in the canonical cache; expected 7 from a model in which a
+request is one job plus, for a publishing mutation, one ticket release.
+Evidence: receipt 278 (15002 jobs, 2001 reader grants), statement analysis.
+
+Change (commit `4398c013c`): LOOKUP, GETATTR and every native mutation are
+owner visits. A visit records no source, reads base facts from resident
+cache objects inside the job, and decides or publishes with the reply's
+kernel custody in one transaction. An undecided visit changes nothing; the
+request reads the missing facts outside the owner, tagged with the base root,
+and visits again holding nothing in between.
+
+Owner decisions used (delegated): such requests no longer count in
+`base_readers`; a prepared-base install and a revoke are not held back by a
+request between two visits (the next visit re-reads state; after a revoke it
+fails Stale); the recorded source's decided flag is replaced by the driver
+ending at its one publication. Recorded in architecture notes 28, 73, 75, 77.
+
+Big-O: jobs per request 3–4 → 1 (2 for a publishing mutation); statements
+per created file 233 → 104 attempts by family count below; all remaining
+statements are point seeks. A visit's in-memory fact read is bounded by tree
+depth times the 64 KiB object cap and by four rounds.
+
+Known remainder, from the test agent's review and this lead's: a LOOKUP of a
+base regular file is two jobs and one reader grant even when every object is
+resident, because file lengths have no memory-only provider (candidate C08);
+the source-holding mutation path is unreachable from the request service and
+still present (retirement owed); the turn-local source is turn-local by
+construction of its only makers, not by type.
+
+**298 — C01:B:L at `4398c013c`, one sample, exploratory.** Row DIAGNOSTIC,
+verifier PASS, custody KNOWN_STOP, cleanup Gone.
+
+| Measure | 278 at `9306a9073` | 298 at `4398c013c` | Change |
+| --- | ---: | ---: | ---: |
+| Command ns | 900809042 | 585850167 | −314958875 (−35.0 %) |
+| Mount / unmount ns | 7267792 / 5425417 | 10559625 / 4391542 | |
+| Owner jobs | 15002 | 7001 | −8001 |
+| — Source / Read / Mutation / Lifecycle | 4000 / 3001 / 3000 / 5001 | 0 / 2000 / 2000 / 3001 | |
+| Store reader grants | 2001 | 0 | −2001 |
+| Statement executions | 263010 | 119005 | −144005 |
+| — Begin, Commit, Startup | 13000 each | 5000 each | |
+| — Lease / Workspace | 135004 / 40002 | 35000 / 20001 | |
+| Owner service ns | 574973234 | 253122866 | −321850368 |
+| Owner queue wait ns | 59433176 | 47363124 | −12070052 |
+| Command minus owner wait and service | 266402632 | 285364177 | +18961545 |
+| Store logical / allocated | 213072 / 217088 | 213072 / 217088 | 0 |
+| Overlay logical / allocated | 561152 / 268996608 | 561152 / 269000704 | 0 / +4096 |
+| `peak_credited_bytes` / `scheduler_bytes` | 46581 / 25896 | 46581 / 25896 | 0 |
+| Daemon VmHWM | 31477760 | 47738880 | +16261120 |
+
+KEPT. Command against target: 585.9 ms against A2's 183.4 ms, 3.2 times
+slower.
+
+Observations to carry:
+
+- **Half the command is now outside the owner** (285 ms of 586). No counter
+  in the receipt divides it. By count it holds 7000 kernel round trips
+  (A2's whole cost for the same seven requests is 183 ms), 2000 FLUSH
+  requests that only acknowledge, and the hand-offs of requests that arrive
+  while a post-reply job holds the connection: Read jobs (the LOOKUP after a
+  WRITE and RELEASE, the GETATTR after a CREATE) wait 22.7 µs each, 45.5 ms
+  in all, and each such job is then served by the owner thread and finished
+  by a pool worker.
+- **Daemon VmHWM is bimodal across samples** (46.6 MB at 250, 32.0 at 262,
+  31.5 at 278, 47.7 here), not monotone in the changes. Cause not
+  established; nothing in this step retains memory per request.
+- Overlay allocated bytes rose by one page with equal logical bytes: the
+  preallocated tail is established from the committed length when the file
+  grows, so the final tail position depends on when the last growth was
+  admitted. Logical size is equal.

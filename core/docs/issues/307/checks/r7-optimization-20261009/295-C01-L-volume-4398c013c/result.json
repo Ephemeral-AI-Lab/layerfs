@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "setup",
+  "source_commit": "4398c013c3b69d7e3c69fc53138d2d153cb712a8",
+  "source_tree": "d2a0af0d780756e1c5d2d14e0b056ec9a98b8783",
+  "worktree_status": "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md\n?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md\n?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md\n?? core/docs/issues/307/checks/multi-workspace-model-confirmation-20261008/04-commit-confirmation.json\n?? core/docs/issues/307/checks/r7-optimization-20261009/291-L-source-seal-4398c013c/\n?? core/docs/issues/307/checks/r7-optimization-20261009/292-runtime-release-4398c013c/\n?? core/docs/issues/307/checks/r7-optimization-20261009/293-daemon-release-4398c013c/\n?? core/docs/issues/307/checks/r7-optimization-20261009/294-build-provenance-4398c013c/",
+  "command": [
+    "docker",
+    "volume",
+    "create",
+    "layerfs-r7-C01-L-4398c013c-20261009"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 49980666,
+  "status": "PASS"
+}
