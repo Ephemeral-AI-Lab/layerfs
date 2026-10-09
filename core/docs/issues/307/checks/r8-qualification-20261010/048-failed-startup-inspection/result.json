@@ -1,0 +1,20 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "3748e37ce3806d2514323ab1d15614ab5cfa192e",
+  "source_tree": "506148aa755953482e60cea6a7864df5144f3183",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8-qualification-20261010/047-full-mounted-proof/",
+  "command": [
+    "docker",
+    "logs",
+    "c4f1d18cd912a7fd0d5d9b3e788847b81431198d194c6ae203dafb13f3206819"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 229366791,
+  "status": "PASS"
+}

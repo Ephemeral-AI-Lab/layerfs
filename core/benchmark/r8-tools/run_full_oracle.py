@@ -98,18 +98,22 @@ def prepare(output):
         copied = checked(["docker", "run", "--rm", "--name", volume + "-copy",
                           "--network", "none", "-i", "-v", volume + ":/dest",
                           IMAGE, "sh", "-c",
-                          "set -e; mkdir -m 700 /dest/global; cat > /dest/global/store.sqlite; "
+                          "set -e; umask 077; mkdir -m 700 /dest/global; cat > /dest/global/store.sqlite; "
                           "sha256sum /dest/global/store.sqlite; "
-                          "stat -c '%s %b %B' /dest/global/store.sqlite"],
+                          "stat -c '%s %b %B %a %u %g' /dest/global/store.sqlite"],
                          timeout=45, stdin=source)
     (output / "copy.stdout").write_bytes(copied.stdout)
     (output / "copy.stderr").write_bytes(copied.stderr)
     if copied.stdout.decode().split()[0] != EXPECTED[str(SEALED)]:
         raise RuntimeError("independent volume copy digest differs")
+    backing = copied.stdout.decode().splitlines()[1].split()
+    if int(backing[0]) != facts[str(SEALED)]["bytes"] or backing[3:] != ["600", "0", "0"]:
+        raise RuntimeError("copied Store violates protected-file ownership/mode contract")
     config = dict(schema="r8-full-proof-inputs-v1", volume=volume,
                   manifest=str(MANIFEST), manifest_sha256=EXPECTED[str(MANIFEST)],
                   inventory=str(INVENTORY), inventory_sha256=EXPECTED[str(INVENTORY)],
                   store_sha256=EXPECTED[str(SEALED)], store_bytes=facts[str(SEALED)]["bytes"],
+                  backing_mode="0600", backing_uid=0, backing_gid=0,
                   image=IMAGE, uid=501, gid=20, setup="full independent streamed byte copy",
                   source_commit=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip())
     write(output / "inputs.json", config)

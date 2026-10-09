@@ -1,0 +1,13 @@
+{
+  "invocation.json": "9fbe4944f47afbb58e91936add3a7744709755dff7ef85405288071e165bfc6b",
+  "proof/proof.json": "8c282878b292d66096ab99fe00561149752a523748f236057170b9a331f34297",
+  "proof/retained-runtime-custody.json": "147e9ec6fd18b1418be332438e29a2cf8af0786e03d1c8a25edd1ed2c802e59d",
+  "proof/retained-runtime-host-fence.json": "14a0e00f34710be2709d2d083fb530f06e341f80d24145665dd8ddc31b705459",
+  "proof/runtime.events.jsonl": "39c57b5b397fe7a6452e63ad475be6d9bea6410a2f81fb4c6dfa7f194b5c4d6d",
+  "proof/runtime.host-custody.json": "2f4bc63fdb812a9212094d6aa01a94df30879827600f68e6bf0ce73d49f89681",
+  "proof/runtime.stderr": "9c1a9637db0c896b6ee8371e757d20cb5c8e7bcdb5f0190bdc0e84be1bd66b08",
+  "proof/runtime.stdout": "39c57b5b397fe7a6452e63ad475be6d9bea6410a2f81fb4c6dfa7f194b5c4d6d",
+  "result.json": "1ac74354d7d084132c17c28389245c0b3781c29a34cbe524e239620035b2a3c5",
+  "stderr.txt": "8aca02437a0fa795817b8e6d4b3c4f36d1e940f8fab267196139a983a3d08ccd",
+  "stdout.txt": "f2c0f67c36a08292e8ce0f7bd826e0d0a774b02e578b949574e6950cc37d5797"
+}
