@@ -8,6 +8,14 @@ every standing rule; this one says where the run stopped, what is fixed, what
 is open and how to pick it up. Read both. Where they differ on state, this
 one is newer; where they differ on a rule, neither lifts the other.
 
+## Owner direction, 2026-10-09 (third): the next lead's assignment
+
+The owner then assigned the continuation in five points (subagents, ranked
+batches, generic and no cheating, iterate without stopping or asking, storage
+and memory not traded for speed). They are quoted and read in the
+[prompt for the next lead](PROMPT-R7-NEXT-AGENT-20261009.md), which supersedes
+the "Method" bullet and the delegation caveat below.
+
 ## Owner direction, 2026-10-09 (second)
 
 Relayed from a fork of the session and again through the session channel:
