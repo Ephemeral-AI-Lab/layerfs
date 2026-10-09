@@ -1,0 +1,13 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 16fa316ee, uncommitted product/test paths=10, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/filesystem_port-9a367c3ce80975d4 --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 4 tests
+test a_full_handoff_of_parked_reads_holds_no_owner_credit_and_every_read_completes ... ok
+test directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close ... ok
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

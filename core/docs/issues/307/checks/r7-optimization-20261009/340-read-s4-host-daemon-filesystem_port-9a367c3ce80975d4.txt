@@ -1,0 +1,26 @@
+
+running 4 tests
+test a_full_handoff_of_parked_reads_holds_no_owner_credit_and_every_read_completes ... ok
+test directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close ... ok
+test real_native_steps_park_for_readers_and_release_original_consumers ... FAILED
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+failures:
+
+---- real_native_steps_park_for_readers_and_release_original_consumers stdout ----
+
+thread 'real_native_steps_park_for_readers_and_release_original_consumers' panicked at crates/layerfs-daemon/tests/filesystem_port.rs:343:5:
+assertion `left == right` failed
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    real_native_steps_park_for_readers_and_release_original_consumers
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 101

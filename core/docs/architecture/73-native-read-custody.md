@@ -3,6 +3,51 @@
 > **Status:** Implemented R2 component on parent78374ced6,2026-10-08.
 > Native Fuse activation, Ready and normal drain remain open.
 
+R7 update, 2026-10-09 (OPEN): **OPEN of a regular file is one owner visit
+that writes its descriptor and nothing else.** The job is the visit LOOKUP
+and GETATTR use (`NativeJob::ObserveVisit`, class Read), made by
+`Workspace::native_open_visit` and run by
+[`Overlay::open_native_visit`](../../crates/layerfs-overlay/src/lifetime/native_visit.rs)
+in one transaction: the fence on the kernel's lookup reference
+(`FENCE_LOOKUP`), the same bounded decision (`decide_read` for `Open`) over
+current rows and base facts carried by the request or resident in memory
+(the inode value and, for a base file, the remembered length), and, when it
+decides a regular file, the descriptor's rows (`file_handle`, its `lease`,
+the file's open count) and the `native_file` association with the kernel
+request that receives it. The descriptor's internal request key is the
+job's own minted owner, as for a created-and-opened file. An undecided visit
+writes nothing and holds nothing; the request reads the facts outside the
+owner through `RequestServices::base` and visits again, exactly as LOOKUP
+does. A directory is refused `EISDIR` and anything else `EINVAL` by the
+decision, with nothing written. A file whose last name is gone stays
+openable under the kernel's reference.
+
+What OPEN no longer records: the request source (`native_source`,
+`base_source`, its lease), the processing FileRead (`file_read`,
+`native_read`) and their two releases after the reply. The descriptor is
+released by RELEASE alone, which is unchanged (one job, one transaction).
+Because nothing but the descriptor is owned, a fenced or failed OPEN has
+nothing to give back, and an OPEN does not hold back a prepared-base
+install. Per request, from
+[`read_cost.rs`](../../crates/layerfs-daemon/tests/read_cost.rs) (jobs as
+Read/Lifecycle/Source):
+
+| Request | Before | Now |
+| --- | --- | --- |
+| OPEN of a base file the daemon has seen | 2/2/1 jobs, 1 grant, 4 transactions, 64/82 | 1/0/0 jobs, 0 grants, 1 transaction, 10/13 |
+| OPEN of a local file | 1/2/1 jobs, 0 grants, 4 transactions, 58/76 | 1/0/0 jobs, 0 grants, 1 transaction, 9/12 |
+| OPEN of a base file whose inode or length is not in memory | not pinned | 2/0/0 jobs, 1 grant, 1 length batch, 1 transaction, 11/14 |
+| RELEASE | 0/1/0 jobs, 1 transaction, 7/11 | unchanged |
+
+OPENDIR still records a source and a processing read, through
+`NativeReadPlan`, as described below. `NativeReadOperation::Open` on that
+plan and `Overlay::observe_native_open` are no longer reached by a
+filesystem request. Mounted consequence for the proofs: a reader whose name
+was looked up is no longer parked in its OPEN when no Store reader is free;
+it is parked in its first READ of base bytes
+([`mounted_parking.rs`](../../crates/layerfs-daemon/tests/mounted_parking.rs),
+[`forced_unmount.rs`](../../crates/layerfs-daemon/tests/forced_unmount.rs)).
+
 R7 update, 2026-10-09 (READ and READLINK): **file data and symbolic-link
 data are served by one read-only owner visit that records nothing.** The job
 is `NativeJob::ReadVisit` (class Read) over
@@ -112,9 +157,8 @@ owner thread for every READ of a file with no local row. Nothing keeps the
 objects of a replaced base root for a READ that has not finished: this
 relies on the Store never deleting an object, which holds today because no
 collection exists; a future collector needs its own rule for in-flight
-readers. OPEN and OPENDIR still record a source and a processing read, as
-described below, and `NativeReadOperation::Data` is no longer reached by a
-filesystem request.
+readers. `NativeReadOperation::Data` on the source-holding plan is no longer
+reached by a filesystem request.
 
 R7 update, 2026-10-09 (statement diet): the visit's three checks below (live
 Workspace, attached mount, the kernel's reference) are **one statement**,
@@ -154,9 +198,9 @@ again. Between visits the request holds nothing in the owner. Consequences:
 `base_readers` no longer counts these requests, so they do not hold back a
 prepared-base install; a revoke between two visits is not refused on their
 account, and the next visit fails `Stale`; the kernel's reference keeps the
-parent or target inode as before. OPEN, OPENDIR and directory enumeration
-still record a source, as described below; file data and symbolic-link data
-do not (see the update above).
+parent or target inode as before. OPENDIR and directory enumeration still
+record a source, as described below; OPEN, file data and symbolic-link data
+do not (see the updates above).
 
 R7 update, 2026-10-09 (directory link counts): the fact of a base directory
 now includes its child-directory count, which is derived, not stored

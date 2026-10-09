@@ -1,0 +1,29 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 16fa316ee, uncommitted product/test paths=8, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_visit-446d787932187da0 --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 6 tests
+test a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source ... ok
+test a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_needs ... ok
+test a_resident_client_answers_only_from_memory_and_only_small_objects ... ok
+test a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing ... ok
+test an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone ... FAILED
+test facts_of_another_base_are_ignored_and_read_again_for_the_present_one ... ok
+
+failures:
+
+---- an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone stdout ----
+
+thread 'an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone' panicked at crates/layerfs-workspace/tests/native_visit.rs:513:5:
+assertion `left == right` failed
+  left: 5
+ right: 4
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 101

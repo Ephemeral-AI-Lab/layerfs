@@ -370,6 +370,7 @@ impl RequestServices for FilesystemPort {
     fn observe_visit(
         &self,
         mount: NativeMount,
+        request: u64,
         serial: u64,
         handle: Option<u64>,
         operation: NativeReadOperation,
@@ -379,14 +380,15 @@ impl RequestServices for FilesystemPort {
         if let Err(fenced) = self.fenced(true) {
             return Box::pin(async move { Err(fenced) });
         }
-        let visit = self.0.workspace().native_read_visit(
-            self.0.resident(),
-            mount,
-            serial,
-            handle,
-            operation,
-            facts,
-        );
+        let (workspace, resident) = (self.0.workspace(), self.0.resident());
+        let visit = match operation {
+            NativeReadOperation::Open { writable, .. } => {
+                workspace.native_open_visit(resident, mount, request, serial, writable, facts)
+            }
+            operation => {
+                workspace.native_read_visit(resident, mount, serial, handle, operation, facts)
+            }
+        };
         match visit {
             Ok(visit) => self.acquire(
                 Command::Native(NativeJob::ObserveVisit(Box::new(visit))),

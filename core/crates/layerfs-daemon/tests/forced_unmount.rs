@@ -716,8 +716,9 @@ fn cold_rig(label: &str) -> Rig {
     })
 }
 /// `count` cold readers parked behind a fully leased read set, then Force.
+/// Each is parked in its first READ, after an OPEN that needed no reader.
 /// With more readers than handoff slots the mount is saturated: sixteen
-/// requests admitted and parked, the receive unit held by a callback waiting
+/// READs admitted and parked, the receive unit held by a callback waiting
 /// for a slot, and the rest queued in the kernel.
 ///
 /// The staging does not fix how the teardown ends. The kernel's abort returns
@@ -735,8 +736,10 @@ fn parked_readers_are_ended(name: &'static str, label: &str, count: usize) {
     assert!(ready.receipt.abort_bound, "{:?}", ready.receipt);
     let connection = fusectl::own(&ready);
     let mount = root(&ready).to_owned();
-    // The names are looked up before the hold, so each reader has exactly
-    // one request in flight: its OPEN, which needs the base inode.
+    // The names are looked up before the hold, so each reader's OPEN is
+    // decided by one owner visit from what the daemon remembers and
+    // completes. Its one request in flight is then its first READ, which
+    // needs base bytes and so a Store reader.
     passed(
         &bash_in(COMMAND, &mount, "stat cold/* > /dev/null"),
         "before the hold",
@@ -773,10 +776,17 @@ fn parked_readers_are_ended(name: &'static str, label: &str, count: usize) {
         (leases.count(), admitted, held.grants),
         "every admitted request waits for a reader: {waiting:?}"
     );
+    // Every handed-off request is a parked READ or a completed OPEN: the
+    // OPEN of every reader that is parked, and of no more than every reader.
+    let opened = before.completed - idle.completed;
     assert_eq!(
         before.handoffs - idle.handoffs,
-        admitted as u64,
-        "one parked request for each admitted reader"
+        admitted as u64 + opened,
+        "every handed-off request is parked or completed: {before:?}"
+    );
+    assert!(
+        (admitted as u64..=count as u64).contains(&opened),
+        "completed OPENs: {opened}"
     );
     let blocked = readers
         .iter_mut()

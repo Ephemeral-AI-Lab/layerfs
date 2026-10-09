@@ -7,11 +7,13 @@
 //! request that needs the Store waits for a reader and is parked by the
 //! request service. Cold readers are external python3 processes of the
 //! command identity that open a base file with `O_DIRECT` and read it whole.
-//! Their names were looked up before the hold, so each has exactly one
-//! foreground request in flight: its OPEN, which needs the base inode and so
-//! a reader. None is a readahead request that the kernel's background limit
-//! of one would queue behind another. The tests check that count: one
-//! handoff for each parked reader.
+//! Their names were looked up before the hold, so each makes two foreground
+//! requests: its OPEN, which one owner visit decides from what the daemon
+//! remembers and which completes, and then its first READ, which needs the
+//! base bytes and so a reader. That READ is the one request it has in
+//! flight. None is a readahead request that the kernel's background limit
+//! of one would queue behind another. The tests check that count: every
+//! handed-off request is a parked READ or a completed OPEN.
 //!
 //! What is observed: the mount's maintained `received`, `admitted`, `parked`,
 //! `handoffs` and `completed` counters through control Status, the Store's
@@ -460,9 +462,12 @@ fn fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_park
         "{parked:?}"
     );
     assert_eq!(
-        parked.handoffs - idle.handoffs,
-        READERS as u64,
-        "one parked request for each reader"
+        (
+            parked.handoffs - idle.handoffs,
+            parked.completed - idle.completed
+        ),
+        (2 * READERS as u64, READERS as u64),
+        "one completed OPEN and one parked READ for each reader"
     );
     assert_eq!((parked.loops_configured, parked.loops_entered), (1, 1));
     let waiting = rig.store.read_work();
@@ -594,9 +599,12 @@ fn a_read_of_locally_written_bytes_needs_no_store_reader() {
     });
     let parked = work(rig, a.token);
     assert_eq!(
-        parked.handoffs - idle.handoffs,
-        READERS as u64,
-        "one parked request for each reader"
+        (
+            parked.handoffs - idle.handoffs,
+            parked.completed - idle.completed
+        ),
+        (2 * READERS as u64, READERS as u64),
+        "one completed OPEN and one parked READ for each reader"
     );
     let waiting = rig.store.read_work();
     assert_eq!(
@@ -738,10 +746,19 @@ fn fp34_admitted_and_received_units_stay_within_their_bounds_and_a_sibling_progr
         thread::sleep(Duration::from_millis(2));
     }
     let saturated = work(rig, a.token);
+    // Sixteen READs are handed off and parked. Every other handed-off
+    // request is an OPEN that completed before the slots filled: at least
+    // the sixteen of the parked readers, at most one for each reader. The
+    // received request is not handed off.
+    let opened = saturated.completed - idle.completed;
     assert_eq!(
         saturated.handoffs - idle.handoffs,
-        u64::from(HANDOFFS),
-        "sixteen requests handed off; the received one is not"
+        u64::from(HANDOFFS) + opened,
+        "every handed-off request is parked or completed: {saturated:?}"
+    );
+    assert!(
+        (u64::from(HANDOFFS)..=READERS as u64).contains(&opened),
+        "completed OPENs: {opened}"
     );
     let waiting = rig.store.read_work();
     assert_eq!(steady, 100, "the saturated state is stable: {saturated:?}");

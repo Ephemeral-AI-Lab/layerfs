@@ -193,10 +193,11 @@ impl Custody {
             Err(reason) => Err(ReadFailure::new(reason, self)),
         }
     }
-    /// LOOKUP and GETATTR are served by owner visits that record no request
-    /// source: nothing is acquired, so nothing is released afterwards. An
-    /// undecided visit changed nothing; the base facts it asked for are read
-    /// here, outside the owner, before the next visit.
+    /// LOOKUP, GETATTR and OPEN are served by owner visits that record no
+    /// request source: nothing is acquired, so nothing is released
+    /// afterwards. An undecided visit changed nothing; the base facts it
+    /// asked for are read here, outside the owner, before the next visit.
+    /// The visit that decides an OPEN wrote its descriptor.
     async fn visit(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
         let mut facts = Arc::new(VisitFacts::default());
         loop {
@@ -204,6 +205,7 @@ impl Custody {
                 .services
                 .observe_visit(
                     self.mount,
+                    self.request,
                     self.protected,
                     self.handle,
                     self.operation.clone(),
@@ -218,7 +220,7 @@ impl Custody {
                     return Ok(Ok(NativeReadValue {
                         stat,
                         read: None,
-                        file: None,
+                        file: original.open_candidate,
                         directory: None,
                         original,
                     }));
@@ -247,10 +249,8 @@ impl Custody {
         }
     }
     async fn prepare(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
-        if matches!(
-            self.operation,
-            NativeReadOperation::Lookup { .. } | NativeReadOperation::Getattr { .. }
-        ) {
+        // OPENDIR alone still records a request source and a read.
+        if !matches!(self.operation, NativeReadOperation::Opendir { .. }) {
             return self.visit().await;
         }
         let granted = self

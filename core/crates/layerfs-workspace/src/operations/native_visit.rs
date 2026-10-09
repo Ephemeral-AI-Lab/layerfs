@@ -19,7 +19,9 @@ use layerfs_content::{
     filesystem::{identity::MAXIMUM_INODE_SERIAL, PathName},
     ContentError,
 };
-use layerfs_overlay::{BaseSource, NativeDecision, NativeMount, OpenFile, Overlay, OverlayError};
+use layerfs_overlay::{
+    BaseSource, NativeDecision, NativeMount, OpenFile, Overlay, OverlayError, SourceRows,
+};
 use std::{borrow::Cow, fmt, sync::Arc};
 
 /// Fact rounds one visit may take from resident objects. A window of one job,
@@ -105,13 +107,15 @@ pub struct NativeVisitRequest {
     /// Base facts read for earlier undecided visits of this request.
     pub facts: Arc<VisitFacts>,
 }
-/// LOOKUP or GETATTR as one owner job.
+/// LOOKUP, GETATTR or OPEN of a regular file as one owner job.
 #[derive(Clone)]
 pub struct NativeReadVisit {
     mount: NativeMount,
     serial: u64,
     handle: Option<u64>,
     operation: NativeReadOperation,
+    /// The kernel request an OPEN's descriptor is recorded for.
+    open: Option<u64>,
     facts: Arc<VisitFacts>,
     resident: BaseView,
 }
@@ -184,6 +188,33 @@ impl Workspace {
             serial,
             handle,
             operation,
+            open: None,
+            facts,
+            resident: base.with_client(resident),
+        })
+    }
+    /// OPEN of the regular file `serial`, which the kernel references, for
+    /// the kernel request `request`. `resident` reads from memory only.
+    pub fn native_open_visit(
+        &self,
+        resident: Arc<crate::CanonicalClient>,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        writable: bool,
+        facts: Arc<VisitFacts>,
+    ) -> WorkspaceResult<NativeReadVisit> {
+        let base = self.base()?;
+        if mount.route() != self.route() || mount.root_serial() != base.root().root_inode().serial()
+        {
+            return Err(OverlayError::Stale.into());
+        }
+        Ok(NativeReadVisit {
+            mount,
+            serial,
+            handle: None,
+            operation: NativeReadOperation::Open { serial, writable },
+            open: Some(request),
             facts,
             resident: base.with_client(resident),
         })
@@ -220,32 +251,30 @@ impl NativeReadVisit {
         self.facts.charge() + 255
     }
     /// The answer, a refusal or the needs of an undecided visit. An
-    /// undecided visit has written nothing.
+    /// undecided visit has written nothing. A decided OPEN carries its
+    /// descriptor as the observation's open candidate.
     pub fn perform(&self, db: &Overlay) -> NativeReadOutcome {
         let lookup = matches!(self.operation, NativeReadOperation::Lookup { .. });
-        db.observe_native_visit(
-            self.mount,
-            self.serial,
-            self.handle,
-            lookup,
-            |rows, source| {
-                let mut facts = carried(&self.facts, source);
-                let mut round = 0;
-                loop {
-                    let decision =
-                        decide_read(&self.operation, &facts, self.mount, rows, self.serial)?;
-                    let NativeDecision::Needs(NativeReadDecision::Needs(needs)) = &decision else {
-                        return Ok(decision);
-                    };
-                    if round == ROUNDS
-                        || !supply(&self.resident, source, facts.to_mut(), needs, None)
-                    {
-                        return Ok(decision);
-                    }
-                    round += 1;
+        let decide = |rows: SourceRows<'_>, source: BaseSource| {
+            let mut facts = carried(&self.facts, source);
+            let mut round = 0;
+            loop {
+                let decision = decide_read(&self.operation, &facts, self.mount, rows, self.serial)?;
+                let NativeDecision::Needs(NativeReadDecision::Needs(needs)) = &decision else {
+                    return Ok(decision);
+                };
+                if round == ROUNDS || !supply(&self.resident, source, facts.to_mut(), needs, None) {
+                    return Ok(decision);
                 }
-            },
-        )
+                round += 1;
+            }
+        };
+        match (&self.operation, self.open) {
+            (NativeReadOperation::Open { writable, .. }, Some(request)) => {
+                db.open_native_visit(self.mount, request, self.serial, *writable, decide)
+            }
+            _ => db.observe_native_visit(self.mount, self.serial, self.handle, lookup, decide),
+        }
     }
 }
 impl NativeMutationVisit {

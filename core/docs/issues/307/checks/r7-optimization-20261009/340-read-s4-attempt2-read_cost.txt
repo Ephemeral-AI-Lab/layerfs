@@ -1,0 +1,29 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 16fa316ee, uncommitted product/test paths=9, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/read_cost-106cc8ee0ca7784d --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 5 tests
+test a_base_file_length_is_one_store_answer_per_daemon_and_costs_a_visit_when_not_remembered ... ok
+test a_window_reads_the_base_its_visit_named_whatever_is_installed_before_its_bytes ... ok
+test an_unlinked_open_file_still_reads_its_own_bytes_in_one_visit ... ok
+test read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows ... ok
+test without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing ... FAILED
+
+failures:
+
+---- without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing stdout ----
+READ_COST open base uncached: jobs=[2, 0, 0, 0, 0, 0] grants=1 length_batches=1 transactions=1 statements=(11, 14) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 2, 2), ("Lease", 4, 7)]
+
+thread 'without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing' panicked at crates/layerfs-daemon/tests/read_cost.rs:967:9:
+assertion `left == right` failed: 0
+  left: Cost { jobs: [2, 0, 0, 0, 0, 0], grants: 1, length_batches: 1, sql: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 2, 2), ("Lease", 4, 7)] }
+ right: Cost { jobs: [2, 0, 0, 0, 0, 0], grants: 1, length_batches: 1, sql: [] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 101

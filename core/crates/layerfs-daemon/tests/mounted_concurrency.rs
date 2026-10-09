@@ -1314,7 +1314,8 @@ struct Together {
 /// writes of 128 KiB in all. B: two processes, 200 small operations in all,
 /// and one Commit while they arrive. Both finish; each mount completed at
 /// least one request for every write or operation; every owner service class
-/// advanced; nothing is retained. Counts only: no share and no time.
+/// but Source advanced, and no Source job ran; nothing is retained. Counts
+/// only: no share and no time.
 #[test]
 fn r6_6_finite_arrivals_on_two_workspaces_both_finish() {
     const BIG_PROCESSES: usize = 8;
@@ -1463,10 +1464,13 @@ fn r6_6_finite_arrivals_on_two_workspaces_both_finish() {
         b_after.completed - b_before.completed >= operations as u64,
         "{what}: B's completed requests are below its {operations} operations"
     );
+    // No request of these arrivals records a source: OPEN, like every
+    // mutation, is an owner visit, and nothing lists a directory.
     for (class, count) in CLASSES.iter().zip(delta) {
-        assert!(
+        assert_eq!(
             count > 0,
-            "{what}: owner class {class} did not advance: {delta:?}"
+            *class != "source",
+            "{what}: owner class {class}: {delta:?}"
         );
     }
     assert_eq!(

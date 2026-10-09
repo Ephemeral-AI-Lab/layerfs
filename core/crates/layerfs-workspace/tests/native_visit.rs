@@ -14,7 +14,8 @@ use layerfs_content::{
     AuthenticatedObjects, ContentError, ObjectId,
 };
 use layerfs_overlay::{
-    Inode, InodeKind, NativeMount, OverlayError, StatementKind, StoredCounts, WorkspaceState,
+    Inode, InodeKind, NativeMount, OpenFile, OverlayError, StatementKind, StoredCounts,
+    WorkspaceState,
 };
 use layerfs_workspace::{
     CanonicalCache, CanonicalClient, FileLengths, JobOutcome, NativeInput, NativeMutationOutcome,
@@ -88,6 +89,61 @@ fn observe(
         Some(NativeReadDecision::Refused(refusal)) => Seen::Refused(refusal),
         other => panic!("undecided read visit: {other:?}"),
     }
+}
+/// One OPEN visit as one owner job: what it decided and the descriptor it
+/// recorded. The job itself asks the provider nothing.
+fn open(
+    b: &Bench,
+    client: Arc<CanonicalClient>,
+    mount: NativeMount,
+    request: u64,
+    serial: u64,
+    writable: bool,
+    facts: &VisitFacts,
+) -> (Seen, Option<OpenFile>) {
+    let visit = b
+        .workspace
+        .native_open_visit(
+            client,
+            mount,
+            request,
+            serial,
+            writable,
+            Arc::new(facts.clone()),
+        )
+        .unwrap();
+    let demand = b.demand();
+    let outcome = visit.perform(&b.overlay);
+    assert_eq!(b.demand(), demand, "an owner visit asked the provider");
+    assert!(matches!(outcome.result, Ok(None)), "{:?}", outcome.result);
+    assert!(outcome.candidate.is_none() && outcome.directory_candidate.is_none());
+    let seen = match outcome.decision {
+        Some(NativeReadDecision::Needs(needs)) => Seen::Needs(needs),
+        Some(NativeReadDecision::Value(inode)) => Seen::Value(inode),
+        Some(NativeReadDecision::Refused(refusal)) => Seen::Refused(refusal),
+        other => panic!("undecided open visit: {other:?}"),
+    };
+    assert_eq!(
+        outcome.open_candidate.is_some(),
+        matches!(seen, Seen::Value(_)),
+        "a descriptor exactly when the visit decided a file"
+    );
+    (seen, outcome.open_candidate)
+}
+/// LOOKUP of a root name until it is decided, reading what each undecided
+/// visit asks for: the kernel's reference on the found inode.
+fn reference(b: &Bench, mount: NativeMount, child: &str) -> Inode {
+    let mut facts = VisitFacts::default();
+    for _ in 0..4 {
+        match observe(b, empty(), mount, 1, lookup(1, child), &facts) {
+            Seen::Value(inode) => return inode,
+            Seen::Needs(needs) => facts
+                .supply(&b.workspace.base().unwrap(), &needs, None)
+                .unwrap(),
+            Seen::Refused(refusal) => panic!("lookup {child}: {refusal:?}"),
+        }
+    }
+    panic!("lookup {child} was not decided in four visits")
 }
 fn named(
     mount: NativeMount,
@@ -288,7 +344,8 @@ fn a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_n
     b.overlay.forget_native(mount, 2, 1).unwrap();
     let before = snapshot(&b);
 
-    // Only LOOKUP and GETATTR are visits; the kernel's reference is required.
+    // This constructor serves LOOKUP and GETATTR alone (OPEN has its own);
+    // the kernel's reference is required.
     for operation in [
         NativeReadOperation::Data { serial: 4 },
         NativeReadOperation::Opendir { serial: 4 },
@@ -327,6 +384,134 @@ fn a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_n
     assert!(unreferenced.decision.is_none());
     assert_eq!(snapshot(&b), before);
     b.overlay.forget_native(mount, 4, 2).unwrap();
+    b.overlay.revoke_native_mount(mount).unwrap();
+}
+
+#[test]
+fn an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone() {
+    let b = Bench::new("native-visit-open");
+    let mount = b.overlay.create_native_mount(b.route(), 1).unwrap();
+    let base = b.workspace.base().unwrap();
+    let file = reference(&b, mount, "file");
+    let directory = reference(&b, mount, ".git");
+    let link = reference(&b, mount, "symlink");
+    assert_eq!(
+        (file.serial, file.kind, file.size),
+        (2, InodeKind::File, 10)
+    );
+    assert_eq!((directory.serial, link.serial), (4, 3));
+    let none = VisitFacts::default();
+
+    // Nothing resident and no facts: undecided, no descriptor, nothing
+    // written.
+    let before = snapshot(&b);
+    let (Seen::Needs(needs), None) = open(&b, empty(), mount, 30, 2, false, &none) else {
+        panic!("a cold OPEN was decided")
+    };
+    assert!(!needs.is_empty());
+    assert_eq!(snapshot(&b).0, before.0);
+    assert_eq!(snapshot(&b).1, before.1);
+    assert_eq!(b.overlay.retained_native_file(mount, 30).unwrap(), None);
+
+    // With its facts, read outside the owner, the next visit of the same
+    // request decides and records the descriptor in its one transaction:
+    // one owner row more, no source, no base reader.
+    let mut facts = VisitFacts::default();
+    facts.supply(&base, &needs, None).unwrap();
+    let (Seen::Value(opened), Some(first)) = open(&b, empty(), mount, 30, 2, false, &facts) else {
+        panic!("the supplied facts did not decide the OPEN")
+    };
+    assert_eq!(opened, file);
+    assert_eq!((first.serial(), first.writable()), (2, false));
+    assert_eq!(
+        b.overlay.retained_native_file(mount, 30).unwrap(),
+        Some(first)
+    );
+    let after = snapshot(&b);
+    assert_eq!(after.0, before.0, "the Workspace row is unchanged");
+    assert_eq!(
+        (
+            after.1.owner_rows,
+            after.1.source_rows,
+            after.0.base_readers
+        ),
+        (before.1.owner_rows + 1, 0, 0)
+    );
+    assert_eq!(b.overlay.retained_native_source(mount, 30).unwrap(), None);
+    assert_eq!(b.overlay.retained_native_read(mount, 30).unwrap(), None);
+
+    // The file's objects and its length are resident now: another OPEN is
+    // decided by its one visit with no facts and no provider demand.
+    let begun = snapshot(&b).2;
+    let (Seen::Value(again), Some(second)) = open(&b, resident(&b), mount, 31, 2, true, &none)
+    else {
+        panic!("resident facts did not decide the OPEN")
+    };
+    assert_eq!(again, file);
+    assert!(second.writable() && second.owner_id() != first.owner_id());
+    assert_eq!(snapshot(&b).2, begun + 1);
+
+    // A directory and a symbolic link are refused by kind and open nothing.
+    let held = snapshot(&b);
+    assert_eq!(
+        open(&b, resident(&b), mount, 32, 4, false, &none),
+        (Seen::Refused(Refusal::IsDirectory), None)
+    );
+    assert_eq!(
+        open(&b, resident(&b), mount, 33, 3, false, &none),
+        (Seen::Refused(Refusal::Invalid), None)
+    );
+    assert_eq!((snapshot(&b).0, snapshot(&b).1), (held.0, held.1));
+    // An inode the kernel does not reference is stale before any decision.
+    let unreferenced = b
+        .workspace
+        .native_open_visit(resident(&b), mount, 34, 8, false, Arc::new(none.clone()))
+        .unwrap()
+        .perform(&b.overlay);
+    assert!(matches!(unreferenced.result, Err(OverlayError::Stale)));
+    assert!(unreferenced.decision.is_none() && unreferenced.open_candidate.is_none());
+    // A mount of another Workspace is refused before any job is made.
+    let other = b.overlay.open_workspace([63; 32], [64; 32]).unwrap();
+    let elsewhere = b.overlay.create_native_mount(other, 1).unwrap();
+    assert!(b
+        .workspace
+        .native_open_visit(
+            resident(&b),
+            elsewhere,
+            35,
+            2,
+            false,
+            Arc::new(none.clone())
+        )
+        .is_err());
+    assert_eq!((snapshot(&b).0, snapshot(&b).1), (held.0, held.1));
+
+    // A local file needs no base fact: created, then opened again by one
+    // visit with nothing resident.
+    let serial = b.workspace.next_serial(&b.allocator).unwrap();
+    let made = mutate(
+        &b,
+        resident(&b),
+        named(mount, 36, create(1, "local"), Some(serial), T1, &none),
+    );
+    let Ok(JobOutcome::Applied { publication, .. }) = made.result else {
+        panic!("the local file was not created: {made:?}")
+    };
+    b.overlay.reply_attempted(publication).unwrap();
+    let (Seen::Value(local), Some(third)) = open(&b, empty(), mount, 37, serial, true, &none)
+    else {
+        panic!("a local file was not opened by one visit")
+    };
+    assert_eq!((local.serial, local.kind), (serial, InodeKind::File));
+
+    // Each descriptor is released by its own RELEASE and by nothing else.
+    for descriptor in [first, second, third] {
+        b.overlay
+            .close_native_file(mount, descriptor.serial(), descriptor.owner_id())
+            .unwrap();
+    }
+    // What remains beyond the start is the created file's kernel reference.
+    assert_eq!(snapshot(&b).1.owner_rows, before.1.owner_rows + 1);
     b.overlay.revoke_native_mount(mount).unwrap();
 }
 

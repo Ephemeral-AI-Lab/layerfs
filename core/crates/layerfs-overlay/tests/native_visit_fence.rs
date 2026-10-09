@@ -154,6 +154,21 @@ impl World {
         );
         refusal
     }
+    /// The refusal of an OPEN visit of `serial` under the kernel's lookup
+    /// reference: its fence refuses before any decision.
+    fn opening(&self, mount: NativeMount, serial: u64) -> OverlayError {
+        let refused = self.db.open_native_visit(
+            mount,
+            901,
+            serial,
+            true,
+            |_, _| -> Result<NativeDecision<()>, OverlayError> {
+                panic!("a refused OPEN reached its decision")
+            },
+        );
+        assert!(refused.decision.is_none() && refused.open_candidate.is_none());
+        refused.result.unwrap_err()
+    }
     fn attributes(&self, mount: NativeMount, serial: u64, handle: Option<u64>) -> OverlayError {
         self.db
             .observe_native_visit(
@@ -399,7 +414,8 @@ fn a_closed_workspace_refuses_visits_and_still_releases_descriptors() {
             OverlayError::Closed
         ));
     }
-    assert_eq!(w.snapshot(w.route), before);
+    assert!(matches!(w.opening(w.mount, 50), OverlayError::Closed));
+    assert_eq!(w.snapshot(w.route).1, before.1);
 
     // RELEASE of an open descriptor is still served, exactly once.
     w.db.close_native_file(w.mount, 50, file.owner_id())
@@ -440,6 +456,8 @@ fn a_revoked_or_replaced_mount_is_stale_for_every_fenced_job() {
         Err(OverlayError::Stale)
     ));
     assert_eq!(w.snapshot(w.route), before);
+    assert!(matches!(w.opening(w.mount, 50), OverlayError::Stale));
+    assert_eq!(w.snapshot(w.route).1, before.1);
     w.maintain();
     assert!(matches!(
         w.db.check_file(file, false),
@@ -578,6 +596,129 @@ fn a_read_window_writes_nothing_and_follows_its_descriptor_past_unlink_and_insta
         window(50, Some(handle), 0, 4096),
         Err(OverlayError::Stale)
     ));
+}
+
+#[test]
+fn an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_file() {
+    let w = world();
+    let first = w.open(w.mount, 1, 50, true);
+    let open = |request: u64, serial: u64, writable: bool, decided: Option<Option<Inode>>| {
+        w.db.open_native_visit(w.mount, request, serial, writable, |_, _| {
+            Ok(match decided {
+                None => NativeDecision::Needs("needs"),
+                Some(inode) => NativeDecision::Finished {
+                    inode,
+                    value: "finished",
+                },
+            })
+        })
+    };
+    let rows = || (w.snapshot(w.route).0, w.snapshot(w.route).1);
+    let before = rows();
+
+    // Undecided, and decided without an inode (a refusal): nothing written.
+    let undecided = open(10, 50, false, None);
+    assert!(matches!(undecided.result, Ok(None)));
+    assert_eq!(
+        (undecided.decision, undecided.open_candidate),
+        (Some("needs"), None)
+    );
+    let refused = open(10, 50, false, Some(None));
+    assert!(matches!(refused.result, Ok(None)));
+    assert_eq!(
+        (refused.decision, refused.open_candidate),
+        (Some("finished"), None)
+    );
+    assert_eq!(rows(), before);
+    // An inode the kernel holds no lookup count on: stale before a decision.
+    assert!(matches!(w.opening(w.mount, 77), OverlayError::Stale));
+    // A decision that is not this regular file fails the whole job.
+    let directory = Inode {
+        kind: InodeKind::Directory,
+        mode: 0o755,
+        ..inode(50)
+    };
+    let wrong = open(10, 50, false, Some(Some(directory)));
+    assert!(matches!(wrong.result, Err(OverlayError::Missing)));
+    let other = open(10, 50, false, Some(Some(inode(51))));
+    assert!(matches!(
+        other.result,
+        Err(OverlayError::Invalid("native observation serial"))
+    ));
+    assert_eq!((wrong.open_candidate, other.open_candidate), (None, None));
+    assert_eq!(rows(), before);
+    assert_eq!(w.db.retained_native_file(w.mount, 10).unwrap(), None);
+
+    // Decided: one read-only descriptor of the file, recorded for the
+    // request that receives it, beside the first one. No source, no read.
+    let opened = open(10, 50, false, Some(Some(inode(50))));
+    assert!(matches!(opened.result, Ok(None)));
+    assert!(opened.candidate.is_none() && opened.directory_candidate.is_none());
+    let second = opened.open_candidate.expect("the OPEN's descriptor");
+    assert_eq!((second.serial(), second.writable()), (50, false));
+    assert_ne!(second.owner_id(), first.owner_id());
+    assert_eq!(
+        w.db.retained_native_file(w.mount, 10).unwrap(),
+        Some(second)
+    );
+    let after = rows();
+    assert_eq!(after.0, before.0, "the Workspace row is unchanged");
+    assert_eq!(
+        (
+            after.1.owner_rows - before.1.owner_rows,
+            after.1.source_rows,
+            after.1.inode_rows,
+            after.1.payload_cells
+        ),
+        (
+            1,
+            before.1.source_rows,
+            before.1.inode_rows,
+            before.1.payload_cells
+        )
+    );
+    // The descriptor reads, and being read-only it cannot publish.
+    assert!(w
+        .db
+        .read_native_visit(w.mount, 50, Some(second.owner_id()), 0, 1)
+        .is_ok());
+    assert!(matches!(
+        w.grow(w.mount, 50, Some(second.owner_id()), None),
+        Err(OverlayError::Invalid("read-only descriptor"))
+    ));
+    // A second OPEN recorded for the same kernel request fails whole.
+    let again = open(10, 50, true, Some(Some(inode(50))));
+    assert!(again.result.is_err(), "{:?}", again.result);
+    assert_eq!(rows(), after);
+    assert_eq!(
+        w.db.retained_native_file(w.mount, 10).unwrap(),
+        Some(second)
+    );
+
+    // A file whose last name is gone is still opened under the kernel's
+    // reference, and no longer once the kernel has forgotten the inode.
+    let unlinked = Inode {
+        nlink: 0,
+        ..inode(50)
+    };
+    let third = open(11, 50, true, Some(Some(unlinked)))
+        .open_candidate
+        .expect("opened under the kernel's reference");
+    assert!(third.writable());
+    w.db.forget_native(w.mount, 50, 1).unwrap();
+    let held = rows();
+    assert!(matches!(w.opening(w.mount, 50), OverlayError::Stale));
+    assert_eq!(rows(), held);
+    // Each descriptor is released once, by RELEASE alone.
+    for file in [first, second, third] {
+        w.db.close_native_file(w.mount, 50, file.owner_id())
+            .unwrap();
+        assert!(matches!(
+            w.db.close_native_file(w.mount, 50, file.owner_id()),
+            Err(OverlayError::Stale)
+        ));
+    }
+    assert_eq!(w.db.retained_native_file(w.mount, 10).unwrap(), None);
 }
 
 #[test]

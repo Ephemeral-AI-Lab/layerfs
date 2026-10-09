@@ -323,9 +323,10 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
         (disposed.outstanding, disposed.admitted),
         (0, visited.admitted)
     );
-    // A definite refusal of a request that records a source still owns that
-    // source and its original result until the caller disposes the reply:
-    // OPEN of a directory.
+    // OPEN of a directory is refused the same way, by two visits around
+    // one base read, and owns nothing either: no source, no descriptor, and
+    // no job after the reply.
+    let grants = store.read_work().grants;
     let refused = wait(NativeRead::prepare(
         bound.request(&Fence::default()).unwrap(),
         mount,
@@ -339,6 +340,56 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     ))
     .unwrap();
     assert!(matches!(refused.value(), Err(Refusal::IsDirectory)));
+    let visited = client.diagnostics().unwrap();
+    assert_eq!(
+        (
+            visited.outstanding,
+            visited.admitted,
+            visited.completed[ServiceClass::Read as usize],
+            visited.completed[ServiceClass::Source as usize]
+        ),
+        (
+            0,
+            disposed.admitted + 2,
+            disposed.completed[ServiceClass::Read as usize] + 2,
+            disposed.completed[ServiceClass::Source as usize]
+        )
+    );
+    assert_eq!(store.read_work().grants, grants + 1);
+    wait(refused.dispose()).unwrap();
+    let disposed = client.diagnostics().unwrap();
+    assert_eq!(
+        (disposed.outstanding, disposed.admitted),
+        (0, visited.admitted)
+    );
+    // A definite refusal of a request that records a source still owns that
+    // source and its original result until the caller disposes the reply:
+    // OPENDIR of a regular file the kernel references.
+    let found = wait(NativeRead::prepare(
+        bound.request(&Fence::default()).unwrap(),
+        mount,
+        9,
+        root,
+        None,
+        NativeReadOperation::Lookup {
+            parent: root,
+            name: PathName::new("file-000000").unwrap(),
+        },
+    ))
+    .unwrap();
+    assert_eq!(found.value().unwrap().stat.serial, serial);
+    wait(found.dispose()).unwrap();
+    let disposed = client.diagnostics().unwrap();
+    let refused = wait(NativeRead::prepare(
+        bound.request(&Fence::default()).unwrap(),
+        mount,
+        10,
+        serial,
+        None,
+        NativeReadOperation::Opendir { serial },
+    ))
+    .unwrap();
+    assert!(matches!(refused.value(), Err(Refusal::NotDirectory)));
     let held = client.diagnostics().unwrap();
     assert_eq!(held.outstanding, 1);
     assert_eq!(
@@ -352,6 +403,7 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
         (released.outstanding, released.admitted),
         (0, held.admitted + 1)
     );
+    drop(wait(services.forget(mount, serial, 1)).unwrap());
     let done = wait(
         client
             .try_submit(

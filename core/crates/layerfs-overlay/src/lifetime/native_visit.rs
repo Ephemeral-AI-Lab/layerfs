@@ -105,7 +105,43 @@ impl Overlay {
         lookup: bool,
         decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<NativeDecision<T>>,
     ) -> NativeObservation<T> {
+        self.observe_visit(mount, serial, handle, lookup, None, decide)
+    }
+    /// OPEN of a regular file in one visit, under the kernel's lookup
+    /// reference on the inode. The same bounded decision; when it finishes
+    /// with the file, its descriptor and the association with the request
+    /// that receives it are written in the deciding transaction. Nothing
+    /// else is recorded: no request source and no processing read, so the
+    /// reply is followed by no release. A file whose last name is gone stays
+    /// openable under the kernel's reference.
+    pub fn open_native_visit<T>(
+        &self,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        writable: bool,
+        decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<NativeDecision<T>>,
+    ) -> NativeObservation<T> {
+        self.observe_visit(
+            mount,
+            serial,
+            None,
+            false,
+            Some((request, writable)),
+            decide,
+        )
+    }
+    fn observe_visit<T>(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: Option<u64>,
+        lookup: bool,
+        open: Option<(u64, bool)>,
+        decide: impl FnOnce(SourceRows<'_>, BaseSource) -> OverlayResult<NativeDecision<T>>,
+    ) -> NativeObservation<T> {
         let mut decision = None;
+        let mut open_candidate = None;
         let result = self
             .atomic(|| {
                 let held = handle.map_or(Held::Lookup, Held::Handle);
@@ -134,6 +170,28 @@ impl Overlay {
                 } else if inode.serial != serial {
                     return Err(OverlayError::Invalid("native observation serial"));
                 }
+                let Some((request, writable)) = open else {
+                    return Ok(());
+                };
+                if inode.kind != InodeKind::File {
+                    return Err(OverlayError::Missing);
+                }
+                // The descriptor's request key is this job's own minted
+                // owner, in the negative internal domain.
+                let key = -integer(source.owner)?;
+                let file = self.retain_file(mount.route, key, serial, writable)?;
+                open_candidate = Some(file);
+                self.execute(
+                    StatementKind::Lease,
+                    "INSERT INTO native_file VALUES(?1,?2,?3,?4)",
+                    &[
+                        &mount.route.ns,
+                        &integer(mount.owner)?,
+                        &request.to_be_bytes().as_slice(),
+                        &integer(file.owner)?,
+                    ],
+                    32,
+                )?;
                 Ok(())
             })
             .map(|()| None);
@@ -141,7 +199,7 @@ impl Overlay {
             decision,
             result,
             candidate: None,
-            open_candidate: None,
+            open_candidate,
             directory_candidate: None,
         }
     }

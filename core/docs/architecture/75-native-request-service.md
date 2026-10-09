@@ -180,7 +180,8 @@ was attempted and is counted either way. What can be held at a fenced step:
 
 | Request | Held when fenced | Released |
 | --- | --- | --- |
-| LOOKUP, GETATTR, OPEN, OPENDIR | nothing, or its source (a fact round acquires no read) | source |
+| LOOKUP, GETATTR, OPEN | nothing: a visit records no source, and an undecided one wrote nothing | — |
+| OPENDIR | nothing, or its source (a fact round acquires no read) | source |
 | READ, READLINK | nothing: the visit records no row and its completion is dropped before the reader gate | — |
 | Mutation | nothing, or its source; never a publication ticket | source |
 | READDIR | nothing, or its source with a page or an unpublished cookie plan | page, listing and plan dropped, then source |
@@ -299,8 +300,11 @@ is the whole request in the owner, and an undecided one leaves the receive
 loop, reads its base facts through `RequestServices::base` and visits again.
 Nothing is released after these replies except a publication's ticket, and
 that release is recorded from the replying thread without an owner job
-([owner](21-daemon-owner.md)). The flow above still applies to OPEN and
-OPENDIR.
+([owner](21-daemon-owner.md)). OPEN of a regular file takes the same visits
+since the OPEN update of [native read custody](73-native-read-custody.md):
+the visit that decides it writes its descriptor, `observe_visit` carries the
+kernel request the descriptor is recorded for, and nothing is released
+after its reply. The flow above still applies to OPENDIR.
 
 R7 update, 2026-10-09 (READ and READLINK): the next paragraph describes the
 earlier flow. A READ or READLINK is now one read-only owner visit

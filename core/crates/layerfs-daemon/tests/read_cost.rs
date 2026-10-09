@@ -4,9 +4,10 @@
 //! batches. The real owner and the real Store with its shared canonical
 //! cache, without a kernel mount. Every request is measured at two file
 //! sizes and again beside unrelated local rows, and its bytes are checked.
-//! A READ records nothing in the engine: the tests after the costs show
-//! what that leaves true of an unlinked open file, of a window whose base
-//! is replaced before its bytes are read, and of a daemon with no cache.
+//! A READ records nothing in the engine and an OPEN only its descriptor:
+//! the tests after the costs show what that leaves true of an unlinked open
+//! file, of a window whose base is replaced before its bytes are read, and
+//! of a daemon with no cache.
 //! Public API only; every wait is bounded and the test spawns no thread.
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]
@@ -812,6 +813,27 @@ fn an_unlinked_open_file_still_reads_its_own_bytes_in_one_visit() {
         assert!(ranges == (1, 1) || ranges == (2, 2), "{label}: {ranges:?}");
     }
 
+    // The kernel still references the unlinked inode, so it is opened
+    // again by one visit, at the cost of any OPEN plus the orphan's probes,
+    // and the new descriptor reads the same file.
+    let (again, cost) = rig.measured(|| rig.open(s.mixed_large.0, false));
+    println!(
+        "OPEN_UNLINKED: jobs={:?} grants={} transactions={} statements={:?} sql={:?}",
+        cost.jobs,
+        cost.grants,
+        cost.transactions(),
+        cost.statements(),
+        cost.sql
+    );
+    assert_eq!(cost.jobs, jobs(1, 0, 0));
+    assert_eq!((cost.grants, cost.transactions()), (0, 1));
+    assert_ne!(again, s.mixed_large.1);
+    assert_eq!(
+        rig.read(s.mixed_large.0, again, 0, WINDOW),
+        mixed[..READ_WINDOW]
+    );
+    rig.release(s.mixed_large.0, again);
+
     // It is written through its descriptor and read back, still unlinked.
     rig.write(s.mixed_large.0, s.mixed_large.1, 0, b"after-unlink");
     mixed[..12].copy_from_slice(b"after-unlink");
@@ -927,6 +949,25 @@ fn without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing(
         let (target, cost) = rig.measured(|| rig.readlink(s.link_short));
         assert_eq!(target, b"small", "{round}");
         assert_eq!(cost, READLINK_BASE.cost(), "{round}");
+    }
+    // An OPEN decides nothing from memory here either: its first visit is
+    // undecided and writes nothing, one reader answers the inode and its
+    // length, and the second visit opens. The same every time.
+    for round in 0..2 {
+        let (handle, cost) = rig.measured(|| rig.open(s.large.0, false));
+        println!(
+            "READ_COST open base uncached: jobs={:?} grants={} length_batches={} transactions={} statements={:?} sql={:?}",
+            cost.jobs,
+            cost.grants,
+            cost.length_batches,
+            cost.transactions(),
+            cost.statements(),
+            cost.sql
+        );
+        assert_eq!(cost, OPEN_UNSEEN.cost(), "{round}");
+        let (bytes, _) = rig.measured(|| rig.read(s.large.0, handle, 0, WINDOW));
+        assert_eq!(bytes, large[..READ_WINDOW], "{round}");
+        rig.release(s.large.0, handle);
     }
     // A READ of a directory and a READLINK of a file are refused by kind.
     let (services, request) = rig.request();
@@ -1066,33 +1107,50 @@ const READ_MIXED: Pinned = Pinned {
     length_batches: 0,
     sql: &[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)],
 };
-/// OPEN of a base file: a source, two observations around one reader (no
-/// length batch), and the release of the processing read and source.
+/// OPEN of a base file this daemon has seen: one visit decides over
+/// resident facts and writes the descriptor in its one transaction (the
+/// handle row, its lease, the file's open count and the request's
+/// association). No source, no reader, no release.
 const OPEN_BASE: Pinned = Pinned {
-    jobs: (2, 2, 1),
-    grants: 1,
-    length_batches: 0,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 12, 12),
-        ("Inode", 2, 2),
-        ("Lease", 38, 56),
-    ],
-};
-/// OPEN of a local file: one observation decides.
-const OPEN_LOCAL: Pinned = Pinned {
-    jobs: (1, 2, 1),
+    jobs: (1, 0, 0),
     grants: 0,
     length_batches: 0,
     sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 11, 11),
+        ("Startup", 1, 1),
+        ("Begin", 1, 1),
+        ("Commit", 1, 1),
+        ("Workspace", 1, 1),
+        ("Inode", 2, 2),
+        ("Lease", 4, 7),
+    ],
+};
+/// OPEN of a local file: the same visit, decided by the local row.
+const OPEN_LOCAL: Pinned = Pinned {
+    jobs: (1, 0, 0),
+    grants: 0,
+    length_batches: 0,
+    sql: &[
+        ("Startup", 1, 1),
+        ("Begin", 1, 1),
+        ("Commit", 1, 1),
+        ("Workspace", 1, 1),
         ("Inode", 1, 1),
-        ("Lease", 34, 52),
+        ("Lease", 4, 7),
+    ],
+};
+/// OPEN of a base file whose inode or length is not in memory: two visits
+/// around one reader. Only the second writes.
+const OPEN_UNSEEN: Pinned = Pinned {
+    jobs: (2, 0, 0),
+    grants: 1,
+    length_batches: 1,
+    sql: &[
+        ("Startup", 1, 1),
+        ("Begin", 1, 1),
+        ("Commit", 1, 1),
+        ("Workspace", 2, 2),
+        ("Inode", 2, 2),
+        ("Lease", 4, 7),
     ],
 };
 /// RELEASE: one job, one transaction.

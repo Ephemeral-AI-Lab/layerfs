@@ -18,6 +18,17 @@ meaning, the namespace reference count that construction writes back. The
 filesystem meaning of the column belongs to Workspace; see
 [namespace operations](30-namespace-operations.md).
 
+R7 update, 2026-10-09 (OPEN visit, schema unchanged at 22):
+`Overlay::open_native_visit` is `observe_native_visit` under the kernel's
+lookup reference with one addition: when the decision finishes with the
+regular file it was asked for, the same transaction inserts the descriptor
+(`file_handle`, its `lease`, the open count) and its `native_file` row for
+the kernel request. A decision that names another inode or another kind
+fails the whole job, and an undecided or refusing one writes nothing. No
+statement was added. It attempts 10 statements (13 executions) for a base
+file and 9 (12) for a local one, where the source-holding OPEN attempted 64
+(82) and 58 (76) over five and four jobs.
+
 R7 update, 2026-10-09 (READ window visit, schema unchanged at 22):
 `Overlay::read_native_visit` is the read-only job of a native READ or
 READLINK. It runs outside a transaction and writes nothing: the fence

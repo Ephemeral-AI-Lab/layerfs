@@ -367,9 +367,24 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
         "observe_visit",
         services.observe_visit(
             mount,
+            14,
             root,
             None,
             NativeReadOperation::Getattr { serial: root },
+            Arc::new(VisitFacts::default()),
+        ),
+    );
+    refused(
+        "observe_visit of an OPEN",
+        services.observe_visit(
+            mount,
+            15,
+            serial,
+            None,
+            NativeReadOperation::Open {
+                serial,
+                writable: false,
+            },
             Arc::new(VisitFacts::default()),
         ),
     );
@@ -424,7 +439,7 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     // The port itself replies to nothing.
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "FENCED-CALLS refused=16 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=5"
+        "FENCED-CALLS refused=17 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=5"
     );
     drop((view, services));
     rig.revoke_and_stop();
