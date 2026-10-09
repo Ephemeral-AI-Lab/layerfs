@@ -174,8 +174,10 @@ impl Overlay {
         let rows = self.query(StatementKind::Reclaim, PAYLOAD, &[&ns], 8, |r| {
             Ok((r.get::<_, i64>(0)?, unsigned(r, 1)?))
         })?;
+        // One page of cells, however wide the rows that hold them.
+        let rows = &rows[..crate::maintenance::PAGE.fit(rows.iter().map(|row| row.1)).0];
         let mut bytes = 0;
-        for (row, size) in &rows {
+        for (row, size) in rows {
             self.execute(
                 StatementKind::Reclaim,
                 "DELETE FROM payload WHERE rowid=?1 AND ns=?2",

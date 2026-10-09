@@ -396,15 +396,92 @@ fn worst_case_shapes_report_their_stored_rows_bytes_and_pages() {
             file.write(at * WRITE_WINDOW as u64, &window);
         }
     });
+    let large = shape(|file| {
+        for at in 0..512 {
+            file.write(at * WRITE_WINDOW as u64, &window);
+        }
+    });
     println!(
-        "R7_RUN_SHAPES (rows,bytes,pages) alternating={alternating:?} appends={appends:?} boundary_bytes={boundary_bytes:?} shrink_inside={shrink_inside:?} sparse_put={sparse_put:?} dense_2mib={dense:?}"
+        "R7_RUN_SHAPES (rows,bytes,pages) alternating={alternating:?} appends={appends:?} boundary_bytes={boundary_bytes:?} shrink_inside={shrink_inside:?} sparse_put={sparse_put:?} dense_2mib={dense:?} dense_64mib={large:?}"
     );
-    // Stored rows and bytes of each shape; pages are reported, not pinned.
-    assert_eq!((alternating.0, alternating.1), (32, 131_072));
-    assert_eq!((appends.0, appends.1), (64, 262_144));
-    assert_eq!((boundary_bytes.0, boundary_bytes.1), (64, 64));
-    assert_eq!((shrink_inside.0, shrink_inside.1), (5, 20_000));
-    // The put cell ends at its last valid byte and carries a 512-byte mask.
-    assert_eq!((sparse_put.0, sparse_put.1), (32, 131_072 - 1 + 512));
-    assert_eq!((dense.0, dense.1), (512, 2 << 20));
+    // (rows, bytes, pages) of each shape with one cell per row, measured at
+    // 935fdc685 on this host, beside the rows and bytes stored now. No shape
+    // stores more rows, bytes or pages than it did.
+    for (name, now, before, rows) in [
+        ("alternating cells", alternating, (32, 131_072, 36), 32),
+        ("4 KiB appends", appends, (64, 262_144, 72), 64),
+        (
+            "1-byte writes at cell boundaries",
+            boundary_bytes,
+            (64, 64, 0),
+            64,
+        ),
+        // Four whole cells in one row and the cut cell in another.
+        ("shrink inside a row", shrink_inside, (5, 20_000, 6), 2),
+        // The row gives up one cell: its part below, the put cell, its part
+        // above, beside the three other rows of the window.
+        ("sparse put inside a row", sparse_put, (32, 131_583, 36), 6),
+        ("dense 2 MiB", dense, (512, 2 << 20, 582), 64),
+        // Not measured before: 32 times the 2 MiB file's rows and pages.
+        ("dense 64 MiB", large, (16_384, 64 << 20, 32 * 582), 2_048),
+    ] {
+        assert_eq!((now.0, now.1), (rows, before.1), "{name}");
+        assert!(
+            now.2 <= before.2,
+            "{name}: {} pages, {} before",
+            now.2,
+            before.2
+        );
+    }
+}
+
+#[test]
+fn a_maintenance_page_is_fourteen_cells_of_bytes_whatever_the_rows() {
+    // Four rows of 32 KiB, then twenty rows of one cell, unlinked with no
+    // owner: every step of the layer's retirement drops at most 14 cells.
+    let temp = Temp::new();
+    let db = temp.db();
+    let route = db.open_workspace([47; 32], [48; 32]).unwrap();
+    let source = db.acquire_base_source(route, 1).unwrap();
+    let mut file = File::new(&db, source, 7, Vec::new());
+    file.write(0, &noise(WRITE_WINDOW, 12));
+    for cell in 32..52 {
+        file.write(cell * CELL as u64, &noise(CELL, 13));
+    }
+    let size = file.expect.len() as u64;
+    let mut removed = file.inode(size);
+    removed.nlink = 0;
+    let publication = db
+        .apply(
+            source,
+            &Changes {
+                inodes: vec![removed],
+                ..Changes::default()
+            },
+        )
+        .unwrap();
+    db.reply_attempted(publication).unwrap();
+    let mut steps = Vec::new();
+    let mut cursor = MaintenanceCursor::default();
+    while let Some(step) = db.maintain(cursor).unwrap() {
+        cursor = step.cursor;
+        if step.work.data_bytes != 0 {
+            steps.push((step.work.rows, step.work.data_bytes));
+        }
+        assert!(steps.len() < 100);
+    }
+    // One row of 32 KiB a step while the next is another: two are 16
+    // cells, more than a page. The last one leaves room for six rows of
+    // one cell; the rest go 14 a step, as they always did.
+    assert_eq!(
+        steps,
+        [
+            (1, 32_768),
+            (1, 32_768),
+            (1, 32_768),
+            (7, 14 * 4_096),
+            (14, 14 * 4_096)
+        ]
+    );
+    assert_eq!(db.resources(Some(route)).unwrap().counts.payload_cells, 0);
 }

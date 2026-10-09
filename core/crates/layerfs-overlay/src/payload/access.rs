@@ -30,11 +30,24 @@ impl Overlay {
             data: cell.data.clone(),
             mask: cell.validity.clone(),
         };
+        let key = integer(cell.offset)?;
+        // A wide row over this cell gives it up: a stale one is garbage, a
+        // live one keeps its other cells as rows of their own.
+        if let Some((shape, _)) = self.covering(route.ns, serial, layer.gen, key)? {
+            if shape.wide() {
+                if self.stale(route.ns, serial, layer, shape.offset, shape.epoch)? {
+                    self.drop_row(shape.row)?;
+                } else {
+                    let layer = (route.ns, serial, layer.gen);
+                    self.carve(layer, &shape, key, key + CELL_BYTES as i64)?;
+                }
+            }
+        }
         self.store(
             route.ns,
             serial,
             layer.gen,
-            integer(cell.offset)?,
+            key,
             layer.epoch,
             window.trim(&self.payload_work),
         )
@@ -90,10 +103,23 @@ impl Overlay {
         generation: Generation,
         offset: u64,
     ) -> OverlayResult<Option<Cell>> {
-        let Some(stored) =
-            self.stored(route.ns, integer(serial)?, generation.0, integer(offset)?)?
+        let cell = integer(offset)?;
+        if offset % CELL_BYTES as u64 != 0 {
+            return Ok(None);
+        }
+        let Some((shape, stored)) =
+            self.covering(route.ns, integer(serial)?, generation.0, cell)?
         else {
             return Ok(None);
+        };
+        // A wide row is dense: its cell is whole.
+        let stored = match stored {
+            Some(stored) => stored,
+            None => crate::cells::Stored {
+                epoch: shape.epoch,
+                data: self.row_bytes(shape.row, cell - shape.offset, CELL_BYTES as i64)?,
+                validity: None,
+            },
         };
         let window = stored.expand(&self.payload_work)?;
         Ok(Some(Cell {

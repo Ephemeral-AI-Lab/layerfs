@@ -179,6 +179,23 @@ impl Overlay {
         self.query(kind, sql, params, bytes, |_| Ok(()))?;
         Ok(self.connection.changes())
     }
+    /// Whether the running job has passed admission and begun its
+    /// transaction: true from its first writing statement on.
+    pub(crate) fn writing(&self) -> bool {
+        self.transaction.get() == Transaction::Begun
+    }
+    /// The failure of a write that is not a statement. An unsafe database
+    /// state quarantines the connection, as it does for a statement.
+    pub(crate) fn failed(&self, cause: OverlayError) -> OverlayError {
+        if !cause.unsafe_database_state() {
+            return cause;
+        }
+        self.quarantined.set(true);
+        OverlayError::Uncertain {
+            cause: Box::new(cause),
+            completion: None,
+        }
+    }
     pub(crate) fn atomic<T>(&self, job: impl FnOnce() -> OverlayResult<T>) -> OverlayResult<T> {
         self.transaction(false, job)
     }

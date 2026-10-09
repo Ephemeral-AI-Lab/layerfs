@@ -1,0 +1,15 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 935fdc685, uncommitted product/test paths=36, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/payload_runs-dceb2975487b213e --test-threads=1 --nocapture (cwd core/crates/layerfs-overlay)
+
+running 4 tests
+test a_maintenance_page_is_fourteen_cells_of_bytes_whatever_the_rows ... ok
+test an_orphan_keeps_every_byte_while_rows_of_several_cells_move_into_its_domain ... ok
+test rows_of_several_cells_match_a_reference_model_through_every_writer_and_reader ... R7_RUN_MODEL payload_rows=18 payload_bytes=524278
+ok
+test worst_case_shapes_report_their_stored_rows_bytes_and_pages ... R7_RUN_SHAPES (rows,bytes,pages) alternating=(32, 131072, 36) appends=(64, 262144, 72) boundary_bytes=(64, 64, 0) shrink_inside=(2, 20000, 6) sparse_put=(6, 131583, 32) dense_2mib=(64, 2097152, 520) dense_64mib=(2048, 67108864, 16664)
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.31s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0

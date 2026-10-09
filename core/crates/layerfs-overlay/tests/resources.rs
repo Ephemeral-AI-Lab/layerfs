@@ -11,7 +11,8 @@ fn physical_reserve_counts_allocation_separately_from_logical_rows_and_reusable_
     let mut f = File::new(&db, source, 7, Vec::new());
     f.write(0, &pattern(131072, 3));
     let r = db.resources(Some(route)).unwrap();
-    assert_eq!(r.counts.payload_cells, 32);
+    // Four rows of 32 KiB.
+    assert_eq!(r.counts.payload_cells, 4);
     assert_eq!(r.counts.payload_bytes, 131072);
     assert!(r.allocation.allocated_bytes > r.allocation.logical_bytes + CLEANUP_HEADROOM);
     assert_eq!(r.counts.reply_tickets, 0);
@@ -84,7 +85,8 @@ fn retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_dupli
         cursor = step.cursor;
     }
     let held = db.resources(Some(route)).unwrap();
-    assert_eq!(held.counts.payload_cells, 512);
+    // Rows of 32 KiB: 64 hold the 2 MiB.
+    assert_eq!(held.counts.payload_cells, 64);
     assert_eq!(held.counts.payload_bytes, 2 << 20);
     assert_eq!(held.counts.wait_refs, 1);
     db.resolve_failed_capture(capture).unwrap();
@@ -95,13 +97,13 @@ fn retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_dupli
         };
         cursor = step.cursor;
         assert!(
-            db.resources(Some(route)).unwrap().counts.payload_cells <= 512,
+            db.resources(Some(route)).unwrap().counts.payload_cells <= 64,
             "payload duplication at turn {turn}"
         );
         assert!(turn < 1999);
     }
     let moved = db.resources(Some(route)).unwrap();
-    assert_eq!(moved.counts.payload_cells, 512);
+    assert_eq!(moved.counts.payload_cells, 64);
     assert_eq!(moved.counts.payload_bytes, 2 << 20);
     assert_eq!(moved.counts.wait_refs, 0);
     let read = db.acquire_file_read(source, open, 1).unwrap();
@@ -120,7 +122,7 @@ fn retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_dupli
         cursor = step.cursor;
     }
     assert_eq!(db.resources(Some(route)).unwrap().counts.payload_cells, 0);
-    println!("S6_ORPHAN_MOVE held={held:?} moved={moved:?} maximum_payload_cells=512 snapshot_wait_refs=1->0 original_bytes_preserved=true");
+    println!("S6_ORPHAN_MOVE held={held:?} moved={moved:?} maximum_payload_rows=64 snapshot_wait_refs=1->0 original_bytes_preserved=true");
 }
 
 #[test]

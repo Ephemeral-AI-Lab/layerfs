@@ -6,6 +6,69 @@ schema16. Earlier algorithm and proof pins retain their original scope; see
 
 > **Status:** Current general guide.
 
+R7 update, 2026-10-09 (payload rows of several cells, decisions P1 to P5,
+overlay schema 23). Implemented:
+
+- **Row shape (P1).** A `payload` row is a cell row, as before (at most 4096
+  bytes, optional validity mask), or a dense row of whole cells with no
+  mask that lies inside one aligned slot of `RUN_BYTES` (32768, one named
+  constant in `contract/types.rs`; the table CHECK repeats the number).
+  Columns, indexes and triggers are unchanged; `payload_cells` counts rows.
+  `PRAGMA user_version` and its readback are 23. Rows of one layer never
+  share a cell, live or stale, and a row is wholly live or wholly stale.
+- **One range finds every row.** A row that holds a byte of `[a, b)` starts
+  in `[a - a % RUN_BYTES, b)`: `CELL_COVER` (the last row at or before a
+  cell in its slot; it returns bytes only for a one-cell row),
+  `CELL_SHAPES` (shapes of a slot's rows, no bytes) and `CELL_RANGE` and the
+  captured metadata seek with the residual `cell_offset+length(data)>?`.
+  All are index searches ([`payload/runs.rs`](../../crates/layerfs-overlay/src/payload/runs.rs)).
+- **Write (P2).** Whole cells are written one slot at a time: one
+  `CELL_SHAPES` read, then the bytes overwrite a live dense row in place
+  (SQLite incremental blob write through rusqlite's safe handle: no
+  statement, index entry, trigger or length change), or stale and smaller
+  rows of the range are deleted by one range delete and one row is inserted,
+  bound from the caller's slice. A neighbouring row is never extended. A
+  partly covered cell is one `CELL_COVER` read and either an in-place write
+  into a wide row or the earlier merge and upsert of a cell row. A
+  128 KiB write into a fresh file is 8 Payload statements (12 executions,
+  12 changed rows) where it was 32 (64, 96); the same window overwritten is
+  4 reads and 4 in-place writes.
+- **In-place writes are counted and fenced (P4).** `PayloadWork` gains
+  `in_place_writes`, `in_place_bytes` and `in_place_ns`. `write_in_place`
+  refuses unless the job's transaction has begun, which the inode upsert
+  before every payload write does; the handle is closed before the job
+  returns. The daemon's diagnostic rows do not carry the three counters.
+- **Shrink, sparse put, raw cell.** A shrink cuts the one dense row that
+  holds the boundary with `substr` statements (its whole cells below the
+  boundary cell stay one row, the boundary cell's kept bytes become a cell
+  row) and frees the rest at once; a masked cell row is trimmed as before;
+  a shrink to a slot boundary touches no row. `put_cell` carves its cell
+  out of a live wide row, which keeps its other cells as rows of their own.
+  `cell`/`captured_cell`/`source_cell` return the cell of a wide row whole.
+- **Moves.** Failed-capture fold and orphan migration share
+  `Overlay::transfer_row`: one lower row a step. The row itself moves
+  (`UPDATE ... SET gen, epoch`) when the upper layer has no live row over
+  its cells and all its bytes are effective; otherwise its cells are merged
+  below the upper bytes one at a time and the row is dropped.
+- **Maintenance page.** `PAGE` stays 14 payload cells; a wide row counts as
+  the cells it holds (`Page::fit`), so a step, and the releasing job's
+  inline budget, drop at most 14 cells of bytes however the rows are
+  shaped: one 32 KiB row a step while the next row is another one.
+- **Captured scan.** A probe starts at the slot of its position; a window
+  ends with the widest row that holds its first byte, at most `RUN_BYTES`
+  with `RUN_BYTES/8` mask bytes. Workspace's scan and the daemon's
+  `CapturedRun` reply charge use those bounds.
+
+Memory (P5), per daemon and one job at a time: SQLite's bind and record
+buffers of one row are at most 2 x 32768 bytes where they were 2 x 4096; one
+row is loaded per read step; a captured window and its reply charge are at
+most 32768 + 4096 bytes per in-flight captured read where they were 4096 +
+512. Nothing grows with files, bytes or rows. Not changed: the read and write
+windows, accounting triggers, secondary indexes, admission. Numbers and the
+worst-case storage table are pinned in
+[`costs.rs`](../../crates/layerfs-overlay/tests/costs.rs) and
+[`payload_runs.rs`](../../crates/layerfs-overlay/tests/payload_runs.rs).
+
 R7 update, 2026-10-09 (directory link counts, overlay schema 22): the `inode`
 row gains `subdirs INTEGER NOT NULL CHECK(subdirs>=0 AND (kind=2 OR
 subdirs=0))`, the absolute number of child directories bound in a directory

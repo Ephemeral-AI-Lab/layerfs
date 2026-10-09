@@ -1,7 +1,7 @@
 //! Bounded live garbage and generation-selective retirement, metadata first.
 use crate::{
     db::unsigned,
-    maintenance::{Item, OPERATION_RECORD, STALE, STEPS},
+    maintenance::{Item, OPERATION_RECORD, PAGE, STALE, STEPS},
     sql, Overlay, OverlayResult, StatementKind,
 };
 
@@ -15,7 +15,9 @@ impl Overlay {
                     FROM payload INDEXED BY payload_generation WHERE ns=?1 AND gen=?2 AND (serial,cell_offset)>(?3,?4)
                     ORDER BY serial,cell_offset LIMIT 14", &[&ns,&gen,&item.cursor,&item.aux],32,
                     |r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,unsigned(r,2)?)))?;
-                for (serial, cell, size) in &rows {
+                // One page of cells, however wide the rows that hold them.
+                let rows = &rows[..PAGE.fit(rows.iter().map(|row| row.2)).0];
+                for (serial, cell, size) in rows {
                     if self.orphan_holds(ns, *serial, gen)? {
                         continue;
                     }
@@ -129,7 +131,8 @@ impl Overlay {
                 FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>?4 ORDER BY cell_offset LIMIT 14",
                 &[&item.ns,&item.resource,&item.target,&item.cursor],32,
                 |r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,unsigned(r,2)?)))?;
-            for (cell, stamp, size) in &rows {
+            let rows = &rows[..PAGE.fit(rows.iter().map(|row| row.2)).0];
+            for (cell, stamp, size) in rows {
                 let stale = match layer {
                     Some(ref layer) => self.stale(item.ns, item.resource, layer, *cell, *stamp)?,
                     None => true,

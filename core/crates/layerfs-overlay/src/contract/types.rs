@@ -2,6 +2,12 @@
 
 /// Selected cell window. S5 will qualify mutation/visibility and layout costs.
 pub const CELL_BYTES: usize = 4096;
+/// Largest payload row. A row wider than one cell is dense, a whole number
+/// of cells, and lies inside one aligned slot of this size, so every row
+/// that can hold a byte is found by one indexed range of its slot. SQLite
+/// reaches byte x of a stored value by walking x/4092 overflow pages: this
+/// is also the page walk of one random access and of one maintenance row.
+pub const RUN_BYTES: usize = 32 * 1024;
 /// Per-byte validity for a cell; a written zero remains distinguishable.
 pub const MASK_BYTES: usize = CELL_BYTES / 8;
 /// Maximum rows in one owner service window, not a total namespace limit.

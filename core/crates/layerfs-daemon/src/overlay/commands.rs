@@ -390,8 +390,8 @@ impl Command {
                 std::mem::size_of::<layerfs_overlay::CapturedRunCursor>(),
                 std::mem::size_of::<layerfs_overlay::CapturedRunReply>()
                     + std::mem::size_of::<layerfs_overlay::LocalRead>()
-                    + CELL_BYTES
-                    + MASK_BYTES,
+                    + layerfs_overlay::RUN_BYTES
+                    + layerfs_overlay::RUN_BYTES / 8,
             ),
             Self::ReaderInode { .. } => (0, std::mem::size_of::<Inode>()),
             Self::ReaderParentDirectoryEntries { after, .. } => (

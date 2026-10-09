@@ -5,21 +5,43 @@ pub(crate) const INODE_LOOKUP: &str =
 pub(crate) const INODE_CAPTURE: &str =
     "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs
     FROM inode INDEXED BY inode_capture WHERE ns=?1 AND gen=?2 AND serial>?3 ORDER BY serial LIMIT 64";
-pub(crate) const CELL_LOOKUP: &str = "SELECT epoch,data,validity FROM payload
-    WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4";
+/// The last row at or before cell ?5 in its slot, which starts at ?4. A row
+/// of one cell at ?5 returns its bytes and mask; any other row only its
+/// shape, so a wide row is never loaded to learn that it is there.
+pub(crate) const CELL_COVER: &str = "SELECT rowid,cell_offset,epoch,length(data),
+    CASE WHEN cell_offset=?5 AND length(data)<=4096 THEN data END,
+    CASE WHEN cell_offset=?5 THEN validity END FROM payload
+    WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<=?5
+    ORDER BY cell_offset DESC LIMIT 1";
+/// Shapes of the rows whose first cell lies in [?4, ?5); no bytes are loaded.
+pub(crate) const CELL_SHAPES: &str =
+    "SELECT rowid,cell_offset,epoch,length(data),length(validity) FROM payload
+    WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5
+    ORDER BY cell_offset";
 pub(crate) const CELL_PUT: &str =
     "INSERT INTO payload(ns,serial,gen,cell_offset,epoch,data,validity) VALUES(?1,?2,?3,?4,?5,?6,?7)
     ON CONFLICT(ns,serial,gen,cell_offset) DO UPDATE SET epoch=excluded.epoch,
     data=excluded.data,validity=excluded.validity";
 pub(crate) const CELL_DROP: &str =
     "DELETE FROM payload WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4";
+pub(crate) const CELLS_DROP: &str = "DELETE FROM payload
+    WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5";
+pub(crate) const ROW_DROP: &str = "DELETE FROM payload WHERE rowid=?1";
+/// Cuts a dense row to its first ?2 bytes.
+pub(crate) const ROW_KEEP: &str = "UPDATE payload SET data=substr(data,1,?2) WHERE rowid=?1";
+pub(crate) const ROW_MOVE: &str = "UPDATE payload SET gen=?2,epoch=?3 WHERE rowid=?1";
+/// ?3 bytes of a row from its byte ?2, counted from one.
+pub(crate) const ROW_SLICE: &str = "SELECT substr(data,?2,?3) FROM payload WHERE rowid=?1";
+/// Rows that hold a byte of [?6, ?5): a row can start as early as its slot,
+/// ?4, and one that ends at or before ?6 is passed over without its bytes.
 pub(crate) const CELL_RANGE: &str = "SELECT cell_offset,epoch,data,validity FROM payload
     WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5
-    ORDER BY cell_offset";
+    AND cell_offset+length(data)>?6 ORDER BY cell_offset";
+/// The next row at or after ?4 that reaches past cell ?6.
 pub(crate) const CAPTURED_CELL_METADATA: &str =
     "SELECT cell_offset,epoch,length(data),length(validity) FROM payload
     WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>=?4 AND cell_offset<?5
-    ORDER BY cell_offset LIMIT 1";
+    AND cell_offset+length(data)>?6 ORDER BY cell_offset LIMIT 1";
 pub(crate) const STEP_GET: &str =
     "SELECT cell_offset,epoch FROM shrink WHERE ns=?1 AND serial=?2 AND gen=?3 AND depth=?4";
 pub(crate) const STEP_PUT: &str = "INSERT INTO shrink VALUES(?1,?2,?3,?4,?5,?6)

@@ -802,13 +802,13 @@ impl OverlayCapturedRuns for InheritedPort<'_> {
             original.step = if self.window {
                 let length = (end - offset) as usize;
                 let mut data = Vec::with_capacity(if self.oversized == Some(false) {
-                    layerfs_overlay::CELL_BYTES + 1
+                    layerfs_overlay::RUN_BYTES + 1
                 } else {
                     length
                 });
                 data.resize(length, 0xa5);
                 let mut inherited = Vec::with_capacity(if self.oversized == Some(true) {
-                    layerfs_overlay::MASK_BYTES + 1
+                    layerfs_overlay::RUN_BYTES / 8 + 1
                 } else {
                     length.div_ceil(8)
                 });

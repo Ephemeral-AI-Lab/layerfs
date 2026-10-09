@@ -21,8 +21,10 @@ fn complete_mutation_reports_triggers_blob_delivery_and_physical_reservation() {
     assert_eq!(copies.write_cells, 1);
     assert_eq!(copies.partial_write_cells, 0);
     assert_eq!(copies.write_input_bytes, CELL_BYTES as u64);
-    assert_eq!(copies.cell_copy_bytes, CELL_BYTES as u64);
+    // A whole cell is bound from the caller's slice: the engine copies none.
+    assert_eq!(copies.cell_copy_bytes, 0);
     assert_eq!(copies.cell_zeroed_bytes, 0);
+    assert_eq!(copies.in_place_writes, 0);
     // File::write includes the mutation and its reply attempt. Only the
     // mutation writes: the attempt returns a ticket held in the engine's
     // memory, and its owner turn finds a live Workspace with nothing to
@@ -152,6 +154,12 @@ fn one_write_window_costs_the_same_statements_at_either_file_size_and_beside_ano
         let first = window_cost(&db, || file.write(0, &rewritten));
         let copies = db.payload_work().since(copies);
         assert_eq!(copies.write_input_bytes, 3 * WRITE_WINDOW as u64);
+        // The two overwrites: one positioning of the row handle per row.
+        assert_eq!(
+            (copies.in_place_writes, copies.in_place_bytes),
+            (8, 2 * WRITE_WINDOW as u64)
+        );
+        assert_eq!((copies.cell_copy_bytes, copies.cell_zeroed_bytes), (0, 0));
         file.check();
         let rows = db.resources(Some(route)).unwrap().counts;
         seen.push((fresh, over, first, rows.payload_cells, rows.payload_bytes));
@@ -161,13 +169,16 @@ fn one_write_window_costs_the_same_statements_at_either_file_size_and_beside_ano
         );
     }
     // (Payload attempts, Payload executions, Payload rows changed, attempts
-    // of the whole job): 32 cell upserts, each with one accounting trigger
-    // program that updates two rows.
-    // The first window of a file also reads that no lower row exists.
-    let (first, fresh, over) = ((32, 64, 96, 43), (32, 64, 96, 42), (32, 64, 96, 42));
+    // of the whole job). A fresh window is four rows of 32 KiB: per row one
+    // read of the slot's shapes and one insert with its accounting trigger
+    // program, which updates two rows. Before rows of several cells this
+    // was (32, 64, 96, 42): 32 cell upserts and their trigger programs.
+    // An overwrite writes the four rows where they lie: four shape reads,
+    // no row changed, no trigger; it was (32, 64, 96, 42) as well.
+    let (first, fresh, over) = ((8, 12, 12, 19), (8, 12, 12, 18), (4, 4, 0, 14));
     assert_eq!((seen[0].0, seen[0].1, seen[0].2), (first, over, over));
     assert_eq!((seen[1].0, seen[1].1, seen[1].2), (fresh, over, over));
     // Stored rows of the file and of the two files beside it.
-    assert_eq!((seen[0].3, seen[0].4), (3 * 32, 3 * 131_072));
-    assert_eq!((seen[1].3, seen[1].4), (18 * 32, 18 * 131_072));
+    assert_eq!((seen[0].3, seen[0].4), (3 * 4, 3 * 131_072));
+    assert_eq!((seen[1].3, seen[1].4), (18 * 4, 18 * 131_072));
 }
