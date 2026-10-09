@@ -51,16 +51,24 @@ impl Overlay {
                 .pop()
                 .ok_or(OverlayError::Stale)?;
             if left == 0 {
-                // An orphan's last reference finishes it in this job, once a
-                // job; what that leaves, and every other file, is queued.
-                if self.orphan_seen.get() && self.release_step.get() {
-                    if let Some(orphan) = self.orphan(ns, serial)? {
-                        self.release_step.set(false);
-                        return self.finish_release(ns, serial, orphan);
+                // While the engine holds no orphan the file has none.
+                let orphan = match self.orphan_seen.get() {
+                    true => self.orphan(ns, serial)?,
+                    false => None,
+                };
+                match orphan {
+                    // A file with no orphan leaves only its custody row.
+                    None => self.drop_custody(ns, serial)?,
+                    // An orphan's last reference finishes it in this job,
+                    // once a job; a later one of the job is queued.
+                    Some(orphan) if self.release_step.replace(false) => {
+                        self.finish_release(ns, serial, orphan)?
+                    }
+                    Some(_) => {
+                        self.enqueue(ns, crate::maintenance::ORPHAN, serial, -1)?;
+                        self.wake_orphan(ns, serial)?;
                     }
                 }
-                self.enqueue(ns, crate::maintenance::ORPHAN, serial, -1)?;
-                self.wake_orphan(ns, serial)?;
             }
         }
         Ok(())

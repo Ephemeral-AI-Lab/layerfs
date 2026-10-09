@@ -755,9 +755,10 @@ fn a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole(
         (3, 1)
     );
     assert!(w.db.maintenance_idle(w.route).unwrap());
-    // The last reference queues the inode's reclamation, as before.
+    // The last reference of a file with no orphan deletes its custody row
+    // itself and queues nothing.
     w.db.forget_native(w.mount, 50, 1).unwrap();
-    assert!(!w.db.maintenance_idle(w.route).unwrap());
+    assert!(w.db.maintenance_idle(w.route).unwrap());
     w.maintain();
 
     // An entry without a descriptor.

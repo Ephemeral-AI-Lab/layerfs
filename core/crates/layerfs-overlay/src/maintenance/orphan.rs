@@ -166,7 +166,8 @@ impl Overlay {
         )?;
         Ok(())
     }
-    fn drop_custody(&self, ns: i64, serial: i64) -> OverlayResult<()> {
+    /// The custody row of a file nothing references.
+    pub(crate) fn drop_custody(&self, ns: i64, serial: i64) -> OverlayResult<()> {
         self.execute(
             StatementKind::Lease,
             "DELETE FROM file_custody WHERE ns=?1 AND serial=?2 AND opens+lookups+readers=0",

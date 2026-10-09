@@ -102,6 +102,13 @@ struct Special {
     /// Whether maintenance was pending after FORGET, then its steps and rows.
     forgotten: (bool, u64, u64),
 }
+/// The last reference of a file that keeps its name.
+#[derive(Debug, Eq, PartialEq)]
+struct Live {
+    job: Cost,
+    /// Whether maintenance was pending afterwards, then its steps and rows.
+    after: (bool, u64, u64),
+}
 impl Mounted<'_> {
     fn request(&self) -> u64 {
         self.requests.set(self.requests.get() + 1);
@@ -137,8 +144,8 @@ impl Mounted<'_> {
             facts: Arc::new(VisitFacts::default()),
         }
     }
-    /// A file that keeps its name and its kernel reference.
-    fn keep(&self, child: &str) -> u64 {
+    /// A created file, open, with its name and its kernel reference.
+    fn opened(&self, child: &str) -> (u64, OpenFile) {
         let overlay = &self.b.overlay;
         let serial = self.workspace.next_serial(&self.b.allocator).unwrap();
         let mut request = self.mutation(1, None, NativeInput::Named(create(1, child)));
@@ -152,11 +159,47 @@ impl Mounted<'_> {
             panic!("CREATE was not published: {outcome:?}")
         };
         overlay.reply_tickets().attempted(publication).unwrap();
-        let file = outcome.file.expect("the created file is open");
-        overlay
+        (serial, outcome.file.expect("the created file is open"))
+    }
+    /// A file that keeps its name and its kernel reference.
+    fn keep(&self, child: &str) -> u64 {
+        let (serial, file) = self.opened(child);
+        self.b
+            .overlay
             .close_native_file(self.mount, serial, file.owner_id())
             .unwrap();
         serial
+    }
+    /// The last reference of a file that keeps its name: its FORGET after
+    /// its RELEASE, or its RELEASE after its FORGET.
+    fn live(&self, child: &str, forget_last: bool) -> Live {
+        let overlay = &self.b.overlay;
+        let queued = overlay.resources(None).unwrap().counts.maintenance_targets;
+        let (serial, file) = self.opened(child);
+        let close = || {
+            overlay
+                .close_native_file(self.mount, serial, file.owner_id())
+                .unwrap()
+        };
+        let forget = || overlay.forget_native(self.mount, serial, 1).unwrap();
+        let ((), work) = if forget_last {
+            close();
+            measured(overlay, forget)
+        } else {
+            forget();
+            measured(overlay, close)
+        };
+        let pending = overlay.maintenance_pending();
+        let (steps, rows, _) = self.drain();
+        // Nothing of the file is left queued.
+        assert_eq!(
+            overlay.resources(None).unwrap().counts.maintenance_targets,
+            queued
+        );
+        Live {
+            job: cost(&work),
+            after: (pending, steps, rows),
+        }
     }
     /// A file removed under the kernel's lookup reference and not forgotten.
     fn parked(&self, child: &str) -> u64 {
@@ -415,6 +458,11 @@ fn one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans() 
 
     // The directory gets its local row; no orphan has been made yet.
     one.keep("k0");
+    // The last reference of a file that keeps its name, in an engine with
+    // no orphan: its FORGET, then another file's RELEASE.
+    let live = [one.live("l0", true), one.live("l1", false)];
+    println!("NATIVE_UNLINK_COST live file, FORGET last {:?}", live[0]);
+    println!("NATIVE_UNLINK_COST live file, RELEASE last {:?}", live[1]);
     let fresh = one.removed("f0", false);
     println!("NATIVE_UNLINK_COST fresh {fresh:?}");
     let mut sized = Vec::new();
@@ -458,6 +506,10 @@ fn one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans() 
     let parked = two.parked("p");
     let orphans = || b.overlay.resources(None).unwrap().counts.orphan_rows;
     assert_eq!((orphans(), b.overlay.maintenance_pending()), (1, false));
+    // While the engine holds that orphan, a live file's last reference
+    // probes for its own orphan row and nothing more.
+    let beside = [one.live("l2", true), one.live("l3", false)];
+    println!("NATIVE_UNLINK_COST live file beside an orphan {beside:?}");
     let large = one.special("large", 4 * 14, false);
     let open = one.special("open", 1, true);
     println!("NATIVE_UNLINK_COST four pages {large:?}");
@@ -466,6 +518,23 @@ fn one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans() 
     b.overlay.forget_native(two.mount, parked, 1).unwrap();
     assert_eq!((orphans(), b.overlay.maintenance_pending()), (0, false));
 
+    // A live file's last reference deletes its custody row itself and
+    // leaves the owner nothing.
+    let done = |job: &[(&'static str, u64, u64)]| Live {
+        job: job.to_vec(),
+        after: (false, 0, 0),
+    };
+    assert_eq!(live, [done(&LIVE_FORGET), done(&LIVE_RELEASE)]);
+    let probed = |live: &Live| Live {
+        job: (live.job.iter())
+            .map(|&(family, attempts, executions)| match family {
+                "Lease" => (family, attempts + 1, executions + 1),
+                _ => (family, attempts, executions),
+            })
+            .collect(),
+        after: live.after,
+    };
+    assert_eq!(beside, [probed(&live[0]), probed(&live[1])]);
     // Four times as many kept files beside it: nothing changes.
     assert_eq!(sized[0], sized[1]);
     let (late, early) = &sized[0];
@@ -614,4 +683,26 @@ const FORGET_MIGRATED: [(&str, u64, u64); 6] = [
     ("Workspace", 1, 1),
     ("Lease", 7, 11),
     ("Reclaim", 8, 12),
+];
+/// FORGET as the last reference of a file that keeps its name: the
+/// Workspace's row and the mount's [Workspace, Lease]; the lookup's row, its
+/// deletion and its owner's [3 Lease]; the file reference dropped by a
+/// statement that returns what remains [Lease]; the custody row, deleted
+/// [Lease, with its trigger]. Nothing is queued.
+const LIVE_FORGET: [(&str, u64, u64); 5] = [
+    ("Startup", 1, 1),
+    ("Begin", 1, 1),
+    ("Commit", 1, 1),
+    ("Workspace", 1, 1),
+    ("Lease", 6, 10),
+];
+/// RELEASE as the last reference of such a file: the fence [Workspace]; the
+/// descriptor's row and its owner's, the file reference [3 Lease]; the
+/// custody row, deleted [Lease, with its trigger]. Nothing is queued.
+const LIVE_RELEASE: [(&str, u64, u64); 5] = [
+    ("Startup", 1, 1),
+    ("Begin", 1, 1),
+    ("Commit", 1, 1),
+    ("Workspace", 1, 1),
+    ("Lease", 4, 10),
 ];

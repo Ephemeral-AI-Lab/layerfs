@@ -1,0 +1,285 @@
+===== cleanup_observation-d61a43d43d1e30ed (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 2 tests
+test fixed_point_work_is_equal_beside_two_unrelated_population_sizes ... ok
+test observation_keeps_live_and_held_state_and_reports_exact_physical_absence ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== compound-015a16aad54419dc (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== costs-349e2bf53982389c (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 2 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== directory_links-69605645be14f1d8 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 5 tests
+test a_base_directory_counts_its_child_directories_and_nothing_else ... ok
+test a_base_directory_with_children_keeps_its_count_exact_under_every_change ... ok
+test a_visit_that_misses_the_count_is_undecided_writes_nothing_and_decides_once_supplied ... ok
+test every_binding_change_moves_the_count_of_a_local_directory_exactly ... ok
+test remembered_counts_are_bounded_and_an_evicted_one_is_derived_again ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== directory_links-b597317bca66614e (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 4 tests
+test a_failed_capture_folds_the_sealed_count_into_the_active_generation ... ok
+test the_count_round_trips_through_every_whole_row_reader ... ok
+test the_engine_refuses_a_count_on_a_file_and_an_unrepresentable_count ... ok
+test the_schema_check_refuses_a_negative_count_and_a_count_on_a_file ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== job_cost-6806228384655850 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 1 test
+test completion_cost_matches_exclusive_owner_aggregate_and_retained_credit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== lifetimes-92a4b3cb30ffe3b7 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 3 tests
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_directory-da74e859bec14402 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 2 tests
+test cookies_are_reused_and_retire_in_bounded_indexed_live_turns ... ok
+test only_accepted_entries_publish_offsets_and_concurrent_aliases_remain_valid ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_directory-dc23566612d2ac3a (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 3 tests
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test next_directory_read_observes_parent_moved_by_the_atomic_namespace_job ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_jobs-80237cf905513ccf (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 1 test
+test native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_lookup-c3a8c6eab76f3974 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 11 tests
+test a_mutation_visit_publishes_with_its_kernel_custody_and_records_no_source ... ok
+test a_read_visit_records_no_source_and_writes_only_a_positive_lookup_reference ... ok
+test a_visit_source_names_no_row_and_is_stale_once_the_base_or_frontier_moves ... ok
+test aggregate_forget_is_checked_and_implicit_root_is_independent ... ok
+test attribute_only_decision_counts_the_lookup_and_retains_no_read ... ok
+test foreign_engine_or_mount_cannot_consume_ownership ... ok
+test native_file_keys_retain_exact_open_owners_and_independent_processing ... ok
+test native_open_refuses_nonregular_and_opens_a_removed_file_under_lookup_custody ... ok
+test need_rounds_do_not_acquire_and_failed_atomic_decisions_keep_original_evidence ... ok
+test revoked_lookup_retirement_is_bounded_indexed_and_allows_closed_cleanup ... ok
+test source_and_read_fence_revocation_and_request_keys_keep_all_u64_bits ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_read_plan-b2bcdf9f7de89efd (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 4 tests
+test deciding_lookup_sees_mutation_after_missing_fact_round ... ok
+test native_open_retains_removed_metadata_after_last_lookup_and_handle_release ... ok
+test positive_lookup_preserves_alias_identity_and_exact_kernel_counts ... ok
+test processing_source_survives_forget_and_last_name_removal_before_getattr ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_revocation-5b16c0da6e2c9dee (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 1 test
+test revocation_retires_unreleased_handles_in_bounded_indexed_turns ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_unlink_cost-bcded746609cf3eb (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans ... FAILED
+
+failures:
+
+---- one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans stdout ----
+NATIVE_UNLINK_COST live file, FORGET last Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 6, 10)], after: (false, 0, 0) }
+NATIVE_UNLINK_COST live file, RELEASE last Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 10)], after: (false, 0, 0) }
+NATIVE_UNLINK_COST fresh Removed { jobs: [[("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 4, 5), ("Lease", 3, 4)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 3, 3), ("Inode", 2, 2), ("Lease", 11, 15), ("Reclaim", 10, 13)]], steps: 0, rows: 0, maintenance: [], inode: 23 }
+NATIVE_UNLINK_COST files=25 forget-first Removed { jobs: [[("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 4, 5), ("Lease", 3, 4)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 3, 3), ("Inode", 2, 2), ("Lease", 11, 15), ("Reclaim", 10, 13)]], steps: 0, rows: 0, maintenance: [], inode: 23 }
+NATIVE_UNLINK_COST files=25 maintenance-first Removed { jobs: [[("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 4, 5), ("Lease", 3, 4)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 3, 3), ("Inode", 2, 2), ("Lease", 11, 15), ("Reclaim", 10, 13)]], steps: 0, rows: 0, maintenance: [], inode: 23 }
+NATIVE_UNLINK_COST files=100 forget-first Removed { jobs: [[("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 4, 5), ("Lease", 3, 4)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 3, 3), ("Inode", 2, 2), ("Lease", 11, 15), ("Reclaim", 10, 13)]], steps: 0, rows: 0, maintenance: [], inode: 23 }
+NATIVE_UNLINK_COST files=100 maintenance-first Removed { jobs: [[("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 4, 5), ("Lease", 3, 4)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 3, 3), ("Inode", 2, 2), ("Lease", 11, 15), ("Reclaim", 10, 13)]], steps: 0, rows: 0, maintenance: [], inode: 23 }
+NATIVE_UNLINK_COST second Workspace Removed { jobs: [[("Workspace", 1, 1), ("Inode", 2, 2), ("DirectoryEntry", 2, 2)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 5, 6), ("Lease", 6, 12)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 3, 3), ("Payload", 2, 3)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 2, 2), ("Inode", 8, 9), ("DirectoryEntry", 4, 5), ("Lease", 3, 4)], [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 3, 3), ("Inode", 2, 2), ("Lease", 11, 15), ("Reclaim", 10, 13)]], steps: 0, rows: 0, maintenance: [], inode: 23 }
+NATIVE_UNLINK_COST live file beside an orphan [Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 7, 11)], after: (false, 0, 0) }, Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 5, 11)], after: (false, 0, 0) }]
+NATIVE_UNLINK_COST four pages Special { unlinked: (false, 0, 0), cells: (56, 42), forget: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 9, 11), ("Reclaim", 19, 37)], forgotten: (true, 5, 46) }
+NATIVE_UNLINK_COST open at unlink Special { unlinked: (true, 4, 3), cells: (1, 0), forget: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 7, 11), ("Reclaim", 8, 12)], forgotten: (false, 0, 0) }
+
+thread 'one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans' panicked at crates/layerfs-workspace/tests/native_unlink_cost.rs:527:5:
+assertion `left == right` failed
+  left: [Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 6, 10)], after: (false, 0, 0) }, Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 10)], after: (false, 0, 0) }]
+ right: [Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 6, 8)], after: (false, 0, 0) }, Live { job: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 8)], after: (false, 0, 0) }]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 101
+===== native_visit-3cf70db899407a5e (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 6 tests
+test a_mutation_visit_publishes_once_with_its_reply_custody_and_holds_no_source ... ok
+test a_read_visit_decides_in_one_job_from_resident_objects_or_names_the_facts_it_needs ... ok
+test a_resident_client_answers_only_from_memory_and_only_small_objects ... ok
+test a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing ... ok
+test an_open_visit_decides_a_regular_file_and_records_its_descriptor_alone ... ok
+test facts_of_another_base_are_ignored_and_read_again_for_the_present_one ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_cost-31891792959c0ed4 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.56s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_fence-05a8e2ec310cfb42 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 8 tests
+test a_closed_workspace_refuses_visits_and_still_releases_descriptors ... ok
+test a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole ... ok
+test a_descriptor_of_another_mount_or_inode_and_a_missing_reference_are_stale ... ok
+test a_read_only_descriptor_cannot_publish_and_begins_no_transaction ... ok
+test a_read_window_writes_nothing_and_follows_its_descriptor_past_unlink_and_install ... ok
+test a_revoked_or_replaced_mount_is_stale_for_every_fenced_job ... ok
+test an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_file ... ok
+test every_visit_statement_is_an_indexed_seek ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== orphans-ac39fc227e494246 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 10 tests
+test a_closed_namespace_that_takes_the_last_orphan_stops_the_probe ... ok
+test a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue ... ok
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... ok
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+test inode_reads_probe_the_orphan_domain_only_while_an_orphan_exists ... ok
+test logical_close_refuses_new_captured_owners_and_keeps_existing_consumers ... ok
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_operation_record ... ok
+test three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlink_reader ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== resources-d5629cf95337a133 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 6 tests
+test last_generation_release_is_fixed_work_and_wakes_retirements_in_bounded_pages ... ok
+test lost_backing_path_quarantines_without_sql_or_releasing_published_capture ... ok
+test physical_reserve_counts_allocation_separately_from_logical_rows_and_reusable_pages ... ok
+test real_backing_corruption_retains_original_sql_cause_and_quarantines_custody ... ok
+test repeated_resource_snapshots_do_not_reprepare_expired_metadata_statements ... ok
+test retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_duplication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== transactions-b47653736df2ab57 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 6 tests
+test a_failure_after_the_first_write_rolls_back_and_one_before_it_has_nothing_to_roll_back ... ok
+test a_read_only_atomic_job_begins_commits_and_admits_nothing ... ok
+test consecutive_writes_that_do_not_grow_the_file_allocate_at_most_once ... ok
+test linked_sqlite_classifies_reads_and_writes_as_the_engine_expects ... ok
+test owner_identities_are_unique_and_increasing_across_namespaces ... ok
+test reads_then_writes_are_one_transaction_begun_at_the_first_write ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0

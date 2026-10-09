@@ -396,3 +396,21 @@ migration 31 -> 19. Pinned in
 [`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs);
 the parked layer in `layerfs-overlay` `tests/orphans.rs`
 (`a_last_release_under_a_generation_hold_parks_the_layer_for_the_queue`).
+
+R7 update, 2026-10-09 (a live file's last reference, report item O2, schema
+unchanged at 22). Implemented, superseding "a file with no orphan row still
+queues its item" above: in the `left == 0` branch of `Overlay::file_ref` a
+serial with no orphan row has its custody row deleted by that job
+(`Overlay::drop_custody`, the statement the `ORPHAN` step ran) and nothing
+is queued or woken. The orphan row is not probed while `orphan_seen` is
+false. This path is not gated by `release_step`: `retire_native` uses it for
+each lookup or handle of its page and still finishes no orphan inline (an
+orphan there is queued and made ready). Counts: FORGET as the last reference
+of a file that keeps its name 11 -> 10 statement attempts (Lease 5 -> 6,
+Reclaim 2 -> 0), RELEASE as the last reference 9 -> 8 (Lease 3 -> 4, Reclaim
+2 -> 0), one more Lease attempt each while the engine holds an orphan;
+maintenance steps afterwards 1 -> 0 and `maintenance_pending()` false.
+Pinned in
+[`native_unlink_cost.rs`](../../crates/layerfs-workspace/tests/native_unlink_cost.rs).
+The no-orphan branch of `maintain_orphan` is kept for an item that outlives
+its orphan row.
