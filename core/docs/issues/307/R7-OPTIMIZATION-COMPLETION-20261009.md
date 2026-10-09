@@ -2,6 +2,11 @@
 
 > **Status:** Measured result and hand-back, 2026-10-09. Local `main` at
 > `ffea8f9d5` plus the commit that adds this file. Nothing is pushed.
+>
+> **Closed 2026-10-10** by owner direction ("proceed to close r7"). The verdicts
+> below stand as written: seven of twelve cells are above A2, and closing the
+> stage does not accept or relabel them. Open items and undecided rows are
+> carried in the [rollout ledger](ROLLOUT-LEDGER-20261008.md) row for R7.
 
 The assignment's stop rule has two halves. The second holds: no ranked row
 is left whose predicted saving exceeds the one-sample spread without a

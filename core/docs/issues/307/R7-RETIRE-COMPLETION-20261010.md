@@ -3,6 +3,10 @@
 > **Status:** Dated checkpoint record, 2026-10-10; not release evidence or a
 > product contract. No sample was taken and no timing, storage or memory claim
 > is made.
+>
+> **Closed 2026-10-10** with R7 by owner direction ("proceed to close r7"). The
+> [questions for the owner](#questions-for-the-owner) stay open and are carried
+> in the [rollout ledger](ROLLOUT-LEDGER-20261008.md) row.
 
 R7-retire is the stage the [R5–R9 handoff](HANDOFF-R5-R9-20261009.md) calls
 "R7: covered integration cleanup (S11)": audit the seven directories excluded
