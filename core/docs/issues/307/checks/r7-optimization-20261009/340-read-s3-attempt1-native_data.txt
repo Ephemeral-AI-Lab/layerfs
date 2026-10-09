@@ -1,0 +1,23 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD dbaad86a5, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/native_data-ebaa576502bf0b3e --test-threads=1  (cwd core/crates/layerfs-workspace)
+
+running 2 tests
+test a_visit_is_refused_for_another_workspace_and_fenced_by_the_kernel_reference ... ok
+test every_window_is_the_ordinary_read_and_takes_the_base_only_for_what_it_inherits ... FAILED
+
+failures:
+
+---- every_window_is_the_ordinary_read_and_takes_the_base_only_for_what_it_inherits stdout ----
+
+thread 'every_window_is_the_ordinary_read_and_takes_the_base_only_for_what_it_inherits' panicked at crates/layerfs-workspace/tests/native_data.rs:63:10:
+called `Result::unwrap()` on an `Err` value: Invalid("inode metadata")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    every_window_is_the_ordinary_read_and_takes_the_base_only_for_what_it_inherits
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 101

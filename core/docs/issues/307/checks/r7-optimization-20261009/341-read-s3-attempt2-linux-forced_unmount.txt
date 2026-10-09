@@ -1,0 +1,15 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD dbaad86a5, uncommitted product/test paths=22, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/forced_unmount-3a624eb67361c91c --test-threads=1 
+
+running 6 tests
+test a_read_parked_after_its_visit_holds_no_engine_row_and_is_ended_by_the_fence ... ok
+test fp19_force_releases_a_parked_cold_reader_while_the_read_set_stays_leased ... ok
+test fp22_a_reference_in_a_never_holds_b_and_force_on_a_signals_no_process ... ok
+test fp33_a_held_descriptor_leaves_the_mount_aborted_and_retained ... ok
+test fp33_a_held_working_directory_leaves_the_mount_aborted_and_retained ... ok
+test fp34_force_ends_every_admitted_and_received_callback_of_a_saturated_mount ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 0

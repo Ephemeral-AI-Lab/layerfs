@@ -1,5 +1,5 @@
 //! Composed file read: one local layered plan, then one inherited base range.
-use crate::{OverlayFileRead, OverlayRead, SourceView, WorkspaceError, WorkspaceResult};
+use crate::{BaseView, OverlayFileRead, OverlayRead, SourceView, WorkspaceError, WorkspaceResult};
 use layerfs_content::ContentError;
 use layerfs_overlay::{CapturedReader, FileRead, InodeKind, LocalRead, READ_WINDOW};
 use std::io::Write;
@@ -106,43 +106,45 @@ impl SourceView {
             .as_ref()
             .and_then(|local| local.base_root)
             .unwrap_or(root);
-        let rebound;
-        let base = if root == self.base.identity().0.to_bytes() {
-            &self.base
-        } else {
-            rebound = self
-                .base
-                .rebind(layerfs_content::filesystem::FilesystemRootId(
-                    layerfs_content::ObjectId::from_bytes(&root)?,
-                ))?;
-            &rebound
-        };
-        let Some(mut local) = local else {
+        let base = self.base.at(root)?;
+        let Some(local) = local else {
             let plan = base.plan_read(serial, offset, length)?;
             plan.emit(sink)?;
             return Ok(plan.length());
         };
-        if local.kind != InodeKind::File {
-            return Err(ContentError::WrongLogicalRole.into());
-        }
-        if let Some((from, to)) = local.span {
-            let span = u32::try_from(to - from)
-                .ok()
-                .filter(|span| *span as usize <= READ_WINDOW && from >= local.offset)
-                .ok_or(ContentError::InvalidRecord("inherited read span"))?;
-            let plan = base.plan_read(serial, from, span)?;
-            let mut inherited = Vec::with_capacity(plan.length() as usize);
-            plan.emit(&mut inherited)?;
-            let first = (from - local.offset) as usize;
-            for slot in first..first + span as usize {
-                if local.inherited[slot / 8] & (1 << (slot % 8)) != 0 {
-                    // The base file ends where it ends; beyond that is zero.
-                    local.data[slot] = inherited.get(slot - first).copied().unwrap_or(0);
-                }
+        let data = file_window(Some(base.as_ref()), serial, local)?;
+        sink.write_all(&data)
+            .map_err(|error| WorkspaceError::Service(Box::new(error)))?;
+        Ok(data.len() as u64)
+    }
+}
+/// A regular file's local window with its inherited bytes read from `base`,
+/// which the caller bound to the root those bytes belong to. A window with
+/// no inherited byte needs no base.
+pub(crate) fn file_window(
+    base: Option<&BaseView>,
+    serial: u64,
+    mut local: LocalRead,
+) -> WorkspaceResult<Vec<u8>> {
+    if local.kind != InodeKind::File {
+        return Err(ContentError::WrongLogicalRole.into());
+    }
+    if let Some((from, to)) = local.span {
+        let base = base.ok_or(ContentError::InvalidRecord("inherited window without base"))?;
+        let span = u32::try_from(to - from)
+            .ok()
+            .filter(|span| *span as usize <= READ_WINDOW && from >= local.offset)
+            .ok_or(ContentError::InvalidRecord("inherited read span"))?;
+        let plan = base.plan_read(serial, from, span)?;
+        let mut inherited = Vec::with_capacity(plan.length() as usize);
+        plan.emit(&mut inherited)?;
+        let first = (from - local.offset) as usize;
+        for slot in first..first + span as usize {
+            if local.inherited[slot / 8] & (1 << (slot % 8)) != 0 {
+                // The base file ends where it ends; beyond that is zero.
+                local.data[slot] = inherited.get(slot - first).copied().unwrap_or(0);
             }
         }
-        sink.write_all(&local.data)
-            .map_err(|error| WorkspaceError::Service(Box::new(error)))?;
-        Ok(local.data.len() as u64)
     }
+    Ok(local.data)
 }

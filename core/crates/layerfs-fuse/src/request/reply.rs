@@ -2,14 +2,13 @@
 use super::terminal;
 use crate::{
     attributes::{refusal, Identity},
-    operations::NativeRead,
+    operations::{NativeData, NativeRead, ReadDataInput},
     ports::{Fence, RequestServices},
     RequestDisposition,
 };
 use fuser::{
     Errno, FileHandle, FopenFlags, Generation, ReplyAttr, ReplyData, ReplyEntry, ReplyOpen,
 };
-use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_overlay::NativeMount;
 use layerfs_workspace::NativeReadOperation;
 use std::{sync::Arc, time::Duration};
@@ -25,8 +24,7 @@ pub(super) enum ReadReply {
     Link(ReplyData),
 }
 impl ReadReply {
-    pub fn data_input(&self) -> Option<crate::operations::ReadDataInput> {
-        use crate::operations::ReadDataInput;
+    pub fn data_input(&self) -> Option<ReadDataInput> {
         match self {
             Self::Data(_, offset, length) => Some(ReadDataInput::File {
                 offset: *offset,
@@ -56,12 +54,51 @@ impl ReadReply {
         operation: NativeReadOperation,
         identity: Identity,
     ) -> RequestDisposition {
+        let (reply, input) = match self {
+            Self::Data(reply, offset, length) => (reply, ReadDataInput::File { offset, length }),
+            Self::Link(reply) => (reply, ReadDataInput::Link),
+            reply => {
+                return reply
+                    .attributes(
+                        services, fence, mount, request, protected, handle, operation, identity,
+                    )
+                    .await
+            }
+        };
+        // Nothing is held in the engine after the visit: the reply ends it.
+        match NativeData::read(services, mount, request, protected, handle, input).await {
+            Ok(Ok(data)) => {
+                reply.data(data.bytes());
+                RequestDisposition::Complete
+            }
+            Ok(Err(reason)) => {
+                reply.error(refusal(reason));
+                RequestDisposition::Complete
+            }
+            Err(error) => {
+                reply.error(terminal::errno(error.fenced()));
+                terminal::read(&fence, error).await
+            }
+        }
+    }
+    /// LOOKUP, GETATTR, OPEN and OPENDIR: one decided inode and its reply.
+    #[allow(clippy::too_many_arguments)]
+    async fn attributes(
+        self,
+        services: Arc<dyn RequestServices>,
+        fence: Fence,
+        mount: NativeMount,
+        request: u64,
+        protected: u64,
+        handle: Option<u64>,
+        operation: NativeReadOperation,
+        identity: Identity,
+    ) -> RequestDisposition {
         let answer =
             match NativeRead::prepare(services, mount, request, protected, handle, operation).await
             {
                 Ok(answer) => answer,
                 Err(error) => {
-                    let error = error.with_data_input(self.data_input());
                     self.error(terminal::errno(error.fenced()));
                     return terminal::read(&fence, error).await;
                 }
@@ -74,24 +111,6 @@ impl ReadReply {
             }
         };
         match self {
-            Self::Data(reply, offset, length) => {
-                if value.stat.kind != InodeKind::RegularFile {
-                    reply.error(if value.stat.kind == InodeKind::Directory {
-                        Errno::EISDIR
-                    } else {
-                        Errno::EINVAL
-                    });
-                    return dispose(answer).await;
-                }
-                return data(reply, &fence, answer.read_file(offset, length).await).await;
-            }
-            Self::Link(reply) => {
-                if value.stat.kind != InodeKind::Symlink {
-                    reply.error(Errno::EINVAL);
-                    return dispose(answer).await;
-                }
-                return data(reply, &fence, answer.readlink().await).await;
-            }
             Self::Open(reply, directory) => {
                 let handle = if directory {
                     value.directory.map(|value| value.owner_id())
@@ -122,7 +141,7 @@ impl ReadReply {
                         reply.entry(&TTL, &attributes, Generation(mount.owner_id()))
                     }
                     Self::Attr(reply) => reply.attr(&TTL, &attributes),
-                    _ => unreachable!("data and opens handled above"),
+                    _ => unreachable!("data is served before, opens above"),
                 }
             }
         }
@@ -133,25 +152,6 @@ async fn dispose(answer: NativeRead) -> RequestDisposition {
     match answer.dispose().await {
         Ok(()) => RequestDisposition::Complete,
         Err(error) => RequestDisposition::Retained(Box::new(error)),
-    }
-}
-async fn data(
-    reply: ReplyData,
-    fence: &Fence,
-    result: Result<crate::operations::NativeData, crate::operations::ReadFailure>,
-) -> RequestDisposition {
-    match result {
-        Ok(data) => {
-            reply.data(data.bytes());
-            match data.dispose().await {
-                Ok(()) => RequestDisposition::Complete,
-                Err(error) => RequestDisposition::Retained(Box::new(error)),
-            }
-        }
-        Err(error) => {
-            reply.error(terminal::errno(error.fenced()));
-            terminal::read(fence, error).await
-        }
     }
 }
 /// The declared page-cache treatment of every opened or created file.

@@ -2,6 +2,7 @@
 pub(crate) mod attributes;
 pub(crate) mod file;
 pub(crate) mod namespace;
+pub(crate) mod native_data;
 pub(crate) mod native_directory;
 pub(crate) mod native_mutation;
 pub(crate) mod native_read;

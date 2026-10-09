@@ -25,8 +25,8 @@
 //! the same mount is chosen so that it has no base demand (a file created
 //! through that mount); a request that needs base facts would wait for the
 //! same readers on any Workspace, because the read set belongs to the Store.
-//! The same-mount request is a write: a READ takes a Store read ticket even
-//! when its bytes are all local, which the third test records as a limit.
+//! The same-mount request of the first test is a write; the third test
+//! shows that a READ of bytes that are all local takes no reader either.
 //! The terminal half of FP-34 is not here (`forced_unmount.rs`).
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
@@ -434,10 +434,9 @@ fn appended() -> Vec<u8> {
 /// has exactly its bytes.
 ///
 /// The same-mount "unrelated request" is the append to a file created
-/// through that mount (OPEN and WRITE): a mutation needs no Store reader. No
-/// same-mount READ can serve as one, because every READ takes a Store read
-/// ticket, whatever its bytes; see
-/// `a_read_of_locally_written_bytes_still_waits_for_a_store_reader`.
+/// through that mount (OPEN and WRITE): a mutation needs no Store reader. A
+/// same-mount READ of local bytes needs none either; see
+/// `a_read_of_locally_written_bytes_needs_no_store_reader`.
 #[test]
 fn fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_parked() {
     const READERS: usize = 4;
@@ -562,25 +561,25 @@ fn fp8_a_sibling_write_and_a_same_mount_write_complete_while_cold_reads_are_park
     checks.done("FP-8 writes");
 }
 
-/// A recorded LIMIT of the current product, not a requirement: a READ takes
-/// a Store read ticket even when its bytes are all local. Every READ window
-/// awaits the immutable source (`layerfs-fuse/src/operations/read.rs`,
-/// `Custody::window`), so with every Store reader leased the read of a file
-/// written wholly through the mount parks beside the cold reads. The proof
-/// plan suggested this read as FP-8's lease-free same-mount request; source
-/// contradicts that, and `P1-attempt1-linux-mounted_parking` and
-/// `P1-attempt2-linux-mounted_parking` are the failing receipts of that
-/// original expectation. The row itself is the test above.
+/// A READ of bytes that are all local takes no Store reader. Its one owner
+/// visit copies them and the reply follows (`layerfs-fuse/src/operations/
+/// read.rs`, `Custody::window`): with every Store reader leased, the read of
+/// a file written wholly through the mount returns its exact bytes beside
+/// the parked cold reads. Its LOOKUP and OPEN are decided by local rows and
+/// take no reader either.
 ///
-/// Asserted as it is: with the leases held the read does not return inside
-/// the bounded observation, A's `parked` and the Store's waiting read
-/// admissions each rise by one and no reader is granted; after the leases
-/// are returned the same process returns the exact bytes. The read is made
-/// with `O_DIRECT`, so that it is a READ request on A and not a page the
-/// kernel still held. A read that returns while the leases are held fails
-/// this test: the limit would then be gone, which is new information.
+/// Until R7 H01 stage 3 this test recorded the opposite as a limit of the
+/// product: every READ window awaited the immutable source, so this read
+/// parked beside the cold ones until the leases were returned.
+///
+/// Asserted: with the leases held the read returns within the bounded
+/// observation with the exact bytes; A's `parked` and the Store's waiting
+/// read admissions stay what the cold reads made them, no reader is
+/// granted, and the cold reads are still blocked. The read is made with
+/// `O_DIRECT`, so that it is a READ request on A and not a page the kernel
+/// still held.
 #[test]
-fn a_read_of_locally_written_bytes_still_waits_for_a_store_reader() {
+fn a_read_of_locally_written_bytes_needs_no_store_reader() {
     const READERS: usize = 4;
     let staged = Staged::new("fp8-read");
     let (rig, a) = (&staged.rig, &staged.a);
@@ -613,13 +612,14 @@ fn a_read_of_locally_written_bytes_still_waits_for_a_store_reader() {
         &[path.to_str().unwrap()],
     ));
     let read = local[0].wait(HELD);
-    let after = work(rig, a.token);
+    let after = settled(rig, a.token, |now| now.completed > parked.completed);
     let admission = rig.store.read_work();
     let reading = running(&mut readers);
     println!(
-        "FP8_LIMIT readers={READERS} leases_held={} local_read_returned_while_held={} observed_for={HELD:?} a_parked={}->{} read_admissions_waiting={}->{} reader_grants={}->{} a_handoffs={}->{} a_completed={}->{} cold_readers_still_blocked={reading}",
+        "FP8_LOCAL_READ readers={READERS} leases_held={} local_read_returned_while_held={} bytes_exact={} a_parked={}->{} read_admissions_waiting={}->{} reader_grants={}->{} a_handoffs={}->{} a_completed={}->{} cold_readers_still_blocked={reading}",
         leases.count(),
         read.is_some(),
+        read.as_ref().is_some_and(|(_, bytes)| bytes == WRITTEN),
         parked.parked,
         after.parked,
         waiting.waiting,
@@ -631,43 +631,49 @@ fn a_read_of_locally_written_bytes_still_waits_for_a_store_reader() {
         parked.completed,
         after.completed
     );
-    checks.that(read.is_none(), || {
-        format!(
-            "FP8_LIMIT: the read of locally written bytes returned while every Store reader was leased, so the recorded limit no longer holds: {:?}; {parked:?} -> {after:?}; {admission:?}",
-            read.as_ref().map(|(status, output)| (status.code(), output.len()))
-        )
-    });
     checks.that(
-        after.parked == parked.parked + 1 && admission.waiting == waiting.waiting + 1,
+        read.as_ref()
+            .is_some_and(|(status, bytes)| status.success() && bytes == WRITTEN),
         || {
             format!(
-                "FP8_LIMIT: the read is not one more request parked on reader admission: A parked {} -> {}, Store read admissions waiting {} -> {}",
-                parked.parked, after.parked, waiting.waiting, admission.waiting
+                "FP8_LOCAL_READ: the read of locally written bytes did not return its exact bytes while every Store reader was leased: {:?}; {parked:?} -> {after:?}; {admission:?}",
+                read.as_ref().map(|(status, output)| (status.code(), output.len()))
             )
         },
     );
     checks.that(
-        admission.grants == held.grants && admission.leased == leases.count(),
+        after.parked == parked.parked
+            && admission.waiting == waiting.waiting
+            && after.completed > parked.completed,
         || {
             format!(
-                "FP8_LIMIT: a reader was granted while all were leased: {held:?} -> {admission:?}"
+                "FP8_LOCAL_READ: the read waited on reader admission or completed nothing: A parked {} -> {}, completed {} -> {}, Store read admissions waiting {} -> {}",
+                parked.parked, after.parked, parked.completed, after.completed, waiting.waiting, admission.waiting
+            )
+        },
+    );
+    checks.that(
+        admission.grants == held.grants
+            && admission.leased == leases.count()
+            && reading == READERS,
+        || {
+            format!(
+                "FP8_LOCAL_READ: a reader was granted while all were leased, or a cold read returned: {held:?} -> {admission:?}, {reading} cold reads running"
             )
         },
     );
 
     leases.release();
     Staged::exact(&mut readers);
-    if local[0].child.is_some() {
-        let bytes = local[0].done();
-        assert_eq!(bytes, WRITTEN, "the read after the leases were returned");
-        println!(
-            "FP8_LIMIT after release: the same process returned its {} exact bytes local_read_exact=true cold_readers_exact={READERS}",
-            bytes.len()
-        );
-    }
+    let released = rig.store.read_work();
+    assert_eq!(
+        (released.leased, released.waiting, released.quarantined),
+        (0, 0, 0)
+    );
+    println!("FP8_LOCAL_READ after release: cold_readers_exact={READERS}");
     drop((readers, local));
     staged.finish();
-    checks.done("FP8_LIMIT");
+    checks.done("FP8_LOCAL_READ");
 }
 
 /// What the sampling thread saw of A.

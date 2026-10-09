@@ -18,8 +18,8 @@ use layerfs_daemon::{
 };
 use layerfs_fuse::{
     operations::{
-        create::mkdir, DirectoryStream, MutationInput, MutationRequest, NativeMutation, NativeRead,
-        ReadFailure,
+        create::mkdir, DirectoryStream, MutationInput, MutationRequest, NativeData, NativeMutation,
+        NativeRead, ReadDataInput, ReadFailure,
     },
     ports::{FailedDemands, Fence, MountServices, RequestServices},
     Dispatch, DispatchConfig, FailureView, MountQueue, RequestDisposition,
@@ -474,19 +474,22 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     );
     let handle = opened.value().unwrap().file.unwrap().owner_id();
     wait(opened.dispose()).unwrap();
-    let data = wait(
-        rig.read(
-            services.clone(),
-            4,
-            serial,
-            Some(handle),
-            NativeReadOperation::Data { serial },
-        )
-        .read_file(0, READ_WINDOW as u32),
-    )
+    let window = ReadDataInput::File {
+        offset: 0,
+        length: READ_WINDOW as u32,
+    };
+    let data = wait(NativeData::read(
+        services.clone(),
+        mount,
+        4,
+        serial,
+        Some(handle),
+        window,
+    ))
+    .unwrap()
     .unwrap();
     assert_eq!(data.bytes(), support::bytes(0));
-    wait(data.dispose()).unwrap();
+    drop(data);
     let readers = rig.store.read_work();
     assert!(readers.grants > grants);
     assert_eq!((readers.quarantined, readers.outstanding), (1, 0));
@@ -498,13 +501,6 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     // the prepared requests hold was acquired while readers were still
     // granted; a request that starts afterwards still gets its source from
     // the owner, which stopped reads do not touch.
-    let held = rig.read(
-        services.clone(),
-        5,
-        serial,
-        Some(handle),
-        NativeReadOperation::Data { serial },
-    );
     let listed = rig.read(
         services.clone(),
         6,
@@ -534,14 +530,32 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
         );
     };
 
-    let failure = match wait(held.read_file(0, READ_WINDOW as u32)) {
+    // A READ of base bytes is one owner visit and then the one base read it
+    // is refused a reader for. It recorded nothing: the failure holds no
+    // source and no read, and giving it up admits no owner job.
+    let before = rig.owner_work();
+    let failure = match wait(NativeData::read(
+        services.clone(),
+        mount,
+        5,
+        serial,
+        Some(handle),
+        window,
+    )) {
         Err(failure) => failure,
         Ok(_) => panic!("file data was read without a reader"),
     };
     stopped(failure.base_demand().unwrap().cause());
-    assert!(!failure.fenced() && failure.retained_source().is_some());
-    let window = failure.retained_read().is_some();
+    assert!(!failure.fenced());
+    assert!(failure.retained_source().is_none() && failure.retained_read().is_none());
+    assert_eq!(failure.data_input(), Some(window));
     wait(failure.relinquish()).unwrap();
+    let after = rig.owner_work();
+    assert_eq!(after.admitted, before.admitted + 1);
+    assert_eq!(
+        after.completed[ServiceClass::Read as usize],
+        before.completed[ServiceClass::Read as usize] + 1
+    );
 
     // A metadata request that still records a source: OPENDIR needs the
     // directory's base inode, is refused a reader, and holds its source.
@@ -620,7 +634,7 @@ fn a_failed_base_demand_ends_its_own_request_and_keeps_its_original_cause() {
     assert!(!fence.stopped());
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "COLD-ADMISSION read=(base_demand,source_held,read_held={window})->released opendir=(base_demand,source_held,no_read)->released mutation=(base_demand,no_source,no_ticket)->nothing held directory=(base_demand,source_held)->released quarantined=1 record=(count 5, first=quarantined reader failure, latest=ReadAdmission(Stopped))"
+        "COLD-ADMISSION read=(base_demand,no_source,no_read; 1 visit, 0 release) opendir=(base_demand,source_held,no_read)->released mutation=(base_demand,no_source,no_ticket)->nothing held directory=(base_demand,source_held)->released quarantined=1 record=(count 5, first=quarantined reader failure, latest=ReadAdmission(Stopped))"
     );
 
     drop(wait(services.close_file(mount, serial, handle)).unwrap());

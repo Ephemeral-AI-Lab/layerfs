@@ -73,6 +73,15 @@ impl BaseView {
     pub(crate) fn rebind(&self, identity: FilesystemRootId) -> ContentResult<Self> {
         Self::open(self.client.clone(), identity, self.root.scope())
     }
+    /// This binding when `root` is its own, else this client bound to `root`:
+    /// the base a retained read window names, whatever was installed since.
+    pub(crate) fn at(&self, root: [u8; 32]) -> ContentResult<std::borrow::Cow<'_, Self>> {
+        if root == self.identity.0.to_bytes() {
+            return Ok(std::borrow::Cow::Borrowed(self));
+        }
+        let identity = FilesystemRootId(layerfs_content::ObjectId::from_bytes(&root)?);
+        Ok(std::borrow::Cow::Owned(self.rebind(identity)?))
+    }
     pub(crate) fn reader(&self) -> ContentResult<FilesystemRead<'_>> {
         FilesystemRead::new(self.client.as_ref(), self.identity)
     }
@@ -147,6 +156,18 @@ impl BaseView {
             logical_len,
         })
     }
+    /// One inode's value and, for a regular file, its length, as far as this
+    /// view's client answers. A memory-only client answers a resident inode
+    /// and a remembered length; what it cannot answer is absent, not an error.
+    pub(crate) fn extent(&self, serial: u64) -> (Option<InodeValue>, Option<u64>) {
+        let Ok(value) = self.inode(serial).map(|found| found.value) else {
+            return (None, None);
+        };
+        let length = (value.kind == InodeKind::RegularFile)
+            .then(|| crate::FileLengths::file_length(self.client.as_ref(), value.content_root).ok())
+            .flatten();
+        (Some(value), length)
+    }
     /// Plans a bounded file read, clamps EOF and retains its immutable source.
     pub fn plan_read(&self, serial: u64, offset: u64, length: u32) -> ContentResult<BaseRead> {
         if length > 128 * 1024 {
@@ -156,7 +177,16 @@ impl BaseView {
                 actual: u64::from(length),
             });
         }
-        let file = self.file(self.inode(serial)?.value)?;
+        self.plan_file(self.inode(serial)?.value, offset, length)
+    }
+    /// The same plan for an inode value already resolved in this base.
+    pub(crate) fn plan_file(
+        &self,
+        value: InodeValue,
+        offset: u64,
+        length: u32,
+    ) -> ContentResult<BaseRead> {
+        let file = self.file(value)?;
         let start = offset.min(file.logical_len());
         let end = start
             .saturating_add(u64::from(length))

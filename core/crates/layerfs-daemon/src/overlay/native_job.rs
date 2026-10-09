@@ -5,8 +5,8 @@ use layerfs_overlay::{
     OverlayResult, Route,
 };
 use layerfs_workspace::{
-    NativeMutationJob, NativeMutationOutcome, NativeMutationVisit, NativeReadJob,
-    NativeReadOutcome, NativeReadVisit,
+    NativeDataVisit, NativeMutationJob, NativeMutationOutcome, NativeMutationVisit, NativeReadJob,
+    NativeReadOutcome, NativeReadVisit, NativeWindow,
 };
 use std::sync::Arc;
 
@@ -58,6 +58,8 @@ pub enum NativeJob {
     Observe(Box<NativeReadJob>),
     /// LOOKUP or GETATTR decided in this one job, with no request source.
     ObserveVisit(Box<NativeReadVisit>),
+    /// READ or READLINK: the window's local part, read in this one job.
+    ReadVisit(Box<NativeDataVisit>),
     /// A native mutation decided and published in this one job.
     MutateVisit(Box<NativeMutationVisit>),
     /// A handle-addressed mutation's descriptor and request source.
@@ -88,6 +90,7 @@ pub enum NativeReply {
     RetainedFile(Option<OpenFile>),
     File(OpenFile),
     Observed(Arc<NativeReadOutcome>),
+    Window(Arc<NativeWindow>),
     OpenSource(BaseSource, OpenFile),
     Mutated(Arc<NativeMutationOutcome>),
     Directory(NativeDirectoryReply),
@@ -101,7 +104,7 @@ impl NativeJob {
             | Self::FileSource { .. }
             | Self::HandleSource { .. }
             | Self::OpenSource { .. } => ServiceClass::Source,
-            Self::Observe(_) | Self::ObserveVisit(_) => ServiceClass::Read,
+            Self::Observe(_) | Self::ObserveVisit(_) | Self::ReadVisit(_) => ServiceClass::Read,
             Self::Mutate(_) | Self::MutateVisit(_) => ServiceClass::Mutation,
             Self::Directory(job) => job.class(),
             _ => ServiceClass::Lifecycle,
@@ -128,6 +131,11 @@ impl NativeJob {
                 std::mem::size_of::<NativeReadOutcome>()
                     + 4 * (std::mem::size_of::<layerfs_workspace::Need>() + 255)
                     + 2 * std::mem::size_of::<usize>(),
+            ),
+            // Decided bytes plus one inherited bit per byte of the window.
+            Self::ReadVisit(job) => (
+                std::mem::size_of::<NativeDataVisit>(),
+                std::mem::size_of::<NativeWindow>() + job.charge(),
             ),
             Self::MutateVisit(job) => (
                 std::mem::size_of::<NativeMutationVisit>() + job.charge(),
@@ -156,6 +164,7 @@ impl NativeJob {
             Self::Observe(job) => Some(job.source().route()),
             Self::Mutate(job) => Some(job.source().route()),
             Self::ObserveVisit(job) => Some(job.mount().route()),
+            Self::ReadVisit(job) => Some(job.mount().route()),
             Self::MutateVisit(job) => Some(job.mount().route()),
             Self::Directory(job) => Some(job.route()),
             Self::Mount { .. } | Self::RetainedMount => None,
@@ -223,6 +232,9 @@ impl NativeJob {
                 .map(|(source, file)| NativeReply::OpenSource(source, file)),
             Self::Mutate(job) => Ok(NativeReply::Mutated(Arc::new(job.perform(db)))),
             Self::ObserveVisit(job) => Ok(NativeReply::Observed(Arc::new(job.perform(db)))),
+            Self::ReadVisit(job) => job
+                .perform(db)
+                .map(|window| NativeReply::Window(Arc::new(window))),
             Self::MutateVisit(job) => Ok(NativeReply::Mutated(Arc::new(job.perform(db)))),
             Self::Directory(job) => job.perform(db).map(NativeReply::Directory),
             Self::Forget {

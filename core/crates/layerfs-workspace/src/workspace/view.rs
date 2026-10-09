@@ -208,43 +208,42 @@ impl SourceView {
         root: [u8; 32],
     ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
         let retained = local.as_ref().and_then(|r| r.base_root).unwrap_or(root);
-        let rebound;
-        let base = if retained == self.base.identity().0.to_bytes() {
-            &self.base
-        } else {
-            rebound = self
-                .base
-                .rebind(layerfs_content::filesystem::FilesystemRootId(
-                    layerfs_content::ObjectId::from_bytes(&retained)?,
-                ))?;
-            &rebound
-        };
-        let Some(mut local) = local else {
-            return Ok(base.readlink(serial)?);
-        };
-        if local.kind != layerfs_overlay::InodeKind::Symlink {
-            return Err(ContentError::WrongLogicalRole.into());
+        let base = self.base.at(retained)?;
+        match local {
+            Some(local) => link_target(Some(base.as_ref()), serial, local),
+            None => Ok(base.readlink(serial)?),
         }
-        if local.size > layerfs_overlay::CELL_BYTES as u64
-            || local.data.len() != local.size as usize
-        {
-            return Err(ContentError::InvalidRecord("symlink window").into());
-        }
-        if local.span.is_some() {
-            let target = base.readlink(serial)?;
-            for (slot, byte) in local.data.iter_mut().enumerate() {
-                if local
-                    .inherited
-                    .get(slot / 8)
-                    .is_some_and(|b| b & (1 << (slot % 8)) != 0)
-                {
-                    *byte = *target
-                        .as_bytes()
-                        .get(slot)
-                        .ok_or(ContentError::InvalidRecord("inherited symlink span"))?;
-                }
+    }
+}
+/// A symlink's local window with its inherited bytes read from `base`, which
+/// the caller bound to the root those bytes belong to. A window with no
+/// inherited byte needs no base.
+pub(crate) fn link_target(
+    base: Option<&BaseView>,
+    serial: u64,
+    mut local: layerfs_overlay::LocalRead,
+) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+    if local.kind != layerfs_overlay::InodeKind::Symlink {
+        return Err(ContentError::WrongLogicalRole.into());
+    }
+    if local.size > layerfs_overlay::CELL_BYTES as u64 || local.data.len() != local.size as usize {
+        return Err(ContentError::InvalidRecord("symlink window").into());
+    }
+    if local.span.is_some() {
+        let base = base.ok_or(ContentError::InvalidRecord("inherited window without base"))?;
+        let target = base.readlink(serial)?;
+        for (slot, byte) in local.data.iter_mut().enumerate() {
+            if local
+                .inherited
+                .get(slot / 8)
+                .is_some_and(|b| b & (1 << (slot % 8)) != 0)
+            {
+                *byte = *target
+                    .as_bytes()
+                    .get(slot)
+                    .ok_or(ContentError::InvalidRecord("inherited symlink span"))?;
             }
         }
-        Ok(layerfs_content::filesystem::SymlinkTarget::new(local.data)?)
     }
+    Ok(layerfs_content::filesystem::SymlinkTarget::new(local.data)?)
 }

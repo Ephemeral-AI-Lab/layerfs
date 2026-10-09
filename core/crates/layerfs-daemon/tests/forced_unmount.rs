@@ -934,6 +934,147 @@ fn fp19_force_releases_a_parked_cold_reader_while_the_read_set_stays_leased() {
     parked_readers_are_ended("FP-19-FS", "fp19", 1);
 }
 
+/// What a terminal unmount accounts a READ by. A READ makes one owner visit
+/// that records nothing and may then wait for a Store reader. Here it is
+/// parked on reader admission behind a fully leased read set, through a
+/// descriptor an external process opened before the hold. The engine's
+/// maintained row counts are what they were with the descriptor idle (no
+/// source, reader or lease row of the request) and it counts no base
+/// reader. Normal Unmount is refused by the kernel's own reversible answer
+/// and changes nothing. Force then ends the request through the mount's
+/// fence: one terminal reply, nothing received, admitted or retained when
+/// the one detach is made, and no reader granted. The process keeps its
+/// descriptor, so the kernel keeps the aborted mount and the teardown stops
+/// `Retained` at `Detach`, as in FP-33.
+#[test]
+fn a_read_parked_after_its_visit_holds_no_engine_row_and_is_ended_by_the_fence() {
+    let name = "PARKED-READ";
+    fusectl::mount();
+    let rig = Rig::new("parked-read");
+    let helper = rig.harness.bind(1);
+    let ready = rig.mount(2);
+    let _guard = Mounted(ready.directory.clone());
+    let token = ready.token;
+    let mut checks = Checks::default();
+    assert!(ready.receipt.abort_bound, "{:?}", ready.receipt);
+    let mount = root(&ready).to_owned();
+    // The descriptor is opened and read once while readers are granted.
+    let mut holder = Holder::spawn("descriptor", &mount);
+    let served = holder.ask("probe");
+    assert!(
+        served.starts_with("ok "),
+        "{name}: before the hold: {served}"
+    );
+    quiet(&rig, token);
+    let idle_rows = rig.harness.engine(helper);
+    let leases = holds::Leases::all(&rig.store, WAIT);
+    let (held, idle) = (rig.store.read_work(), work(&rig, token));
+
+    // One READ through the held descriptor: its visit, then the reader wait.
+    writeln!(holder.input.as_mut().unwrap(), "probe").unwrap();
+    within("the READ is parked on reader admission", || {
+        let now = work(&rig, token);
+        (now.admitted, now.parked, now.received) == (1, 1, 0) && rig.store.read_work().waiting == 1
+    });
+    let before = work(&rig, token);
+    assert_eq!(before.handoffs - idle.handoffs, 1, "one parked request");
+    let parked_rows = rig.harness.engine(helper);
+    let local = rig
+        .harness
+        .status(token)
+        .local
+        .expect("the engine is observed beside the parked READ");
+    println!(
+        "{name} parked: admitted={} parked={} read_admissions_waiting=1 engine_rows(idle={idle_rows:?} parked={parked_rows:?}) base_readers={}",
+        before.admitted, before.parked, local.base_readers
+    );
+    checks.that(parked_rows == idle_rows && local.base_readers == 0, || {
+        format!(
+            "{name}: the parked READ holds engine rows: {idle_rows:?} -> {parked_rows:?}, base_readers={}",
+            local.base_readers
+        )
+    });
+
+    // Normal Unmount: the kernel counts the caller blocked in its READ.
+    match rig.harness.try_unmount(token) {
+        Err(Failure::Native(failure)) => checks.that(
+            (failure.code, failure.phase) == (ControlCode::Busy, "unmount:kernel"),
+            || format!("{name}: Unmount beside the parked READ: {failure:?}"),
+        ),
+        other => panic!("{name}: Unmount beside the parked READ: {}", brief(&other)),
+    }
+    let busy = work(&rig, token);
+    checks.that(
+        rig.harness.phase(token) == NativePhase::Ready
+            && (busy.admitted, busy.parked, busy.terminal) == (1, 1, before.terminal)
+            && rig.store.read_work().waiting == 1,
+        || format!("{name}: the busy Unmount had an effect: {before:?} -> {busy:?}"),
+    );
+
+    let custody = match force(&rig.harness, token) {
+        Ended::Retained(custody) => *custody,
+        Ended::Unmounted(outcome, _) => {
+            panic!("{name}: forced past a held descriptor: {outcome:?}")
+        }
+    };
+    println!("{name} custody={custody:?}");
+    checks.that(aborted_and_mounted(&custody, token), || {
+        format!("{name}: not Retained at Detach with abort Written and detach Busy: {custody:?}")
+    });
+    // The fence ended the one admitted request before its demand, and the
+    // local drain held before the one detach.
+    checks.that(
+        custody
+            .forced
+            .as_ref()
+            .is_some_and(|facts| facts.fenced == 1)
+            && custody.work.is_some_and(|work| {
+                (work.received, work.admitted, work.retained) == (0, 0, 0)
+                    && work.loops_joined == work.loops_configured
+                    && work.loops_configured != 0
+            }),
+        || {
+            format!(
+                "{name}: the parked READ was not ended by the fence before the detach: {:?} {:?}",
+                custody.forced, custody.work
+            )
+        },
+    );
+    let after = rig.store.read_work();
+    checks.that(
+        (after.leased, after.waiting, after.grants) == (leases.count(), 0, held.grants),
+        || format!("{name}: the read set after Force, leases still held: {after:?}"),
+    );
+    // The blocked caller got the kernel's answer for an aborted connection.
+    let answer = holder.line();
+    checks.that(
+        errno(&answer).is_some_and(|errno| ABORTED.contains(&errno)),
+        || format!("{name}: the parked READ answered {answer:?}, not one of {ABORTED:?}"),
+    );
+    println!(
+        "{name} force: fenced={:?} left={:?} reader_grants={}->{} read_admissions_waiting={} read_answer={answer:?}",
+        custody.forced.as_ref().map(|facts| facts.fenced),
+        custody
+            .work
+            .map(|work| (work.received, work.admitted, work.retained)),
+        held.grants,
+        after.grants,
+        after.waiting
+    );
+
+    leases.release();
+    let (signals, exit) = holder.leave();
+    checks.that(
+        exit.code() == Some(0) && exit.signal().is_none() && signals == "signals 0",
+        || format!("{name}: the holder ended {exit:?} after {signals:?}"),
+    );
+    let detached = plain_umount(&ready.directory);
+    assert!(detached.success(), "{name}: umount: {detached:?}");
+    assert!(mount_entry(&ready.directory).is_none());
+    abandon(rig);
+    checks.done(name);
+}
+
 /// FP-34, terminal half: twenty cold readers saturate the mount.
 #[test]
 fn fp34_force_ends_every_admitted_and_received_callback_of_a_saturated_mount() {

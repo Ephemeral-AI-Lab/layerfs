@@ -7,7 +7,9 @@ use layerfs_daemon::{
     OwnerError, Response, ServiceClass,
 };
 use layerfs_fuse::{
-    operations::{DirectoryStep, DirectoryStream, NativeRead, ReadFailure},
+    operations::{
+        DirectoryStep, DirectoryStream, NativeData, NativeRead, ReadDataInput, ReadFailure,
+    },
     ports::{Fence, MountServices},
     Dispatch, DispatchConfig, FailureView, RequestDisposition,
 };
@@ -186,26 +188,32 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     let handle = opened.value().unwrap().file.unwrap().owner_id();
     wait(opened.dispose()).unwrap();
     drop(wait(services.forget(mount, values[0].0, 3)).unwrap());
-    let read = wait(NativeRead::prepare(
+    let window = ReadDataInput::File {
+        offset: 0,
+        length: layerfs_overlay::READ_WINDOW as u32,
+    };
+    let data = wait(NativeData::read(
         bound.request(&Fence::default()).unwrap(),
         mount,
         6,
         serial,
         Some(handle),
-        NativeReadOperation::Data { serial },
+        window,
     ))
+    .unwrap()
     .unwrap();
-    let data = wait(read.read_file(0, layerfs_overlay::READ_WINDOW as u32)).unwrap();
     assert_eq!(data.bytes(), support::bytes(0));
     assert_eq!(
         store.read_work().outstanding,
         0,
         "provider returned before reply consumer"
     );
-    wait(data.dispose()).unwrap();
+    // The read holds nothing in the owner: its bytes are the request's own.
+    assert_eq!(client.diagnostics().unwrap().outstanding, 0);
+    drop(data);
     // Prepare an actual mixed inherited/local 128KiB window through the normal
-    // Workspace mutation API; the native data consumer keeps the original SQL
-    // read payload borrowed and composes the same retained source afterward.
+    // Workspace mutation API; the native read copies its local part in its
+    // one visit and fills the inherited part from the base that visit named.
     let operation = bound.operation().unwrap();
     let acquired = wait(
         client
@@ -261,21 +269,21 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     .unwrap();
     assert!(released.result().is_ok());
     drop(released);
-    let read = wait(NativeRead::prepare(
+    let data = wait(NativeData::read(
         bound.request(&Fence::default()).unwrap(),
         mount,
         7,
         serial,
         Some(handle),
-        NativeReadOperation::Data { serial },
+        window,
     ))
+    .unwrap()
     .unwrap();
-    let data = wait(read.read_file(0, layerfs_overlay::READ_WINDOW as u32)).unwrap();
     assert_eq!(data.bytes().len(), layerfs_overlay::READ_WINDOW);
     assert_eq!(&data.bytes()[..17], &support::bytes(0)[..17]);
     assert_eq!(&data.bytes()[17..], local);
     assert_eq!(store.read_work().outstanding, 0);
-    wait(data.dispose()).unwrap();
+    drop(data);
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
 
     // A definite missing-name refusal of a lookup is not confused with an
@@ -521,7 +529,7 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
 }
 
 #[test]
-fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credit() {
+fn a_full_handoff_of_parked_reads_holds_no_owner_credit_and_every_read_completes() {
     use std::sync::Mutex;
     struct Gate(Mutex<(bool, Vec<Option<Waker>>)>);
     struct Turn(Arc<Gate>, usize);
@@ -623,24 +631,24 @@ fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credi
             .admit(0)
             .unwrap()
             .handoff(Box::pin(async move {
-                let answer = NativeRead::prepare(
+                prepared.send(()).unwrap();
+                Turn(gate, index).await;
+                let data = NativeData::read(
                     services,
                     mount,
                     1000 + index as u64,
                     serial,
                     None,
-                    NativeReadOperation::Data { serial },
+                    ReadDataInput::File {
+                        offset: 0,
+                        length: layerfs_overlay::READ_WINDOW as u32,
+                    },
                 )
                 .await
+                .unwrap()
                 .unwrap();
-                prepared.send(()).unwrap();
-                Turn(gate, index).await;
-                let data = answer
-                    .read_file(0, layerfs_overlay::READ_WINDOW as u32)
-                    .await
-                    .unwrap();
                 assert_eq!(data.bytes(), support::bytes(0));
-                data.dispose().await.unwrap();
+                drop(data);
                 done.send(()).unwrap();
                 RequestDisposition::Complete
             }))
@@ -650,7 +658,8 @@ fn full_handoff_of_metadata_consumers_can_advance_to_data_without_more_sql_credi
         ready.recv_timeout(WAIT).unwrap();
     }
     until(|| queue.work().unwrap().parked == count);
-    assert_eq!(client.diagnostics().unwrap().outstanding, count);
+    // A read has no metadata phase: a parked one holds no owner credit.
+    assert_eq!(client.diagnostics().unwrap().outstanding, 0);
     let wakes = {
         let mut state = gate.0.lock().unwrap();
         state.0 = true;

@@ -1,5 +1,5 @@
 //! Real kernel mounts under concurrent external processes: R6-1 (mounted
-//! part), R6-2, R6-3 and R6-6.
+//! part), R6-2, R6-3 and R6-6, and readers on two Workspaces at once.
 //!
 //! Every process is python3 launched by plain exec under the command
 //! identity and registered with nothing. It reads and writes through ordinary
@@ -30,6 +30,9 @@
 //!   not told apart. A stage's count spans its first to its last snapshot.
 //! - R6-6 reads its row as totals: 400 writes of 128 KiB over eight processes
 //!   on A and 200 small operations over two processes on B.
+//! - The two-Workspace readers test checks bytes and completion only. It
+//!   counts no owner job and no Store reader; those are pinned per request in
+//!   `read_cost.rs`. No Commit runs in it: READ across an install is R6-1.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]
@@ -194,6 +197,40 @@ for i in range(count):
         os.mkdir(os.path.join(directory, "d-%03d" % group), 0o755)
     else:
         os.chmod(moved, 0o600)
+    done += 1
+sys.stdout.write("%d\n" % done)
+"#;
+/// After one line on standard input: `turns` whole reads with `O_DIRECT`
+/// (OPEN, every READ of 16 KiB and RELEASE served by the daemon), one file per
+/// turn starting at file `start`. Each file is `name=seed=length=offset=text`:
+/// the rig's pattern with `text` written at `offset`. A read that is not exactly
+/// that ends the process with status 7. Reports its turns.
+const READER: &str = r#"
+import os, sys
+root, turns, start = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+files = []
+for entry in sys.argv[4:]:
+    name, seed, length, offset, patch = entry.split("=")
+    want = bytearray((n * 31 + (n >> 9) + int(seed)) & 255 for n in range(int(length)))
+    patch = patch.encode()
+    want[int(offset):int(offset) + len(patch)] = patch
+    files.append((name, bytes(want)))
+sys.stdin.readline()
+done = 0
+for turn in range(turns):
+    name, want = files[(start + turn) % len(files)]
+    fd = os.open(os.path.join(root, name), os.O_RDONLY | os.O_DIRECT)
+    try:
+        data = b""
+        while True:
+            part = os.read(fd, 16384)
+            if not part:
+                break
+            data += part
+    finally:
+        os.close(fd)
+    if data != want:
+        sys.exit(7)
     done += 1
 sys.stdout.write("%d\n" % done)
 "#;
@@ -1500,6 +1537,230 @@ fn r6_6_finite_arrivals_on_two_workspaces_both_finish() {
     println!(
         "{what}: both_finished=true a_bytes_exact={} b_tree_exact=true b_commit_published=true",
         writes * BLOCK
+    );
+    unmount(&rig, &a);
+    unmount(&rig, &b);
+    rig.finish();
+}
+
+/// Base files the two-Workspace readers read, with the seed of their bytes:
+/// one to nineteen READ windows of 16 KiB each.
+const SHARED: [(&str, u8, usize); 5] = [
+    ("docs/guide.md", 10, 5_000),
+    ("node_modules/pkg/lib/util.js", 4, 12_000),
+    (".cache/tool/data.bin", 6, 20_000),
+    ("dist/bundle.js", 9, 33_000),
+    ("target/debug/app", 7, 300_017),
+];
+
+/// Readers on two Workspaces of one daemon. Six processes on A and six on B
+/// read the same five base files, each starting at another file, so the same
+/// file and different files are read at once on both mounts, while two more
+/// processes write 5 MiB each on B. One of the files has seven bytes of B's
+/// own in its second window: B's readers see them, A's readers see the base.
+/// Every sequence is finite, every read is compared with its exact bytes by
+/// the process that made it, and every process finishes inside the bounded
+/// wait. Counts only: no share and no time.
+#[test]
+fn readers_on_two_workspaces_read_exact_bytes_while_one_is_written() {
+    const READERS: usize = 6;
+    const TURNS: usize = 20;
+    const WRITERS: usize = 2;
+    const WRITES_EACH: usize = 40;
+    const BLOCK: usize = 128 * 1024;
+    const OWN: (&str, usize, &str) = ("dist/bundle.js", 20_000, "LOCAL-B");
+    let what = "TWO-WORKSPACE READERS";
+    let rig = Rig::new("two-readers");
+    let a = rig.mount(1);
+    let b = rig.mount(2);
+    let _mounted = [Mounted(a.directory.clone()), Mounted(b.directory.clone())];
+    let (mount_a, mount_b) = (root(&a), root(&b));
+    passed(
+        &bash_in(
+            COMMAND,
+            mount_b,
+            &format!(
+                "set -euo pipefail; umask 022; mkdir big; printf %s '{}' | dd of={} bs=1 seek={} conv=notrunc status=none",
+                OWN.2,
+                OWN.0,
+                OWN.1
+            ),
+        ),
+        "B's own bytes and directory",
+    );
+    let wanted = |own: bool| -> Vec<(&str, Vec<u8>)> {
+        SHARED
+            .iter()
+            .map(|&(path, seed, length)| {
+                let mut bytes = pattern(seed, length);
+                if own && path == OWN.0 {
+                    bytes[OWN.1..OWN.1 + OWN.2.len()].copy_from_slice(OWN.2.as_bytes());
+                }
+                (path, bytes)
+            })
+            .collect()
+    };
+    let files = |own: bool| -> Vec<String> {
+        SHARED
+            .iter()
+            .map(|&(path, seed, length)| {
+                let patch = if own && path == OWN.0 { OWN.2 } else { "" };
+                format!("{path}={seed}={length}={}={patch}", OWN.1)
+            })
+            .collect()
+    };
+    let readers = |mount: &Path, own: bool, side: &str| -> Vec<Proc> {
+        (0..READERS)
+            .map(|process| {
+                let mut arguments = vec![
+                    mount.to_str().unwrap().to_owned(),
+                    TURNS.to_string(),
+                    process.to_string(),
+                ];
+                arguments.extend(files(own));
+                Proc::python(format!("{side}'s reader {process}"), READER, &arguments)
+            })
+            .collect()
+    };
+    let mut read_a = readers(mount_a, false, "A");
+    let mut read_b = readers(mount_b, true, "B");
+    let mut write_b: Vec<Proc> = (0..WRITERS)
+        .map(|process| {
+            let arguments = [
+                mount_b.to_str().unwrap().to_owned(),
+                process.to_string(),
+                WRITES_EACH.to_string(),
+                BLOCK.to_string(),
+            ];
+            Proc::python(format!("B's writer {process}"), BIG, &arguments)
+        })
+        .collect();
+
+    let owner = rig.harness.owner.client();
+    let before = owner.diagnostics().unwrap();
+    let (a_before, b_before) = (work(&rig, a.token), work(&rig, b.token));
+    let together = Arc::new(Mutex::new(Together::default()));
+    let sampler = {
+        let service = rig.harness.service.clone();
+        let (token_a, token_b, together) = (a.token, b.token, together.clone());
+        Sampler::start(Duration::from_millis(1), move || {
+            let count = |token| Some(status(&service, token)?.native?.work?.completed);
+            let (Some(a), Some(b)) = (count(token_a), count(token_b)) else {
+                return;
+            };
+            let mut together = together.lock().unwrap();
+            together.samples += 1;
+            if let Some((last_a, last_b)) = together.last {
+                together.both_advanced += u64::from(a > last_a && b > last_b);
+            }
+            together.last = Some((a, b));
+        })
+    };
+    // All fourteen start on one line each.
+    for process in read_a.iter_mut().chain(&mut read_b).chain(&mut write_b) {
+        process.go();
+    }
+    // No starvation: every finite sequence ends, each inside the bounded wait,
+    // with every one of its reads exact.
+    for process in read_a.iter_mut().chain(&mut read_b) {
+        assert_eq!(process.release(), [TURNS], "{}", process.what);
+    }
+    for process in &mut write_b {
+        assert_eq!(process.release(), [WRITES_EACH], "{}", process.what);
+    }
+    drop((read_a, read_b, write_b));
+    sampler.finish();
+    let quiet = |token| {
+        let mut last = None;
+        within("connection quiescent", || {
+            let now = work(&rig, token);
+            let settled = now.received == 0 && now.admitted == 0 && last == Some(now.completed);
+            last = Some(now.completed);
+            thread::sleep(Duration::from_millis(10));
+            settled
+        });
+        work(&rig, token)
+    };
+    let (a_after, b_after) = (quiet(a.token), quiet(b.token));
+    let after = owner.diagnostics().unwrap();
+    let delta = completed(&before, &after);
+    let (samples, both_advanced) = {
+        let together = together.lock().unwrap();
+        (together.samples, together.both_advanced)
+    };
+    let dispatch = rig.harness.serving.work().unwrap();
+    // One OPEN, at least one READ and one RELEASE of every turn reached the
+    // daemon: the descriptor is `O_DIRECT`.
+    let turns = (READERS * TURNS) as u64;
+    println!(
+        "{what}: readers_each_mount={READERS} turns_each={TURNS} files={} a_completed=+{} a_handoffs=+{} b_writers={WRITERS} b_writes={} b_block={BLOCK} b_completed=+{} b_handoffs=+{} samples={samples} samples_where_both_advanced={both_advanced}",
+        SHARED.len(),
+        a_after.completed - a_before.completed,
+        a_after.handoffs - a_before.handoffs,
+        WRITERS * WRITES_EACH,
+        b_after.completed - b_before.completed,
+        b_after.handoffs - b_before.handoffs
+    );
+    println!(
+        "{what}: owner_admitted=+{} owner_completed {} outstanding={} peak_queued={} a_retained={} b_retained={} dispatch_retained={} dispatch_parked={} dispatch_queued={}",
+        after.admitted - before.admitted,
+        classes(delta),
+        after.outstanding,
+        after.peak_queued,
+        a_after.retained,
+        b_after.retained,
+        dispatch.retained,
+        dispatch.parked,
+        dispatch.queued
+    );
+    assert!(
+        a_after.completed - a_before.completed >= 3 * turns,
+        "{what}: A's completed requests are below three for each of its {turns} turns"
+    );
+    assert!(
+        b_after.completed - b_before.completed >= 3 * turns + (WRITERS * WRITES_EACH) as u64,
+        "{what}: B's completed requests are below its turns and writes"
+    );
+    assert_eq!(
+        (
+            a_after.retained,
+            b_after.retained,
+            dispatch.retained,
+            a_after.terminal,
+            b_after.terminal,
+            after.outstanding
+        ),
+        (0, 0, 0, 0, 0, 0),
+        "{what}: nothing is retained"
+    );
+    assert!(
+        both_advanced >= 1,
+        "{what}: no sample saw both mounts complete requests in one interval ({samples} samples)"
+    );
+
+    // What each Workspace serves now: A the base, B the base with its own
+    // seven bytes, and B's written files whole.
+    for (mount, own) in [(mount_a, false), (mount_b, true)] {
+        for (path, bytes) in wanted(own) {
+            assert!(
+                direct(&mount.join(path)) == bytes,
+                "{what}: {path} own={own}"
+            );
+        }
+    }
+    for process in 0..WRITERS {
+        let expected: Vec<u8> = (0..WRITES_EACH)
+            .flat_map(|write| [process as u8 + 1, write as u8].repeat(BLOCK / 2))
+            .collect();
+        assert!(
+            direct(&mount_b.join(format!("big/p{process}"))) == expected,
+            "{what}: B's file of writer {process}"
+        );
+    }
+    println!(
+        "{what}: all_finished=true reads_exact={} b_bytes_exact={}",
+        2 * turns,
+        WRITERS * WRITES_EACH * BLOCK
     );
     unmount(&rig, &a);
     unmount(&rig, &b);

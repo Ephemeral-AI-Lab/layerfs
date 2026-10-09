@@ -1,12 +1,12 @@
 //! External engine/Store boundaries; all waiting returns to the native pool.
 use layerfs_overlay::{
-    BaseSource, FileRead, LocalRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
+    BaseSource, FileRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
     NativeDirectoryRead, NativeMount, OpenFile, Publication,
 };
 use layerfs_workspace::{
     BaseView, MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome,
-    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, Operation,
-    SourceView, Time, VisitFacts,
+    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, NativeWindow,
+    Operation, SourceView, Time, VisitFacts,
 };
 use std::{
     error::Error,
@@ -131,36 +131,18 @@ impl Error for Fenced {}
 /// request-owned storage ends those consumers; Arc::clone alone does not. Copying
 /// an engine token acquires no new lease and does not release its backed owner.
 pub struct ServiceReply<T> {
-    value: ReplyValue<T>,
-}
-enum ReplyValue<T> {
-    Owned {
-        value: T,
-        _completion: Box<dyn Send + Sync>,
-    },
-    Borrowed(Box<dyn AsRef<T> + Send + Sync>),
+    value: T,
+    _completion: Box<dyn Send + Sync>,
 }
 impl<T> ServiceReply<T> {
     pub fn new(value: T, completion: impl Send + Sync + 'static) -> Self {
         Self {
-            value: ReplyValue::Owned {
-                value,
-                _completion: Box::new(completion),
-            },
-        }
-    }
-    /// A payload borrowed directly from its original completion avoids an
-    /// otherwise redundant full read-window copy at the service boundary.
-    pub fn borrowed(owner: impl AsRef<T> + Send + Sync + 'static) -> Self {
-        Self {
-            value: ReplyValue::Borrowed(Box::new(owner)),
+            value,
+            _completion: Box::new(completion),
         }
     }
     pub fn get(&self) -> &T {
-        match &self.value {
-            ReplyValue::Owned { value, .. } => value,
-            ReplyValue::Borrowed(owner) => owner.as_ref().as_ref(),
-        }
+        &self.value
     }
 }
 
@@ -175,9 +157,9 @@ pub trait MountServices: Send + Sync {
 ///
 /// Once the fence is stopped, every acquiring call returns [`Fenced`] before
 /// its attempt, also from a wait it was already in: `source`, `open_source`,
-/// `observe`, `mutate`, `local_read`, `immutable`, `reserve_serial`,
-/// `directory`, `directory_read`, `directory_page`, `directory_cookies` and
-/// `publish_cookies`. A job already submitted is awaited to its original
+/// `observe`, `observe_visit`, `read_visit`, `mutate_visit`, `mutate`, `base`,
+/// `immutable`, `reserve_serial`, `directory`, `directory_read`,
+/// `directory_page`, `directory_cookies` and `publish_cookies`. A job already submitted is awaited to its original
 /// result. The disposal calls are never refused by the fence:
 /// `release_read`, `release_source`, `reply_attempted`, `replied`,
 /// `close_file`, `close_directory` and `forget`.
@@ -210,12 +192,17 @@ pub trait RequestServices: Send + Sync {
         accepted: usize,
     ) -> ServiceFuture<'_, ServiceReply<()>>;
     fn close_directory(&self, directory: NativeDirectory) -> ServiceFuture<'_, ServiceReply<()>>;
-    fn local_read(
+    /// READ (through `handle`) or READLINK (no handle) as one read-only owner
+    /// job: the window's local part and the base root the rest belongs to.
+    /// It records nothing, so its request holds nothing afterwards.
+    fn read_visit(
         &self,
-        read: FileRead,
+        mount: NativeMount,
+        serial: u64,
+        handle: Option<u64>,
         offset: u64,
         length: u32,
-    ) -> ServiceFuture<'_, ServiceReply<Option<LocalRead>>>;
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeWindow>>>;
     fn close_file(
         &self,
         mount: NativeMount,
@@ -257,7 +244,8 @@ pub trait RequestServices: Send + Sync {
         facts: Arc<VisitFacts>,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>>;
     /// The Workspace's current base over an admitted Store reader, for the
-    /// facts an undecided visit asked for. It acquires nothing in the owner.
+    /// facts an undecided visit asked for and the inherited bytes of a read
+    /// window. It acquires nothing in the owner.
     fn base(&self) -> ServiceFuture<'_, BaseView>;
     /// A native mutation as one owner job with no request source. An
     /// undecided outcome has changed nothing and holds nothing.

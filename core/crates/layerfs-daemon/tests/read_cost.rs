@@ -4,6 +4,9 @@
 //! batches. The real owner and the real Store with its shared canonical
 //! cache, without a kernel mount. Every request is measured at two file
 //! sizes and again beside unrelated local rows, and its bytes are checked.
+//! A READ records nothing in the engine: the tests after the costs show
+//! what that leaves true of an unlinked open file, of a window whose base
+//! is replaced before its bytes are read, and of a daemon with no cache.
 //! Public API only; every wait is bounded and the test spawns no thread.
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]
@@ -18,7 +21,8 @@ use layerfs_daemon::{
 use layerfs_fuse::{
     operations::{
         create::{create, symlink},
-        MutationInput, MutationRequest, NativeMutation, NativeRead,
+        remove::unlink,
+        MutationInput, MutationRequest, NativeData, NativeMutation, NativeRead, ReadDataInput,
     },
     ports::{Fence, MountServices, RequestServices},
 };
@@ -26,7 +30,7 @@ use layerfs_history::WorkspaceId;
 use layerfs_overlay::{
     DatabaseWork, NativeMount, ProfileConfig, StatementKind, StatementWork, READ_WINDOW,
 };
-use layerfs_workspace::{NativeReadOperation, Time};
+use layerfs_workspace::{NativeReadOperation, NativeWindow, Refusal, Time};
 use std::{
     cell::Cell,
     future::Future,
@@ -349,38 +353,21 @@ impl Rig {
     }
     /// READ of one window through a descriptor.
     fn read(&self, serial: u64, handle: u64, offset: u64, length: u32) -> Vec<u8> {
-        let (services, request) = self.request();
-        let read = wait(NativeRead::prepare(
-            services,
-            self.mount,
-            request,
-            serial,
-            Some(handle),
-            NativeReadOperation::Data { serial },
-        ))
-        .unwrap_or_else(|failure| panic!("read {serial}: {failure:?}"));
-        let data = wait(read.read_file(offset, length))
-            .unwrap_or_else(|failure| panic!("read {serial} at {offset}: {failure:?}"));
-        let bytes = data.bytes().to_vec();
-        wait(data.dispose()).unwrap();
-        bytes
+        self.data(serial, Some(handle), ReadDataInput::File { offset, length })
     }
     fn readlink(&self, serial: u64) -> Vec<u8> {
+        self.data(serial, None, ReadDataInput::Link)
+    }
+    /// The reply's bytes. Nothing follows the reply: no release is owed.
+    fn data(&self, serial: u64, handle: Option<u64>, input: ReadDataInput) -> Vec<u8> {
         let (services, request) = self.request();
-        let read = wait(NativeRead::prepare(
-            services,
-            self.mount,
-            request,
-            serial,
-            None,
-            NativeReadOperation::Data { serial },
+        wait(NativeData::read(
+            services, self.mount, request, serial, handle, input,
         ))
-        .unwrap_or_else(|failure| panic!("readlink {serial}: {failure:?}"));
-        let data = wait(read.readlink())
-            .unwrap_or_else(|failure| panic!("readlink {serial}: {failure:?}"));
-        let bytes = data.bytes().to_vec();
-        wait(data.dispose()).unwrap();
-        bytes
+        .unwrap_or_else(|failure| panic!("read {serial} {input:?}: {failure:?}"))
+        .unwrap_or_else(|refusal| panic!("read {serial} {input:?}: refused {refusal:?}"))
+        .bytes()
+        .to_vec()
     }
     /// One published mutation and its reply attempt: the changed inode's
     /// serial and, for a create, its open descriptor's handle.
@@ -560,6 +547,14 @@ fn pass(rig: &Rig, s: &Subjects) -> Vec<(&'static str, Cost)> {
     assert_eq!(bytes, large[3 * READ_WINDOW..]);
     costs.push(("read base large tail", cost));
 
+    // READ at and beyond the end of a base file whose length is remembered.
+    let (bytes, cost) = rig.measured(|| rig.read(s.small.0, s.small.1, SMALL as u64, WINDOW));
+    assert!(bytes.is_empty());
+    costs.push(("read base small end", cost));
+    let (bytes, cost) = rig.measured(|| rig.read(s.large.0, s.large.1, LARGE as u64 + 7, WINDOW));
+    assert!(bytes.is_empty());
+    costs.push(("read base large beyond", cost));
+
     // READ of local bytes.
     let (bytes, cost) = rig.measured(|| rig.read(s.local_small.0, s.local_small.1, 0, WINDOW));
     assert_eq!(bytes, b"1\n");
@@ -567,6 +562,10 @@ fn pass(rig: &Rig, s: &Subjects) -> Vec<(&'static str, Cost)> {
     let (bytes, cost) = rig.measured(|| rig.read(s.local_large.0, s.local_large.1, window, WINDOW));
     assert_eq!(bytes, pattern(2 * READ_WINDOW, 5)[READ_WINDOW..]);
     costs.push(("read local large", cost));
+
+    let (bytes, cost) = rig.measured(|| rig.read(s.local_small.0, s.local_small.1, 2, WINDOW));
+    assert!(bytes.is_empty());
+    costs.push(("read local small end", cost));
 
     // READ of a window that is partly local and partly inherited.
     let mut mixed = pattern(SMALL, 3);
@@ -654,6 +653,8 @@ fn read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_row
         ("read base small", "read base large first"),
         ("read base small", "read base large third"),
         ("read base small", "read base large tail"),
+        ("read base small end", "read base large beyond"),
+        ("read base small end", "read local small end"),
         ("read local small", "read local large"),
         ("read mixed small", "read mixed large"),
         ("open base small", "open base large"),
@@ -666,10 +667,11 @@ fn read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_row
         assert_eq!(of(&first, one), of(&first, other), "{one} and {other}");
     }
 
-    let expected: [(&str, Cost); 9] = [
+    let expected: [(&str, Cost); 10] = [
         ("lookup base small", LOOKUP_BASE.cost()),
         ("getattr base small", GETATTR_BASE.cost()),
         ("read base small", READ_BASE.cost()),
+        ("read base small end", READ_END.cost()),
         ("read local small", READ_LOCAL.cost()),
         ("read mixed small", READ_MIXED.cost()),
         ("open base small", OPEN_BASE.cost()),
@@ -739,6 +741,236 @@ fn a_base_file_length_is_one_store_answer_per_daemon_and_costs_a_visit_when_not_
     rig.stop();
 }
 
+#[test]
+fn an_unlinked_open_file_still_reads_its_own_bytes_in_one_visit() {
+    let rig = Rig::new("read-cost-unlinked", 174, CACHE);
+    let s = subjects(&rig);
+    let remove = |child: &str| {
+        let (services, request) = rig.request();
+        let done = wait(NativeMutation::perform(
+            services,
+            MutationRequest {
+                mount: rig.mount,
+                request,
+                protected: rig.root,
+                handle: None,
+                input: MutationInput::Named(unlink(rig.root, name(child))),
+                open: None,
+                now: NOW,
+            },
+        ))
+        .unwrap_or_else(|failure| panic!("unlink {child}: {failure:?}"));
+        assert!(done.value().unwrap().changed, "{child}");
+        wait(done.replied()).unwrap();
+    };
+    // A base file, a partly overwritten base file and a local file, each
+    // unlinked while its descriptor is open.
+    for child in ["small", "mixed-large", "local-large"] {
+        remove(child);
+    }
+    let (bytes, base) = rig.measured(|| rig.read(s.small.0, s.small.1, 0, WINDOW));
+    assert_eq!(bytes, pattern(SMALL, 1));
+    let mut mixed = pattern(LARGE, 4);
+    mixed[MIXED_LARGE_AT..MIXED_LARGE_AT + MIXED_LARGE_BYTES]
+        .copy_from_slice(&pattern(MIXED_LARGE_BYTES, 9));
+    let (bytes, partly) = rig.measured(|| rig.read(s.mixed_large.0, s.mixed_large.1, 0, WINDOW));
+    assert_eq!(bytes, mixed[..READ_WINDOW]);
+    let window = READ_WINDOW as u64;
+    let (bytes, local) =
+        rig.measured(|| rig.read(s.local_large.0, s.local_large.1, window, WINDOW));
+    assert_eq!(bytes, pattern(2 * READ_WINDOW, 5)[READ_WINDOW..]);
+    for (label, cost, grants) in [
+        ("base", &base, 1),
+        ("mixed", &partly, 1),
+        ("local", &local, 0),
+    ] {
+        println!(
+            "READ_UNLINKED {label}: jobs={:?} grants={} statements={:?} sql={:?}",
+            cost.jobs,
+            cost.grants,
+            cost.statements(),
+            cost.sql
+        );
+        // One read-only visit: nothing is written, acquired or released.
+        // Inherited bytes come from the root the orphan retains: one reader.
+        assert_eq!(cost.jobs, jobs(1, 0, 0), "{label}");
+        assert_eq!((cost.grants, cost.length_batches), (grants, 0), "{label}");
+        // The fence, the orphan's row, and its own and its retained layers.
+        let families: Vec<_> = cost.sql.iter().map(|(family, ..)| *family).collect();
+        assert_eq!(
+            families,
+            ["Workspace", "Inode", "Payload", "Lease"],
+            "{label}"
+        );
+        assert_eq!(cost.family("Workspace"), (1, 1), "{label}");
+        assert_eq!(cost.family("Inode"), (2, 2), "{label}");
+        assert_eq!(cost.family("Lease"), (1, 1), "{label}");
+        // One cell range for each layer that still holds the file's cells:
+        // the orphan's own, and the retained one below it until background
+        // reclamation has moved its cells up. Never more than these two here.
+        let ranges = cost.family("Payload");
+        assert!(ranges == (1, 1) || ranges == (2, 2), "{label}: {ranges:?}");
+    }
+
+    // It is written through its descriptor and read back, still unlinked.
+    rig.write(s.mixed_large.0, s.mixed_large.1, 0, b"after-unlink");
+    mixed[..12].copy_from_slice(b"after-unlink");
+    assert_eq!(
+        rig.read(s.mixed_large.0, s.mixed_large.1, 0, WINDOW),
+        mixed[..READ_WINDOW]
+    );
+    // A file that still has its name pays one probe for the orphan.
+    let (bytes, cost) = rig.measured(|| rig.read(s.large.0, s.large.1, 0, WINDOW));
+    assert_eq!(bytes, pattern(LARGE, 2)[..READ_WINDOW]);
+    assert_eq!(cost, READ_BASE_BESIDE_ORPHAN.cost());
+
+    for (serial, handle) in [
+        s.small,
+        s.large,
+        s.local_small,
+        s.local_large,
+        s.mixed_small,
+        s.mixed_large,
+    ] {
+        rig.release(serial, handle);
+    }
+    rig.stop();
+}
+
+#[test]
+fn a_window_reads_the_base_its_visit_named_whatever_is_installed_before_its_bytes() {
+    let rig = Rig::new("read-cost-install", 175, CACHE);
+    let s = subjects(&rig);
+    let (serial, handle) = s.mixed_large;
+    let mut before = pattern(LARGE, 4);
+    before[MIXED_LARGE_AT..MIXED_LARGE_AT + MIXED_LARGE_BYTES]
+        .copy_from_slice(&pattern(MIXED_LARGE_BYTES, 9));
+
+    // The request's visit, exactly as the READ driver makes it: the local
+    // part is copied and the base root of the rest is named. Nothing is held.
+    let (services, _) = rig.request();
+    let visit = wait(services.read_visit(rig.mount, serial, Some(handle), 0, WINDOW)).unwrap();
+    let window = NativeWindow::clone(visit.get());
+    drop(visit);
+    let old = rig.bound.operation().unwrap().workspace().base().unwrap();
+    assert_eq!(window.root, old.identity().0.to_bytes());
+    assert!(window.inherits(0, false) && window.whole(false).is_none());
+    assert_eq!(rig.client.diagnostics().unwrap().outstanding, 0);
+
+    // Before its bytes are read, the inherited part of the same window is
+    // overwritten and the Workspace is committed: the installed base now
+    // holds other bytes there, and the install waited for no read.
+    rig.write(serial, handle, 0, &pattern(MIXED_LARGE_AT, 11));
+    let committed = rig
+        .bound
+        .commit_captured()
+        .unwrap_or_else(|failure| panic!("{failure:?}"));
+    assert!(matches!(committed.installed.result(), Ok(Response::Done)));
+    drop(committed);
+    let new = wait(services.base()).unwrap();
+    assert_ne!(new.identity(), old.identity());
+
+    // The window is finished over the Workspace's base of now, as the driver
+    // does it, and answers the file as it stood at its visit: every
+    // inherited byte from the root the visit named, none from the new one.
+    let bytes = window
+        .finish(Some(&new), serial, 0, WINDOW, false)
+        .unwrap()
+        .unwrap();
+    drop(new);
+    assert_eq!(bytes, before[..READ_WINDOW]);
+
+    // A read that visits now sees the file of now.
+    let mut after = before;
+    after[..MIXED_LARGE_AT].copy_from_slice(&pattern(MIXED_LARGE_AT, 11));
+    let (bytes, cost) = rig.measured(|| rig.read(serial, handle, 0, WINDOW));
+    assert_eq!(bytes, after[..READ_WINDOW]);
+    // Its window is wholly inherited from the installed base.
+    assert_eq!(cost, READ_BASE.cost());
+    println!(
+        "READ_INSTALL visit_root=old installed_between=1 finished_over=new answer=old_file(exact) next_read=new_file(exact) cost={cost:?}"
+    );
+
+    drop(services);
+    for (serial, handle) in [
+        s.small,
+        s.large,
+        s.local_small,
+        s.local_large,
+        s.mixed_small,
+        s.mixed_large,
+    ] {
+        rig.release(serial, handle);
+    }
+    rig.stop();
+}
+
+#[test]
+fn without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing() {
+    let rig = Rig::new("read-cost-uncached-read", 176, 0);
+    let s = subjects(&rig);
+    let large = pattern(LARGE, 2);
+    let window = READ_WINDOW as u64;
+    for round in 0..2 {
+        let (bytes, cost) = rig.measured(|| rig.read(s.large.0, s.large.1, 2 * window, WINDOW));
+        assert_eq!(bytes, large[2 * READ_WINDOW..3 * READ_WINDOW], "{round}");
+        assert_eq!(cost, READ_BASE.cost(), "{round}");
+        // Nothing is remembered about the base: the end of the file is
+        // found by the one base read instead of by the visit.
+        let (bytes, cost) = rig.measured(|| rig.read(s.large.0, s.large.1, LARGE as u64, WINDOW));
+        assert!(bytes.is_empty(), "{round}");
+        assert_eq!(cost, READ_BASE.cost(), "{round}");
+        let (bytes, cost) =
+            rig.measured(|| rig.read(s.local_large.0, s.local_large.1, window, WINDOW));
+        assert_eq!(bytes, pattern(2 * READ_WINDOW, 5)[READ_WINDOW..], "{round}");
+        assert_eq!(cost, READ_LOCAL.cost(), "{round}");
+        let (target, cost) = rig.measured(|| rig.readlink(s.link_short));
+        assert_eq!(target, b"small", "{round}");
+        assert_eq!(cost, READLINK_BASE.cost(), "{round}");
+    }
+    // A READ of a directory and a READLINK of a file are refused by kind.
+    let (services, request) = rig.request();
+    let refused = |serial: u64, handle: Option<u64>, input: ReadDataInput| match wait(
+        NativeData::read(services.clone(), rig.mount, request, serial, handle, input),
+    ) {
+        Ok(Err(refusal)) => refusal,
+        Ok(Ok(_)) => panic!("served {input:?} of {serial}"),
+        Err(failure) => panic!("{failure:?}"),
+    };
+    assert_eq!(
+        refused(
+            rig.root,
+            None,
+            ReadDataInput::File {
+                offset: 0,
+                length: WINDOW
+            }
+        ),
+        Refusal::IsDirectory
+    );
+    assert_eq!(
+        refused(s.large.0, None, ReadDataInput::Link),
+        Refusal::Invalid
+    );
+    assert_eq!(
+        refused(s.local_large.0, None, ReadDataInput::Link),
+        Refusal::Invalid
+    );
+    drop(services);
+    assert_eq!(rig.store.cache_work().unwrap().file_lengths, 0);
+    for (serial, handle) in [
+        s.small,
+        s.large,
+        s.local_small,
+        s.local_large,
+        s.mixed_small,
+        s.mixed_large,
+    ] {
+        rig.release(serial, handle);
+    }
+    rig.stop();
+}
+
 /// A pinned cost: jobs (Read, Lifecycle, Source), reader grants, length
 /// batches and the statement families.
 struct Pinned {
@@ -800,54 +1032,39 @@ const LOOKUP_UNSEEN: Pinned = Pinned {
         ("Lease", 2, 2),
     ],
 };
-/// READ of base bytes: a source, two observations around one reader (the
-/// file's length is remembered: no length batch), the local window, a second
-/// reader for the bytes, and the release of the read and of the source. Four
-/// write transactions.
+/// READ of base bytes: one read-only visit (the mount, the descriptor and
+/// the Workspace row in one statement; the inode's local layers in another)
+/// and one reader for the bytes. No transaction, no source, no release.
 const READ_BASE: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 2,
+    jobs: (1, 0, 0),
+    grants: 1,
     length_batches: 0,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 14, 14),
-        ("Inode", 3, 3),
-        ("Lease", 39, 54),
-    ],
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1)],
 };
-/// READ of local bytes: one observation decides over the local row; a
-/// reader is still taken although nothing is inherited.
+/// READ at or beyond the end of a file: the same visit and nothing else. A
+/// base file's end is the length the daemon remembers; a local file's is its
+/// own row.
+const READ_END: Pinned = Pinned {
+    jobs: (1, 0, 0),
+    grants: 0,
+    length_batches: 0,
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1)],
+};
+/// READ of local bytes: the visit copies them (one cell-range statement of
+/// the one local layer). No reader.
 const READ_LOCAL: Pinned = Pinned {
-    jobs: (2, 2, 1),
-    grants: 1,
+    jobs: (1, 0, 0),
+    grants: 0,
     length_batches: 0,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 13, 13),
-        ("Inode", 2, 2),
-        ("Payload", 1, 1),
-        ("Lease", 35, 50),
-    ],
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)],
 };
-/// READ of a window that is partly local: the same jobs as a local one;
-/// its one reader serves the inherited span.
+/// READ of a window that is partly local: the visit of a local one, and one
+/// reader for the inherited span.
 const READ_MIXED: Pinned = Pinned {
-    jobs: (2, 2, 1),
+    jobs: (1, 0, 0),
     grants: 1,
     length_batches: 0,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 13, 13),
-        ("Inode", 2, 2),
-        ("Payload", 1, 1),
-        ("Lease", 35, 50),
-    ],
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)],
 };
 /// OPEN of a base file: a source, two observations around one reader (no
 /// length batch), and the release of the processing read and source.
@@ -891,33 +1108,26 @@ const RELEASE: Pinned = Pinned {
         ("Lease", 3, 7),
     ],
 };
-/// READLINK of a base link: the jobs of a READ of base bytes; a link has no
-/// Store length, so no length batch.
+/// READLINK of a base link: the visit, under the kernel's lookup reference,
+/// and one reader for the target.
 const READLINK_BASE: Pinned = Pinned {
-    jobs: (3, 2, 1),
-    grants: 2,
-    length_batches: 0,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 14, 14),
-        ("Inode", 3, 3),
-        ("Lease", 39, 54),
-    ],
-};
-/// READLINK of a local link: the jobs of a READ of local bytes.
-const READLINK_LOCAL: Pinned = Pinned {
-    jobs: (2, 2, 1),
+    jobs: (1, 0, 0),
     grants: 1,
     length_batches: 0,
-    sql: &[
-        ("Startup", 4, 4),
-        ("Begin", 4, 4),
-        ("Commit", 4, 4),
-        ("Workspace", 13, 13),
-        ("Inode", 2, 2),
-        ("Payload", 1, 1),
-        ("Lease", 35, 50),
-    ],
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1)],
+};
+/// READLINK of a local link: the visit copies the target. No reader.
+const READLINK_LOCAL: Pinned = Pinned {
+    jobs: (1, 0, 0),
+    grants: 0,
+    length_batches: 0,
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)],
+};
+/// READ of base bytes once this engine has made an orphan: the visit also
+/// asks whether its inode is one.
+const READ_BASE_BESIDE_ORPHAN: Pinned = Pinned {
+    jobs: (1, 0, 0),
+    grants: 1,
+    length_batches: 0,
+    sql: &[("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 1, 1)],
 };

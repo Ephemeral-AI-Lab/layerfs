@@ -4,8 +4,8 @@
 //! is written by a refused visit.
 use layerfs_overlay::{
     Binding, Changes, CleanupState, DirectoryEntryChange, Inode, InodeKind, MaintenanceCursor,
-    NativeDecision, NativeEffect, NativeMount, OpenFile, Overlay, OverlayError, ProfileConfig,
-    Publication, Route, StatementKind, StoredCounts, WorkspaceState,
+    NativeDecision, NativeEffect, NativeMount, OpenFile, Overlay, OverlayError, PayloadWrite,
+    ProfileConfig, Publication, Route, StatementKind, StoredCounts, WorkspaceState, READ_WINDOW,
 };
 use std::{
     path::PathBuf,
@@ -139,7 +139,22 @@ impl World {
             })
             .map(|applied| applied.map(|applied| applied.publication))
     }
+    /// The refusal of a GETATTR visit. A READ window of the same inode
+    /// through the same reference is refused the same way.
     fn read(&self, mount: NativeMount, serial: u64, handle: Option<u64>) -> OverlayError {
+        let window = self
+            .db
+            .read_native_visit(mount, serial, handle, 0, 1)
+            .expect_err("a refused visit read a window");
+        let refusal = self.attributes(mount, serial, handle);
+        assert_eq!(
+            std::mem::discriminant(&window),
+            std::mem::discriminant(&refusal),
+            "window {window:?}, attributes {refusal:?}"
+        );
+        refusal
+    }
+    fn attributes(&self, mount: NativeMount, serial: u64, handle: Option<u64>) -> OverlayError {
         self.db
             .observe_native_visit(
                 mount,
@@ -449,6 +464,120 @@ fn a_revoked_or_replaced_mount_is_stale_for_every_fenced_job() {
     let reopened = w.open(again, 2, 60, true);
     w.db.close_native_file(again, 60, reopened.owner_id())
         .unwrap();
+}
+
+#[test]
+fn a_read_window_writes_nothing_and_follows_its_descriptor_past_unlink_and_install() {
+    let w = world();
+    let file = w.open(w.mount, 1, 50, true);
+    let handle = file.owner_id();
+    let publish = |request: u64, serial: u64, by: Option<u64>, changes: Changes| {
+        let applied =
+            w.db.mutate_native_visit(w.mount, request, serial, by, |_, open| {
+                Ok(Some((Changes { open, ..changes }, NativeEffect::None)))
+            })
+            .unwrap()
+            .expect("published");
+        w.db.reply_attempted(applied.publication).unwrap();
+    };
+    let written = |text: &'static [u8], offset: u64, size: u64, nlink: u64| Changes {
+        inodes: vec![Inode {
+            size,
+            nlink,
+            ..inode(50)
+        }],
+        write: Some(PayloadWrite {
+            serial: 50,
+            offset,
+            data: text.into(),
+        }),
+        ..Changes::default()
+    };
+    publish(2, 50, Some(handle), written(b"local bytes", 0, 11, 1));
+    // A kernel lookup count on an inode with no local row.
+    w.db.observe_native_visit(w.mount, 1, None, true, |_, _| {
+        Ok(NativeDecision::Finished {
+            inode: Some(inode(60)),
+            value: (),
+        })
+    })
+    .result
+    .unwrap();
+
+    let base = w.db.state(w.route).unwrap().base_root;
+    let before = w.snapshot(w.route);
+    let window = |serial: u64, by: Option<u64>, offset: u64, length: u32| {
+        w.db.read_native_visit(w.mount, serial, by, offset, length)
+    };
+    let (root, local) = window(50, Some(handle), 0, 4096).unwrap();
+    let local = local.expect("the file has a local row");
+    assert_eq!(root, base);
+    assert_eq!(
+        (local.kind, local.size, local.offset, local.data.as_slice()),
+        (InodeKind::File, 11, 0, b"local bytes".as_slice())
+    );
+    assert_eq!((local.span, local.base_root), (None, None));
+    // A window is clamped to the local row's size; one at the end is empty.
+    let (_, tail) = window(50, Some(handle), 6, 4096).unwrap();
+    assert_eq!(tail.unwrap().data, b"bytes");
+    let (_, end) = window(50, Some(handle), 11, 4096).unwrap();
+    assert!(end.unwrap().data.is_empty());
+    // Under the lookup reference alone the same window is read: READLINK
+    // names no descriptor.
+    assert_eq!(
+        window(50, None, 0, 4096).unwrap().1.unwrap().data,
+        b"local bytes"
+    );
+    // No local row: the whole inode is the base's, at the current root.
+    assert_eq!(window(60, None, 0, 4096).unwrap(), (base, None));
+    // A directory answers its kind and no bytes.
+    let (_, directory) = window(1, None, 0, 4096).unwrap();
+    assert_eq!(directory.unwrap().kind, InodeKind::Directory);
+    assert!(matches!(
+        window(50, Some(handle), 0, READ_WINDOW as u32 + 1),
+        Err(OverlayError::Invalid("read window"))
+    ));
+    // Nothing was written, and no transaction was begun.
+    assert_eq!(w.snapshot(w.route), before);
+
+    // Unlinked while open: the descriptor still reads the file, and names
+    // the root the orphan retained. Without a descriptor the file is gone.
+    publish(3, 50, Some(handle), written(b"L", 0, 11, 0));
+    let before = w.snapshot(w.route);
+    let (root, local) = window(50, Some(handle), 0, 4096).unwrap();
+    let local = local.unwrap();
+    assert_eq!((root, local.base_root), (base, Some(base)));
+    assert_eq!(local.data, b"Local bytes");
+    assert!(matches!(
+        window(50, None, 0, 4096),
+        Err(OverlayError::Missing)
+    ));
+    // Another inode now pays the orphan probe and is read as before.
+    assert_eq!(window(60, None, 0, 4096).unwrap(), (base, None));
+    assert_eq!(w.snapshot(w.route), before);
+
+    // An install replaces the Workspace's base. The orphan keeps its root;
+    // an inode with no local row now names the installed one.
+    let capture = w.db.capture(w.route).unwrap();
+    w.db.install(capture, [35; 32]).unwrap();
+    assert_eq!(w.db.state(w.route).unwrap().base_root, [35; 32]);
+    let (root, local) = window(50, Some(handle), 0, 4096).unwrap();
+    assert_eq!(
+        (root, local.unwrap().data.as_slice()),
+        (base, b"Local bytes".as_slice())
+    );
+    assert_eq!(window(60, None, 0, 4096).unwrap(), ([35; 32], None));
+    // It is still written and read through its descriptor.
+    publish(4, 50, Some(handle), written(b"!", 10, 11, 0));
+    assert_eq!(
+        window(50, Some(handle), 0, 4096).unwrap().1.unwrap().data,
+        b"Local byte!"
+    );
+    w.db.close_native_file(w.mount, 50, handle).unwrap();
+    assert!(matches!(
+        window(50, Some(handle), 0, 4096),
+        Err(OverlayError::Stale)
+    ));
 }
 
 #[test]

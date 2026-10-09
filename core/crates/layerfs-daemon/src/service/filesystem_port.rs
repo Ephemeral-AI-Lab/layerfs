@@ -10,13 +10,13 @@ use layerfs_fuse::ports::{
 };
 use layerfs_history::HistoryError;
 use layerfs_overlay::{
-    BaseSource, FileRead, LocalRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
+    BaseSource, FileRead, NativeCookiePlan, NativeDirectory, NativeDirectoryPage,
     NativeDirectoryRead, NativeMount, OpenFile, Publication,
 };
 use layerfs_workspace::{
     BaseView, MutationInputFailure, MutationPlan, NativeMutationJob, NativeMutationOutcome,
-    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, Operation,
-    SourceView, Time, VisitFacts, WorkspaceError,
+    NativeReadJob, NativeReadOperation, NativeReadOutcome, NativeVisitRequest, NativeWindow,
+    Operation, SourceView, Time, VisitFacts, WorkspaceError,
 };
 use std::{
     future::{poll_fn, Future},
@@ -252,29 +252,36 @@ impl RequestServices for FilesystemPort {
             directory_done,
         )
     }
-    fn local_read(
+    fn read_visit(
         &self,
-        read: FileRead,
+        mount: NativeMount,
+        serial: u64,
+        handle: Option<u64>,
         offset: u64,
         length: u32,
-    ) -> ServiceFuture<'_, ServiceReply<Option<LocalRead>>> {
-        Box::pin(async move {
-            let original = self
-                .complete(
-                    Command::FileRead {
-                        read,
-                        offset,
-                        length,
-                    },
-                    true,
-                )
-                .await?;
-            if matches!(original.result(), Ok(Response::Read(_))) {
-                Ok(ServiceReply::borrowed(LocalWindow(original)))
-            } else {
-                Err(Box::new(original) as ServiceError)
-            }
-        })
+    ) -> ServiceFuture<'_, ServiceReply<Arc<NativeWindow>>> {
+        // A stopped mount refuses before anything about the request is read.
+        if let Err(fenced) = self.fenced(true) {
+            return Box::pin(async move { Err(fenced) });
+        }
+        let visit = self.0.workspace().native_data_visit(
+            self.0.resident(),
+            mount,
+            serial,
+            handle,
+            offset,
+            length,
+        );
+        match visit {
+            Ok(visit) => self.acquire(
+                Command::Native(NativeJob::ReadVisit(Box::new(visit))),
+                |response| match response {
+                    Response::Native(NativeReply::Window(value)) => Some(value.clone()),
+                    _ => None,
+                },
+            ),
+            Err(error) => Box::pin(async move { Err(Box::new(error) as ServiceError) }),
+        }
     }
     fn close_file(
         &self,
@@ -534,15 +541,4 @@ fn directory_done(response: &Response) -> Option<()> {
         Response::Native(NativeReply::Directory(NativeDirectoryReply::Done))
     )
     .then_some(())
-}
-
-/// The local payload stays in the same original Completion and credit cell.
-struct LocalWindow(Completion);
-impl AsRef<Option<LocalRead>> for LocalWindow {
-    fn as_ref(&self) -> &Option<LocalRead> {
-        match self.0.result() {
-            Ok(Response::Read(value)) => value,
-            _ => unreachable!("LocalWindow follows its checked immutable completion"),
-        }
-    }
 }

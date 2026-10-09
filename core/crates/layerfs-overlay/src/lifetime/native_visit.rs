@@ -4,7 +4,7 @@
 //! cannot run inside it. A visit that cannot decide changes nothing; its
 //! request holds nothing until it visits again.
 use crate::{
-    db::integer, inode, BaseSource, Changes, InodeKind, NativeApplied, NativeDecision,
+    db::integer, inode, BaseSource, Changes, InodeKind, LocalRead, NativeApplied, NativeDecision,
     NativeEffect, NativeMount, NativeObservation, OpenFile, Overlay, OverlayError, OverlayResult,
     SourceRows, StatementKind, WorkspaceState,
 };
@@ -144,6 +144,38 @@ impl Overlay {
             open_candidate: None,
             directory_candidate: None,
         }
+    }
+    /// The local part of one READ window, through its descriptor, or of one
+    /// READLINK window, under the kernel's lookup reference, and the base
+    /// root its inherited bytes belong to. The job only reads: it records no
+    /// request, source or reader, so its request has nothing to release and
+    /// holds back no install, revoke or close. An unlinked file is read
+    /// through its descriptor from the layers and root its orphan retains.
+    pub fn read_native_visit(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: Option<u64>,
+        offset: u64,
+        length: u32,
+    ) -> OverlayResult<([u8; 32], Option<LocalRead>)> {
+        let held = handle.map_or(Held::Lookup, Held::Handle);
+        let (state, _) = self.native_fence(mount, serial, held, true)?;
+        let (ns, key) = (mount.route.ns, integer(serial)?);
+        // No orphan row exists before this engine created its first one.
+        if self.orphan_seen.get() {
+            if let Some(orphan) = self.orphan(ns, key)? {
+                // Without a descriptor a removed regular file is gone.
+                if handle.is_none() && self.orphan_layer(ns, key)?.kind == InodeKind::File {
+                    return Err(OverlayError::Missing);
+                }
+                let local = self.orphan_read(ns, key, orphan, offset, length)?;
+                return Ok((orphan.root, local));
+            }
+        }
+        let local =
+            self.read_layers(ns, serial, state.active.0, state.installed, offset, length)?;
+        Ok((state.base_root, local))
     }
     /// One native mutation in one visit. The callback decides over current
     /// rows of the Workspace row the fence read; when it returns changes

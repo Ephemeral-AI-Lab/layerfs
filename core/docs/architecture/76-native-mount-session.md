@@ -211,6 +211,20 @@ earlier rule that an outstanding handle refused revocation. The mount row fences
 whole-namespace cleanup until retirement ends, so a terminal unmount reply does
 not claim that every physical row is already gone.
 
+R7 update, 2026-10-09: a READ or READLINK records no source or read
+association ([native read custody](73-native-read-custody.md)), so this
+refusal cannot see one. Such a request is accounted by the connection drain
+that precedes revocation on both paths: it stays admitted in its lane until
+its future ends, and `Revoke` is submitted only after the drain observed
+nothing received and nothing admitted.
+[`forced_unmount.rs`](../../crates/layerfs-daemon/tests/forced_unmount.rs)
+stages a READ parked for a Store reader on a real mount: the engine's row
+counts equal those of the idle descriptor, normal Unmount is `Busy` at
+`unmount:kernel` with no effect, and Force ends the request through the
+fence before its one detach. A READ that is inside a Store read at that
+moment is not staged on a real mount; that case rests on the drain predicate
+and on the request staying admitted, by source.
+
 A re-Attach issued immediately after a failed Attach can be refused until the
 revoked mount row has retired. The caller observes and issues a new Attach; the
 daemon does not wait or retry on its behalf.

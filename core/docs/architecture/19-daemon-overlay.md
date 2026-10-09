@@ -18,6 +18,17 @@ meaning, the namespace reference count that construction writes back. The
 filesystem meaning of the column belongs to Workspace; see
 [namespace operations](30-namespace-operations.md).
 
+R7 update, 2026-10-09 (READ window visit, schema unchanged at 22):
+`Overlay::read_native_visit` is the read-only job of a native READ or
+READLINK. It runs outside a transaction and writes nothing: the fence
+statement, the orphan probe once `orphan_seen` is set, the inode row, and
+the cell range of the requested window when the inode has local payload.
+It returns the base root the window belongs to (the orphan's retained root,
+or the Workspace's current one) with the ordinary `LocalRead`. No statement
+was added: it attempts 2 statements for an inode with no local row, 3 with
+local payload, and one more once an orphan exists. See
+[native read custody](73-native-read-custody.md).
+
 R7 update, 2026-10-09 (statement diet, schema unchanged at 21): **a job
 reads a row once.** A native visit's fence is one statement
 (`FENCE_LOOKUP`, `FENCE_FILE`, `FENCE_HANDLE` in

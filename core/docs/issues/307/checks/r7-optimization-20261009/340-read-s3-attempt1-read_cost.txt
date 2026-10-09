@@ -1,0 +1,51 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD dbaad86a5, uncommitted product/test paths=17, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/read_cost-106cc8ee0ca7784d --test-threads=1  (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test a_base_file_length_is_one_store_answer_per_daemon_and_costs_a_visit_when_not_remembered ... ok
+test read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows ... FAILED
+
+failures:
+
+---- read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows stdout ----
+READ_COST lookup base small: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=1 statements=(11, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 3, 3), ("DirectoryEntry", 2, 2), ("Lease", 2, 2)]
+READ_COST lookup base large: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=1 statements=(11, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 3, 3), ("DirectoryEntry", 2, 2), ("Lease", 2, 2)]
+READ_COST getattr base small: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(3, 3) sql=[("Workspace", 1, 1), ("Inode", 2, 2)]
+READ_COST getattr base large: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(3, 3) sql=[("Workspace", 1, 1), ("Inode", 2, 2)]
+READ_COST read base small: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST read base large first: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST read base large third: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST read base large tail: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST read base small end: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST read base large beyond: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST read local small: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(3, 3) sql=[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)]
+READ_COST read local large: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(3, 3) sql=[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)]
+READ_COST read local small end: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST read mixed small: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(3, 3) sql=[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)]
+READ_COST read mixed large: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(3, 3) sql=[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)]
+READ_COST open base small: jobs=[2, 0, 0, 2, 0, 1] grants=1 length_batches=0 transactions=4 statements=(64, 82) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 12, 12), ("Inode", 2, 2), ("Lease", 38, 56)]
+READ_COST release base small: jobs=[0, 0, 0, 1, 0, 0] grants=0 length_batches=0 transactions=1 statements=(7, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)]
+READ_COST open base large: jobs=[2, 0, 0, 2, 0, 1] grants=1 length_batches=0 transactions=4 statements=(64, 82) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 12, 12), ("Inode", 2, 2), ("Lease", 38, 56)]
+READ_COST release base large: jobs=[0, 0, 0, 1, 0, 0] grants=0 length_batches=0 transactions=1 statements=(7, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)]
+READ_COST open local small: jobs=[1, 0, 0, 2, 0, 1] grants=0 length_batches=0 transactions=4 statements=(58, 76) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 11, 11), ("Inode", 1, 1), ("Lease", 34, 52)]
+READ_COST release local small: jobs=[0, 0, 0, 1, 0, 0] grants=0 length_batches=0 transactions=1 statements=(7, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)]
+READ_COST open local large: jobs=[1, 0, 0, 2, 0, 1] grants=0 length_batches=0 transactions=4 statements=(58, 76) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 11, 11), ("Inode", 1, 1), ("Lease", 34, 52)]
+READ_COST release local large: jobs=[0, 0, 0, 1, 0, 0] grants=0 length_batches=0 transactions=1 statements=(7, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 3, 7)]
+READ_COST readlink base short: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST readlink base long: jobs=[1, 0, 0, 0, 0, 0] grants=1 length_batches=0 transactions=0 statements=(2, 2) sql=[("Workspace", 1, 1), ("Inode", 1, 1)]
+READ_COST readlink local: jobs=[1, 0, 0, 0, 0, 0] grants=0 length_batches=0 transactions=0 statements=(3, 3) sql=[("Workspace", 1, 1), ("Inode", 1, 1), ("Payload", 1, 1)]
+
+thread 'read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows' panicked at crates/layerfs-daemon/tests/read_cost.rs:676:9:
+assertion `left == right` failed: read base small
+  left: Cost { jobs: [1, 0, 0, 0, 0, 0], grants: 1, length_batches: 0, sql: [("Workspace", 1, 1), ("Inode", 1, 1)] }
+ right: Cost { jobs: [3, 0, 0, 2, 0, 1], grants: 2, length_batches: 0, sql: [("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 14, 14), ("Inode", 3, 3), ("Lease", 39, 54)] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 101

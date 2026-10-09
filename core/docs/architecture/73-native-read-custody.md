@@ -3,6 +3,119 @@
 > **Status:** Implemented R2 component on parent78374ced6,2026-10-08.
 > Native Fuse activation, Ready and normal drain remain open.
 
+R7 update, 2026-10-09 (READ and READLINK): **file data and symbolic-link
+data are served by one read-only owner visit that records nothing.** The job
+is `NativeJob::ReadVisit` (class Read) over
+[`Overlay::read_native_visit`](../../crates/layerfs-overlay/src/lifetime/native_visit.rs)
+and Workspace's
+[`NativeDataVisit`](../../crates/layerfs-workspace/src/operations/native_data.rs).
+It runs no transaction and writes no row:
+
+1. The fence statement, on the descriptor for READ (`FENCE_HANDLE`) and on the
+   kernel's lookup reference for READLINK (`FENCE_LOOKUP`), with the outcomes
+   of every other visit.
+2. Once the engine has created its first orphan, one probe for an orphan row
+   of the inode. An orphan is read from its own generation and names the base
+   root the orphan retained; a removed regular file reached without a
+   descriptor is `Missing`.
+3. Otherwise the inode's current layers (`read_layers`, the ordinary read):
+   the local row and the local cells of the requested window, at most the
+   existing 128 KiB read window, are copied inside the job. Parts the local
+   state does not cover are reported as inherited spans, not read. The window
+   names the Workspace's base root of that moment.
+4. When no local row exists and the memory-only client is bound to that same
+   root, the job also takes the inode's base value from resident canonical
+   objects and, for a regular file, the length the cache remembers
+   ([file lengths](24-file-lengths.md)). A fact that is not resident is left
+   absent; it is not an error and nothing is asked of a provider.
+
+The result is a
+[`NativeWindow`](../../crates/layerfs-workspace/src/operations/native_data.rs):
+the base root, the local window if a local row exists, and the resident base
+value and length otherwise. After the job the request holds nothing in the
+owner. [`NativeData::read`](../../crates/layerfs-fuse/src/operations/read.rs)
+then replies in one of three ways:
+
+| Window | Hand-off | Store reader | Bytes |
+| --- | --- | --- | --- |
+| A local regular file with no inherited span | none | none | replied from the job's completion, not copied again |
+| No local row, and the offset is at or after a length known from memory | none | none | empty |
+| Anything inherited: a local window with a span, a base file below or without a known length, a base link | one `LeaveReceiver` | one, through `RequestServices::base` | `NativeWindow::finish` over that reader |
+
+In the third row the request first takes its own copy of the window and
+drops the completion, so no owner credit is held across the reader wait or
+the Store read. `finish` binds the base to the root the visit named
+(`BaseView::at`: the current view when the roots are equal, a rebind
+otherwise), reads the inode value if the job did not have it, and composes
+the window with the unchanged Workspace algorithm (`file_window`,
+`link_target`, `BaseView::plan_file`). A kind the operation does not serve is
+the same refusal as before: `EISDIR` for READ of a directory, `EINVAL` for a
+READ of a link or a READLINK of anything else, `ENOENT` for a serial the base
+does not have. No job follows the reply.
+
+What a READ no longer records, and what stands in its place:
+
+- No `native_source`, `base_source`, `lease`, `file_read` or `native_read`
+  row and no `base_readers` count. A READ therefore does not hold back a
+  prepared-base install or a revoke, and there is nothing to release after
+  its reply or after a failure.
+- The bytes are those of one base root. The local part was copied inside one
+  job; the inherited part is read from the immutable content of the root that
+  job named, whatever is installed before the read. An install between the
+  visit and the Store read costs a rebind of the view and never a mix.
+- A file unlinked while open still reads its own bytes: its orphan generation
+  and the root the orphan retained are found by step 2, through the
+  descriptor's own engine rows, which RELEASE alone removes.
+- The request is accounted by the dispatcher lane alone. It stays `admitted`
+  from its receive until its future ends, whether it is parked for a reader
+  or inside a Store read. Normal Unmount makes the kernel's reversible detach
+  first, which answers busy while a caller is blocked in the READ, and then
+  requires the lane's drain (`received == 0 && admitted == 0`) before
+  `Revoke` is submitted; Force stops the fence, so a READ parked for a reader
+  ends with `ENOTCONN` at the reader gate holding nothing, and one inside a
+  Store read runs to its own result while the drain waits for it
+  ([mount session](76-native-mount-session.md#revocation-after-detach)).
+  `revoke_native_mount` still refuses on a remaining source or read
+  association of the requests that have one; it cannot see a READ, and the
+  drain before it is what covers a READ.
+- A failed Store read is `BaseDemandFailed` for that request (`EIO`), with
+  nothing to give back; the mount keeps serving
+  ([request service](75-native-request-service.md#failed-base-demand)).
+
+Per request, exact, from
+[`read_cost.rs`](../../crates/layerfs-daemon/tests/read_cost.rs) (owner jobs
+as Read/Lifecycle/Source, then reader grants, write transactions and
+statements as attempted/executions):
+
+| Request | Before | Now |
+| --- | --- | --- |
+| READ of base bytes | 3/2/1 jobs, 2 grants, 4 transactions, 68/83 | 1/0/0 jobs, 1 grant, 0 transactions, 2/2 |
+| READ of local bytes | 2/2/1 jobs, 1 grant, 4 transactions, 63/78 | 1/0/0 jobs, 0 grants, 0 transactions, 3/3 |
+| READ of a window with local and inherited bytes | 2/2/1 jobs, 1 grant, 4 transactions, 63/78 | 1/0/0 jobs, 1 grant, 0 transactions, 3/3 |
+| READ at or after a length known from memory or the local row | as the first two rows | 1/0/0 jobs, 0 grants, 0 transactions, 2/2 |
+| READLINK of a base link | 3/2/1 jobs, 2 grants, 4 transactions, 68/83 | 1/0/0 jobs, 1 grant, 0 transactions, 2/2 |
+| READLINK of a local link | 2/2/1 jobs, 1 grant, 4 transactions, 63/78 | 1/0/0 jobs, 0 grants, 0 transactions, 3/3 |
+
+Once the engine has created an orphan, every READ and READLINK attempts one
+more statement, the orphan probe. A READ of an orphan reads its cells from
+the orphan generation and, until background maintenance has moved them
+there, from the generation they were written in: one or two cell statements.
+With no canonical cache allowance a READ is still one job and one grant; a
+read at the end of a base file then costs the grant too, because no length
+is remembered.
+
+Limits of this record. The copy in the third reply row is one bounded
+allocation per in-flight request (the window, at most 128 KiB, and its span
+list), released with the reply; no resident structure was added. The
+in-job lookup of step 4 walks the base inode tree in resident objects on the
+owner thread for every READ of a file with no local row. Nothing keeps the
+objects of a replaced base root for a READ that has not finished: this
+relies on the Store never deleting an object, which holds today because no
+collection exists; a future collector needs its own rule for in-flight
+readers. OPEN and OPENDIR still record a source and a processing read, as
+described below, and `NativeReadOperation::Data` is no longer reached by a
+filesystem request.
+
 R7 update, 2026-10-09 (statement diet): the visit's three checks below (live
 Workspace, attached mount, the kernel's reference) are **one statement**,
 `Overlay::native_fence`, with the same outcomes: `Closed` for a closed
@@ -41,8 +154,9 @@ again. Between visits the request holds nothing in the owner. Consequences:
 `base_readers` no longer counts these requests, so they do not hold back a
 prepared-base install; a revoke between two visits is not refused on their
 account, and the next visit fails `Stale`; the kernel's reference keeps the
-parent or target inode as before. OPEN, OPENDIR, file data, symbolic-link
-data and directory enumeration still record a source, as described below.
+parent or target inode as before. OPEN, OPENDIR and directory enumeration
+still record a source, as described below; file data and symbolic-link data
+do not (see the update above).
 
 R7 update, 2026-10-09 (directory link counts): the fact of a base directory
 now includes its child-directory count, which is derived, not stored
@@ -87,9 +201,9 @@ nlookup in one atomic transaction. Getattr uses the same observation without
 adding a kernel lookup. Both replies carry attributes only, so neither retains
 a FileRead (`Overlay::observe_native_attributes`): the request's source and,
 for a lookup, the kernel reference taken in the same transaction are the only
-owners. The `Data` operation is the target of READ and READLINK; it runs the
-same decision and retains the independent FileRead its bytes are served
-from, as open and opendir do. The existing source protects removed metadata,
+owners. The `Data` operation was the target of READ and READLINK until the
+R7 update above; it runs the same decision and retains the independent
+FileRead its bytes are served from, as open and opendir do. The existing source protects removed metadata,
 so a previously received getattr can report nlink0. A final negative/refusal
 is marked decided and acquires no FileRead. An original request cannot perform
 a second final decision.

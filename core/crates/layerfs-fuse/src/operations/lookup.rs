@@ -92,11 +92,6 @@ impl ReadFailure {
     pub const fn data_input(&self) -> Option<super::ReadDataInput> {
         self.custody.data_input
     }
-    #[cfg(target_os = "linux")]
-    pub(crate) fn with_data_input(mut self, input: Option<super::ReadDataInput>) -> Self {
-        self.custody.data_input = input;
-        self
-    }
     pub const fn retained_source(&self) -> Option<BaseSource> {
         self.custody.source
     }
@@ -137,20 +132,7 @@ impl NativeRead {
         handle: Option<u64>,
         operation: NativeReadOperation,
     ) -> Result<Self, ReadFailure> {
-        let mut custody = Custody {
-            services,
-            mount,
-            request,
-            protected,
-            handle,
-            operation,
-            data_input: None,
-            source: None,
-            read: None,
-            view: None,
-            plan: None,
-            receipt: None,
-        };
+        let mut custody = Custody::unowned(services, mount, request, protected, handle, operation);
         match custody.prepare().await {
             Ok(value) => Ok(Self { value, custody }),
             Err(reason) => Err(ReadFailure::new(reason, custody)),
@@ -175,6 +157,33 @@ impl NativeRead {
     }
 }
 impl Custody {
+    /// The request as it arrived: nothing is owned in the engine yet.
+    pub(super) fn unowned(
+        services: Arc<dyn RequestServices>,
+        mount: NativeMount,
+        request: u64,
+        protected: u64,
+        handle: Option<u64>,
+        operation: NativeReadOperation,
+    ) -> Self {
+        Self {
+            services,
+            mount,
+            request,
+            protected,
+            handle,
+            operation,
+            data_input: None,
+            source: None,
+            read: None,
+            view: None,
+            plan: None,
+            receipt: None,
+        }
+    }
+    pub(super) const fn target(&self) -> (NativeMount, u64, Option<u64>) {
+        (self.mount, self.protected, self.handle)
+    }
     pub async fn dispose(mut self) -> Result<(), ReadFailure> {
         self.plan = None;
         self.view = None;

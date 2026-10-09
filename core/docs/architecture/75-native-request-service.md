@@ -111,10 +111,11 @@ Its projection drops before the Completion/credit owner. Payload clones remain
 subject to that receipt's lifetime; scalar engine tokens own independent backed
 references and can be copied after consuming their receipt. Failed completions
 themselves become the retained error, including original unattempted commands.
-Local read payloads use the borrowed form directly over the original Completion:
-the port adds no data-window clone. Workspace composition owns one mutable window
-and an inherited/output buffer in addition to that original. This bounded-copy
-source structure does not establish native resident-memory qualification.
+A READ's window is one such reply: a wholly local window is answered from it
+with no further copy, and a window with inherited parts is copied once into
+request storage so that the Completion is dropped before the reader wait
+([native read custody](73-native-read-custody.md)). This bounded-copy source
+structure does not establish native resident-memory qualification.
 
 The [admitted read provider](../../crates/layerfs-daemon/src/store/read_scope.rs)
 uses one already granted ReadLease and the existing CanonicalClient/cache.
@@ -156,8 +157,8 @@ consults it only before an attempt, at three kinds of point:
 | Entry check | `reserve_serial`, the one synchronous acquiring call | returns `Fenced` before the allocator is asked |
 
 Acquiring calls are gated: `source`, `open_source`, `observe`, `mutate`,
-`local_read`, `immutable`, `reserve_serial`, `directory`, `directory_read`,
-`directory_page`, `directory_cookies` and `publish_cookies`. Disposal calls are
+`read_visit`, `immutable`, `base`, `reserve_serial`, `directory`,
+`directory_read`, `directory_page`, `directory_cookies` and `publish_cookies`. Disposal calls are
 never gated: `release_read`, `release_source`, `reply_attempted`, `close_file`,
 `close_directory` and `forget`. A stopped mount starts nothing new and still
 gives back what it holds. `Fenced` is produced only before submission: once a
@@ -180,7 +181,7 @@ was attempted and is counted either way. What can be held at a fenced step:
 | Request | Held when fenced | Released |
 | --- | --- | --- |
 | LOOKUP, GETATTR, OPEN, OPENDIR | nothing, or its source (a fact round acquires no read) | source |
-| READ, READLINK | source and, after the deciding job, its read | read, then source |
+| READ, READLINK | nothing: the visit records no row and its completion is dropped before the reader gate | — |
 | Mutation | nothing, or its source; never a publication ticket | source |
 | READDIR | nothing, or its source with a page or an unpublished cookie plan | page, listing and plan dropped, then source |
 | RELEASEDIR | nothing | — |
@@ -223,11 +224,11 @@ alone calls, for the Store read path only:
 | --- | --- | --- |
 | Reader admission | `immutable`: the read ticket is refused or its wait fails | the scope's earlier failure, or `PortError::ReadAdmission` |
 | Fact round | `plan.supply` on the admitted view, in the read and mutation drivers | the `PortError` this request's scope recorded |
-| File or link window | `read_file_window`, `readlink_window` | same |
+| File or link window | `NativeWindow::finish` on the view `base` returned | same |
 | Directory listing | `native_directory_listing` | same |
 
-The reads of the last three rows run inside Fuse on the view `immutable`
-returned, so Fuse cannot see whether the provider failed. It hands the step's
+The reads of the last three rows run inside Fuse on the view `immutable` or
+`base` returned, so Fuse cannot see whether the provider failed. It hands the step's
 error to
 `RequestServices::failed_base_read`, and the adapter answers from this
 request's `StorePorts` failure scope: a recorded request-scoped `PortError`
@@ -298,8 +299,18 @@ is the whole request in the owner, and an undecided one leaves the receive
 loop, reads its base facts through `RequestServices::base` and visits again.
 Nothing is released after these replies except a publication's ticket, and
 that release is recorded from the replying thread without an owner job
-([owner](21-daemon-owner.md)). The flow above still applies to OPEN, OPENDIR
-and data reads.
+([owner](21-daemon-owner.md)). The flow above still applies to OPEN and
+OPENDIR.
+
+R7 update, 2026-10-09 (READ and READLINK): the next paragraph describes the
+earlier flow. A READ or READLINK is now one read-only owner visit
+(`RequestServices::read_visit`), at most one `LeaveReceiver` and one Store
+reader, then the reply; it acquires no source, no FileRead and no metadata
+answer, and nothing follows the reply. The steps, what stands in place of
+the rows and the exact counts are in
+[native read custody](73-native-read-custody.md). The sixteen-slot pressure
+case below no longer applies to it: a READ holds no owner credit while it
+waits for a reader.
 
 READ and READLINK consume their metadata answer before requesting a local window.
 The original metadata value/Arc and Completion are disposed; independent FileRead

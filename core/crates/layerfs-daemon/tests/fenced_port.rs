@@ -13,7 +13,8 @@ use layerfs_daemon::{
 };
 use layerfs_fuse::{
     operations::{
-        create::mkdir, DirectoryStream, MutationInput, MutationRequest, NativeMutation, NativeRead,
+        create::mkdir, DirectoryStream, MutationInput, MutationRequest, NativeData, NativeMutation,
+        NativeRead, ReadDataInput,
     },
     ports::{Fence, Fenced, MountServices, RequestServices, ServiceError},
     Dispatch, DispatchConfig, MountQueue, RequestDisposition,
@@ -298,17 +299,6 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     .unwrap();
     let directory = listed.value().unwrap().directory.unwrap();
     wait(listed.dispose()).unwrap();
-    // A decided read: it owns a source and a read until it is disposed.
-    let held = wait(NativeRead::prepare(
-        services.clone(),
-        mount,
-        4,
-        serial,
-        Some(handle),
-        NativeReadOperation::Data { serial },
-    ))
-    .unwrap();
-    let read = held.value().unwrap().read.unwrap();
     let reply = wait(services.directory_read(directory, 5, 0)).unwrap();
     let directory_read = Arc::new(reply.get().as_ref().clone());
     drop(reply);
@@ -385,7 +375,10 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     );
     refused("mutate_visit", services.mutate_visit(visit));
     refused("base", services.base());
-    refused("local_read", services.local_read(read, 0, 1));
+    refused(
+        "read_visit",
+        services.read_visit(mount, serial, Some(handle), 0, 1),
+    );
     refused("immutable", services.immutable(&view));
     refused(
         "directory",
@@ -410,7 +403,7 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     assert_eq!(rig.store.read_work().grants, grants);
     assert_eq!(rig.store.read_work().outstanding, 0);
 
-    // Every disposal call still runs: ticket, reads, sources, handles, lookup.
+    // Every disposal call still runs: ticket, sources, handles, lookup.
     // A replied mutation holds no source, and its reply attempt gives back a
     // ticket held in the engine's memory: nothing waits for this Workspace's
     // tickets, so the attempt is recorded with no owner job at all.
@@ -419,19 +412,19 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     let admitted = rig.owner_work().admitted;
     wait(published.replied()).unwrap();
     assert_eq!(rig.owner_work().admitted, admitted);
-    wait(held.dispose()).unwrap();
     drop(wait(services.release_source(source)).unwrap());
     drop(wait(services.release_source(directory_read.source())).unwrap());
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
     drop(wait(services.close_directory(directory)).unwrap());
     drop(wait(services.forget(mount, serial, 1)).unwrap());
-    assert_eq!(rig.owner_work().admitted, admitted + 7);
+    // A READ or READLINK served before the stop left nothing to dispose.
+    assert_eq!(rig.owner_work().admitted, admitted + 5);
     // The stopped fence did not keep the ticket: it was returned.
     assert!(rig.pending_publications(route).is_empty());
     // The port itself replies to nothing.
     assert_eq!(fence.terminal_replies(), 0);
     println!(
-        "FENCED-CALLS refused=16 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=7"
+        "FENCED-CALLS refused=16 owner_admitted_during_refusals=0 reader_grants_during_refusals=0 reply_attempt_jobs_after_stop=0 disposal_jobs_after_stop=5"
     );
     drop((view, services));
     rig.revoke_and_stop();
@@ -445,12 +438,69 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
     let services = rig.services(&fence);
     let stepper = Stepper::new();
 
-    // Store readers: the only reader is leased to the test, so two cold
+    // A file opened while readers are still granted, for the READ below.
+    let found = rig.lookup(services.clone(), 10, root, "file-000000");
+    let serial = found.value().unwrap().stat.serial;
+    wait(found.dispose()).unwrap();
+    let opened = wait(NativeRead::prepare(
+        services.clone(),
+        mount,
+        11,
+        serial,
+        None,
+        NativeReadOperation::Open {
+            serial,
+            writable: false,
+        },
+    ))
+    .unwrap();
+    let handle = opened.value().unwrap().file.unwrap().owner_id();
+    wait(opened.dispose()).unwrap();
+
+    // Store readers: the only reader is leased to the test, so three cold
     // requests handed to the dispatcher park before their provider demand. A
-    // lookup is served by owner visits and parks holding nothing; an OPENDIR
-    // acquires its recorded source first and parks holding it.
+    // lookup is served by owner visits and parks holding nothing; a READ of
+    // base bytes made its one visit, recorded nothing and parks holding
+    // nothing; an OPENDIR acquires its recorded source first and parks
+    // holding it.
     let reader = wait(rig.store.read_ticket(Some(rig.identity)).unwrap()).unwrap();
     let (send, observed) = mpsc::channel();
+    {
+        let services = rig.services(&fence);
+        let send = send.clone();
+        rig.queue
+            .receive()
+            .unwrap()
+            .admit(0)
+            .unwrap()
+            .handoff(Box::pin(async move {
+                let window = ReadDataInput::File {
+                    offset: 0,
+                    length: 4096,
+                };
+                match NativeData::read(services, mount, 302, serial, Some(handle), window).await {
+                    Ok(_) => {
+                        let _ = send.send((302, None));
+                        RequestDisposition::Complete
+                    }
+                    Err(failure) => {
+                        let _ = send.send((
+                            302,
+                            Some((
+                                failure.fenced(),
+                                failure.retained_source().is_some(),
+                                failure.retained_read().is_some(),
+                            )),
+                        ));
+                        match failure.relinquish().await {
+                            Ok(()) => RequestDisposition::Complete,
+                            Err(failure) => RequestDisposition::Retained(Box::new(failure)),
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+    }
     for (request, operation) in [
         (
             300,
@@ -498,8 +548,8 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
             }))
             .unwrap();
     }
-    until("both cold requests parked for a reader", || {
-        rig.store.read_work().waiting == 2 && rig.queue.work().unwrap().parked == 2
+    until("the three cold requests parked for a reader", || {
+        rig.store.read_work().waiting == 3 && rig.queue.work().unwrap().parked == 3
     });
     until("their owner results were returned", || {
         rig.owner_work().outstanding == 0
@@ -524,8 +574,8 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
     assert!(stepper.poll(cold.as_mut()).is_pending());
     let mut cold_base = services.base();
     assert!(stepper.poll(cold_base.as_mut()).is_pending());
-    until("all four reader waits parked", || {
-        rig.store.read_work().waiting == 4 && rig.queue.work().unwrap().parked == 2
+    until("all five reader waits parked", || {
+        rig.store.read_work().waiting == 5 && rig.queue.work().unwrap().parked == 3
     });
     let grants = rig.store.read_work().grants;
     let before = rig.owner_work();
@@ -533,9 +583,10 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
     rig.queue.stop_service().unwrap();
 
     // The parked requests needed no wakeup of their own: the stop ran them and
-    // each failed before its demand. The lookup held nothing; the OPENDIR
-    // still held its source, and released it.
+    // each failed before its demand. The lookup and the READ held nothing;
+    // the OPENDIR still held its source, and released it.
     let mut seen = [
+        observed.recv_timeout(WAIT).unwrap(),
         observed.recv_timeout(WAIT).unwrap(),
         observed.recv_timeout(WAIT).unwrap(),
     ];
@@ -544,14 +595,15 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
         seen,
         [
             (300, Some((true, false, false))),
-            (301, Some((true, true, false)))
+            (301, Some((true, true, false))),
+            (302, Some((true, false, false)))
         ]
     );
     until("the fenced requests left the lane", || {
         rig.queue.work().unwrap().admitted == 0
     });
     let lane = rig.queue.work().unwrap();
-    assert_eq!((lane.completed, lane.retained), (2, 0));
+    assert_eq!((lane.completed, lane.retained), (3, 0));
     // The three waits on the port end as `Fenced`, having attempted nothing.
     match stepper.poll(cold.as_mut()) {
         Poll::Ready(Err(error)) if error.is::<Fenced>() => {}
@@ -573,8 +625,8 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
     );
     drop(reader);
     // Only the fenced OPENDIR's one release was admitted since the stop: the
-    // fenced lookup had nothing to release, and the blocked acquisition never
-    // was admitted.
+    // fenced lookup and the fenced READ had nothing to release, and the
+    // blocked acquisition never was admitted.
     until("the release result returned its credit", || {
         rig.owner_work().outstanding == bound
     });
@@ -585,7 +637,7 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
         before.completed[ServiceClass::Source as usize]
     );
     println!(
-        "FENCED-WAITS admission_wait=Fenced reader_wait=Fenced base_reader_wait=Fenced parked_lookup=(fenced,no_source,no_read)->Complete parked_opendir=(fenced,source_held,no_read)->Complete owner_jobs_after_stop=1 source_jobs_after_stop=0 reader_grants_after_stop=0"
+        "FENCED-WAITS admission_wait=Fenced reader_wait=Fenced base_reader_wait=Fenced parked_lookup=(fenced,no_source,no_read)->Complete parked_read=(fenced,no_source,no_read)->Complete parked_opendir=(fenced,source_held,no_read)->Complete owner_jobs_after_stop=1 source_jobs_after_stop=0 reader_grants_after_stop=0"
     );
 
     // The sixteen sources the test held are given back through the same port.
@@ -595,6 +647,8 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
         drop(holder);
         drop(wait(services.release_source(source)).unwrap());
     }
+    drop(wait(services.close_file(mount, serial, handle)).unwrap());
+    drop(wait(services.forget(mount, serial, 1)).unwrap());
     drop(services);
     rig.revoke_and_stop();
 }
