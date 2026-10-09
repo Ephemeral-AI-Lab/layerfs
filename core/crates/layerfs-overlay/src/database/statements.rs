@@ -182,3 +182,7 @@ pub(crate) const FENCE_FILE: &str = fence!(
 pub(crate) const FENCE_HANDLE: &str = fence!(
     "CASE WHEN EXISTS(SELECT 1 FROM native_file n JOIN file_handle f ON f.ns=n.ns AND f.owner=n.owner WHERE n.ns=w.ns AND n.mount=?3 AND n.owner=?5 AND f.serial=?4) OR EXISTS(SELECT 1 FROM native_directory d WHERE d.ns=w.ns AND d.owner=?5 AND d.mount=?3 AND d.serial=?4 AND d.closed=0) THEN 1 END"
 );
+/// An open directory descriptor of the inode.
+pub(crate) const FENCE_DIRECTORY: &str = fence!(
+    "SELECT 1 FROM native_directory d WHERE d.ns=w.ns AND d.owner=?5 AND d.mount=?3 AND d.serial=?4 AND d.closed=0"
+);

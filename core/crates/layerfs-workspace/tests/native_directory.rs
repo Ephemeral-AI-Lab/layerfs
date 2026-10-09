@@ -155,7 +155,9 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
         .iter()
         .all(|e| e.name.as_slice() > b"alias" && e.name != b"file"));
     b.overlay.release_base_source(old.source()).unwrap();
-    b.overlay.close_native_directory(directory).unwrap();
+    b.overlay
+        .close_native_directory(directory.mount(), directory.serial(), directory.owner_id())
+        .unwrap();
     b.overlay.revoke_native_mount(mount).unwrap();
 }
 #[test]
@@ -183,7 +185,9 @@ fn opened_directory_retains_parent_and_metadata_after_forget_and_rmdir() {
         .acquire_native_directory_read(directory, 3, 0)
         .unwrap();
     assert_eq!(read.parent(), 1);
-    b.overlay.close_native_directory(directory).unwrap();
+    b.overlay
+        .close_native_directory(directory.mount(), directory.serial(), directory.owner_id())
+        .unwrap();
     let inode = b
         .overlay
         .source_inode(read.source(), serial)
@@ -240,6 +244,8 @@ fn next_directory_read_observes_parent_moved_by_the_atomic_namespace_job() {
     );
     b.overlay.release_base_source(before.source()).unwrap();
     b.overlay.release_base_source(after.source()).unwrap();
-    b.overlay.close_native_directory(directory).unwrap();
+    b.overlay
+        .close_native_directory(directory.mount(), directory.serial(), directory.owner_id())
+        .unwrap();
     b.overlay.revoke_native_mount(mount).unwrap();
 }

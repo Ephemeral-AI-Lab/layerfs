@@ -204,6 +204,7 @@ fn every_visit_statement_is_an_indexed_seek() {
         "fence-lookup",
         "fence-file",
         "fence-handle",
+        "fence-directory",
         "drop-open",
         "drop-lookup",
         "drop-reader",
@@ -719,6 +720,152 @@ fn an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_fil
         ));
     }
     assert_eq!(w.db.retained_native_file(w.mount, 10).unwrap(), None);
+}
+
+#[test]
+fn an_opendir_visit_writes_its_descriptor_alone_and_releasedir_closes_exactly_that_directory() {
+    let w = world();
+    let file = w.open(w.mount, 1, 50, true);
+    let root = Inode {
+        kind: InodeKind::Directory,
+        mode: 0o755,
+        ..inode(1)
+    };
+    let open = |request: u64, serial: u64, decided: Option<Option<Inode>>| {
+        w.db.opendir_native_visit(w.mount, request, serial, |_, _| {
+            Ok(match decided {
+                None => NativeDecision::Needs("needs"),
+                Some(inode) => NativeDecision::Finished {
+                    inode,
+                    value: "finished",
+                },
+            })
+        })
+    };
+    let rows = || (w.snapshot(w.route).0, w.snapshot(w.route).1);
+    let before = rows();
+
+    // Undecided, and decided without an inode (a refusal): nothing written.
+    let undecided = open(20, 1, None);
+    assert!(matches!(undecided.result, Ok(None)));
+    assert_eq!(
+        (undecided.decision, undecided.directory_candidate),
+        (Some("needs"), None)
+    );
+    let refused = open(20, 1, Some(None));
+    assert!(matches!(refused.result, Ok(None)));
+    assert_eq!(
+        (refused.decision, refused.directory_candidate),
+        (Some("finished"), None)
+    );
+    // An inode the kernel holds no lookup count on: stale before a decision.
+    let stale =
+        w.db.opendir_native_visit(w.mount, 20, 77, |_, _| -> Result<NativeDecision<()>, _> {
+            panic!("a refused OPENDIR reached its decision")
+        });
+    assert!(matches!(stale.result, Err(OverlayError::Stale)));
+    // A decision that is not this directory, or a removed one, fails whole.
+    let wrong = open(20, 50, Some(Some(inode(50))));
+    assert!(matches!(wrong.result, Err(OverlayError::Missing)));
+    let other = open(
+        20,
+        1,
+        Some(Some(Inode {
+            serial: 2,
+            ..root.clone()
+        })),
+    );
+    assert!(matches!(
+        other.result,
+        Err(OverlayError::Invalid("native observation serial"))
+    ));
+    assert_eq!(
+        (wrong.directory_candidate, other.directory_candidate),
+        (None, None)
+    );
+    assert_eq!(rows(), before);
+    assert_eq!(w.db.retained_native_directory(w.mount, 20).unwrap(), None);
+
+    // Decided: one open descriptor of the directory, recorded for the request
+    // that receives it. No source and no read; the Workspace row is unchanged.
+    let opened = open(20, 1, Some(Some(root.clone())));
+    assert!(matches!(opened.result, Ok(None)));
+    assert!(opened.candidate.is_none() && opened.open_candidate.is_none());
+    let directory = opened
+        .directory_candidate
+        .expect("the OPENDIR's descriptor");
+    assert_eq!(directory.serial(), 1);
+    assert_eq!(
+        w.db.retained_native_directory(w.mount, 20).unwrap(),
+        Some(directory)
+    );
+    let after = rows();
+    assert_eq!(after.0, before.0, "the Workspace row is unchanged");
+    assert_eq!(
+        (after.1.source_rows, after.1.inode_rows),
+        (before.1.source_rows, before.1.inode_rows)
+    );
+    assert_eq!(w.db.state(w.route).unwrap().base_readers, 0);
+    // A second OPENDIR recorded for the same kernel request fails whole.
+    let again = open(20, 1, Some(Some(root.clone())));
+    assert!(again.result.is_err(), "{:?}", again.result);
+    assert_eq!(rows(), after);
+    // The descriptor serves a handle-addressed visit of its directory.
+    let seen = w.db.observe_native_visit(
+        w.mount,
+        1,
+        Some(directory.owner_id()),
+        false,
+        |_, _| -> Result<NativeDecision<()>, OverlayError> {
+            Ok(NativeDecision::Finished {
+                inode: None,
+                value: (),
+            })
+        },
+    );
+    assert!(matches!(seen.result, Ok(None)));
+
+    // RELEASEDIR closes exactly an open directory descriptor of that inode:
+    // a file's descriptor, another inode and an unknown handle are stale and
+    // change nothing.
+    for (serial, handle) in [
+        (50, file.owner_id()),
+        (50, directory.owner_id()),
+        (1, file.owner_id()),
+        (1, directory.owner_id() + 1000),
+    ] {
+        assert!(matches!(
+            w.db.close_native_directory(w.mount, serial, handle),
+            Err(OverlayError::Stale)
+        ));
+    }
+    assert_eq!(rows(), after);
+    // A closed Workspace refuses OPENDIR and still serves RELEASEDIR, once.
+    let second = open(21, 1, Some(Some(root.clone())))
+        .directory_candidate
+        .expect("a second descriptor of the same directory");
+    assert_ne!(second.owner_id(), directory.owner_id());
+    w.db.close(w.route).unwrap();
+    let closed = open(22, 1, Some(Some(root)));
+    assert!(matches!(closed.result, Err(OverlayError::Closed)));
+    w.db.close_native_directory(w.mount, 1, directory.owner_id())
+        .unwrap();
+    assert!(matches!(
+        w.db.close_native_directory(w.mount, 1, directory.owner_id()),
+        Err(OverlayError::Stale)
+    ));
+    // The other descriptor is untouched by that release, and a revoked
+    // mount's RELEASEDIR is stale: revocation retires what is left.
+    assert!(w.db.native_directory(w.mount, 1, second.owner_id()).is_ok());
+    w.db.close_native_file(w.mount, 50, file.owner_id())
+        .unwrap();
+    w.db.revoke_native_mount(w.mount).unwrap();
+    assert!(matches!(
+        w.db.close_native_directory(w.mount, 1, second.owner_id()),
+        Err(OverlayError::Stale)
+    ));
+    w.maintain();
+    assert_eq!(w.db.cleanup_state(w.route).unwrap(), CleanupState::Queued);
 }
 
 #[test]

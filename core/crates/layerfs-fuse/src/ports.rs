@@ -191,7 +191,13 @@ pub trait RequestServices: Send + Sync {
         plan: Arc<NativeCookiePlan>,
         accepted: usize,
     ) -> ServiceFuture<'_, ServiceReply<()>>;
-    fn close_directory(&self, directory: NativeDirectory) -> ServiceFuture<'_, ServiceReply<()>>;
+    /// RELEASEDIR as one owner job: the open descriptor is found and closed.
+    fn close_directory(
+        &self,
+        mount: NativeMount,
+        serial: u64,
+        handle: u64,
+    ) -> ServiceFuture<'_, ServiceReply<()>>;
     /// READ (through `handle`) or READLINK (no handle) as one read-only owner
     /// job: the window's local part and the base root the rest belongs to.
     /// It records nothing, so its request holds nothing afterwards.
@@ -233,10 +239,10 @@ pub trait RequestServices: Send + Sync {
         &self,
         job: NativeReadJob,
     ) -> ServiceFuture<'_, ServiceReply<Arc<NativeReadOutcome>>>;
-    /// LOOKUP, GETATTR or OPEN of a regular file as one owner job with no
-    /// request source. An undecided outcome has changed nothing and holds
-    /// nothing. A decided OPEN recorded its descriptor for `request` in that
-    /// job; no other operation uses `request`.
+    /// LOOKUP, GETATTR, OPEN of a regular file or OPENDIR as one owner job
+    /// with no request source. An undecided outcome has changed nothing and
+    /// holds nothing. A decided OPEN or OPENDIR recorded its descriptor for
+    /// `request` in that job; no other operation uses `request`.
     fn observe_visit(
         &self,
         mount: NativeMount,

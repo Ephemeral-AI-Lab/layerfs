@@ -1,0 +1,203 @@
+===== compound-015a16aad54419dc (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 0
+===== costs-349e2bf53982389c (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 2 tests
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... ok
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== directory_cost-a418e959b7b472e1 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 1 test
+test opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows ... FAILED
+
+failures:
+
+---- opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows stdout ----
+DIR_COST opendir local small: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first local small: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(114, 133) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 25, 25), ("Inode", 11, 11), ("DirectoryEntry", 1, 1), ("Lease", 65, 84)]
+DIR_COST readdir end local small: jobs=[1, 0, 0, 2, 0, 1] grants=1 transactions=2 statements=(44, 53) sql=[("Startup", 2, 2), ("Begin", 2, 2), ("Commit", 2, 2), ("Workspace", 11, 11), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 25, 34)]
+DIR_COST releasedir local small: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+DIR_COST opendir local large: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first local large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(384, 457) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 79, 79), ("Inode", 65, 65), ("DirectoryEntry", 1, 1), ("Lease", 227, 300)]
+DIR_COST readdir next local large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(388, 461) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 79, 79), ("Inode", 65, 65), ("DirectoryEntry", 1, 1), ("Lease", 231, 304)]
+DIR_COST readdir again local large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(323, 332) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 79, 79), ("Inode", 65, 65), ("DirectoryEntry", 1, 1), ("Lease", 166, 175)]
+DIR_COST releasedir local large: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+DIR_COST opendir base small: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first base small: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(84, 103) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 55, 74)]
+DIR_COST readdir end base small: jobs=[1, 0, 0, 2, 0, 1] grants=1 transactions=2 statements=(44, 53) sql=[("Startup", 2, 2), ("Begin", 2, 2), ("Commit", 2, 2), ("Workspace", 11, 11), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 25, 34)]
+DIR_COST releasedir base small: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+DIR_COST opendir base large: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first base large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(192, 265) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 163, 236)]
+DIR_COST readdir next base large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(196, 269) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 167, 240)]
+DIR_COST readdir again base large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(131, 140) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 102, 111)]
+DIR_COST releasedir base large: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+
+thread 'opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows' panicked at crates/layerfs-daemon/tests/directory_cost.rs:622:9:
+assertion `left == right` failed: opendir base small
+  left: Cost { jobs: [1, 0, 0, 0, 0, 0], grants: 0, sql: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)] }
+ right: Cost { jobs: [1, 0, 0, 0, 0, 0], grants: 0, sql: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 2, 2), ("Lease", 4, 6)] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 101
+===== fenced_port-47a98c1a1fe5e978 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_they_hold ... ok
+test a_job_submitted_before_the_stop_is_awaited_to_its_original_result ... ok
+test a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call ... ok
+test a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== filesystem_port-9a367c3ce80975d4 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 4 tests
+test a_full_handoff_of_parked_reads_holds_no_owner_credit_and_every_read_completes ... ok
+test directory_consumer_publishes_only_accepted_names_and_survives_descriptor_close ... ok
+test real_native_steps_park_for_readers_and_release_original_consumers ... ok
+test terminal_owner_failure_retains_unattempted_input_without_replay ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== job_cost-6806228384655850 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 1 test
+test completion_cost_matches_exclusive_owner_aggregate_and_retained_credit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== job_rows-d777c76c4ebfe5b5 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 3 tests
+test a_job_keeps_the_rows_it_can_publish_and_reads_the_rest_by_index ... ok
+test a_reserved_serial_that_already_has_a_row_fails_the_whole_job ... ok
+test a_row_the_job_read_is_written_as_the_indexed_path_writes_it ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_directory-da74e859bec14402 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 2 tests
+test cookies_are_reused_and_retire_in_bounded_indexed_live_turns ... ok
+test only_accepted_entries_publish_offsets_and_concurrent_aliases_remain_valid ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_directory-dc23566612d2ac3a (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 3 tests
+test empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies ... ok
+test next_directory_read_observes_parent_moved_by_the_atomic_namespace_job ... ok
+test opened_directory_retains_parent_and_metadata_after_forget_and_rmdir ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_unlink_cost-bcded746609cf3eb (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test one_removed_file_costs_exactly_this_beside_any_files_and_after_any_orphans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_cost-31891792959c0ed4 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+
+running 1 test
+test the_five_jobs_of_one_created_file_cost_exactly_this_at_any_directory_size ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== native_visit_fence-05a8e2ec310cfb42 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 9 tests
+test a_closed_workspace_refuses_visits_and_still_releases_descriptors ... ok
+test a_created_inode_takes_its_custody_without_a_read_and_a_duplicate_fails_whole ... ok
+test a_descriptor_of_another_mount_or_inode_and_a_missing_reference_are_stale ... ok
+test a_read_only_descriptor_cannot_publish_and_begins_no_transaction ... ok
+test a_read_window_writes_nothing_and_follows_its_descriptor_past_unlink_and_install ... ok
+test a_revoked_or_replaced_mount_is_stale_for_every_fenced_job ... ok
+test an_open_visit_writes_its_descriptor_alone_and_nothing_unless_it_decides_a_file ... ok
+test an_opendir_visit_writes_its_descriptor_alone_and_releasedir_closes_exactly_that_directory ... ok
+test every_visit_statement_is_an_indexed_seek ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+
+EXIT 0
+===== read_cost-106cc8ee0ca7784d (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+
+running 5 tests
+test a_base_file_length_is_one_store_answer_per_daemon_and_costs_a_visit_when_not_remembered ... ok
+test a_window_reads_the_base_its_visit_named_whatever_is_installed_before_its_bytes ... ok
+test an_unlinked_open_file_still_reads_its_own_bytes_in_one_visit ... ok
+test read_open_and_readlink_cost_exactly_this_at_any_size_and_beside_unrelated_rows ... ok
+test without_a_cache_a_read_is_still_one_visit_and_one_reader_and_refuses_nothing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0
+===== transactions-b47653736df2ab57 (cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+
+running 6 tests
+test a_failure_after_the_first_write_rolls_back_and_one_before_it_has_nothing_to_roll_back ... ok
+test a_read_only_atomic_job_begins_commits_and_admits_nothing ... ok
+test consecutive_writes_that_do_not_grow_the_file_allocate_at_most_once ... ok
+test linked_sqlite_classifies_reads_and_writes_as_the_engine_expects ... ok
+test owner_identities_are_unique_and_increasing_across_namespaces ... ok
+test reads_then_writes_are_one_transaction_begun_at_the_first_write ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+
+EXIT 0

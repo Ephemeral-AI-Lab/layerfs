@@ -107,14 +107,14 @@ pub struct NativeVisitRequest {
     /// Base facts read for earlier undecided visits of this request.
     pub facts: Arc<VisitFacts>,
 }
-/// LOOKUP, GETATTR or OPEN of a regular file as one owner job.
+/// LOOKUP, GETATTR, OPEN of a regular file or OPENDIR as one owner job.
 #[derive(Clone)]
 pub struct NativeReadVisit {
     mount: NativeMount,
     serial: u64,
     handle: Option<u64>,
     operation: NativeReadOperation,
-    /// The kernel request an OPEN's descriptor is recorded for.
+    /// The kernel request an OPEN's or OPENDIR's descriptor is recorded for.
     open: Option<u64>,
     facts: Arc<VisitFacts>,
     resident: BaseView,
@@ -204,6 +204,31 @@ impl Workspace {
         writable: bool,
         facts: Arc<VisitFacts>,
     ) -> WorkspaceResult<NativeReadVisit> {
+        let operation = NativeReadOperation::Open { serial, writable };
+        self.opening_visit(resident, mount, request, serial, operation, facts)
+    }
+    /// OPENDIR of the directory `serial`, which the kernel references, for
+    /// the kernel request `request`. `resident` reads from memory only.
+    pub fn native_opendir_visit(
+        &self,
+        resident: Arc<crate::CanonicalClient>,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        facts: Arc<VisitFacts>,
+    ) -> WorkspaceResult<NativeReadVisit> {
+        let operation = NativeReadOperation::Opendir { serial };
+        self.opening_visit(resident, mount, request, serial, operation, facts)
+    }
+    fn opening_visit(
+        &self,
+        resident: Arc<crate::CanonicalClient>,
+        mount: NativeMount,
+        request: u64,
+        serial: u64,
+        operation: NativeReadOperation,
+        facts: Arc<VisitFacts>,
+    ) -> WorkspaceResult<NativeReadVisit> {
         let base = self.base()?;
         if mount.route() != self.route() || mount.root_serial() != base.root().root_inode().serial()
         {
@@ -213,7 +238,7 @@ impl Workspace {
             mount,
             serial,
             handle: None,
-            operation: NativeReadOperation::Open { serial, writable },
+            operation,
             open: Some(request),
             facts,
             resident: base.with_client(resident),
@@ -251,8 +276,9 @@ impl NativeReadVisit {
         self.facts.charge() + 255
     }
     /// The answer, a refusal or the needs of an undecided visit. An
-    /// undecided visit has written nothing. A decided OPEN carries its
-    /// descriptor as the observation's open candidate.
+    /// undecided visit has written nothing. A decided OPEN or OPENDIR
+    /// carries its descriptor as the observation's open or directory
+    /// candidate.
     pub fn perform(&self, db: &Overlay) -> NativeReadOutcome {
         let lookup = matches!(self.operation, NativeReadOperation::Lookup { .. });
         let decide = |rows: SourceRows<'_>, source: BaseSource| {
@@ -272,6 +298,9 @@ impl NativeReadVisit {
         match (&self.operation, self.open) {
             (NativeReadOperation::Open { writable, .. }, Some(request)) => {
                 db.open_native_visit(self.mount, request, self.serial, *writable, decide)
+            }
+            (NativeReadOperation::Opendir { .. }, Some(request)) => {
+                db.opendir_native_visit(self.mount, request, self.serial, decide)
             }
             _ => db.observe_native_visit(self.mount, self.serial, self.handle, lookup, decide),
         }

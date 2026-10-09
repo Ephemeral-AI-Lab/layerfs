@@ -1,0 +1,41 @@
+
+running 1 test
+test opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows ... FAILED
+
+failures:
+
+---- opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows stdout ----
+DIR_COST opendir local small: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first local small: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(114, 133) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 25, 25), ("Inode", 11, 11), ("DirectoryEntry", 1, 1), ("Lease", 65, 84)]
+DIR_COST readdir end local small: jobs=[1, 0, 0, 2, 0, 1] grants=1 transactions=2 statements=(44, 53) sql=[("Startup", 2, 2), ("Begin", 2, 2), ("Commit", 2, 2), ("Workspace", 11, 11), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 25, 34)]
+DIR_COST releasedir local small: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+DIR_COST opendir local large: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first local large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(384, 457) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 79, 79), ("Inode", 65, 65), ("DirectoryEntry", 1, 1), ("Lease", 227, 300)]
+DIR_COST readdir next local large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(388, 461) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 79, 79), ("Inode", 65, 65), ("DirectoryEntry", 1, 1), ("Lease", 231, 304)]
+DIR_COST readdir again local large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(323, 332) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 79, 79), ("Inode", 65, 65), ("DirectoryEntry", 1, 1), ("Lease", 166, 175)]
+DIR_COST releasedir local large: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+DIR_COST opendir base small: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first base small: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(84, 103) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 55, 74)]
+DIR_COST readdir end base small: jobs=[1, 0, 0, 2, 0, 1] grants=1 transactions=2 statements=(44, 53) sql=[("Startup", 2, 2), ("Begin", 2, 2), ("Commit", 2, 2), ("Workspace", 11, 11), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 25, 34)]
+DIR_COST releasedir base small: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+DIR_COST opendir base large: jobs=[1, 0, 0, 0, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)]
+DIR_COST readdir first base large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(192, 265) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 163, 236)]
+DIR_COST readdir next base large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(196, 269) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 167, 240)]
+DIR_COST readdir again base large: jobs=[3, 0, 0, 2, 0, 1] grants=1 transactions=4 statements=(131, 140) sql=[("Startup", 4, 4), ("Begin", 4, 4), ("Commit", 4, 4), ("Workspace", 15, 15), ("Inode", 1, 1), ("DirectoryEntry", 1, 1), ("Lease", 102, 111)]
+DIR_COST releasedir base large: jobs=[0, 0, 0, 1, 0, 0] grants=0 transactions=1 statements=(9, 11) sql=[("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Lease", 4, 5), ("Reclaim", 1, 2)]
+
+thread 'opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows' panicked at crates/layerfs-daemon/tests/directory_cost.rs:622:9:
+assertion `left == right` failed: opendir base small
+  left: Cost { jobs: [1, 0, 0, 0, 0, 0], grants: 0, sql: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 1, 1), ("Lease", 4, 6)] }
+ right: Cost { jobs: [1, 0, 0, 0, 0, 0], grants: 0, sql: [("Startup", 1, 1), ("Begin", 1, 1), ("Commit", 1, 1), ("Workspace", 1, 1), ("Inode", 2, 2), ("Lease", 4, 6)] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    opendir_readdir_and_releasedir_cost_exactly_this_at_any_size_and_beside_unrelated_rows
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+
+EXIT 101

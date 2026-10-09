@@ -362,9 +362,8 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
         (disposed.outstanding, disposed.admitted),
         (0, visited.admitted)
     );
-    // A definite refusal of a request that records a source still owns that
-    // source and its original result until the caller disposes the reply:
-    // OPENDIR of a regular file the kernel references.
+    // OPENDIR is a visit as well: its definite refusal, of a regular file
+    // the kernel references, holds nothing and is followed by no release.
     let found = wait(NativeRead::prepare(
         bound.request(&Fence::default()).unwrap(),
         mount,
@@ -391,17 +390,25 @@ fn real_native_steps_park_for_readers_and_release_original_consumers() {
     .unwrap();
     assert!(matches!(refused.value(), Err(Refusal::NotDirectory)));
     let held = client.diagnostics().unwrap();
-    assert_eq!(held.outstanding, 1);
     assert_eq!(
-        held.completed[ServiceClass::Source as usize],
-        disposed.completed[ServiceClass::Source as usize] + 1
+        (
+            held.outstanding,
+            held.admitted,
+            held.completed[ServiceClass::Read as usize],
+            held.completed[ServiceClass::Source as usize]
+        ),
+        (
+            0,
+            disposed.admitted + 1,
+            disposed.completed[ServiceClass::Read as usize] + 1,
+            disposed.completed[ServiceClass::Source as usize]
+        )
     );
     wait(refused.dispose()).unwrap();
     let released = client.diagnostics().unwrap();
-    // Exactly the release of that source.
     assert_eq!(
         (released.outstanding, released.admitted),
-        (0, held.admitted + 1)
+        (0, held.admitted)
     );
     drop(wait(services.forget(mount, serial, 1)).unwrap());
     let done = wait(
@@ -489,8 +496,8 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
     let queue = pool.register(mount).unwrap();
     owner.stop().unwrap();
     let before = client.diagnostics().unwrap().admitted;
-    // A lookup's first owner job is its visit; an OPENDIR's is the
-    // acquisition of its recorded source. Each is retained in its own slot.
+    // The first owner job of a lookup and of an OPENDIR is its visit. Each
+    // is retained in its own slot.
     let requests = [
         (
             u64::MAX,
@@ -554,19 +561,8 @@ fn terminal_owner_failure_retains_unattempted_input_without_replay() {
                 match (command.as_ref(), operation) {
                     (
                         Command::Native(NativeJob::ObserveVisit(visit)),
-                        NativeReadOperation::Lookup { .. },
+                        NativeReadOperation::Lookup { .. } | NativeReadOperation::Opendir { .. },
                     ) => assert_eq!(visit.mount(), mount),
-                    (
-                        Command::Native(NativeJob::Source {
-                            mount: sourced,
-                            request: sourced_request,
-                            serial,
-                        }),
-                        NativeReadOperation::Opendir { .. },
-                    ) => assert_eq!(
-                        (*sourced, *sourced_request, *serial),
-                        (mount, *request, root)
-                    ),
                     other => panic!("unattempted another command: {other:?}"),
                 }
             })
@@ -922,7 +918,7 @@ fn directory_consumer_publishes_only_accepted_names_and_survives_descriptor_clos
             .collect::<Vec<_>>()
     );
     // RELEASEDIR cannot invalidate an already acquired read/cookie source.
-    drop(wait(services.close_directory(directory)).unwrap());
+    drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
     let closed = match wait(NativeRead::prepare(
         bound.request(&Fence::default()).unwrap(),
         mount,

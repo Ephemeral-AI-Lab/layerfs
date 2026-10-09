@@ -429,11 +429,17 @@ fn native_lookup_uses_actual_owner_and_preserves_original_receipt_until_disposal
     )
     .result()
     .is_ok());
-    assert!(
-        dir_job(&client, route, NativeDirectoryJob::Close(directory))
-            .result()
-            .is_ok()
-    );
+    assert!(dir_job(
+        &client,
+        route,
+        NativeDirectoryJob::Close {
+            mount,
+            serial: directory.serial(),
+            handle: directory.owner_id(),
+        }
+    )
+    .result()
+    .is_ok());
     assert!(
         job(&client, route, Command::Native(NativeJob::Revoke(mount)))
             .result()

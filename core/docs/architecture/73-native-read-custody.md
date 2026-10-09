@@ -39,9 +39,10 @@ Read/Lifecycle/Source):
 | OPEN of a base file whose inode or length is not in memory | not pinned | 2/0/0 jobs, 1 grant, 1 length batch, 1 transaction, 11/14 |
 | RELEASE | 0/1/0 jobs, 1 transaction, 7/11 | unchanged |
 
-OPENDIR still records a source and a processing read, through
-`NativeReadPlan`, as described below. `NativeReadOperation::Open` on that
-plan and `Overlay::observe_native_open` are no longer reached by a
+R7 update, 2026-10-09 (OPENDIR): OPENDIR takes the same visit
+(`Workspace::native_opendir_visit`, `Overlay::opendir_native_visit`); see
+[directory custody](74-native-directory-custody.md). `NativeReadPlan` and
+the `Overlay::observe_native*` transactions are no longer reached by any
 filesystem request. Mounted consequence for the proofs: a reader whose name
 was looked up is no longer parked in its OPEN when no Store reader is free;
 it is parked in its first READ of base bytes

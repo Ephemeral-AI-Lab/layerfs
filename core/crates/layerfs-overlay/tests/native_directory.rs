@@ -142,8 +142,12 @@ fn only_accepted_entries_publish_offsets_and_concurrent_aliases_remain_valid() {
         .is_err());
     let dot = f.read(6, 1);
     assert_eq!(*dot.cursor(), NativeDirectoryCursor::AfterDot);
-    f.db.close_native_directory(f.directory).unwrap();
-    assert!(f.db.close_native_directory(f.directory).is_err());
+    f.db.close_native_directory(f.mount, f.directory.serial(), f.directory.owner_id())
+        .unwrap();
+    assert!(f
+        .db
+        .close_native_directory(f.mount, f.directory.serial(), f.directory.owner_id())
+        .is_err());
     assert!(f
         .db
         .acquire_native_directory_read(f.directory, 7, 0)
@@ -238,7 +242,8 @@ fn cookies_are_reused_and_retire_in_bounded_indexed_live_turns() {
         "published-name rewind allocates no new cookie rows"
     );
     let held = f.read(5, last);
-    f.db.close_native_directory(f.directory).unwrap();
+    f.db.close_native_directory(f.mount, f.directory.serial(), f.directory.owner_id())
+        .unwrap();
     let mut cursor = MaintenanceCursor::default();
     for _ in 0..4 {
         if let Some(step) = f.db.maintain(cursor).unwrap() {

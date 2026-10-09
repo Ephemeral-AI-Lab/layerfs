@@ -430,7 +430,7 @@ fn a_stopped_fence_refuses_every_acquiring_call_and_no_disposal_call() {
     drop(wait(services.release_source(source)).unwrap());
     drop(wait(services.release_source(directory_read.source())).unwrap());
     drop(wait(services.close_file(mount, serial, handle)).unwrap());
-    drop(wait(services.close_directory(directory)).unwrap());
+    drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
     drop(wait(services.forget(mount, serial, 1)).unwrap());
     // A READ or READLINK served before the stop left nothing to dispose.
     assert_eq!(rig.owner_work().admitted, admitted + 5);
@@ -598,8 +598,8 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
     rig.queue.stop_service().unwrap();
 
     // The parked requests needed no wakeup of their own: the stop ran them and
-    // each failed before its demand. The lookup and the READ held nothing;
-    // the OPENDIR still held its source, and released it.
+    // each failed before its demand. The lookup, the OPENDIR and the READ
+    // held nothing.
     let mut seen = [
         observed.recv_timeout(WAIT).unwrap(),
         observed.recv_timeout(WAIT).unwrap(),
@@ -610,7 +610,7 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
         seen,
         [
             (300, Some((true, false, false))),
-            (301, Some((true, true, false))),
+            (301, Some((true, false, false))),
             (302, Some((true, false, false)))
         ]
     );
@@ -639,20 +639,20 @@ fn a_wait_for_admission_or_for_a_reader_ends_at_the_stop_with_nothing_attempted(
         (0, 1, grants)
     );
     drop(reader);
-    // Only the fenced OPENDIR's one release was admitted since the stop: the
-    // fenced lookup and the fenced READ had nothing to release, and the
-    // blocked acquisition never was admitted.
-    until("the release result returned its credit", || {
+    // Nothing was admitted since the stop: the fenced lookup, the fenced
+    // OPENDIR and the fenced READ had nothing to release, and the blocked
+    // acquisition never was admitted.
+    until("only the held results keep their credits", || {
         rig.owner_work().outstanding == bound
     });
     let after = rig.owner_work();
-    assert_eq!(after.admitted, before.admitted + 1);
+    assert_eq!(after.admitted, before.admitted);
     assert_eq!(
         after.completed[ServiceClass::Source as usize],
         before.completed[ServiceClass::Source as usize]
     );
     println!(
-        "FENCED-WAITS admission_wait=Fenced reader_wait=Fenced base_reader_wait=Fenced parked_lookup=(fenced,no_source,no_read)->Complete parked_read=(fenced,no_source,no_read)->Complete parked_opendir=(fenced,source_held,no_read)->Complete owner_jobs_after_stop=1 source_jobs_after_stop=0 reader_grants_after_stop=0"
+        "FENCED-WAITS admission_wait=Fenced reader_wait=Fenced base_reader_wait=Fenced parked_lookup=(fenced,no_source,no_read)->Complete parked_read=(fenced,no_source,no_read)->Complete parked_opendir=(fenced,no_source,no_read)->Complete owner_jobs_after_stop=0 source_jobs_after_stop=0 reader_grants_after_stop=0"
     );
 
     // The sixteen sources the test held are given back through the same port.
@@ -849,8 +849,8 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
         );
         let _ = stepper.woken.recv_timeout(Duration::from_millis(20));
     }
-    // A request that still records a source, waiting for the same reader: a
-    // second OPENDIR holds its source while its base fact is not yet read.
+    // A second OPENDIR waits for the same reader while its base fact is not
+    // yet read. It is a visit and holds nothing.
     let mut opening = std::pin::pin!(NativeRead::prepare(
         services.clone(),
         mount,
@@ -893,9 +893,9 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
         Poll::Pending => panic!("the OPENDIR reader wait survived the stop"),
     };
     assert!(failure.fenced());
-    assert!(failure.retained_source().is_some() && failure.retained_read().is_none());
+    assert!(failure.retained_source().is_none() && failure.retained_read().is_none());
     wait(failure.relinquish()).unwrap();
-    assert_eq!(rig.owner_work().admitted, admitted + 1);
+    assert_eq!(rig.owner_work().admitted, admitted);
     assert_eq!(rig.store.read_work().waiting, 0);
 
     let failure = match wait(stream.next()) {
@@ -918,11 +918,11 @@ fn a_fenced_mutation_holds_nothing_and_fenced_source_requests_give_back_what_the
     };
     assert!(failure.fenced() && failure.retained_source().is_none());
     wait(failure.relinquish()).unwrap();
-    // Exactly the two source releases were admitted, the OPENDIR's and the
-    // enumeration's; nothing else was attempted.
-    assert_eq!(rig.owner_work().admitted, admitted + 2);
+    // Exactly the enumeration's source release was admitted; nothing else
+    // was attempted.
+    assert_eq!(rig.owner_work().admitted, admitted + 1);
     drop(reader);
-    drop(wait(services.close_directory(directory)).unwrap());
+    drop(wait(services.close_directory(mount, directory.serial(), directory.owner_id())).unwrap());
 
     let absent = wait(NativeRead::prepare(
         rig.services(&Fence::default()),

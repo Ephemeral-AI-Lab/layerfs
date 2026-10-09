@@ -193,11 +193,11 @@ impl Custody {
             Err(reason) => Err(ReadFailure::new(reason, self)),
         }
     }
-    /// LOOKUP, GETATTR and OPEN are served by owner visits that record no
-    /// request source: nothing is acquired, so nothing is released
+    /// LOOKUP, GETATTR, OPEN and OPENDIR are served by owner visits that
+    /// record no request source: nothing is acquired, so nothing is released
     /// afterwards. An undecided visit changed nothing; the base facts it
     /// asked for are read here, outside the owner, before the next visit.
-    /// The visit that decides an OPEN wrote its descriptor.
+    /// The visit that decides an OPEN or OPENDIR wrote its descriptor.
     async fn visit(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
         let mut facts = Arc::new(VisitFacts::default());
         loop {
@@ -221,7 +221,7 @@ impl Custody {
                         stat,
                         read: None,
                         file: original.open_candidate,
-                        directory: None,
+                        directory: original.directory_candidate,
                         original,
                     }));
                 }
@@ -249,62 +249,7 @@ impl Custody {
         }
     }
     async fn prepare(&mut self) -> Result<Result<NativeReadValue, Refusal>, ServiceError> {
-        // OPENDIR alone still records a request source and a read.
-        if !matches!(self.operation, NativeReadOperation::Opendir { .. }) {
-            return self.visit().await;
-        }
-        let granted = self
-            .services
-            .source(self.mount, self.request, self.protected, self.handle)
-            .await?;
-        let source = *granted.get();
-        self.source = Some(source);
-        drop(granted);
-        let view = self.services.view(source)?;
-        let plan = view.native_read_plan(self.mount, self.operation.clone())?;
-        self.view = Some(view);
-        self.plan = Some(plan);
-        loop {
-            let job = self
-                .plan
-                .as_ref()
-                .unwrap()
-                .job()
-                .expect("native owner stage")
-                .clone();
-            self.receipt = Some(self.services.observe(job).await?);
-            let original = self.receipt.as_ref().unwrap().get().clone();
-            // Even a failed transaction may have produced a candidate. Preserve
-            // the entire observation; only a successful result is usable.
-            self.read = original.candidate;
-            match self.plan.as_mut().unwrap().accept(original) {
-                Ok(Some(value)) => return Ok(Ok(value)),
-                Err(failure) => {
-                    let outcome = &failure.original;
-                    if matches!(outcome.result, Ok(None))
-                        && outcome.candidate.is_none()
-                        && outcome.open_candidate.is_none()
-                        && outcome.directory_candidate.is_none()
-                    {
-                        if let Some(NativeReadDecision::Refused(refusal)) = outcome.decision {
-                            return Ok(Err(refusal));
-                        }
-                    }
-                    return Err(Box::new(failure));
-                }
-                Ok(None) => {}
-            }
-            self.receipt = None;
-            // Provider reads never run on the loop that received the request.
-            crate::LeaveReceiver::default().await;
-            let immutable = self.services.immutable(self.view.as_ref().unwrap()).await?;
-            let result = self.plan.as_mut().unwrap().supply(&immutable);
-            drop(immutable); // Return the actual reader before another SQL wait.
-            if let Err(error) = result {
-                return Err(self.services.failed_base_read(error.into()));
-            }
-            NextTurn::default().await;
-        }
+        self.visit().await
     }
     async fn release(&mut self) -> Result<(), ServiceError> {
         if let Some(read) = self.read {
