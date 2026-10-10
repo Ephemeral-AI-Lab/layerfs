@@ -1,0 +1,57 @@
+# R9c static checks on the staged tree eee41c663366c46ad19526724f3c9f59acfe73c7 over parent d296981ace76fe751bebf00dee52818fe18a3eef
+# (first write of this file lost the exit statuses to a zsh/bash variable slip; the same commands were run again under bash)
+## absent paths
+ABSENT crates/layerfs-content/Cargo.toml
+ABSENT core/reference-tests
+ABSENT Cargo.toml
+ABSENT Cargo.lock
+ABSENT tools/layerfs-eval
+ABSENT containers
+tracked files under removed paths: 0
+untracked leftovers under crates/: crates/.DS_Store crates/layerfs-content/.DS_Store (Finder metadata, ignored, not created by this run, left alone)
+## cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+R4_WALL seconds<=4 limit=120s lock_wait=0s
+EXIT 0
+## boundary guard
+PASS: scanned 674 production Rust/SQL files; semantic review still required
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+EXIT 0
+## fuser provenance (known refusal: r7-passthrough manifest, OWNER-3; 88 manifests now, 101 before: the 13 retired root manifests and locks are gone)
+{
+  "checked_manifests_locks_configs": 88,
+  "errors": [
+    "core/benchmark/r7-passthrough/Cargo.lock: locked fuser has a local/replacement source",
+    "core/benchmark/r7-passthrough/Cargo.toml: patch override of fuser is not the authorized timestamp patch"
+  ],
+  "authorized_patch_verified": false,
+  "registry_package_verified": false
+}
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+EXIT 1
+## tooling tests: core/tools
+..................................................
+----------------------------------------------------------------------
+Ran 50 tests in 0.171s
+
+OK
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0
+## tooling tests: core/benchmark/r8-tools/tests
+----------------------------------------------------------------------
+Ran 65 tests in 1.326s
+
+OK
+{"cache": "natural, setup copy warmth declared; functional only", "construction_workers": 1, "custody": {"host_pid": null, "no_child": true}, "full_byte_stop_seconds": 100, "global_profile": "Disposable/WAL/OFF", "operation_attempts": 1, "original_failure": "original Popen refusal without child", "original_failure_type": "OSError", "performance_samples": 0, "phases": [], "registration_sha256": "230996da18486bdc17e3dd778453b5dc4c02105d25d0d7649352f87e19185dfd", "schema": "r8-full-proof-controller-v1", "source_commit": "registered-source", "status": "FAIL"}
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0
+## tooling tests: tools (pinned counter)
+..................
+----------------------------------------------------------------------
+Ran 18 tests in 0.044s
+
+OK
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0
+## retired driver refuses
+the reference arm's root workspace is retired (R9c); run this driver at local tag reference-v0.1.6-final
+EXIT 1

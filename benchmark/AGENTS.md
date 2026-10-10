@@ -1,5 +1,14 @@
 # Benchmark hosting
 
+> **Status:** Historical. This harness built and measured the v0.1.6 reference
+> under root `crates/`, which R9c retired on 2026-10-10. Its manifest, runner
+> and image recipes name paths that are absent at HEAD, so nothing below is
+> runnable from the current checkout; do not redirect it to the same-named core
+> packages. To reproduce a historical row, check out local tag
+> `reference-v0.1.6-final` (`d296981ac`). Receipts keep their original verdicts.
+> Current core routing is
+> [core/benchmark/fs-bench-pro/AGENTS.md](../core/benchmark/fs-bench-pro/AGENTS.md).
+
 ## Scoped v0.1.6 replacement experiment
 
 For the owner-directed `v016-local-snapshot-experiment-v1` only, follow

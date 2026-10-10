@@ -21,6 +21,12 @@
 > Live Workspace state now lives in the sandbox and the Store format is
 > unchanged; one construction worker, a bounded sandbox spool and every measured
 > regression, waiver and declared allowance stay explicit.
+>
+> **Source notice (2026-10-10):** the v0.1.6 implementation described below is
+> not on `main` any more. Its source under root `crates/` was retired once the
+> replacement in [`core/`](core/README.md) reached its closing examination; the
+> release tag `v0.1.6` still carries it, and the sections below describe that
+> release. `core/` is under development and is not a release.
 
 
 ## 🚀 What is LayerFS?
@@ -122,11 +128,12 @@ Each `workspace exec` starts a fresh process. `commit` publishes the Workspace s
 
 Releases are built from source. You need **macOS or Linux** and **Rust 1.85 or newer**. Docker, `/dev/fuse`, and `CAP_SYS_ADMIN` are needed only for managed container-FUSE workspaces. No packages are published to crates.io for this release.
 
-From the repository root:
+From the repository root, at the `v0.1.6` release tag:
 
 ```bash
 git clone https://github.com/Ephemeral-AI-Lab/layerfs.git
 cd layerfs
+git checkout v0.1.6
 
 cargo build --release -p layerfs-cli
 export LAYERFS_BIN="$PWD/target/release/layerfs"
@@ -152,26 +159,21 @@ printf 'hello\n' > "$PWD/import-root/hello.txt"
 ## 🗂️ Repository layout
 
 ```text
-crates/
-├── layerfs-content           content-addressed objects, chunking, extents, trees
-├── layerfs-layerstack-store  SQLite schema, history, identities, object admission
-├── layerfs-workspace         ephemeral workspaces, capture, execution, containers
-├── layerfs-materialization   directory materialization and capture
-├── layerfs-fuse              Linux FUSE and host/proxy adapters
-├── layerfs-daemon            authenticated container mount/execution protocol
-├── layerfs-monitor           receipts, timings, snapshots, dedup analysis
-├── layerfs-sdk               public Rust client and value types
-└── layerfs-cli               `layerfs` command-line interface
-
-tools/layerfs-eval             Store and Branch integrity evaluator
-benchmark/                     filesystem and end-to-end benchmarks
-containers/layerfs-fuse        managed Linux FUSE runtime image
-docs/versioned/0.1.2          previous versioned product manual
-release-notes/0.1.2            previous release record
-docs/versioned/0.1.6          v0.1.6 manual
-release-notes/0.1.5            previous release record
-release-notes/0.1.3            release contract, evidence, and limitations
+core/                          replacement implementation (in development)
+├── crates/                    content, storage, history, persistence, project,
+│                              telemetry, overlay, workspace, fuse, daemon,
+│                              bridge, sandbox and the SDK
+├── benchmark/                 core harnesses, registrations and proof tools
+└── docs/                      architecture, design contracts and run records
+benchmark/                     v0.1.6 harness, historical; not runnable on main
+docs/versioned/0.1.6           v0.1.6 manual
+docs/versioned/0.1.2           previous versioned product manual
+release-notes/                 release records, evidence and limitations
+tools/production_loc.py        pinned production source-line counter
 ```
+
+The v0.1.6 crates, `tools/layerfs-eval` and `containers/layerfs-fuse` are in the
+`v0.1.6` release tag.
 
 ## ⚠️ Current limitations
 

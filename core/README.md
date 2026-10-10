@@ -21,10 +21,12 @@ is active with deferred engine/Store reads, native callbacks, real Ready and
 normal drain. Live Commit and scoped forced teardown are implemented; their
 remaining proof limits are recorded in the R5/R6 completion records linked by
 the ledger. R7 and R7-retire are closed. All seven excluded predecessors and
-the Server were retired. The root reference and archived `reference-tests`
-remain: R9b closed without removal because two written conditions are unmet.
-The active fixture-seal test no longer reads the root reference generator.
-Product runtime has no reference dependency or fallback.
+the Server were retired. R9b closed without removal; R9c (2026-10-10) then
+retired the root reference and the archived `reference-tests` under the owner's
+close instruction. Both are recoverable at
+local tag `reference-v0.1.6-final` (`d296981ac`, `crates` tree `498dd1917812`).
+The fixture-seal test reads nothing outside `core/`, and the product runtime
+has no reference dependency or fallback.
 
 Project Init includes ignored/dependency/cache/output/.git paths and opaque symlink
 targets, and has removed the inherited4GiB refusal. Native acquisition uses
@@ -49,8 +51,9 @@ carrying no performance or qualification claim.
 
 Start with the [index](docs/architecture/README.md), which maps the descriptive
 papers and the `proposal/` and `deferred/` subtrees beside them. It describes
-**this** workspace; the reference tree under the repository-root `crates/` is a
-different product with different identifiers and formats.
+**this** workspace; the retired v0.1.6 reference that lived under the
+repository-root `crates/` was a different product with different identifiers
+and formats.
 
 ## Commands
 
@@ -83,20 +86,14 @@ cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --
 cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_components -- --mode pipeline --input "$run/input.bin" --store "$run/pipeline.sqlite" --timings "$run/pipeline.json"
 ```
 
-The two workspaces are checked separately: the commands above use the core manifest,
-and the reference workspace uses its own. There is no aggregate repository gate —
+The commands above use the core manifest, the only Cargo workspace at HEAD.
+There is no aggregate repository gate —
 `tools/preflight.sh` is permanently retired by owner decision (ledger L32), and it
 runs no checks. Do not restore it.
 
 ```sh
 python3 core/tools/check_product_boundary.py
 python3 -m unittest discover -s core/tools -p 'test_*.py'
-```
-
-The reference workspace keeps its own commands and lockfile:
-
-```sh
-cargo test --manifest-path Cargo.toml --workspace --locked
 ```
 
 Design and migration: [`docs/roadmap/0.1/0.1.7/component-decoupling/`](../docs/roadmap/0.1/0.1.7/component-decoupling/README.md).
@@ -112,7 +109,7 @@ it measured (`aa4b5a9e4`), the batch tip recorded 11,058, and the architecture
 set's authoring pin (`1884e3eca`) counted 18,792 across 116 files. At `9f35c49ad`
 the counter reports **20,116 production lines across 121 files**
 (`layerfs-content` 12,512; `layerfs-storage` 6,841; `layerfs-telemetry` 763),
-alongside the unchanged reference tree at 65,417 and a combined 85,533. Counted
+alongside the then-present reference tree at 65,417 and a combined 85,533. Counted
 with `tools/production_loc.py`, which excludes comments, blanks, tests, examples,
 docs and manifests, and includes shipped runtime SQL; a physical `wc -l` total is
 a different measure (26,831 at `9f35c49ad`) and must not be quoted as this one.

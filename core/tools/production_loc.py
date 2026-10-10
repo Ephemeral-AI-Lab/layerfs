@@ -8,7 +8,8 @@ test modules and `#[cfg(test)]` items are removed before counting.
 
 Scope:
   core   core/crates/<package>/src/**/*.rs and *.sql   (replacement product)
-  legacy crates/**/*.rs and *.sql                      (reference implementation)
+  legacy crates/**/*.rs and *.sql                      (reference implementation;
+         retired by R9c on 2026-10-10, so this scope is absent and reads 0 at HEAD)
 
 Usage: python3 core/tools/production_loc.py [--json] [--root DIR]
 """

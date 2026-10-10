@@ -8,18 +8,21 @@ supersessions govern; a closed handoff or historical receipt is not a new assign
 
 ## Product scope and current workstreams
 
-**Implement both cluster one and cluster two in `core/`.** Root `crates/` is the
-v0.1.6 reference implementation, retained for inspection and explicitly selected
-baseline comparisons. It is not a dependency, source include or fallback for core.
-Owner direction: remove that legacy tree once cluster two is complete; do not
-delete it early or preserve it as a second product. Retain historical evidence
-and report retirement honestly in the source-size comparison.
+**Implement both cluster one and cluster two in `core/`.** The v0.1.6
+reference implementation that lived under root `crates/` was retired on
+2026-10-10 (R9c) and is absent at HEAD. It was never a dependency, source
+include or fallback for core, and must not return as a second product. Its last
+source is at local tag `reference-v0.1.6-final` (`d296981ac`, `crates` tree `498dd1917812`);
+see the [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md).
+Historical evidence, receipts and verdicts are retained unchanged. The
+retirement is a legacy retirement in the source-size comparison, not a
+simplification.
 
 | Workstream | Current scope | Entry point |
 | --- | --- | --- |
 | Cluster one | Implemented content, storage, history, persistence, project Init and telemetry libraries | [Cluster-one handbook](cluster_one_handbook.md), [CAS/CDC/delta handbook](cas_cdc_deltaencoding_handbook.md) |
 | Cluster two | Workspace, FUSE, daemon, execution and Commit/runtime integration design and implementation | [Current design index](core/docs/issues/303/README.md) and its seven primary contracts |
-| Legacy reference | v0.1.6 under root `crates/`; retire after cluster two completes | Read only when the task needs a reference/baseline |
+| Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
 
 Cluster names are workstreams. C1/C2/C5 in older component documents mean
 content/storage/history. Check [core/Cargo.toml](core/Cargo.toml) for active
@@ -139,8 +142,8 @@ For measurements, read the [agent measurement workflow](docs/general/agent-measu
 [report template](benchmark_agent_report.md) and owning harness/family contract.
 Core routing is [core/benchmark/fs-bench-pro/AGENTS.md](core/benchmark/fs-bench-pro/AGENTS.md).
 Root [benchmark/AGENTS.md](benchmark/AGENTS.md) and its
-[Quickstart](benchmark/fs-bench-pro/QUICKSTART.md) apply to selected legacy/reference
-work, not automatically to new core operations.
+[Quickstart](benchmark/fs-bench-pro/QUICKSTART.md) are historical: that harness
+built the retired reference and is not runnable at HEAD.
 
 ## 1. A warm cache must never credit a measured phase
 
@@ -257,7 +260,9 @@ to this number. This is a source-size comparison, not a performance claim.
   coexist, report their production totals separately as well as the combined
   total. Include application-adapter production code when introduced. Label
   relocation, duplication and legacy retirement; do not call a scope change or
-  deletion of the reference an algorithmic simplification.
+  deletion of the reference an algorithmic simplification. Since R9c the
+  reference scope is absent: report it as `reference absent (retired R9c; last
+  counted 65,417 at tree 498dd1917812)`, never as a bare 0.
 - **Put the result in the commit message and handoff.** Use
   `Production LOC: <before> -> <after> (delta <signed difference>)`, with scope
   and counting method, plus migration subtotals when applicable. For multiple

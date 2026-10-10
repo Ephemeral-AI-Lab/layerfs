@@ -19,8 +19,8 @@
 #     python3 core/tools/check_product_boundary.py
 #     python3 -m unittest discover -s core/tools -p 'test_*.py'
 #
-#   root crates/ (reference, kept isolated):
-#     cargo test --manifest-path Cargo.toml --workspace --locked
+#   The root crates/ reference workspace was retired by R9c (2026-10-10) and
+#   has no commands at HEAD; it is at local tag reference-v0.1.6-final.
 set -euo pipefail
 
 printf '%s\n' \

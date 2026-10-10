@@ -11,6 +11,11 @@ The driver refuses to compare timings unless the two arms agree on the base
 directory, base table, base root, updated directory, updated table and final root
 identities. One sample per case per arm; receipts are append-only.
 
+NOT RUNNABLE AT HEAD: the reference arm was built from the root workspace, which
+R9c retired on 2026-10-10. The driver is kept as historical method and refuses
+to start without that workspace; recover it at local tag reference-v0.1.6-final
+(d296981ac) to rerun. Stage 5 receipts keep their original verdicts.
+
 Usage:
   python3 tools/stage5_component_comparison.py --output <fresh-directory>
 """
@@ -72,6 +77,11 @@ def main():
         help="build profile, applied to both arms",
     )
     arguments = parser.parse_args()
+    if not (ROOT / "Cargo.toml").is_file():
+        raise SystemExit(
+            "the reference arm's root workspace is retired (R9c); "
+            "run this driver at local tag reference-v0.1.6-final"
+        )
     output = pathlib.Path(arguments.output)
     if output.exists():
         raise SystemExit(f"refusing to reuse an existing output directory: {output}")

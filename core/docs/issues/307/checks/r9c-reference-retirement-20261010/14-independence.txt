@@ -1,0 +1,27 @@
+# R9c independence checks on the staged tree eee41c663366c46ad19526724f3c9f59acfe73c7 (reference absent)
+## every path dependency of every tracked manifest, resolved against tracked manifests only
+resolving path entries: 101
+core manifests whose path dependency leaves core/: none
+not resolving, historical evidence probe under docs/ or core/docs/: kept as text, was built against the reference or an old worktree: 44
+    core/docs/issues/236/evidence/sdk-route-v016-20260924-01/measured/Cargo.toml -> ../../crates/layerfs-sdk
+    core/docs/issues/236/evidence/sdk-route-v016-20260924-01/measured/Cargo.toml -> /Users/yifanxu/.codex/worktrees/bb50/layerfs/core/crates/layerfs-telemetry
+    core/docs/issues/236/evidence/sdk-route-v016-20260924-01/premeasurement-failure/Cargo.toml -> ../../crates/layerfs-sdk
+not resolving, root benchmark/ harness: historical, declared not runnable at HEAD: 4
+    benchmark/fs-bench-pro/Cargo.toml -> ../../crates/layerfs-content
+    benchmark/fs-bench-pro/Cargo.toml -> ../../crates/layerfs-layerstack-store
+    benchmark/fs-bench-pro/Cargo.toml -> ../../crates/layerfs-sdk
+not resolving, substitution-proof arm: /tmp copy of core crates, by design: 12
+    core/tools/substitution-proof/arms/baseline/Cargo.toml -> /tmp/subst/baseline/crates/layerfs-content
+    core/tools/substitution-proof/arms/baseline/Cargo.toml -> /tmp/subst/baseline/crates/layerfs-storage
+    core/tools/substitution-proof/arms/baseline/Cargo.toml -> /tmp/subst/baseline/crates/layerfs-telemetry
+OTHER count: 0
+## cargo +1.85.1 metadata --locked: every workspace and path package lies under core/
+core/Cargo.toml packages 127 local 14 outside core/: none
+core/benchmark/r7-runtime/Cargo.toml packages 96 local 10 outside core/: none
+## source joins from core into the retired paths
+none
+## build evidence
+11-host-suite.txt and 13-linux-suite.txt: `cargo test --locked --no-run` resolved and built all 13 packages with the
+reference absent, and the 275 test binaries on each side carry the same names and hashes as R8c receipts 11 and 15.
+Cargo reused its artifacts, so this is not a clean rebuild; a path dependency or tracked source include that the
+removal broke would have failed resolution or invalidated a fingerprint and failed the build.

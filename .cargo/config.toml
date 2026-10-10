@@ -25,8 +25,8 @@
 # not patches. An explicit RUSTFLAGS environment variable overrides this table, so
 # a scripted or container build that sets RUSTFLAGS must repeat these flags.
 #
-# The reference workspace under `crates/` has no `aes`/`polyval`/`ghash` in its
-# lockfile, so these flags change nothing for it.
+# The reference workspace that lived under root `crates/` was retired by R9c
+# (2026-10-10); `core/` is the only Cargo workspace these flags apply to.
 [target.'cfg(target_arch = "aarch64")']
 rustflags = [
     "--cfg", "aes_armv8",

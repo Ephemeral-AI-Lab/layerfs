@@ -1,0 +1,6 @@
+# host tracked-source hashes verified inside the pinned image on the staged tree eee41c663366c46ad19526724f3c9f59acfe73c7 (reference absent)
+ALL_MATCH
+container: ls: cannot access '/work/crates/layerfs-content/Cargo.toml': No such file or directory
+container: ls: cannot access '/work/Cargo.toml': No such file or directory
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+EXIT 0

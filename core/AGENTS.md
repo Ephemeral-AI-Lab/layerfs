@@ -8,10 +8,11 @@ product mental model or campaign-specific benchmark procedures.
 
 ## Scope and ownership
 
-- Implement cluster one and cluster two in `core/`. Root `crates/` is the
-  v0.1.6 reference, not a dependency, source include or fallback. Remove that
-  legacy tree after cluster two is complete, with explicit retirement/accounting;
-  it is not part of routine early cleanup.
+- Implement cluster one and cluster two in `core/`. The v0.1.6 reference under
+  root `crates/` and the archived `core/reference-tests` were retired by R9c
+  (2026-10-10) and are absent at HEAD; recover them at
+  local tag `reference-v0.1.6-final` (`d296981ac`, `crates` tree `498dd1917812`).
+  Neither was a dependency, source include or fallback; do not restore them.
 - Active cluster-one members are content, storage, history, persistence, project
   Init and telemetry. The initial cluster-two SQLite engine is `layerfs-overlay`;
   its active membership does not complete Workspace/FUSE/daemon integration.
@@ -73,7 +74,7 @@ product mental model or campaign-specific benchmark procedures.
   the direct ports; see [native control](docs/architecture/68-native-workspace-control.md).
   The prior client/runtime, daemon upstream, Bridge logical data framing and
   excluded API-core are retired. Historical receipts keep their original topology
-  and verdicts; the root reference remains intact. R7-retire (2026-10-10)
+  and verdicts. R7-retire (2026-10-10)
   removed all seven excluded directories as retirement: `layerfs-server`,
   `layerfs-fuse-legacy`, `layerfs-sandbox-legacy`, `layerfs-sdk-legacy`,
   `layerfs-daemon-legacy`, `layerfs-bridge-legacy` and
@@ -123,9 +124,12 @@ product mental model or campaign-specific benchmark procedures.
   harness sets 0 today, which makes none. A new Mount is refused `Capacity` at
   `mount:debt` while maintenance is stopped. Both, the proofs added around
   them and the rows still open are in the
-  [R8b record](docs/issues/307/R8B-COMPLETION-20261010.md); R8 remains not
-  qualified and the root reference remains in place
-  ([R9b record](docs/issues/307/R9B-COMPLETION-20261010.md)).
+  [R8b record](docs/issues/307/R8B-COMPLETION-20261010.md). R8b closed not
+  qualified and R9b without removal. R8c then closed qualified on function,
+  counts and resources at the owner-rescoped scope, with the deployed
+  low-water at 256 ([R8c record](docs/issues/307/R8C-COMPLETION-20261010.md)),
+  and R9c retired the root reference
+  ([R9c record](docs/issues/307/R9C-COMPLETION-20261010.md)).
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,
@@ -338,8 +342,8 @@ its actual allocation/clock path. Scaffold no empty placeholder directories.
 All new replacement/application-adapter production files have at most **999
 physical lines**, including comments/blanks. This includes required runtime SQL
 or other shipped formats outside Rust src. Extend guard coverage for new formats;
-moving implementation does not evade the rule. Legacy root source remains a
-reference until retirement, not a place to put new product work.
+moving implementation does not evade the rule. The legacy root source is
+retired; do not recreate a root `crates/` for product work.
 
 Every product `lib.rs`/`mod.rs` has at most **200 physical lines**. These files
 contain attributes, declarations, imports/reexports, API docs and thin forwarding.
