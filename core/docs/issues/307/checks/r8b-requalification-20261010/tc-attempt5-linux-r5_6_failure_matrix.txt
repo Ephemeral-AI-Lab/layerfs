@@ -1,0 +1,17 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD ebfd560f2, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/r5_6_failure_matrix-364ff7b2c69e8e42 --test-threads=1 r5_7 --nocapture
+
+running 1 test
+test r5_7_a_release_refused_after_a_settled_failure_keeps_the_owner_and_answers_unknown ... R5-7 STAGED how=Commit thread held at support/history_gate.rs Point::BeforePublication; the test releases the Commit's captured reader through the public OwnerClient (a job no product path issues), then an external python3 process holds the Store SQLite writer and the gate is released; route=serve_one_control(Request::Commit) mount=/tmp/layerfs-installed-7-r5-7-release/mounts/1
+R5-7 FAILURE phase=Publish error=History(Busy) published=None locally_settled=true local=false local_error=None namespace=Some(CapturedConstruction { work: Some(CapturedNamespaceWork { inode_rows: 17, entry_rows: 11, inode_pages: 1, entry_pages: 1, change_pages: 48, largest_page: 17, parent_points: 8, base_lookups: 1, headers_written: 8, headers_dropped: 0, values_written: 15, fresh_serials: 6, tombstones_skipped: 2, files_constructed: 6, files_unchanged: 1, symlinks: 1, metadata_built: 6, metadata_patched: 9, record_jobs: 128, header_o reply=ControlRefusal { code: Unknown, phase: "Commit Publish", moved: None, published: None, detail: "captured namespace custody retained after: busy" }
+R5-7 REFUSALS later_commit=code:Unknown,detail:"original Commit custody retained" unmount=code:Unknown registry_unchanged=true native_phase=Ready mount_table_entry=present
+R5-7 CLASSIFIED error=History(Busy) settled=true release(reader)=performed,refused:Stale release(operation)=not_attempted released=[] reader=named owner=named,held_by_engine activity=Uncertain reply_code=Unknown reply_detail_prefix='captured namespace custody retained after: ' later_commit=refused unmount=refused mount_serves=true paths=78
+R5-7 TEARDOWN by_test=plain umount(8) status=ExitStatus(unix_wait_status(0)) mount_table_entry=gone receive_loops_exited=1/1 product_unmount=refused
+R5_RIG owner stop with retained custody: Ok(())
+R5_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=false handles_after_stop=1
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.26s
+
+R4_WALL seconds<=2 limit=115s lock_wait=2s
+EXIT 0

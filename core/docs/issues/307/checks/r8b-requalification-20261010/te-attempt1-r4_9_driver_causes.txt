@@ -1,0 +1,37 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD ea812d3f8, uncommitted product/test paths=6, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/r4_9_driver_causes-3e9bab45b36aaa31 --test-threads=1 --nocapture (cwd core/crates/layerfs-daemon)
+
+running 2 tests
+test r4_9_an_engine_refusal_of_each_provider_call_is_definite_at_the_driver ... R4-9 driver COUNT calls={InodePage: 1, InodePoint: 7, NamePage: 1, ParentPage: 24, NamePoint: 16, Symlink: 1, RunStep: 32, NamespaceApply: 51, NamespaceGet: 260, NamespaceContains: 2, NamespaceKeys: 44, FileApply: 28, FileRead: 58} parent_points=3 total=525
+R4-9 driver Engine InodePage #0: class=definite error=Completion(Err(Overlay(Stale))) slot=Namespace label=Some("ProviderFailure { what: \"captured namespace original refusal\" }") calls=7 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine InodePoint #0: class=definite error=Completion(Err(Overlay(Stale))) slot=Namespace label=Some("ProviderFailure { what: \"captured namespace original refusal\" }") calls=3 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine InodePoint #3: class=definite error=Completion(Err(Overlay(Stale))) slot=File label=Some("ProviderFailure { what: \"captured namespace file refusal\" }") calls=8 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine NamePage #0: class=definite error=Completion(Err(Overlay(Stale))) slot=Namespace label=Some("ProviderFailure { what: \"captured namespace original refusal\" }") calls=2 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine ParentPage #0: class=definite error=Completion(Err(Overlay(Stale))) slot=Namespace label=Some("ProviderFailure { what: \"captured namespace original refusal\" }") calls=139 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine NamePoint #0: class=definite error=Completion(Err(Overlay(Stale))) slot=Namespace label=Some("ProviderFailure { what: \"captured namespace original refusal\" }") calls=140 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine Symlink #0: class=definite error=Completion(Err(Overlay(Stale))) slot=Namespace label=Some("ProviderFailure { what: \"captured namespace original refusal\" }") calls=125 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine RunStep #0: class=definite error=Completion(Err(Overlay(Stale))) slot=File label=Some("ProviderFailure { what: \"captured namespace file refusal\" }") calls=10 after_failure=0 published=None stage=None engine(reader=false owner=true capture=false)
+R4-9 driver Engine NamespaceApply #0: class=definite error=Completion(Err(Overlay(Stale))) slot=NamespaceRecords label=Some("ProviderFailure { what: \"indexed edit backing original refusal\" }") calls=1 after_failure=0 published=None stage=None engine(reader=true owner=false capture=false)
+R4-9 driver Engine NamespaceGet #0: class=definite error=Completion(Err(Overlay(Stale))) slot=NamespaceRecords label=Some("ProviderFailure { what: \"indexed edit backing original refusal\" }") calls=135 after_failure=0 published=None stage=None engine(reader=true owner=false capture=false)
+R4-9 driver Engine NamespaceContains #0: class=definite error=Completion(Err(Overlay(Stale))) slot=NamespaceRecords label=Some("ProviderFailure { what: \"indexed edit backing original refusal\" }") calls=126 after_failure=0 published=None stage=None engine(reader=true owner=false capture=false)
+R4-9 driver Engine NamespaceKeys #0: class=definite error=Completion(Err(Overlay(Stale))) slot=NamespaceRecords label=Some("ProviderFailure { what: \"indexed edit backing original refusal\" }") calls=137 after_failure=0 published=None stage=None engine(reader=true owner=false capture=false)
+R4-9 driver Engine FileApply #0: class=definite error=Completion(Err(Overlay(Stale))) slot=FileRecords label=Some("ProviderFailure { what: \"captured namespace file refusal\" }") calls=9 after_failure=0 published=None stage=None engine(reader=true owner=false capture=false)
+R4-9 driver Engine FileRead #0: class=definite error=Completion(Err(Overlay(Stale))) slot=FileRecords label=Some("ProviderFailure { what: \"indexed edit backing original refusal\" }") calls=12 after_failure=0 published=None stage=None engine(reader=true owner=false capture=false)
+R4-9 driver SWEEP how=Engine cases=14 call_kinds=13 later_commits=14 exact=true
+ok
+test r4_9_an_unknown_failure_of_each_provider_call_is_uncertain_at_the_driver ... R4-9 driver COUNT calls={InodePage: 1, InodePoint: 7, NamePage: 1, ParentPage: 24, NamePoint: 16, Symlink: 1, RunStep: 32, NamespaceApply: 51, NamespaceGet: 260, NamespaceContains: 2, NamespaceKeys: 44, FileApply: 28, FileRead: 58} parent_points=3 total=525
+
+thread 'r4_9_an_unknown_failure_of_each_provider_call_is_uncertain_at_the_driver' panicked at crates/layerfs-daemon/tests/r4_9_driver_causes.rs:719:5:
+assertion failed: !first.commit_in_flight()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    r4_9_an_unknown_failure_of_each_provider_call_is_uncertain_at_the_driver
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+
+R4_WALL seconds<=4 limit=100s lock_wait=0s
+EXIT 101

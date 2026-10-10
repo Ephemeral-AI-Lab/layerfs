@@ -1,0 +1,21 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 136a6ec72, uncommitted product/test paths=24, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/r5_6_failure_matrix-364ff7b2c69e8e42 --test-threads=1 r5_6_a --nocapture
+
+running 1 test
+test r5_6_a_missing_dependency_from_real_store_damage_is_settled_and_a_later_commit_is_exact ... R5-6a STAGED how=external python3 SQLite process deleted the object_location row of docs/guide.md's content root 7fb208058656b40d257974dae33df41786263dc145eb61fda09d185631433f2d (row: 1 5023 4100 0 13) route=serve_one_control(Request::Commit) mount=/tmp/layerfs-installed-7-r5-6-missing/mounts/1
+
+thread 'r5_6_a_missing_dependency_from_real_store_damage_is_settled_and_a_later_commit_is_exact' panicked at crates/layerfs-daemon/tests/r5_6_failure_matrix.rs:410:21:
+R5-6a: the Commit succeeded: Committed(Committed(CommitRecord { id: CommitId(12256d700bd1827a9da65b888f8993a0e5879e0e473a70f8cd2a946913a453b0af), stack: LayerStackId(3117171717171717171717171717171717), root: ObjectId("53fb7862621e9753349744c5494d16c7df7a9cb5619ba78bac4bcb432ff5a493"), parent: None, base_layer: LayerId(320441923fefdf5aa431891eb37254511ef8d657623864a9e4f1cba15eea4a598f) }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+R5_GUARD lazy umount of /tmp/layerfs-installed-7-r5-6-missing/mounts/1 by the test: Ok(ExitStatus(unix_wait_status(0)))
+FAILED
+
+failures:
+
+failures:
+    r5_6_a_missing_dependency_from_real_store_damage_is_settled_and_a_later_commit_is_exact
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.27s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 101

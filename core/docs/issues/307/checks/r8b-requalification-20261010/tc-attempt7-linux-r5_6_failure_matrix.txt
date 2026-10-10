@@ -1,0 +1,21 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD ebfd560f2, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/r5_6_failure_matrix-364ff7b2c69e8e42 --test-threads=1 r5_6_a_reported --ignored --nocapture
+
+running 1 test
+test r5_6_a_reported_an_untouched_inode_content_root_is_not_in_the_dependency_check ... R5-6a-reported STAGED how=external python3 SQLite process deleted the object_location row of ContentRoot 7fb208058656b40d257974dae33df41786263dc145eb61fda09d185631433f2d (row: 1 5023 4105 0 8) change="chmod 0640 debug.log" route=serve_one_control(Request::Commit) mount=/tmp/layerfs-installed-7-r5-6-root/mounts/1
+
+thread 'r5_6_a_reported_an_untouched_inode_content_root_is_not_in_the_dependency_check' panicked at crates/layerfs-daemon/tests/r5_6_failure_matrix.rs:416:21:
+R5-6a-reported: the Commit succeeded: Committed(Committed(CommitRecord { id: CommitId(12de9837213881d412caa3685eef86355ffe3f55a94e9d62071d7a7b35575c2472), stack: LayerStackId(3117171717171717171717171717171717), root: ObjectId("bb9467fc01ae341951d0207e09a5a430e539e01e1f12d2d36f5e2c2a1615cc76"), parent: None, base_layer: LayerId(32ff44c2e5cd57cfa74cf637621f7cd0289f5eb244f272bfb58c00eb5a77ddd2e9) }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+R5_GUARD lazy umount of /tmp/layerfs-installed-7-r5-6-root/mounts/1 by the test: Ok(ExitStatus(unix_wait_status(0)))
+FAILED
+
+failures:
+
+failures:
+    r5_6_a_reported_an_untouched_inode_content_root_is_not_in_the_dependency_check
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.18s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 101

@@ -1,0 +1,15 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD ea812d3f8, uncommitted product/test paths=7, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/r5_1_actual_daemon_commit-24574525f4f43231 --test-threads=1 --nocapture
+
+running 1 test
+test r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is_exact ... R5-1-BINARY STARTED executable=/work/core/target/cluster2-linux/debug/layerfs-daemon pid=13 listen=127.0.0.1:42271 phase=ControlReady store_sqlite=3.53.2 mount=/tmp/layerfs-r5-1-binary-mounts-7/1 command_identity=65534:65534
+R5-1-BINARY COMMITTED commit=CommitId(1221236e9544d7927541a435a4dc2f04890cdc16a2935d89cb8175fe797b1be5f8) root=ObjectId("acff98da3cc66471eedceda7adf33b709a73fd62022a371e3e822249408a99de") parent=None history=1 same_mount=exact paths=11
+MOUNTED_KERNEL R5-1-BINARY fresh mount: paths=11 inodes=10 files=5 alias_names=2 directories=4 directories_with_child_directories=2 symlinks=2 symlink_size_is_target_length=2 owner=65534:65534
+R5-1-BINARY FRESH_MOUNT workspace=new root=committed oracle=native_replay names_kinds_modes_links_aliases_bytes=exact explicit_times=2 clock_times=9 kernel_table=owner,nlink,size,inode_sharing paths=11
+R5-1-BINARY RESULT actual_executable=true attach=2 external_bash_change=true control_commit=Committed terminal_unmount=2 fresh_mount=exact up_to_date_after=true session_end=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0
