@@ -1,0 +1,12 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 600 cargo +1.85.1 clippy --manifest-path core/benchmark/fs-bench-pro-storage-content/Cargo.toml --locked --offline --all-targets -- -D warnings
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: ea812d3f8
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:36:19Z
+---- output (stdout+stderr) ----
+    Checking fs-bench-pro-storage-content v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.61s
+R4_WALL seconds<=2 limit=600s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:36:20Z

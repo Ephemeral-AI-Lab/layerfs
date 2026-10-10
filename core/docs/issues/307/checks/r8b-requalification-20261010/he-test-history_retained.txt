@@ -1,0 +1,17 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/history_retained-5afaa354b3812ab9 --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: f0e1e2d84
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:26Z
+---- output (stdout+stderr) ----
+
+running 2 tests
+test compound_canonical_pins_never_accept_missing_or_drifted_counters ... ok
+test retained_states_reopen_and_allocation_never_passes_missing_or_shared_owners ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:27Z

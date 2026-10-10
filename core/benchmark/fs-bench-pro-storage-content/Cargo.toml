@@ -37,6 +37,11 @@ path = "src/main.rs"
 layerfs-content = { path = "../../crates/layerfs-content" }
 layerfs-storage = { path = "../../crates/layerfs-storage" }
 layerfs-history = { path = "../../crates/layerfs-history" }
+# First-party path dependency added by the 2026-10-10 port: the embedded Store
+# (`Store`, `SaveOutcome`, `SaveHandoff`, `StoreProvider`) and the standalone
+# history catalogue left `layerfs-storage`/`layerfs-history` in `bd9ededba`, and
+# the engine that holds packs and history now lives here. Not a third-party crate.
+layerfs-persistence = { path = "../../crates/layerfs-persistence" }
 layerfs-telemetry = { path = "../../crates/layerfs-telemetry" }
 # The locator-shape diagnostic (`tests/locator_btree_shape.rs`) drives the engine
 # directly. The pin and the feature set are the product's own

@@ -102,7 +102,7 @@ fn the_spilled_fixture_read_back_cold_one_file_per_object() {
             continue;
         }
         let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
-            + u64::from(file.serial)
+            + file.serial
             - (2 + u64::from(declaration.directories));
         let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
         let (result, _) = layerfs_telemetry::timer::Timing::disabled(
@@ -253,7 +253,7 @@ fn the_packed_fixture_read_back_cold() {
             continue;
         }
         let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
-            + u64::from(file.serial)
+            + file.serial
             - (2 + u64::from(declaration.directories));
         let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
         let (result, _) = layerfs_telemetry::timer::Timing::disabled(
@@ -379,7 +379,7 @@ fn the_packed_fixture_read_back_cold() {
             hashed += *len as u64;
         }
         let hash_only = started.elapsed().as_nanos() as u64;
-        drop(bytes);
+        let _ = bytes;
         // Stream the same bytes through `read` in 4 MiB windows, hashing each object out of the window.
         // **The streaming reader, done properly this time.** One `read` per 1 MiB window over the pack's
         // whole payload, splitting every object out of the window; the window is re-anchored to the first
@@ -532,7 +532,7 @@ fn the_timed_clone_of_the_content_stream() {
             continue;
         }
         let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
-            + u64::from(file.serial)
+            + file.serial
             - (2 + u64::from(declaration.directories));
         let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
         let (result, _) = layerfs_telemetry::timer::Timing::disabled(
@@ -606,7 +606,7 @@ fn the_packed_fixture_read_back_without_reidentifying() {
             continue;
         }
         let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
-            + u64::from(file.serial)
+            + file.serial
             - (2 + u64::from(declaration.directories));
         let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
         let (result, _) = layerfs_telemetry::timer::Timing::disabled(
@@ -618,7 +618,7 @@ fn the_packed_fixture_read_back_without_reidentifying() {
         result.expect("construct");
     }
     let ids: Vec<ObjectId> = content.insertion_order().to_vec();
-    let canonical: u64 = ids
+    let _canonical: u64 = ids
         .iter()
         .filter_map(|id| content.object(*id))
         .map(|object| object.canonical_len() as u64)
@@ -773,7 +773,7 @@ fn dropping_the_content_store_and_reading_rss() {
             continue;
         }
         let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
-            + u64::from(file.serial)
+            + file.serial
             - (2 + u64::from(declaration.directories));
         let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
         let (result, _) = layerfs_telemetry::timer::Timing::disabled(

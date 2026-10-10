@@ -1,0 +1,25 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/digest_vectors-2e61d02bff9316b1 --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: ea812d3f8
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:16Z
+---- output (stdout+stderr) ----
+
+running 10 tests
+test a_binary_multi_block_input_matches ... ok
+test a_single_flipped_byte_changes_the_digest ... ok
+test an_empty_update_is_a_no_op ... ok
+test fips_180_4_published_vectors_match ... ok
+test streaming_and_one_shot_agree_at_every_chunk_boundary ... ok
+test the_448_bit_padding_edge_is_a_second_block ... ok
+test the_896_bit_padding_edge_is_a_second_block ... ok
+test the_accelerated_and_scalar_routes_agree ... ok
+test the_million_a_vector_matches_across_many_blocks ... ok
+test two_agreeing_wrong_digests_would_still_compare_equal ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:17Z

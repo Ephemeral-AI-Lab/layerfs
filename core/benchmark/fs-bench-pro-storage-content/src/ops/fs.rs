@@ -439,7 +439,7 @@ fn common_gates(
         ),
         gates::require(
             GateClass::Correctness,
-            &"g1.o4-inode-table",
+            "g1.o4-inode-table",
             replay.value.inode_table() == measured.result.value.inode_table(),
             &format!("{}", replay.value.inode_table()),
             &format!("{}", measured.result.value.inode_table()),
@@ -627,8 +627,7 @@ pub fn fs_build(
         // loaded here rather than replayed: replaying it inside the performance
         // invocation charges the same 33 operations to preparation that the row
         // then charges again to its own timer, and neither copy is the row's claim.
-        let artifact = Artifact::read(&context.artifact_directory()?)
-            .map_err(|error| OpError::Io(error))?;
+        let artifact = Artifact::read(&context.artifact_directory()?).map_err(OpError::Io)?;
         let chain = chain_of(artifact)?;
         return run_batched_build_row(case, &prepared, scope, context, "fs_build", &chain);
     }
@@ -947,9 +946,8 @@ fn run_batched_build_row(
             "oracle_phase: separate-unmeasured-replay".to_string(),
         ],
     })
-    .map(|outcome| {
+    .inspect(|_| {
         let _ = case;
-        outcome
     })
 }
 
@@ -1175,9 +1173,8 @@ fn run_build_row(
             format!("ordering_backing: {}", backing.is_some()),
         ],
     })
-    .map(|outcome| {
+    .inspect(|_| {
         let _ = case;
-        outcome
     })
 }
 
@@ -1310,9 +1307,8 @@ fn run_traverse_row(
             "measured_phase: read-only traversal of an immutable root".to_string(),
         ],
     })
-    .map(|outcome| {
+    .inspect(|_| {
         let _ = case;
-        outcome
     })
 }
 
@@ -1552,8 +1548,7 @@ fn run_delete_row(
             "oracle_phase: separate-unmeasured-replay".to_string(),
         ],
     })
-    .map(|outcome| {
+    .inspect(|_| {
         let _ = case;
-        outcome
     })
 }

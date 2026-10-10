@@ -1,0 +1,27 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/window_containment-a132dc4be9bc5dab --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: f0e1e2d84
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:39Z
+---- output (stdout+stderr) ----
+
+running 12 tests
+test a_balanced_tree_is_a_valid_envelope ... ok
+test a_bracket_outside_the_root_is_reported ... ok
+test a_bracket_that_closes_before_it_opens_is_unbalanced ... ok
+test a_child_may_touch_its_parent_bounds_exactly ... ok
+test a_child_that_extends_past_its_parent_is_not_contained ... ok
+test a_matching_elapsed_sum_is_not_used_as_an_attach_detector ... ok
+test an_empty_tree_has_no_defects_and_no_elapsed ... ok
+test an_unknown_parent_is_reported_and_not_contained ... ok
+test siblings_that_merely_touch_do_not_overlap ... ok
+test siblings_that_overlap_are_reported ... ok
+test the_one_clock_domain_is_readable_and_non_decreasing ... ok
+test the_recorded_api_links_children_and_closes_a_real_envelope ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:40Z

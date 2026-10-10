@@ -3,22 +3,27 @@
 //! The four rows are the only place in the registry where the C1 and C2 halves
 //! run **in one region**. `test_setup_and_cache_discipline.md` section 2.2 fixes
 //! what is inside the timer: `update_filesystem` (or `apply_edits`) plus
-//! `Store::open` plus the save plus its acknowledgement. C1 construction of the
+//! the Store open plus the save plus its acknowledgement. C1 construction of the
 //! base is setup; the measured C1 half is the operation that edits it.
 //!
-//! **The handoff is the product's own adapter.** `SaveHandoff` is
-//! `layerfs-storage`'s "adapter that lets C1 feed a save operation directly", so
-//! every object C1 emits reaches the save operation on the path the product
-//! provides and nothing is retained by the harness inside the heap window. The
-//! count of what crossed is taken by `CountingConsumer` on that same path, which
-//! is why `g2.handoff` compares the objects C1 emitted with the objects the save
-//! acknowledged rather than with a number the save reports about itself.
+//! **The handoff is the product's own adapter.** `Save::sink()` returns
+//! `layerfs-storage`'s `SaveSink`, the C1 consumer adapter that forwards to
+//! `Save::accept` (it replaced the removed `SaveHandoff`), so every object C1
+//! emits reaches the save operation on the path the product provides and nothing
+//! is retained by the harness inside the heap window. The count of what crossed
+//! is taken by `CountingConsumer` on that same path, which is why `g2.handoff`
+//! compares the objects C1 emitted with the objects the save acknowledged rather
+//! than with a number the save reports about itself.
 //!
 //! **The base is read from the Store, not from harness memory.** A pipeline row
 //! that read its base from a `TreeStore` would prove nothing about the handoff in
-//! the read direction. The reader is `StoreProvider` over the sample Store, so
-//! the measured region genuinely goes C1 -> C2 for the base and C1 -> C2 for the
-//! result.
+//! the read direction. The reader is `Storage::reader()` over the sample Store
+//! (it replaced the removed `StoreProvider`), so the measured region genuinely
+//! goes C1 -> C2 for the base and C1 -> C2 for the result.
+//!
+//! Ported 2026-10-10 to the current public API through `ops::store`; the Store is
+//! Disposable / WAL / `synchronous = OFF`, selected explicitly. Counters with no
+//! current source are listed in `ops::store::UNAVAILABLE_COUNTERS` and not emitted.
 
 use layerfs_content::filesystem::references::backing::OrderingBacking;
 use layerfs_content::filesystem::{
@@ -29,13 +34,13 @@ use layerfs_content::filesystem::{
 use layerfs_content::{
     apply_edits, construct_bytes, construct_stream, ConstructionPolicy, Edit, EditRequest, ObjectId,
 };
-use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 
 use super::c1;
 use super::c2;
 use super::fs;
 use super::fs_fixture::{PreparedTree, Recipe, ROOT_SERIAL};
+use super::store::{self, Store};
 use crate::workload::edits::{Edits, Parts};
 use super::{seed_of, OpContext, OpError, OpOutcome};
 use crate::fixture::{self, structured};
@@ -69,7 +74,7 @@ fn stream_fixture_requested() -> bool {
 ///
 /// **Why logical length will not do.** `pipeline.content_bytes` is pinned at **502,914,928** canonical
 /// bytes for this row's 500,000,000 declared. A streamed construction knows each file's *logical* length
-/// - that is what it asked for - but the canonical bytes are the consumer's business: 11.7 % of envelope
+/// (that is what it asked for), but the canonical bytes are the consumer's business: 11.7 % of envelope
 /// and hash framing sits between the two, and the gap is the whole difference between the pinned figure
 /// and the declared one. This counts where the objects actually pass, so the streamed path publishes the
 /// same quantity the store-held path published.
@@ -352,11 +357,11 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
     let mut emitted = 0_u64;
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |scope: &TimingScope<'_, Active>| {
-        let store = Store::open(&sample, scope.child("store.open"))?;
-        let provider = StoreProvider::new(&store);
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        let store = Store::open(&sample)?;
+        let provider = store.reader()?;
+        let operation = store.begin_save()?;
         let file = {
-            let mut handoff = SaveHandoff::new(&mut operation);
+            let mut handoff = operation.sink();
             let mut counting = CountingConsumer::new(&mut handoff);
             let request = EditRequest {
                 root: setup.base_root,
@@ -372,12 +377,12 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
                 scope.child("edit"),
             )?;
             emitted = counting.accepted();
-            if let Some(error) = handoff.take_failure() {
+            if let Some(error) = operation.take_failure() {
                 return Err(PipelineFailure::Storage(error));
             }
             file
         };
-        let outcome = operation.finish(scope.child("storage.finish"))?;
+        let outcome = operation.finish()?;
         Ok::<_, PipelineFailure>((file, outcome))
     });
     let heap = instruments::heap_end();
@@ -424,11 +429,9 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
     context.trace.write_number(Kind::Counter, "pipeline.base_bytes", setup.base_bytes as i128, "bytes", "fixture recipe")?;
     context.trace.write_number(Kind::Counter, "pipeline.final_bytes", file.logical_len as i128, "bytes", "ConstructedFile.logical_len")?;
     context.trace.write_number(Kind::Counter, "pipeline.expected_final_bytes", setup.expectation.logical_len as i128, "bytes", "base - removed + replacement, computed by the oracle")?;
-    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveHandoff path, measured phase")?;
-    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
-    context.trace.write_number(Kind::Counter, "pipeline.commits", i128::from(outcome.commits), "transactions", "SaveOutcome.commits")?;
-    context.trace.write_number(Kind::Counter, "pipeline.statements", i128::from(outcome.statements), "statements", "SaveOutcome.statements")?;
+    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveSink path, measured phase")?;
+    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "WriteOutcome.inserted")?;
+    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "WriteOutcome.reused")?;
     context.trace.write_number(Kind::Counter, "pipeline.nodes_read", file.counters.nodes_read as i128, "nodes", "EditCounters.nodes_read")?;
     context.trace.write_number(Kind::Counter, "pipeline.nodes_created", file.counters.nodes_created as i128, "nodes", "EditCounters.nodes_created")?;
     context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
@@ -453,7 +456,7 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.handoff",
-        emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,
+        emitted > 0 && outcome.inserted + outcome.reused == emitted,
         &format!(
             "{emitted} objects crossed the handoff; save acknowledged {} inserted + {} reused",
             outcome.inserted, outcome.reused
@@ -484,19 +487,21 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
             "the edited file reads back through the Store byte-exact",
         )),
     }
-    gates.extend(c2::sidecar_gates(&sample));
+    gates.extend(c2::sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
 
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&["pipeline.commits", "pipeline.statements"]),
             format!("pipeline_op: {op:?}"),
             format!("declared_base_bytes: {}", config.base_bytes),
             format!("declared_edit: {}..{} -> {} bytes", config.start, config.end, config.replacement),
             format!("cutoff_bytes: {}", cutoff()),
-            "measured_region: Store::open + apply_edits + save + acknowledgement".to_string(),
-            "base_reader: StoreProvider over the sample copy".to_string(),
-            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter".to_string(),
+            "measured_region: Store open + apply_edits + save + acknowledgement".to_string(),
+            "base_reader: Storage::reader() over the sample copy".to_string(),
+            "handoff: layerfs_storage::SaveSink, the product's own C1-to-save adapter".to_string(),
             format!("store_state: opened-from-copy"),
             format!("copy_rung: {}", c2::COPY_RUNG),
             format!("allocation_attribution: {}", c2::ATTRIBUTION),
@@ -584,11 +589,11 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     // measured region and how much to the fixture the driver holds before the timer.
     // This samples the measured region at the declared 10 ms interval and publishes
     // the bundle, so the two questions are separable. Diagnostic: never pinned.
-    let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
-        let store = Store::open(&sample, timing.child("store.open"))?;
-        let mut operation = store.begin_save(timing.child("storage.begin"))?;
+    let (measured, report) = super::measure("pipeline", |_timing: &TimingScope<'_, Active>| {
+        let store = Store::open(&sample)?;
+        let operation = store.begin_save()?;
         let result = {
-            let mut handoff = SaveHandoff::new(&mut operation);
+            let mut handoff = operation.sink();
             let mut counting = CountingConsumer::new(&mut handoff);
             let reader = PairProvider::new(&empty, &empty);
             let mut objects = FilesystemObjects::new(&reader, &mut counting);
@@ -596,7 +601,7 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
             emitted = counting.accepted();
             result
         };
-        let outcome = operation.finish(timing.child("storage.finish"))?;
+        let outcome = operation.finish()?;
         Ok::<_, PipelineFailure>((result, outcome))
     });
     let heap = instruments::heap_end();
@@ -618,10 +623,9 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     context.trace.write_number(Kind::Counter, "pipeline.declared_files", config.files as i128, "files", "fixture recipe")?;
     context.trace.write_number(Kind::Counter, "pipeline.declared_directories", config.directories as i128, "directories", "fixture recipe")?;
     context.trace.write_number(Kind::Counter, "pipeline.bindings", prepared.bindings() as i128, "bindings", "fixture manifest")?;
-    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveHandoff path, measured phase")?;
-    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
-    context.trace.write_number(Kind::Counter, "pipeline.commits", i128::from(outcome.commits), "transactions", "SaveOutcome.commits")?;
+    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveSink path, measured phase")?;
+    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "WriteOutcome.inserted")?;
+    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "WriteOutcome.reused")?;
     context.trace.write_number(Kind::Counter, "pipeline.objects_emitted", result.counters.objects.objects_emitted as i128, "objects", "ObjectWork.objects_emitted")?;
     context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
     context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
@@ -642,7 +646,7 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.handoff",
-        emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,
+        emitted > 0 && outcome.inserted + outcome.reused == emitted,
         &format!(
             "{emitted} objects crossed the handoff; save acknowledged {} inserted + {} reused",
             outcome.inserted, outcome.reused
@@ -670,7 +674,15 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
         Ok(store) => store,
         Err(error) => return Ok(c1::unmeasured(&error, gates)),
     };
-    let provider = StoreProvider::new(&store);
+    let provider = match store.reader() {
+        Ok(provider) => provider,
+        Err(error) => {
+            return Ok(c1::unmeasured(
+                &OpError::Product(format!("{error:?}")),
+                gates,
+            ))
+        }
+    };
     let tuple = fs::three_tuple(&provider, result.root);
     match tuple {
         Ok(tuple) => gates.push(gates::require(
@@ -704,26 +716,28 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
             "every directory's bindings equal the fixture manifest",
         )),
     }
-    gates.extend(c2::sidecar_gates(&sample));
+    drop(provider);
+    gates.extend(c2::sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
 
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&["pipeline.commits"]),
             format!("pipeline_op: {op:?}"),
             format!("declared_files: {}", config.files),
             format!("declared_directories: {}", config.directories),
-            "measured_region: Store::open + build_filesystem + save + acknowledgement".to_string(),
-            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter".to_string(),
+            "measured_region: Store open + build_filesystem + save + acknowledgement".to_string(),
+            "handoff: layerfs_storage::SaveSink, the product's own C1-to-save adapter".to_string(),
             "store_state: opened-from-copy".to_string(),
             format!("copy_rung: {}", c2::COPY_RUNG),
             format!("allocation_attribution: {}", c2::ATTRIBUTION),
             format!("heap_charged_bytes: {}", heap.charged_bytes),
         ],
     })
-    .map(|outcome| {
+    .inspect(|_| {
         let _ = case;
-        outcome
     })
 }
 
@@ -739,15 +753,15 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
 /// `pipeline-namespace-100000`, and they differ only in the declaration they read
 /// from [`declaration`]: the entry count, the directory count, the band mix, the
 /// anchor count and the total. The driver takes its batched route automatically at
-/// either size - `PreparedTree::batches` splits the tree under
-/// `MAXIMUM_WALK_ENTRIES`, which a 10,101-binding tree already exceeds.
+/// either size - `PreparedTree::batches` splits the tree at the workload's own
+/// `BUILD_BATCH_BINDINGS` (4,096), which a 10,101-binding tree already exceeds.
 ///
 /// **Why the content is a second stream.** `build_filesystem` emits metadata only:
 /// its internal `contents` map holds *directory* roots, and a file's `content_root`
 /// is copied out of the input `InodeValue` without ever being demanded from the
 /// reader. So a filesystem build cannot put the declared content into a Store, and
 /// the row has to construct that content itself and accept it on the same
-/// `SaveOperation`. The construction happens before the timer; the save does not.
+/// `Save`. The construction happens before the timer; the save does not.
 fn namespace_scale(
     case: &Case,
     op: PipelineOp,
@@ -820,7 +834,7 @@ fn namespace_scale(
         // the mapping `namespace_content::plan` applied forward. It must use the
         // declaration's directory count, because the serials the recipe built did.
         let index = u64::from(file.directory) * super::namespace_content::FILES_PER_DIRECTORY
-            + u64::from(file.serial)
+            + file.serial
             - (2 + u64::from(declared.directories));
         let noise_started = std::time::Instant::now();
         let bytes = fixture::noise(file.size, seed ^ index.rotate_left(13));
@@ -862,7 +876,6 @@ fn namespace_scale(
     // `pipeline.content_objects` is published from it when the switch is on; counted below, where the
     // stream runs. Without the switch it stays 0 and the store's own length is published instead.
     let mut content_objects_offered = 0_u64;
-    let content_objects_planned = planned_content_files(&plan);
     let content_objects_store_held = content.len() as u64;
 
     let scope = scope_for_seed({
@@ -883,12 +896,14 @@ fn namespace_scale(
         gates::attribution_gate(gates::Attribution::Exclusive),
     ];
 
-    // A 10,000-file / 100-directory tree states 10,101 bindings, and the product
-    // refuses more than `MAXIMUM_WALK_ENTRIES` (4,096) in one operation: the cycle
-    // check returns `InvalidRecord("cycle check work limit")`. `limits.rs` says such
-    // a tree "is reached by several operations that each stay under the ceiling", and
-    // `PreparedTree::batches` is that route. `c1.fs.build-scale`'s own
-    // namespace-10000 row does the same thing and reports `fs_build.operations: 3`.
+    // A 10,000-file / 100-directory tree states 10,101 bindings, and this row builds
+    // it in operations of at most `BUILD_BATCH_BINDINGS` (4,096) bindings each. That
+    // figure is a **workload constant** of this harness, kept so the batch count and
+    // the operation boundaries stay what the recorded rows measured; it is not a
+    // product refusal (the historical `MAXIMUM_WALK_ENTRIES` ceiling this comment
+    // used to cite is no longer in `layerfs-content`). `PreparedTree::batches` is the
+    // route, and `c1.fs.build-scale`'s own namespace-10000 row does the same thing
+    // and reports `fs_build.operations: 3`.
     let batches = match prepared.batches(fs::WALK_CEILING) {
         Ok(batches) => batches,
         Err(defect) => return Ok(c1::unmeasured(&OpError::Io(defect), gates)),
@@ -1036,16 +1051,11 @@ fn namespace_scale(
     let mut content_stream_ns = 0_u64;
     let mut batch_roots = 0_u64;
     let mut largest_batch = 0_u64;
-    // The denominator `SaveProfile` is reported against. `SaveProfile` is an
-    // aggregate over the accept path and its own documentation defines the
-    // remainder as `total_ns` against the accept span
-    // (`layerfs-storage/src/cas/owner.rs`, `SaveProfile::total_ns`), so the span
-    // has to be measured rather than inferred. It runs from the moment the
-    // operation is owned to the moment the seal returns: every one of the seven
-    // buckets is charged inside that interval and nothing outside it is. Read
-    // beside `pipeline.profile_total_ns`; the difference is the remainder the
-    // instrument does not name. A harness `Instant` pair, not a product timing
-    // node - the shipped `timing.json` carries no span for this region.
+    // The accept span. It runs from the moment the operation is owned to the moment
+    // `finish` returns. It was the denominator the removed `SaveProfile`'s seven
+    // disjoint buckets were reported against; those buckets have no current source
+    // (`ops::store::UNAVAILABLE_COUNTERS`), and the span is still published because
+    // it is the harness's own `Instant` pair, not a product timing node.
     let mut accept_span_ns = 0_u64;
     // What the per-batch prefix keys actually served, accumulated over the timed
     // pass. This is the reading that keeps the identity sets honest: with one chain
@@ -1065,7 +1075,9 @@ fn namespace_scale(
     let mut build_span_ns = 0_u64;
     let mut content_span_ns = 0_u64;
     let mut finish_span_ns = 0_u64;
-    let mut finish_child_ns = 0_u64;
+    // `SaveOutcome.pack_bytes_written` is `Storage::diagnostics().pack_write_bytes`
+    // across the one save (`ops::store::COUNTER_MAPPINGS`).
+    let mut pack_bytes_written = 0_u64;
     let mut establishment_ns = 0_u64;
     // The build span's two parts: the product's `accept` calls, and (by
     // subtraction) the caller's tree build. `span_build_ns` is one span; a span
@@ -1114,12 +1126,19 @@ fn namespace_scale(
         // is the failure the campaign already recorded once. It is published rather
         // than dropped, and the v0.1.6 pairing must use the same boundary on both
         // sides.
+        //
+        // Ported 2026-10-10: the teardown figure was a `SaveProfile` bucket
+        // (`diag.finish_drop_ns`) and has no current source, so `pipeline.teardown_ns`
+        // and the formula built on it (`pipeline.operation_work_ns`) are not emitted;
+        // `pipeline.establishment_ns` and `pipeline.accept_span_ns` still are.
         let closure_started = std::time::Instant::now();
-        let store = Store::open(&sample, timing.child("store.open"))?;
-        let mut operation = store.begin_save(timing.child("storage.begin"))?;
+        let store = Store::open(&sample)?;
+        // Cumulative per handle, so the save's own pack bytes are after minus before.
+        let pack_bytes_before = store.diagnostics().pack_write_bytes;
+        let operation = store.begin_save()?;
         let accept_started = std::time::Instant::now();
         let result = {
-            let mut handoff = SaveHandoff::new(&mut operation);
+            let mut handoff = operation.sink();
             let mut counting = CountingConsumer::new(&mut handoff);
             let mut last: Option<layerfs_content::FilesystemResult> = None;
             for (index, batch) in batches.iter().enumerate() {
@@ -1197,13 +1216,13 @@ fn namespace_scale(
             built
         };
         let build_done = std::time::Instant::now();
-        // The content stream, on the same operation. `SaveHandoff` is dropped above
-        // so the operation is free; the identities are the constructed ones.
+        // The content stream, on the same operation. The metadata stream's `SaveSink`
+        // is dropped above; the identities are the constructed ones.
         //
         // **The object is moved into the save, not copied into it.** This loop used
         // `cloned_object`, which deep-copies every canonical object - 502,912,427
         // bytes of copy for the 100,000-entry row, measured at 79,174,500 ns, inside
-        // this timer. `Store::accept` takes the object by value, so the copy bought
+        // this timer. `Save::accept` takes the object by value, so the copy bought
         // nothing: the operation is handed the object the harness already held. The
         // drain leaves `content` empty and reusable, and the object count is kept
         // because the row publishes it and the loop is what consumes it.
@@ -1222,13 +1241,13 @@ fn namespace_scale(
                 // The index the plan gave this file, re-derived exactly as the untimed pass derived it:
                 // the tree's file serials are `2 + directories + index`.
                 let index = u64::from(file.directory) * super::namespace_content::FILES_PER_DIRECTORY
-                    + u64::from(file.serial)
+                    + file.serial
                     - (2 + u64::from(declared.directories));
                 let (bytes, canonical, counted, failure) = {
-                    // `SaveHandoff` is the product's own C1-to-save adapter and is what the metadata
+                    // `SaveSink` is the product's own C1-to-save adapter and is what the metadata
                     // stream above already feeds; the content stream takes the same path rather than a
                     // second one, so both halves of this row cross into storage the same way.
-                    let mut handoff = SaveHandoff::new(&mut operation);
+                    let mut handoff = operation.sink();
                     let mut meter = ContentMeter::new(&mut handoff);
                     let reader = std::io::BufReader::with_capacity(
                         STREAM_WINDOW_BYTES,
@@ -1251,7 +1270,7 @@ fn namespace_scale(
                         built.logical_len,
                         meter.canonical_bytes,
                         meter.objects,
-                        handoff.take_failure(),
+                        operation.take_failure(),
                     )
                 };
                 if let Some(error) = failure {
@@ -1274,29 +1293,27 @@ fn namespace_scale(
         let offered = content.drain();
         content_objects_offered = offered.len() as u64;
         for object in offered {
-            // `SaveOutcome` carries no byte field - its `chain` is delta-base
-            // acquisition work, not bytes - so the bytes the Store has to hold are
-            // counted on the way in, from the objects themselves.
+            // The bytes the Store has to hold are counted on the way in, from the
+            // objects themselves, exactly as the row always counted them.
             content_bytes = content_bytes.saturating_add(object.canonical_len() as u64);
             operation.accept(object)?;
         }
         }
         content_stream_ns = content_started.elapsed().as_nanos() as u64;
         let content_done = std::time::Instant::now();
-        // The node itself is created inside the finish span, so it is charged
-        // separately: `span_finish_ns` minus this and minus the save's own
-        // `finish_call_ns` is what the span leaves unnamed.
-        let child_started = std::time::Instant::now();
-        let finish_scope = timing.child("storage.finish");
-        let child_ns = child_started.elapsed().as_nanos() as u64;
-        let outcome = operation.finish(finish_scope)?;
+        // `finish` takes no timing scope now, so no `storage.finish` node is created
+        // and there is no node-creation cost to charge inside the finish span.
+        let outcome = operation.finish()?;
         let finish_done = std::time::Instant::now();
+        pack_bytes_written = store
+            .diagnostics()
+            .pack_write_bytes
+            .saturating_sub(pack_bytes_before);
         accept_span_ns = accept_started.elapsed().as_nanos() as u64;
         establishment_ns = accept_started.duration_since(closure_started).as_nanos() as u64;
         build_span_ns = build_done.duration_since(accept_started).as_nanos() as u64;
         content_span_ns = content_done.duration_since(build_done).as_nanos() as u64;
         finish_span_ns = finish_done.duration_since(content_done).as_nanos() as u64;
-        finish_child_ns = child_ns;
         Ok::<_, PipelineFailure>((result, outcome))
     });
     // The store-held path knows its count before the timer; the streamed path only knows it after, when
@@ -1322,12 +1339,11 @@ fn namespace_scale(
     };
 
     // The oracle: a second, unmeasured, byte-identical build into an authenticating
-    // store. It **must be batched too**. `fs::replay_build` issues one
-    // `build_filesystem` over the whole prepared tree, which for 10,101 bindings is
-    // refused by the same `MAXIMUM_WALK_ENTRIES` ceiling - and it reports the refusal
-    // as `OpError::Product`, which is how this row's first four runs were diagnosed:
-    // the failure was never in the measured region, it was here. The batches and their
-    // prefix chains are reused, so the oracle replays exactly what the timer ran.
+    // store. It **is batched too**, with the same `BUILD_BATCH_BINDINGS` workload
+    // batches: the oracle must replay the operations the timer ran, not one
+    // `build_filesystem` over the whole prepared tree (`fs::replay_build`), which is
+    // a different sequence of operations. The batches and their prefix chains are
+    // reused, so the oracle replays exactly what the timer ran.
     let mut store = TreeStore::new();
     let mut replay: Option<layerfs_content::FilesystemResult> = None;
     for (index, batch) in batches.iter().enumerate() {
@@ -1407,7 +1423,7 @@ fn namespace_scale(
         "pipeline.batches",
         batches.len() as i128,
         "operations",
-        "PreparedTree::batches under MAXIMUM_WALK_ENTRIES",
+        "PreparedTree::batches under BUILD_BATCH_BINDINGS, a workload constant",
     )?;
     // The build span's own split, read back out of the product's timing tree by
     // phase name. Each is a total over the row's batches, so the six together
@@ -1419,7 +1435,7 @@ fn namespace_scale(
             &format!("pipeline.build_{}_ns", name.replace('.', "_")),
             nanos as i128,
             "ns",
-            "FilesystemPhases inside the measured closure, outside the seven buckets",
+            "FilesystemPhases inside the measured closure",
         )?;
     }
     context.trace.write_number(
@@ -1592,28 +1608,21 @@ fn namespace_scale(
         "pipeline.metadata_objects",
         metadata_emitted as i128,
         "objects",
-        "CountingConsumer on the SaveHandoff path, measured phase",
+        "CountingConsumer on the SaveSink path, measured phase",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pipeline.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pipeline.reused",
         i128::from(outcome.reused),
         "objects",
-        "SaveOutcome.reused",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "pipeline.commits",
-        i128::from(outcome.commits),
-        "transactions",
-        "SaveOutcome.commits",
+        "WriteOutcome.reused",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -1629,138 +1638,39 @@ fn namespace_scale(
         "objects",
         "ObjectWork.objects_emitted",
     )?;
-    // The save's own nanosecond accept-path split for this row, and the span it is
-    // reported against. Seven disjoint buckets charged inside the accept path;
-    // their sum is charged work, and the difference from `pipeline.accept_span_ns`
-    // is the remainder the instrument does not name. Published under `pipeline.`
-    // with the names `history`'s `delta.profile_*` group already carries, so the
-    // two rows read side by side. Diagnostics only: none of these is pinned in
-    // `tests/golden/expected.tsv`, because a wall-clock observation cannot be a
-    // frozen constant.
+    // The harness's own spans over the measured closure. Each is an `Instant` pair
+    // taken by this driver, not a product timing node. The removed `SaveProfile`
+    // split (`pipeline.profile_*`, `pipeline.diag_*`), the teardown it named
+    // (`pipeline.teardown_ns`) and the formula that subtracted it
+    // (`pipeline.operation_work_ns`) have no current source and are not emitted:
+    // see `ops::store::UNAVAILABLE_COUNTERS`. Diagnostics only: none of these is
+    // pinned in `tests/golden/expected.tsv`, because a wall-clock observation cannot
+    // be a frozen constant.
     for (key, value) in [
-        ("pipeline.profile_resolve_ns", outcome.profile.resolve_ns()),
-        ("pipeline.profile_resolve_eligible_ns", outcome.profile.resolve.eligible_ns),
-        ("pipeline.profile_resolve_acquire_ns", outcome.profile.resolve.acquire_ns),
-        ("pipeline.profile_resolve_cost_ns", outcome.profile.resolve.cost_ns),
-        ("pipeline.profile_resolve_reuse_ns", outcome.profile.resolve.reuse_ns),
-        ("pipeline.profile_resolve_pooled_ns", outcome.profile.resolve.pooled_ns),
-        ("pipeline.profile_full_ns", outcome.profile.full_ns),
-        ("pipeline.profile_delta_ns", outcome.profile.delta_ns),
-        ("pipeline.profile_group_ns", outcome.profile.group_ns),
-        ("pipeline.profile_place_ns", outcome.profile.place_ns),
-        ("pipeline.profile_sql_ns", outcome.profile.sql_ns),
-        ("pipeline.profile_commit_ns", outcome.profile.commit_ns),
-        ("pipeline.profile_total_ns", outcome.profile.total_ns()),
         ("pipeline.accept_span_ns", accept_span_ns),
         ("pipeline.span_build_ns", build_span_ns),
         ("pipeline.span_content_ns", content_span_ns),
         ("pipeline.span_finish_ns", finish_span_ns),
-        ("pipeline.span_finish_child_ns", finish_child_ns),
-        // The two terms the row's formula excludes, published so the inclusive
-        // span is always reconstructible: `establishment_ns + accept_span_ns` is
-        // the whole measured closure and `teardown_ns` is the part of
-        // `accept_span_ns` that the save's own connection close accounts for.
+        // `establishment_ns + accept_span_ns` is the whole measured closure.
         ("pipeline.establishment_ns", establishment_ns),
-        (
-            "pipeline.teardown_ns",
-            outcome.profile.diag.finish_drop_ns,
-        ),
-        // The row's formula: the accept span minus the teardown. Establishment is
-        // outside the accept span already, so `establishment_ns + operation_work_ns
-        // + teardown_ns` is exactly the inclusive closure the runner times.
-        (
-            "pipeline.operation_work_ns",
-            accept_span_ns.saturating_sub(outcome.profile.diag.finish_drop_ns),
-        ),
-        // DIAGNOSTIC totals of the regions the seven buckets do not charge. Each is
-        // a **total** of a named region, so a region that contains a bucket contains
-        // its charge too; the residue is the difference. They are published beside
-        // the profile and never folded into it, and `SaveOutcome`'s equality ignores
-        // them exactly as it ignores the profile. Nothing here is pinned.
-        ("pipeline.diag_commit_total_ns", outcome.profile.diag.commit_total_ns),
-        ("pipeline.diag_begin_ns", outcome.profile.diag.begin_ns),
-        ("pipeline.diag_seal_total_ns", outcome.profile.diag.seal_total_ns),
-        ("pipeline.diag_offer_total_ns", outcome.profile.diag.offer_total_ns),
-        ("pipeline.diag_write_pack_total_ns", outcome.profile.diag.write_pack_total_ns),
-        ("pipeline.diag_validate_ns", outcome.profile.diag.validate_ns),
-        ("pipeline.diag_collision_query_ns", outcome.profile.diag.collision_query_ns),
-        ("pipeline.diag_rows_ns", outcome.profile.diag.rows_ns),
-        ("pipeline.diag_members_ns", outcome.profile.diag.members_ns),
-        ("pipeline.diag_accept_plumbing_ns", outcome.profile.diag.accept_plumbing_ns),
-        ("pipeline.diag_flush_batch_ns", outcome.profile.diag.flush_batch_ns),
-        ("pipeline.diag_wave_ns", outcome.profile.diag.wave_ns),
-        ("pipeline.diag_finish_total_ns", outcome.profile.diag.finish_total_ns),
-        ("pipeline.diag_publish_ns", outcome.profile.diag.publish_ns),
-        ("pipeline.diag_finish_drain_ns", outcome.profile.diag.finish_drain_ns),
-        ("pipeline.diag_finish_drop_ns", outcome.profile.diag.finish_drop_ns),
-        ("pipeline.diag_finish_call_ns", outcome.profile.diag.finish_call_ns),
-        ("pipeline.diag_insert_objects_ns", outcome.profile.diag.insert_objects_ns),
-        ("pipeline.diag_release_connection_ns", outcome.profile.diag.release_connection_ns),
-        ("pipeline.diag_release_compression_ns", outcome.profile.diag.release_compression_ns),
-        ("pipeline.diag_release_decompression_ns", outcome.profile.diag.release_decompression_ns),
-        ("pipeline.diag_release_pool_reader_ns", outcome.profile.diag.release_pool_reader_ns),
-        ("pipeline.diag_release_pack_cache_ns", outcome.profile.diag.release_pack_cache_ns),
-        ("pipeline.diag_release_candidates_ns", outcome.profile.diag.release_candidates_ns),
-        ("pipeline.diag_release_pool_index_ns", outcome.profile.diag.release_pool_index_ns),
-        ("pipeline.diag_release_tails_ns", outcome.profile.diag.release_tails_ns),
-        // A region **inside** `pipeline.profile_full_ns`, published beside it: the
-        // bounded-prefix probe that decides whether a payload is compressed at all.
-        // Reported separately because the treatment trades a whole-payload codec
-        // call for a bounded one, and a saving read from the bucket alone cannot
-        // say whether the probe or the escape carried it.
-        ("pipeline.diag_probe_ns", outcome.profile.diag.probe_ns),
     ] {
         context.trace.write_number(
             Kind::Counter,
             key,
             value as i128,
             "ns",
-            "the save's own nanosecond accept-path split, an aggregate over the operation, never a span per object",
+            "harness Instant spans over the measured closure; an aggregate over the operation, never a span per object",
         )?;
     }
-    // A count, not a duration: it is the population the B1 reuse probe measures, so
-    // it is published in its own unit rather than folded into the `ns` group. Zero
-    // unless `LAYERFS_STORAGE_REUSE_PROBE=1`.
-    context.trace.write_number(
-        Kind::Counter,
-        "pipeline.profile_reuse_repeat",
-        outcome.profile.reuse_repeat as i128,
-        "objects",
-        "repeats of an exact-reuse verification this operation had already performed",
-    )?;
-    // A count read from each stored record's own tag: the records a reader will
-    // take the stored-payload path for. Published in its own unit for the same
-    // reason as the line above - "the probe stopped compressing" and "the store
-    // stopped writing frames" are different claims, and only the second one is the
-    // treatment. Nothing here is pinned.
-    context.trace.write_number(
-        Kind::Counter,
-        "pipeline.stored_records",
-        outcome.profile.stored_records as i128,
-        "records",
-        "payload records stored verbatim, read from the record tag the reader dispatches on",
-    )?;
-    // The save's own statement and pack counters. `SaveOutcome` carries every one
-    // of them on every row (`cas/store.rs:55-90`); this driver published none of
-    // them, which is why the pack-append call count had to be derived from the
-    // source and a microbenchmark rather than read from the row. `pack_appends`
-    // against `packs_created` is the write amplification the pack-append rewrite
-    // causes: `append_pack` binds the whole new body because the pack directory
-    // moves (`sqlite/write.rs:79-89`, `cas/placement.rs:203-205`).
+    // The save's own pack and record counters, from `WriteOutcome` and, for the
+    // pack bytes, from the handle's cumulative `Diagnostics` across the one save
+    // (`ops::store::COUNTER_MAPPINGS`). `pipeline.statements`,
+    // `pipeline.presence_queries` and `pipeline.pack_appends` have no current
+    // source and are not emitted.
     for (key, value, unit) in [
-        ("pipeline.statements", outcome.statements, "statements"),
-        ("pipeline.presence_queries", outcome.presence_queries, "queries"),
-        ("pipeline.packs_created", outcome.packs_created, "packs"),
-        // The bytes this operation actually handed to the engine for packs, in the
-        // unit the pack-append rewrite is measured in. Before the reserved-directory
-        // framing every append submitted the whole reassembled pack; the campaign
-        // measured that at 2,292,865,337 bytes for 302,023,232 persisted.
-        (
-            "pipeline.pack_bytes_written",
-            outcome.pack_bytes_written,
-            "bytes",
-        ),
-        ("pipeline.pack_appends", outcome.pack_appends, "appends"),
+        ("pipeline.packs_created", outcome.packs, "packs"),
+        // The physical pack body bytes this save's publications acknowledged.
+        ("pipeline.pack_bytes_written", pack_bytes_written, "bytes"),
         ("pipeline.full_records", outcome.full_records, "objects"),
         ("pipeline.prefix_records", outcome.prefix_records, "objects"),
     ] {
@@ -1769,7 +1679,7 @@ fn namespace_scale(
             key,
             i128::from(value),
             unit,
-            "SaveOutcome's own statement and pack counters, published by this driver",
+            "WriteOutcome's own pack and record counters, and Diagnostics.pack_write_bytes across the save",
         )?;
     }
     context.trace.write_number(
@@ -1855,7 +1765,7 @@ fn namespace_scale(
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.handoff",
-        metadata_emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) > 0,
+        metadata_emitted > 0 && outcome.inserted + outcome.reused > 0,
         &format!(
             "{metadata_emitted} metadata objects crossed the handoff; {content_objects} content \
              objects were accepted; save acknowledged {} inserted + {} reused",
@@ -1878,21 +1788,44 @@ fn namespace_scale(
             "every directory's bindings equal the fixture manifest",
         )),
     }
-    gates.extend(c2::sidecar_gates(&sample));
+    // The measured closure closed its own Store. The sidecar gate is read on the
+    // sealed file, so the sample is reopened and sealed here, outside the timer.
+    match c2::open_untimed(&sample) {
+        Ok(store) => gates.extend(c2::sealed_sidecar_gates(store, &sample)),
+        Err(error) => gates.push(Gate::incomplete(
+            GateClass::Cleanup,
+            "g5.no-sidecars",
+            &format!("{}: reopen for seal refused: {error}", sample.display()),
+            "no -wal, -shm or -journal sidecar",
+        )),
+    }
     gates.push(gates::swap_gate(instruments::swaps()));
 
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&[
+                "pipeline.commits",
+                "pipeline.statements",
+                "pipeline.presence_queries",
+                "pipeline.pack_appends",
+                "pipeline.profile_*",
+                "pipeline.diag_*",
+                "pipeline.stored_records",
+                "pipeline.teardown_ns",
+                "pipeline.operation_work_ns",
+                "pipeline.span_finish_child_ns",
+            ]),
             format!("pipeline_op: {op:?}"),
             format!("declared_files: {}", config.files),
             format!("declared_directories: {}", config.directories),
             format!("declared_content_bytes: {}", plan.total_bytes),
-            "measured_region: Store::open + build_filesystem + content accept + save + acknowledgement"
+            "measured_region: Store open + build_filesystem + content accept + save + acknowledgement"
                 .to_string(),
             "content: constructed before the timer, accepted inside it (C2's supplied-object rule)"
                 .to_string(),
-            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter".to_string(),
+            "handoff: layerfs_storage::SaveSink, the product's own C1-to-save adapter".to_string(),
         ],
     })
 }

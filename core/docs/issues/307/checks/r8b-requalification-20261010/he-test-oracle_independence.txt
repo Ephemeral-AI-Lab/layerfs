@@ -1,0 +1,31 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/oracle_independence-a335e42d679c8b86 --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: f0e1e2d84
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:28Z
+---- output (stdout+stderr) ----
+
+running 16 tests
+test a_head_splice_matches_a_materialised_splice ... ok
+test a_middle_splice_matches_a_materialised_splice ... ok
+test a_pure_delete_matches_a_materialised_splice ... ok
+test a_pure_insert_matches_a_materialised_splice ... ok
+test a_read_back_that_matches_passes_both_halves ... ok
+test a_read_back_whose_bytes_differ_fails_the_digest_gate ... ok
+test a_read_back_with_the_wrong_length_fails_even_when_the_prefix_agrees ... ok
+test a_tail_splice_matches_a_materialised_splice ... ok
+test an_expectation_of_bytes_hashes_those_bytes ... ok
+test sampled_ranges_never_exceed_the_declared_range_count ... ok
+test sampled_ranges_stay_inside_the_file_and_the_frozen_bounds ... ok
+test the_census_is_the_recipe_and_totals_its_own_entries ... ok
+test the_hashing_sink_retains_nothing ... ok
+test the_hashing_sink_streams_to_the_same_digest_as_one_shot ... ok
+test the_splice_oracle_recomputes_rather_than_reusing_the_base ... ok
+test the_zero_length_edges_match_a_materialised_splice ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:29Z

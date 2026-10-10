@@ -1,0 +1,20 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/walk_ceiling-cc6d4f8a63ba4b7b --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: f0e1e2d84
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:40Z
+---- output (stdout+stderr) ----
+
+running 5 tests
+test a_fresh_build_above_the_historical_width_is_accepted ... ok
+test a_restated_stored_directory_over_a_large_base_has_no_walk_work_ceiling ... ok
+test a_single_build_at_the_historical_batch_width_is_accepted ... ok
+test every_batch_stays_within_its_declared_width_and_states_new_files_only ... ok
+test the_batched_route_is_served_by_a_non_retaining_measured_phase ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:42Z

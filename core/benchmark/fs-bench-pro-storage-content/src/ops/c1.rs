@@ -640,7 +640,7 @@ fn chunk_count_perf(
     gates.push(gates::require(
         GateClass::Resource,
         "g4.peak-deferred",
-        (counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
+        counters.peak_deferred_bytes <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
         &format!("{} bytes", counters.peak_deferred_bytes),
         &format!("<= EDIT_DEFERRED_LIMIT ({})", layerfs_content::file::edit::EDIT_DEFERRED_LIMIT),
     ));
@@ -878,7 +878,7 @@ fn edit_perf(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpO
     gates.push(gates::require(
         GateClass::Resource,
         "g4.peak-deferred",
-        (counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
+        counters.peak_deferred_bytes <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
         &format!("{} bytes", counters.peak_deferred_bytes),
         &format!("<= EDIT_DEFERRED_LIMIT ({})", layerfs_content::file::edit::EDIT_DEFERRED_LIMIT),
     ));

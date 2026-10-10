@@ -24,6 +24,7 @@ pub mod history;
 pub mod history_retained;
 pub mod namespace_content;
 pub mod pipeline;
+pub mod store;
 
 use std::path::{Path, PathBuf};
 

@@ -207,7 +207,7 @@ fn namespace_memory_attribution() {
             continue;
         }
         let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
-            + u64::from(file.serial)
+            + file.serial
             - (2 + u64::from(declaration.directories));
         let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
         let (result, _) = layerfs_telemetry::timer::Timing::disabled(

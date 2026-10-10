@@ -1,0 +1,73 @@
+command: rustfmt +1.85.1 --check --edition 2021 --config skip_children=true <file>   (one invocation per changed .rs file, at HEAD content and at working-tree content)
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: 02dd96b0b
+rustfmt version: rustfmt 1.8.0-stable (4eb161250e 2025-03-15)
+note: the harness is not rustfmt-clean at HEAD. This track did not mass-reformat pre-existing content. 'hunks' counts 'Diff in' blocks. 'on changed lines' counts working-tree hunks whose removed lines include a line this track changed (git diff -U0 HEAD).
+
+file                                         hunks@HEAD  hunks@now   on changed lines exit@now
+src/families/c2_read.rs                               0          0                 [] 0
+src/ops/c1.rs                                        42         42                 [] 1
+src/ops/c2.rs                                         0          0                 [] 0
+src/ops/fs.rs                                         7          6                 [] 1
+src/ops/fs_fixture.rs                                 0          0                 [] 0
+src/ops/history.rs                                   77         71                 [] 1
+src/ops/history_retained.rs                           3          3                 [] 1
+src/ops/mod.rs                                        2          2                 [] 1
+src/ops/pipeline.rs                                  33         27   [426, 620, 1290] 1
+src/registry.rs                                       1          1                 [] 1
+src/support/mod.rs                                    0          0                 [] 0
+src/workload/expected.rs                              0          0                 [] 0
+src/workload/mod.rs                                   0          0                 [] 0
+tests/namespace_memory_probe.rs                       2          2                 [] 1
+tests/spill_read_price.rs                            17         17                 [] 1
+src/ops/store.rs                                  (new)          0                 [] 0
+tests/store_adapter.rs                            (new)          0                 [] 0
+
+---- the hunks on changed lines, in full ----
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:426:
+         }
+     };
+ 
+-    context.trace.write_number(Kind::Counter, "pipeline.base_bytes", setup.base_bytes as i128, "bytes", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.final_bytes", file.logical_len as i128, "bytes", "ConstructedFile.logical_len")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.expected_final_bytes", setup.expectation.logical_len as i128, "bytes", "base - removed + replacement, computed by the oracle")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveSink path, measured phase")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "WriteOutcome.inserted")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "WriteOutcome.reused")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.nodes_read", file.counters.nodes_read as i128, "nodes", "EditCounters.nodes_read")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.nodes_created", file.counters.nodes_created as i128, "nodes", "EditCounters.nodes_created")?;
+-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+  [...]
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:620:
+     let (store, replay) = fs::replay_build(&prepared, scope, None)?;
+     let listing = fs::listings_match(&store, replay.root, &prepared)?;
+ 
+-    context.trace.write_number(Kind::Counter, "pipeline.declared_files", config.files as i128, "files", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.declared_directories", config.directories as i128, "directories", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.bindings", prepared.bindings() as i128, "bindings", "fixture manifest")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveSink path, measured phase")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "WriteOutcome.inserted")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "WriteOutcome.reused")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.objects_emitted", result.counters.objects.objects_emitted as i128, "objects", "ObjectWork.objects_emitted")?;
+-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
++    context.trace.write_number(
+  [...]
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:1290:
+             }
+             content_rng_seed_ns = 0;
+         } else {
+-        let offered = content.drain();
+-        content_objects_offered = offered.len() as u64;
+-        for object in offered {
+-            // The bytes the Store has to hold are counted on the way in, from the
+-            // objects themselves, exactly as the row always counted them.
+-            content_bytes = content_bytes.saturating_add(object.canonical_len() as u64);
+-            operation.accept(object)?;
++            let offered = content.drain();
++            content_objects_offered = offered.len() as u64;
++            for object in offered {
+  [...]
+---- end ----
+classification: all three are in src/ops/pipeline.rs and are pre-existing layout that this track edited in place without reflowing: (426, 620) the file's one-call-per-line write_number style, where only a source-label string or WriteOutcome expression changed; (1290) an else-block that is mis-indented at HEAD (HEAD line 1274), where only a comment changed.

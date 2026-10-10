@@ -367,3 +367,100 @@ The pinned `additions` digest remains part of the C2 offered-member oracle emitt
 by `ops/c2.rs`. It is unrelated to the crate-internal `CheckedInput.additions`
 field removed in R4. Removing the digest from discovery would weaken the frozen
 oracle, so its pinned identities and gates remain unchanged.
+
+## Port to the current Store API, 2026-10-10 — a new harness identity
+
+`bd9ededba` removed `layerfs_storage::{Store, SaveOutcome, SaveHandoff,
+StoreProvider}` and `layerfs_history::sqlite`; this harness did not build after
+it. The port makes it build against the current public API and nothing else: no
+product API was added or widened, no third-party dependency was added
+(`layerfs-persistence` is a first-party path dependency), and no gate, pinned
+expectation or golden row was edited. This section registers no sample and makes
+no performance or storage claim. The drivers were compiled and the adapter was
+exercised by `tests/store_adapter.rs`; no registered row was run by the port.
+
+**The identity changed; old figures are not continued.** The removed engine was
+`journal_mode = MEMORY` / `synchronous = OFF` with the history catalogue in a
+separate `history.sqlite`. Every Store is now created and opened through
+`ops::store::config` as **Disposable / WAL / `synchronous = OFF`**, selected
+explicitly (the product default is Durable, which is never executed here), and
+holds packs **and** history in one database file. Byte-size, page, statement and
+commit figures recorded against the removed engine, and any gate limit derived
+from them, describe a different layout and profile. A later run under this
+identity starts its own evidence; it does not extend the old receipts.
+
+**Closed means sealed.** Under WAL an open or merely dropped session can leave
+`-wal`/`-shm` beside the database. A prepared master is sealed
+(`Handles::seal`: checkpoint, close, verify one file) before it is byte-copied,
+and a sample is sealed before its sidecar gate and before its allocated and
+apparent bytes are read. The seal runs outside the measured timer. The port adds
+no `fsync`-family call. The `sync_all` in `ops/c2.rs` `byte_copy` (the per-sample
+acquisition copy, CONTRACT section 4) predates the port and is unchanged; whether
+it stays under the Disposable-only direction is an open owner/lead decision, not
+one the port made.
+
+**Construction stays single-producer**, and `BUILD_BATCH_BINDINGS` (4,096) stays
+the historical workload width with its batch count and operation boundaries.
+
+### Counters that kept their meaning under a new source
+
+The authoritative table is `COUNTER_MAPPINGS` in `src/ops/store.rs`.
+
+| Trace names | Removed source | Current source |
+| --- | --- | --- |
+| `*.inserted`, `*.reused`, `*.full_records`, `*.prefix_records` | `SaveOutcome` fields | `WriteOutcome` fields of the same names |
+| `*.packs_created` | `SaveOutcome.packs_created` | `WriteOutcome.packs` |
+| `pool.*`, `history.state.<n>.save.pool.*`, `delta.pool_*` | `SaveOutcome.pool` | `WriteOutcome.pool` |
+| `pipeline.pack_bytes_written` | `SaveOutcome.pack_bytes_written` | `Storage::diagnostics().pack_write_bytes`, after minus before the one save |
+| `lifecycle.second` at the begin-save step | `SaveOperation::pending().1` | `Save::pending_canonical_bytes()` |
+| `history.state.<n>.filesystem.provider.pooled.*` | `StoreProvider::pooled_read_counters()` | `Reader::pooled_read_counters()` |
+| `history.canonical_bytes`, `history.canonical_objects` | SQL over `objects` | SQL over `object_location` |
+| presence oracle (`g1.o1-*-presence`) | `Store::contains` | `PackPersistence::locate`, paged at `StorageCapacities.read_objects` |
+
+### Unavailable at this product identity
+
+The authoritative lists are `UNAVAILABLE_COUNTERS` and `UNAVAILABLE_TIMER_NODES`
+in `src/ops/store.rs`, each entry with its reason. A name listed there is **not
+emitted**: not as zero, not as a different quantity. A gate that reads one keeps
+its class, identity and limit and reports `INCOMPLETE`, never `PASS`.
+
+- `*.pack_appends` — packs are immutable and registered whole.
+- `*.presence_queries`, `*.commits`, `*.statements` — the save reports none of
+  them; the session-cumulative `SqlWork` and `Diagnostics.locate` figures count a
+  different set.
+- `delta.*` selection counters and `*.chain.*` — `Save::delta_counters()` and
+  `Save::chain_counters()` are readable only before `Save::finish`, which runs
+  the final wave where selection happens; `WriteOutcome` carries neither.
+- `lifecycle.first` at the begin-save step — no pending object count is public.
+- `read.wave1_opens`, `read.wave2_opens`, `read.provider_opens`,
+  `*.connection_opens`, `read.wave1_pages`, `read.ceiling`,
+  `read.canonical_bytes`, `*.group_decodes` — one shared session; `Reader`
+  exposes pooled-lane counters only.
+- `pool.index_entries_before`, `pool.index_entries`, `pool.index_bytes` — no
+  entry count is public and the byte figure is readable only before `finish`.
+- `pipeline.profile_*`, `pipeline.diag_*`, `pipeline.stored_records`,
+  `pipeline.teardown_ns`, `pipeline.operation_work_ns`, the per-state
+  `save.*_ns` rows and `delta.profile_*` — the current `SaveProfile` holds
+  inclusive overlapping spans, not the removed disjoint buckets.
+- `pipeline.span_finish_child_ns` and the timer nodes `store.create`,
+  `store.open`, `storage.begin`, `storage.begin2`, `storage.finish`,
+  `storage.abort`, `storage.wave1`, `storage.wave2`, `presence` — no product call
+  takes a timing scope now, and the harness does not re-create them under the
+  same names.
+- `diagnostic.state.<n>.C2.*` and `.C5.*` block figures — one shared file,
+  published as owner `C2C5`.
+
+### Known consequences, left as they are
+
+These are differences the port reports; it does not hide them by editing a gate.
+
+- `g2.second-begin-refused` still names the removed engine's
+  `OwnershipUnavailable`. The current product refuses a second `begin_save` on
+  one handle with `StorageError::Integrity("one save per storage handle")`, so
+  that gate does not pass as written.
+- `history_retained::storage_gate` still expects a separate `history.sqlite`. A
+  combined Store has none, so the gate reports `INCOMPLETE`.
+- `g2.exact-hit-writes-nothing`, `g2.opens-o1`, `g2.paged-locator` and
+  `g2.pool-index` read counters in the unavailable list and report `INCOMPLETE`.
+- `tests/golden/expected.tsv` is byte-identical. Golden rows whose counter is
+  unavailable stay in the file and are unpublished by a run under this identity.

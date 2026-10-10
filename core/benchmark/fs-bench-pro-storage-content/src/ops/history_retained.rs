@@ -1,14 +1,32 @@
 //! Versioned C5 companion to the existing history construction driver.
 //! State 1 is genesis; every later state stages, commits and publishes one Layer.
+//!
+//! **Ported 2026-10-10.** `layerfs_history::sqlite` (a standalone catalogue
+//! database) was removed by `bd9ededba`; the catalogue is now the
+//! `HistoryCatalog` a `layerfs_persistence::Handles` holds in the **same**
+//! database as the packs. The history driver therefore publishes into the Store
+//! it grows ([`RetainedHistory::create_in`], [`RetainedHistory::publish_in`],
+//! [`verify_in`]), and there is no `history.sqlite` beside `sample.sqlite` any
+//! more. The path-taking entry points ([`RetainedHistory::create`],
+//! [`RetainedHistory::publish`], [`verify`]) keep their signatures and open a
+//! Store of their own at the path they are handed. Every open selects
+//! Disposable / WAL / `synchronous = OFF` explicitly through `ops::store::config`.
+//!
+//! [`storage_gate`] is **unchanged**: it still sums `sample.sqlite` and
+//! `history.sqlite` against the ceilings recorded for the removed two-file
+//! layout. With one combined Store it finds no `history.sqlite` and reports
+//! `INCOMPLETE`; the old byte ceilings are not continued under the new identity.
 use std::path::Path;
 
 use layerfs_content::{filesystem::root::profile_id, InodeScope, ObjectId};
 use layerfs_history::{
-    sqlite, AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitStagedOutcome,
-    CommitStagedRequest, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryError, HistoryName, HistoryResult, LayerId, LayerStackId, StackInitialization,
-    StageRequest, WorkspaceId,
+    AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitStagedOutcome, CommitStagedRequest,
+    ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryError, HistoryName,
+    HistoryResult, LayerId, LayerStackId, StackInitialization, StageRequest, WorkspaceId,
 };
+use layerfs_persistence::Handles;
+use layerfs_storage::port::PersistenceError;
+use layerfs_storage::StoragePolicy;
 
 /// Explicit opt-in; historical C2-only operations retain their original behavior.
 pub fn enabled() -> bool {
@@ -36,7 +54,8 @@ pub fn record_counters(
             path,
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
         )?;
-        db.query_row("SELECT COUNT(*), SUM(n) FROM (SELECT object_id, MAX(canonical_length) n FROM objects GROUP BY object_id)",
+        // Table `objects` became `object_location` (`object_id` is its primary key).
+        db.query_row("SELECT COUNT(*), SUM(n) FROM (SELECT object_id, MAX(canonical_length) n FROM object_location GROUP BY object_id)",
             [], |row| Ok((row.get(0)?, row.get(1)?)))
     };
     let (objects, bytes) = read().map_err(|error| super::OpError::Io(error.to_string()))?;
@@ -102,7 +121,11 @@ pub fn counter_gates(
         .collect()
 }
 
-fn config() -> HistoryCatalogConfig {
+/// The history binding every `history.*` Store is created and opened under.
+///
+/// The Store always carries a catalogue now, so the row's Store is bound with this
+/// config whether or not the compound profile publishes into it.
+pub fn config() -> HistoryCatalogConfig {
     // v4 changes the storage gate, not the retained-history workload identity.
     let identity_version = if version() == "v4" { "v3" } else { version() };
     HistoryCatalogConfig {
@@ -133,17 +156,51 @@ pub struct RetainedState {
     pub layer: LayerId,
 }
 
+/// A persistence refusal, as the history error class it is.
+fn persistence_error(error: PersistenceError) -> HistoryError {
+    match error {
+        PersistenceError::Busy => HistoryError::Busy,
+        PersistenceError::Uncertain => HistoryError::UnknownOutcome,
+        PersistenceError::Missing => {
+            HistoryError::Missing(layerfs_history::error::Missing::Catalog)
+        }
+        PersistenceError::BackendUnavailable => HistoryError::Unsupported("persistence backend"),
+        PersistenceError::Refused { .. } | PersistenceError::Malformed => {
+            HistoryError::Integrity("retained Store refused")
+        }
+    }
+}
+
 /// One fresh catalog, owned by the measured invocation rather than preparation.
 pub struct RetainedHistory {
-    catalog: sqlite::SqliteCatalog,
+    /// The Store this value created for itself ([`RetainedHistory::create`]), or
+    /// `None` when the chain publishes into a Store its caller holds.
+    owned: Option<Handles>,
     head: LayerId,
     next_ordinal: usize,
 }
 
 impl RetainedHistory {
-    /// Creates the catalog, genesis Layer and Branch inside state 1's timer.
+    /// Creates a Store at `path`, then the genesis Layer and Branch in its catalog.
     pub fn create(path: &Path, scope: InodeScope, root: ObjectId) -> HistoryResult<Self> {
-        let catalog = sqlite::create(path, &config())?;
+        let handles = Handles::create(
+            super::store::config(path),
+            StoragePolicy::frozen_default(),
+            &config(),
+        )
+        .map_err(persistence_error)?;
+        let mut created = Self::create_in(&handles.history, scope, root)?;
+        created.owned = Some(handles);
+        Ok(created)
+    }
+
+    /// Creates the genesis Layer and Branch in a catalog the caller holds, inside
+    /// state 1's timer.
+    pub fn create_in(
+        catalog: &dyn HistoryCatalog,
+        scope: InodeScope,
+        root: ObjectId,
+    ) -> HistoryResult<Self> {
         let initialized = catalog.initialize_layerstack(&StackInitialization {
             stack: stack(),
             name: HistoryName::new("retained")?,
@@ -158,7 +215,7 @@ impl RetainedHistory {
             source: ForkSource::Layer(initialized.head_layer),
         })?;
         Ok(Self {
-            catalog,
+            owned: None,
             head: initialized.head_layer,
             next_ordinal: 2,
         })
@@ -172,23 +229,59 @@ impl RetainedHistory {
         }
     }
 
-    /// Saves one real retained state through public C5 transitions, without retry.
+    /// Saves one retained state into the Store this value created for itself.
     pub fn publish(&mut self, ordinal: usize, root: ObjectId) -> HistoryResult<RetainedState> {
-        if ordinal != self.next_ordinal {
+        let Self {
+            owned,
+            head,
+            next_ordinal,
+        } = self;
+        let handles = owned
+            .as_ref()
+            .ok_or(HistoryError::InvalidInput("retained catalog owner"))?;
+        advance(&handles.history, head, next_ordinal, ordinal, root)
+    }
+
+    /// Saves one retained state into a catalog the caller holds.
+    pub fn publish_in(
+        &mut self,
+        catalog: &dyn HistoryCatalog,
+        ordinal: usize,
+        root: ObjectId,
+    ) -> HistoryResult<RetainedState> {
+        advance(
+            catalog,
+            &mut self.head,
+            &mut self.next_ordinal,
+            ordinal,
+            root,
+        )
+    }
+}
+
+/// Saves one real retained state through public C5 transitions, without retry.
+fn advance(
+    catalog: &dyn HistoryCatalog,
+    head: &mut LayerId,
+    next_ordinal: &mut usize,
+    ordinal: usize,
+    root: ObjectId,
+) -> HistoryResult<RetainedState> {
+    {
+        if ordinal != *next_ordinal {
             return Err(HistoryError::InvalidInput("retained state order"));
         }
         // C5 Branch bases are immutable. Each publication forks the prior Layer.
-        self.catalog.fork(&ForkRequest {
+        catalog.fork(&ForkRequest {
             stack: stack(),
             branch: branch(ordinal),
             name: HistoryName::new(&format!("state-{ordinal}"))?,
-            source: ForkSource::Layer(self.head),
+            source: ForkSource::Layer(*head),
         })?;
-        let old = self
-            .catalog
+        let old = catalog
             .branch_snapshot(branch(ordinal))?
             .ok_or(HistoryError::Integrity("retained Branch"))?;
-        let stage = self.catalog.stage_changes(&StageRequest {
+        let stage = catalog.stage_changes(&StageRequest {
             workspace: workspace(),
             branch: branch(ordinal),
             expected_head: old.branch.head_commit,
@@ -201,7 +294,7 @@ impl RetainedHistory {
             scope: old.scope,
             generation: ordinal as u64,
         })?;
-        let commit = match self.catalog.commit_staged(&CommitStagedRequest {
+        let commit = match catalog.commit_staged(&CommitStagedRequest {
             workspace: workspace(),
             token: stage.token,
         })? {
@@ -212,11 +305,11 @@ impl RetainedHistory {
                 ))
             }
         };
-        let layer = match self.catalog.add_layer(&AddLayerRequest {
+        let layer = match catalog.add_layer(&AddLayerRequest {
             stack: stack(),
             branch: branch(ordinal),
             commit: commit.id,
-            expected_stack_head: self.head,
+            expected_stack_head: *head,
             expected_branch_base: old.branch.base_layer,
         })? {
             AddLayerOutcome::Added(layer) => layer,
@@ -226,8 +319,8 @@ impl RetainedHistory {
                 ))
             }
         };
-        self.head = layer.id;
-        self.next_ordinal += 1;
+        *head = layer.id;
+        *next_ordinal += 1;
         Ok(RetainedState {
             commit: Some(commit.id),
             layer: layer.id,
@@ -235,15 +328,30 @@ impl RetainedHistory {
     }
 }
 
-/// Reopens and queries EVERY selected root through public C5 APIs.
+/// Reopens the Store at `path` read-only and queries EVERY selected root through
+/// public C5 APIs.
 /// This proves C5 custody against the performance roots; independent O1 pins
 /// and the corpus tree/byte oracle remain separate mandatory checks.
 pub fn verify(path: &Path, scope: InodeScope, roots: &[ObjectId]) -> HistoryResult<usize> {
+    let settings = config();
+    let handles = Handles::open_read_only(
+        super::store::config(path),
+        &settings.binding_key,
+        settings.cursor_key,
+    )
+    .map_err(persistence_error)?;
+    verify_in(&handles.history, scope, roots)
+}
+
+/// Queries EVERY selected root through a catalog the caller holds.
+pub fn verify_in(
+    catalog: &dyn HistoryCatalog,
+    scope: InodeScope,
+    roots: &[ObjectId],
+) -> HistoryResult<usize> {
     let first = *roots
         .first()
         .ok_or(HistoryError::InvalidInput("retained roots"))?;
-    let settings = config();
-    let catalog = sqlite::open_read_only(path, &settings.binding_key, settings.cursor_key)?;
     let genesis = LayerId::derive(stack(), None, first);
     let mut parent = None;
     let mut last_commit = None;

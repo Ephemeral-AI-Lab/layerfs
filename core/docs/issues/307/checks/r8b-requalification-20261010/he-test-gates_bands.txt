@@ -1,0 +1,38 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/gates_bands-517ca6671aeb2609 --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: f0e1e2d84
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:25Z
+---- output (stdout+stderr) ----
+
+running 23 tests
+test a_band_contains_its_bounds_inclusively_and_is_one_sided_at_the_top ... ok
+test a_gating_metric_can_produce_fail_and_a_missing_tier_is_incomplete ... ok
+test aggregate_returns_the_worst_gate ... ok
+test attribution_refuses_a_shared_with_master_row ... ok
+test band_describe_renders_closed_and_one_sided_forms ... ok
+test device_attestation_demands_ninety_percent_from_the_device ... ok
+test doublings_refuses_degenerate_steps ... ok
+test every_growth_and_metric_pair_has_its_frozen_band ... ok
+test gate_class_tokens_are_the_frozen_seven ... ok
+test only_time_is_stripped_of_the_power_to_decide ... ok
+test pack_accounting_refuses_a_fabricated_zero ... ok
+test per_doubling_is_identity_for_a_constant_and_refuses_non_positive ... ok
+test per_doubling_normalises_the_raw_ratio_on_the_real_ladders ... ok
+test require_maps_a_boolean_onto_a_named_limit ... ok
+test residency_and_swap_gates_fail_closed_on_a_missing_reading ... ok
+test severity_orders_not_run_above_target_miss ... ok
+test slope_on_the_real_byte_ladder_recovers_a_linear_growth ... ok
+test slope_recovers_a_known_exponent ... ok
+test slope_refuses_what_it_cannot_fit ... ok
+test the_byte_ladder_has_no_doublings ... ok
+test the_normalised_ratio_is_what_the_band_judges ... ok
+test time_never_produces_fail_whatever_the_value ... ok
+test timing_purity_turns_a_clipped_tree_into_a_hard_failure ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:26Z

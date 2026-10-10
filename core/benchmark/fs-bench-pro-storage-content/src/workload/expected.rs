@@ -286,12 +286,13 @@ pub fn publish(
 
 /// The distinct identities of a list, in a stable order.
 ///
-/// `Store::contains` answers per **lookup page** (`LOOKUP_PAGE_IDS = 128`), so an
-/// input list with repeats — and 500 `delete` members derived from one base are
-/// byte-identical, so the list is 500 copies of one identity — comes back with one
-/// entry per page that matched. Comparing `present.len()` with the raw list length
-/// therefore reported "1 of 500 present" for a Store that held the identity, which
-/// is exactly the false failure this helper removes. Both sides are distinct.
+/// The presence question is answered over **distinct** identities (the pack port's
+/// locator takes distinct ids and omits absence), so an input list with repeats —
+/// and 500 `delete` members derived from one base are byte-identical, so the list
+/// is 500 copies of one identity — does not come back with one entry per repeat.
+/// Comparing `present.len()` with the raw list length therefore reported "1 of 500
+/// present" for a Store that held the identity, which is exactly the false failure
+/// this helper removes. Both sides are distinct.
 pub fn distinct(ids: &[ObjectId]) -> Vec<ObjectId> {
     let mut out = ids.to_vec();
     out.sort_unstable();
@@ -301,7 +302,7 @@ pub fn distinct(ids: &[ObjectId]) -> Vec<ObjectId> {
 
 /// Every identity of `ids` the Store holds, asking in waves the Store allows.
 ///
-/// `Store::contains` refuses a demand above its **declared** read ceiling
+/// The locator takes at most its **declared** read ceiling of distinct ids
 /// (`StorageCapacities::read_objects`, today 4,096), and the ceiling is read from
 /// the Store rather than restated here: a harness constant that happened to match
 /// today's policy would silently become a hardcoded limit the day the policy moved.
@@ -309,16 +310,18 @@ pub fn distinct(ids: &[ObjectId]) -> Vec<ObjectId> {
 /// version of the presence gate was refused with `CapacityExceeded` and reported the
 /// row `INCOMPLETE` for the harness's own over-ask rather than for anything the
 /// product did.
+///
+/// Ported 2026-10-10: the removed `Store::contains(ids, scope)` is
+/// [`crate::ops::store::Store::contains`], which asks `PackPersistence::locate`.
+/// The product records no `presence` timer node any more, so none is created.
 pub fn present_all(
-    store: &layerfs_storage::Store,
+    store: &crate::ops::store::Store,
     ids: &[ObjectId],
-    scope: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
 ) -> Result<Vec<ObjectId>, layerfs_storage::StorageError> {
     let ceiling = store.capacities().read_objects.max(1);
     let mut present = Vec::with_capacity(ids.len());
-    for (index, wave) in ids.chunks(ceiling).enumerate() {
-        present.extend(store.contains(wave, scope.child("presence"))?);
-        let _ = index;
+    for wave in ids.chunks(ceiling) {
+        present.extend(store.contains(wave)?);
     }
     Ok(present)
 }

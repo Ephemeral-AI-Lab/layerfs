@@ -6,6 +6,10 @@
 //! assertion, so it is not evidence (`core/docs/architecture/10-counters.md`).
 
 pub mod instruments;
+// `phases` (with `window` and `instruments`) is a frozen first-party reference
+// module: active core examples and tests compile the same file through `#[path]`
+// and allow this same lint at their own include site. Its source stays unchanged.
+#[allow(clippy::useless_format)]
 pub mod phases;
 pub mod trace;
 pub mod window;

@@ -22,9 +22,18 @@
 //!
 //! **The base is read back through the Store.** State 1 builds a new filesystem
 //! (`base: None`); every later state passes the previous root, whose content the
-//! operation reads through `StoreProvider` over the very Store the chain is
+//! operation reads through `Storage::reader()` over the very Store the chain is
 //! growing. The chain therefore goes C1 → C2 in the read direction and not out of
 //! harness memory.
+//!
+//! **Ported 2026-10-10 to the current public API** (`ops::store`). The Store is
+//! one `layerfs_persistence::Handles` plus one `layerfs_storage::Storage`,
+//! Disposable / WAL / `synchronous = OFF`, selected explicitly, and it holds the
+//! retained-history catalogue in the same database as the packs. `close` above is
+//! a **seal**: the checkpoint and close after which the database is one file.
+//! Counters with no current source (`ops::store::UNAVAILABLE_COUNTERS`) are not
+//! emitted; that includes the save's delta-selection and chain counters, which the
+//! product now exposes only before `Save::finish` runs the final wave.
 //!
 //! ## What this lane does not model
 //!
@@ -57,9 +66,10 @@ use layerfs_content::{
     construct_bytes, construct_bytes_with_predecessor, AdvisoryPredecessors,
     ConstructionCapacities, ConstructionPolicy, ObjectId, PredecessorBase, PredecessorProvenance,
 };
-use layerfs_storage::{SaveOutcome, StoragePolicy, Store, StoreProvider};
+use layerfs_storage::{StoragePolicy, WriteOutcome};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 
+use super::store::{self, Store};
 use super::{OpContext, OpError, OpOutcome, Phase};
 use crate::gates::{self, Gate, GateClass};
 use crate::registry::Case;
@@ -308,19 +318,21 @@ fn advisory_depth_limit() -> u8 {
         .unwrap_or(u8::MAX)
 }
 
-/// The save counters this row did not previously publish, per state and in total.
+/// The save counters this row publishes, per state and in total.
 ///
-/// "Cannot see it" and "sees it and declines it" were indistinguishable without
-/// these: the selection counters live in `DeltaCounters`, which `SaveOutcome`
-/// already carries, and nothing read them. The `#190` save-attribution round needs
-/// the same figures **per state**, because the question there is which part of
-/// `storage.accept_loop` grows with chain depth - a chain total cannot answer it.
+/// Every field is read from the `WriteOutcome` the product returns from
+/// `Save::finish`. The struct is a plain accumulator so one state's figures can be
+/// published after the measured region closes, which is where the rest of this
+/// driver's counters are written.
 ///
-/// Nothing here is new product instrumentation: every field is read from the
-/// `SaveOutcome` the product already returns, at the same place and with the same
-/// lifetime the existing `delta.*` totals used. The struct is a plain accumulator
-/// so one state's figures can be published after the measured region closes, which
-/// is where the rest of this driver's counters are written.
+/// **What is no longer here.** Against the removed engine this accumulator also
+/// carried `SaveOutcome.{pack_appends, commits, statements, presence_queries}`,
+/// the whole of `SaveOutcome.delta` and `.chain`, and the `SaveProfile` buckets.
+/// None has a current source that is the same quantity - the delta-selection and
+/// chain counters in particular are readable only through `Save::delta_counters`
+/// and `Save::chain_counters`, before `Save::finish` runs the save's final wave,
+/// so a reading would exclude that wave. They are listed in
+/// `ops::store::UNAVAILABLE_COUNTERS` and are not emitted, as zero or otherwise.
 #[derive(Default, Clone, Copy)]
 struct SaveTotals {
     reused: u64,
@@ -328,24 +340,6 @@ struct SaveTotals {
     full_records: u64,
     prefix_records: u64,
     packs_created: u64,
-    pack_appends: u64,
-    commits: u64,
-    statements: u64,
-    presence_queries: u64,
-    prepared_full: u64,
-    trials: u64,
-    prefix_selected: u64,
-    full_losses: u64,
-    no_candidate: u64,
-    absent_candidates: u64,
-    ineligible_candidates: u64,
-    work_exceeded: u64,
-    chain_objects: u64,
-    chain_edges: u64,
-    chain_encoded_bytes: u64,
-    chain_canonical_bytes: u64,
-    chain_max_depth: u64,
-    chain_group_decodes: u64,
     pool_leaves: u64,
     pool_new_values: u64,
     pool_reused_values: u64,
@@ -354,60 +348,16 @@ struct SaveTotals {
     pool_full_leaves: u64,
     pool_trials: u64,
     pool_work_exceeded: u64,
-    profile_resolve_ns: u64,
-    profile_reuse_repeat: u64,
-    profile_resolve_eligible_ns: u64,
-    profile_resolve_acquire_ns: u64,
-    profile_resolve_cost_ns: u64,
-    profile_resolve_reuse_ns: u64,
-    profile_resolve_pooled_ns: u64,
-    profile_full_ns: u64,
-    profile_delta_ns: u64,
-    profile_group_ns: u64,
-    profile_place_ns: u64,
-    profile_sql_ns: u64,
-    profile_commit_ns: u64,
 }
 
 impl SaveTotals {
-    fn add(&mut self, saved: &SaveOutcome) {
+    fn add(&mut self, saved: &WriteOutcome) {
         self.reused = self.reused.saturating_add(saved.reused);
         self.inserted = self.inserted.saturating_add(saved.inserted);
         self.full_records = self.full_records.saturating_add(saved.full_records);
         self.prefix_records = self.prefix_records.saturating_add(saved.prefix_records);
-        self.packs_created = self.packs_created.saturating_add(saved.packs_created);
-        self.pack_appends = self.pack_appends.saturating_add(saved.pack_appends);
-        self.commits = self.commits.saturating_add(saved.commits);
-        self.statements = self.statements.saturating_add(saved.statements);
-        self.presence_queries = self
-            .presence_queries
-            .saturating_add(saved.presence_queries);
-        let delta = saved.delta;
-        self.prepared_full = self.prepared_full.saturating_add(delta.prepared_full);
-        self.trials = self.trials.saturating_add(delta.trials);
-        self.prefix_selected = self.prefix_selected.saturating_add(delta.prefix_selected);
-        self.full_losses = self.full_losses.saturating_add(delta.full_losses);
-        self.no_candidate = self.no_candidate.saturating_add(delta.no_candidate);
-        self.absent_candidates = self
-            .absent_candidates
-            .saturating_add(delta.absent_candidates);
-        self.ineligible_candidates = self
-            .ineligible_candidates
-            .saturating_add(delta.ineligible_candidates);
-        self.work_exceeded = self.work_exceeded.saturating_add(delta.work_exceeded);
-        let chain = saved.chain;
-        self.chain_objects = self.chain_objects.saturating_add(chain.objects);
-        self.chain_edges = self.chain_edges.saturating_add(chain.edges);
-        self.chain_encoded_bytes = self
-            .chain_encoded_bytes
-            .saturating_add(chain.encoded_bytes);
-        self.chain_canonical_bytes = self
-            .chain_canonical_bytes
-            .saturating_add(chain.canonical_bytes);
-        self.chain_max_depth = self.chain_max_depth.max(chain.max_depth);
-        self.chain_group_decodes = self
-            .chain_group_decodes
-            .saturating_add(chain.group_decodes);
+        // `SaveOutcome.packs_created` is `WriteOutcome.packs`.
+        self.packs_created = self.packs_created.saturating_add(saved.packs);
         let pool = saved.pool;
         self.pool_leaves = self.pool_leaves.saturating_add(pool.leaves);
         self.pool_new_values = self.pool_new_values.saturating_add(pool.new_values);
@@ -421,70 +371,19 @@ impl SaveTotals {
         self.pool_work_exceeded = self
             .pool_work_exceeded
             .saturating_add(pool.work_exceeded);
-        let profile = saved.profile;
-        self.profile_resolve_ns = self.profile_resolve_ns.saturating_add(profile.resolve_ns());
-        self.profile_reuse_repeat = self
-            .profile_reuse_repeat
-            .saturating_add(profile.reuse_repeat);
-        self.profile_resolve_eligible_ns = self
-            .profile_resolve_eligible_ns
-            .saturating_add(profile.resolve.eligible_ns);
-        self.profile_resolve_acquire_ns = self
-            .profile_resolve_acquire_ns
-            .saturating_add(profile.resolve.acquire_ns);
-        self.profile_resolve_cost_ns = self
-            .profile_resolve_cost_ns
-            .saturating_add(profile.resolve.cost_ns);
-        self.profile_resolve_reuse_ns = self
-            .profile_resolve_reuse_ns
-            .saturating_add(profile.resolve.reuse_ns);
-        self.profile_resolve_pooled_ns = self
-            .profile_resolve_pooled_ns
-            .saturating_add(profile.resolve.pooled_ns);
-        self.profile_full_ns = self.profile_full_ns.saturating_add(profile.full_ns);
-        self.profile_delta_ns = self.profile_delta_ns.saturating_add(profile.delta_ns);
-        self.profile_group_ns = self.profile_group_ns.saturating_add(profile.group_ns);
-        self.profile_place_ns = self.profile_place_ns.saturating_add(profile.place_ns);
-        self.profile_sql_ns = self.profile_sql_ns.saturating_add(profile.sql_ns);
-        self.profile_commit_ns = self.profile_commit_ns.saturating_add(profile.commit_ns);
     }
 
     /// The same figures as trace rows: `(suffix, value, unit)`.
     ///
-    /// `inserted` and `commits` are deliberately absent - this row already
-    /// publishes them as `history.state.<n>.inserted` and `.save.commits`, and a
-    /// key written twice would make a reader's first-match lookup ambiguous.
-    fn rows(&self) -> [(&'static str, u64, &'static str); 42] {
+    /// `inserted` is deliberately absent - this row already publishes it as
+    /// `history.state.<n>.inserted`, and a key written twice would make a reader's
+    /// first-match lookup ambiguous.
+    fn rows(&self) -> [(&'static str, u64, &'static str); 12] {
         [
             ("save.reused", self.reused, "objects"),
             ("save.full_records", self.full_records, "objects"),
             ("save.prefix_records", self.prefix_records, "objects"),
             ("save.packs_created", self.packs_created, "packs"),
-            ("save.pack_appends", self.pack_appends, "packs"),
-            ("save.statements", self.statements, "statements"),
-            ("save.presence_queries", self.presence_queries, "queries"),
-            ("save.delta.prepared_full", self.prepared_full, "objects"),
-            ("save.delta.trials", self.trials, "trials"),
-            ("save.delta.prefix_selected", self.prefix_selected, "objects"),
-            ("save.delta.full_losses", self.full_losses, "objects"),
-            ("save.delta.no_candidate", self.no_candidate, "objects"),
-            ("save.delta.absent_candidates", self.absent_candidates, "objects"),
-            (
-                "save.delta.ineligible_candidates",
-                self.ineligible_candidates,
-                "objects",
-            ),
-            ("save.delta.work_exceeded", self.work_exceeded, "objects"),
-            ("save.chain.objects", self.chain_objects, "objects"),
-            ("save.chain.edges", self.chain_edges, "edges"),
-            ("save.chain.encoded_bytes", self.chain_encoded_bytes, "bytes"),
-            (
-                "save.chain.canonical_bytes",
-                self.chain_canonical_bytes,
-                "bytes",
-            ),
-            ("save.chain.max_depth", self.chain_max_depth, "edges"),
-            ("save.chain.group_decodes", self.chain_group_decodes, "count"),
             ("save.pool.leaves", self.pool_leaves, "objects"),
             ("save.pool.new_values", self.pool_new_values, "values"),
             ("save.pool.reused_values", self.pool_reused_values, "values"),
@@ -493,31 +392,6 @@ impl SaveTotals {
             ("save.pool.full_leaves", self.pool_full_leaves, "objects"),
             ("save.pool.trials", self.pool_trials, "trials"),
             ("save.pool.work_exceeded", self.pool_work_exceeded, "objects"),
-            ("save.resolve_ns", self.profile_resolve_ns, "ns"),
-            ("save.reuse_repeat", self.profile_reuse_repeat, "objects"),
-            (
-                "save.resolve.eligible_ns",
-                self.profile_resolve_eligible_ns,
-                "ns",
-            ),
-            (
-                "save.resolve.acquire_ns",
-                self.profile_resolve_acquire_ns,
-                "ns",
-            ),
-            ("save.resolve.cost_ns", self.profile_resolve_cost_ns, "ns"),
-            ("save.resolve.reuse_ns", self.profile_resolve_reuse_ns, "ns"),
-            (
-                "save.resolve.pooled_ns",
-                self.profile_resolve_pooled_ns,
-                "ns",
-            ),
-            ("save.full_ns", self.profile_full_ns, "ns"),
-            ("save.delta_ns", self.profile_delta_ns, "ns"),
-            ("save.group_ns", self.profile_group_ns, "ns"),
-            ("save.place_ns", self.profile_place_ns, "ns"),
-            ("save.sql_ns", self.profile_sql_ns, "ns"),
-            ("save.commit_ns", self.profile_commit_ns, "ns"),
         ]
     }
 }
@@ -1216,7 +1090,10 @@ fn stored_root_metadata(path: &Path) -> Result<BTreeMap<ObjectId, (u8, u64)>, Op
     let database = rusqlite::Connection::open_with_flags(path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|error| OpError::Io(format!("metadata Store: {error}")))?;
-    let mut query = database.prepare("SELECT object_id, MIN(object_role), MAX(object_role), MIN(canonical_length), MAX(canonical_length) FROM objects GROUP BY object_id")
+    // Table `objects(object_role)` became `object_location(role)`; `object_id` is
+    // its primary key, so each group is one row and the consistency check below
+    // holds by construction. The shape is kept so the check stays stated.
+    let mut query = database.prepare("SELECT object_id, MIN(role), MAX(role), MIN(canonical_length), MAX(canonical_length) FROM object_location GROUP BY object_id")
         .map_err(|error| OpError::Io(format!("metadata query: {error}")))?;
     let rows = query.query_map([], |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, i64>(1)?,
         row.get::<_, i64>(2)?, row.get::<_, i64>(3)?, row.get::<_, i64>(4)?)))
@@ -1722,6 +1599,10 @@ impl ChangeMix {
     }
 }
 
+/// One state's constructed content: `path -> content root`, and each root's
+/// eight-hash signature.
+type ConstructedContent = (BTreeMap<Vec<u8>, ObjectId>, BTreeMap<ObjectId, [u64; 8]>);
+
 /// What one state's child produced, carried out of the measured region so the
 /// trace is written **after** the timer rather than inside it.
 struct StateOutcome {
@@ -1739,12 +1620,9 @@ struct StateOutcome {
     input_ns: u64,
     build_ns: u64,
     save_ns: u64,
-    commits: u64,
     /// This state's save counters, published after the measured region closes.
     save: SaveTotals,
-    group_decodes: u64,
     pooled_reads: layerfs_storage::encoding::pool::PoolReadCounters,
-    connection_opens: u64,
     filesystem: FilesystemUpdateCounters,
     filesystem_reads: ReadCounters,
     content_reads: ReadCounters,
@@ -1793,9 +1671,9 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
     };
     if super::history_retained::enabled() {
         let selected: Vec<ObjectId> = roots.iter().map(|(_, root)| *root).collect();
-        let checked = super::history_retained::verify(
-            &context.output.join("history.sqlite"), scope_of(row), &selected,
-        );
+        // The catalogue is in the Store the measured phase grew; there is no
+        // separate `history.sqlite` to reopen.
+        let checked = super::history_retained::verify(&store_path, scope_of(row), &selected);
         gates.push(gates::require(GateClass::Custody, "g6.c5-retained-roots",
             checked.as_ref().is_ok_and(|count| *count == row.states()),
             &format!("{checked:?}"), "all selected roots reopened through public C5"));
@@ -1809,11 +1687,14 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         &format!("{} state roots recorded", roots.len()),
         &format!("{} states in the selection", pins.states),
     ));
-    let store = match super::c2::open_untimed(&store_path) {
+    let store = match Store::open_with(&store_path, &super::history_retained::config()) {
         Ok(store) => store,
         Err(error) => {
             return Ok(unmeasured(
-                &OpError::Io(format!("{}: {error}", store_path.display())),
+                &OpError::Io(format!(
+                    "{}: product error: {error:?}",
+                    store_path.display()
+                )),
                 gates,
             ))
         }
@@ -1858,9 +1739,12 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         Some(requested) => requested.max(1),
     };
 
+    let provider = match store.reader() {
+        Ok(provider) => provider,
+        Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
+    };
     let (result, _) = Timing::disabled("history.verify", |scope: &TimingScope<'_, Active>| {
         let _ = scope;
-        let provider = StoreProvider::new(&store);
         let verified_pages = stored_metadata.as_ref().map(|metadata|
             VerifiedPages::new(&provider, metadata, 8 * 1024 * 1024));
         let mut total = VerifyTally::default();
@@ -1903,34 +1787,18 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
             total,
             failures,
             per_state_ns,
-            provider.connection_opens(),
-            provider.group_decodes(),
             verified_pages.as_ref().map(VerifiedPages::stats).unwrap_or((0, 0, 0)),
         ))
     });
-    let (total, failures, per_state_ns, connection_opens, group_decodes, page_reuse) = match result {
+    let (total, failures, per_state_ns, page_reuse) = match result {
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
 
-    // The Store's own read accounting. Without it, "the phase is slow" is an
-    // observation and "the phase opens a connection per wave" is a finding.
-    for (key, value, unit, basis) in [
-        (
-            "verify.store_connection_opens",
-            connection_opens as i128,
-            "connections",
-            "SQLite connections this phase's waves opened",
-        ),
-        (
-            "verify.store_group_decodes",
-            group_decodes as i128,
-            "groups",
-            "ordinary-lane group bodies this phase decompressed",
-        ),
-    ] {
-        context.trace.write_number(Kind::Resource, key, value, unit, basis)?;
-    }
+    // `verify.store_connection_opens` and `verify.store_group_decodes` were the
+    // removed `StoreProvider`'s own read accounting. The current `Reader` shares the
+    // one session `Handles` opened and exposes pooled-lane counters only, so neither
+    // has a source and neither is emitted (`ops::store::UNAVAILABLE_COUNTERS`).
     for (key, value, unit) in [
         ("verify.authenticated_page_reuses", page_reuse.0 as i128, "objects"),
         ("verify.authenticated_page_reads", page_reuse.1 as i128, "objects"),
@@ -2058,6 +1926,11 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&[
+                "verify.store_connection_opens",
+                "verify.store_group_decodes",
+            ]),
             format!("verify_op: {}", row.id()),
             "verification_phase: separate unmeasured invocation".to_string(),
             if super::history_retained::enabled() {
@@ -2198,7 +2071,6 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let mut store: Option<Store> = None;
     let mut previous_root: Option<FilesystemRootId> = None;
     let mut retained: Option<super::history_retained::RetainedHistory> = None;
-    let history_path = context.output.join("history.sqlite");
 
     let mut directories: Vec<DirectoryUpdate> = Vec::new();
     let mut inodes: Vec<InodeUpdate> = Vec::new();
@@ -2225,7 +2097,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     // own depth bookkeeping is not a public reading.
     let mut chain_depth: BTreeMap<Vec<u8>, u8> = BTreeMap::new();
     let mut advisory_bases: u64 = 0;
-    let mut prior_unavailable: u64 = 0;
+    let prior_unavailable: u64 = 0;
     let mut totals = SaveTotals::default();
     let mut change_totals = ChangeMix::default();
     // Labelled allocation diagnostic only. It observes original owner files
@@ -2332,10 +2204,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         .child("content")
                         .run(
                             |content: &TimingScope<'_, Active>| -> Result<
-                                (
-                                    BTreeMap<Vec<u8>, ObjectId>,
-                                    BTreeMap<ObjectId, [u64; 8]>,
-                                ),
+                                ConstructedContent,
                                 OpError,
                             > {
                                 let _ = content;
@@ -2344,10 +2213,14 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                                 // walk a previous version's mapping through. It is built
                                 // once per state and reads nothing until a chunked
                                 // construction asks it for a mapping page.
-                                let cursor_reader = if chunk_predecessors_enabled() {
-                                    store.as_ref().map(|store| ReadWork::new(StoreProvider::new(store), detailed))
-                                } else {
-                                    None
+                                let cursor_reader = match store.as_ref() {
+                                    Some(store) if chunk_predecessors_enabled() => {
+                                        let reader = store.reader().map_err(|error| {
+                                            OpError::Product(format!("{error:?}"))
+                                        })?;
+                                        Some(ReadWork::new(reader, detailed))
+                                    }
+                                    _ => None,
                                 };
                                 let mut constructed = BTreeMap::new();
                                 let mut state_signatures: BTreeMap<ObjectId, [u64; 8]> =
@@ -2578,7 +2451,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                                     chain_depth.insert(changed.path.clone(), 0);
                                     continue;
                                 }
-                                for candidate in &eligible {
+                                if let Some(candidate) = eligible.first() {
                                     let depth = index
                                         .path_of
                                         .get(candidate)
@@ -2587,7 +2460,6 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                                         .unwrap_or(0);
                                     chain_depth
                                         .insert(changed.path.clone(), depth.saturating_add(1));
-                                    break;
                                 }
                                 bases.insert(new_root, eligible);
                             }
@@ -2598,10 +2470,10 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     // The Store is created inside state 1's child, so the fixed
                     // cost is visible and subtractable rather than buried.
                     if store.is_none() {
-                        let created = Store::create(
+                        let created = Store::create_with(
                             &store_path,
                             StoragePolicy::frozen_default(),
-                            child.child("store.create"),
+                            &super::history_retained::config(),
                         )
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
                         store = Some(created);
@@ -2630,7 +2502,11 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         new_inodes: &new_inodes,
                         resources: FilesystemResources::default(),
                     };
-                    let provider = ReadWork::new(StoreProvider::new(held), detailed);
+                    let provider = ReadWork::new(
+                        held.reader()
+                            .map_err(|error| OpError::Product(format!("{error:?}")))?,
+                        detailed,
+                    );
                     let bindings: usize =
                         directories.iter().map(|update| update.changes.len()).sum();
                     // **Always supply the ordering backing.**
@@ -2673,8 +2549,8 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     })?;
                     let build_ns = t_build.elapsed().as_nanos() as u64;
                     let t_save = std::time::Instant::now();
-                    let mut operation = held
-                        .begin_save(child.child("storage.begin"))
+                    let operation = held
+                        .begin_save()
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
                     history_phase(child, detailed, "storage.accept_loop", |_| {
                         for id in consumer.insertion_order() {
@@ -2712,14 +2588,16 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         Ok(())
                     })?;
                     let saved = operation
-                        .finish(child.child("storage.finish"))
+                        .finish()
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                    // The retained catalogue is the Store's own: packs and history
+                    // share one database, so the state is published where it was saved.
                     let retained_state = if super::history_retained::enabled() {
                         let state = if let Some(catalog) = retained.as_mut() {
-                            catalog.publish(ordinal, built.root.0)
+                            catalog.publish_in(held.history(), ordinal, built.root.0)
                         } else {
-                            let created = super::history_retained::RetainedHistory::create(
-                                &history_path, scope, built.root.0,
+                            let created = super::history_retained::RetainedHistory::create_in(
+                                held.history(), scope, built.root.0,
                             ).map_err(|error| OpError::Product(format!("{error:?}")))?;
                             let genesis = created.genesis();
                             retained = Some(created);
@@ -2750,11 +2628,8 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         input_ns,
                         build_ns,
                         save_ns,
-                        commits: saved.commits,
                         save: state_save,
-                        group_decodes: provider.inner.group_decodes(),
                         pooled_reads: provider.inner.pooled_read_counters(),
-                        connection_opens: provider.inner.connection_opens(),
                         filesystem_reads: provider.counters(),
                         content_reads,
                         retained: retained_state,
@@ -2766,11 +2641,12 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                 ..outcome
             });
             if block_probe {
-                let c2 = instruments::space(&store_path)
-                    .map_err(|error| OpError::Io(format!("C2 block probe: {error}")))?;
-                let c5 = instruments::space(&history_path)
-                    .map_err(|error| OpError::Io(format!("C5 block probe: {error}")))?;
-                block_progress.push((ordinal, c2, c5));
+                // One database file holds packs (C2) and history (C5), so there is
+                // one owner to stat. The session is open, so under WAL this is the
+                // main file as checkpointed so far, not the sealed size.
+                let shared = instruments::space(&store_path)
+                    .map_err(|error| OpError::Io(format!("C2C5 block probe: {error}")))?;
+                block_progress.push((ordinal, shared));
             }
         }
         Ok((outcomes, corpus_read_ns))
@@ -2788,25 +2664,32 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         }
         _ => None,
     };
-    drop(store);
+    // `close`: the Store is sealed, so the canonical-identity counters, the space
+    // figures and the verify invocation all read one closed, checkpointed file.
     drop(retained);
+    if let Some(store) = store {
+        if let Err(error) = store.seal() {
+            return Ok(unmeasured(
+                &OpError::Product(format!("seal {}: {error:?}", store_path.display())),
+                gates,
+            ));
+        }
+    }
     if super::history_retained::enabled() {
         super::history_retained::record_counters(&store_path, context.trace)?;
     }
-    for (ordinal, c2, c5) in block_progress {
-        for (owner, space) in [("C2", c2), ("C5", c5)] {
-            for (metric, bytes) in [
-                ("allocated", space.allocated_bytes),
-                ("apparent", space.apparent_bytes),
-            ] {
-                context.trace.write_number(
-                    Kind::Resource,
-                    &format!("diagnostic.state.{ordinal}.{owner}.{metric}_bytes"),
-                    bytes as i128,
-                    "bytes",
-                    "original-owner stat after state save; diagnostic only, never a gate",
-                )?;
-            }
+    for (ordinal, shared) in block_progress {
+        for (metric, bytes) in [
+            ("allocated", shared.allocated_bytes),
+            ("apparent", shared.apparent_bytes),
+        ] {
+            context.trace.write_number(
+                Kind::Resource,
+                &format!("diagnostic.state.{ordinal}.C2C5.{metric}_bytes"),
+                bytes as i128,
+                "bytes",
+                "shared C2+C5 Store file stat after state save, session open; diagnostic only, never a gate",
+            )?;
         }
     }
 
@@ -2884,7 +2767,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             &format!("history.state.{}.inserted", outcome.ordinal),
             i128::from(outcome.inserted),
             "objects",
-            "SaveOutcome.inserted",
+            "WriteOutcome.inserted",
         )?;
         context.trace.write_number(
             Kind::Counter,
@@ -2946,10 +2829,10 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             }
         }
         let fs = outcome.filesystem;
+        // `save.commits`, `filesystem.provider.group_decodes` and
+        // `filesystem.provider.connection_opens` have no current source and are
+        // not emitted (`ops::store::UNAVAILABLE_COUNTERS`).
         for (suffix, value) in [
-            ("save.commits", outcome.commits),
-            ("filesystem.provider.group_decodes", outcome.group_decodes),
-            ("filesystem.provider.connection_opens", outcome.connection_opens),
             ("filesystem.validation.objects_read", fs.validation.objects_read),
             ("filesystem.validation.read_waves", fs.validation.read_waves),
             ("filesystem.validation.inode_demands", fs.validation.inode_demands),
@@ -2972,7 +2855,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                 &format!("history.state.{}.{suffix}", outcome.ordinal),
                 i128::from(value),
                 "count",
-                "public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed",
+                "public FilesystemUpdateCounters; overlapping work counters are not summed",
             )?;
         }
         // The save's own counters, per state. `storage.accept_loop` is one span and
@@ -2985,7 +2868,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                 &format!("history.state.{}.{suffix}", outcome.ordinal),
                 i128::from(value),
                 unit,
-                "SaveOutcome's own counters for this state; work counters, not times",
+                "WriteOutcome's own counters for this state; work counters, not times",
             )?;
         }
         for (suffix, nanos, basis) in [
@@ -3074,34 +2957,19 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         "the sum of this row's named children; the published operation_ns",
     )?;
 
-    // The counters the row did not publish, which is why "cannot see it" and
-    // "sees it and declines it" were indistinguishable. `prefix_records` is the
-    // object count actually stored as a PREFIX (delta) record; `no_candidate`
-    // is the count for which the save was supplied **no** base at all; the rest
-    // separate "absent" from "present but ineligible" from "over budget".
+    // The chain totals of the save's own counters, from `WriteOutcome`.
+    // `prefix_records` is the object count actually stored as a PREFIX (delta)
+    // record. The selection counters that separated "no base supplied" from
+    // "absent", "ineligible" and "over budget" (`delta.no_candidate` and the rest of
+    // `SaveOutcome.delta`), the chain counters, and `delta.pack_appends`,
+    // `delta.statements` and `delta.presence_queries` have no current source and
+    // are not emitted (`ops::store::UNAVAILABLE_COUNTERS`).
     for (key, value) in [
         ("delta.reused", totals.reused),
         ("delta.inserted", totals.inserted),
         ("delta.full_records", totals.full_records),
         ("delta.prefix_records", totals.prefix_records),
         ("delta.packs_created", totals.packs_created),
-        ("delta.pack_appends", totals.pack_appends),
-        ("delta.statements", totals.statements),
-        ("delta.presence_queries", totals.presence_queries),
-        ("delta.prepared_full", totals.prepared_full),
-        ("delta.trials", totals.trials),
-        ("delta.prefix_selected", totals.prefix_selected),
-        ("delta.full_losses", totals.full_losses),
-        ("delta.no_candidate", totals.no_candidate),
-        ("delta.absent_candidates", totals.absent_candidates),
-        ("delta.ineligible_candidates", totals.ineligible_candidates),
-        ("delta.work_exceeded", totals.work_exceeded),
-        ("delta.chain_objects", totals.chain_objects),
-        ("delta.chain_edges", totals.chain_edges),
-        ("delta.chain_encoded_bytes", totals.chain_encoded_bytes),
-        ("delta.chain_canonical_bytes", totals.chain_canonical_bytes),
-        ("delta.chain_max_depth", totals.chain_max_depth),
-        ("delta.chain_group_decodes", totals.chain_group_decodes),
         ("delta.pool_leaves", totals.pool_leaves),
         ("delta.pool_new_values", totals.pool_new_values),
         ("delta.pool_reused_values", totals.pool_reused_values),
@@ -3132,51 +3000,8 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             "whole-run changed-set composition, from the driver's own walk of each transition",
         )?;
     }
-    // The save's own nanosecond split, totalled over every state. Seven disjoint
-    // buckets charged inside `storage.accept_loop`; their sum is charged work and
-    // the difference from the accept span is the remainder the instrument does
-    // not name. Published as a separate group because the unit is `ns`, not the
-    // `objects` the counters above carry.
-    for (key, value) in [
-        ("delta.profile_resolve_ns", totals.profile_resolve_ns),
-        (
-            "delta.profile_resolve_eligible_ns",
-            totals.profile_resolve_eligible_ns,
-        ),
-        (
-            "delta.profile_resolve_acquire_ns",
-            totals.profile_resolve_acquire_ns,
-        ),
-        ("delta.profile_resolve_cost_ns", totals.profile_resolve_cost_ns),
-        ("delta.profile_resolve_reuse_ns", totals.profile_resolve_reuse_ns),
-        (
-            "delta.profile_resolve_pooled_ns",
-            totals.profile_resolve_pooled_ns,
-        ),
-        ("delta.profile_full_ns", totals.profile_full_ns),
-        ("delta.profile_delta_ns", totals.profile_delta_ns),
-        ("delta.profile_group_ns", totals.profile_group_ns),
-        ("delta.profile_place_ns", totals.profile_place_ns),
-        ("delta.profile_sql_ns", totals.profile_sql_ns),
-        ("delta.profile_commit_ns", totals.profile_commit_ns),
-    ] {
-        context.trace.write_number(
-            Kind::Counter,
-            key,
-            value as i128,
-            "ns",
-            "chain total of the save's own nanosecond accept-path split, an aggregate over the operation, never a span per object",
-        )?;
-    }
-    // A count, not a duration: it is the population the B1 probe measured, so it
-    // is published in its own unit rather than folded into the `ns` group above.
-    context.trace.write_number(
-        Kind::Counter,
-        "delta.profile_reuse_repeat",
-        totals.profile_reuse_repeat as i128,
-        "objects",
-        "reuse occurrences that repeated an identity this same operation had already verified; zero unless LAYERFS_STORAGE_REUSE_PROBE=1",
-    )?;
+    // The removed `SaveProfile` split (`delta.profile_*`, including
+    // `delta.profile_reuse_repeat`) has no current source and is not emitted.
     context.trace.write_number(
         Kind::Counter,
         "history.advisory_model",
@@ -3223,14 +3048,14 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         "space.allocated_bytes",
         space.allocated_bytes as i128,
         "bytes",
-        "st_blocks * 512 of the Store file",
+        "st_blocks * 512 of the sealed Store file (packs and history in one database)",
     )?;
     context.trace.write_number(
         Kind::Resource,
         "space.apparent_bytes",
         space.apparent_bytes as i128,
         "bytes",
-        "st_size of the Store file",
+        "st_size of the sealed Store file (packs and history in one database)",
     )?;
     let pins = corpus.pins();
     gates.push(gates::require(
@@ -3244,6 +3069,19 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&[
+                "history.state.<n>.save.commits",
+                "history.state.<n>.save.{pack_appends, statements, presence_queries}",
+                "history.state.<n>.save.delta.*",
+                "history.state.<n>.save.chain.*",
+                "history.state.<n>.save.{resolve*, reuse_repeat, full_ns, delta_ns, group_ns, place_ns, sql_ns, commit_ns}",
+                "history.state.<n>.filesystem.provider.{group_decodes, connection_opens}",
+                "delta.{pack_appends, statements, presence_queries, prepared_full, trials, prefix_selected, full_losses, no_candidate, absent_candidates, ineligible_candidates, work_exceeded}",
+                "delta.chain_*",
+                "delta.profile_*",
+            ]),
+            "store_layout: one database holds packs (C2) and the retained-history catalogue (C5)".to_string(),
             format!("history_row: {}", row.id()),
             format!("history_states: {}", pins.states),
             format!("history_logical_bytes: {}", pins.logical_bytes),

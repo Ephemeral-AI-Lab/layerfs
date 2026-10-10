@@ -1,0 +1,24 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/registry_negative-a7f9a181d78946a9 --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: f0e1e2d84
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:38Z
+---- output (stdout+stderr) ----
+
+running 9 tests
+test every_real_case_id_is_unique_and_a_duplicate_would_be_caught ... ok
+test every_real_family_is_registered_and_an_unknown_name_would_be_caught ... ok
+test the_byte_ladder_families_carry_both_profiles_too ... ok
+test the_frozen_cardinality_array_is_what_the_registry_holds ... ok
+test the_lane_sizes_and_admission_split_are_the_frozen_ones ... ok
+test the_profile_per_tier_ruling_is_fixed ... ok
+test the_registry_is_clean_under_its_own_self_check ... ok
+test the_registry_owns_one_row_per_family_module_entry ... ok
+test the_ruling_is_visible_in_the_rows_it_governs ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:39Z

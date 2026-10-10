@@ -479,13 +479,14 @@ impl PreparedTree {
         Self::from_text(&text)
     }
 
-    /// Splits this tree's bindings into the batches a build above the walk
-    /// ceiling needs.
+    /// Splits this tree's bindings into batches of at most `ceiling` bindings.
     ///
-    /// `MAXIMUM_WALK_ENTRIES` is charged once per whole-tree walk and a
-    /// `build_filesystem` states its own bindings, so one build is refused above
-    /// the ceiling; the product's own `limits.rs` doc says a tree larger than that
-    /// "is reached by several operations that each stay under the ceiling". This
+    /// The width callers pass (`ops::fs::BUILD_BATCH_BINDINGS`, 4,096) is a
+    /// **workload constant**: it preserves the recorded multi-operation workloads.
+    /// It was introduced when a single build above the historical
+    /// `MAXIMUM_WALK_ENTRIES` walk ceiling was refused; that ceiling is no longer in
+    /// `layerfs-content`, and the batching is kept because the batch count and the
+    /// operation boundaries are part of what the rows measure. This
     /// is that route, computed from the **final** tree rather than from a grown
     /// recipe: `Recipe::files_in` divides `entries` by the directory count, so a
     /// recipe grown from a smaller one rebinds serials to different directories

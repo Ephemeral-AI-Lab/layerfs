@@ -1,10 +1,10 @@
 //! C2-7 `c2.read.waves`: independent bounded reads over a stored ladder.
 //!
-//! The O(1) claim gates on `opens`: one on the opening wave and zero afterwards,
-//! **but only through `StoreProvider::read_wave`**. The direct `Store::read_batch`
-//! route reports `opens: 1` unconditionally, so this cell is ungateable on that
-//! route and the case is driven through the provider. `pages` must equal
-//! `ceil(ids / 128)`.
+//! The O(1) claim gated on `opens`: one on the opening wave and zero afterwards,
+//! and `pages` had to equal `ceil(ids / 128)`. Both were counters of the removed
+//! `StoreProvider::read_wave`. The current reader (`Storage::reader()`) publishes
+//! neither, so the driver still runs and times the two waves and reports the two
+//! gates `INCOMPLETE` (`ops::store::UNAVAILABLE_COUNTERS`).
 
 use super::{leak, CaseSpec, BYTE_LADDER};
 use crate::registry::{CacheState, Case, Preparation, Shape, StoreState};

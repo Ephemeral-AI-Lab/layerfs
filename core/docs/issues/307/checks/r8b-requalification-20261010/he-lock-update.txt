@@ -1,0 +1,99 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 300 cargo +1.85.1 metadata --manifest-path core/benchmark/fs-bench-pro-storage-content/Cargo.toml --offline --format-version 1 > /dev/null
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: 02dd96b0b (now, when this receipt was written)
+note: the one --offline lock update was executed earlier in this track, once, when HEAD was a8aa0b2b6; it exited 0. Its output went to /dev/null and is not reproduced. This receipt records the retained before/after state as verified now. Every later cargo command used --locked --offline.
+reason: added first-party path dependency layerfs-persistence to core/benchmark/fs-bench-pro-storage-content/Cargo.toml; no third-party crate was added to Cargo.toml.
+
+sha256 before (git show HEAD:core/benchmark/fs-bench-pro-storage-content/Cargo.lock): 52173e7c378de41bdeb45c2f5db942f401a97a96de9f4ffd617bdd18164db48c
+sha256 before (copy kept before the update):      52173e7c378de41bdeb45c2f5db942f401a97a96de9f4ffd617bdd18164db48c
+sha256 after  (core/benchmark/fs-bench-pro-storage-content/Cargo.lock):                    6ded9abd8fe293877f78de9f3582f72219d4beb75b5ef4621c2e6dc0be621854
+physical lines before/after: 476 -> 507
+git diff --numstat: 31	0	core/benchmark/fs-bench-pro-storage-content/Cargo.lock
+
+---- git diff HEAD -- core/benchmark/fs-bench-pro-storage-content/Cargo.lock ----
+diff --git a/core/benchmark/fs-bench-pro-storage-content/Cargo.lock b/core/benchmark/fs-bench-pro-storage-content/Cargo.lock
+index db0e07dda..658f19a0a 100644
+--- a/core/benchmark/fs-bench-pro-storage-content/Cargo.lock
++++ b/core/benchmark/fs-bench-pro-storage-content/Cargo.lock
+@@ -67,6 +67,12 @@ version = "1.0.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+ 
++[[package]]
++name = "cfg_aliases"
++version = "0.2.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
++
+ [[package]]
+ name = "const-oid"
+ version = "0.10.2"
+@@ -138,6 +144,7 @@ version = "0.1.0"
+ dependencies = [
+  "layerfs-content",
+  "layerfs-history",
++ "layerfs-persistence",
+  "layerfs-storage",
+  "layerfs-telemetry",
+  "libsqlite3-sys",
+@@ -227,6 +234,17 @@ dependencies = [
+  "layerfs-content",
+ ]
+ 
++[[package]]
++name = "layerfs-persistence"
++version = "0.1.6"
++dependencies = [
++ "layerfs-content",
++ "layerfs-history",
++ "layerfs-storage",
++ "nix",
++ "rusqlite",
++]
++
+ [[package]]
+ name = "layerfs-storage"
+ version = "0.1.6"
+@@ -254,10 +272,23 @@ version = "0.38.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
+ dependencies = [
++ "cc",
+  "pkg-config",
+  "vcpkg",
+ ]
+ 
++[[package]]
++name = "nix"
++version = "0.31.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
++dependencies = [
++ "bitflags",
++ "cfg-if",
++ "cfg_aliases",
++ "libc",
++]
++
+ [[package]]
+ name = "once_cell"
+ version = "1.21.4"
+---- end diff ----
+
+explanation of each added entry (from core/crates/layerfs-persistence/Cargo.toml at this tree):
+  layerfs-persistence 0.1.6      first-party path dependency (the port's one new dependency)
+  nix 0.31.3, cfg_aliases 0.2.2  layerfs-persistence's own macOS target dependency (nix =0.31.3, features [fs]) and its build dependency
+  "cc" under libsqlite3-sys     the optional edge of rusqlite's 'bundled' feature, which layerfs-persistence enables for target_os=linux only; cc 1.4.5 was already a locked package
+
+---- python3 -B core/benchmark/fs-bench-pro-storage-content/shared/test_lock_parity.py ----
+lock parity: core/Cargo.lock vs harness Cargo.lock
+  product packages         : 145
+  harness packages         : 58
+  shared names / entries   : 55 / 57
+  product entries the harness does not link : 7
+    version + checksum     : 52
+    version only (no sums) : 5 ['layerfs-content@0.1.6', 'layerfs-history@0.1.6', 'layerfs-persistence@0.1.6', 'layerfs-storage@0.1.6', 'layerfs-telemetry@0.1.6']
+  harness only             : ['fs-bench-pro-storage-content']
+  mismatches               : 0
+lock parity: PASS (57 shared package entries compared)
+exit_status: 0

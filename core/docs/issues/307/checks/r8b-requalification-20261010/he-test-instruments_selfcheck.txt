@@ -1,0 +1,23 @@
+command: LAYERFS_CONSTRUCTION_WORKERS=1 R4_LOCK_WAIT=600 perl core/target/r4-locked.pl 100 core/benchmark/fs-bench-pro-storage-content/target/debug/deps/instruments_selfcheck-55e4fb73eb7daea5 --test-threads=1
+cwd: /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+git rev-parse --short HEAD: f0e1e2d84
+note: working tree = HEAD plus uncommitted track H-E harness changes (and other workers' uncommitted changes under core/crates, which this track did not make)
+started_utc: 2026-10-10T03:37:27Z
+---- output (stdout+stderr) ----
+
+running 8 tests
+test a_zero_length_file_is_resident_by_definition_not_by_reading ... ok
+test an_allocating_window_charges_more_than_a_quiet_one ... ok
+test residency_sees_a_file_this_process_just_wrote_and_de_warm_clears_it ... ok
+test the_heap_window_attributes_a_known_allocation_pattern ... ok
+test the_page_size_is_read_rather_than_assumed ... ok
+test the_rss_bundle_refuses_a_peak_it_cannot_stand_behind ... ok
+test the_rss_sampler_takes_a_series_and_keeps_its_own_interval ... ok
+test the_rusage_readings_are_available_on_this_host ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+---- end output ----
+exit_status: 0
+finished_utc: 2026-10-10T03:37:28Z

@@ -5,10 +5,16 @@
 //! `lifecycle-create`.** Phase 0 declared creation-inside-the-region for the
 //! C2-only supplied-object family; it does not generalise, because every other
 //! family measures against a base that must already be stored. The copy is a
-//! closed, quiescent **byte copy** (rung R2), never a reflink: `journal_mode =
-//! MEMORY` is applied per connection and is not persisted in the file header, so a
-//! clone cannot inherit it, and a COW clone's `st_blocks` double-counts blocks
-//! shared with the master.
+//! closed, quiescent **byte copy** (rung R2), never a reflink: a COW clone's
+//! `st_blocks` double-counts blocks shared with the master.
+//!
+//! **Ported 2026-10-10 to the current public API** (`ops::store`). The Store is
+//! one `layerfs_persistence::Handles` plus one `layerfs_storage::Storage`, always
+//! Disposable / WAL / `synchronous = OFF`, selected explicitly. A master is
+//! **sealed** before it is copied, because a WAL database is one quiescent file
+//! only after its checkpoint and close; and a sample is sealed before its sidecar
+//! gate is read, for the same reason. Counters with no current source are listed
+//! in `ops::store::UNAVAILABLE_COUNTERS` and are not emitted.
 //!
 //! C2 never runs C1 file construction inside a measured phase. Every canonical
 //! object a C2 row saves is supplied by the harness: built before the timer, and
@@ -18,9 +24,10 @@
 use std::path::{Path, PathBuf};
 
 use layerfs_content::{construct_bytes, ConstructionCapacities, ConstructionPolicy, ObjectId};
-use layerfs_storage::{SaveOutcome, StoragePolicy, Store, StoreProvider};
+use layerfs_storage::{StoragePolicy, WriteOutcome};
 use layerfs_telemetry::timer::{Active, Timing, TimingReport, TimingScope};
 
+use super::store::{self, Store};
 use super::{seed_of, OpContext, OpError, OpOutcome, Phase};
 use crate::fixture;
 use crate::gates::{self, Gate, GateClass};
@@ -93,33 +100,37 @@ fn objects_of(bytes: &[u8]) -> Result<(TreeStore, ObjectId), OpError> {
 
 /// Opens a Store without a timer, for setup and oracle work.
 pub(super) fn open_untimed(path: &Path) -> Result<Store, OpError> {
-    let (result, _) = Timing::disabled("setup.open", |scope: &TimingScope<'_, Active>| {
-        Store::open(path, scope.child("store.open"))
-    });
-    result.map_err(|error| OpError::Product(format!("{error:?}")))
+    Store::open(path).map_err(|error| OpError::Product(format!("{error:?}")))
 }
 
-/// Creates a Store without a timer and saves `objects` into it.
+/// Creates a Store without a timer, saves `objects` into it and seals it.
+///
+/// The seal is what makes the result a master: under WAL the database is one
+/// closed, quiescent file only after its checkpoint and close, and
+/// [`prepare_sample`] copies exactly one file.
 pub(super) fn create_and_save_untimed(
     path: &Path,
     objects: &TreeStore,
-) -> Result<SaveOutcome, OpError> {
-    let (result, _) = Timing::disabled("setup.store", |scope: &TimingScope<'_, Active>| {
-        let store = Store::create(
-            path,
-            StoragePolicy::frozen_default(),
-            scope.child("store.create"),
-        )?;
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        for id in objects.insertion_order() {
-            let object = objects
-                .cloned_object(*id)
-                .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
-            operation.accept(object)?;
-        }
-        operation.finish(scope.child("storage.finish"))
-    });
-    result.map_err(|error| OpError::Product(format!("{error:?}")))
+) -> Result<WriteOutcome, OpError> {
+    let save = || -> layerfs_storage::StorageResult<(Store, WriteOutcome)> {
+        let store = Store::create(path, StoragePolicy::frozen_default())?;
+        let outcome = {
+            let operation = store.begin_save()?;
+            for id in objects.insertion_order() {
+                let object = objects
+                    .cloned_object(*id)
+                    .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
+                operation.accept(object)?;
+            }
+            operation.finish()?
+        };
+        Ok((store, outcome))
+    };
+    let (store, outcome) = save().map_err(|error| OpError::Product(format!("{error:?}")))?;
+    store
+        .seal()
+        .map_err(|error| OpError::Product(format!("seal {}: {error:?}", path.display())))?;
+    Ok(outcome)
 }
 
 /// Copies the base Store to the sample path and de-warms the copy.
@@ -170,8 +181,8 @@ pub(super) fn prepare_sample(
 ///
 /// The steps below are section 4's, in its order: a 1 MiB buffered copy, a flush and
 /// an `fsync`, and the inode-alias refusal. `PRAGMA quick_check` is the one step this
-/// harness cannot take — it links no SQLite — and `Store::open`'s own watermark
-/// refusal is the integrity gate it has instead, as section 3.1 records.
+/// row does not take; the open's own binding and profile validation is the
+/// integrity gate it has instead, as section 3.1 records.
 fn byte_copy(source: &Path, destination: &Path) -> Result<(), OpError> {
     use std::io::{Read, Write};
 
@@ -239,7 +250,13 @@ fn set_owner_writable(path: &Path) -> Result<(), OpError> {
     Ok(())
 }
 
-/// Sidecar gates for a Store path: `journal_mode = MEMORY` leaves none.
+/// Sidecar gates for a **closed** Store path.
+///
+/// The removed engine ran `journal_mode = MEMORY` and left no sidecar even while
+/// open. The current profile is WAL, where `-wal` and `-shm` exist by design for as
+/// long as a session is open; the state in which none may remain is the sealed one.
+/// A caller therefore closes its Store with [`sealed_sidecar_gates`] before this is
+/// read. The gate itself is unchanged: any sidecar present is a failure.
 pub(super) fn sidecar_gates(path: &Path) -> Vec<Gate> {
     ["-wal", "-shm", "-journal"]
         .iter()
@@ -261,14 +278,32 @@ pub(super) fn sidecar_gates(path: &Path) -> Vec<Gate> {
         .collect()
 }
 
+/// Seals the row's last open Store, then reads the unchanged sidecar gates.
+///
+/// One attempt. A seal that is refused leaves the sidecar question unanswered, so
+/// the gate is `INCOMPLETE` with the refusal rather than a pass or a guessed fail.
+pub(super) fn sealed_sidecar_gates(store: Store, path: &Path) -> Vec<Gate> {
+    match store.seal() {
+        Ok(_) => sidecar_gates(path),
+        Err(error) => vec![Gate::incomplete(
+            GateClass::Cleanup,
+            "g5.no-sidecars",
+            &format!("{}: seal refused: {error:?}", path.display()),
+            "no -wal, -shm or -journal sidecar",
+        )],
+    }
+}
+
 /// Reads a logical file back through a Store and compares it with the recipe.
 pub(super) fn read_back_through_store(
     store: &Store,
     root: ObjectId,
     expectation: &Expectation,
 ) -> Result<oracle::ReadBack, OpError> {
+    let provider = store
+        .reader()
+        .map_err(|error| OpError::Product(format!("{error:?}")))?;
     let (result, _) = Timing::disabled("oracle.readback", |scope: &TimingScope<'_, Active>| {
-        let provider = StoreProvider::new(store);
         oracle::read_back(&provider, root, expectation, scope.child("content"))
     });
     result.map_err(|error| OpError::Product(format!("{error:?}")))
@@ -312,32 +347,41 @@ pub fn lifecycle(
     }
 
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.lifecycle", |scope: &TimingScope<'_, Active>| {
+    // `first` and `second` are `None` where the step's counter has no current
+    // source (`ops::store::UNAVAILABLE_COUNTERS`): nothing is emitted for it.
+    type Step = (String, Option<i128>, Option<i128>);
+    let (result, report) = super::measure("c2.lifecycle", |_scope: &TimingScope<'_, Active>| {
         match step {
             LifecycleStep::Create => {
-                let store = Store::create(&sample, policy, scope.child("store.create"))?;
-                Ok::<_, layerfs_storage::StorageError>((
+                let store = Store::create(&sample, policy)?;
+                Ok::<Step, layerfs_storage::StorageError>((
                     store.path().display().to_string(),
-                    0_i128,
-                    0_i128,
+                    Some(0),
+                    Some(0),
                 ))
             }
             LifecycleStep::Open => {
-                let store = Store::open(&sample, scope.child("store.open"))?;
-                Ok::<_, layerfs_storage::StorageError>((store.path().display().to_string(), 0, 0))
+                let store = Store::open(&sample)?;
+                Ok::<Step, layerfs_storage::StorageError>((
+                    store.path().display().to_string(),
+                    Some(0),
+                    Some(0),
+                ))
             }
             LifecycleStep::BeginSave => {
-                let store = Store::open(&sample, scope.child("store.open"))?;
-                let operation = store.begin_save(scope.child("storage.begin"))?;
-                let (objects, bytes) = operation.pending();
-                // Concurrency and visibility, observed on a real Store. The busy
-                // timeout is zero, so a second acquisition fails immediately and
-                // deterministically rather than after a wait, which is why this is
-                // observable without a race loop. A second acquisition that
-                // *succeeded* would be the defect: two exclusive owners on one
-                // Store. The outcome is carried out as the second return value so
-                // the gate can assert the exact error class.
-                let second = store.begin_save(scope.child("storage.begin2"));
+                let store = Store::open(&sample)?;
+                let operation = store.begin_save()?;
+                // `Save` publishes its pending canonical bytes and no pending object
+                // count, so the step's first figure is unavailable.
+                let bytes = operation.pending_canonical_bytes();
+                // Concurrency and visibility, observed on a real Store. A second
+                // acquisition is refused immediately and deterministically rather
+                // than after a wait, which is why this is observable without a race
+                // loop. A second acquisition that *succeeded* would be the defect:
+                // two exclusive owners on one Store. The outcome is carried out as
+                // the second return value so the gate can assert the exact error
+                // class.
+                let second = store.begin_save();
                 let second_token = match second {
                     Ok(_) => "ACQUIRED".to_string(),
                     Err(error) => format!("{error:?}"),
@@ -348,28 +392,34 @@ pub fn lifecycle(
                     .hold_at(crate::ops::HoldPoint::Begin)
                     .map_err(|_| layerfs_storage::StorageError::Integrity("hold marker"))?;
                 let _ = held;
-                operation.abort(scope.child("storage.abort"))?;
-                Ok::<_, layerfs_storage::StorageError>((
+                // There is no `abort` call: dropping an unfinished `Save` is the abort.
+                drop(operation);
+                Ok::<Step, layerfs_storage::StorageError>((
                     format!("{}|{second_token}", store.path().display()),
-                    objects as i128,
-                    bytes as i128,
+                    None,
+                    Some(i128::from(bytes)),
                 ))
             }
             LifecycleStep::FinishEmpty => {
-                let store = Store::open(&sample, scope.child("store.open"))?;
-                let operation = store.begin_save(scope.child("storage.begin"))?;
-                let outcome = operation.finish(scope.child("storage.finish"))?;
-                Ok::<_, layerfs_storage::StorageError>((
+                let store = Store::open(&sample)?;
+                let operation = store.begin_save()?;
+                let outcome = operation.finish()?;
+                // The step's second figure was `SaveOutcome.commits`: unavailable.
+                Ok::<Step, layerfs_storage::StorageError>((
                     store.path().display().to_string(),
-                    i128::from(outcome.inserted),
-                    i128::from(outcome.commits),
+                    Some(i128::from(outcome.inserted)),
+                    None,
                 ))
             }
             LifecycleStep::Abort => {
-                let store = Store::open(&sample, scope.child("store.open"))?;
-                let operation = store.begin_save(scope.child("storage.begin"))?;
-                operation.abort(scope.child("storage.abort"))?;
-                Ok::<_, layerfs_storage::StorageError>((store.path().display().to_string(), 0, 0))
+                let store = Store::open(&sample)?;
+                let operation = store.begin_save()?;
+                drop(operation);
+                Ok::<Step, layerfs_storage::StorageError>((
+                    store.path().display().to_string(),
+                    Some(0),
+                    Some(0),
+                ))
             }
         }
     });
@@ -407,20 +457,27 @@ pub fn lifecycle(
             "a second exclusive acquisition on the same Store",
         )?;
     }
-    context.trace.write_number(
-        Kind::Counter,
-        "lifecycle.first",
-        first,
-        "count",
-        "objects or inserted, per step",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "lifecycle.second",
-        second,
-        "count",
-        "commits or pending bytes, per step",
-    )?;
+    let mut unavailable: Vec<&str> = Vec::new();
+    match first {
+        Some(first) => context.trace.write_number(
+            Kind::Counter,
+            "lifecycle.first",
+            first,
+            "count",
+            "objects or inserted, per step",
+        )?,
+        None => unavailable.push("lifecycle.first"),
+    }
+    match second {
+        Some(second) => context.trace.write_number(
+            Kind::Counter,
+            "lifecycle.second",
+            second,
+            "count",
+            "commits or pending bytes, per step",
+        )?,
+        None => unavailable.push("lifecycle.second"),
+    }
     context.trace.write_number(
         Kind::Counter,
         "timing_json_bytes",
@@ -444,7 +501,17 @@ pub fn lifecycle(
         &format!("{store_path} exists"),
         "the operation produced a Store at the path it was given",
     ));
-    gates.extend(sidecar_gates(Path::new(&store_path)));
+    // The step closed its Store inside the timer. The sidecar gate is read on the
+    // sealed file, so the sample is reopened and sealed here, outside the timer.
+    match open_untimed(Path::new(&store_path)) {
+        Ok(store) => gates.extend(sealed_sidecar_gates(store, Path::new(&store_path))),
+        Err(error) => gates.push(Gate::incomplete(
+            GateClass::Cleanup,
+            "g5.no-sidecars",
+            &format!("{store_path}: reopen for seal refused: {error}"),
+            "no -wal, -shm or -journal sidecar",
+        )),
+    }
     if let Some(second) = &second_begin {
         gates.push(gates::require(
             GateClass::Mechanism,
@@ -456,24 +523,26 @@ pub fn lifecycle(
     }
     gates.push(gates::swap_gate(instruments::swaps()));
 
-    Ok(OpOutcome {
-        gates,
-        notes: vec![
-            format!("lifecycle_step: {step:?}"),
-            format!("master_source: {master_source}"),
-            format!(
-                "store_state: {}",
-                if step == LifecycleStep::Create {
-                    "created-in-sample"
-                } else {
-                    "opened-from-copy"
-                }
-            ),
-            format!("copy_rung: {COPY_RUNG}"),
-            format!("allocation_attribution: {ATTRIBUTION}"),
-            format!("heap_charged_bytes: {}", heap.charged_bytes),
-        ],
-    })
+    let mut notes = vec![store::profile_note()];
+    if !unavailable.is_empty() {
+        notes.push(store::unavailable_note(&unavailable));
+    }
+    notes.extend([
+        format!("lifecycle_step: {step:?}"),
+        format!("master_source: {master_source}"),
+        format!(
+            "store_state: {}",
+            if step == LifecycleStep::Create {
+                "created-in-sample"
+            } else {
+                "opened-from-copy"
+            }
+        ),
+        format!("copy_rung: {COPY_RUNG}"),
+        format!("allocation_attribution: {ATTRIBUTION}"),
+        format!("heap_charged_bytes: {}", heap.charged_bytes),
+    ]);
+    Ok(OpOutcome { gates, notes })
 }
 
 /// C2-2: cross-file reuse of supplied objects, one save operation.
@@ -612,8 +681,8 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.reuse", |scope: &TimingScope<'_, Active>| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+    let (result, report) = super::measure("c2.reuse", |_scope: &TimingScope<'_, Active>| {
+        let operation = store.begin_save()?;
         for member in &artifact.members {
             for id in &member.ids {
                 let object = artifact
@@ -630,7 +699,7 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
         context
             .hold_at(crate::ops::HoldPoint::Accept)
             .map_err(|_| layerfs_storage::StorageError::Integrity("hold marker"))?;
-        operation.finish(scope.child("storage.finish"))
+        operation.finish()
     });
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
@@ -659,35 +728,14 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
         "reuse.reused",
         i128::from(outcome.reused),
         "objects",
-        "SaveOutcome.reused",
+        "WriteOutcome.reused",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "reuse.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "reuse.commits",
-        i128::from(outcome.commits),
-        "transactions",
-        "SaveOutcome.commits",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "reuse.statements",
-        i128::from(outcome.statements),
-        "statements",
-        "SaveOutcome.statements",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "reuse.presence_queries",
-        i128::from(outcome.presence_queries),
-        "queries",
-        "SaveOutcome.presence_queries",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -747,6 +795,8 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
         "additions",
         &crate::workload::expected::identity_digest(&roots),
     )?;
+    // The measured session is closed before the oracle opens its own.
+    drop(store);
     let store = match open_untimed(&sample) {
         Ok(store) => store,
         Err(error) => return Ok(unmeasured(&error, gates)),
@@ -814,12 +864,18 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
         },
         "every member's logical bytes are recoverable after the save",
     ));
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
 
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&[
+                "reuse.commits",
+                "reuse.statements",
+                "reuse.presence_queries",
+            ]),
             format!("reuse_profile: {op:?}"),
             format!("members: {members}"),
             format!("member_bytes: {member_bytes}"),
@@ -1036,8 +1092,8 @@ fn workspace_perf(
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.workspace", |scope: &TimingScope<'_, Active>| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+    let (result, report) = super::measure("c2.workspace", |_scope: &TimingScope<'_, Active>| {
+        let operation = store.begin_save()?;
         for member in &artifact.members {
             for id in &member.ids {
                 let object = artifact
@@ -1047,7 +1103,7 @@ fn workspace_perf(
                 operation.accept(object)?;
             }
         }
-        operation.finish(scope.child("storage.finish"))
+        operation.finish()
     });
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
@@ -1089,28 +1145,21 @@ fn workspace_perf(
         "workspace.reused",
         i128::from(outcome.reused),
         "objects",
-        "SaveOutcome.reused",
+        "WriteOutcome.reused",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "workspace.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "workspace.packs_created",
-        i128::from(outcome.packs_created),
+        i128::from(outcome.packs),
         "packs",
-        "SaveOutcome.packs_created",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "workspace.statements",
-        i128::from(outcome.statements),
-        "statements",
-        "SaveOutcome.statements",
+        "WriteOutcome.packs",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -1154,16 +1203,26 @@ fn workspace_perf(
         },
     ));
     if matches!(op, ReuseOp::Identical) {
-        gates.push(gates::require(
-            GateClass::Mechanism,
-            "g2.exact-hit-writes-nothing",
-            outcome.packs_created == 0 && outcome.pack_appends == 0,
-            &format!(
-                "{} packs created, {} appends",
-                outcome.packs_created, outcome.pack_appends
-            ),
-            "an exact-hit save resolves by lookup and writes no pack",
-        ));
+        // The gate reads two counters and only one has a current source. A pack
+        // that *was* written is a definite failure on the available half; with
+        // none written the append half is still unobserved, so the gate is
+        // `INCOMPLETE`, never a pass on half its evidence.
+        let limit = "an exact-hit save resolves by lookup and writes no pack";
+        if outcome.packs != 0 {
+            gates.push(Gate::fail(
+                GateClass::Mechanism,
+                "g2.exact-hit-writes-nothing",
+                &format!("{} packs created", outcome.packs),
+                limit,
+            ));
+        } else {
+            gates.push(store::unavailable_gate(
+                GateClass::Mechanism,
+                "g2.exact-hit-writes-nothing",
+                &format!("{} packs created; pack_appends not observed", outcome.packs),
+                limit,
+            ));
+        }
     }
 
     // O1, and only O1. The frozen oracle for this family is **O1 + O5** - *"root
@@ -1176,14 +1235,14 @@ fn workspace_perf(
         "additions",
         &crate::workload::expected::identity_digest(&roots),
     )?;
+    // The measured session is closed before the oracle opens its own.
+    drop(store);
     let store = match open_untimed(&sample) {
         Ok(store) => store,
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     let distinct = crate::workload::expected::distinct(&roots);
-    let (present, _) = Timing::disabled("oracle.contains", |scope: &TimingScope<'_, Active>| {
-        crate::workload::expected::present_all(&store, &distinct, scope)
-    });
+    let present = crate::workload::expected::present_all(&store, &distinct);
     match present {
         Ok(present) => gates.push(gates::require(
             GateClass::Correctness,
@@ -1203,12 +1262,14 @@ fn workspace_perf(
             "every addition root the recipe declares is present after the save",
         )),
     }
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
 
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&["workspace.statements", "pack_appends"]),
             format!("workspace_profile: {op:?}"),
             format!("members: {members}"),
             format!("base_files: {base_files} (declared by the row's tier and profile)"),
@@ -1391,8 +1452,8 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.delta", |scope: &TimingScope<'_, Active>| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+    let (result, report) = super::measure("c2.delta", |_scope: &TimingScope<'_, Active>| {
+        let operation = store.begin_save()?;
         for member in &artifact.members {
             for id in &member.ids {
                 let object = artifact
@@ -1402,8 +1463,16 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
                 operation.accept(object)?;
             }
         }
-        operation.finish(scope.child("storage.finish"))
+        operation.finish()
     });
+    // **The delta-selection and chain counters are not read.** They were
+    // `SaveOutcome.delta` and `.chain`, complete for the save. Today they are
+    // `Save::delta_counters` and `Save::chain_counters`, which exist only while the
+    // save does, and `Save::finish` both consumes the save and runs its final wave
+    // (`pending.drain()` then `wave`), where selection happens. A reading taken
+    // before `finish` therefore excludes the last wave - for a save that fits one
+    // batch, all of it - and is a different quantity from the one these names
+    // carried. They are listed in `ops::store::UNAVAILABLE_COUNTERS`.
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
     let outcome = match result {
@@ -1416,63 +1485,28 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
         "delta.reused",
         i128::from(outcome.reused),
         "objects",
-        "SaveOutcome.reused",
+        "WriteOutcome.reused",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "delta.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "delta.full_records",
         i128::from(outcome.full_records),
         "records",
-        "SaveOutcome.full_records",
+        "WriteOutcome.full_records",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "delta.prefix_records",
         i128::from(outcome.prefix_records),
         "records",
-        "SaveOutcome.prefix_records",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "delta.chain_max_depth",
-        i128::from(outcome.chain.max_depth),
-        "edges",
-        "SaveOutcome.chain.max_depth",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "delta.prefix_selected",
-        i128::from(outcome.delta.prefix_selected),
-        "records",
-        "SaveOutcome.delta.prefix_selected",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "delta.full_losses",
-        i128::from(outcome.delta.full_losses),
-        "records",
-        "SaveOutcome.delta.full_losses",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "delta.no_candidate",
-        i128::from(outcome.delta.no_candidate),
-        "records",
-        "SaveOutcome.delta.no_candidate",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "delta.work_exceeded",
-        i128::from(outcome.delta.work_exceeded),
-        "records",
-        "SaveOutcome.delta.work_exceeded",
+        "WriteOutcome.prefix_records",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -1497,11 +1531,19 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
         &format!("{} inserted, {} reused", outcome.inserted, outcome.reused),
         "the save accepted and accounted for the supplied member set",
     ));
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&[
+                "delta.chain_max_depth",
+                "delta.prefix_selected",
+                "delta.full_losses",
+                "delta.no_candidate",
+                "delta.work_exceeded",
+            ]),
             format!("delta_op: {op:?}"),
             format!("members: {members}"),
             format!("base_bytes: {bytes}"),
@@ -1514,9 +1556,8 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
             format!("heap_charged_bytes: {}", heap.charged_bytes),
         ],
     })
-    .map(|outcome| {
+    .inspect(|_| {
         let _ = case;
-        outcome
     })
 }
 
@@ -1568,10 +1609,9 @@ fn delta_verify(
     // `index % 10 == 0`, so the sample spreads across the whole set rather than
     // being a prefix. A sampled row is `INCOMPLETE` in the receipt; the mode is
     // published there and in the report header.
-    let sampled = match context.verify_sample {
-        None => None,
-        Some(requested) => Some(crate::ops::sampled_indices(all.len(), requested)),
-    };
+    let sampled = context
+        .verify_sample
+        .map(|requested| crate::ops::sampled_indices(all.len(), requested));
     let distinct: Vec<ObjectId> = match &sampled {
         None => all.clone(),
         Some(indices) => indices.iter().map(|index| all[*index]).collect(),
@@ -1590,9 +1630,7 @@ fn delta_verify(
         "identities",
         "identities this invocation verified, by the declared index % 10 == 0 rule",
     )?;
-    let (present, _) = Timing::disabled("oracle.contains", |scope: &TimingScope<'_, Active>| {
-        crate::workload::expected::present_all(&store, &distinct, scope)
-    });
+    let present = crate::workload::expected::present_all(&store, &distinct);
     let mut gates = Vec::new();
     match present {
         Ok(present) => gates.push(gates::require(
@@ -1680,15 +1718,15 @@ pub fn boundary(case: &Case, seed: u8, context: &mut OpContext<'_>) -> Result<Op
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.boundary", |scope: &TimingScope<'_, Active>| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+    let (result, report) = super::measure("c2.boundary", |_scope: &TimingScope<'_, Active>| {
+        let operation = store.begin_save()?;
         for id in objects.insertion_order() {
             let object = objects
                 .cloned_object(*id)
                 .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
             operation.accept(object)?;
         }
-        operation.finish(scope.child("storage.finish"))
+        operation.finish()
     });
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
@@ -1716,14 +1754,14 @@ pub fn boundary(case: &Case, seed: u8, context: &mut OpContext<'_>) -> Result<Op
         "boundary.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "boundary.reused",
         i128::from(outcome.reused),
         "objects",
-        "SaveOutcome.reused",
+        "WriteOutcome.reused",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -1751,6 +1789,8 @@ pub fn boundary(case: &Case, seed: u8, context: &mut OpContext<'_>) -> Result<Op
         ),
         "a grammar edge is accepted, or refused with its declared error class",
     ));
+    // The measured session is closed before the oracle opens its own.
+    drop(store);
     let store = match open_untimed(&sample) {
         Ok(store) => store,
         Err(error) => return Ok(unmeasured(&error, gates)),
@@ -1775,12 +1815,13 @@ pub fn boundary(case: &Case, seed: u8, context: &mut OpContext<'_>) -> Result<Op
             )),
         }
     }
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
     crate::workload::expected::publish(context.trace, "file_root", &root.to_string())?;
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
             format!("grammar_edge_bytes: {length}"),
             format!("declared_seed: {seed}"),
             format!("store_state: opened-from-copy"),
@@ -1812,15 +1853,15 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.small-file", |scope: &TimingScope<'_, Active>| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+    let (result, report) = super::measure("c2.small-file", |_scope: &TimingScope<'_, Active>| {
+        let operation = store.begin_save()?;
         for id in objects.insertion_order() {
             let object = objects
                 .cloned_object(*id)
                 .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
             operation.accept(object)?;
         }
-        operation.finish(scope.child("storage.finish"))
+        operation.finish()
     });
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
@@ -1842,14 +1883,14 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
         "small_file.full_records",
         i128::from(outcome.full_records),
         "records",
-        "SaveOutcome.full_records",
+        "WriteOutcome.full_records",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "small_file.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -1877,6 +1918,8 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
         ),
         "a sub-cutoff file takes the whole-file route and is stored as a FULL record",
     ));
+    // The measured session is closed before the oracle opens its own.
+    drop(store);
     let store = match open_untimed(&sample) {
         Ok(store) => store,
         Err(error) => return Ok(unmeasured(&error, gates)),
@@ -1901,12 +1944,13 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
             )),
         }
     }
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
     crate::workload::expected::publish(context.trace, "file_root", &root.to_string())?;
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
             format!("declared_bytes: {}", case.bytes),
             format!("cutoff_bytes: {cutoff}"),
             format!("store_state: opened-from-copy"),
@@ -1918,11 +1962,14 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
 
 /// C2-7: independent read waves over a stored ladder.
 ///
-/// The O(1) claim gates on `opens`: one on the opening wave and zero afterwards,
-/// **but only through `StoreProvider::read_wave`**. The direct `Store::read_batch`
-/// route reports `opens: 1` unconditionally, so this cell is ungateable on that
-/// route and the case is driven through the provider. `pages` must equal
-/// `ceil(ids / 128)`.
+/// The O(1) claim gated on `opens`: one on the opening wave and zero afterwards,
+/// and `pages` had to equal `ceil(ids / 128)`. Both were `StoreReadCounters`
+/// fields of the removed `StoreProvider::read_wave`. The current reader is
+/// `Storage::reader()`, whose `read_objects` returns bytes only, over the one
+/// session `Handles` opened: there is no per-wave open or page count to read.
+/// The two waves still run and are still timed; `g2.opens-o1` and
+/// `g2.paged-locator` are kept and reported `INCOMPLETE`
+/// (`ops::store::UNAVAILABLE_COUNTERS`).
 ///
 /// **Phase split.** The row measures two read waves over a prepared Store. Building
 /// that Store means generating up to 500 MiB, chunking it and saving it — all
@@ -2016,75 +2063,27 @@ fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
     };
 
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.read.waves", |scope: &TimingScope<'_, Active>| {
-        let provider = StoreProvider::new(&store);
-        let (first, first_counters) = provider.read_wave(&[root], scope.child("storage.wave1"))?;
-        let (second, second_counters) =
-            provider.read_wave(&[root], scope.child("storage.wave2"))?;
+    let (result, report) = super::measure("c2.read.waves", |_scope: &TimingScope<'_, Active>| {
+        let provider = store.reader()?;
+        let first = provider.read_objects(&[root])?;
+        let second = provider.read_objects(&[root])?;
         let bytes_out =
             first.iter().map(Vec::len).sum::<usize>() + second.iter().map(Vec::len).sum::<usize>();
-        Ok::<_, layerfs_storage::StorageError>((
-            first_counters,
-            second_counters,
-            provider.connection_opens(),
-            bytes_out,
-        ))
+        Ok::<_, layerfs_storage::StorageError>(bytes_out)
     });
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
-    let (first, second, opens, bytes_out) = match result {
+    let bytes_out = match result {
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
 
     context.trace.write_number(
         Kind::Counter,
-        "read.wave1_opens",
-        i128::from(first.opens),
-        "connections",
-        "StoreReadCounters.opens of wave 1",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "read.wave2_opens",
-        i128::from(second.opens),
-        "connections",
-        "StoreReadCounters.opens of wave 2",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "read.provider_opens",
-        i128::from(opens),
-        "connections",
-        "StoreProvider.connection_opens()",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "read.wave1_pages",
-        i128::from(first.pages),
-        "pages",
-        "StoreReadCounters.pages of wave 1",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
         "read.emitted_bytes",
         bytes_out as i128,
         "bytes",
         "sum of the two waves' returned bytes",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "read.canonical_bytes",
-        i128::from(first.canonical_bytes + second.canonical_bytes),
-        "bytes",
-        "StoreReadCounters.canonical_bytes",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "read.ceiling",
-        i128::from(first.ceiling),
-        "pack id",
-        "StoreReadCounters.ceiling",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -2102,24 +2101,21 @@ fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
     )?;
 
     gates.push(completeness_gate(&report));
-    gates.push(gates::require(
+    gates.push(store::unavailable_gate(
         GateClass::Mechanism,
         "g2.opens-o1",
-        first.opens == 1 && second.opens == 0 && opens == 1,
-        &format!(
-            "wave1 opens {}, wave2 opens {}, provider opens {opens}",
-            first.opens, second.opens
-        ),
+        "wave1 opens, wave2 opens and provider opens not observed",
         "opens is 1 on the opening wave then 0: the O(1) connection claim",
     ));
     let expected_pages = 1_u64;
-    gates.push(gates::require(
+    gates.push(store::unavailable_gate(
         GateClass::Mechanism,
         "g2.paged-locator",
-        first.pages == expected_pages,
-        &format!("{} pages", first.pages),
+        "wave1 pages not observed",
         &format!("ceil(ids / LOOKUP_PAGE_IDS) = {expected_pages} page for one id"),
     ));
+    // The measured session is closed before the oracle opens its own.
+    drop(store);
     let store = match open_untimed(&sample) {
         Ok(store) => store,
         Err(error) => return Ok(unmeasured(&error, gates)),
@@ -2142,12 +2138,21 @@ fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
             "readback equals input",
         )),
     }
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
     crate::workload::expected::publish(context.trace, "file_root", &root.to_string())?;
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&[
+                "read.wave1_opens",
+                "read.wave2_opens",
+                "read.provider_opens",
+                "read.wave1_pages",
+                "read.canonical_bytes",
+                "read.ceiling",
+            ]),
             format!("declared_bytes: {}", case.bytes),
             format!("objects: {objects}"),
             format!("store_state: opened-from-copy"),
@@ -2218,10 +2223,12 @@ const BASE_SERIAL_BASE: u64 = 1;
 /// the declared leaves into a Store that holds no pooled values, so every one of
 /// the `leaves x rows` values must receive a new ordinal. A **warm** row saves the
 /// same leaves into a Store that already holds them, so every value must reuse an
-/// existing ordinal. The Store-owned state that decides which happens is the
-/// pooled index, published here as `Store::pool_index_entries` and
-/// `Store::pool_index_bytes`; the catalogue it is synchronized from is
-/// `metadata_value_groups`, counted through `SaveOutcome.pool.groups`. Cold and
+/// existing ordinal. The state that decides which happens is the pooled index;
+/// the removed engine published it as `Store::pool_index_entries` and
+/// `Store::pool_index_bytes`, and the current handle publishes neither (see
+/// `ops::store::UNAVAILABLE_COUNTERS`), so `g2.pool-index` is kept and reported
+/// `INCOMPLETE`. The catalogue the index is synchronized from is
+/// `metadata_value_group`, counted through `WriteOutcome.pool.groups`. Cold and
 /// warm are reported separately and are never pooled into one number.
 pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
     context.create_output()?;
@@ -2255,17 +2262,16 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
         Ok(store) => store,
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
-    let index_before = store.pool_index_entries();
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.pool", |scope: &TimingScope<'_, Active>| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+    let (result, report) = super::measure("c2.pool", |_scope: &TimingScope<'_, Active>| {
+        let operation = store.begin_save()?;
         for id in objects.insertion_order() {
             let object = objects
                 .cloned_object(*id)
                 .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
             operation.accept(object)?;
         }
-        operation.finish(scope.child("storage.finish"))
+        operation.finish()
     });
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
@@ -2273,67 +2279,62 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
         Ok(outcome) => outcome,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
-    // Read after the timer: the index is Store-owned state, and reading it is a
-    // published observation rather than part of the operation.
-    let index_entries = store.pool_index_entries();
-    let index_bytes = store.pool_index_bytes();
-
     let pool = outcome.pool;
     context.trace.write_number(
         Kind::Counter,
         "pool.leaves",
         pool.leaves as i128,
         "leaves",
-        "SaveOutcome.pool.leaves",
+        "WriteOutcome.pool.leaves",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.reused_values",
         pool.reused_values as i128,
         "values",
-        "SaveOutcome.pool.reused_values",
+        "WriteOutcome.pool.reused_values",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.new_values",
         pool.new_values as i128,
         "values",
-        "SaveOutcome.pool.new_values",
+        "WriteOutcome.pool.new_values",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.groups",
         pool.groups as i128,
         "groups",
-        "SaveOutcome.pool.groups, the metadata_value_groups catalogue",
+        "WriteOutcome.pool.groups, the metadata_value_group catalogue",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.delta_leaves",
         pool.delta_leaves as i128,
         "leaves",
-        "SaveOutcome.pool.delta_leaves",
+        "WriteOutcome.pool.delta_leaves",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.full_leaves",
         pool.full_leaves as i128,
         "leaves",
-        "SaveOutcome.pool.full_leaves",
+        "WriteOutcome.pool.full_leaves",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.trials",
         pool.trials as i128,
         "trials",
-        "SaveOutcome.pool.trials",
+        "WriteOutcome.pool.trials",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.work_exceeded",
         pool.work_exceeded as i128,
         "leaves",
-        "SaveOutcome.pool.work_exceeded",
+        "WriteOutcome.pool.work_exceeded",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -2347,42 +2348,14 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
         "pool.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "pool.reused",
         i128::from(outcome.reused),
         "objects",
-        "SaveOutcome.reused",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "pool.commits",
-        i128::from(outcome.commits),
-        "transactions",
-        "SaveOutcome.commits",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "pool.index_entries_before",
-        index_before as i128,
-        "entries",
-        "Store::pool_index_entries before the measured save",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "pool.index_entries",
-        index_entries as i128,
-        "entries",
-        "Store::pool_index_entries after the measured save",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "pool.index_bytes",
-        index_bytes as i128,
-        "bytes",
-        "Store::pool_index_bytes after the measured save",
+        "WriteOutcome.reused",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -2429,11 +2402,10 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
     // re-synchronized from the catalogue on the first pooled save after a reopen.
     // What separates the rows is therefore not the index's *starting* count but
     // whether the catalogue could answer the values, which is `reused_values`.
-    gates.push(gates::require(
+    gates.push(store::unavailable_gate(
         GateClass::Mechanism,
         "g2.pool-index",
-        index_before == 0 && index_entries as u64 == declared_values && index_bytes > 0,
-        &format!("index {index_before} -> {index_entries} entries, {index_bytes} bytes"),
+        "pooled index entries before and after, and its bytes, not observed",
         "the reopened index starts empty and the save leaves every declared value retained",
     ));
     gates.push(gates::require(
@@ -2457,6 +2429,8 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
     // A pooled leaf is stored as a transformed body against a base, so this is
     // the gate that says the reconstruction is the identity and not merely
     // something the Store is willing to return.
+    // The measured session is closed before the oracle opens its own.
+    drop(store);
     let store = match open_untimed(&sample) {
         Ok(store) => store,
         Err(error) => return Ok(unmeasured(&error, gates)),
@@ -2471,9 +2445,7 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
         &crate::workload::expected::identity_digest(&ids),
     )?;
     let distinct = crate::workload::expected::distinct(&ids);
-    let (present, _) = Timing::disabled("oracle.contains", |scope: &TimingScope<'_, Active>| {
-        crate::workload::expected::present_all(&store, &distinct, scope)
-    });
+    let present = crate::workload::expected::present_all(&store, &distinct);
     match present {
         Ok(present) => gates.push(gates::require(
             GateClass::Correctness,
@@ -2493,17 +2465,23 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
             "every pooled leaf identity the row offered is present after the save",
         )),
     }
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
 
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&[
+                "pool.commits",
+                "pool.index_entries_before",
+                "pool.index_entries",
+                "pool.index_bytes",
+            ]),
             format!("pool_index_state: {}", if cold { "cold" } else { "warm" }),
             format!("declared_leaves: {leaves}"),
             format!("declared_rows_per_leaf: {rows}"),
             format!("declared_values: {declared_values}"),
-            format!("pool_index_entries_before: {index_before}"),
             "cold and warm rows are reported separately and are never pooled".to_string(),
             format!("store_state: opened-from-copy"),
             format!("copy_rung: {COPY_RUNG}"),
@@ -2511,9 +2489,8 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
             format!("heap_charged_bytes: {}", heap.charged_bytes),
         ],
     })
-    .map(|outcome| {
+    .inspect(|_| {
         let _ = case;
-        outcome
     })
 }
 
@@ -2635,15 +2612,15 @@ fn footprint_perf(
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     instruments::heap_begin();
-    let (result, report) = super::measure("c2.footprint", |scope: &TimingScope<'_, Active>| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+    let (result, report) = super::measure("c2.footprint", |_scope: &TimingScope<'_, Active>| {
+        let operation = store.begin_save()?;
         for id in supplied.insertion_order() {
             let object = supplied
                 .cloned_object(*id)
                 .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
             operation.accept(object)?;
         }
-        operation.finish(scope.child("storage.finish"))
+        operation.finish()
     });
     let heap = instruments::heap_end();
     let timing_bytes = crate::support::phases::timing_json_bytes();
@@ -2651,7 +2628,21 @@ fn footprint_perf(
         Ok(outcome) => outcome,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
+    // The footprint is read on the **sealed** file. Under WAL the bytes a save
+    // wrote are in the `-wal` sidecar until the checkpoint, so the main file's size
+    // while a session is open is not the Store's size; the seal checkpoints and
+    // closes, and the presence oracle below reopens the sealed file.
+    if let Err(error) = store.seal() {
+        return Ok(unmeasured(
+            &OpError::Product(format!("seal {}: {error:?}", sample.display())),
+            gates,
+        ));
+    }
     let space = instruments::space(&sample).map_err(|error| OpError::Io(format!("{error}")))?;
+    let store = match open_untimed(&sample) {
+        Ok(store) => store,
+        Err(error) => return Ok(unmeasured(&error, gates)),
+    };
 
     context.trace.write_number(
         Kind::Counter,
@@ -2665,42 +2656,28 @@ fn footprint_perf(
         "footprint.inserted",
         i128::from(outcome.inserted),
         "objects",
-        "SaveOutcome.inserted",
+        "WriteOutcome.inserted",
     )?;
     context.trace.write_number(
         Kind::Counter,
         "footprint.packs_created",
-        i128::from(outcome.packs_created),
+        i128::from(outcome.packs),
         "packs",
-        "SaveOutcome.packs_created",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "footprint.pack_appends",
-        i128::from(outcome.pack_appends),
-        "appends",
-        "SaveOutcome.pack_appends",
-    )?;
-    context.trace.write_number(
-        Kind::Counter,
-        "footprint.statements",
-        i128::from(outcome.statements),
-        "statements",
-        "SaveOutcome.statements",
+        "WriteOutcome.packs",
     )?;
     context.trace.write_number(
         Kind::Resource,
         "space.apparent_bytes",
         space.apparent_bytes as i128,
         "bytes",
-        "st_size of the Store file",
+        "st_size of the sealed Store file",
     )?;
     context.trace.write_number(
         Kind::Resource,
         "space.allocated_bytes",
         space.allocated_bytes as i128,
         "bytes",
-        "st_blocks * 512 of the Store file, exclusive attribution",
+        "st_blocks * 512 of the sealed Store file, exclusive attribution",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -2726,9 +2703,7 @@ fn footprint_perf(
         &crate::workload::expected::identity_digest(&supplied_ids),
     )?;
     let distinct = crate::workload::expected::distinct(&supplied_ids);
-    let (present, _) = Timing::disabled("oracle.contains", |scope: &TimingScope<'_, Active>| {
-        crate::workload::expected::present_all(&store, &distinct, scope)
-    });
+    let present = crate::workload::expected::present_all(&store, &distinct);
     match present {
         Ok(present) => gates.push(gates::require(
             GateClass::Correctness,
@@ -2779,11 +2754,14 @@ fn footprint_perf(
         "at least one Store file in the output directory",
         "exactly one Store file and no sidecars",
     ));
-    gates.extend(sidecar_gates(&sample));
+    gates.extend(sealed_sidecar_gates(store, &sample));
     gates.push(gates::swap_gate(instruments::swaps()));
     Ok(OpOutcome {
         gates,
         notes: vec![
+            store::profile_note(),
+            store::unavailable_note(&["footprint.pack_appends", "footprint.statements"]),
+            "space: read on the sealed file (WAL checkpointed and closed)".to_string(),
             format!("footprint_op: {op:?}"),
             format!("declared_entries: {entries}"),
             format!("declared_object_bytes: {object_bytes}"),

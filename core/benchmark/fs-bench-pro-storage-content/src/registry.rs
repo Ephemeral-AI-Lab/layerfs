@@ -314,15 +314,15 @@ pub enum LocalityOp {
 /// C2-1 lifecycle steps.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LifecycleStep {
-    /// `Store::create` over a fresh path.
+    /// Store creation (`Handles::create` + `Storage::new`) over a fresh path.
     Create,
-    /// `Store::open` over a prepared copy.
+    /// Store open (`Handles::open_writable` + `Storage::new`) over a prepared copy.
     Open,
     /// `begin_save` on an idle Store.
     BeginSave,
     /// `begin_save` then `finish` with nothing accepted.
     FinishEmpty,
-    /// `begin_save` then `abort`.
+    /// `begin_save` then abort, which is dropping the unfinished `Save`.
     Abort,
 }
 
