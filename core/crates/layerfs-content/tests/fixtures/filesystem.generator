@@ -1,0 +1,11 @@
+# The generator of the sealed Stage 5 fixtures, pinned. Key, two spaces, value, one per line.
+# It is reference-implementation source, not part of core: it drives the reference's own tree API so the
+# fixtures stay an independently built oracle. tests/fixture_seal.rs compares this record with its own constants.
+path  crates/layerfs-content/tests/stage5_reference_fixtures.rs
+blob  3a425d5a4318b0a9c7e7548f74be3edce5cedf4d
+sha256  9dc8dd61a3de376417048403baacd8d9f59483c6ec6be4016dbaef59a46eec8d
+recovery_commit  f8a0a5ff1cd5f93b90bf16f964705b4c7d773615
+recovery_tree  498dd1917812ae90efb8841f57e22bfc284e96fb
+ignore_contract  #[ignore = "rewrites the sealed fixtures in place
+gate_contract  LAYERFS_SEAL_FIXTURES
+reseal  git archive of recovery_commit into an empty directory; there, LAYERFS_SEAL_FIXTURES=1 and --ignored; diff against the committed directory; never in place

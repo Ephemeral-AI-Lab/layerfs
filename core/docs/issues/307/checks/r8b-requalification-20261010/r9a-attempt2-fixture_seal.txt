@@ -1,0 +1,15 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD 136a6ec72, uncommitted product/test paths=24, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/fixture_seal-689429751718164b --test-threads=1  (cwd core/crates/layerfs-content)
+
+running 6 tests
+test a_gated_ignored_writer_and_plain_readers_are_not_reported ... ok
+test a_writer_without_the_ignore_or_the_gate_is_reported ... ok
+test an_altered_generator_record_is_reported ... ok
+test no_source_in_core_can_reseal_during_an_ordinary_test_run ... ok
+test the_generator_record_is_the_pinned_one ... ok
+test the_sealed_fixtures_are_exactly_the_frozen_ones ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+R4_WALL seconds<=5 limit=100s lock_wait=0s
+EXIT 0
