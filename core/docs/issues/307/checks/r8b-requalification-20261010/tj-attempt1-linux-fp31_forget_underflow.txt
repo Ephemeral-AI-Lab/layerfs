@@ -1,0 +1,53 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD a8aa0b2b6, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/fp31_forget_underflow-3a2ac1960ccae972 --test-threads=1 --nocapture
+
+running 3 tests
+test fp31_a_kernel_forget_of_a_row_the_owner_port_removed_is_retained_and_unmount_stops_at_requests ... FP-31 reclaim scope: membership="0::/" file=/sys/fs/cgroup/memory.reclaim
+FP-31 Absent staged: inode=3 serial=2 kernel_count=1 engine_reduced_by=1 owner_details(baseline=4 looked=6 reduced=4) engine_mount=NativeMount { route: Route { engine: 1, ns: 2, incarnation: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] }, owner: 1, root: 1 }
+FP-31 Absent: reclaim_requests=1 native work NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 2, handoffs: 2, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 } -> NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 2, handoffs: 3, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 } owner_jobs_since_staged=4 (one is the test's count observation) engine_counts_equal_reduced=true
+FP-31 DEVIATION FP-31 Absent: 4 owner jobs since the staging, not the unit's one and the test's one
+FP-31 Absent: owner-port decrement of the absent row: Err("Err(Overlay(Stale))")
+FP-31 Absent: before the Unmount: activity=Idle phase=Some(Ready)
+FP-31 Absent: custody=TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(0202020202020202020202020202020202020202020202020202020202020202), namespace: 2 }, stage: Requests, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 2, handoffs: 3, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 }), detail: "connection drain stopped at Requests: loops Some(SessionSnapshot { phase: Joined, revision: 7, configured: 1, created: 1, entered: 1, exited: 1, joined: 1 }), work Some(MountWork { received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, owned_input_bytes: 0, future_bytes: 216, receive_units: 3, completed: 2, steps: 7, wakes: 4, terminal: true })", forced: None }
+
+thread 'fp31_a_kernel_forget_of_a_row_the_owner_port_removed_is_retained_and_unmount_stops_at_requests' panicked at crates/layerfs-daemon/tests/fp31_forget_underflow.rs:498:5:
+assertion `left == right` failed: the Unmount and the later replies submitted no owner job: no Revoke, no Close
+  left: 28
+ right: 27
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test fp31_a_kernel_forget_of_two_against_a_row_of_one_underflows_and_the_row_keeps_exactly_one ... FP-31 reclaim scope: membership="0::/" file=/sys/fs/cgroup/memory.reclaim
+FP-31 TooSmall staged: inode=3 serial=2 kernel_count=2 engine_reduced_by=1 owner_details(baseline=4 looked=6 reduced=6) engine_mount=NativeMount { route: Route { engine: 2, ns: 2, incarnation: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] }, owner: 1, root: 1 }
+FP-31 TooSmall: reclaim_requests=1 native work NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 3, handoffs: 3, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 } -> NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 3, handoffs: 4, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 } owner_jobs_since_staged=4 (one is the test's count observation) engine_counts_equal_reduced=true
+FP-31 DEVIATION FP-31 TooSmall: 4 owner jobs since the staging, not the unit's one and the test's one
+FP-31 TooSmall: owner-port decrements of the kept row: first=Ok(()) owner_details=4 second=Err("Err(Overlay(Stale))")
+FP-31 TooSmall: before the Unmount: activity=Idle phase=Some(Ready)
+FP-31 TooSmall: custody=TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(0202020202020202020202020202020202020202020202020202020202020202), namespace: 2 }, stage: Requests, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, completed: 3, handoffs: 4, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 1 }), detail: "connection drain stopped at Requests: loops Some(SessionSnapshot { phase: Joined, revision: 7, configured: 1, created: 1, entered: 1, exited: 1, joined: 1 }), work Some(MountWork { received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, owned_input_bytes: 0, future_bytes: 216, receive_units: 4, completed: 3, steps: 8, wakes: 4, terminal: true })", forced: None }
+
+thread 'fp31_a_kernel_forget_of_two_against_a_row_of_one_underflows_and_the_row_keeps_exactly_one' panicked at crates/layerfs-daemon/tests/fp31_forget_underflow.rs:498:5:
+assertion `left == right` failed: the Unmount and the later replies submitted no owner job: no Revoke, no Close
+  left: 31
+ right: 30
+FAILED
+test fp31_each_retained_kernel_forget_unit_keeps_its_original_input_and_the_engines_refusal ... FP-31 reclaim scope: membership="0::/" file=/sys/fs/cgroup/memory.reclaim
+FP-31 inputs: inodes(single=5 pair=3) reclaim_requests=1 lane MountWork { received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, owned_input_bytes: 0, future_bytes: 0, receive_units: 4, completed: 4, steps: 10, wakes: 6, terminal: false } -> MountWork { received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, owned_input_bytes: 0, future_bytes: 216, receive_units: 6, completed: 4, steps: 11, wakes: 6, terminal: true } opcodes=OpcodeWork { opcodes: [3, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], handoffs: 5, inline: 0, refused: 0, terminal: 0, unadmitted: 1, forget_units: 2, store_units: 0 }
+FP-31 inputs: retained unit: native request 14 on NativeMount { route: Route { engine: 3, ns: 1, incarnation: [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7] }, owner: 1, root: 1 }, input Forget { inode: 5, count: 1 }: owner completion: Err(Overlay(Stale)) <- owner completion: Err(Overlay(Stale)) <- Overlay(Stale) <- Stale
+
+thread 'fp31_each_retained_kernel_forget_unit_keeps_its_original_input_and_the_engines_refusal' panicked at crates/layerfs-daemon/tests/fp31_forget_underflow.rs:734:5:
+assertion `left == right` failed: both units are retained and neither completed: MountWork { received: 0, admitted: 1, queued: 0, running: 0, parked: 0, retained: 1, owned_input_bytes: 0, future_bytes: 216, receive_units: 6, completed: 4, steps: 11, wakes: 6, terminal: true }
+  left: (1, 1, 4)
+ right: (2, 2, 4)
+FP-31 GUARD lazy umount of /tmp/layerfs-installed-7-fp31-inputs/mount by the test: Ok(ExitStatus(unix_wait_status(0)))
+FAILED
+
+failures:
+
+failures:
+    fp31_a_kernel_forget_of_a_row_the_owner_port_removed_is_retained_and_unmount_stops_at_requests
+    fp31_a_kernel_forget_of_two_against_a_row_of_one_underflows_and_the_row_keeps_exactly_one
+    fp31_each_retained_kernel_forget_unit_keeps_its_original_input_and_the_engines_refusal
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+R4_WALL seconds<=2 limit=115s lock_wait=0s
+EXIT 101

@@ -1,0 +1,24 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD ab7e25b89, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/fp2_negotiation_flags-536288768e673dda --test-threads=1 --nocapture
+
+running 2 tests
+test fp2_the_kernel_sends_the_requests_of_a_connection_without_four_forbidden_capabilities ... FP-2 kernel behaviour: readdir=2 readdirplus=0 readlink=2 open=2 setattr=1 write=5 flush=1 selected=["FUSE_ASYNC_READ", "FUSE_BIG_WRITES", "FUSE_MAX_PAGES"]
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+test fp2_the_ready_receipt_is_exactly_the_section_8_1_profile_with_every_forbidden_flag_absent ... FP-2 receipt: abi=7.41 offered=0x1fd33fffffb selected=0x400021 max_write=131072 max_readahead=131072 max_background=1 congestion_threshold=1 page_size=4096 loops=1 abort_bound=true
+FP-2 offered flags: ["FUSE_ASYNC_READ", "FUSE_POSIX_LOCKS", "FUSE_ATOMIC_O_TRUNC", "FUSE_EXPORT_SUPPORT", "FUSE_BIG_WRITES", "FUSE_DONT_MASK", "FUSE_SPLICE_WRITE", "FUSE_SPLICE_MOVE", "FUSE_SPLICE_READ", "FUSE_FLOCK_LOCKS", "FUSE_HAS_IOCTL_DIR", "FUSE_AUTO_INVAL_DATA", "FUSE_DO_READDIRPLUS", "FUSE_READDIRPLUS_AUTO", "FUSE_ASYNC_DIO", "FUSE_WRITEBACK_CACHE", "FUSE_NO_OPEN_SUPPORT", "FUSE_PARALLEL_DIROPS", "FUSE_HANDLE_KILLPRIV", "FUSE_POSIX_ACL", "FUSE_ABORT_ERROR", "FUSE_MAX_PAGES", "FUSE_CACHE_SYMLINKS", "FUSE_NO_OPENDIR_SUPPORT", "FUSE_EXPLICIT_INVAL_DATA", "FUSE_HANDLE_KILLPRIV_V2", "FUSE_SETXATTR_EXT", "FUSE_SECURITY_CTX", "FUSE_CREATE_SUPP_GROUP", "FUSE_HAS_EXPIRE_ONLY", "FUSE_DIRECT_IO_ALLOW_MMAP", "FUSE_PASSTHROUGH", "FUSE_NO_EXPORT_SUPPORT", "FUSE_HAS_RESEND", "FUSE_ALLOW_IDMAP"]
+FP-2 selected flags: ["FUSE_ASYNC_READ", "FUSE_BIG_WRITES", "FUSE_MAX_PAGES"]
+FP-2 forbidden flags: 12 asserted absent by name; offered by this kernel and not selected: ["FUSE_WRITEBACK_CACHE", "FUSE_AUTO_INVAL_DATA", "FUSE_ATOMIC_O_TRUNC", "FUSE_NO_OPEN_SUPPORT", "FUSE_NO_OPENDIR_SUPPORT", "FUSE_HANDLE_KILLPRIV", "FUSE_HANDLE_KILLPRIV_V2", "FUSE_DO_READDIRPLUS", "FUSE_READDIRPLUS_AUTO", "FUSE_PARALLEL_DIROPS", "FUSE_CACHE_SYMLINKS", "FUSE_EXPLICIT_INVAL_DATA"]
+FP-2 selected set: exactly ["FUSE_ASYNC_READ", "FUSE_BIG_WRITES", "FUSE_MAX_PAGES"]; 40 other named flags asserted absent; unnamed selected bits=0
+FP-2 page size: receipt=4096 sysconf(_SC_PAGESIZE)=4096
+FP-2 mountinfo: Row { id: 160, device: (0, 91), options: {"noatime", "nodev", "nosuid", "rw"}, filesystem: "fuse", source: "layerfs", super_options: {"allow_other", "default_permissions", "group_id=0", "max_read=131072", "rw", "user_id=0"} }
+FP-2 fusectl: connection=91 max_background=1 congestion_threshold=1 waiting=0
+FP-2 SPEC_CONFLICT loops: specification section 8.1 says "Loops | 2"; receipt.loops=1 status(loops_configured=1 loops_entered=1) receive-loop threads in /proc/self/task=1; reported, not resolved
+FP-2 NOTE receipt.selected is computed by the product (mount/profile.rs), not read back from the INIT reply. FUSE_INIT_EXT: in receipt.offered=false in receipt.selected=false extended offered bits present=true (the kernel sent it and the library's reply carries it; neither receipt set lists it)
+MOUNTED_COMMIT_RIG store_opened=1 sealed=0 reopened=0 handles_after_stop=1
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+R4_WALL seconds<=1 limit=115s lock_wait=2s
+EXIT 0

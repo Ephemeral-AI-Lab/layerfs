@@ -1,0 +1,45 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 388503a77, uncommitted product/test paths=20, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/fp21_detach_stages-6140bb4e37368fbf --test-threads=1 --nocapture
+
+running 4 tests
+test fp21_close_is_retained_after_revoke_when_one_lifecycle_completion_is_held ... FP-21 close: custody=TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(0202020202020202020202020202020202020202020202020202020202020202), namespace: 2 }, stage: Close, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 1, loops_joined: 1, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 0, handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0 }), detail: "AdmissionFull", forced: None }
+FP-21 close: owner jobs admitted by the Unmount=1 outstanding 1 -> 2 closed_namespaces 0 -> 0
+FP-21 close: kept=Kept { ready: Some(ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(0202020202020202020202020202020202020202020202020202020202020202), namespace: 2 }, directory: "/tmp/layerfs-installed-7-fp21-close/mounts/2", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }), stage: Close, detail: "AdmissionFull", observer: Some(SessionObserver { facts: SessionFacts { mount: NativeMount { route: Route { engine: 1, ns: 2, incarnation: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] }, owner: 1, root: 1 }, loops: Some(SessionSnapshot { phase: Joined, revision: 7, configured: 1, created: 1, entered: 1, exited: 1, joined: 1 }), serving: false, detached: true, work: Err(Stale), opcodes: OpcodeWork { opcodes: [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0, store_units: 0 }, abort_bound: false, aborted: None } }), evidence: (Owner(Unattempted { cause: AdmissionFull, command: Close }), [Ok(Native(Done))], Some(Drained { mount: NativeMount { route: Route { engine: 1, ns: 2, incarnation: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] }, owner: 1, root: 1 }, directory: "/tmp/layerfs-installed-7-fp21-close/mounts/2", outcome: Some(SessionOutcome { startup_error: None, receivers: [ReceiverOutcome { index: 0, result: Ok(()) }], cleanup: Ok(()) }), work: MountWork { received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, owned_input_bytes: 0, future_bytes: 0, receive_units: 6, completed: 5, steps: 11, wakes: 6, terminal: true }, opcodes: OpcodeWork { opcodes: [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], handoffs: 5, inline: 0, refused: 1, terminal: 0, unadmitted: 0, forget_units: 0, store_units: 0 }, removed: Ok(()), forced: None, failed_demands: FailedDemands { count: 0, first: None, latest: None } })), forced: None }
+
+thread 'fp21_close_is_retained_after_revoke_when_one_lifecycle_completion_is_held' panicked at crates/layerfs-daemon/tests/fp21_detach_stages.rs:425:5:
+assertion `left == right` failed: no owner job was replayed by the later replies
+  left: (23, 2)
+ right: (22, 2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test fp21_forget_units_parked_behind_lifecycle_credits_at_detach_all_run_before_revocation ... FP-21 reclaim scope: membership="0::/" file=/sys/fs/cgroup/memory.reclaim
+FP-21 forget staged: inodes=[3, 4, 5] reclaim_requests=1 forget_units=3 parked=3 admitted=3 completed=4 lifecycle_credits_held=2 owner_details(baseline=4 looked=10)
+
+thread 'fp21_forget_units_parked_behind_lifecycle_credits_at_detach_all_run_before_revocation' panicked at crates/layerfs-daemon/tests/fp21_detach_stages.rs:1170:5:
+assertion `left == right` failed: no owner job was submitted while the units were parked
+  left: 25
+ right: 22
+FAILED
+test fp21_unmount_beside_a_readdir_inside_its_store_read_retires_nothing_and_the_listing_is_exact ... FP-21 Readdir in provider held: handoffs=3->4 admitted=1 parked=0 running=1 gate=Calls { entered: 121, returned: 120, holding: 1, expired: 0 } reader_grants=25->26 engine_rows(idle=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 0, owner_details: 8, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 } held=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 0, owner_details: 8, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }) base_readers=Some(0)
+FP-21 Readdir in provider: 10 x Unmount=Busy@unmount:kernel phase=Ready admitted=1 gate_holding=1 engine_mount=Live cleanup=Live engine_rows=idle caller_blocked=true
+FP-21 Readdir in provider: released: listing="names a.txt,b.txt,held.bin"
+FP-21 Readdir in provider: Unmounted: receipt_opcodes(lookup=1 open=0 read=0 release=0 opendir=1 readdir=2 releasedir=1)
+FP-21 Readdir in provider: cleanup=Gone; engine counts equal the baseline
+ok
+test fp21_unmount_beside_an_open_inside_its_store_read_retires_nothing_and_the_open_then_succeeds ... FP-21 Open in provider held: handoffs=3->4 admitted=1 parked=0 running=1 gate=Calls { entered: 136, returned: 135, holding: 1, expired: 0 } reader_grants=25->26 engine_rows(idle=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 0, owner_details: 9, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 } held=StoredCounts { wait_refs: 0, namespaces: 2, inode_rows: 0, directory_entry_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, operation_record_rows: 0, operation_record_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 0, owner_details: 9, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }) base_readers=Some(0)
+FP-21 Open in provider: 10 x Unmount=Busy@unmount:kernel phase=Ready admitted=1 gate_holding=1 engine_mount=Live cleanup=Live engine_rows=idle caller_blocked=true
+FP-21 Open in provider: released: open=ok owner_details 9 -> 10 read_exact=true bytes=3000
+FP-21 Open in provider: Unmounted: receipt_opcodes(lookup=2 open=1 read=1 release=1 opendir=0 readdir=0 releasedir=0)
+FP-21 Open in provider: cleanup=Gone; engine counts equal the baseline
+ok
+
+failures:
+
+failures:
+    fp21_close_is_retained_after_revoke_when_one_lifecycle_completion_is_held
+    fp21_forget_units_parked_behind_lifecycle_credits_at_detach_all_run_before_revocation
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+R4_WALL seconds<=2 limit=115s lock_wait=24s
+EXIT 101
