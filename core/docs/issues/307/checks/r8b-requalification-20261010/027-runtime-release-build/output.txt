@@ -1,0 +1,79 @@
+# host release build of the R7 runtime at 77a9b52dbe1e221954f8a2afbf7e0495a82b615e, tree 3f90565f496b0fe30809d5db0fd9fc93f53e6bbe; status: 16 untracked receipt paths, no tracked change: 0
+# command: env CARGO_TARGET_DIR=core/target/r8b-host-release LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 build --manifest-path core/benchmark/r7-runtime/Cargo.toml --locked --offline --release
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.20.1
+   Compiling version_check v0.9.5
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.12
+   Compiling subtle v2.6.1
+   Compiling pkg-config v0.3.34
+   Compiling zeroize v1.9.0
+   Compiling semver v1.0.28
+   Compiling opaque-debug v0.3.1
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+   Compiling autocfg v1.5.1
+   Compiling vcpkg v0.2.15
+   Compiling rustc_version v0.4.1
+   Compiling cfg_aliases v0.2.2
+   Compiling const-oid v0.10.2
+   Compiling foldhash v0.2.0
+   Compiling nix v0.31.3
+   Compiling bitflags v2.13.1
+   Compiling smallvec v1.16.0
+   Compiling generic-array v0.14.7
+   Compiling memoffset v0.9.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling snow v0.9.6
+   Compiling hashbrown v0.17.1
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling fallible-iterator v0.3.0
+   Compiling hybrid-array v0.4.15
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashlink v0.12.2
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+   Compiling digest v0.11.3
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling rand_core v0.6.4
+   Compiling crypto-common v0.1.7
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling digest v0.10.7
+   Compiling aead v0.5.2
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling blake2 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling ghash v0.5.1
+   Compiling chacha20 v0.9.1
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-r7-runtime v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-runtime)
+    Finished `release` profile [optimized] target(s) in 17.61s
+R4_WALL seconds<=19 limit=585s lock_wait=0s
+EXIT 0
+2aaaf31782b1669eb17f6b10ce585290a4f5caa88b245e615efbd2efe0cf310b  core/target/r8b-host-release/release/layerfs-r7-runtime

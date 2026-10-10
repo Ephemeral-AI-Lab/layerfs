@@ -1,0 +1,8 @@
+# Linux Clippy at 77a9b52dbe1e221954f8a2afbf7e0495a82b615e, pinned image: cargo clippy --locked --manifest-path core/Cargo.toml --all-targets -- -D warnings (after source hash check)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.81s
+R4_WALL seconds<=12 limit=560s lock_wait=0s
+EXIT 0

@@ -1,0 +1,20 @@
+# final host checks at 77a9b52dbe1e221954f8a2afbf7e0495a82b615e, tree 3f90565f496b0fe30809d5db0fd9fc93f53e6bbe, status: ?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md;?? core/docs/issues/307/checks/r8b-requalification-20261010/020-final-host-static.txt;
+## cargo +1.85.1 fmt --all -- --check
+core/target/r4-build.sh: line 23: args[@]: unbound variable
+fmt exit=0
+## boundary guard
+PASS: scanned 674 production Rust/SQL files; semantic review still required
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+## fuser provenance (known refusal: r7-passthrough manifest, PENDING OWNER)
+{
+  "checked_manifests_locks_configs": 101,
+  "errors": [
+    "core/benchmark/r7-passthrough/Cargo.lock: locked fuser has a local/replacement source",
+    "core/benchmark/r7-passthrough/Cargo.toml: patch override of fuser is not the authorized timestamp patch"
+  ],
+  "authorized_patch_verified": false,
+  "registry_package_verified": false
+}
+## rerun of the format check with the correct invocation (the helper needs package arguments): cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+R4_WALL seconds<=4 limit=120s lock_wait=0s
+fmt exit=0

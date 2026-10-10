@@ -1,0 +1,24 @@
+{
+  "cache": "host hash/stream copy warm pages; functional only; no cold claim",
+  "inputs": {
+    "/tmp/layerfs-r7-full-installed-20261009.manifest": {
+      "bytes": 189,
+      "inode": 874405645,
+      "mtime_ns": 1791490509191663959,
+      "sha256": "1d3b8c9c679033dc98cf44eda6b7894fa7244fba2c963e3c7a7ef4fbac272684"
+    },
+    "/tmp/layerfs-r7-full-inventory-20261009.jsonl": {
+      "bytes": 46586430,
+      "inode": 874732130,
+      "mtime_ns": 1791498219112825645,
+      "sha256": "d058d8c61220950b989772681cee4446575893076318d128a25884849271ba52"
+    },
+    "/tmp/layerfs-r7-full-sealed-20261009.sqlite": {
+      "bytes": 1417285632,
+      "inode": 874405395,
+      "mtime_ns": 1791490499349790708,
+      "sha256": "0c836c88ce4eb04be8d823cbe23980696f96f9a56fe6e2da226cbb3b6bdecf05"
+    }
+  },
+  "volume": "layerfs-r8-full-proof-20261010-2aca347ad746"
+}

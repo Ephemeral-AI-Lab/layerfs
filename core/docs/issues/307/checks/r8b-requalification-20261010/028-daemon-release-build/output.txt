@@ -1,0 +1,106 @@
+# Linux release build of layerfs-daemon at 77a9b52dbe1e221954f8a2afbf7e0495a82b615e, tree 3f90565f496b0fe30809d5db0fd9fc93f53e6bbe, pinned image sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6
+# command: docker run --rm --name layerfs-r8b-daemon-build --network none -v ROOT:/work -w /work -e CARGO_HOME=/work/core/target/cluster2-linux-cargo -e CARGO_TARGET_DIR=/work/core/target/r8b-linux-release -e LAYERFS_CONSTRUCTION_WORKERS=1 IMAGE sh -c 'sha256sum -c --quiet core/docs/issues/307/checks/r8b-requalification-20261010/024-linux-source.sha256 && cargo build --manifest-path core/Cargo.toml --locked --offline --release -p layerfs-daemon --bin layerfs-daemon'
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.20.1
+   Compiling version_check v0.9.5
+   Compiling find-msvc-tools v0.1.12
+   Compiling shlex v2.0.1
+   Compiling pkg-config v0.3.34
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling subtle v2.6.1
+   Compiling generic-array v0.14.7
+   Compiling unicode-ident v1.0.24
+   Compiling zeroize v1.9.0
+   Compiling vcpkg v0.2.15
+   Compiling semver v1.0.28
+   Compiling smallvec v1.16.0
+   Compiling arrayref v0.3.9
+   Compiling autocfg v1.5.1
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling memoffset v0.9.1
+   Compiling rustc_version v0.4.1
+   Compiling cfg_aliases v0.2.2
+   Compiling hashbrown v0.17.1
+   Compiling layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+   Compiling bitflags v2.13.1
+   Compiling opaque-debug v0.3.1
+   Compiling winnow v1.0.4
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.2
+   Compiling inout v0.1.4
+   Compiling syn v2.0.119
+   Compiling jobserver v0.1.35
+   Compiling indexmap v2.14.2
+   Compiling nix v0.31.3
+   Compiling hybrid-array v0.4.15
+   Compiling cc v1.4.5
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling hashlink v0.12.2
+   Compiling rand_core v0.6.4
+   Compiling block-buffer v0.10.4
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling rustversion v1.0.23
+   Compiling crypto-common v0.1.7
+   Compiling parking_lot_core v0.9.12
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling cipher v0.4.4
+   Compiling universal-hash v0.5.1
+   Compiling fallible-iterator v0.3.0
+   Compiling polyval v0.6.2
+   Compiling toml_edit v0.25.15+spec-1.1.0
+   Compiling digest v0.10.7
+   Compiling aead v0.5.2
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+   Compiling curve25519-dalek v4.1.3
+   Compiling syn v3.0.5
+   Compiling zerocopy v0.8.57
+   Compiling ref-cast v1.0.27
+   Compiling blake3 v1.8.5
+   Compiling libsqlite3-sys v0.38.2
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling proc-macro-crate v3.5.0
+   Compiling scopeguard v1.2.0
+   Compiling const-oid v0.10.2
+   Compiling lock_api v0.4.14
+   Compiling digest v0.11.3
+   Compiling ghash v0.5.1
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling ref-cast-impl v1.0.27
+   Compiling chacha20 v0.9.1
+   Compiling poly1305 v0.8.0
+   Compiling cpufeatures v0.3.1
+   Compiling snow v0.9.6
+   Compiling num_enum_derive v0.7.6
+   Compiling zerocopy-derive v0.8.57
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling sha2 v0.11.0
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling parking_lot v0.12.5
+   Compiling num_enum v0.7.6
+   Compiling blake2 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling page_size v0.6.0
+   Compiling memchr v2.8.3
+   Compiling log v0.4.34
+   Compiling layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 53.28s
+R4_WALL seconds<=55 limit=585s lock_wait=0s
+EXIT 0
+632b17eab921696935ed5e486a7bf01f7168e0284bb73c47864d7e8af56b7bf4  core/target/r8b-linux-release/release/layerfs-daemon

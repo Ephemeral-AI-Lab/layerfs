@@ -1,0 +1,8 @@
+# host Clippy at 77a9b52dbe1e221954f8a2afbf7e0495a82b615e: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-fuse)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.62s
+R4_WALL seconds<=8 limit=560s lock_wait=0s
+EXIT 0

@@ -1,0 +1,4 @@
+# host tracked-source hashes verified inside the pinned container at 77a9b52dbe1e221954f8a2afbf7e0495a82b615e
+ALL_SOURCE_HASHES_MATCH
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+EXIT 0
