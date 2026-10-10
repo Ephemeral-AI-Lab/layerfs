@@ -1,0 +1,31 @@
+# resource custody, timing baseline 2026-10-10 at 5969ecaf8
+## created by this run and removed (every row PASS, custody KNOWN_STOP, cleanup Gone)
+container 6dfcd1b02e2b (exited exit 137) using layerfs-r7-C01-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C01-L-5969ecaf8-20261009: removed
+container b394f2678261 (exited exit 137) using layerfs-r7-C02-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C02-L-5969ecaf8-20261009: removed
+container 1cc40048f188 (exited exit 137) using layerfs-r7-C03-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C03-L-5969ecaf8-20261009: removed
+container 3a96e7a193a6 (exited exit 137) using layerfs-r7-C04-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C04-L-5969ecaf8-20261009: removed
+container 586aeba61731 (exited exit 137) using layerfs-r7-C05-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C05-L-5969ecaf8-20261009: removed
+container 06c345f24ab3 (exited exit 137) using layerfs-r7-C06-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C06-L-5969ecaf8-20261009: removed
+container 7f6853ab1ef5 (exited exit 137) using layerfs-r7-C07-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C07-L-5969ecaf8-20261009: removed
+container da44bcd18442 (exited exit 137) using layerfs-r7-C08-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C08-L-5969ecaf8-20261009: removed
+container 1b800a5cf3f2 (exited exit 137) using layerfs-r7-C09-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C09-L-5969ecaf8-20261009: removed
+container fa83f1c7c040 (exited exit 137) using layerfs-r7-C10-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C10-L-5969ecaf8-20261009: removed
+container f9ed3db12abc (exited exit 137) using layerfs-r7-C11-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C11-L-5969ecaf8-20261009: removed
+container 9a9476b23ff8 (exited exit 137) using layerfs-r7-C12-L-5969ecaf8-20261009: removed
+volume layerfs-r7-C12-L-5969ecaf8-20261009: removed
+## left in place
+master volumes layerfs-r7-empty-master-20261009-2ac7cc762 and layerfs-r7-big-master-20261009-b8d76c0a3 (read-only sources), every earlier R7 and R8 volume and container, the four running containers, /tmp prepared inputs, build targets core/target/r7-host-release and r7-linux-release
+remaining volumes named 5969ecaf8: 0
+running containers: 9cf2fe345496 ce75ac504df9 d2433851ea59 d2550144998b 
+master volumes present: 6

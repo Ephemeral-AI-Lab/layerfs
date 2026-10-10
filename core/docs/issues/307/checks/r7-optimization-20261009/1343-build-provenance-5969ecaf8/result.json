@@ -1,0 +1,24 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "inventory",
+  "source_commit": "5969ecaf8e7799f51e299b632748419fbaabf63f",
+  "source_tree": "bbd16588731294a5171d2fa66661aacb83a8f10e",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r7-optimization-20261009/1340-L-source-seal-5969ecaf8/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1341-runtime-release-5969ecaf8/\n?? core/docs/issues/307/checks/r7-optimization-20261009/1342-daemon-release-5969ecaf8/",
+  "command": [
+    "python3",
+    "-B",
+    "core/target/r7-seal-build.py",
+    "/tmp/layerfs-r7-source-L-5969ecaf8-20261009.json",
+    "1341-runtime-release-5969ecaf8",
+    "1342-daemon-release-5969ecaf8",
+    "/tmp/layerfs-r7-build-provenance-5969ecaf8-20261009.json"
+  ],
+  "limit_seconds": 15,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 549827708,
+  "status": "PASS"
+}

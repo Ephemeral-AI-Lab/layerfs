@@ -1,0 +1,27 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "build",
+  "source_commit": "5969ecaf8e7799f51e299b632748419fbaabf63f",
+  "source_tree": "bbd16588731294a5171d2fa66661aacb83a8f10e",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r7-optimization-20261009/1340-L-source-seal-5969ecaf8/",
+  "command": [
+    "env",
+    "CARGO_TARGET_DIR=core/target/r7-host-release",
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/benchmark/r7-runtime/Cargo.toml",
+    "--locked",
+    "--offline",
+    "--release"
+  ],
+  "limit_seconds": 560,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 3781527834,
+  "status": "PASS"
+}
