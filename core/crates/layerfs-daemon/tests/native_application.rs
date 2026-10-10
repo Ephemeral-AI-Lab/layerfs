@@ -59,6 +59,7 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
             ordinary_jobs: 8,
             lifecycle_jobs: 4,
             pager_kib: 1024,
+            serial_low_water: 0,
         },
         existing_store: None,
     };

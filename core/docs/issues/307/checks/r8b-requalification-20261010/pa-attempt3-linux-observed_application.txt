@@ -1,0 +1,21 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD ebfd560f2, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/observed_application-667353e132ba6f06 --test-threads=1 --nocapture
+
+running 6 tests
+test configured_serial_low_water_reaches_a_mounted_create_on_both_startup_routes ... LOW_WATER application route=install configured=1023: store serial_reservations after 0..3 creates=[0, 1, 2, 2] serials=[7, 8, 9]
+LOW_WATER application route=existing configured=1023: store serial_reservations after 0..3 creates=[0, 1, 2, 2] serials=[2055, 2056, 2057]
+LOW_WATER application route=existing configured=0: store serial_reservations after 0..3 creates=[0, 1, 1, 1] serials=[4103, 4104, 4105]
+ok
+test diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind ... ok
+test equal_calls_and_reused_slot_have_distinct_public_observation_identity ... ok
+test observer_job_is_charged_and_cardinality_does_not_follow_unrelated_workspaces ... ok
+test resource_and_output_failure_preserve_original_status_reply ... ok
+test startup_refuses_a_serial_low_water_at_or_above_the_refill_window ... LOW_WATER startup configured=1024: status=ExitStatus(unix_wait_status(256)) stdout="" stderr="daemon I/O: serial low-water must be below the refill window"
+LOW_WATER startup configured=1025: status=ExitStatus(unix_wait_status(256)) stdout="" stderr="daemon I/O: serial low-water must be below the refill window"
+LOW_WATER startup configured=18446744073709551615: status=ExitStatus(unix_wait_status(256)) stdout="" stderr="daemon I/O: serial low-water must be below the refill window"
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+R4_WALL seconds<=1 limit=115s lock_wait=6s
+EXIT 0

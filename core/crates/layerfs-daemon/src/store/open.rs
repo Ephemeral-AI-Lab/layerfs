@@ -43,6 +43,8 @@ pub struct Store {
     /// Reads objects already in `cache` and nothing else: no reader, no I/O.
     pub(super) resident: Arc<CanonicalClient>,
     pub(super) counts: Arc<Counts>,
+    /// Unconsumed local serials below which a create refills early.
+    pub(super) serial_low_water: AtomicU64,
 }
 impl Store {
     /// Takes already opened providers. Read capacity is fixed for this daemon.
@@ -72,7 +74,14 @@ impl Store {
             resident: Arc::new(CanonicalClient::resident(cache.clone())),
             cache,
             counts,
+            serial_low_water: AtomicU64::new(0),
         })
+    }
+    /// Explicit configuration. Application assembly calls this once, before
+    /// any Workspace is served; nothing else in the product calls it. Zero,
+    /// the value until then, makes no early attempt.
+    pub fn set_serial_low_water(&self, serials: u64) {
+        self.serial_low_water.store(serials, Ordering::Relaxed);
     }
     /// Independent mutable producer state over the same opened write provider.
     /// No shared Save or whole-Commit ownership is acquired here.

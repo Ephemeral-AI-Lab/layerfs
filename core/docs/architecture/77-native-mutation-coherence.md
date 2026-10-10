@@ -57,7 +57,9 @@ publishing Overlay owner job:
    handle resolved in the same job by `acquire_native_open_source`).
 2. A creating operation reserves its inode serial from the Store through the
    existing allocator. A contended allocator writer is a definite `EAGAIN` with
-   nothing reserved.
+   nothing reserved. Since R8b (2026-10-10) a create that leaves fewer local
+   serials than the daemon's explicit low-water also makes one early
+   reservation; see "Early serial refill" below.
 3. [`NativeMutation`](../../crates/layerfs-fuse/src/operations/mutation.rs) drives
    the plan. Rounds that need immutable base facts read them through the shared
    reader and publish nothing. The deciding round is
@@ -72,6 +74,31 @@ publishing Overlay owner job:
    (`Overlay::reply_attempted_and_release`): either both are recorded or the
    request keeps both. A mutation that published nothing releases its source
    alone.
+
+**Early serial refill (R8b, 2026-10-10; owner ruling P-1).**
+`DaemonLimits.serial_low_water` is an explicit value of the private
+configuration record; startup refuses one at or above the 1,024-serial refill
+window, and 0 makes no early attempt. Application assembly gives it to the
+Store once, before any Workspace is served. `reserve_serial` calls
+[`StorePorts::take_serial`](../../crates/layerfs-daemon/src/store/ports.rs),
+which passes it to `Workspace::next_serial_with_low_water`
+([operations](30-namespace-operations.md)). The early attempt runs on fresh
+ports over the same scope, created only when it is made, so its failure is
+never retained as the request's own first Store failure and the request's
+later base demand is still admitted. Its outcome is decided in
+[`reserve_serial`](../../crates/layerfs-daemon/src/service/filesystem_port.rs):
+writer contention is that attempt's before-effect refusal and the create
+continues with the serial it took; any other early failure ends that create
+with the original error, its serial consumed. Nothing is replayed, waited for
+or timed: a later create is a new operation with its own single attempt, and a
+create that finds no local range and whose one attempt is contended is still
+`EAGAIN` with no effect. A Workspace's first create always finds no range.
+While a peer holds the Store writer, each create below the low-water makes one
+refused write attempt on its request thread. Proofs:
+`layerfs-workspace/tests/namespace.rs` (range arithmetic),
+`layerfs-daemon/tests/mounted_low_water.rs` (real mount, external writer) and
+`layerfs-daemon/tests/observed_application.rs` (configured value through the
+executable). No deployed value is selected here; harnesses and examples set 0.
 
 `Overlay::apply` is the same checked body inside its own transaction;
 `apply_native` adds the native effects to it. A second publication through one

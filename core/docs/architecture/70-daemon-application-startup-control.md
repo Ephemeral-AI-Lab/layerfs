@@ -23,6 +23,15 @@ ordinary Sandbox/runtime route. Existing locked nix0.31.3 supplies safe process
 and descriptor controls; provider-independent `store/` receives no path/engine
 transport type. No daemon Exec registration or supervisor is introduced.
 
+R8b update, 2026-10-10: `DaemonLimits` also carries `serial_low_water`, one
+`u64` after the other limits, and the record magic is `LFSD\x02`; a record of
+the previous layout is refused, not read. Startup refuses a value at or above
+the 1,024-serial refill window as invalid configuration. Each of the three
+places that assemble the control Service passes the value to
+`application/filesystem.rs`, which sets it on the Store before the Service
+exists. Its use is described in
+[native mutation](77-native-mutation-coherence.md).
+
 Startup is InstallPending, Installing, Retained or ControlReady. Explicit
 existing-store configuration opens Disposable once with retained authority; an
 installation failure never selects it as fallback. Otherwise one authenticated

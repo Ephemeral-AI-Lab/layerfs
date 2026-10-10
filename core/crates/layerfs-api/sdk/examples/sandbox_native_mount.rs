@@ -99,6 +99,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             ordinary_jobs: 8,
             lifecycle_jobs: 4,
             pager_kib: 1024,
+            serial_low_water: 0,
         },
         existing_store: None,
     }

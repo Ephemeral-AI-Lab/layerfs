@@ -362,8 +362,13 @@ impl RequestServices for FilesystemPort {
     }
     fn reserve_serial(&self) -> Result<Option<u64>, ServiceError> {
         self.fenced(true)?;
-        match self.0.workspace().next_serial(self.0.ports()) {
-            Ok(serial) => Ok(Some(serial)),
+        match self.0.ports().take_serial(self.0.workspace()) {
+            Ok((serial, None)) => Ok(Some(serial)),
+            // A contended early refill reserved nothing and is not asked
+            // again: this create keeps the serial it took.
+            Ok((serial, Some(early))) if writer_contended(&early) => Ok(Some(serial)),
+            // Any other early failure ends this create; its serial is spent.
+            Ok((_, Some(early))) => Err(Box::new(early)),
             Err(error) if writer_contended(&error) => Ok(None),
             Err(error) => Err(Box::new(error)),
         }

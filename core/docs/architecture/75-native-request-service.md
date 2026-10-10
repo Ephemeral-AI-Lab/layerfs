@@ -58,7 +58,10 @@ hand-off. A step that has to wait returns `Pending`, parks in its slot and is
 continued by a worker. A step never waits: the only blocking wait of a
 receive loop is still the one for a handoff slot. What a receive loop now
 executes is bounded: short owner jobs, the reply write, and for a creating
-request the serial allocator's refill (one bounded write per 1,024 serials).
+request the serial allocator's refill (one bounded write per 1,024 serials;
+with a nonzero low-water since R8b, 2026-10-10, also one early attempt by each
+create that leaves fewer local serials than it, see
+[native mutation](77-native-mutation-coherence.md)).
 Provider reads never run there: every call that obtains a Store reader is
 preceded by `LeaveReceiver`, which is ready at once on a worker and yields one
 turn on a receive thread, so the continuation resumes on a worker first.

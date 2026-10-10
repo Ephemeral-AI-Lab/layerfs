@@ -1,0 +1,22 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD ebfd560f2, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-workspace IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/namespace-6799f25a7d58313c --test-threads=1 --nocapture
+
+running 9 tests
+test chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime ... ok
+test create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically ... ok
+test low_water::an_early_attempt_is_made_exactly_when_the_remainder_is_below_the_low_water ... LOW_WATER 1000: (call, serial, (main, early)) of every attempt = [(0, 5000, (1, 0)), (24, 5024, (0, 1)), (1048, 9024, (0, 1)), (2072, 10048, (0, 1))]
+ok
+test low_water::an_early_failure_is_returned_with_the_serial_and_is_not_asked_again ... LOW_WATER 1023 with a refused early refill: main_attempts=1 early_attempts=3 (refused 2, answered 1)
+ok
+test low_water::an_exhausted_range_is_one_refused_attempt_and_no_serial ... LOW_WATER exhausted: main_attempts=2 early_attempts=0
+ok
+test low_water::zero_low_water_never_attempts_early ... LOW_WATER zero: calls=1025 main_attempts=2 early_attempts=0
+ok
+test rename_moves_replaces_and_refuses_cycles_without_descendant_rows ... ok
+test unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact ... ok
+test unrepresentable_names_targets_and_reservations_are_refused_before_any_job ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=2 limit=115s lock_wait=2s
+EXIT 0

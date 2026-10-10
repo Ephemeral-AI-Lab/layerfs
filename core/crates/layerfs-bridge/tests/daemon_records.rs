@@ -25,6 +25,7 @@ fn setup() -> DaemonSetup {
             ordinary_jobs: 2,
             lifecycle_jobs: 2,
             pager_kib: 1024,
+            serial_low_water: 0,
         },
         existing_store: None,
     }
@@ -52,6 +53,51 @@ fn private_setup_is_exact_bounded_and_redacts_secret() {
     bad = value;
     bad.store = "/shared/../store".into();
     assert!(bad.encode().is_err());
+}
+/// The explicit serial low-water is one `u64` after the other limits, and the
+/// record magic advanced with it: a record of the previous layout is refused,
+/// never read with shifted fields.
+#[test]
+fn serial_low_water_round_trips_and_the_previous_record_is_refused() {
+    const LOW: u64 = 0x0102_0304_0506_0708;
+    let mut value = setup();
+    assert_eq!(value.limits.serial_low_water, 0);
+    let zero = value.encode().unwrap();
+    assert_eq!(DaemonSetup::decode(&zero).unwrap(), value);
+    value.limits.serial_low_water = LOW;
+    let bytes = value.encode().unwrap();
+    let decoded = DaemonSetup::decode(&bytes).unwrap();
+    assert_eq!(decoded.limits.serial_low_water, LOW);
+    assert_eq!(decoded, value);
+
+    // Exact placement: the last limit, before the existing-Store flag.
+    assert_eq!(&bytes[..5], b"LFSD\x02");
+    let at = bytes.len() - 9;
+    assert_eq!(bytes[at..at + 8], LOW.to_be_bytes());
+    assert_eq!(bytes[at - 4..at], value.limits.pager_kib.to_be_bytes());
+    assert_eq!(bytes[at + 8], 0, "no existing Store");
+    assert_eq!(zero.len(), bytes.len());
+    assert_eq!(zero[at..at + 8], [0; 8]);
+    assert_eq!((&zero[..at], zero[at + 8]), (&bytes[..at], bytes[at + 8]));
+
+    // The previous record: magic 1 and no low-water field.
+    let mut previous = bytes.clone();
+    previous.drain(at..at + 8);
+    previous[4] = 1;
+    assert_eq!(&previous[..5], b"LFSD\x01");
+    assert!(DaemonSetup::decode(&previous).is_err());
+    // Neither half alone is accepted: the previous magic over the current
+    // layout, or the current magic over the previous layout.
+    let mut old_magic = bytes.clone();
+    old_magic[4] = 1;
+    assert!(DaemonSetup::decode(&old_magic).is_err());
+    previous[4] = 2;
+    assert!(DaemonSetup::decode(&previous).is_err());
+    for magic in [0, 3, 0xff] {
+        let mut other = bytes.clone();
+        other[4] = magic;
+        assert!(DaemonSetup::decode(&other).is_err(), "magic {magic}");
+    }
 }
 #[test]
 fn startup_and_session_end_preserve_correlation_and_require_actual_ready_facts() {

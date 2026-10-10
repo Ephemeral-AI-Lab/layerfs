@@ -1,0 +1,26 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 388503a77, uncommitted product/test paths=19, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/mounted_low_water-ab12e39c12447297 --test-threads=1 --nocapture
+
+running 3 tests
+test an_early_attempt_refused_under_a_held_store_writer_leaves_the_create_successful ... PA first create (no local range): attempts=[Ok(start=5 count=1024)] store_serial_reservations=1
+PA low_water=1023 held writer: second create attempts=[Ok(start=5 count=1024), Err(Busy)] store_serial_reservations=2 made=Some((6, true, 0, 65534)) | later create attempts=[Ok(start=5 count=1024), Err(Busy), Err(Busy)] made=Some((7, true, 0, 65534)) | port take_serial=Ok((8, Some(Service(History(Busy))))) failure_retained=Ok(false) next_demand_admitted=true attempts=4 | control on shared custody=Ok((9, Some(Service(History(Busy))))) failure_retained=Ok(true) next_demand_admitted=false | attempts=[Ok(start=5 count=1024), Err(Busy), Err(Busy), Err(Busy), Err(Busy)] store_serial_reservations=5 writer write_transactions 1 -> 1 | engine revision Some(1) -> Some(3) quiet before=true held=true undamaged=true
+PA low_water=1023 released: create attempts=[Ok(start=5 count=1024), Err(Busy), Err(Busy), Err(Busy), Err(Busy), Ok(start=1029 count=1024)] | next create attempts=6 store_serial_reservations=6 | writer write_transactions 1 -> 2
+PA_UNMOUNT low-water under a held writer: quiet_before=true unmounted=true answer=Unmounted(WorkspaceToken { workspace: WorkspaceId(0101010101010101010101010101010101010101010101010101010101010101), namespace: 1 })
+PA_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=4
+ok
+test the_second_create_below_an_explicit_low_water_makes_one_early_attempt_and_succeeds ... PA first create (no local range): attempts=[Ok(start=5 count=1024)] store_serial_reservations=1
+PA low_water=1023 second create: attempts=[Ok(start=5 count=1024), Ok(start=1029 count=1024)] store_serial_reservations=2 writer write_transactions 1 -> 2 | after two more creates: attempts=2 store_serial_reservations=2
+PA_UNMOUNT low-water early attempt: quiet_before=true unmounted=true answer=Unmounted(WorkspaceToken { workspace: WorkspaceId(0101010101010101010101010101010101010101010101010101010101010101), namespace: 1 })
+PA_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=1
+ok
+test zero_low_water_makes_no_early_attempt_until_the_range_is_exhausted ... PA first create (no local range): attempts=[Ok(start=5 count=1024)] store_serial_reservations=1
+PA low_water=0 held writer: create made=Some((6, true, 0, 65534)) port take_serial=Ok((7, None)) | attempts=1 store_serial_reservations=1
+PA low_water=0 window: 1020 further creates status=Some(0) names=1020 last=Some((1028, true, 0, 65534)) attempts=1 store_serial_reservations=1 | create on the exhausted range attempts=[Ok(start=5 count=1024), Ok(start=1029 count=1024)]
+PA_UNMOUNT low-water 0: quiet_before=true unmounted=true answer=Unmounted(WorkspaceToken { workspace: WorkspaceId(0101010101010101010101010101010101010101010101010101010101010101), namespace: 1 })
+PA_RIG store_opened=1 sealed=0 reopened=0 profile=Disposable clean_stop=true handles_after_stop=3
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+R4_WALL seconds<=2 limit=115s lock_wait=26s
+EXIT 0

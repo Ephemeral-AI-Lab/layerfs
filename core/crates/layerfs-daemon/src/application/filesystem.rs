@@ -7,12 +7,15 @@ use crate::{
 use std::sync::Arc;
 
 /// Control and native serving share the same Store handle and overlay owner;
-/// the Service's registry stays the sole authority for every mount.
+/// the Service's registry stays the sole authority for every mount. The
+/// Store takes its explicit serial low-water here, before any Workspace.
 pub(super) fn service(
     store: Arc<Store>,
     owner: &Owner,
     native: Option<&Arc<NativeServing>>,
+    serial_low_water: u64,
 ) -> Arc<Service> {
+    store.set_serial_low_water(serial_low_water);
     Arc::new(match native {
         Some(native) => Service::with_native(store, owner, native.clone()),
         None => Service::new(store, owner),

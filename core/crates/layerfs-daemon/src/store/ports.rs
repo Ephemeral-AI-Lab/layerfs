@@ -4,7 +4,7 @@ use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectI
 use layerfs_history::{HistoryError, ReserveRequest, WorkspaceId};
 use layerfs_storage::StorageError;
 use layerfs_workspace::{
-    CanonicalClient, FileLengths, InodeSerials, WorkspaceError, WorkspaceResult,
+    CanonicalClient, FileLengths, InodeSerials, Workspace, WorkspaceError, WorkspaceResult,
 };
 use std::{
     fmt,
@@ -129,6 +129,16 @@ impl StorePorts {
             .read_ticket(self.workspace)
             .map_err(|e| Arc::new(PortError::ReadAdmission(e)))
     }
+    /// One unused serial for a create. An early refill below the Store's
+    /// low-water is made in a custody scope of its own: its failure is
+    /// returned beside the serial and never becomes this operation's.
+    pub fn take_serial(
+        &self,
+        workspace: &Workspace,
+    ) -> WorkspaceResult<(u64, Option<WorkspaceError>)> {
+        let low_water = self.store.serial_low_water.load(Ordering::Relaxed);
+        workspace.next_serial_with_low_water(self, &EarlyRefill(self), low_water)
+    }
     fn check_reader(&self, reader: &ReadLease) -> Result<(), Arc<PortError>> {
         if Arc::ptr_eq(&reader.pool, &self.store.readers) && reader.workspace() == self.workspace {
             Ok(())
@@ -225,6 +235,17 @@ impl InodeSerials for StorePorts {
             Ok((range.start, range.count))
         })
         .map_err(|e| WorkspaceError::Service(Box::new(e)))
+    }
+}
+/// Fresh ports over the same scope, created only when the attempt is made.
+struct EarlyRefill<'a>(&'a StorePorts);
+impl InodeSerials for EarlyRefill<'_> {
+    fn reserve(&self, count: u64) -> WorkspaceResult<(u64, u64)> {
+        let ports = self.0;
+        ports
+            .store
+            .ports_in(ports.scope, ports.workspace)
+            .reserve(count)
     }
 }
 

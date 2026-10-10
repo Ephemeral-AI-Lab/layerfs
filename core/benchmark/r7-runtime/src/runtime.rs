@@ -45,6 +45,7 @@ pub fn start(
             ordinary_jobs: 16,
             lifecycle_jobs: 2,
             pager_kib: 1024,
+            serial_low_water: 0,
         },
         existing_store: manifest,
     };

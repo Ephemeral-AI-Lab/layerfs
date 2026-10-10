@@ -195,6 +195,18 @@ SDK implements the port over the owning history catalog under per-call
 authority. A serial taken for an operation that is then refused is consumed,
 never recycled. The refill size is a window, not a limit on created inodes.
 
+R8b update, 2026-10-10 (owner ruling P-1): `Workspace::next_serial_with_low_water`
+([source](../../crates/layerfs-workspace/src/workspace/serials.rs)) takes a
+second allocator and a low-water count. A serial taken from a local range that
+leaves fewer unconsumed serials than the low-water, summed over the held
+ranges, is followed by one call of 1,024 to that second allocator, outside
+every lock. A reserved range is kept behind the remainder, which is consumed
+first; a failure is returned beside the serial, which stays consumed, and
+nothing is asked again. With no local range the one call is the existing
+exhausted one and no early call is made, so one call makes at most one
+attempt. `next_serial` is the same path with low-water 0, which never attempts
+early. The value is the caller's; Workspace holds no configuration.
+
 **Enumeration.** Listing is the existing bounded three-way name merge, resumed
 after the last visited name. A name bound for the whole enumeration is returned
 exactly once. A name created, removed or renamed during it may or may not

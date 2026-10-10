@@ -5,7 +5,7 @@ use crate::{
     wire::{Reader, Writer},
 };
 use std::fmt;
-const MAGIC: &[u8] = b"LFSD\x01";
+const MAGIC: &[u8] = b"LFSD\x02";
 /// Explicit daemon startup resources; these are windows/admission, not file caps.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DaemonLimits {
@@ -30,6 +30,9 @@ pub struct DaemonLimits {
     pub lifecycle_jobs: u32,
     /// Explicit Overlay pager suggestion, not a resident ceiling.
     pub pager_kib: u32,
+    /// Unconsumed local inode serials below which a create makes one early
+    /// reservation attempt. Zero makes none before the range is exhausted.
+    pub serial_low_water: u64,
 }
 /// Private configuration for one real daemon; caller supplies all policy/resource values.
 #[derive(Clone, Eq, PartialEq)]
@@ -78,6 +81,7 @@ impl DaemonSetup {
         for v in [l.namespaces, l.ordinary_jobs, l.lifecycle_jobs, l.pager_kib] {
             out.put(&v.to_be_bytes())?;
         }
+        out.put(&l.serial_low_water.to_be_bytes())?;
         out.byte(u8::from(self.existing_store.is_some()))?;
         if let Some(value) = &self.existing_store {
             out.blob(&value.encode()?)?;
@@ -106,6 +110,7 @@ impl DaemonSetup {
             ordinary_jobs: u32::from_be_bytes(input.array()?),
             lifecycle_jobs: u32::from_be_bytes(input.array()?),
             pager_kib: u32::from_be_bytes(input.array()?),
+            serial_low_water: u64::from_be_bytes(input.array()?),
         };
         let existing_store = match input.byte()? {
             0 => None,

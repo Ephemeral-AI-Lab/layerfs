@@ -124,7 +124,12 @@ impl Application {
             }
         };
         let service = existing.as_ref().map(|opened| {
-            super::filesystem::service(opened.store.clone(), &owner, native.as_ref())
+            super::filesystem::service(
+                opened.store.clone(),
+                &owner,
+                native.as_ref(),
+                l.serial_low_water,
+            )
         });
         let phase = if service.is_some() {
             DaemonPhase::ControlReady

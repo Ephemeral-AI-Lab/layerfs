@@ -510,3 +510,256 @@ fn unrepresentable_names_targets_and_reservations_are_refused_before_any_job() {
     assert_eq!(b.workspace.next_serial(&Reply(0, 0)).unwrap(), 41);
     assert!(b.workspace.next_serial(&Reply(0, 0)).is_err());
 }
+
+/// Owner ruling P-1 at component scope: the range arithmetic of the early
+/// refill, with counting allocators. `main` answers a Workspace that has no
+/// local range; `early` answers the early refill. Their windows are disjoint,
+/// so every serial names the call that reserved it.
+mod low_water {
+    use super::*;
+    use layerfs_workspace::{InodeSerials, WorkspaceResult};
+    use std::cell::Cell;
+
+    /// The original refusal of one counted call.
+    #[derive(Debug, Eq, PartialEq)]
+    struct Refused(u64);
+    impl std::fmt::Display for Refused {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "refused call {}", self.0)
+        }
+    }
+    impl std::error::Error for Refused {}
+
+    /// Ascending windows of exactly the requested count, every call counted.
+    struct Windows {
+        next: Cell<u64>,
+        calls: Cell<u64>,
+        refuse: Cell<bool>,
+    }
+    impl Windows {
+        fn from(start: u64) -> Self {
+            Self {
+                next: Cell::new(start),
+                calls: Cell::new(0),
+                refuse: Cell::new(false),
+            }
+        }
+    }
+    impl InodeSerials for Windows {
+        fn reserve(&self, count: u64) -> WorkspaceResult<(u64, u64)> {
+            self.calls.set(self.calls.get() + 1);
+            assert_eq!(count, SERIAL_REFILL, "a refill asks for one window");
+            if self.refuse.get() {
+                return Err(WorkspaceError::Service(Box::new(Refused(self.calls.get()))));
+            }
+            let start = self.next.get();
+            self.next.set(start + count);
+            Ok((start, count))
+        }
+    }
+    fn refusal(error: &WorkspaceError) -> Option<&Refused> {
+        match error {
+            WorkspaceError::Service(error) => error.downcast_ref::<Refused>(),
+            _ => None,
+        }
+    }
+    const MAIN: u64 = 5000;
+    const EARLY: u64 = 9000;
+
+    /// One call. Asserts that it made at most one attempt and returns the
+    /// serial, the early failure and which allocator it called.
+    fn take(
+        b: &Bench,
+        main: &Windows,
+        early: &Windows,
+        low_water: u64,
+    ) -> (u64, Option<WorkspaceError>, (u64, u64)) {
+        let before = (main.calls.get(), early.calls.get());
+        let (serial, failure) = b
+            .workspace
+            .next_serial_with_low_water(main, early, low_water)
+            .unwrap();
+        let made = (main.calls.get() - before.0, early.calls.get() - before.1);
+        assert!(made.0 + made.1 <= 1, "two attempts in one call: {made:?}");
+        (serial, failure, made)
+    }
+
+    #[test]
+    fn zero_low_water_never_attempts_early() {
+        let b = Bench::new("low-water-zero");
+        let (main, early) = (Windows::from(MAIN), Windows::from(EARLY));
+        for call in 0..SERIAL_REFILL {
+            let (serial, failure, made) = take(&b, &main, &early, 0);
+            assert_eq!(serial, MAIN + call);
+            assert!(failure.is_none());
+            assert_eq!(made, (u64::from(call == 0), 0), "call {call}");
+        }
+        // The window is exhausted: the next call is the one exhausted attempt.
+        let (serial, failure, made) = take(&b, &main, &early, 0);
+        assert_eq!((serial, made), (MAIN + SERIAL_REFILL, (1, 0)));
+        assert!(failure.is_none());
+        println!(
+            "LOW_WATER zero: calls={} main_attempts={} early_attempts={}",
+            SERIAL_REFILL + 1,
+            main.calls.get(),
+            early.calls.get()
+        );
+        assert_eq!((main.calls.get(), early.calls.get()), (2, 0));
+    }
+
+    #[test]
+    fn an_early_attempt_is_made_exactly_when_the_remainder_is_below_the_low_water() {
+        const LOW: u64 = 1000;
+        let b = Bench::new("low-water-exact");
+        let (main, early) = (Windows::from(MAIN), Windows::from(EARLY));
+        // Model: the unconsumed serials in the order they are handed out.
+        // The remainder a refill was made for is consumed before the refill.
+        let mut model: std::collections::VecDeque<u64> = Default::default();
+        let mut attempts = Vec::new();
+        for call in 0..2 * SERIAL_REFILL + 100 {
+            let exhausted = model.is_empty();
+            if exhausted {
+                model.extend(MAIN..MAIN + SERIAL_REFILL);
+            }
+            let expected = model.pop_front().unwrap();
+            let below = !exhausted && (model.len() as u64) < LOW;
+            if below {
+                let start = EARLY + early.calls.get() * SERIAL_REFILL;
+                model.extend(start..start + SERIAL_REFILL);
+            }
+            let (serial, failure, made) = take(&b, &main, &early, LOW);
+            assert_eq!(serial, expected, "call {call}");
+            assert!(failure.is_none());
+            assert_eq!(
+                made,
+                (u64::from(exhausted), u64::from(below)),
+                "call {call}"
+            );
+            if made != (0, 0) {
+                attempts.push((call, serial, made));
+            }
+        }
+        println!("LOW_WATER {LOW}: (call, serial, (main, early)) of every attempt = {attempts:?}");
+        // Call 0 reserved [5000, 6024). Call 24 took 5024 and left 999, the
+        // first remainder below 1,000: one early window [9000, 10024), kept
+        // behind the 999. Call 1048 took 9024 and left 999 again.
+        assert_eq!(
+            attempts,
+            [
+                (0, MAIN, (1, 0)),
+                (24, MAIN + 24, (0, 1)),
+                (1048, EARLY + 24, (0, 1)),
+                (2072, EARLY + SERIAL_REFILL + 24, (0, 1)),
+            ]
+        );
+        assert_eq!((main.calls.get(), early.calls.get()), (1, 3));
+    }
+
+    #[test]
+    fn an_early_failure_is_returned_with_the_serial_and_is_not_asked_again() {
+        // Just below the refill window: the second create is already below.
+        const LOW: u64 = SERIAL_REFILL - 1;
+        let b = Bench::new("low-water-failure");
+        let (main, early) = (Windows::from(MAIN), Windows::from(EARLY));
+        // No range: the one attempt is the exhausted one, 1,023 are left,
+        // which is not below 1,023.
+        let (serial, failure, made) = take(&b, &main, &early, LOW);
+        assert_eq!((serial, made), (MAIN, (1, 0)));
+        assert!(failure.is_none());
+
+        // The early attempt is refused: the serial is still returned, with
+        // the original refusal, and the call made that one attempt only.
+        early.refuse.set(true);
+        let (serial, failure, made) = take(&b, &main, &early, LOW);
+        assert_eq!((serial, made), (MAIN + 1, (0, 1)));
+        assert_eq!(refusal(failure.as_ref().unwrap()), Some(&Refused(1)));
+        // A later call is a new operation with its own single attempt; the
+        // serial of the refused one was consumed, not handed out again.
+        let (serial, failure, made) = take(&b, &main, &early, LOW);
+        assert_eq!((serial, made), (MAIN + 2, (0, 1)));
+        assert_eq!(refusal(failure.as_ref().unwrap()), Some(&Refused(2)));
+
+        // Once the allocator answers, that call's attempt extends the range,
+        // and the calls after it are above the low-water again.
+        early.refuse.set(false);
+        let (serial, failure, made) = take(&b, &main, &early, LOW);
+        assert_eq!((serial, made), (MAIN + 3, (0, 1)));
+        assert!(failure.is_none());
+        let (serial, failure, made) = take(&b, &main, &early, LOW);
+        assert_eq!((serial, made), (MAIN + 4, (0, 0)));
+        assert!(failure.is_none());
+        println!(
+            "LOW_WATER {LOW} with a refused early refill: main_attempts={} early_attempts={} (refused 2, answered 1)",
+            main.calls.get(),
+            early.calls.get()
+        );
+        assert_eq!((main.calls.get(), early.calls.get()), (1, 3));
+        // The remainder [5005, 6024) is consumed before the early window.
+        for expected in MAIN + 5..MAIN + SERIAL_REFILL {
+            assert_eq!(take(&b, &main, &early, 0).0, expected);
+        }
+        assert_eq!(take(&b, &main, &early, 0).0, EARLY);
+        assert_eq!((main.calls.get(), early.calls.get()), (1, 3));
+    }
+
+    #[test]
+    fn an_exhausted_range_is_one_refused_attempt_and_no_serial() {
+        // One serial per reservation, so every second call finds no range.
+        struct One(Cell<u64>);
+        impl InodeSerials for One {
+            fn reserve(&self, _: u64) -> WorkspaceResult<(u64, u64)> {
+                self.0.set(self.0.get() + 1);
+                Ok((70 + self.0.get(), 1))
+            }
+        }
+        let b = Bench::new("low-water-exhausted");
+        let (one, early) = (One(Cell::new(0)), Windows::from(EARLY));
+        // No range existed: no early attempt, whatever the low-water.
+        let taken = b
+            .workspace
+            .next_serial_with_low_water(&one, &early, u64::MAX)
+            .unwrap();
+        assert_eq!((taken.0, one.0.get(), early.calls.get()), (71, 1, 0));
+        assert!(taken.1.is_none());
+
+        // The range is exhausted and the one attempt is refused: no serial,
+        // the original refusal, and no early attempt beside it.
+        let main = Windows::from(MAIN);
+        main.refuse.set(true);
+        let refused = b
+            .workspace
+            .next_serial_with_low_water(&main, &early, u64::MAX)
+            .unwrap_err();
+        assert_eq!(refusal(&refused), Some(&Refused(1)));
+        assert_eq!((main.calls.get(), early.calls.get()), (1, 0));
+
+        // An early reservation outside the serial space is that attempt's
+        // failure; the serial the call took is still returned.
+        main.refuse.set(false);
+        assert_eq!(take(&b, &main, &early, 0).0, MAIN);
+        struct Zero;
+        impl InodeSerials for Zero {
+            fn reserve(&self, _: u64) -> WorkspaceResult<(u64, u64)> {
+                Ok((0, 8))
+            }
+        }
+        let (serial, failure) = b
+            .workspace
+            .next_serial_with_low_water(&main, &Zero, u64::MAX)
+            .unwrap();
+        assert_eq!(serial, MAIN + 1);
+        assert!(matches!(
+            failure,
+            Some(WorkspaceError::Content(ContentError::InvalidRecord(
+                "inode serial reservation"
+            )))
+        ));
+        assert_eq!(take(&b, &main, &early, 0).0, MAIN + 2);
+        println!(
+            "LOW_WATER exhausted: main_attempts={} early_attempts={}",
+            main.calls.get(),
+            early.calls.get()
+        );
+        assert_eq!((main.calls.get(), early.calls.get()), (2, 0));
+    }
+}

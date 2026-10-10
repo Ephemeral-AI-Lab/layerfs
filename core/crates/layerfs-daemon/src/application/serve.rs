@@ -97,6 +97,7 @@ impl Application {
                     installed.opened.store.clone(),
                     &self.owner,
                     self.native.as_ref(),
+                    l.serial_low_water,
                 ));
                 state.startup.installed = Some(installed);
                 state.startup.phase = DaemonPhase::ControlReady;
@@ -119,6 +120,7 @@ impl Application {
                         opened.store.clone(),
                         &self.owner,
                         self.native.as_ref(),
+                        l.serial_low_water,
                     ));
                     state.startup.phase = DaemonPhase::ControlReady;
                 } else {
