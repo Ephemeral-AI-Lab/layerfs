@@ -1,0 +1,40 @@
+{
+  "cause": "protocol loop ended by the nonzero-exit case",
+  "cause_type": "RuntimeError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8b-requalification-20261010/015-streams-exploratory-2/runtime.events.jsonl"
+  ],
+  "container": "0868d30d3058e6c2fd07ba2dfde75932fc6f6d9cb5ea74d0941a963305fcac9a",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "dffebb0cb0b38e18bff6ae1da2a8263c4eadffca5a14d13f98b192245a04bd0f",
+    "dffebb0cb0b38e18bff6ae1da2a8263c4eadffca5a14d13f98b192245a04bd0f",
+    "70760f95d971ea67ce2baa13d85fbaa8d1bc9a8b562354d10871a5bc08c571d4",
+    "70760f95d971ea67ce2baa13d85fbaa8d1bc9a8b562354d10871a5bc08c571d4",
+    "f080ffc84623348e55a4fa115e3da83f0cd4a0c334f766bd39655fd7c384d083",
+    "f080ffc84623348e55a4fa115e3da83f0cd4a0c334f766bd39655fd7c384d083",
+    "9397a9e2d02e427b83280ac4a5d9faae4df3ebd87e0fd51cf781349cc5c10d75",
+    "9397a9e2d02e427b83280ac4a5d9faae4df3ebd87e0fd51cf781349cc5c10d75",
+    "d7191c5c9e2e1ba3c0414621796b26d9724b4a663e54a4f60fd642862002caf7",
+    "d7191c5c9e2e1ba3c0414621796b26d9724b4a663e54a4f60fd642862002caf7",
+    "06c0d4e9e0f1bf29c8a07bda15e4ed9c32af5fb70dfe2636414596d5a2201aac",
+    "06c0d4e9e0f1bf29c8a07bda15e4ed9c32af5fb70dfe2636414596d5a2201aac",
+    "5ddca7860498c66b5ef78cbdc51fcee45e222622e00c4d7a7c660f5ee96b0473",
+    "5ddca7860498c66b5ef78cbdc51fcee45e222622e00c4d7a7c660f5ee96b0473",
+    "f72cdfa3ffac6dd722b928cf59a9a92be1c6fbb156c5731fddf05bd18a94f99f",
+    "f72cdfa3ffac6dd722b928cf59a9a92be1c6fbb156c5731fddf05bd18a94f99f",
+    "e4ee01b502ac0151f7f21fe4c83c25adac54115701b90691152fd408f73461e4",
+    "e4ee01b502ac0151f7f21fe4c83c25adac54115701b90691152fd408f73461e4",
+    "1a85c8d0f83220fc2b42785197d2dac64f844f16407ace2080b66d22c5fd5d69",
+    "1a85c8d0f83220fc2b42785197d2dac64f844f16407ace2080b66d22c5fd5d69",
+    "9ffb5e08d76dacc655b9ef3e3dfb7ebdbd8c0951271087f243fe13e74123b607",
+    "9ffb5e08d76dacc655b9ef3e3dfb7ebdbd8c0951271087f243fe13e74123b607"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 81266,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": null
+}

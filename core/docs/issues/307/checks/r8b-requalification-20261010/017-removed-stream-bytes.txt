@@ -1,0 +1,19 @@
+# Raw stream files over 65,537 bytes removed from receipts 014-016 by the lead before commit.
+# Each was pattern output of stream_source.py; length and SHA-256 recorded here from the file itself.
+
+014-streams-exploratory/runtime.events.artifacts/000057-command.stderr  1048577  69fe1dfe1b7f73ebeef153887b27b44f7a16b90ac9c5bc417d2420c9b4367e6b
+014-streams-exploratory/runtime.events.artifacts/000057-command.stdout  1048576  122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486
+014-streams-exploratory/runtime.events.artifacts/000064-command.stderr  67108864  19ef6ea64979a7a90963d5831814759088978ffdf8930fa357690e9b932d4ddd
+014-streams-exploratory/runtime.events.artifacts/000064-command.stdout  67108864  483ad0ec43fbb9dbbada98f8b5245d21188ecd51a00d6dfcafabc6d88a77d793
+015-streams-exploratory-2/runtime.events.artifacts/000057-command.stderr  1048577  69fe1dfe1b7f73ebeef153887b27b44f7a16b90ac9c5bc417d2420c9b4367e6b
+015-streams-exploratory-2/runtime.events.artifacts/000057-command.stdout  1048576  122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486
+015-streams-exploratory-2/runtime.events.artifacts/000064-command.stderr  67108864  19ef6ea64979a7a90963d5831814759088978ffdf8930fa357690e9b932d4ddd
+015-streams-exploratory-2/runtime.events.artifacts/000064-command.stdout  67108864  483ad0ec43fbb9dbbada98f8b5245d21188ecd51a00d6dfcafabc6d88a77d793
+015-streams-exploratory-2/runtime.events.artifacts/000080-command.stderr  1048576  ac1d31809564c888674d6cf62e76a84d3ff9887b0987136f489061a12fcff467
+015-streams-exploratory-2/runtime.events.artifacts/000080-command.stdout  1048576  122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486
+016-streams-exploratory-3/runtime.events.artifacts/000057-command.stderr  1048577  69fe1dfe1b7f73ebeef153887b27b44f7a16b90ac9c5bc417d2420c9b4367e6b
+016-streams-exploratory-3/runtime.events.artifacts/000057-command.stdout  1048576  122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486
+016-streams-exploratory-3/runtime.events.artifacts/000064-command.stderr  67108864  19ef6ea64979a7a90963d5831814759088978ffdf8930fa357690e9b932d4ddd
+016-streams-exploratory-3/runtime.events.artifacts/000064-command.stdout  67108864  483ad0ec43fbb9dbbada98f8b5245d21188ecd51a00d6dfcafabc6d88a77d793
+016-streams-exploratory-3/runtime.events.artifacts/000080-command.stderr  1048576  ac1d31809564c888674d6cf62e76a84d3ff9887b0987136f489061a12fcff467
+016-streams-exploratory-3/runtime.events.artifacts/000080-command.stdout  1048576  122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486

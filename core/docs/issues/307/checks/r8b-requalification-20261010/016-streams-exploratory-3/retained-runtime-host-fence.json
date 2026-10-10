@@ -1,0 +1,41 @@
+{
+  "cause": "protocol loop ended by the nonzero-exit case",
+  "cause_type": "RuntimeError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8b-requalification-20261010/016-streams-exploratory-3/runtime.events.jsonl"
+  ],
+  "container": "889cd0d97d54e38d209a54f615d83b0f032a17d64c8bc66753c23d03ff504c3e",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "b6adc4a22402c6ac841a8e0212f140a00def0bee56f32b03860fd80dbfeae335",
+    "b6adc4a22402c6ac841a8e0212f140a00def0bee56f32b03860fd80dbfeae335",
+    "455831200b1bd58d9c1b26f0246d399a97c3091b210e76320859f01f1f691023",
+    "455831200b1bd58d9c1b26f0246d399a97c3091b210e76320859f01f1f691023",
+    "264461ce9db41f45fa5f5681d8f545203ce0815406b74b4f487a36ef16ef6b56",
+    "264461ce9db41f45fa5f5681d8f545203ce0815406b74b4f487a36ef16ef6b56",
+    "23a51d5b05ea6b8320be44af89cfc8461b2a45f306ca7ebb9504370d0d5e629e",
+    "23a51d5b05ea6b8320be44af89cfc8461b2a45f306ca7ebb9504370d0d5e629e",
+    "ff03d0589f6bdcc98a29be784612df5b9ebd0dfb5ec69544904e9abe1032eaa2",
+    "ff03d0589f6bdcc98a29be784612df5b9ebd0dfb5ec69544904e9abe1032eaa2",
+    "e0fc8c988ac49ecd08b6f48dea16b6dc7b35cc29e6fcd4a7398744b25c5b7c09",
+    "e0fc8c988ac49ecd08b6f48dea16b6dc7b35cc29e6fcd4a7398744b25c5b7c09",
+    "0b8d227ed1f9af122e56a77637df33e5361ad26486b6f4a958c09d65abc0ef14",
+    "0b8d227ed1f9af122e56a77637df33e5361ad26486b6f4a958c09d65abc0ef14",
+    "8b6a84e7f8e0e8cd7ea6387b5e193c4eaf77c774fee5aaab721663b46d0b83ae",
+    "8b6a84e7f8e0e8cd7ea6387b5e193c4eaf77c774fee5aaab721663b46d0b83ae",
+    "c84c88213ff88c7333b61c4c7db8deb56d71a3053eee3bbc0fcb6007970c7014",
+    "c84c88213ff88c7333b61c4c7db8deb56d71a3053eee3bbc0fcb6007970c7014",
+    "99c6d04ada28da0a9f2569b9f831730974fb0cf350370b9289e1d554abda2637",
+    "99c6d04ada28da0a9f2569b9f831730974fb0cf350370b9289e1d554abda2637",
+    "1a69badbc98784968b5e4c330074e1e449b8e194fd79daf0c6d7e5b5b15323db",
+    "1a69badbc98784968b5e4c330074e1e449b8e194fd79daf0c6d7e5b5b15323db"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 81316,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "observed_host_exit": 1,
+  "original_operations_replayed": false,
+  "original_phase": null
+}

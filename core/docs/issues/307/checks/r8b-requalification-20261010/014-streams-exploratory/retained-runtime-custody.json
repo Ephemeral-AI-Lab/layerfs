@@ -1,0 +1,38 @@
+{
+  "cause": "original runtime failure: original_failure=SDK operation: Remote(ControlRefusal { code: Busy, phase: \"unmount:kernel\", moved: None, published: None, detail: \"kernel reported the mount busy; no terminal effect\" }); no replay or automatic teardown",
+  "cause_type": "RuntimeError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8b-requalification-20261010/014-streams-exploratory/runtime.events.jsonl"
+  ],
+  "container": "24117a15710eddf2e6449923051e8a2ca6d1259c5836929833a509e91b19a0b2",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "c9db43513396d0d856227aba1a04b7d112d4ed5bb5116e8c23512e73b3fc8800",
+    "c9db43513396d0d856227aba1a04b7d112d4ed5bb5116e8c23512e73b3fc8800",
+    "2d2010ead8b5dc6f597fafabd463bff23f238067e483193a8627763f4e09d903",
+    "2d2010ead8b5dc6f597fafabd463bff23f238067e483193a8627763f4e09d903",
+    "92adf02ffa5889bb97a97e83ca608c34f0ad34a38508d18d390c044a783a87c9",
+    "92adf02ffa5889bb97a97e83ca608c34f0ad34a38508d18d390c044a783a87c9",
+    "69ed7037b9a4e931926be3fd0ec848721df5c6a8dcf692688d6bb835af14c217",
+    "69ed7037b9a4e931926be3fd0ec848721df5c6a8dcf692688d6bb835af14c217",
+    "0889687b3c29c347bbe9fe5486b24037d293b53d729b39c8698729d9c153e1bb",
+    "0889687b3c29c347bbe9fe5486b24037d293b53d729b39c8698729d9c153e1bb",
+    "ecb13dc431be6b790fac5d3b44bd21f88ab44bb538eeb56f062a934902528a2b",
+    "ecb13dc431be6b790fac5d3b44bd21f88ab44bb538eeb56f062a934902528a2b",
+    "2365a9691e435a549a991ab1115ed59b47409b472a74af4318fbad880d47e65e",
+    "2365a9691e435a549a991ab1115ed59b47409b472a74af4318fbad880d47e65e",
+    "6cbc2c172c13ca2ca8a5d676b3792b8d5143b351b6f8a9d3560ff0121835c912",
+    "6cbc2c172c13ca2ca8a5d676b3792b8d5143b351b6f8a9d3560ff0121835c912",
+    "656fd859911f5704be5edbf56279c25b670202628a83f4b8acf7c37349f9b9c9",
+    "656fd859911f5704be5edbf56279c25b670202628a83f4b8acf7c37349f9b9c9",
+    "02de0be50c5af97f83cb70853fa24e4960a490471ccc18fe67513cac059978a4",
+    "02de0be50c5af97f83cb70853fa24e4960a490471ccc18fe67513cac059978a4"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 81170,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": null
+}
