@@ -69,3 +69,13 @@ criterion.
 | C-18 | FP-6-Runtime, FP-7-Runtime | withdrawn scope | Stressed per-stream ordering, a descendant holding a file, and explicit stream disposal are not constructible through the runtime protocol, like the cases of C-7 | Add such modes to the runtime harness |
 | C-19 | R2-STEP-2 | withdrawn scope | Startup and terminal failure paths beyond those the suites stage (FP-21 as rescoped by C-8) have no producer at a real mount | Product hooks |
 | C-20 | R4-6 | ruling | Sibling-page and Store work that grows with base size is a recorded property of the canonical format. The row's requirement is the change-sized producer, owner and validation counts, which pass | Canonical summaries, a format change |
+
+## Owner confirmation of C-1, 2026-10-10
+
+After the closure the owner was told what C-1 costs: bubblewrap, rootless
+container tools run inside a Workspace, and a browser's own sandbox fail with
+`EPERM`. The owner answered: **"yes, block those things"**, having said that
+security is not the main concern and the product should stay simple. C-1 is
+therefore an owner decision, not a lead decision awaiting review. Nothing in
+the product changed with this note. C-2 to C-20 have not been reviewed row by
+row.
