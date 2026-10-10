@@ -1,0 +1,64 @@
+$ python3 -B core/docs/issues/307/checks/r9b-recovery-catalogue-20261010/selfcheck.py --scratch <scratch>/selfcheck > core/docs/issues/307/checks/r9b-recovery-catalogue-20261010/selfcheck.txt
+catalogue_source_commit ea812d3f8283801f7957a7c09c84a67ae6cb9e86
+HEAD at check time      ea812d3f8283801f7957a7c09c84a67ae6cb9e86
+generate.py sha256      1ac2782b2c8b54d990628087fa1f87318fcb1612d7eeb747c997c07a5615bb42
+PASS  header script_sha256 equals generate.py
+
+== 1. two runs, byte comparison ==
+$ python3 -B core/docs/issues/307/checks/r9b-recovery-catalogue-20261010/generate.py --rev ea812d3f8283801f7957a7c09c84a67ae6cb9e86 --output-dir <scratch>/run-a
+  exit 0; rows 2347 (STRONG 1216, REVIEW 1131); missing pin values 7
+PASS  run-a exit status 0
+$ python3 -B core/docs/issues/307/checks/r9b-recovery-catalogue-20261010/generate.py --rev ea812d3f8283801f7957a7c09c84a67ae6cb9e86 --output-dir <scratch>/run-b
+  exit 0; rows 2347 (STRONG 1216, REVIEW 1131); missing pin values 7
+PASS  run-b exit status 0
+  reference-recovery-catalogue.jsonl
+    run-a     2eb396bf78f390d2c2cfa4f9ce3e244da23c903b7a771bff7dc024ba39da9875
+    run-b     2eb396bf78f390d2c2cfa4f9ce3e244da23c903b7a771bff7dc024ba39da9875
+    delivered 2eb396bf78f390d2c2cfa4f9ce3e244da23c903b7a771bff7dc024ba39da9875
+PASS  run-a and run-b identical: reference-recovery-catalogue.jsonl
+PASS  delivered file identical to run-a: reference-recovery-catalogue.jsonl
+  missing-pins.txt
+    run-a     2f1c26653fde9b35a2857f11c73de8d5bbdcc39ef38d0d51e7c386ce839dd19b
+    run-b     2f1c26653fde9b35a2857f11c73de8d5bbdcc39ef38d0d51e7c386ce839dd19b
+    delivered 2f1c26653fde9b35a2857f11c73de8d5bbdcc39ef38d0d51e7c386ce839dd19b
+PASS  run-a and run-b identical: missing-pins.txt
+PASS  delivered file identical to run-a: missing-pins.txt
+  README.md
+    run-a     f0ac349fe0c93b24d68cb6870d13a9c9a6b10ca70955a9b65491523b1bcf685e
+    run-b     f0ac349fe0c93b24d68cb6870d13a9c9a6b10ca70955a9b65491523b1bcf685e
+    delivered f0ac349fe0c93b24d68cb6870d13a9c9a6b10ca70955a9b65491523b1bcf685e
+PASS  run-a and run-b identical: README.md
+PASS  delivered file identical to run-a: README.md
+
+== 2. line counts (wc -l) ==
+      2348 reference-recovery-catalogue.jsonl
+         8 missing-pins.txt
+       418 README.md
+PASS  first line is the header
+PASS  header row_count equals rows present -- 2347 rows
+
+== 3. evidence_blob equals git rev-parse <catalogue commit>:<path> ==
+PASS  seeded sample (seed 20261010) of 200 rows, one git rev-parse each -- 0 mismatches
+PASS  all 2347 rows against one git ls-tree -r -- 0 mismatches
+
+== 4. row invariants ==
+PASS  no row path inside an excluded tree or this directory -- 0 inside
+PASS  no row path is absolute
+PASS  rows sorted by path and unique
+PASS  original_verdict_touched is false in every row and in the header
+PASS  class is STRONG or REVIEW and every row has a signal
+PASS  MISSING_OBJECT rows: recover_reference_at null, recoverable_as_executed false
+PASS  NOT_RECORDED rows: no pin, basis is the not-execution-pin fallback
+PASS  recoverable_as_executed only with a pin found in the row's own file
+PASS  named_reference_paths capped at 8
+PASS  every LOCAL_COMMIT/LOCAL_TREE pin value resolves in this clone (240 values)
+PASS  every MISSING_OBJECT pin value is absent from this clone (7 values)
+
+== 5. introduced_commit, seeded sample of 25 rows ==
+PASS  introduced_commit equals the last line of a per-path git log --diff-filter=A -- 0 mismatches
+
+== 6. the reference trees are untouched in the working tree ==
+PASS  git status --short -- crates core/reference-tests is empty
+recovery commit trees: crates 498dd1917812ae90efb8841f57e22bfc284e96fb, core/reference-tests 3a7fcdcc6f8d1610c896b9e2a2f89d2a0297f027
+
+RESULT: all checks passed

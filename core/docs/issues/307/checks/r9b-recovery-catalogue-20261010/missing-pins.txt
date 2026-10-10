@@ -1,0 +1,8 @@
+# value	keys	rows	STRONG	REVIEW	rows_where_pin_is_in_the_file_itself	example_evidence_path
+26a80a8efae63b7606c845f20c69aa3a1ccef292	head,layerfs_source_commit	8	4	4	2	docs/roadmap/0.1/0.1.5/issue100/40mb-experiment-results.md
+2753453933c55ed7f93eb21619c235668a01ef4c	layerfs_source_commit	19	19	0	16	docs/roadmap/0.1/0.1.4/issue88-native-analysis/depth-read/published/test-debt-ledger.md
+67f0943b394d920b6c142aad8c6af94340342ae7	revision	1	0	1	0	core/docs/issues/307/checks/s7-s9-all-state-handoff/tracker-before.json
+b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed	source_tip	23	11	12	3	benchmark/fs-bench-pro/shared/historical_access.py
+bfbc46c11dbb4d8dd949b54845e222cf42cd822f	layerfs_source_commit	1	1	0	1	docs/roadmap/0.1/0.1.4/issue91-campaign/terminal-r26/campaign/r26-preparation/control-final-preflight.json
+ca4e1c3a1c61129bd95ee57dd744bc53c2e635bb	source_commit	1	0	1	0	benchmark/fs-bench-pro/families/historical_access/mod.rs
+e54af84653cd1a22b3f26631dbd19eafb895a7b4	source_commit	6	1	5	0	core/docs/architecture/proposal/service-daemon-transport/implementation/01-product.md
