@@ -1,0 +1,20 @@
+# exploratory: the exact filter of layerfs-sandbox topology.rs SECCOMP on the pinned image, unprivileged identity 501:20, CAP_SYS_ADMIN added to the container as the Sandbox does
+unshare -Ur:
+unshare: unshare failed: Operation not permitted
+exit=1
+unshare -Urm:
+unshare: unshare failed: Operation not permitted
+exit=1
+fork and threads:
+thread ok
+fork True
+thread ok
+fork True
+Seccomp:	2
+Seccomp_filters:	1
+R4_WALL seconds<=2 limit=60s lock_wait=0s
+EXIT 0
+# same without the filter (Engine default, as before C-1):
+unshare -Urm exit=0
+R4_WALL seconds<=1 limit=60s lock_wait=0s
+EXIT 0

@@ -64,17 +64,22 @@ class Judge(unittest.TestCase):
             value["own_descriptors"]["7"] = "/layerfs-store/global/store.sqlite"
         self.assertEqual(len(self.failures(change)), 1)
 
-    def test_namespace_creation_alone_is_recorded_but_protected_access_inside_fails(self):
+    def test_namespace_creation_fails_and_protected_access_inside_fails_again(self):
         def allowed(value):
             value["namespace"] = {"unshare_user_mount": "ALLOWED",
                                   "inside:/layerfs-local": "EACCES", "inside:umount2": "EINVAL",
                                   "inside:mountinfo_has_workspace": True}
-        self.assertEqual(self.failures(allowed), [])
+        self.assertEqual(len(self.failures(allowed)), 1)
 
         def readable(value):
             allowed(value)
             value["namespace"]["inside:/layerfs-local"] = "ALLOWED"
-        self.assertEqual(len(self.failures(readable)), 1)
+        self.assertEqual(len(self.failures(readable)), 2)
+
+    def test_a_refused_namespace_passes(self):
+        def refused(value):
+            value["namespace"] = {"unshare_user_mount": "EPERM"}
+        self.assertEqual(self.failures(refused), [])
 
     def test_a_probe_outside_the_declared_workspaces_fails(self):
         def change(value):

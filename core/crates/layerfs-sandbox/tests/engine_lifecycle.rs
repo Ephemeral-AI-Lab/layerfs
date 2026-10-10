@@ -43,8 +43,11 @@ fn binary(label: &str) -> (std::path::PathBuf, File) {
     drop(file);
     (path.clone(), File::open(path).unwrap())
 }
+/// The container's system-call filter as the Engine carries it inside a JSON
+/// string: user-namespace creation denied, everything else allowed.
+const SECCOMP: &str = r#"seccomp={\"defaultAction\":\"SCMP_ACT_ALLOW\",\"syscalls\":[{\"names\":[\"unshare\",\"clone\"],\"action\":\"SCMP_ACT_ERRNO\",\"errnoRet\":1,\"args\":[{\"index\":0,\"value\":268435456,\"valueTwo\":268435456,\"op\":\"SCMP_CMP_MASKED_EQ\"}]},{\"names\":[\"clone3\"],\"action\":\"SCMP_ACT_ERRNO\",\"errnoRet\":38}]}"#;
 fn endpoint() -> Vec<u8> {
-    fixed(200,format!(r#"{{"Id":"{CID}","Image":"{IMAGE}","State":{{"Running":true,"Paused":false,"Restarting":false,"Dead":false}},"Config":{{"User":"0:0","Tty":false,"Entrypoint":["/usr/local/bin/layerfs-daemon"],"Cmd":["--config","/layerfs-local/config/daemon.setup"]}},"HostConfig":{{"Privileged":false,"CapAdd":["CAP_SYS_ADMIN"],"Devices":[{{"PathOnHost":"/dev/fuse","PathInContainer":"/dev/fuse","CgroupPermissions":"rwm"}}],"SecurityOpt":["no-new-privileges=true","apparmor=unconfined"],"RestartPolicy":{{"Name":"no"}},"LogConfig":{{"Type":"json-file"}}}},"Mounts":[{{"Type":"volume","Name":"lfs-test-borrowed","Destination":"/layerfs-store","RW":true,"Driver":"local"}}],"NetworkSettings":{{"Ports":{{"30421/tcp":[{{"HostIp":"127.0.0.1","HostPort":"54321"}}]}}}}}}"#).as_bytes())
+    fixed(200,format!(r#"{{"Id":"{CID}","Image":"{IMAGE}","State":{{"Running":true,"Paused":false,"Restarting":false,"Dead":false}},"Config":{{"User":"0:0","Tty":false,"Entrypoint":["/usr/local/bin/layerfs-daemon"],"Cmd":["--config","/layerfs-local/config/daemon.setup"]}},"HostConfig":{{"Privileged":false,"CapAdd":["CAP_SYS_ADMIN"],"Devices":[{{"PathOnHost":"/dev/fuse","PathInContainer":"/dev/fuse","CgroupPermissions":"rwm"}}],"SecurityOpt":["no-new-privileges=true","apparmor=unconfined","{SECCOMP}"],"RestartPolicy":{{"Name":"no"}},"LogConfig":{{"Type":"json-file"}}}},"Mounts":[{{"Type":"volume","Name":"lfs-test-borrowed","Destination":"/layerfs-store","RW":true,"Driver":"local"}}],"NetworkSettings":{{"Ports":{{"30421/tcp":[{{"HostIp":"127.0.0.1","HostPort":"54321"}}]}}}}}}"#).as_bytes())
 }
 #[test]
 fn streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup() {
@@ -122,11 +125,16 @@ fn streamed_private_archive_exact_marker_endpoint_and_borrowed_cleanup() {
         r#""Privileged":false"#,
         r#""CapAdd":["CAP_SYS_ADMIN"]"#,
         r#""Devices":[{"PathOnHost":"/dev/fuse","PathInContainer":"/dev/fuse","CgroupPermissions":"rwm"}]"#,
-        r#""SecurityOpt":["no-new-privileges=true","apparmor=unconfined"]"#,
         r#""User":"0:0""#,
     ] {
         assert!(create.contains(field), "{field}");
     }
+    // Nothing in the container may create a user namespace, so no command can
+    // hold a private copy of a Workspace mount.
+    let security =
+        format!(r#""SecurityOpt":["no-new-privileges=true","apparmor=unconfined","{SECCOMP}"]"#);
+    assert!(create.contains(&security), "{security}");
+    assert_eq!(create.matches("seccomp=").count(), 1);
     assert_eq!(create.matches("CAP_").count(), 1);
     assert_eq!(create.matches("PathOnHost").count(), 1);
     fs::remove_file(path).unwrap();
@@ -150,6 +158,9 @@ fn widened_or_missing_native_access_is_never_reported_as_the_endpoint() {
             r#""no-new-privileges=true","apparmor=unconfined""#,
             r#""apparmor=unconfined""#,
         ),
+        // The system-call filter not named as one, and with a weaker answer.
+        (r#"","seccomp="#, r#"","#),
+        (r#"\"errnoRet\":1,"#, r#"\"errnoRet\":0,"#),
     ] {
         assert!(exact.contains(from), "{from}");
         let altered = exact.replacen(from, to, 1);

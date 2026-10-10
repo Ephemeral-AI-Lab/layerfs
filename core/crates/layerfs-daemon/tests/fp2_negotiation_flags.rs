@@ -29,15 +29,18 @@
 //! effect. The other forbidden flags have no single-request signature and
 //! stay at receipt scope.
 //!
-//! NOT in scope, and not asserted here: the observed maximum READ and WRITE
-//! request sizes of the FP-2 row. No public observation of a request's size
-//! exists, and whether a system-call fixture on the test's own threads is
-//! acceptable is a pending owner ruling (plan section 6).
+//! The observed maximum READ and WRITE request sizes of the FP-2 row are the
+//! third test (owner decision C-2, 2026-10-10): the request service's own
+//! accounting reports the largest READ size and WRITE length the kernel
+//! sent, and one megabyte written and read back in single calls must stay
+//! at or below the negotiated 131072 in both directions. The observation is
+//! the product's, at the callback; it is not an independent trace.
 //!
-//! Reported, not resolved: section 8.1 says "Loops | 2"; the receipt and
-//! `layerfs-fuse` `dispatch/types.rs` (`RECEIVE_SLOTS = 1`) say one. The test
-//! prints the conflict and asserts only that the receipt, control Status and
-//! the process's own thread table agree with each other.
+//! Loops: section 8.1 said "Loops | 2" until 2026-10-10, when owner decision
+//! C-9 corrected it to the product's one receive loop per mount
+//! (`layerfs-fuse` `dispatch/types.rs`, `RECEIVE_SLOTS = 1`). The test asserts
+//! that the receipt, control Status and the process's own thread table agree
+//! on one.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
 #[path = "support/fusectl.rs"]
@@ -65,8 +68,8 @@ use rig::{root, Rig};
 use std::{
     collections::BTreeSet,
     fs::{self, OpenOptions},
-    io::Write,
-    os::unix::fs::MetadataExt,
+    io::{Read, Write},
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
     process::Command as Process,
 };
 
@@ -399,15 +402,15 @@ fn fp2_the_ready_receipt_is_exactly_the_section_8_1_profile_with_every_forbidden
     assert_eq!(congestion, u64::from(receipt.congestion_threshold));
     assert!(receipt.abort_bound, "the abort control was bound at Attach");
 
-    // Loops: reported against section 8.1, asserted only for agreement of
-    // the receipt, control Status and the kernel's thread table.
+    // Loops: section 8.1's one, in the receipt, control Status and the
+    // kernel's thread table.
     let status = rig.harness.status(ready.token);
     let native = status.native.unwrap();
     assert_eq!(native.phase, NativePhase::Ready);
     let work = native.work.unwrap();
     let threads = loop_threads();
     println!(
-        "FP-2 SPEC_CONFLICT loops: specification section 8.1 says \"Loops | 2\"; receipt.loops={} status(loops_configured={} loops_entered={}) receive-loop threads in /proc/self/task={threads}; reported, not resolved",
+        "FP-2 loops: specification section 8.1 says one; receipt.loops={} status(loops_configured={} loops_entered={}) receive-loop threads in /proc/self/task={threads}",
         receipt.loops, work.loops_configured, work.loops_entered
     );
     assert_eq!(
@@ -416,6 +419,7 @@ fn fp2_the_ready_receipt_is_exactly_the_section_8_1_profile_with_every_forbidden
         "{work:?}"
     );
     assert_eq!(threads, usize::from(receipt.loops), "thread count");
+    assert_eq!(receipt.loops, 1, "section 8.1: one receive loop");
     // Reported, not judged. The pinned library hides FUSE_INIT_EXT from the
     // offered set it shows the filesystem (`KernelConfig::capabilities`) and
     // always adds it to its INIT reply when the kernel sent it
@@ -532,6 +536,76 @@ fn fp2_the_kernel_sends_the_requests_of_a_connection_without_four_forbidden_capa
         5,
         "WRITEBACK_CACHE is not in effect: {receipt}"
     );
+    drop(guard);
+    let closed = rig.harness.try_unmount(helper).unwrap();
+    assert_eq!(closed.reply, Reply::Unmounted(helper));
+    drop(closed);
+    rig.finish();
+}
+
+/// One field of the Debug-rendered request accounting in a drain receipt.
+fn field(receipt: &str, name: &str) -> u64 {
+    let key = format!("{name}: ");
+    let at = receipt.find(&key).unwrap_or_else(|| panic!("{receipt}")) + key.len();
+    let digits: String = receipt[at..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().unwrap()
+}
+
+/// FP-2, request maxima: one megabyte handed to the kernel in one write and
+/// asked back in one direct read reaches the daemon in frames of at most the
+/// negotiated 131072 bytes, by the request service's own accounting.
+#[test]
+fn fp2_the_largest_read_and_write_frames_stay_within_the_negotiated_131072() {
+    const LIMIT: u64 = 131_072;
+    const LENGTH: usize = 1 << 20;
+    let rig = Rig::new("fp2-maxima");
+    let helper = rig.harness.bind(1);
+    let ready = rig.mount(2);
+    let guard = Mounted(ready.directory.clone());
+    let mount = root(&ready);
+    assert_eq!(u64::from(ready.receipt.max_write), LIMIT);
+    assert_eq!(u64::from(ready.receipt.max_readahead), LIMIT);
+
+    let bytes: Vec<u8> = (0..LENGTH).map(|index| (index % 251) as u8).collect();
+    let path = mount.join("fp2-maxima.bin");
+    let mut file = fs::File::create(&path).unwrap();
+    // One call with the whole megabyte; the kernel does the splitting.
+    assert_eq!(file.write(&bytes).unwrap(), LENGTH);
+    drop(file);
+    // A direct read asks the daemon, not the page cache the write filled.
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECT)
+        .open(&path)
+        .unwrap();
+    let mut back = vec![0_u8; LENGTH];
+    assert_eq!(file.read(&mut back).unwrap(), LENGTH);
+    drop(file);
+    assert!(back == bytes, "the megabyte read back differs");
+
+    let receipt = rig.unmount(&ready);
+    let counts = opcodes(&receipt);
+    let count = |opcode: Opcode| counts[opcode as usize];
+    let (read, write) = (
+        field(&receipt, "largest_read"),
+        field(&receipt, "largest_write"),
+    );
+    println!(
+        "FP-2 request maxima: largest_read={read} largest_write={write} limit={LIMIT} read_frames={} write_frames={} bytes={LENGTH}",
+        count(Opcode::Read),
+        count(Opcode::Write),
+    );
+    assert!(read > 0 && read <= LIMIT, "largest READ {read}: {receipt}");
+    assert!(
+        write > 0 && write <= LIMIT,
+        "largest WRITE {write}: {receipt}"
+    );
+    // Frames of at most the limit need at least this many for a megabyte.
+    assert!(count(Opcode::Read) >= LENGTH as u64 / LIMIT, "{receipt}");
+    assert!(count(Opcode::Write) >= LENGTH as u64 / LIMIT, "{receipt}");
     drop(guard);
     let closed = rig.harness.try_unmount(helper).unwrap();
     assert_eq!(closed.reply, Reply::Unmounted(helper));

@@ -5,6 +5,20 @@ use super::{
 };
 use crate::RuntimeError;
 use std::io::Read;
+/// The container's whole system-call filter. It denies creation of a user
+/// namespace (`CLONE_NEWUSER` to `unshare` or `clone`; `clone3` answers
+/// `ENOSYS`, which the C library follows with `clone`) and allows everything
+/// else. An unprivileged command can make a mount namespace only inside a
+/// user namespace of its own, so with this no copy of a Workspace mount can
+/// exist outside the daemon's namespace and a normal unmount stays truthful.
+/// It replaces the Engine's default filter; the command identity holds no
+/// capability and, with no user namespace, cannot gain one.
+pub(super) const SECCOMP: &str = concat!(
+    r#"seccomp={"defaultAction":"SCMP_ACT_ALLOW","syscalls":["#,
+    r#"{"names":["unshare","clone"],"action":"SCMP_ACT_ERRNO","errnoRet":1,"#,
+    r#""args":[{"index":0,"value":268435456,"valueTwo":268435456,"op":"SCMP_CMP_MASKED_EQ"}]},"#,
+    r#"{"names":["clone3"],"action":"SCMP_ACT_ERRNO","errnoRet":38}]}"#
+);
 pub(super) fn config<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
     let mut bits = 0;
     let mut valid = true;
@@ -37,7 +51,10 @@ pub(super) fn host<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
             valid &= !j.boolean()?;
         } else if key.equals("SecurityOpt") {
             once(&mut bits, 2)?;
-            valid &= strings(j, &["no-new-privileges=true", "apparmor=unconfined"])?;
+            valid &= strings(
+                j,
+                &["no-new-privileges=true", "apparmor=unconfined", SECCOMP],
+            )?;
         } else if key.equals("CapAdd") {
             once(&mut bits, 16)?;
             valid &= strings(j, &["CAP_SYS_ADMIN"])?;

@@ -59,6 +59,9 @@ output owner cannot repeat its copy. Slow caller sinks provide ordinary
 backpressure; count saturation is reported and never becomes a total-flow cap.
 Output EOF establishes transport completion, not process/descendant exit,
 filesystem-request drain or complete production of every potential future byte.
+A command's streams end when the command exits: bytes a descendant writes to an
+inherited stream afterwards are not delivered and are not an error (owner
+decision C-6, 2026-10-10).
 
 The adapter's process-specific cancel returns an explicit unsupported capability
 before effects. Ordinary stdin/stdout/stderr and exit inspection remain available.

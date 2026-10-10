@@ -684,7 +684,7 @@ its mounted coherence and resource proofs pass.
 | Opens | `FOPEN_KEEP_CACHE`, no `FOPEN_DIRECT_IO` | open reply flags | — |
 | Request window | `max_write` and `max_readahead` 131072 | `KernelConfig` setters inside `init` | negotiated values |
 | Background | `max_background` 1, congestion threshold 1 | `KernelConfig` | negotiated values and fusectl read-back |
-| Loops | 2, sharing the descriptor | `Config.n_threads` | thread count |
+| Loops | 1 (corrected 2026-10-10, owner decision C-9: the product runs one receive loop per mount; this row said 2) | `Config.n_threads` | thread count |
 | Writeback | `FUSE_WRITEBACK_CACHE` not requested | absence asserted | selected flag set |
 | Not requested, absence asserted | `AUTO_INVAL_DATA`, `ATOMIC_O_TRUNC`, open-less flags, both `KILLPRIV` flags, READDIRPLUS, PARALLEL_DIROPS, CACHE_SYMLINKS, EXPLICIT_INVAL_DATA | only `add_capabilities` exists; ASYNC_READ, BIG_WRITES and MAX_PAGES are fuser defaults that cannot be removed | selected flag set |
 | Granularity | 1 ns | default | — |

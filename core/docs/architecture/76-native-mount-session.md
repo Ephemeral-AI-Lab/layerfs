@@ -234,6 +234,14 @@ daemon does not wait or retry on its behalf.
 The Docker [container configuration](../../crates/layerfs-sandbox/src/backend/docker/container.rs)
 adds exactly `CapAdd: ["CAP_SYS_ADMIN"]`, one `/dev/fuse` device mapping and
 `apparmor=unconfined`, keeping `Privileged: false` and `no-new-privileges=true`.
+Since 2026-10-10 (owner decision C-1) it also sends one inline system-call
+filter that denies creating a user namespace (`CLONE_NEWUSER` to `unshare` or
+`clone`; `clone3` answers `ENOSYS`) and allows everything else. An unprivileged
+command can make a mount namespace only inside a user namespace of its own, so
+no copy of a Workspace mount can exist outside the daemon's namespace and a
+normal Unmount stays truthful against any holder. A tool that needs an
+unprivileged user namespace fails in a Workspace command with `EPERM`. The
+filter replaces the Engine's default one for this container.
 [Topology inspection](../../crates/layerfs-sandbox/src/backend/docker/topology.rs)
 requires exactly that set: a missing, widened or additional capability, device
 or security option is not reported as the daemon endpoint. Commands still run

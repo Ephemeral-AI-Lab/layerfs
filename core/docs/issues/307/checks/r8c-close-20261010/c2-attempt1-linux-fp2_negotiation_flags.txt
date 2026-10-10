@@ -1,0 +1,12 @@
+# linux pinned image sha256:378b799ef433..., cargo --locked, HEAD 5654d0181, uncommitted product/test paths=8, LAYERFS_CONSTRUCTION_WORKERS=1, FUSE device + SYS_ADMIN
+# command: docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -v ROOT:/work:ro -w /work/core/crates/layerfs-daemon IMAGE timeout 100 /work/core/target/cluster2-linux/debug/deps/fp2_negotiation_flags-536288768e673dda --test-threads=1 
+
+running 3 tests
+test fp2_the_kernel_sends_the_requests_of_a_connection_without_four_forbidden_capabilities ... ok
+test fp2_the_largest_read_and_write_frames_stay_within_the_negotiated_131072 ... ok
+test fp2_the_ready_receipt_is_exactly_the_section_8_1_profile_with_every_forbidden_flag_absent ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+R4_WALL seconds<=1 limit=115s lock_wait=0s
+EXIT 0

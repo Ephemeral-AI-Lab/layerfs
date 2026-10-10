@@ -78,7 +78,8 @@ publishing Overlay owner job:
 **Early serial refill (R8b, 2026-10-10; owner ruling P-1).**
 `DaemonLimits.serial_low_water` is an explicit value of the private
 configuration record; startup refuses one at or above the 1,024-serial refill
-window, and 0 makes no early attempt. Application assembly gives it to the
+window, and 0 makes no early attempt. The runtime and the SDK examples deploy
+256 (2026-10-10, owner decision C-4). Application assembly gives it to the
 Store once, before any Workspace is served. `reserve_serial` calls
 [`StorePorts::take_serial`](../../crates/layerfs-daemon/src/store/ports.rs),
 which passes it to `Workspace::next_serial_with_low_water`
@@ -224,5 +225,8 @@ the request no more. An engine reservation refusal is `ENOSPC` with no effect.
 ## Accounting
 
 Every mutating opcode is counted by opcode and disposal like the read path.
-`store_units` counts WRITE units that carried the page-cache flag. The counts
-are reported in the connection's drain receipt.
+`store_units` counts WRITE units that carried the page-cache flag.
+`largest_read` and `largest_write` are the largest READ size and WRITE data
+length the kernel has sent on the connection (2026-10-10, owner decision C-2):
+the observed request maxima beside the negotiated 131072. The counts are
+reported in the connection's drain receipt.

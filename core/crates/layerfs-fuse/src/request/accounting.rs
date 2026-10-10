@@ -72,6 +72,8 @@ pub struct Accounting {
     disposals: [AtomicU64; DISPOSALS],
     forget_units: AtomicU64,
     store_units: AtomicU64,
+    largest_read: AtomicU64,
+    largest_write: AtomicU64,
 }
 /// Monotonic counters copied without a lock; fields are individually exact.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -87,6 +89,11 @@ pub struct OpcodeWork {
     /// WRITE units that carried the per-request page-cache flag: stores from
     /// a shared mapping, counted among the WRITE opcode's frames.
     pub store_units: u64,
+    /// Largest size any READ frame asked for, and largest data length any
+    /// WRITE frame carried, as the kernel sent them: the observed request
+    /// maxima beside the negotiated ones. Zero until the first such frame.
+    pub largest_read: u64,
+    pub largest_write: u64,
 }
 impl OpcodeWork {
     pub fn count(&self, opcode: Opcode) -> u64 {
@@ -103,6 +110,8 @@ impl Default for Accounting {
             disposals: std::array::from_fn(|_| AtomicU64::new(0)),
             forget_units: AtomicU64::new(0),
             store_units: AtomicU64::new(0),
+            largest_read: AtomicU64::new(0),
+            largest_write: AtomicU64::new(0),
         }
     }
 }
@@ -119,6 +128,14 @@ impl Accounting {
     pub(super) fn store_unit(&self) {
         self.store_units.fetch_add(1, Ordering::Relaxed);
     }
+    pub(super) fn read_size(&self, size: u32) {
+        self.largest_read
+            .fetch_max(u64::from(size), Ordering::Relaxed);
+    }
+    pub(super) fn write_size(&self, length: usize) {
+        self.largest_write
+            .fetch_max(length as u64, Ordering::Relaxed);
+    }
     pub fn observe(&self) -> OpcodeWork {
         let disposal = |value: Disposal| self.disposals[value as usize].load(Ordering::Relaxed);
         OpcodeWork {
@@ -130,6 +147,8 @@ impl Accounting {
             unadmitted: disposal(Disposal::Unadmitted),
             forget_units: self.forget_units.load(Ordering::Relaxed),
             store_units: self.store_units.load(Ordering::Relaxed),
+            largest_read: self.largest_read.load(Ordering::Relaxed),
+            largest_write: self.largest_write.load(Ordering::Relaxed),
         }
     }
 }

@@ -7,11 +7,12 @@ ownership and modes, and an explicit terminal teardown. Functional only; no
 timing claim. One attempt per operation; a failure keeps the original custody.
 
 Judged: no protected cell may be allowed, the command holds no inherited
-descriptor, its identity and capability sets are the declared ones, both
-Workspaces and the controller's own Status keep answering afterwards.
-Recorded and not judged, because no product declaration exists to judge them
-against: unprivileged namespace creation, sibling visibility, an
-unauthenticated connect to the control listener, and name metadata.
+descriptor, its identity and capability sets are the declared ones, it cannot
+create a user and mount namespace (the Sandbox denies it since owner decision
+C-1, 2026-10-10), both Workspaces and the controller's own Status keep
+answering afterwards. Recorded and not judged: sibling visibility and an
+unauthenticated connect to the control listener, both declared as they are by
+owner decision C-11, and name metadata.
 """
 import argparse
 import json
@@ -29,9 +30,8 @@ PROBE_SECONDS = 20
 PORT = 30421
 DENIED_PROCESS_READ = "EPERM"
 OPEN_DECLARATIONS = {
-    "namespace": "PENDING OWNER: whether an ordinary command may create a user and mount namespace",
-    "sibling": "PENDING OWNER: no declared claim about a sibling Workspace of the same daemon",
-    "control_listener": "RECORDED: an unauthenticated connect is not a path alias or inherited descriptor",
+    "sibling": "DECLARED (C-11): Workspaces of one daemon are visible to each other's commands",
+    "control_listener": "DECLARED (C-11): a connect gives nothing without the authenticated channel",
 }
 
 
@@ -61,6 +61,8 @@ def judge(report, directories, uid, gid):
         if name not in {"0", "1", "2"}:
             failures.append("inherited descriptor %s -> %s" % (name, target))
     inside = report["namespace"]
+    if inside.get("unshare_user_mount") == "ALLOWED":
+        failures.append("the command created a user and mount namespace")
     for key, value in inside.items():
         if key.startswith("inside:/") and value == "ALLOWED":
             failures.append("protected path readable inside a private namespace: " + key)

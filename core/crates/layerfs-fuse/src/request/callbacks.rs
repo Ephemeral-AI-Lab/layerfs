@@ -145,6 +145,7 @@ impl Filesystem for NativeFilesystem {
         _: Option<LockOwner>,
         reply: ReplyData,
     ) {
+        self.accounting.read_size(size);
         let Some((permit, reply)) =
             self.admit(Opcode::Read, ReadReply::Data(reply, offset, size), 0)
         else {
@@ -520,6 +521,7 @@ impl Filesystem for NativeFilesystem {
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
+        self.accounting.write_size(data.len());
         if data.len() > layerfs_overlay::WRITE_WINDOW {
             return self.refuse(Opcode::Write, reply, ReplyWrite::error, Errno::EINVAL);
         }

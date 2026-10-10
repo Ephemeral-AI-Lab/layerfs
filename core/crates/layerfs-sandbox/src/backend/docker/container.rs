@@ -3,6 +3,7 @@ use super::{
     container_types::{CreatePhase, Sandbox, SandboxCreateFailure, SandboxRequest},
     json::{once, Json},
     strings::quoted,
+    topology::SECCOMP,
     Docker,
 };
 use crate::{ContainerId, RuntimeError, WireFailure};
@@ -11,12 +12,15 @@ impl SandboxRequest {
     /// Native mounting needs exactly one capability and one device. The
     /// container stays unprivileged with no-new-privileges; commands run as
     /// their own nonroot identity and inherit neither.
+    /// Nothing in it may create a user namespace: see [`SECCOMP`].
     fn encode(&self, w: &mut dyn Write) -> io::Result<()> {
         w.write_all(b"{\"Image\":")?;
         quoted(w, &self.image)?;
         w.write_all(b",\"User\":\"0:0\",\"Entrypoint\":[\"/usr/local/bin/layerfs-daemon\"],\"Cmd\":[\"--config\",\"/layerfs-local/config/daemon.setup\"],\"Tty\":false,\"ExposedPorts\":{")?;
         quoted(w, &format!("{}/tcp", self.port))?;
-        w.write_all(b":{}},\"HostConfig\":{\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\"},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\"],\"Mounts\":[{\"Type\":\"volume\",\"Source\":")?;
+        w.write_all(b":{}},\"HostConfig\":{\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\"},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\",")?;
+        quoted(w, SECCOMP)?;
+        w.write_all(b"],\"Mounts\":[{\"Type\":\"volume\",\"Source\":")?;
         quoted(w, &self.store_volume)?;
         w.write_all(b",\"Target\":\"/layerfs-store\",\"ReadOnly\":false,\"VolumeOptions\":{\"NoCopy\":true}}],\"PortBindings\":{")?;
         quoted(w, &format!("{}/tcp", self.port))?;
