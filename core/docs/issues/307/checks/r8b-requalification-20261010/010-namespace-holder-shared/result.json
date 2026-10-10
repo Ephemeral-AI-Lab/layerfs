@@ -1,0 +1,139 @@
+{
+  "arrangement": "shared",
+  "construction_workers": 1,
+  "container_stop": "EXPLICIT docker stop by this controller, exit 0",
+  "custody": {
+    "cause": "OriginalFailure: original runtime failure: original_failure=SDK operation: Remote(ControlRefusal { code: Busy, phase: \"unmount:kernel\", moved: None, published: None, detail: \"kernel reported the mount busy; no terminal effect\" }); no replay or automatic teardown",
+    "cause_type": "RuntimeError",
+    "child_event_receipts": [
+      "core/docs/issues/307/checks/r8b-requalification-20261010/010-namespace-holder-shared/runtime.events.jsonl"
+    ],
+    "container": "4f5c2031d6fada3edd347d8cabc0c9f651105d2f04a1fc8d8c4e628050596114",
+    "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+    "exec_ids": [
+      "f9e8128b46b15c39e91bf0d4a4045dbc20f64235e2594934002372d12de43201",
+      "f9e8128b46b15c39e91bf0d4a4045dbc20f64235e2594934002372d12de43201"
+    ],
+    "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+    "host_pid": 77813,
+    "host_signal": "NOT_ATTEMPTED",
+    "host_wait_stop_seconds": 1,
+    "independent_failures": [],
+    "observed_host_exit": 1,
+    "original_operations_replayed": false,
+    "original_phase": null
+  },
+  "eligible": false,
+  "global_profile": "Disposable/WAL/OFF",
+  "hold_seconds": 14,
+  "holder": {
+    "command_mount_namespace": "mnt:[4026532962]",
+    "cwd": "/workspaces/1",
+    "hold_seconds": 14.0,
+    "mount_namespace": "mnt:[4026532962]",
+    "pid": 31,
+    "private": false,
+    "schema": "r8b-namespace-holder-v1"
+  },
+  "operation_attempts": 1,
+  "phases": [
+    {
+      "host_end_ns": 875536673416125,
+      "host_start_ns": 875536654611500,
+      "key": "c6cfe5fba0ef157247aa7b80bc5bc88df405549867fc072fda3f68e5c4d9b7c4",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 572594833,
+        "elapsed_ns": 17667541,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 3,
+          "control_send_records_before": 1,
+          "directory": "/workspaces/1",
+          "key": "c6cfe5fba0ef157247aa7b80bc5bc88df405549867fc072fda3f68e5c4d9b7c4"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 7,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 17667541,
+          "end_ns": 572524166,
+          "start_ns": 554856625
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(c6cfe5fba0ef157247aa7b80bc5bc88df405549867fc072fda3f68e5c4d9b7c4), namespace: 1 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(c6cfe5fba0ef157247aa7b80bc5bc88df405549867fc072fda3f68e5c4d9b7c4), namespace: 1 }, directory: \"/workspaces/1\", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 875536680839291,
+      "host_start_ns": 875536673449208,
+      "key": "570c8ffdfd2bc7607a4bd595955a5f40b4c9440164f97e94c9546c60d98e53a5",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 580133333,
+        "elapsed_ns": 6952083,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 5,
+          "control_send_records_before": 3,
+          "directory": "/workspaces/2",
+          "key": "570c8ffdfd2bc7607a4bd595955a5f40b4c9440164f97e94c9546c60d98e53a5"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 8,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 6952083,
+          "end_ns": 580093541,
+          "start_ns": 573141458
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(570c8ffdfd2bc7607a4bd595955a5f40b4c9440164f97e94c9546c60d98e53a5), namespace: 2 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(570c8ffdfd2bc7607a4bd595955a5f40b4c9440164f97e94c9546c60d98e53a5), namespace: 2 }, directory: \"/workspaces/2\", receipt: NativeReceipt { mount: 3, root: 1, mount_id: 160, device_major: 0, device_minor: 92, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 875536763154208,
+      "host_start_ns": 875536681200458,
+      "key": "c6cfe5fba0ef157247aa7b80bc5bc88df405549867fc072fda3f68e5c4d9b7c4",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 662467666,
+        "elapsed_ns": 81067084,
+        "event": "command",
+        "fields": {
+          "command_sha256": "dee667b9364fecde1ab675bd7f9e1a28c096ffa8fab78f7101a1b288701cdb67",
+          "container": "4f5c2031d6fada3edd347d8cabc0c9f651105d2f04a1fc8d8c4e628050596114",
+          "exec": "f9e8128b46b15c39e91bf0d4a4045dbc20f64235e2594934002372d12de43201",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/010-namespace-holder-shared/runtime.events.artifacts/000009-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/010-namespace-holder-shared/runtime.events.artifacts/000009-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 15,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 81067084,
+          "end_ns": 662364500,
+          "start_ns": 581297416
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"4f5c2031d6fada3edd347d8cabc0c9f651105d2f04a1fc8d8c4e628050596114\"), exec: ExecId(\"f9e8128b46b15c39e91bf0d4a4045dbc20f64235e2594934002372d12de43201\"), running: false, exit_code: Some(0), pid: Some(94799) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 5000000000
+    }
+  ],
+  "schema": "r8b-namespace-holder-controller-v1",
+  "seals": {
+    "controller": "8e81fe5df2fb486515feb76f9b578391647ec224796410f04a1f7e466ce9ea98",
+    "daemon": "068df9797dc169f93e00e09ca65da2769a220bc879618ea26ee4f9bfbf636d2e",
+    "holder": "e340ad7e0d4325cc6c2a5dd52479cea06474da6a8e4e6eafa42afd729a9aa986",
+    "inputs": "846505e4bab7dfca57509e03ae530db4f712aa3bde556131aa1c1f72f51b2fe5",
+    "runtime": "a553bc6a1301c0dd633dff40da45887ba778ef4bc3abb156a9a76b1454de9843"
+  },
+  "status": "COMPLETE",
+  "unmount_original_failure": "OriginalFailure: original runtime failure: original_failure=SDK operation: Remote(ControlRefusal { code: Busy, phase: \"unmount:kernel\", moved: None, published: None, detail: \"kernel reported the mount busy; no terminal effect\" }); no replay or automatic teardown",
+  "unmount_seconds": 0.003,
+  "unmount_while_held": "FAILED",
+  "verdict": "NONE: exploratory observation",
+  "volume": "layerfs-r8-full-proof-20261010-2cd69f68db34"
+}

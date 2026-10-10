@@ -1,0 +1,1 @@
+{"command_mount_namespace": "mnt:[4026532962]", "cwd": "/workspaces/1", "hold_seconds": 14.0, "mount_namespace": "mnt:[4026533100]", "pid": 31, "private": true, "schema": "r8b-namespace-holder-v1", "unshare": "ALLOWED"}

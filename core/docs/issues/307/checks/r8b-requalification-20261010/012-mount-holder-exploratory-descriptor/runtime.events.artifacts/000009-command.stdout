@@ -1,0 +1,1 @@
+{"arrangement": "descriptor", "command_mount_namespace": "mnt:[4026532962]", "cwd": "/", "descriptors": ["0", "1", "2", "3", "4"], "file": "./.DS_Store", "hold_seconds": 9.0, "mount": "/workspaces/1", "mount_namespace": "mnt:[4026532962]", "pid": 30, "schema": "r8b-mount-holder-v1"}

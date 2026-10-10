@@ -1,0 +1,47 @@
+/layerfs-store directory 755 0 0
+/layerfs-store/global directory 700 0 0
+/layerfs-store/global/store.sqlite regular file 600 0 0
+/layerfs-store/global/store.sqlite-shm regular file 600 0 0
+/layerfs-store/global/store.sqlite-wal regular empty file 600 0 0
+/layerfs-local directory 700 0 0
+/layerfs-local/config directory 700 0 0
+/layerfs-local/overlay directory 700 0 0
+/layerfs-local/config/daemon.setup regular file 600 0 0
+/layerfs-local/overlay/overlay.sqlite regular file 600 0 0
+/dev/fuse character special file 600 0 0
+/workspaces directory 755 0 0
+/workspaces/1 directory 755 501 20
+/workspaces/2 directory 755 501 20
+DAEMON
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+CapEff:	00000000a82425fb
+NoNewPrivs:	1
+Seccomp:	2
+yama-absent
+MOUNTINFO
+260 162 0:80 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/146067/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/137845/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120408/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120407/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120406/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120405/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120404/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/146068/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/146068/work
+262 260 0:109 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+263 260 0:110 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+264 263 0:111 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666
+265 260 0:112 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro
+266 265 0:39 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw
+267 263 0:107 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+268 263 0:113 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k
+269 260 254:1 /docker/volumes/layerfs-r8-full-proof-20261010-2cd69f68db34/_data /layerfs-store rw,relatime master:1 - ext4 /dev/vda1 rw,discard
+270 260 254:1 /docker/containers/66dc2806fa33c163aab936f8e70cc68e1e9a5b2bc285cc8146fc5f6802b0ee57/resolv.conf /etc/resolv.conf rw,relatime - ext4 /dev/vda1 rw,discard
+271 260 254:1 /docker/containers/66dc2806fa33c163aab936f8e70cc68e1e9a5b2bc285cc8146fc5f6802b0ee57/hostname /etc/hostname rw,relatime - ext4 /dev/vda1 rw,discard
+272 260 254:1 /docker/containers/66dc2806fa33c163aab936f8e70cc68e1e9a5b2bc285cc8146fc5f6802b0ee57/hosts /etc/hosts rw,relatime - ext4 /dev/vda1 rw,discard
+163 262 0:109 /bus /proc/bus ro,nosuid,nodev,noexec,relatime - proc proc rw
+164 262 0:109 /fs /proc/fs ro,nosuid,nodev,noexec,relatime - proc proc rw
+165 262 0:109 /irq /proc/irq ro,nosuid,nodev,noexec,relatime - proc proc rw
+166 262 0:109 /sys /proc/sys ro,nosuid,nodev,noexec,relatime - proc proc rw
+167 262 0:109 /sysrq-trigger /proc/sysrq-trigger ro,nosuid,nodev,noexec,relatime - proc proc rw
+168 262 0:110 /null /proc/interrupts rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+169 262 0:110 /null /proc/kcore rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+172 262 0:110 /null /proc/keys rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+185 262 0:114 / /proc/scsi ro,relatime - tmpfs tmpfs ro
+186 262 0:110 /null /proc/timer_list rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+187 265 0:115 / /sys/firmware ro,relatime - tmpfs tmpfs ro
+159 260 0:91 / /workspaces/1 rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072
+160 260 0:92 / /workspaces/2 rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072

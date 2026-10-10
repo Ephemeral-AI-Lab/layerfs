@@ -1,0 +1,20 @@
+{
+  "cause": "OriginalFailure: original runtime failure: original_failure=SDK operation: Retained(TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db), namespace: 1 }, stage: Join, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 1, handoffs: 1, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }), detail: \"connection drain stopped at Join: loops Some(SessionSnapshot { phase: Serving, revision: 4, configured: 1, created: 1, entered: 1, exited: 0, joined: 0 }), work Some(MountWork { received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, owned_input_bytes: 0, future_bytes: 0, receive_units: 1, completed: 1, steps: 3, wakes: 2, terminal: true })\", forced: None }); no replay or automatic teardown",
+  "cause_type": "RuntimeError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8b-requalification-20261010/010-namespace-holder-private/runtime.events.jsonl"
+  ],
+  "container": "10a7e55c44545db3eabe93dc1c3d6ba7eea7addbf7ba872a3a84709fe21e22c9",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "afcb123c48019830682d62adc2e5d33a842a2b86f4f2feebd1abf9c35589d712",
+    "afcb123c48019830682d62adc2e5d33a842a2b86f4f2feebd1abf9c35589d712"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 77858,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": null
+}

@@ -1,0 +1,140 @@
+{
+  "arrangement": "private",
+  "construction_workers": 1,
+  "container_stop": "EXPLICIT docker stop by this controller, exit 0",
+  "custody": {
+    "cause": "OriginalFailure: original runtime failure: original_failure=SDK operation: Retained(TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db), namespace: 1 }, stage: Join, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 1, handoffs: 1, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }), detail: \"connection drain stopped at Join: loops Some(SessionSnapshot { phase: Serving, revision: 4, configured: 1, created: 1, entered: 1, exited: 0, joined: 0 }), work Some(MountWork { received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, owned_input_bytes: 0, future_bytes: 0, receive_units: 1, completed: 1, steps: 3, wakes: 2, terminal: true })\", forced: None }); no replay or automatic teardown",
+    "cause_type": "RuntimeError",
+    "child_event_receipts": [
+      "core/docs/issues/307/checks/r8b-requalification-20261010/010-namespace-holder-private/runtime.events.jsonl"
+    ],
+    "container": "10a7e55c44545db3eabe93dc1c3d6ba7eea7addbf7ba872a3a84709fe21e22c9",
+    "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+    "exec_ids": [
+      "afcb123c48019830682d62adc2e5d33a842a2b86f4f2feebd1abf9c35589d712",
+      "afcb123c48019830682d62adc2e5d33a842a2b86f4f2feebd1abf9c35589d712"
+    ],
+    "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+    "host_pid": 77858,
+    "host_signal": "NOT_ATTEMPTED",
+    "host_wait_stop_seconds": 1,
+    "independent_failures": [],
+    "observed_host_exit": 1,
+    "original_operations_replayed": false,
+    "original_phase": null
+  },
+  "eligible": false,
+  "global_profile": "Disposable/WAL/OFF",
+  "hold_seconds": 14,
+  "holder": {
+    "command_mount_namespace": "mnt:[4026532962]",
+    "cwd": "/workspaces/1",
+    "hold_seconds": 14.0,
+    "mount_namespace": "mnt:[4026533100]",
+    "pid": 31,
+    "private": true,
+    "schema": "r8b-namespace-holder-v1",
+    "unshare": "ALLOWED"
+  },
+  "operation_attempts": 1,
+  "phases": [
+    {
+      "host_end_ns": 875554532614791,
+      "host_start_ns": 875554520745916,
+      "key": "2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 526077500,
+        "elapsed_ns": 10969542,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 3,
+          "control_send_records_before": 1,
+          "directory": "/workspaces/1",
+          "key": "2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 7,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 10969542,
+          "end_ns": 526034834,
+          "start_ns": 515065292
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db), namespace: 1 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db), namespace: 1 }, directory: \"/workspaces/1\", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 875554539429000,
+      "host_start_ns": 875554532651750,
+      "key": "273e58e1cfb55d571b893418f9e7270356802acf5703b37054aaa43a1149aabb",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 533006542,
+        "elapsed_ns": 6290458,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 5,
+          "control_send_records_before": 3,
+          "directory": "/workspaces/2",
+          "key": "273e58e1cfb55d571b893418f9e7270356802acf5703b37054aaa43a1149aabb"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 8,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 6290458,
+          "end_ns": 532976917,
+          "start_ns": 526686459
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(273e58e1cfb55d571b893418f9e7270356802acf5703b37054aaa43a1149aabb), namespace: 2 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(273e58e1cfb55d571b893418f9e7270356802acf5703b37054aaa43a1149aabb), namespace: 2 }, directory: \"/workspaces/2\", receipt: NativeReceipt { mount: 3, root: 1, mount_id: 160, device_major: 0, device_minor: 92, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 875554612849333,
+      "host_start_ns": 875554539790791,
+      "key": "2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 606031625,
+        "elapsed_ns": 71815875,
+        "event": "command",
+        "fields": {
+          "command_sha256": "71c662a5fe6ff61c7bbb66b6acc14a0dba2bb112251821862c91f5ae1aa48f2d",
+          "container": "10a7e55c44545db3eabe93dc1c3d6ba7eea7addbf7ba872a3a84709fe21e22c9",
+          "exec": "afcb123c48019830682d62adc2e5d33a842a2b86f4f2feebd1abf9c35589d712",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/010-namespace-holder-private/runtime.events.artifacts/000009-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/010-namespace-holder-private/runtime.events.artifacts/000009-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 15,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 71815875,
+          "end_ns": 605970667,
+          "start_ns": 534154792
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"10a7e55c44545db3eabe93dc1c3d6ba7eea7addbf7ba872a3a84709fe21e22c9\"), exec: ExecId(\"afcb123c48019830682d62adc2e5d33a842a2b86f4f2feebd1abf9c35589d712\"), running: false, exit_code: Some(0), pid: Some(95065) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 5000000000
+    }
+  ],
+  "schema": "r8b-namespace-holder-controller-v1",
+  "seals": {
+    "controller": "8e81fe5df2fb486515feb76f9b578391647ec224796410f04a1f7e466ce9ea98",
+    "daemon": "068df9797dc169f93e00e09ca65da2769a220bc879618ea26ee4f9bfbf636d2e",
+    "holder": "e340ad7e0d4325cc6c2a5dd52479cea06474da6a8e4e6eafa42afd729a9aa986",
+    "inputs": "846505e4bab7dfca57509e03ae530db4f712aa3bde556131aa1c1f72f51b2fe5",
+    "runtime": "a553bc6a1301c0dd633dff40da45887ba778ef4bc3abb156a9a76b1454de9843"
+  },
+  "status": "COMPLETE",
+  "unmount_original_failure": "OriginalFailure: original runtime failure: original_failure=SDK operation: Retained(TeardownCustody { token: WorkspaceToken { workspace: WorkspaceId(2c765be7b8686c3132283b13b896896a02d972b66d2558d186f78920d13168db), namespace: 1 }, stage: Join, detached: true, work: Some(NativeWork { loops_configured: 1, loops_entered: 1, loops_exited: 0, loops_joined: 0, received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, completed: 1, handoffs: 1, inline: 0, refused: 0, terminal: 0, unadmitted: 0, forget_units: 0 }), detail: \"connection drain stopped at Join: loops Some(SessionSnapshot { phase: Serving, revision: 4, configured: 1, created: 1, entered: 1, exited: 0, joined: 0 }), work Some(MountWork { received: 0, admitted: 0, queued: 0, running: 0, parked: 0, retained: 0, owned_input_bytes: 0, future_bytes: 0, receive_units: 1, completed: 1, steps: 3, wakes: 2, terminal: true })\", forced: None }); no replay or automatic teardown",
+  "unmount_seconds": 5.004,
+  "unmount_while_held": "FAILED",
+  "verdict": "NONE: exploratory observation",
+  "volume": "layerfs-r8-full-proof-20261010-2cd69f68db34"
+}
