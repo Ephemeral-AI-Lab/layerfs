@@ -1,0 +1,7 @@
+# linux release daemon at 307618496aadd3900d412b9d5ea9eab4267293da, pinned image, source hashes checked first
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 58.45s
+R4_WALL seconds<=60 limit=585s lock_wait=0s
+EXIT 0
+f44900cfc975901b7101f4874f708390b6f7401981e06d608b3df52a50848c0e  core/target/r8b-linux-release/release/layerfs-daemon

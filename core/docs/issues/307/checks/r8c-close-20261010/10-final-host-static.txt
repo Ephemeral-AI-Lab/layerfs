@@ -1,0 +1,20 @@
+# final host checks at 307618496aadd3900d412b9d5ea9eab4267293da, tree 4922d6171609ec2a1aeaf40cb2ba88c0220664d3
+## cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+R4_WALL seconds<=6 limit=120s lock_wait=0s
+EXIT 0
+## boundary guard
+PASS: scanned 674 production Rust/SQL files; semantic review still required
+R4_WALL seconds<=1 limit=120s lock_wait=0s
+EXIT 0
+## fuser provenance (known refusal: r7-passthrough manifest, OWNER-3)
+{
+  "checked_manifests_locks_configs": 101,
+  "errors": [
+    "core/benchmark/r7-passthrough/Cargo.lock: locked fuser has a local/replacement source",
+    "core/benchmark/r7-passthrough/Cargo.toml: patch override of fuser is not the authorized timestamp patch"
+  ],
+  "authorized_patch_verified": false,
+  "registry_package_verified": false
+}
+R4_WALL seconds<=2 limit=120s lock_wait=0s
+EXIT 1

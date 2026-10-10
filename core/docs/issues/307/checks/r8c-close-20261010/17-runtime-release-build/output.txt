@@ -1,0 +1,7 @@
+# host release runtime at 307618496aadd3900d412b9d5ea9eab4267293da
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-r7-runtime v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/r7-runtime)
+    Finished `release` profile [optimized] target(s) in 3.83s
+R4_WALL seconds<=5 limit=585s lock_wait=0s
+EXIT 0
+fdd962b7258903252bf097cd1be22f8acd56d3047369d08b68affe4c491d0573  core/target/r8b-host-release/release/layerfs-r7-runtime

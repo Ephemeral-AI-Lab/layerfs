@@ -1,0 +1,7 @@
+# host clippy at 307618496aadd3900d412b9d5ea9eab4267293da: cargo +1.85.1 clippy --locked --manifest-path core/Cargo.toml --all-targets -- -D warnings
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-sandbox)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.84s
+R4_WALL seconds<=7 limit=560s lock_wait=0s
+EXIT 0

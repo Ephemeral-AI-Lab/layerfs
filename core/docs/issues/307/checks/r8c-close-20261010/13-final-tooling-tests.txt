@@ -1,0 +1,19 @@
+# tooling tests at 307618496aadd3900d412b9d5ea9eab4267293da
+## python3 -B -m unittest discover -s core/tools -p test_*.py
+Ran 50 tests in 0.174s
+
+OK
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0
+## python3 -B -m unittest discover -s core/benchmark/r8-tools/tests -p test_*.py
+
+OK
+{"cache": "natural, setup copy warmth declared; functional only", "construction_workers": 1, "custody": {"host_pid": null, "no_child": true}, "full_byte_stop_seconds": 100, "global_profile": "Disposable/WAL/OFF", "operation_attempts": 1, "original_failure": "original Popen refusal without child", "original_failure_type": "OSError", "performance_samples": 0, "phases": [], "registration_sha256": "04bfb8dbdcc893d7ff9ec26640ded3a9822ba9bf1c10dae3228ffde74d573aec", "schema": "r8-full-proof-controller-v1", "source_commit": "registered-source", "status": "FAIL"}
+R4_WALL seconds<=2 limit=100s lock_wait=0s
+EXIT 0
+## python3 -B -m unittest discover -s tools -p test_*.py
+Ran 25 tests in 0.078s
+
+OK
+R4_WALL seconds<=1 limit=100s lock_wait=0s
+EXIT 0
