@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "core/target/r8b-host-release/release/layerfs-r7-runtime",
+    "serve",
+    "--socket",
+    "/Users/yifanxu/.docker/run/docker.sock",
+    "--volume",
+    "layerfs-r8-full-proof-20261010-b8b718c0807e",
+    "--daemon",
+    "core/target/r8b-linux-release/release/layerfs-daemon",
+    "--manifest",
+    "/tmp/layerfs-r7-full-installed-20261009.manifest",
+    "--receipt",
+    "core/docs/issues/307/checks/r8c-close-20261010/37-holder-descriptor/runtime.events.jsonl",
+    "--uid",
+    "501",
+    "--gid",
+    "20"
+  ],
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8c-close-20261010/37-holder-descriptor/runtime.events.jsonl"
+  ],
+  "host_group": 10518,
+  "host_pid": 10518,
+  "timeout_disposition": "host timeout does not stop Docker exec/container; exact owned IDs retained; lead explicit cancellation/stop only"
+}

@@ -1,0 +1,40 @@
+{
+  "cause": "protocol loop ended by the nonzero-exit case",
+  "cause_type": "RuntimeError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8c-close-20261010/40-streams/runtime.events.jsonl"
+  ],
+  "container": "42beb58872d1dd24a9a0ee6eda14f645391bab53ceda03931a50ed149276288c",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "f4718db7356d603156eb5ceeaa07938bdafb878a878b5e82c9dd53cea1d85907",
+    "f4718db7356d603156eb5ceeaa07938bdafb878a878b5e82c9dd53cea1d85907",
+    "c4c682b8b243397a731ff63b857b39976fb8ec72b29ffee79c87705f3cd3e0af",
+    "c4c682b8b243397a731ff63b857b39976fb8ec72b29ffee79c87705f3cd3e0af",
+    "4e115b7122babfd436070f6a2981cd23dc31b920f78a7612f46108e69311e8f7",
+    "4e115b7122babfd436070f6a2981cd23dc31b920f78a7612f46108e69311e8f7",
+    "5d733a25c3d3241e95e1f5f447f501c5e56cae5dbf05b206701788340e147e46",
+    "5d733a25c3d3241e95e1f5f447f501c5e56cae5dbf05b206701788340e147e46",
+    "e4923c0e10de9ad8043b3f1078aace1d1543b704be31a3f0bd55f83ddf6e778a",
+    "e4923c0e10de9ad8043b3f1078aace1d1543b704be31a3f0bd55f83ddf6e778a",
+    "0415562e87f50d7d504b57645317f21023e79300a9ef3210367a444b39e7a8e2",
+    "0415562e87f50d7d504b57645317f21023e79300a9ef3210367a444b39e7a8e2",
+    "cdae89ba9ca021e71c443df073a15ef8290235325bbf8053d0ca91da86b652ed",
+    "cdae89ba9ca021e71c443df073a15ef8290235325bbf8053d0ca91da86b652ed",
+    "41108d0666f0cafdb65094bd03d4eda074d39c342194a011a49f25a9fb7630ad",
+    "41108d0666f0cafdb65094bd03d4eda074d39c342194a011a49f25a9fb7630ad",
+    "baa646aff7c5e48df9db68bd223fc2d661dda502d8c01a69e8857f8b2d9f532c",
+    "baa646aff7c5e48df9db68bd223fc2d661dda502d8c01a69e8857f8b2d9f532c",
+    "02722be6a005f0eb6351d7748cc1621d8c3a909af5f27ed07b14a65fe07e3693",
+    "02722be6a005f0eb6351d7748cc1621d8c3a909af5f27ed07b14a65fe07e3693",
+    "e3f9b67d1a8b48945fd7710605d11ef1e4322b70df3fd66f746ad51f9d13dcf8",
+    "e3f9b67d1a8b48945fd7710605d11ef1e4322b70df3fd66f746ad51f9d13dcf8"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 12268,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": null
+}

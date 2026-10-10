@@ -1,0 +1,20 @@
+{
+  "cause": "OriginalFailure: original runtime failure: original_failure=SDK operation: Remote(ControlRefusal { code: Busy, phase: \"unmount:kernel\", moved: None, published: None, detail: \"kernel reported the mount busy; no terminal effect\" }); no replay or automatic teardown",
+  "cause_type": "RuntimeError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8c-close-20261010/37-holder-descriptor/runtime.events.jsonl"
+  ],
+  "container": "2526ffd9114f45b029696e37b71febb843bcdb79904c1917133739a8239f51f7",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "8aecb2c4fa8f11c32b448c6388a020852a0299ab5cc087aa24a0e8548e97e12a",
+    "8aecb2c4fa8f11c32b448c6388a020852a0299ab5cc087aa24a0e8548e97e12a"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 10518,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": null
+}

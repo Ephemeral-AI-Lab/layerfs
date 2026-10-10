@@ -57,3 +57,15 @@ command with `EPERM`. What it replaces: the container no longer runs under
 Docker's default filter, whose other denials are capability-gated in the
 kernel for the unprivileged command identity; the confinement proof is run
 again at the new identity.
+
+## Addendum: three more decisions, found while mapping every row
+
+Taken under the same instruction after the registered proofs, when each row's
+remaining text was checked against C-1 to C-17. None changes a registered
+criterion.
+
+| ID | Row | Kind | Decision | Alternative |
+| --- | --- | --- | --- | --- |
+| C-18 | FP-6-Runtime, FP-7-Runtime | withdrawn scope | Stressed per-stream ordering, a descendant holding a file, and explicit stream disposal are not constructible through the runtime protocol, like the cases of C-7 | Add such modes to the runtime harness |
+| C-19 | R2-STEP-2 | withdrawn scope | Startup and terminal failure paths beyond those the suites stage (FP-21 as rescoped by C-8) have no producer at a real mount | Product hooks |
+| C-20 | R4-6 | ruling | Sibling-page and Store work that grows with base size is a recorded property of the canonical format. The row's requirement is the change-sized producer, owner and validation counts, which pass | Canonical summaries, a format change |

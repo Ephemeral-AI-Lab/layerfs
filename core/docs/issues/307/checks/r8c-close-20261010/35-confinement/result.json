@@ -1,0 +1,1223 @@
+{
+  "cells": {
+    "protected": 84,
+    "recorded": 21,
+    "total": 105
+  },
+  "construction_workers": 1,
+  "container_stop": "ACKNOWLEDGED",
+  "gid": 20,
+  "global_profile": "Disposable/WAL/OFF",
+  "host_exit": 0,
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "judged_failures": [],
+  "not_judged": {
+    "control_listener": "DECLARED (C-11): a connect gives nothing without the authenticated channel",
+    "sibling": "DECLARED (C-11): Workspaces of one daemon are visible to each other's commands"
+  },
+  "operation_attempts": 1,
+  "overall_wall_stop_seconds": 60,
+  "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+  "phases": [
+    {
+      "host_end_ns": 882227386419833,
+      "host_start_ns": 882227378435750,
+      "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 317719042,
+        "elapsed_ns": 7177417,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 3,
+          "control_send_records_before": 1,
+          "directory": "/workspaces/1",
+          "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 7,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 7177417,
+          "end_ns": 317671542,
+          "start_ns": 310494125
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db), namespace: 1 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db), namespace: 1 }, directory: \"/workspaces/1\", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 882227391021916,
+      "host_start_ns": 882227386447458,
+      "key": "ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 322485833,
+        "elapsed_ns": 4236000,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 5,
+          "control_send_records_before": 3,
+          "directory": "/workspaces/2",
+          "key": "ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 8,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 4236000,
+          "end_ns": 322457625,
+          "start_ns": 318221625
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4), namespace: 2 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4), namespace: 2 }, directory: \"/workspaces/2\", receipt: NativeReceipt { mount: 3, root: 1, mount_id: 160, device_major: 0, device_minor: 92, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 882227690179625,
+      "host_start_ns": 882227471865625,
+      "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 621438500,
+        "elapsed_ns": 217363584,
+        "event": "command",
+        "fields": {
+          "command_sha256": "e50001bfb9fe022c2e8b7b7dde735b7328c7f73a2972cc322310b63640fdcec0",
+          "container": "ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f",
+          "exec": "e52867c040bf398324503d8418224b46168fec333dacf4966476099d8683f9b2",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000009-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000009-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 15,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 217363584,
+          "end_ns": 621342917,
+          "start_ns": 403979333
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f\"), exec: ExecId(\"e52867c040bf398324503d8418224b46168fec333dacf4966476099d8683f9b2\"), running: false, exit_code: Some(0), pid: Some(81938) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 22000000000
+    },
+    {
+      "host_end_ns": 882227782482541,
+      "host_start_ns": 882227745156375,
+      "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 713917500,
+        "elapsed_ns": 36375709,
+        "event": "command",
+        "fields": {
+          "command_sha256": "4c7e616d052a998299c7e20deab15f82b503ba53ab72d8285c6910278d570d63",
+          "container": "ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f",
+          "exec": "a65c589fae1e2e4f7b6ee2998794ac7016036e680e80283094c268bd0bbc1d38",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000016-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000016-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 22,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 36375709,
+          "end_ns": 713839417,
+          "start_ns": 677463708
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f\"), exec: ExecId(\"a65c589fae1e2e4f7b6ee2998794ac7016036e680e80283094c268bd0bbc1d38\"), running: false, exit_code: Some(0), pid: Some(81987) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 882227800237375,
+      "host_start_ns": 882227782499541,
+      "key": "ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 731693292,
+        "elapsed_ns": 16859417,
+        "event": "command",
+        "fields": {
+          "command_sha256": "4c7e616d052a998299c7e20deab15f82b503ba53ab72d8285c6910278d570d63",
+          "container": "ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f",
+          "exec": "96dea482e4ebab95cd81426a54f874a0599f211372e5fdff064d401e8d31308b",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000023-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000023-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 29,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 16859417,
+          "end_ns": 731624000,
+          "start_ns": 714764583
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f\"), exec: ExecId(\"96dea482e4ebab95cd81426a54f874a0599f211372e5fdff064d401e8d31308b\"), running: false, exit_code: Some(0), pid: Some(82007) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 882227936876166,
+      "host_start_ns": 882227800253500,
+      "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db",
+      "operation": "snapshot",
+      "original_event": {
+        "at_ns": 868265542,
+        "elapsed_ns": 133214458,
+        "event": "external_snapshot",
+        "fields": {
+          "container": "ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f",
+          "stderr": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000031-external_snapshot.stderr",
+          "stdout": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/runtime.events.artifacts/000031-external_snapshot.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 33,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 133214458,
+          "end_ns": 868237083,
+          "start_ns": 735022625
+        },
+        "value": "status=ExitStatus(unix_wait_status(0))"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 882227942916250,
+      "host_start_ns": 882227936933458,
+      "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db",
+      "operation": "unmount",
+      "original_event": {
+        "at_ns": 874298000,
+        "elapsed_ns": 5496041,
+        "event": "unmount",
+        "fields": {
+          "control_send_records_after": 7,
+          "control_send_records_before": 6,
+          "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 34,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 5496041,
+          "end_ns": 874276958,
+          "start_ns": 868780917
+        },
+        "value": "key=6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db token=WorkspaceToken { workspace: WorkspaceId(6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db), namespace: 1 }; logical_terminal=true; physical_cleanup requires its own original observation"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 882227946310958,
+      "host_start_ns": 882227942958833,
+      "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db",
+      "operation": "cleanup",
+      "original_event": {
+        "at_ns": 877756833,
+        "elapsed_ns": 2255708,
+        "event": "cleanup",
+        "fields": {
+          "control_send_records_after": 8,
+          "control_send_records_before": 7,
+          "key": "6dc6f9c057f918baba9786f253dcc36c341df6fcf8d1f787417b1e2d45b5e8db",
+          "state": "Gone"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 35,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 2255708,
+          "end_ns": 877738333,
+          "start_ns": 875482625
+        },
+        "value": "original read-only cleanup observation; no replay or maintenance invocation"
+      },
+      "wall_stop_ns": 4999996916
+    },
+    {
+      "host_end_ns": 882227949544541,
+      "host_start_ns": 882227946336416,
+      "key": "ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4",
+      "operation": "unmount",
+      "original_event": {
+        "at_ns": 881007542,
+        "elapsed_ns": 2826792,
+        "event": "unmount",
+        "fields": {
+          "control_send_records_after": 9,
+          "control_send_records_before": 8,
+          "key": "ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 36,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 2826792,
+          "end_ns": 880996125,
+          "start_ns": 878169333
+        },
+        "value": "key=ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4 token=WorkspaceToken { workspace: WorkspaceId(ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4), namespace: 2 }; logical_terminal=true; physical_cleanup requires its own original observation"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 882227952096375,
+      "host_start_ns": 882227949562875,
+      "key": "ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4",
+      "operation": "cleanup",
+      "original_event": {
+        "at_ns": 883565875,
+        "elapsed_ns": 2193708,
+        "event": "cleanup",
+        "fields": {
+          "control_send_records_after": 10,
+          "control_send_records_before": 9,
+          "key": "ca70dbaad107ee5190a046cad384031ace719ac639173ed421d55ebe1ce45ba4",
+          "state": "Gone"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 37,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 2193708,
+          "end_ns": 883555500,
+          "start_ns": 881361792
+        },
+        "value": "original read-only cleanup observation; no replay or maintenance invocation"
+      },
+      "wall_stop_ns": 4999998084
+    },
+    {
+      "host_end_ns": 882229175190625,
+      "host_start_ns": 882227952111583,
+      "key": "",
+      "operation": "stop",
+      "original_event": {
+        "at_ns": 2106437042,
+        "elapsed_ns": null,
+        "event": "container_stopped",
+        "fields": {},
+        "schema": "r7-runtime-events-v1",
+        "sequence": 38,
+        "span": null,
+        "value": "ef020e9350ef71fd85231358d7cbd3b86e09fdea419be958275bd4a51ae9b36f"
+      },
+      "wall_stop_ns": 5000000000
+    }
+  ],
+  "report": {
+    "cells": [
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EISDIR",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "ALLOWED",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-store/global",
+        "value": "0o40700"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global/store.sqlite"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global/store.sqlite"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-store/global/store.sqlite"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global/store.sqlite-wal"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global/store.sqlite-wal"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-store/global/store.sqlite-wal"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global/store.sqlite-shm"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global/store.sqlite-shm"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-store/global/store.sqlite-shm"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EISDIR",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "ALLOWED",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-local",
+        "value": "0o40700"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/overlay"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/overlay"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-local/overlay"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/overlay/overlay.sqlite"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/overlay/overlay.sqlite"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-local/overlay/overlay.sqlite"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/config"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/config"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-local/config"
+      },
+      {
+        "action": "open_read",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/config/daemon.setup"
+      },
+      {
+        "action": "open_write",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/config/daemon.setup"
+      },
+      {
+        "action": "lstat",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/layerfs-local/config/daemon.setup"
+      },
+      {
+        "action": "listdir",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-store/global"
+      },
+      {
+        "action": "listdir",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local"
+      },
+      {
+        "action": "listdir",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/overlay"
+      },
+      {
+        "action": "listdir",
+        "group": "direct",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/layerfs-local/config"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-store/global"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite-wal"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite-wal"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite-wal"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite-shm"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite-shm"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-store/global/store.sqlite-shm"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-local"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/overlay"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/overlay"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-local/overlay"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/overlay/overlay.sqlite"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/overlay/overlay.sqlite"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-local/overlay/overlay.sqlite"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/config"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/config"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-local/config"
+      },
+      {
+        "action": "open_read",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/config/daemon.setup"
+      },
+      {
+        "action": "open_write",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/config/daemon.setup"
+      },
+      {
+        "action": "lstat",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": false,
+        "record": true,
+        "target": "/proc/1/root/layerfs-local/config/daemon.setup"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-store/global"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/overlay"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_root",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root/layerfs-local/config"
+      },
+      {
+        "action": "readlink",
+        "group": "proc_link",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/cwd"
+      },
+      {
+        "action": "readlink",
+        "group": "proc_link",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/exe"
+      },
+      {
+        "action": "readlink",
+        "group": "proc_link",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/root"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/fdinfo"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/map_files"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/1/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/10/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/11/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/12/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/19/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/20/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/21/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/22/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/23/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/24/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/7/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/8/fd"
+      },
+      {
+        "action": "listdir",
+        "group": "proc_descriptors",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/task/9/fd"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/environ"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/maps"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/mem"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/smaps"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/pagemap"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/auxv"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/stack"
+      },
+      {
+        "action": "open_and_read_one_byte",
+        "group": "proc_memory",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/proc/1/io"
+      },
+      {
+        "action": "open_rdwr",
+        "group": "device",
+        "outcome": "EACCES",
+        "protected": true,
+        "record": false,
+        "target": "/dev/fuse"
+      },
+      {
+        "action": "mknod_char_10_229",
+        "group": "device",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "/tmp/confinement-fuse-twin"
+      },
+      {
+        "action": "process_vm_readv",
+        "group": "daemon_process",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "pid 1"
+      },
+      {
+        "action": "listdir",
+        "group": "abort_control",
+        "outcome": "ALLOWED",
+        "protected": false,
+        "record": true,
+        "target": "/sys/fs/fuse/connections",
+        "value": []
+      },
+      {
+        "action": "umount2",
+        "group": "detach",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/1"
+      },
+      {
+        "action": "umount2_detach",
+        "group": "detach",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/1"
+      },
+      {
+        "action": "umount",
+        "group": "detach",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/1"
+      },
+      {
+        "action": "umount -l",
+        "group": "detach",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/1"
+      },
+      {
+        "action": "fusermount -u",
+        "group": "detach",
+        "outcome": "ENOENT",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/1"
+      },
+      {
+        "action": "fusermount3 -u",
+        "group": "detach",
+        "outcome": "ENOENT",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/1"
+      },
+      {
+        "action": "kill_0",
+        "group": "daemon_process",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "pid 1"
+      },
+      {
+        "action": "ptrace_attach",
+        "group": "daemon_process",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "pid 1"
+      },
+      {
+        "action": "mount_tmpfs_over",
+        "group": "mount",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/1"
+      },
+      {
+        "action": "umount2_sibling",
+        "group": "mount",
+        "outcome": "EPERM",
+        "protected": true,
+        "record": false,
+        "target": "/workspaces/2"
+      },
+      {
+        "action": "tcp_connect",
+        "group": "control_listener",
+        "outcome": "ALLOWED",
+        "protected": false,
+        "record": true,
+        "target": "127.0.0.1:30421",
+        "value": "connected and closed without authentication"
+      },
+      {
+        "action": "listdir",
+        "group": "sibling",
+        "outcome": "ALLOWED",
+        "protected": false,
+        "record": true,
+        "target": "/workspaces/2",
+        "value": 66
+      }
+    ],
+    "cwd": "/workspaces/1",
+    "identity": {
+      "gid": 20,
+      "groups": [
+        20
+      ],
+      "status": {
+        "CapAmb": "0000000000000000",
+        "CapBnd": "00000000a82425fb",
+        "CapEff": "0000000000000000",
+        "CapInh": "0000000000000000",
+        "CapPrm": "0000000000000000",
+        "Gid": "20\t20\t20\t20",
+        "Groups": "20",
+        "NoNewPrivs": "1",
+        "Seccomp": "2",
+        "Uid": "501\t501\t501\t501"
+      },
+      "uid": 501
+    },
+    "mountinfo": [
+      "260 162 0:80 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/147395/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/137845/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120408/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120407/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120406/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120405/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/120404/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/147396/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/147396/work",
+      "262 260 0:109 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw",
+      "263 260 0:110 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755",
+      "264 263 0:111 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666",
+      "265 260 0:112 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro",
+      "266 265 0:39 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw",
+      "267 263 0:107 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw",
+      "268 263 0:113 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k",
+      "269 260 254:1 /docker/volumes/layerfs-r8-full-proof-20261010-b8b718c0807e/_data /layerfs-store rw,relatime master:1 - ext4 /dev/vda1 rw,discard",
+      "185 262 0:114 / /proc/scsi ro,relatime - tmpfs tmpfs ro",
+      "187 265 0:115 / /sys/firmware ro,relatime - tmpfs tmpfs ro",
+      "159 260 0:91 / /workspaces/1 rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072",
+      "160 260 0:92 / /workspaces/2 rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072"
+    ],
+    "namespace": {
+      "unshare_user_mount": "EPERM"
+    },
+    "own_descriptors": {
+      "0": "/dev/null",
+      "1": "pipe:[53619686]",
+      "2": "pipe:[53619687]"
+    },
+    "schema": "r8b-confinement-probe-v1",
+    "sibling": "/workspaces/2"
+  },
+  "schema": "r8b-confinement-controller-v1",
+  "seals": {
+    "controller": "caac21231b3ac1d6ca0aea5142265ac026ac120cdbc58e6a80f46f90d7a3032a",
+    "daemon": "f44900cfc975901b7101f4874f708390b6f7401981e06d608b3df52a50848c0e",
+    "inputs": "2aa5552904293ef3741b260bf94a329a134ac66fb1df4d9494ec16bd0463ab9e",
+    "probe": "4001423614433f934a414865a066ad6a9dbe6666ec3275f01c44cfbcd828604b",
+    "runtime": "fdd962b7258903252bf097cd1be22f8acd56d3047369d08b68affe4c491d0573"
+  },
+  "status": "PASS",
+  "terminal": "both Workspaces Unmounted, Gone observed, stop acknowledged",
+  "timing_claim": "NOT_MEASURED",
+  "uid": 501,
+  "volume": "layerfs-r8-full-proof-20261010-b8b718c0807e"
+}

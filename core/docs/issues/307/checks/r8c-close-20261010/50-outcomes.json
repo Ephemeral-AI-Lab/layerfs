@@ -1,0 +1,4827 @@
+{
+ "Durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+ "frozen_product": "10bd8215443766fa2509fa5f90cf0044200ba7be",
+ "frozen_source": "307618496aadd3900d412b9d5ea9eab4267293da",
+ "functional_count": 90,
+ "functional_pass_basis_counts": {
+  "as scoped": 50,
+  "fix": 5,
+  "registered precondition proof at v4": 4,
+  "ruling": 5,
+  "withdrawn scope": 18
+ },
+ "functional_rows": [
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount_routes": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-14"
+   ],
+   "established": "Lifecycle 41 and full proof 30 at the final identity.",
+   "id": "FP-1",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Session-buffer observation: no product observation exists. Resident memory is reported at phase boundaries against no bound."
+  },
+  {
+   "basis": "fix",
+   "covering_test_binaries": {
+    "mounted_fusectl": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-2",
+    "C-9"
+   ],
+   "established": "Largest READ and WRITE frames are 131072, the negotiated limit, by the request service's own accounting; one loop asserted against the corrected specification.",
+   "id": "FP-2",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "The maxima are the product's observation, not an independent trace."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount_routes": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-3",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_mount_routes": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-4",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-5",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "fix",
+   "covering_test_binaries": {},
+   "decisions": [
+    "C-1",
+    "C-11"
+   ],
+   "established": "Confinement 35: 84 protected routes refused and the command cannot create a user and mount namespace (EPERM).",
+   "id": "FP-5-Runtime",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Declared as they are: sibling visibility, the unauthenticated listener connect."
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-6",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "engine_protocol": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-7",
+    "C-18",
+    "C-14"
+   ],
+   "established": "Streams 40: exact delivery up to 64 MiB each.",
+   "id": "FP-6-Runtime",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "A stalled or failing sink, stressed ordering, a resident bound."
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-7",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "ruling",
+   "covering_test_binaries": {
+    "engine_protocol": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_cycles": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-6",
+    "C-18"
+   ],
+   "established": "Streams 40: own bytes and status beside a descendant; complete bytes and status 7. The stream ends at command exit by C-6.",
+   "id": "FP-7-Runtime",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "A descendant holding a file; explicit disposal."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "dispatch": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_parking": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-8",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_fusectl": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-9",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-10",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-11",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-12",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-13",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-14",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-3"
+   ],
+   "established": "Flagged-WRITE counts, handle and RELEASE order, dirty-page Commit.",
+   "id": "FP-15",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "WRITE header identity."
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-3"
+   ],
+   "established": "Size never shrinks under concurrent append and read.",
+   "id": "FP-16",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "A GETATTR held across a WRITE by an external fixture."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-17",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-18",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-19",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "forced_producers": {
+     "host": 0,
+     "linux": 0
+    },
+    "forced_unmount": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_store_read": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-19-FS",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_store_read": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-20",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_drain": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_store_read": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_revocation": {
+     "host": 0,
+     "linux": 0
+    },
+    "store_read_drain": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-8"
+   ],
+   "established": "Close retained; Busy beside a held OPEN or READDIR; FORGET units before revocation.",
+   "id": "FP-21",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Join, Owner, Lane and Registry failure stages."
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-22",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "fix",
+   "covering_test_binaries": {
+    "forced_unavailable": {
+     "host": 0,
+     "linux": 0
+    },
+    "forced_unmount": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_cycles": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-1",
+    "C-11"
+   ],
+   "established": "Holders 36 to 39: every arrangement gives the reversible Busy and the sibling reaches Unmounted and Gone. The private-namespace holder's unshare is refused, so no copy of a mount exists.",
+   "id": "FP-22-FS",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "FAIL",
+   "withdrawn_or_declared": "Force is unavailable in the Sandbox topology, declared by C-11."
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-23",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "forced_producers": {
+     "host": 0,
+     "linux": 0
+    },
+    "forced_unmount": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_store_read": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-8"
+   ],
+   "established": "Active-producer refusal and staged abort and detach outcomes.",
+   "id": "FP-23-FS",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "The abort-error and independent-effect scopes it inherits from FP-33."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_cycles": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-24",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-25",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "engine_protocol": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount_routes": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-7"
+   ],
+   "established": "Lost Mount and Attach acknowledgements located without replay.",
+   "id": "FP-25-Routes",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Attach failure after a successful mount call; a lost runtime result at the actual topology."
+  },
+  {
+   "basis": "ruling",
+   "covering_test_binaries": {
+    "mounted_cycles": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-5"
+   ],
+   "established": "Mount refused at mount:debt while maintenance is stopped (mount_debt).",
+   "id": "FP-26",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "A stop on an otherwise usable engine; a headroom number; Status."
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "cold_failure_scope": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_failure_scope": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-8",
+    "C-9"
+   ],
+   "established": "A failing READ fails alone; a Capacity refusal is retained.",
+   "id": "FP-27",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Release after a failed demand, concurrent demand, foreign reader, invariant and poisoned-lock classes. A Capacity refusal fences the mount, declared by C-9."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-28",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_drain": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-29",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn prospectively by R0, unchanged",
+   "covering_test_binaries": {},
+   "id": "FP-30",
+   "stage": "FP",
+   "status": "WITHDRAWN",
+   "status_r8b": "WITHDRAWN"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "engine_protocol": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-7"
+   ],
+   "established": "Streams 40: window-edge sizes, the last megabyte before a nonzero exit, a descendant-held pipe.",
+   "id": "FP-30-Runtime",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "A fast exit with a delayed consumer."
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_drain": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_custody": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_lookup": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_revocation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-8",
+    "C-14"
+   ],
+   "established": "Underflow and failure custody on a real kernel FORGET.",
+   "id": "FP-31",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Foreign incarnation; a resident-memory measurement."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "forced_producers": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_store_read": {
+     "host": 0,
+     "linux": 0
+    },
+    "store_read_drain": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-32",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "forced_smoke": {
+     "host": 0,
+     "linux": 0
+    },
+    "forced_unmount": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-8"
+   ],
+   "established": "Clean and held-reference forced detach outcomes with no replay.",
+   "id": "FP-33",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Short, failed and unknown abort writes, refusal after admission, an independent trace."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "dispatch": {
+     "host": 0,
+     "linux": 0
+    },
+    "fence": {
+     "host": 0,
+     "linux": 0
+    },
+    "forced_unmount": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_parking": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "FP-34",
+   "stage": "FP",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "dispatch": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R2-STEP-1",
+   "stage": "R2",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_store_read": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount_routes": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-2",
+    "C-19"
+   ],
+   "established": "Lifecycle 41; FP-2 complete.",
+   "id": "R2-STEP-2",
+   "stage": "R2",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Startup and terminal failure paths beyond those staged."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_application": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_control": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R2-STEP-3",
+   "stage": "R2",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "native_control": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount_routes": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-7"
+   ],
+   "established": "Attach, Locate and acknowledgement routes.",
+   "id": "R2-STEP-4",
+   "stage": "R2",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "FP-25-Routes' scopes."
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_drain": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_store_read": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-8",
+    "C-1"
+   ],
+   "established": "Reversible Busy at the actual topology (36 to 39).",
+   "id": "R2-STEP-5",
+   "stage": "R2",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "FP-21's stages with no producer."
+  },
+  {
+   "basis": "fix",
+   "covering_test_binaries": {
+    "engine_lifecycle": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-1"
+   ],
+   "established": "Confinement 35 with namespace creation refused.",
+   "id": "R2-STEP-6",
+   "stage": "R2",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": ""
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_mount": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mount_routes": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R2-STEP-7",
+   "stage": "R2",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_custody": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R3-STEP-1",
+   "stage": "R3",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R3-STEP-2",
+   "stage": "R3",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R3-STEP-3",
+   "stage": "R3",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R3-STEP-4",
+   "stage": "R3",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_drain": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R3-STEP-5",
+   "stage": "R3",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-3"
+   ],
+   "established": "Shared-mapping store flag, clipping, size and dirty-page Commit.",
+   "id": "R3-STEP-6",
+   "stage": "R3",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "WRITE header identity."
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "native_coherence": {
+     "host": 0,
+     "linux": 0
+    },
+    "native_mutation": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-3"
+   ],
+   "established": "Lifecycle 41; FP-15 and FP-16 as rescoped.",
+   "id": "R3-STEP-7",
+   "stage": "R3",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "As FP-15 and FP-16."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_metadata": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_rebound": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_states": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R4-1",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_namespace_perturbed": {
+     "host": 0,
+     "linux": 0
+    },
+    "filesystem_topology": {
+     "host": 0,
+     "linux": 0
+    },
+    "filesystem_topology_backed": {
+     "host": 0,
+     "linux": 0
+    },
+    "filesystem_topology_model": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R4-2",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_namespace_fragments": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_holds": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_rebound": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_states": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R4-3",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_namespace_fragments": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R4-4",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_namespace": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_cursor": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R4-5",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "ruling",
+   "covering_test_binaries": {
+    "captured_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_cursor": {
+     "host": 0,
+     "linux": 0
+    },
+    "filesystem_topology_counts": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-20"
+   ],
+   "established": "Change-sized producer, owner and validation counts.",
+   "id": "R4-6",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Sibling-page and Store work grows with base size: a recorded property of the format."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_namespace_cursor": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_order": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R4-7",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_order": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R4-8",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "captured_namespace_custody": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R4-9",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "captured_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R4-10",
+   "stage": "R4",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R5-1",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "product_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R5-2",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R5-3",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_install": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R5-4",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_concurrency": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_install": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R5-5",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "ruling",
+   "covering_test_binaries": {
+    "captured_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_commit_failures": {
+     "host": 0,
+     "linux": 0
+    },
+    "product_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "store_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-10"
+   ],
+   "established": "Mounted missing dependency, unknown History, install failure after publication.",
+   "id": "R5-6",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Reproduction R5-6a needs outside deletion of Store rows; outside the profile's guarantees."
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_commit_failures": {
+     "host": 0,
+     "linux": 0
+    },
+    "product_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-8"
+   ],
+   "established": "A release refused after a settled failure keeps the owner named.",
+   "id": "R5-7",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "A release error after a settled failure; a release refused before admission."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    },
+    "product_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R5-8",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R5-9",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "product_commit": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Closed at R8b by added tests or proofs; same assertions pass at v4.",
+   "id": "R5-10",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "product_commit_cost": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R5-11",
+   "stage": "R5",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "fix",
+   "covering_test_binaries": {
+    "mounted_failure_scope": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-4"
+   ],
+   "established": "The runtime deploys serial_low_water 256; lifecycle 41 and every runtime proof ran with it; the mechanism is proved by its own tests.",
+   "id": "P-1",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "The non-contention early-failure arm is reached by no test."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "install_slots": {
+     "host": 0,
+     "linux": 0
+    },
+    "mounted_concurrency": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R6-1",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_concurrency": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R6-2",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_concurrency": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R6-3",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "mounted_concurrency": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "R6-6",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "ruling",
+   "covering_test_binaries": {
+    "mounted_cycles": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-5"
+   ],
+   "established": "As FP-26.",
+   "id": "R6-7",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "As FP-26."
+  },
+  {
+   "basis": "withdrawn scope",
+   "covering_test_binaries": {
+    "mounted_cycles": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "decisions": [
+    "C-7",
+    "C-6"
+   ],
+   "established": "Streams 40 exact.",
+   "id": "R6-8",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PARTIAL",
+   "withdrawn_or_declared": "Backpressure against a stalled sink."
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {
+    "forced_unavailable": {
+     "host": 0,
+     "linux": 0
+    }
+   },
+   "established": "Same assertions pass in the final suites at the v4 source.",
+   "id": "force:capability",
+   "stage": "R6",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "as scoped",
+   "covering_test_binaries": {},
+   "established": "Passed at R8b; successor proof 30 PASS at v4.",
+   "id": "FULL-FIXTURE-ORACLE",
+   "stage": "Prerequisites",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "registered precondition proof at v4",
+   "covering_test_binaries": {
+    "complete_fixture": null,
+    "complete_installed_roots": {
+     "host": 101,
+     "linux": 101
+    }
+   },
+   "established": "core/docs/issues/307/checks/r8c-close-20261010/31-host-wide-proof/result.json",
+   "id": "PREREQ-COMPLETE-INSTALLED-HOST",
+   "stage": "Prerequisites",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "registered precondition proof at v4",
+   "covering_test_binaries": {
+    "complete_fixture": null,
+    "complete_installed_roots": {
+     "host": 101,
+     "linux": 101
+    }
+   },
+   "established": "core/docs/issues/307/checks/r8c-close-20261010/32-linux-wide-proof/result.json",
+   "id": "PREREQ-COMPLETE-INSTALLED-LINUX",
+   "stage": "Prerequisites",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "registered precondition proof at v4",
+   "covering_test_binaries": {
+    "host_handoff": {
+     "host": 101,
+     "linux": 0
+    },
+    "install_docker": null
+   },
+   "established": "core/docs/issues/307/checks/r8c-close-20261010/33-host-linux-handoff-proof/result.json",
+   "id": "PREREQ-HOST-HANDOFF",
+   "stage": "Prerequisites",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  },
+  {
+   "basis": "registered precondition proof at v4",
+   "covering_test_binaries": {
+    "shared_processes": {
+     "host": 0,
+     "linux": 101
+    }
+   },
+   "established": "core/docs/issues/307/checks/r8c-close-20261010/34-linux-shared-process-proof/result.json",
+   "id": "PREREQ-SHARED-PROCESSES-LINUX",
+   "stage": "Prerequisites",
+   "status": "PASS",
+   "status_r8b": "PASS"
+  }
+ ],
+ "functional_status_counts": {
+  "PASS": 82,
+  "WITHDRAWN": 8
+ },
+ "gates": [
+  {
+   "id": "G01",
+   "reason": "C-4: the examined runtime deploys serial_low_water 256; the mechanism is proved by mounted_low_water, namespace and observed_application in the final suites.",
+   "requirement": "P-1 early low-water serial refill",
+   "status": "MET"
+  },
+  {
+   "id": "G02",
+   "reason": "C-5: debt admission is the mount:debt refusal while maintenance is stopped, proved for a quarantined engine (mount_debt). No headroom number; Status unchanged. A stop on an otherwise usable engine is a withdrawn scope.",
+   "requirement": "FP-26 reclaim-debt admission refusal",
+   "status": "MET AS RESCOPED"
+  },
+  {
+   "id": "G03",
+   "reason": "C-2: largest READ and WRITE frames are both 131072 by the request service's own accounting (fp2_negotiation_flags, receipt c2-attempt2); flags, options and fusectl values as before. Product observation, not an independent trace.",
+   "requirement": "FP-2 observed negotiation/request maxima",
+   "status": "MET"
+  },
+  {
+   "id": "G04",
+   "reason": "C-3: WRITE header identity and a GETATTR held across a WRITE are withdrawn scopes. Flagged-WRITE counts, handle and RELEASE order, the dirty-page Commit and the concurrent append and read proof remain and pass.",
+   "requirement": "FP-15/FP-16 mapping headers and reply-order hold",
+   "status": "MET AS RESCOPED"
+  },
+  {
+   "id": "G05",
+   "reason": "All seven runtime selections PASS at v4 (35 to 41), the private-namespace holder among them after fix C-1. C-6 rules the stream end; C-7 and C-18 withdraw what the runtime protocol cannot construct.",
+   "requirement": "Ordinary runtime proof matrix",
+   "status": "MET AS RESCOPED"
+  },
+  {
+   "id": "G06",
+   "reason": "C-8 withdraws the stages with no producer; C-10 rules reproduction R5-6a outside the Disposable profile's guarantees. The staged matrix passes in the final suites.",
+   "requirement": "R5 Commit failure and mapped-frontier matrix",
+   "status": "MET AS RESCOPED"
+  },
+  {
+   "id": "G07",
+   "reason": "Full-byte proof 30 PASS under the unchanged 100 s and 85 s stops.",
+   "requirement": "Final-identity full-byte mounted fixture oracle",
+   "status": "MET"
+  },
+  {
+   "id": "G08",
+   "reason": "C-13: the assertions existing tests make on H-1 to H-19, mapped in 22-count-hypotheses-map.md and passing in the final suites. Six rows are asserted at a real mount, ten in part; H-13 and H-14 have none. Nothing beyond the assertions is claimed.",
+   "requirement": "Frozen deterministic count scopes",
+   "status": "MET AS RESCOPED"
+  },
+  {
+   "id": "G09",
+   "reason": "C-14: lifecycle 41 reports daemon resident set and threads, cgroup memory and Store and Overlay backing bytes at six phase boundaries. Not continuous peaks; no bound exists. Unobserved: immutable-cache charge, demand transients, owned request bytes, pager and journal statistics, receive buffers.",
+   "requirement": "Frozen resource and cache scopes",
+   "status": "MET AS RESCOPED"
+  }
+ ],
+ "meaning": "Every selection registered in v4 has an outcome. Rows closed by a ruling or a withdrawn scope say so; nothing withdrawn is reported as proved. Not a timing, cold-cache or release claim.",
+ "owner_instruction": {
+  "decisions": "core/docs/issues/307/checks/r8c-close-20261010/00-owner-instruction-and-decisions.md",
+  "decisions_sha256": "28cb2d6ec237aaacd42606debc89389cec25c8c0c086cbecd68809ae700a7886",
+  "text": "fix all of them with simplicity and i want to close r8 and r9 fast"
+ },
+ "owner_questions": [
+  {
+   "id": "OWNER-1",
+   "question": "Do seven C cells above A2 matter to R8, when A2 supplies no arm?",
+   "recommendation": "Keep A2 historical, no R8 gate or arm; retain R7 counted evidence.",
+   "status": "PENDING OWNER"
+  },
+  {
+   "id": "OWNER-2",
+   "question": "Materially better threshold L against P",
+   "recommendation": "Owner defines after eligible matched-class/scheduler diagnostic data; no threshold invented.",
+   "status": "PENDING OWNER"
+  },
+  {
+   "id": "OWNER-3",
+   "question": "Authorize r7-passthrough manifest to use the product vendored fuser",
+   "recommendation": "Keep checker unchanged and P unrun until exact explicit manifest authorization.",
+   "status": "PENDING OWNER"
+  },
+  {
+   "behaviors": [
+    "SandboxApi::list",
+    "daemon log capture at Sandbox delete",
+    "separate read-only mount profile",
+    "daemon-served FUSE ACCESS",
+    "headless stdin and stdout delivery"
+   ],
+   "id": "OWNER-4",
+   "question": "Five predecessor behaviors with no recorded disposition",
+   "recommendation": "Owner explicitly retains or drops each; do not infer replacement coverage.",
+   "status": "PENDING OWNER"
+  },
+  {
+   "id": "OWNER-5",
+   "question": "O-10 pinned read-only SDK views",
+   "recommendation": "Retain deferral, design on current overlay if retained; no predecessor restored.",
+   "status": "PENDING OWNER"
+  },
+  {
+   "id": "OWNER-6",
+   "question": "R2/R3/R4 owner acceptance and recorded decisions",
+   "recommendation": "Review exact partial scopes and source decisions; examination closure supplies no acceptance.",
+   "status": "PENDING OWNER"
+  },
+  {
+   "id": "OWNER-7",
+   "question": "Group commit, payload outside SQLite, and narrowed-inode-update cost",
+   "recommendation": "Keep design proposals outside R8 examination; preserve R7 accepted source/cost evidence.",
+   "status": "PENDING OWNER"
+  },
+  {
+   "id": "OWNER-8",
+   "question": "May a Sandbox command create a user and mount namespace, and what must a normal Unmount answer when one holds a copy of the mount?",
+   "recommendation": "Decide the topology first (shared parent mount, denying namespace creation in Sandbox setup, or binding the abort control); 042 shows one such command also holds every sibling Workspace of the daemon.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-9",
+   "question": "Which stream-EOF sentence governs bytes a descendant writes after the command has exited?",
+   "recommendation": "Today they are dropped silently at command exit; either declare that or require delivery until EOF.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-10",
+   "question": "Deployed serial low-water value, the bound below the 1,024 window, and whether a non-contention early failure should end only that create (L-2, L-3, L-4).",
+   "recommendation": "Name a number; until then 0 keeps the previous behaviour and P-1 stays PARTIAL.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-11",
+   "question": "Debt headroom value at Mount, and maintenance failure in Status (L-5).",
+   "recommendation": "Both are additive; nothing built blocks them. Reading debt at Mount adds an owner job.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-12",
+   "question": "Is a seccomp or equivalent system-call fixture for the test's own threads, outside product source, acceptable for FP-2, FP-15, FP-16, FP-21 Join, FP-23-FS and FP-33?",
+   "recommendation": "The alternative is product telemetry that looks like a test hook.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-13",
+   "question": "Rows whose remaining stages have no producer or no kernel input at a real mount (FP-21, FP-27, FP-31, FP-33, R5-7): scope each to what a mount can present, or accept component scope?",
+   "recommendation": "Rescope; the receipts recorded here can be reused.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-14",
+   "question": "Specification 8.1 says two loops where the product runs one; selected INIT flags are computed, not read back; a Capacity refusal fences the whole mount.",
+   "recommendation": "Correct the specification or the product.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-15",
+   "question": "R5-6a: after external deletion of an untouched content root's location row, a Commit publishes a root naming an unlocatable object.",
+   "recommendation": "Decide whether the Save's dependency check must be offered content and metadata roots of trusted leaf pages; needs external Store damage to occur.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-16",
+   "question": "Recovery catalogue: 1,131 weak-signal rows, 7 pin values (59 rows) that resolve to no local object, and a recovery commit that is local only.",
+   "recommendation": "Review the classes; push or tag the recovery commit before any retirement.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-17",
+   "question": "Does a generator pinned by blob and recovery commit satisfy 'ignored-only generation' for the content fixture seal?",
+   "recommendation": "The generator drives the reference's own tree API and cannot be ported without making the oracle self-referential.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-18",
+   "question": "Content/storage harness port: seal placement outside the timer, counters and timer nodes reported unavailable, lint allowances at frozen include sites, a pre-existing sync_all in the acquisition copy.",
+   "recommendation": "Review before any registered row of that harness is executed.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-19",
+   "question": "Sibling Workspace visibility from a command, the unauthenticated control-listener connect, and Force being unavailable in the Sandbox topology.",
+   "recommendation": "Declare each or change the topology.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-20",
+   "question": "Lead decisions L-1 (8 comparator walkers), L-6 (a dirty mapped page is outside the Commit) and L-7 (rows needing a ruling stay PARTIAL).",
+   "recommendation": "Confirm or reverse; each reversal is recorded in the plan.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  },
+  {
+   "id": "OWNER-21",
+   "question": "Counts and resources (G08, G09): per-statement correlation in a mounted run, pager and journal statistics, continuous request maxima and phase peaks have no product observation, and no bound exists.",
+   "recommendation": "Product telemetry is not a defect fix; authorize it or rescope the gates.",
+   "status": "ANSWERED UNDER OWNER INSTRUCTION (C-1 to C-20)"
+  }
+ ],
+ "previous_outcomes": {
+  "functional_status_counts": {
+   "FAIL": 1,
+   "PARTIAL": 27,
+   "PASS": 54,
+   "WITHDRAWN": 8
+  },
+  "path": "core/docs/issues/307/checks/r8b-requalification-20261010/045-outcomes.json",
+  "sha256": "974a6c4727b2d11d2e9dc2cce110901b11b83b1784cd9213296124fa91a1e860",
+  "status": "CLOSED - NOT QUALIFIED"
+ },
+ "registered_invocation_status_counts": {
+  "PASS": 12
+ },
+ "registered_invocations": [
+  {
+   "attempts": 1,
+   "id": "R8b-full-fixture-mounted",
+   "limit_seconds": 100,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/30-full-mounted-proof/proof.json",
+   "receipt_sha256": "bdfbde6e0b3d6ecd48c649ba5c46ecab9b7b511c3afe741f697989e93874af25",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 66
+  },
+  {
+   "attempts": 1,
+   "id": "Q1-wide-host",
+   "limit_seconds": 9,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/31-host-wide-proof/result.json",
+   "receipt_sha256": "6b2c022a40fb0b4c05eea34dd205244b6b2f2b939b4be22d2d9f02c33fcf1c7f",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 4
+  },
+  {
+   "attempts": 1,
+   "id": "Q1-wide-linux",
+   "limit_seconds": 9,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/32-linux-wide-proof/result.json",
+   "receipt_sha256": "93e7d40e21930eafed0490dfb205194baf35962ba7a5d48e6ec0221e4bc43a89",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 4
+  },
+  {
+   "attempts": 1,
+   "id": "Q1-host-handoff",
+   "limit_seconds": 9,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/33-host-linux-handoff-proof/result.json",
+   "receipt_sha256": "c24b78ce8b01fe6b88c17ef4f8b69822151a550edaff8f88f62f5bcf3c96bb6e",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 2
+  },
+  {
+   "attempts": 1,
+   "id": "Q1-shared-processes-linux",
+   "limit_seconds": 9,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/34-linux-shared-process-proof/result.json",
+   "receipt_sha256": "18d8fbb9ee7f721154f630995fdf48ac985dc28bce1b203c622332e22c5ebfbc",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 1
+  },
+  {
+   "attempts": 1,
+   "id": "R8b-confinement",
+   "limit_seconds": 60,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/35-confinement/result.json",
+   "receipt_sha256": "2595ff93d6994d0c64155187d8d8ad9c05e060f7771b7bc10343dd4bcaa071c0",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 3
+  },
+  {
+   "attempts": 1,
+   "id": "R8b-holder-cwd",
+   "limit_seconds": 45,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/36-holder-cwd/result.json",
+   "receipt_sha256": "65e4664d1850416f0c4076fb527a579726c38933b6297a6144d3c125439bd9a2",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 13
+  },
+  {
+   "attempts": 1,
+   "id": "R8b-holder-descriptor",
+   "limit_seconds": 45,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/37-holder-descriptor/result.json",
+   "receipt_sha256": "69fa76b373274e35e49a6a733c45106251dcf0d22afeccb5e21ef44a9dd9816b",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 14
+  },
+  {
+   "attempts": 1,
+   "id": "R8b-holder-mapping",
+   "limit_seconds": 45,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/38-holder-mapping/result.json",
+   "receipt_sha256": "d96e57847cb0cfad724a1fd1c5f5126bd2637a63a576a7304379e9f68545f2aa",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 13
+  },
+  {
+   "attempts": 1,
+   "id": "R8b-holder-private",
+   "limit_seconds": 45,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/39-holder-private/result.json",
+   "receipt_sha256": "f28f93d776751165da09b1100420e6b3aff64e6f7cd321d11e082d64f2a840f5",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 14
+  },
+  {
+   "attempts": 1,
+   "id": "R8b-streams",
+   "limit_seconds": 60,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/40-streams/result.json",
+   "receipt_sha256": "5825a19a87fb0fb061422dbbe9c3c21a79ad5089d761df3d02f32d4aa9bf0ed9",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 7
+  },
+  {
+   "attempts": 1,
+   "id": "R8b-lifecycle",
+   "limit_seconds": 60,
+   "receipt": "core/docs/issues/307/checks/r8c-close-20261010/41-lifecycle/result.json",
+   "receipt_sha256": "8213e41ac9d6fe0326de2425da9d5114586536d709c87724bfd8f82e909f6d43",
+   "status": "PASS",
+   "wall_note": "command custody bound, not a measurement",
+   "wall_seconds_at_most": 4
+  }
+ ],
+ "registration": {
+  "commit": "a2b8bc0229c20aeab262c2321f4fe6382c72ba5d",
+  "path": "core/benchmark/fs-bench-pro/registry/r8-integrated-qualification-v4.json",
+  "sha256": "8c69dd351a68c213a58d2b5df9b3b1cebc739ec8444ab62fcbe2d331a91b704d"
+ },
+ "schema": "r8c-integrated-examination-outcomes-v1",
+ "status": "CLOSED - QUALIFIED ON FUNCTION, COUNTS AND RESOURCES AT THE OWNER-RESCOPED SCOPE; TIMING NOT_RUN",
+ "timing_count": 282,
+ "timing_rows": [
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "E08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Owner excludes E08 TypeScript build; retain NOT_RUN.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "E08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Owner excludes E08 TypeScript build; retain NOT_RUN.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "E08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Owner excludes E08 TypeScript build; retain NOT_RUN.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "E09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Owner excludes E09 without authorized normalized oracle; retain NOT_RUN.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "E09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Owner excludes E09 without authorized normalized oracle; retain NOT_RUN.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "E09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Owner excludes E09 without authorized normalized oracle; retain NOT_RUN.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E12:C identical first call creates symlinks; second frozen symlink creation is nonrepeatable. No reset or replay treatment is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E12:C identical first call creates symlinks; second frozen symlink creation is nonrepeatable. No reset or replay treatment is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E12:C identical first call creates symlinks; second frozen symlink creation is nonrepeatable. No reset or replay treatment is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E13:C identical first call creates .experiment-store; second original mkdir is nonrepeatable. No reset authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E13:C identical first call creates .experiment-store; second original mkdir is nonrepeatable. No reset authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E13:C identical first call creates .experiment-store; second original mkdir is nonrepeatable. No reset authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E14",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E14",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E14",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E14",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E14",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E14",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E15",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E15",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E15",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E15",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E15",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E15",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E16",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E16",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E16",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E16",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E16",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E16",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E17",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E17",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E17",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E17",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E17",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E17",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E18 is only the labelled unrefreshed-index case. C identical status warmup can refresh that required index, so C remains NOT_RUN with no reset/refresh.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E18 is only the labelled unrefreshed-index case. C identical status warmup can refresh that required index, so C remains NOT_RUN with no reset/refresh.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E18",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "E18 is only the labelled unrefreshed-index case. C identical status warmup can refresh that required index, so C remains NOT_RUN with no reset/refresh.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "E19",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "C12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "C12:C identical init/add/commit body on initialized retained root is nonrepeatable; no second new commit/reset is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "C12:C identical init/add/commit body on initialized retained root is nonrepeatable; no second new commit/reset is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "C12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "C12:C identical init/add/commit body on initialized retained root is nonrepeatable; no second new commit/reset is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "K05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no substituted command-only arm is registered.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "W01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "W01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "W01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "W02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "W02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "W02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic functional, count and resource scopes are incomplete; no timing is authorized.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC01",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC02",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC03",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC04",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC05",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC06",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC07",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC08",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC09",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC10",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "SC11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "SC11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "LayerFS-specific detach/drain/custody scenario has no assigned native/P equivalent; independent control scope must be prospectively defined.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "SC11",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "LayerFS-specific detach/drain/custody scenario has no assigned native/P equivalent; independent control scope must be prospectively defined.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "SC12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "SC12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no equivalent total-lifecycle comparison arm is assigned.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": null,
+   "case_id": "SC12",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Native/passthrough has no canonical Store Commit; no equivalent total-lifecycle comparison arm is assigned.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "A",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "B",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Cache class B is L-only; native/passthrough has no analogue.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "L",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "N",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  },
+  {
+   "arm": "P",
+   "attempted_operation_count": 0,
+   "cache_class": "C",
+   "case_id": "SC13",
+   "new_receipt": null,
+   "reason": "C-15: zero attempts authorized; no timing selection could be judged.",
+   "reason_061": "Required deterministic function/count/resource scopes and complete scenario preparation are unmet; zero timing attempts.",
+   "status": "NOT_RUN"
+  }
+ ],
+ "timing_samples": 0,
+ "timing_status_counts": {
+  "NOT_RUN": 282
+ },
+ "timing_zero_attempt_reason": "C-15: no acceptance threshold exists (OWNER-2), the P arm is unauthorized (OWNER-3) and A2 supplies no arm (OWNER-1), so no timing selection could be judged. All 282 stay NOT_RUN with zero attempts; R8 closes on function, counts and resources."
+}

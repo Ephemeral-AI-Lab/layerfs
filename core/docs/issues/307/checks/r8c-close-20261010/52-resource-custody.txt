@@ -1,0 +1,41 @@
+R8c resource custody, 2026-10-10T04:50:54Z, HEAD a2b8bc022
+
+## exited containers created in the R8c run, mapped to their receipt
+ee5df733861d -> 41-lifecycle 
+42beb58872d1 -> 40-streams 
+8e632b4f2e14 -> 39-holder-private 
+ed05fcb7105a -> 38-holder-mapping 
+2526ffd9114f -> 37-holder-descriptor 
+2e050957fba7 -> 36-holder-cwd 
+ef020e9350ef -> 35-confinement 
+347a55e1a7af -> 30-full-mounted-proof 
+
+## removed: the eight exited containers above (every selection passed)
+ee5df733861d removed
+42beb58872d1 removed
+8e632b4f2e14 removed
+ed05fcb7105a removed
+2526ffd9114f removed
+2e050957fba7 removed
+ef020e9350ef removed
+347a55e1a7af removed
+
+## removed: volumes prepared in the R8c run
+layerfs-r8-full-proof-20261010-b8b718c0807e removed
+layerfs-r8-full-proof-20261010-63ab137c63f9 removed
+layerfs-r8c-shared-proof-20261010-307618496 removed
+
+## retained, unchanged: everything listed as retained or not touched in the R8b custody record (../r8b-requalification-20261010/048-resource-custody.txt)
+
+## after
+71e27756ad4f hardcore_neumann Exited (137) 43 minutes ago | 2026-10-10 12:07:10 +0800 +08
+0868d30d3058 adoring_bhaskara Exited (137) 2 hours ago | 2026-10-10 11:10:06 +0800 +08
+24117a15710e stupefied_ardinghelli Exited (137) 2 hours ago | 2026-10-10 11:09:04 +0800 +08
+10a7e55c4454 stupefied_visvesvaraya Exited (137) 2 hours ago | 2026-10-10 10:56:38 +0800 +08
+66dc2806fa33 reverent_chatelet Exited (137) 2 hours ago | 2026-10-10 10:54:22 +0800 +08
+f52b51a15a64 frosty_mcnulty Exited (137) 10 hours ago | 2026-10-10 02:23:46 +0800 +08
+c4f1d18cd912 gallant_margulis Exited (1) 11 hours ago | 2026-10-10 02:16:43 +0800 +08
+layerfs-r8-full-proof-20261010-2aca347ad746
+layerfs-r8-full-proof-20261010-2cd69f68db34
+layerfs-r8-full-proof-20261010-8d7d083aaa8d
+layerfs-r8-full-proof-20261010-cd9345cf061e

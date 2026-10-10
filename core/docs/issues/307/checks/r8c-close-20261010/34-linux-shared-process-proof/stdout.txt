@@ -1,0 +1,50 @@
+
+running 1 test
+test overlapping_saves_ordered_overwrites_and_killed_daemon_preserve_the_shared_store ... SHARING_OVERLAP both_Save_lifetimes_active=true initial_reservations_acknowledged=true
+SHARING_KILLED pid=14 status=signal: 9 (SIGKILL)
+
+running 1 test
+test daemon_process_role ... SHARING_READY role=A pid=14 overlay=/tmp/layerfs-native-install-7-shared-processes/A-overlay.sqlite address=127.0.0.1:42919
+SHARING_SAVE_ENTER role=A attempt=1
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b) tag=65 full_bytes=300048 root=e0c1a3448bbae62775e1c5b7329ea17c0d57908494e7b51eac4664a93f4ee3b9
+SHARING_COMMIT role=A attempt=1 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_SAVE_ENTER role=A attempt=2
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b) tag=67 full_bytes=300048 root=4f0d054dc62cd98387ee8489d68c5b19903cc3f602d2bce35c378d0397e2a4a1
+SHARING_COMMIT role=A attempt=2 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_SAVE_ENTER role=A attempt=3
+SHARING_PREFIX_ACK role=A bytes=16777216 writes_before=8 writes_after=13 root=8b68bf09253e4a98cedbf2d9ba0c47f08af5da08459386bc9cc6245ed79e9752
+
+SHARING_ORIGINAL_CRASH_CLIENT ControlFailure { call: Call { id: 5, request: Commit(WorkspaceToken { workspace: WorkspaceId(0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(Io(Kind(UnexpectedEof))), fence_error: None }
+
+running 1 test
+test daemon_process_role ... SHARING_READY role=B pid=19 overlay=/tmp/layerfs-native-install-7-shared-processes/B-overlay.sqlite address=127.0.0.1:33907
+SHARING_SAVE_ENTER role=B attempt=1
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c) tag=66 full_bytes=300048 root=c132c90496ec53e7c125644a362d55969a29123ea3c3f216c692a1c039ebf55d
+SHARING_COMMIT role=B attempt=1 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_SAVE_ENTER role=B attempt=2
+SHARING_ROOT_ORACLE workspace=WorkspaceId(0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d) tag=68 full_bytes=300048 root=1c08be0e5422c5092c06b8fa3d5fe8fad75b5429fcf9fe7362a868468e630146
+SHARING_COMMIT role=B attempt=2 writes=3 initial=1 refills=0 publication=1 history=1
+SHARING_ROOT_ORACLE workspace=WorkspaceId(6363636363636363636363636363636363636363636363636363636363636363) tag=68 full_bytes=300048 root=1c08be0e5422c5092c06b8fa3d5fe8fad75b5429fcf9fe7362a868468e630146
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.19s
+
+
+SHARING_EXIT pid=19 status=exit status: 0
+
+running 1 test
+test daemon_process_role ... SHARING_READY role=C pid=29 overlay=/tmp/layerfs-native-install-7-shared-processes/C-overlay.sqlite address=127.0.0.1:43191
+SHARING_ROOT_ORACLE workspace=WorkspaceId(1515151515151515151515151515151515151515151515151515151515151515) tag=68 full_bytes=300048 root=1c08be0e5422c5092c06b8fa3d5fe8fad75b5429fcf9fe7362a868468e630146
+SHARING_ROOT_ORACLE workspace=WorkspaceId(1616161616161616161616161616161616161616161616161616161616161616) tag=66 full_bytes=300048 root=c132c90496ec53e7c125644a362d55969a29123ea3c3f216c692a1c039ebf55d
+SHARING_ROOT_ORACLE workspace=WorkspaceId(6363636363636363636363636363636363636363636363636363636363636363) tag=68 full_bytes=300048 root=1c08be0e5422c5092c06b8fa3d5fe8fad75b5429fcf9fe7362a868468e630146
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.02s
+
+
+SHARING_EXIT pid=29 status=exit status: 0
+SHARING_RESULT separate_commits=2 same_branch_publications=2 last_head=1251fe45d9051d68f19f29f4d109d98af64601403db88e592470ceb22989a419f2 captured_parents_preserved=true killed_daemon=true fresh_open_full_oracles=true original_client_unknown_preserved=true store=/store/layerfs-sharing-7/store.sqlite
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.27s
+

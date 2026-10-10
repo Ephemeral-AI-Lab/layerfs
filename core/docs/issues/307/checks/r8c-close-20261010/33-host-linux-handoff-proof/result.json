@@ -1,0 +1,24 @@
+{
+  "schema": "layerfs-r7-command-v1",
+  "kind": "test",
+  "source_commit": "a2b8bc0229c20aeab262c2321f4fe6382c72ba5d",
+  "source_tree": "f301604ea8d8dc6a989a2bee84f2eb458d44082a",
+  "worktree_status": "?? core/docs/issues/307/PROMPT-R8-R9-NEXT-AGENT-20261010.md\n?? core/docs/issues/307/checks/r8c-close-20261010/30-full-mounted-proof.stderr\n?? core/docs/issues/307/checks/r8c-close-20261010/30-full-mounted-proof.stdout\n?? core/docs/issues/307/checks/r8c-close-20261010/30-full-mounted-proof/\n?? core/docs/issues/307/checks/r8c-close-20261010/31-host-wide-proof/\n?? core/docs/issues/307/checks/r8c-close-20261010/32-linux-wide-proof/",
+  "command": [
+    "env",
+    "LAYERFS_INSTALL_DAEMON_BINARY=/work/core/target/cluster2-linux/debug/deps/host_handoff-f5838c7100750c80",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/host_handoff-a4c4b3d19848e0be",
+    "--exact",
+    "macos_init_handoff_to_linux_daemon_has_no_host_data_path",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "limit_seconds": 9,
+  "admission_eligible": false,
+  "construction_workers": 1,
+  "global_profile": "Disposable/WAL/OFF",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "exit_code": 0,
+  "complete_command_ns": 813674708,
+  "status": "PASS"
+}

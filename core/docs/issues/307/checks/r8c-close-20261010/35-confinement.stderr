@@ -1,0 +1,2 @@
+R4_WALL seconds<=3 limit=60s lock_wait=0s
+== 35 confinement EXIT 0
