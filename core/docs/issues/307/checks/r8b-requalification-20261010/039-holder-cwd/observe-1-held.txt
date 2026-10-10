@@ -1,0 +1,18 @@
+DAEMON_MOUNTS
+159 260 0:91 / /workspaces/1 rw,nosuid,nodev,noatime -
+160 260 0:92 / /workspaces/2 rw,nosuid,nodev,noatime -
+HOLDER
+2
+THREADS
+      2 fuser-0
+      1 layerfs-control
+      1 layerfs-daemon
+      1 layerfs-fence-1
+      1 layerfs-fence-2
+      1 layerfs-fuse-0
+      1 layerfs-fuse-1
+      1 layerfs-fuse-2
+      1 layerfs-fuse-3
+      1 layerfs-mount-1
+      1 layerfs-mount-2
+      1 layerfs-overlay

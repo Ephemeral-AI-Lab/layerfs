@@ -118,6 +118,14 @@ product mental model or campaign-specific benchmark procedures.
   slots, and a failed cold read ends its own request with `EIO` while the
   mount keeps serving; the concurrency, teardown and failure-scope proofs and
   their limits are in the [R6 record](docs/issues/307/R6-COMPLETION-20261009.md).
+  A create that leaves fewer unconsumed inode serials than the daemon's
+  configured low-water makes one early reservation; every deployment and
+  harness sets 0 today, which makes none. A new Mount is refused `Capacity` at
+  `mount:debt` while maintenance is stopped. Both, the proofs added around
+  them and the rows still open are in the
+  [R8b record](docs/issues/307/R8B-COMPLETION-20261010.md); R8 remains not
+  qualified and the root reference remains in place
+  ([R9b record](docs/issues/307/R9B-COMPLETION-20261010.md)).
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,

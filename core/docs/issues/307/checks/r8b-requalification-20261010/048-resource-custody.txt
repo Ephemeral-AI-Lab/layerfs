@@ -1,0 +1,500 @@
+R8b resource custody, 2026-10-10T04:13:30Z, HEAD b22fa088f
+
+## before
+d2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d Up 8 days | 2026-10-02 03:07:59 +0800 +08
+d2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab Up 8 days | 2026-10-02 06:35:34 +0800 +08
+ce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927 Up 6 days | 2026-10-03 13:23:15 +0800 +08
+9cf2fe345496 layerfs-experiment-305-dev Up 6 days | 2026-10-04 00:02:30 +0800 +08
+7dc0a380f532 cf-build-probe Exited (0) 6 days ago | 2026-10-04 09:45:42 +0800 +08
+9b18a3ba01da layerfs-e04-disposable-b1ce023ba91f41f3 Exited (1) 3 days ago | 2026-10-07 10:21:15 +0800 +08
+f9ad2396ba59 layerfs-e04-disposable-43092703c3fa4050 Exited (137) 3 days ago | 2026-10-07 10:24:53 +0800 +08
+74f00c22609e layerfs-e04-disposable-3ed7e72b47a94001 Exited (1) 3 days ago | 2026-10-07 10:29:27 +0800 +08
+4b2b6fab9351 layerfs-e04-range-cause-20261007 Exited (0) 3 days ago | 2026-10-07 10:39:46 +0800 +08
+135ac26660ee layerfs-e04-disposable-eb14de6b6749461a-pre-start Exited (0) 3 days ago | 2026-10-07 11:09:32 +0800 +08
+d79ac40f17b8 layerfs-e04-disposable-eb14de6b6749461a Exited (0) 3 days ago | 2026-10-07 11:09:39 +0800 +08
+7b6f8be08ae0 layerfs-e04-disposable-fe9ebf338f7743e2-pre-start Exited (0) 3 days ago | 2026-10-07 11:53:57 +0800 +08
+d73ececb5183 layerfs-e04-disposable-fe9ebf338f7743e2-post-exit Exited (0) 3 days ago | 2026-10-07 11:54:48 +0800 +08
+282382b7471d layerfs-e04-durable-d2e6c91d2dd0498f-pre-start Exited (0) 3 days ago | 2026-10-07 12:06:14 +0800 +08
+8dbf00a20405 layerfs-e04-durable-652dfa25a9184db2-pre-start Exited (0) 3 days ago | 2026-10-07 12:13:38 +0800 +08
+cc5a3fdf93c9 layerfs-e04-durable-652dfa25a9184db2-post-exit Exited (0) 3 days ago | 2026-10-07 12:14:28 +0800 +08
+25eae7f3a4c9 unruffled_mcnulty Exited (137) 32 hours ago | 2026-10-09 04:14:59 +0800 +08
+e9847e604207 layerfs-r7-p-proof-20261009 Exited (137) 31 hours ago | 2026-10-09 05:14:00 +0800 +08
+b16ac5af97bc pensive_mccarthy Exited (137) 31 hours ago | 2026-10-09 05:19:27 +0800 +08
+287df3107235 flamboyant_lalande Exited (137) 30 hours ago | 2026-10-09 05:55:02 +0800 +08
+c7977fcc7427 bold_kirch Exited (137) 30 hours ago | 2026-10-09 06:10:01 +0800 +08
+baf6e1bb841d vigorous_mclaren Exited (137) 30 hours ago | 2026-10-09 06:25:14 +0800 +08
+3e1f310accc4 adoring_mcnulty Exited (137) 29 hours ago | 2026-10-09 06:59:43 +0800 +08
+13543dab0f27 competent_haslett Exited (137) 29 hours ago | 2026-10-09 07:02:27 +0800 +08
+b86f1f557ea5 friendly_mendeleev Exited (137) 29 hours ago | 2026-10-09 07:04:31 +0800 +08
+20586d26778f keen_cannon Exited (137) 29 hours ago | 2026-10-09 07:35:25 +0800 +08
+3c4e958e3233 jolly_turing Exited (137) 28 hours ago | 2026-10-09 08:19:25 +0800 +08
+0faa42b0254d loving_hugle Exited (137) 27 hours ago | 2026-10-09 08:45:27 +0800 +08
+d320ea6b5c1f mystifying_margulis Exited (137) 27 hours ago | 2026-10-09 09:32:52 +0800 +08
+8d50e8075c1c dreamy_wozniak Exited (137) 26 hours ago | 2026-10-09 09:55:37 +0800 +08
+de9f8008df98 brave_edison Exited (137) 26 hours ago | 2026-10-09 10:27:56 +0800 +08
+2e8802753eee happy_mahavira Exited (137) 26 hours ago | 2026-10-09 10:39:08 +0800 +08
+96857cb53184 optimistic_sinoussi Exited (137) 25 hours ago | 2026-10-09 10:49:48 +0800 +08
+086efa74e3ca distracted_nash Exited (137) 25 hours ago | 2026-10-09 11:00:06 +0800 +08
+a78de91194ca exciting_euclid Exited (137) 24 hours ago | 2026-10-09 11:46:39 +0800 +08
+75029702123c wonderful_agnesi Exited (137) 24 hours ago | 2026-10-09 12:37:49 +0800 +08
+8de53b79986c elated_maxwell Exited (137) 23 hours ago | 2026-10-09 13:35:54 +0800 +08
+efeabf55db2f brave_khayyam Exited (137) 22 hours ago | 2026-10-09 13:43:45 +0800 +08
+2a15bc1bfb9d reverent_morse Exited (137) 22 hours ago | 2026-10-09 14:15:53 +0800 +08
+159b1f8d9711 affectionate_gagarin Exited (137) 22 hours ago | 2026-10-09 14:16:10 +0800 +08
+ff161335d8d8 festive_gauss Exited (137) 22 hours ago | 2026-10-09 14:16:17 +0800 +08
+2041c989a269 gifted_edison Exited (137) 22 hours ago | 2026-10-09 14:16:25 +0800 +08
+baa78a97d328 ecstatic_jones Exited (137) 22 hours ago | 2026-10-09 14:16:33 +0800 +08
+c0cfa3aaf9bd elegant_meitner Exited (137) 22 hours ago | 2026-10-09 14:16:40 +0800 +08
+bafa1a8accb2 eager_perlman Exited (137) 22 hours ago | 2026-10-09 14:16:47 +0800 +08
+71f0bf570ab3 loving_golick Exited (137) 22 hours ago | 2026-10-09 14:16:54 +0800 +08
+f3af371b6023 affectionate_babbage Exited (137) 22 hours ago | 2026-10-09 14:17:01 +0800 +08
+6d941109b759 boring_johnson Exited (137) 22 hours ago | 2026-10-09 14:17:09 +0800 +08
+1fc03d5f92f9 priceless_gould Exited (137) 22 hours ago | 2026-10-09 14:17:17 +0800 +08
+6653d38fd916 strange_dijkstra Exited (137) 22 hours ago | 2026-10-09 14:41:04 +0800 +08
+f0acc31fd4b4 compassionate_dijkstra Exited (137) 22 hours ago | 2026-10-09 14:42:48 +0800 +08
+55f4548d43d5 romantic_bhabha Exited (137) 21 hours ago | 2026-10-09 14:54:56 +0800 +08
+48efbfbde2f6 modest_proskuriakova Exited (137) 21 hours ago | 2026-10-09 14:55:05 +0800 +08
+c9710bf3d63c suspicious_cohen Exited (137) 21 hours ago | 2026-10-09 14:55:16 +0800 +08
+639c0b705e12 kind_pasteur Exited (137) 21 hours ago | 2026-10-09 14:55:25 +0800 +08
+79e9319bbcf0 vibrant_chebyshev Exited (137) 21 hours ago | 2026-10-09 14:55:33 +0800 +08
+418c877cf0bb objective_hamilton Exited (137) 21 hours ago | 2026-10-09 14:55:41 +0800 +08
+3aa5f55771fb zealous_sammet Exited (137) 21 hours ago | 2026-10-09 14:55:47 +0800 +08
+b875beacbf42 sad_cannon Exited (137) 21 hours ago | 2026-10-09 14:55:53 +0800 +08
+f758e0399287 sleepy_kepler Exited (137) 21 hours ago | 2026-10-09 14:55:59 +0800 +08
+716925accad5 eloquent_varahamihira Exited (137) 21 hours ago | 2026-10-09 14:56:07 +0800 +08
+bc65a9ccd3ea silly_shirley Exited (137) 21 hours ago | 2026-10-09 14:56:13 +0800 +08
+bbbc4b4c5610 confident_hertz Exited (137) 21 hours ago | 2026-10-09 14:56:19 +0800 +08
+95eb269ad839 epic_tu Exited (137) 21 hours ago | 2026-10-09 15:30:29 +0800 +08
+11175ac7f604 practical_payne Exited (137) 20 hours ago | 2026-10-09 16:17:19 +0800 +08
+26314df81727 hungry_torvalds Exited (137) 20 hours ago | 2026-10-09 16:17:28 +0800 +08
+b863eb8cfd99 modest_lichterman Exited (137) 20 hours ago | 2026-10-09 16:17:38 +0800 +08
+f486cd4f505d quirky_mcnulty Exited (137) 20 hours ago | 2026-10-09 16:17:48 +0800 +08
+9e88aa000f88 charming_cohen Exited (137) 19 hours ago | 2026-10-09 16:49:29 +0800 +08
+21b0b3fce434 great_wozniak Exited (137) 19 hours ago | 2026-10-09 16:49:39 +0800 +08
+919fc3b8df51 silly_kalam Exited (137) 18 hours ago | 2026-10-09 16:49:57 +0800 +08
+b45f378e59ee cool_sanderson Exited (137) 18 hours ago | 2026-10-09 16:50:03 +0800 +08
+3af5f79e50e7 upbeat_hypatia Exited (137) 18 hours ago | 2026-10-09 16:50:09 +0800 +08
+f0477368c28d serene_payne Exited (137) 19 hours ago | 2026-10-09 16:50:15 +0800 +08
+fa02723e247c goofy_hoover Exited (137) 18 hours ago | 2026-10-09 16:50:22 +0800 +08
+61af21ff1b64 trusting_knuth Exited (137) 18 hours ago | 2026-10-09 16:50:28 +0800 +08
+011e74cdec06 modest_elgamal Exited (137) 19 hours ago | 2026-10-09 16:55:30 +0800 +08
+ca9adab7108f nifty_pare Exited (137) 19 hours ago | 2026-10-09 16:55:38 +0800 +08
+a02b9a381544 determined_ardinghelli Exited (137) 19 hours ago | 2026-10-09 16:55:48 +0800 +08
+884316a292a2 intelligent_heyrovsky Exited (137) 19 hours ago | 2026-10-09 16:55:57 +0800 +08
+35db7f1d95dc crazy_sinoussi Exited (137) 19 hours ago | 2026-10-09 16:56:07 +0800 +08
+ec9e1e34f628 busy_snyder Exited (137) 19 hours ago | 2026-10-09 16:56:17 +0800 +08
+f2fe4e2d0bdd boring_engelbart Exited (137) 19 hours ago | 2026-10-09 16:56:25 +0800 +08
+8e9f5c63d9fb pensive_hermann Exited (137) 19 hours ago | 2026-10-09 16:56:34 +0800 +08
+2886ced9628d elated_davinci Exited (137) 19 hours ago | 2026-10-09 16:56:42 +0800 +08
+35c57466deef interesting_allen Exited (137) 19 hours ago | 2026-10-09 16:56:50 +0800 +08
+1f8b2e696a3b brave_chaum Exited (137) 19 hours ago | 2026-10-09 16:56:58 +0800 +08
+50f84741fb66 practical_yonath Exited (137) 19 hours ago | 2026-10-09 16:57:07 +0800 +08
+bcf70214c258 pedantic_rhodes Exited (137) 18 hours ago | 2026-10-09 18:34:37 +0800 +08
+7257149acb53 youthful_shtern Exited (137) 18 hours ago | 2026-10-09 18:34:46 +0800 +08
+0ec86c413672 magical_euler Exited (137) 18 hours ago | 2026-10-09 18:34:56 +0800 +08
+8d7fdcde1de7 thirsty_johnson Exited (137) 18 hours ago | 2026-10-09 18:35:04 +0800 +08
+a6da7e9a1fb0 focused_hopper Exited (137) 18 hours ago | 2026-10-09 18:35:14 +0800 +08
+59051f409a6e jovial_mccarthy Exited (137) 18 hours ago | 2026-10-09 18:35:24 +0800 +08
+38cb8aa2e51d cool_khorana Exited (137) 18 hours ago | 2026-10-09 18:35:33 +0800 +08
+672f0dafda4f goofy_gauss Exited (137) 18 hours ago | 2026-10-09 18:35:43 +0800 +08
+ee5b972c7258 recursing_wu3 Exited (137) 18 hours ago | 2026-10-09 18:35:51 +0800 +08
+d866f394a035 agitated_mahavira Exited (137) 18 hours ago | 2026-10-09 18:35:59 +0800 +08
+b651e0b0c1ed xenodochial_roentgen Exited (137) 18 hours ago | 2026-10-09 18:36:08 +0800 +08
+4765193c98ef recursing_joliot Exited (137) 18 hours ago | 2026-10-09 18:36:17 +0800 +08
+2db18203c665 happy_sutherland Exited (137) 17 hours ago | 2026-10-09 18:51:10 +0800 +08
+68a9d75b92b5 eloquent_kilby Exited (137) 17 hours ago | 2026-10-09 18:51:19 +0800 +08
+6e6646accb3e friendly_shockley Exited (137) 17 hours ago | 2026-10-09 18:51:30 +0800 +08
+e3c488d1939a zealous_dirac Exited (137) 17 hours ago | 2026-10-09 18:51:39 +0800 +08
+a08146d9c6de ecstatic_shaw Exited (137) 17 hours ago | 2026-10-09 18:51:49 +0800 +08
+fd8ea1acb87b naughty_jones Exited (137) 17 hours ago | 2026-10-09 18:52:00 +0800 +08
+d46ea0bbd886 sleepy_hodgkin Exited (137) 17 hours ago | 2026-10-09 18:52:08 +0800 +08
+a7c9d8338b03 recursing_montalcini Exited (137) 17 hours ago | 2026-10-09 18:52:17 +0800 +08
+a55b3aec4eea upbeat_sammet Exited (137) 17 hours ago | 2026-10-09 18:52:26 +0800 +08
+9e19cfeb3c66 nostalgic_faraday Exited (137) 17 hours ago | 2026-10-09 18:52:34 +0800 +08
+72007b2958d4 magical_dirac Exited (137) 17 hours ago | 2026-10-09 18:52:43 +0800 +08
+1950e8257d9e heuristic_engelbart Exited (137) 17 hours ago | 2026-10-09 18:52:52 +0800 +08
+358d525871d1 vigorous_cori0 Exited (137) 17 hours ago | 2026-10-09 19:11:14 +0800 +08
+bb1538ece196 funny_rosalind Exited (137) 17 hours ago | 2026-10-09 19:11:22 +0800 +08
+d64ea57ac688 determined_snyder Exited (137) 17 hours ago | 2026-10-09 19:11:32 +0800 +08
+c235e3a3f0e5 dazzling_hawking Exited (137) 17 hours ago | 2026-10-09 19:11:42 +0800 +08
+56f72036fc4b vibrant_liskov Exited (137) 17 hours ago | 2026-10-09 19:11:52 +0800 +08
+fe733cc29427 pedantic_mclaren Exited (137) 17 hours ago | 2026-10-09 19:12:01 +0800 +08
+a0f332ea0a61 flamboyant_rubin Exited (137) 17 hours ago | 2026-10-09 19:12:10 +0800 +08
+d5cc68a61994 sad_swirles Exited (137) 17 hours ago | 2026-10-09 19:12:20 +0800 +08
+7d5554778935 loving_lamport Exited (137) 17 hours ago | 2026-10-09 19:12:29 +0800 +08
+2c113badd72d boring_williamson Exited (137) 17 hours ago | 2026-10-09 19:12:37 +0800 +08
+1423a4728b87 eager_fermi Exited (137) 17 hours ago | 2026-10-09 19:12:46 +0800 +08
+11ca8086c1e9 priceless_lalande Exited (137) 17 hours ago | 2026-10-09 19:12:55 +0800 +08
+82ade6f56761 intelligent_shannon Exited (137) 17 hours ago | 2026-10-09 19:38:23 +0800 +08
+14b80b9e8037 tender_hodgkin Exited (137) 17 hours ago | 2026-10-09 19:38:33 +0800 +08
+8e15eed92ba2 stoic_shannon Exited (137) 17 hours ago | 2026-10-09 19:38:43 +0800 +08
+b282b5ccdb82 jovial_babbage Exited (137) 17 hours ago | 2026-10-09 19:38:52 +0800 +08
+35b8ec7dbf62 trusting_swanson Exited (137) 17 hours ago | 2026-10-09 19:39:02 +0800 +08
+4f3a8ed6db9e clever_lamport Exited (137) 17 hours ago | 2026-10-09 19:39:13 +0800 +08
+68cd489ba1c7 dreamy_beaver Exited (137) 17 hours ago | 2026-10-09 19:39:22 +0800 +08
+ae19dd5f7081 sad_keldysh Exited (137) 17 hours ago | 2026-10-09 19:39:32 +0800 +08
+e9bc7be22c17 vigilant_shtern Exited (137) 17 hours ago | 2026-10-09 19:39:41 +0800 +08
+bdfd0f7a0b39 mystifying_jackson Exited (137) 17 hours ago | 2026-10-09 19:39:49 +0800 +08
+18a4efd6932c charming_hermann Exited (137) 17 hours ago | 2026-10-09 19:39:58 +0800 +08
+09570dc008a6 objective_ishizaka Exited (137) 17 hours ago | 2026-10-09 19:40:06 +0800 +08
+079ce0cfe9c5 frosty_galileo Exited (137) 16 hours ago | 2026-10-09 20:01:10 +0800 +08
+10f908decfe3 magical_feistel Exited (137) 16 hours ago | 2026-10-09 20:01:19 +0800 +08
+a7f6d033f6cb sharp_nash Exited (137) 16 hours ago | 2026-10-09 20:01:30 +0800 +08
+d74ed36f2b37 fervent_black Exited (137) 16 hours ago | 2026-10-09 20:01:39 +0800 +08
+1486d58b5d2a youthful_ptolemy Exited (137) 16 hours ago | 2026-10-09 20:01:49 +0800 +08
+4dcf3db9e722 trusting_shannon Exited (137) 16 hours ago | 2026-10-09 20:01:59 +0800 +08
+3458559c8056 objective_goodall Exited (137) 16 hours ago | 2026-10-09 20:02:08 +0800 +08
+3ec3ae076727 happy_kapitsa Exited (137) 16 hours ago | 2026-10-09 20:02:18 +0800 +08
+8eb6b4190653 dreamy_allen Exited (137) 16 hours ago | 2026-10-09 20:02:27 +0800 +08
+80712b889205 jolly_jemison Exited (137) 16 hours ago | 2026-10-09 20:02:35 +0800 +08
+cae259c94edb determined_bhabha Exited (137) 16 hours ago | 2026-10-09 20:02:44 +0800 +08
+f9bc68f85fc6 exciting_shannon Exited (137) 16 hours ago | 2026-10-09 20:02:53 +0800 +08
+235a86e6c07e hungry_shockley Exited (137) 16 hours ago | 2026-10-09 20:33:49 +0800 +08
+fd10c35d70be sweet_sammet Exited (137) 16 hours ago | 2026-10-09 20:33:58 +0800 +08
+5e05425fa95d magical_keller Exited (137) 16 hours ago | 2026-10-09 20:34:07 +0800 +08
+ec09e8045ace bold_mclean Exited (137) 16 hours ago | 2026-10-09 20:34:16 +0800 +08
+9c9bf4a7686c great_cartwright Exited (137) 16 hours ago | 2026-10-09 20:34:26 +0800 +08
+5e27e36950d5 epic_ptolemy Exited (137) 16 hours ago | 2026-10-09 20:34:36 +0800 +08
+081081848aa4 fervent_vaughan Exited (137) 16 hours ago | 2026-10-09 20:34:45 +0800 +08
+e6f7f329d0a2 vibrant_fermat Exited (137) 16 hours ago | 2026-10-09 20:34:54 +0800 +08
+6eaa4847287d hopeful_taussig Exited (137) 16 hours ago | 2026-10-09 20:35:04 +0800 +08
+7e606e0017c1 romantic_proskuriakova Exited (137) 16 hours ago | 2026-10-09 20:35:11 +0800 +08
+6423bab3d474 optimistic_euler Exited (137) 16 hours ago | 2026-10-09 20:35:20 +0800 +08
+cbd0378e576e gifted_moore Exited (137) 16 hours ago | 2026-10-09 20:35:29 +0800 +08
+e23cd7e2113c suspicious_austin Exited (137) 15 hours ago | 2026-10-09 21:01:21 +0800 +08
+2cdeb0e1c9b1 reverent_payne Exited (137) 15 hours ago | 2026-10-09 21:01:31 +0800 +08
+ebec5b1ff704 kind_hawking Exited (137) 15 hours ago | 2026-10-09 21:01:41 +0800 +08
+dd3168dfd0fe kind_varahamihira Exited (137) 15 hours ago | 2026-10-09 21:01:51 +0800 +08
+5234192a4ae7 zen_chatterjee Exited (137) 15 hours ago | 2026-10-09 21:02:01 +0800 +08
+cee0e4c5a948 youthful_turing Exited (137) 15 hours ago | 2026-10-09 21:02:11 +0800 +08
+a0ae38db2b36 focused_colden Exited (137) 15 hours ago | 2026-10-09 21:02:19 +0800 +08
+2889bd33c155 loving_kilby Exited (137) 15 hours ago | 2026-10-09 21:02:28 +0800 +08
+3e855535a48b strange_elbakyan Exited (137) 15 hours ago | 2026-10-09 21:02:37 +0800 +08
+a65d521aa75e relaxed_cori Exited (137) 15 hours ago | 2026-10-09 21:02:46 +0800 +08
+fd068365c0fe condescending_hellman Exited (137) 15 hours ago | 2026-10-09 21:02:55 +0800 +08
+e1ce9f841ca4 friendly_swartz Exited (137) 15 hours ago | 2026-10-09 21:03:03 +0800 +08
+8c17e7680ee0 wizardly_grothendieck Exited (137) 15 hours ago | 2026-10-09 21:25:50 +0800 +08
+b6f7122471df xenodochial_lovelace Exited (137) 15 hours ago | 2026-10-09 21:25:59 +0800 +08
+a3fbfe67ffa8 condescending_driscoll Exited (137) 15 hours ago | 2026-10-09 21:26:09 +0800 +08
+aebed305446a friendly_lamarr Exited (137) 15 hours ago | 2026-10-09 21:26:18 +0800 +08
+06ce59fb1955 boring_hofstadter Exited (137) 15 hours ago | 2026-10-09 21:26:28 +0800 +08
+e9271971c1b7 elastic_lalande Exited (137) 15 hours ago | 2026-10-09 21:26:38 +0800 +08
+e678cc942cc7 friendly_brown Exited (137) 15 hours ago | 2026-10-09 21:26:47 +0800 +08
+58d123d247dc infallible_hawking Exited (137) 15 hours ago | 2026-10-09 21:26:56 +0800 +08
+95c99096010a clever_euclid Exited (137) 15 hours ago | 2026-10-09 21:27:05 +0800 +08
+5ffa58f0e0ba magical_carson Exited (137) 15 hours ago | 2026-10-09 21:27:13 +0800 +08
+da728d52243a gallant_varahamihira Exited (137) 15 hours ago | 2026-10-09 21:27:22 +0800 +08
+8af6b4742740 quizzical_keller Exited (137) 15 hours ago | 2026-10-09 21:27:31 +0800 +08
+7bc0b7c25d49 cranky_allen Exited (137) 14 hours ago | 2026-10-09 22:23:40 +0800 +08
+31e8bd394180 quizzical_jepsen Exited (137) 14 hours ago | 2026-10-09 22:23:48 +0800 +08
+950030638a70 nice_noether Exited (137) 14 hours ago | 2026-10-09 22:23:59 +0800 +08
+c5b83bde849f nice_morse Exited (137) 14 hours ago | 2026-10-09 22:24:08 +0800 +08
+54517cff115f beautiful_bhaskara Exited (137) 14 hours ago | 2026-10-09 22:24:19 +0800 +08
+562af63db3c0 exciting_ganguly Exited (137) 14 hours ago | 2026-10-09 22:24:28 +0800 +08
+7dba371b50c9 gracious_greider Exited (137) 14 hours ago | 2026-10-09 22:24:37 +0800 +08
+33a3ee092a24 thirsty_rhodes Exited (137) 14 hours ago | 2026-10-09 22:24:46 +0800 +08
+2defda1e6768 trusting_thompson Exited (137) 14 hours ago | 2026-10-09 22:24:54 +0800 +08
+72bd40ff47df sharp_chandrasekhar Exited (137) 14 hours ago | 2026-10-09 22:25:02 +0800 +08
+6cb167e61149 interesting_kowalevski Exited (137) 14 hours ago | 2026-10-09 22:25:11 +0800 +08
+153ad63d398b dreamy_mcclintock Exited (137) 14 hours ago | 2026-10-09 22:25:19 +0800 +08
+9249b65addec angry_jemison Exited (137) 13 hours ago | 2026-10-09 23:38:56 +0800 +08
+8705f7eb344c modest_kalam Exited (137) 13 hours ago | 2026-10-09 23:39:04 +0800 +08
+5c29c3ea1feb affectionate_blackwell Exited (137) 13 hours ago | 2026-10-09 23:39:15 +0800 +08
+72950e4cb357 optimistic_lamport Exited (137) 13 hours ago | 2026-10-09 23:39:24 +0800 +08
+d1bb65e10c03 objective_easley Exited (137) 13 hours ago | 2026-10-09 23:39:34 +0800 +08
+a32a5c15431f wizardly_khorana Exited (137) 13 hours ago | 2026-10-09 23:39:44 +0800 +08
+af7a190ec64f eloquent_proskuriakova Exited (137) 13 hours ago | 2026-10-09 23:39:53 +0800 +08
+2a7606b181ee boring_mahavira Exited (137) 13 hours ago | 2026-10-09 23:40:03 +0800 +08
+87a1a31306d5 pensive_allen Exited (137) 13 hours ago | 2026-10-09 23:40:12 +0800 +08
+f12acd2141eb silly_brahmagupta Exited (137) 13 hours ago | 2026-10-09 23:40:20 +0800 +08
+ff248c983f0f confident_hermann Exited (137) 13 hours ago | 2026-10-09 23:40:29 +0800 +08
+17ba563d03b3 funny_shirley Exited (137) 13 hours ago | 2026-10-09 23:40:37 +0800 +08
+c4f1d18cd912 gallant_margulis Exited (1) 10 hours ago | 2026-10-10 02:16:43 +0800 +08
+f52b51a15a64 frosty_mcnulty Exited (137) 10 hours ago | 2026-10-10 02:23:46 +0800 +08
+8eedf378a0d6 gracious_wilson Exited (137) 2 hours ago | 2026-10-10 10:25:54 +0800 +08
+1fad8de5fcaf tender_tu Exited (137) 2 hours ago | 2026-10-10 10:28:25 +0800 +08
+66dc2806fa33 reverent_chatelet Exited (137) About an hour ago | 2026-10-10 10:54:22 +0800 +08
+4f5c2031d6fa gifted_faraday Exited (137) About an hour ago | 2026-10-10 10:56:20 +0800 +08
+10a7e55c4454 stupefied_visvesvaraya Exited (137) About an hour ago | 2026-10-10 10:56:38 +0800 +08
+bae18f21ca4d objective_dhawan Exited (137) About an hour ago | 2026-10-10 10:59:33 +0800 +08
+5c739e116a77 xenodochial_wright Exited (137) About an hour ago | 2026-10-10 10:59:35 +0800 +08
+fca6b53fd8d8 priceless_ishizaka Exited (137) About an hour ago | 2026-10-10 10:59:48 +0800 +08
+24117a15710e stupefied_ardinghelli Exited (137) About an hour ago | 2026-10-10 11:09:04 +0800 +08
+0868d30d3058 adoring_bhaskara Exited (137) About an hour ago | 2026-10-10 11:10:06 +0800 +08
+889cd0d97d54 recursing_clarke Exited (137) About an hour ago | 2026-10-10 11:10:28 +0800 +08
+66dd4135b486 modest_cohen Exited (137) 58 minutes ago | 2026-10-10 11:14:31 +0800 +08
+12a7a7dfa838 stupefied_hamilton Exited (137) 8 minutes ago | 2026-10-10 12:04:19 +0800 +08
+1203b0a6d237 jolly_lewin Exited (137) 7 minutes ago | 2026-10-10 12:06:23 +0800 +08
+df6f267a341e quirky_heyrovsky Exited (137) 6 minutes ago | 2026-10-10 12:06:33 +0800 +08
+a8fcf391c946 strange_nightingale Exited (137) 6 minutes ago | 2026-10-10 12:06:45 +0800 +08
+d9003f91e04d objective_rosalind Exited (137) 6 minutes ago | 2026-10-10 12:06:58 +0800 +08
+71e27756ad4f hardcore_neumann Exited (137) 6 minutes ago | 2026-10-10 12:07:10 +0800 +08
+666e7af01e49 musing_hamilton Exited (137) 5 minutes ago | 2026-10-10 12:07:54 +0800 +08
+6ecff553aced affectionate_hoover Exited (137) 5 minutes ago | 2026-10-10 12:08:06 +0800 +08
+
+layerfs-r8-full-proof-20261010-2aca347ad746
+layerfs-r8-full-proof-20261010-2cd69f68db34
+layerfs-r8-full-proof-20261010-8d7d083aaa8d
+layerfs-r8-full-proof-20261010-cd9345cf061e
+layerfs-r8-full-proof-20261010-f1291be40649
+layerfs-r8b-shared-proof-20261010-77a9b52db
+
+## volumes still referenced by a container
+layerfs-r8-full-proof-20261010-f1291be40649: 6ecff553aced 
+layerfs-r8b-shared-proof-20261010-77a9b52db: 
+
+## removed: exited containers of this run whose selection or probe passed or completed (receipt in parentheses)
+8eedf378a0d6 (003) removed
+1fad8de5fcaf (005) removed
+4f5c2031d6fa (010-shared) removed
+bae18f21ca4d (011) removed
+5c739e116a77 (012-descriptor) removed
+fca6b53fd8d8 (012-mapping) removed
+889cd0d97d54 (016) removed
+66dd4135b486 (018) removed
+12a7a7dfa838 (033) removed
+1203b0a6d237 (038) removed
+df6f267a341e (039) removed
+a8fcf391c946 (040) removed
+d9003f91e04d (041) removed
+666e7af01e49 (043) removed
+6ecff553aced (044) removed
+
+## removed: volumes of this run used only by passing selections
+layerfs-r8-full-proof-20261010-f1291be40649 removed
+layerfs-r8b-shared-proof-20261010-77a9b52db removed
+
+## retained from this run, as custody of a failed or uncertain attempt
+66dc2806fa33 (008 confinement exploratory, tool FAIL)
+10a7e55c4454 (010 private namespace holder, Retained teardown custody)
+24117a15710e (014 streams exploratory, tool FAIL)
+0868d30d3058 (015 streams exploratory 2, tool FAIL)
+71e27756ad4f (042 R8b-holder-private, registered FAIL)
+volume layerfs-r8-full-proof-20261010-2cd69f68db34 (exploratory runs 003 to 018, holds one exploratory Commit)
+volume layerfs-r8-full-proof-20261010-2aca347ad746 (registered 033, 038 to 043; Store unwritten)
+/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-installed-87599-r4-9-Opaque-InodePage-0 (temporary directory of a worker's failed test attempt)
+
+## not touched (not created in this run)
+running 9cf2fe345496 ce75ac504df9 d2433851ea59 d2550144998b; exited c4f1d18cd912 f52b51a15a64 and every container created before 2026-10-10 10:25 +0800; volumes layerfs-r8-full-proof-20261010-cd9345cf061e and -8d7d083aaa8d; deepseek-harness; master volumes; three merged R7 worktrees; /var/folders/.../layerfs-installed-56560-full-native-handoff
+
+## after
+d2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d Up 8 days | 2026-10-02 03:07:59 +0800 +08
+d2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab Up 8 days | 2026-10-02 06:35:34 +0800 +08
+ce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927 Up 6 days | 2026-10-03 13:23:15 +0800 +08
+9cf2fe345496 layerfs-experiment-305-dev Up 6 days | 2026-10-04 00:02:30 +0800 +08
+7dc0a380f532 cf-build-probe Exited (0) 6 days ago | 2026-10-04 09:45:42 +0800 +08
+9b18a3ba01da layerfs-e04-disposable-b1ce023ba91f41f3 Exited (1) 3 days ago | 2026-10-07 10:21:15 +0800 +08
+f9ad2396ba59 layerfs-e04-disposable-43092703c3fa4050 Exited (137) 3 days ago | 2026-10-07 10:24:53 +0800 +08
+74f00c22609e layerfs-e04-disposable-3ed7e72b47a94001 Exited (1) 3 days ago | 2026-10-07 10:29:27 +0800 +08
+4b2b6fab9351 layerfs-e04-range-cause-20261007 Exited (0) 3 days ago | 2026-10-07 10:39:46 +0800 +08
+135ac26660ee layerfs-e04-disposable-eb14de6b6749461a-pre-start Exited (0) 3 days ago | 2026-10-07 11:09:32 +0800 +08
+d79ac40f17b8 layerfs-e04-disposable-eb14de6b6749461a Exited (0) 3 days ago | 2026-10-07 11:09:39 +0800 +08
+7b6f8be08ae0 layerfs-e04-disposable-fe9ebf338f7743e2-pre-start Exited (0) 3 days ago | 2026-10-07 11:53:57 +0800 +08
+d73ececb5183 layerfs-e04-disposable-fe9ebf338f7743e2-post-exit Exited (0) 3 days ago | 2026-10-07 11:54:48 +0800 +08
+282382b7471d layerfs-e04-durable-d2e6c91d2dd0498f-pre-start Exited (0) 3 days ago | 2026-10-07 12:06:14 +0800 +08
+8dbf00a20405 layerfs-e04-durable-652dfa25a9184db2-pre-start Exited (0) 3 days ago | 2026-10-07 12:13:38 +0800 +08
+cc5a3fdf93c9 layerfs-e04-durable-652dfa25a9184db2-post-exit Exited (0) 3 days ago | 2026-10-07 12:14:28 +0800 +08
+25eae7f3a4c9 unruffled_mcnulty Exited (137) 32 hours ago | 2026-10-09 04:14:59 +0800 +08
+e9847e604207 layerfs-r7-p-proof-20261009 Exited (137) 31 hours ago | 2026-10-09 05:14:00 +0800 +08
+b16ac5af97bc pensive_mccarthy Exited (137) 31 hours ago | 2026-10-09 05:19:27 +0800 +08
+287df3107235 flamboyant_lalande Exited (137) 30 hours ago | 2026-10-09 05:55:02 +0800 +08
+c7977fcc7427 bold_kirch Exited (137) 30 hours ago | 2026-10-09 06:10:01 +0800 +08
+baf6e1bb841d vigorous_mclaren Exited (137) 30 hours ago | 2026-10-09 06:25:14 +0800 +08
+3e1f310accc4 adoring_mcnulty Exited (137) 29 hours ago | 2026-10-09 06:59:43 +0800 +08
+13543dab0f27 competent_haslett Exited (137) 29 hours ago | 2026-10-09 07:02:27 +0800 +08
+b86f1f557ea5 friendly_mendeleev Exited (137) 29 hours ago | 2026-10-09 07:04:31 +0800 +08
+20586d26778f keen_cannon Exited (137) 29 hours ago | 2026-10-09 07:35:25 +0800 +08
+3c4e958e3233 jolly_turing Exited (137) 28 hours ago | 2026-10-09 08:19:25 +0800 +08
+0faa42b0254d loving_hugle Exited (137) 27 hours ago | 2026-10-09 08:45:27 +0800 +08
+d320ea6b5c1f mystifying_margulis Exited (137) 27 hours ago | 2026-10-09 09:32:52 +0800 +08
+8d50e8075c1c dreamy_wozniak Exited (137) 26 hours ago | 2026-10-09 09:55:37 +0800 +08
+de9f8008df98 brave_edison Exited (137) 26 hours ago | 2026-10-09 10:27:56 +0800 +08
+2e8802753eee happy_mahavira Exited (137) 26 hours ago | 2026-10-09 10:39:08 +0800 +08
+96857cb53184 optimistic_sinoussi Exited (137) 25 hours ago | 2026-10-09 10:49:48 +0800 +08
+086efa74e3ca distracted_nash Exited (137) 25 hours ago | 2026-10-09 11:00:06 +0800 +08
+a78de91194ca exciting_euclid Exited (137) 24 hours ago | 2026-10-09 11:46:39 +0800 +08
+75029702123c wonderful_agnesi Exited (137) 24 hours ago | 2026-10-09 12:37:49 +0800 +08
+8de53b79986c elated_maxwell Exited (137) 23 hours ago | 2026-10-09 13:35:54 +0800 +08
+efeabf55db2f brave_khayyam Exited (137) 22 hours ago | 2026-10-09 13:43:45 +0800 +08
+2a15bc1bfb9d reverent_morse Exited (137) 22 hours ago | 2026-10-09 14:15:53 +0800 +08
+159b1f8d9711 affectionate_gagarin Exited (137) 22 hours ago | 2026-10-09 14:16:10 +0800 +08
+ff161335d8d8 festive_gauss Exited (137) 22 hours ago | 2026-10-09 14:16:17 +0800 +08
+2041c989a269 gifted_edison Exited (137) 22 hours ago | 2026-10-09 14:16:25 +0800 +08
+baa78a97d328 ecstatic_jones Exited (137) 22 hours ago | 2026-10-09 14:16:33 +0800 +08
+c0cfa3aaf9bd elegant_meitner Exited (137) 22 hours ago | 2026-10-09 14:16:40 +0800 +08
+bafa1a8accb2 eager_perlman Exited (137) 22 hours ago | 2026-10-09 14:16:47 +0800 +08
+71f0bf570ab3 loving_golick Exited (137) 22 hours ago | 2026-10-09 14:16:54 +0800 +08
+f3af371b6023 affectionate_babbage Exited (137) 22 hours ago | 2026-10-09 14:17:01 +0800 +08
+6d941109b759 boring_johnson Exited (137) 22 hours ago | 2026-10-09 14:17:09 +0800 +08
+1fc03d5f92f9 priceless_gould Exited (137) 22 hours ago | 2026-10-09 14:17:17 +0800 +08
+6653d38fd916 strange_dijkstra Exited (137) 22 hours ago | 2026-10-09 14:41:04 +0800 +08
+f0acc31fd4b4 compassionate_dijkstra Exited (137) 22 hours ago | 2026-10-09 14:42:48 +0800 +08
+55f4548d43d5 romantic_bhabha Exited (137) 21 hours ago | 2026-10-09 14:54:56 +0800 +08
+48efbfbde2f6 modest_proskuriakova Exited (137) 21 hours ago | 2026-10-09 14:55:05 +0800 +08
+c9710bf3d63c suspicious_cohen Exited (137) 21 hours ago | 2026-10-09 14:55:16 +0800 +08
+639c0b705e12 kind_pasteur Exited (137) 21 hours ago | 2026-10-09 14:55:25 +0800 +08
+79e9319bbcf0 vibrant_chebyshev Exited (137) 21 hours ago | 2026-10-09 14:55:33 +0800 +08
+418c877cf0bb objective_hamilton Exited (137) 21 hours ago | 2026-10-09 14:55:41 +0800 +08
+3aa5f55771fb zealous_sammet Exited (137) 21 hours ago | 2026-10-09 14:55:47 +0800 +08
+b875beacbf42 sad_cannon Exited (137) 21 hours ago | 2026-10-09 14:55:53 +0800 +08
+f758e0399287 sleepy_kepler Exited (137) 21 hours ago | 2026-10-09 14:55:59 +0800 +08
+716925accad5 eloquent_varahamihira Exited (137) 21 hours ago | 2026-10-09 14:56:07 +0800 +08
+bc65a9ccd3ea silly_shirley Exited (137) 21 hours ago | 2026-10-09 14:56:13 +0800 +08
+bbbc4b4c5610 confident_hertz Exited (137) 21 hours ago | 2026-10-09 14:56:19 +0800 +08
+95eb269ad839 epic_tu Exited (137) 21 hours ago | 2026-10-09 15:30:29 +0800 +08
+11175ac7f604 practical_payne Exited (137) 20 hours ago | 2026-10-09 16:17:19 +0800 +08
+26314df81727 hungry_torvalds Exited (137) 20 hours ago | 2026-10-09 16:17:28 +0800 +08
+b863eb8cfd99 modest_lichterman Exited (137) 20 hours ago | 2026-10-09 16:17:38 +0800 +08
+f486cd4f505d quirky_mcnulty Exited (137) 20 hours ago | 2026-10-09 16:17:48 +0800 +08
+9e88aa000f88 charming_cohen Exited (137) 19 hours ago | 2026-10-09 16:49:29 +0800 +08
+21b0b3fce434 great_wozniak Exited (137) 19 hours ago | 2026-10-09 16:49:39 +0800 +08
+919fc3b8df51 silly_kalam Exited (137) 18 hours ago | 2026-10-09 16:49:57 +0800 +08
+b45f378e59ee cool_sanderson Exited (137) 18 hours ago | 2026-10-09 16:50:03 +0800 +08
+3af5f79e50e7 upbeat_hypatia Exited (137) 18 hours ago | 2026-10-09 16:50:09 +0800 +08
+f0477368c28d serene_payne Exited (137) 19 hours ago | 2026-10-09 16:50:15 +0800 +08
+fa02723e247c goofy_hoover Exited (137) 18 hours ago | 2026-10-09 16:50:22 +0800 +08
+61af21ff1b64 trusting_knuth Exited (137) 18 hours ago | 2026-10-09 16:50:28 +0800 +08
+011e74cdec06 modest_elgamal Exited (137) 19 hours ago | 2026-10-09 16:55:30 +0800 +08
+ca9adab7108f nifty_pare Exited (137) 19 hours ago | 2026-10-09 16:55:38 +0800 +08
+a02b9a381544 determined_ardinghelli Exited (137) 19 hours ago | 2026-10-09 16:55:48 +0800 +08
+884316a292a2 intelligent_heyrovsky Exited (137) 19 hours ago | 2026-10-09 16:55:57 +0800 +08
+35db7f1d95dc crazy_sinoussi Exited (137) 19 hours ago | 2026-10-09 16:56:07 +0800 +08
+ec9e1e34f628 busy_snyder Exited (137) 19 hours ago | 2026-10-09 16:56:17 +0800 +08
+f2fe4e2d0bdd boring_engelbart Exited (137) 19 hours ago | 2026-10-09 16:56:25 +0800 +08
+8e9f5c63d9fb pensive_hermann Exited (137) 19 hours ago | 2026-10-09 16:56:34 +0800 +08
+2886ced9628d elated_davinci Exited (137) 19 hours ago | 2026-10-09 16:56:42 +0800 +08
+35c57466deef interesting_allen Exited (137) 19 hours ago | 2026-10-09 16:56:50 +0800 +08
+1f8b2e696a3b brave_chaum Exited (137) 19 hours ago | 2026-10-09 16:56:58 +0800 +08
+50f84741fb66 practical_yonath Exited (137) 19 hours ago | 2026-10-09 16:57:07 +0800 +08
+bcf70214c258 pedantic_rhodes Exited (137) 18 hours ago | 2026-10-09 18:34:37 +0800 +08
+7257149acb53 youthful_shtern Exited (137) 18 hours ago | 2026-10-09 18:34:46 +0800 +08
+0ec86c413672 magical_euler Exited (137) 18 hours ago | 2026-10-09 18:34:56 +0800 +08
+8d7fdcde1de7 thirsty_johnson Exited (137) 18 hours ago | 2026-10-09 18:35:04 +0800 +08
+a6da7e9a1fb0 focused_hopper Exited (137) 18 hours ago | 2026-10-09 18:35:14 +0800 +08
+59051f409a6e jovial_mccarthy Exited (137) 18 hours ago | 2026-10-09 18:35:24 +0800 +08
+38cb8aa2e51d cool_khorana Exited (137) 18 hours ago | 2026-10-09 18:35:33 +0800 +08
+672f0dafda4f goofy_gauss Exited (137) 18 hours ago | 2026-10-09 18:35:43 +0800 +08
+ee5b972c7258 recursing_wu3 Exited (137) 18 hours ago | 2026-10-09 18:35:51 +0800 +08
+d866f394a035 agitated_mahavira Exited (137) 18 hours ago | 2026-10-09 18:35:59 +0800 +08
+b651e0b0c1ed xenodochial_roentgen Exited (137) 18 hours ago | 2026-10-09 18:36:08 +0800 +08
+4765193c98ef recursing_joliot Exited (137) 18 hours ago | 2026-10-09 18:36:17 +0800 +08
+2db18203c665 happy_sutherland Exited (137) 17 hours ago | 2026-10-09 18:51:10 +0800 +08
+68a9d75b92b5 eloquent_kilby Exited (137) 17 hours ago | 2026-10-09 18:51:19 +0800 +08
+6e6646accb3e friendly_shockley Exited (137) 17 hours ago | 2026-10-09 18:51:30 +0800 +08
+e3c488d1939a zealous_dirac Exited (137) 17 hours ago | 2026-10-09 18:51:39 +0800 +08
+a08146d9c6de ecstatic_shaw Exited (137) 17 hours ago | 2026-10-09 18:51:49 +0800 +08
+fd8ea1acb87b naughty_jones Exited (137) 17 hours ago | 2026-10-09 18:52:00 +0800 +08
+d46ea0bbd886 sleepy_hodgkin Exited (137) 17 hours ago | 2026-10-09 18:52:08 +0800 +08
+a7c9d8338b03 recursing_montalcini Exited (137) 17 hours ago | 2026-10-09 18:52:17 +0800 +08
+a55b3aec4eea upbeat_sammet Exited (137) 17 hours ago | 2026-10-09 18:52:26 +0800 +08
+9e19cfeb3c66 nostalgic_faraday Exited (137) 17 hours ago | 2026-10-09 18:52:34 +0800 +08
+72007b2958d4 magical_dirac Exited (137) 17 hours ago | 2026-10-09 18:52:43 +0800 +08
+1950e8257d9e heuristic_engelbart Exited (137) 17 hours ago | 2026-10-09 18:52:52 +0800 +08
+358d525871d1 vigorous_cori0 Exited (137) 17 hours ago | 2026-10-09 19:11:14 +0800 +08
+bb1538ece196 funny_rosalind Exited (137) 17 hours ago | 2026-10-09 19:11:22 +0800 +08
+d64ea57ac688 determined_snyder Exited (137) 17 hours ago | 2026-10-09 19:11:32 +0800 +08
+c235e3a3f0e5 dazzling_hawking Exited (137) 17 hours ago | 2026-10-09 19:11:42 +0800 +08
+56f72036fc4b vibrant_liskov Exited (137) 17 hours ago | 2026-10-09 19:11:52 +0800 +08
+fe733cc29427 pedantic_mclaren Exited (137) 17 hours ago | 2026-10-09 19:12:01 +0800 +08
+a0f332ea0a61 flamboyant_rubin Exited (137) 17 hours ago | 2026-10-09 19:12:10 +0800 +08
+d5cc68a61994 sad_swirles Exited (137) 17 hours ago | 2026-10-09 19:12:20 +0800 +08
+7d5554778935 loving_lamport Exited (137) 17 hours ago | 2026-10-09 19:12:29 +0800 +08
+2c113badd72d boring_williamson Exited (137) 17 hours ago | 2026-10-09 19:12:37 +0800 +08
+1423a4728b87 eager_fermi Exited (137) 17 hours ago | 2026-10-09 19:12:46 +0800 +08
+11ca8086c1e9 priceless_lalande Exited (137) 17 hours ago | 2026-10-09 19:12:55 +0800 +08
+82ade6f56761 intelligent_shannon Exited (137) 17 hours ago | 2026-10-09 19:38:23 +0800 +08
+14b80b9e8037 tender_hodgkin Exited (137) 17 hours ago | 2026-10-09 19:38:33 +0800 +08
+8e15eed92ba2 stoic_shannon Exited (137) 17 hours ago | 2026-10-09 19:38:43 +0800 +08
+b282b5ccdb82 jovial_babbage Exited (137) 17 hours ago | 2026-10-09 19:38:52 +0800 +08
+35b8ec7dbf62 trusting_swanson Exited (137) 17 hours ago | 2026-10-09 19:39:02 +0800 +08
+4f3a8ed6db9e clever_lamport Exited (137) 17 hours ago | 2026-10-09 19:39:13 +0800 +08
+68cd489ba1c7 dreamy_beaver Exited (137) 17 hours ago | 2026-10-09 19:39:22 +0800 +08
+ae19dd5f7081 sad_keldysh Exited (137) 17 hours ago | 2026-10-09 19:39:32 +0800 +08
+e9bc7be22c17 vigilant_shtern Exited (137) 17 hours ago | 2026-10-09 19:39:41 +0800 +08
+bdfd0f7a0b39 mystifying_jackson Exited (137) 17 hours ago | 2026-10-09 19:39:49 +0800 +08
+18a4efd6932c charming_hermann Exited (137) 17 hours ago | 2026-10-09 19:39:58 +0800 +08
+09570dc008a6 objective_ishizaka Exited (137) 17 hours ago | 2026-10-09 19:40:06 +0800 +08
+079ce0cfe9c5 frosty_galileo Exited (137) 16 hours ago | 2026-10-09 20:01:10 +0800 +08
+10f908decfe3 magical_feistel Exited (137) 16 hours ago | 2026-10-09 20:01:19 +0800 +08
+a7f6d033f6cb sharp_nash Exited (137) 16 hours ago | 2026-10-09 20:01:30 +0800 +08
+d74ed36f2b37 fervent_black Exited (137) 16 hours ago | 2026-10-09 20:01:39 +0800 +08
+1486d58b5d2a youthful_ptolemy Exited (137) 16 hours ago | 2026-10-09 20:01:49 +0800 +08
+4dcf3db9e722 trusting_shannon Exited (137) 16 hours ago | 2026-10-09 20:01:59 +0800 +08
+3458559c8056 objective_goodall Exited (137) 16 hours ago | 2026-10-09 20:02:08 +0800 +08
+3ec3ae076727 happy_kapitsa Exited (137) 16 hours ago | 2026-10-09 20:02:18 +0800 +08
+8eb6b4190653 dreamy_allen Exited (137) 16 hours ago | 2026-10-09 20:02:27 +0800 +08
+80712b889205 jolly_jemison Exited (137) 16 hours ago | 2026-10-09 20:02:35 +0800 +08
+cae259c94edb determined_bhabha Exited (137) 16 hours ago | 2026-10-09 20:02:44 +0800 +08
+f9bc68f85fc6 exciting_shannon Exited (137) 16 hours ago | 2026-10-09 20:02:53 +0800 +08
+235a86e6c07e hungry_shockley Exited (137) 16 hours ago | 2026-10-09 20:33:49 +0800 +08
+fd10c35d70be sweet_sammet Exited (137) 16 hours ago | 2026-10-09 20:33:58 +0800 +08
+5e05425fa95d magical_keller Exited (137) 16 hours ago | 2026-10-09 20:34:07 +0800 +08
+ec09e8045ace bold_mclean Exited (137) 16 hours ago | 2026-10-09 20:34:16 +0800 +08
+9c9bf4a7686c great_cartwright Exited (137) 16 hours ago | 2026-10-09 20:34:26 +0800 +08
+5e27e36950d5 epic_ptolemy Exited (137) 16 hours ago | 2026-10-09 20:34:36 +0800 +08
+081081848aa4 fervent_vaughan Exited (137) 16 hours ago | 2026-10-09 20:34:45 +0800 +08
+e6f7f329d0a2 vibrant_fermat Exited (137) 16 hours ago | 2026-10-09 20:34:54 +0800 +08
+6eaa4847287d hopeful_taussig Exited (137) 16 hours ago | 2026-10-09 20:35:04 +0800 +08
+7e606e0017c1 romantic_proskuriakova Exited (137) 16 hours ago | 2026-10-09 20:35:11 +0800 +08
+6423bab3d474 optimistic_euler Exited (137) 16 hours ago | 2026-10-09 20:35:20 +0800 +08
+cbd0378e576e gifted_moore Exited (137) 16 hours ago | 2026-10-09 20:35:29 +0800 +08
+e23cd7e2113c suspicious_austin Exited (137) 15 hours ago | 2026-10-09 21:01:21 +0800 +08
+2cdeb0e1c9b1 reverent_payne Exited (137) 15 hours ago | 2026-10-09 21:01:31 +0800 +08
+ebec5b1ff704 kind_hawking Exited (137) 15 hours ago | 2026-10-09 21:01:41 +0800 +08
+dd3168dfd0fe kind_varahamihira Exited (137) 15 hours ago | 2026-10-09 21:01:51 +0800 +08
+5234192a4ae7 zen_chatterjee Exited (137) 15 hours ago | 2026-10-09 21:02:01 +0800 +08
+cee0e4c5a948 youthful_turing Exited (137) 15 hours ago | 2026-10-09 21:02:11 +0800 +08
+a0ae38db2b36 focused_colden Exited (137) 15 hours ago | 2026-10-09 21:02:19 +0800 +08
+2889bd33c155 loving_kilby Exited (137) 15 hours ago | 2026-10-09 21:02:28 +0800 +08
+3e855535a48b strange_elbakyan Exited (137) 15 hours ago | 2026-10-09 21:02:37 +0800 +08
+a65d521aa75e relaxed_cori Exited (137) 15 hours ago | 2026-10-09 21:02:46 +0800 +08
+fd068365c0fe condescending_hellman Exited (137) 15 hours ago | 2026-10-09 21:02:55 +0800 +08
+e1ce9f841ca4 friendly_swartz Exited (137) 15 hours ago | 2026-10-09 21:03:03 +0800 +08
+8c17e7680ee0 wizardly_grothendieck Exited (137) 15 hours ago | 2026-10-09 21:25:50 +0800 +08
+b6f7122471df xenodochial_lovelace Exited (137) 15 hours ago | 2026-10-09 21:25:59 +0800 +08
+a3fbfe67ffa8 condescending_driscoll Exited (137) 15 hours ago | 2026-10-09 21:26:09 +0800 +08
+aebed305446a friendly_lamarr Exited (137) 15 hours ago | 2026-10-09 21:26:18 +0800 +08
+06ce59fb1955 boring_hofstadter Exited (137) 15 hours ago | 2026-10-09 21:26:28 +0800 +08
+e9271971c1b7 elastic_lalande Exited (137) 15 hours ago | 2026-10-09 21:26:38 +0800 +08
+e678cc942cc7 friendly_brown Exited (137) 15 hours ago | 2026-10-09 21:26:47 +0800 +08
+58d123d247dc infallible_hawking Exited (137) 15 hours ago | 2026-10-09 21:26:56 +0800 +08
+95c99096010a clever_euclid Exited (137) 15 hours ago | 2026-10-09 21:27:05 +0800 +08
+5ffa58f0e0ba magical_carson Exited (137) 15 hours ago | 2026-10-09 21:27:13 +0800 +08
+da728d52243a gallant_varahamihira Exited (137) 15 hours ago | 2026-10-09 21:27:22 +0800 +08
+8af6b4742740 quizzical_keller Exited (137) 15 hours ago | 2026-10-09 21:27:31 +0800 +08
+7bc0b7c25d49 cranky_allen Exited (137) 14 hours ago | 2026-10-09 22:23:40 +0800 +08
+31e8bd394180 quizzical_jepsen Exited (137) 14 hours ago | 2026-10-09 22:23:48 +0800 +08
+950030638a70 nice_noether Exited (137) 14 hours ago | 2026-10-09 22:23:59 +0800 +08
+c5b83bde849f nice_morse Exited (137) 14 hours ago | 2026-10-09 22:24:08 +0800 +08
+54517cff115f beautiful_bhaskara Exited (137) 14 hours ago | 2026-10-09 22:24:19 +0800 +08
+562af63db3c0 exciting_ganguly Exited (137) 14 hours ago | 2026-10-09 22:24:28 +0800 +08
+7dba371b50c9 gracious_greider Exited (137) 14 hours ago | 2026-10-09 22:24:37 +0800 +08
+33a3ee092a24 thirsty_rhodes Exited (137) 14 hours ago | 2026-10-09 22:24:46 +0800 +08
+2defda1e6768 trusting_thompson Exited (137) 14 hours ago | 2026-10-09 22:24:54 +0800 +08
+72bd40ff47df sharp_chandrasekhar Exited (137) 14 hours ago | 2026-10-09 22:25:02 +0800 +08
+6cb167e61149 interesting_kowalevski Exited (137) 14 hours ago | 2026-10-09 22:25:11 +0800 +08
+153ad63d398b dreamy_mcclintock Exited (137) 14 hours ago | 2026-10-09 22:25:19 +0800 +08
+9249b65addec angry_jemison Exited (137) 13 hours ago | 2026-10-09 23:38:56 +0800 +08
+8705f7eb344c modest_kalam Exited (137) 13 hours ago | 2026-10-09 23:39:04 +0800 +08
+5c29c3ea1feb affectionate_blackwell Exited (137) 13 hours ago | 2026-10-09 23:39:15 +0800 +08
+72950e4cb357 optimistic_lamport Exited (137) 13 hours ago | 2026-10-09 23:39:24 +0800 +08
+d1bb65e10c03 objective_easley Exited (137) 13 hours ago | 2026-10-09 23:39:34 +0800 +08
+a32a5c15431f wizardly_khorana Exited (137) 13 hours ago | 2026-10-09 23:39:44 +0800 +08
+af7a190ec64f eloquent_proskuriakova Exited (137) 13 hours ago | 2026-10-09 23:39:53 +0800 +08
+2a7606b181ee boring_mahavira Exited (137) 13 hours ago | 2026-10-09 23:40:03 +0800 +08
+87a1a31306d5 pensive_allen Exited (137) 13 hours ago | 2026-10-09 23:40:12 +0800 +08
+f12acd2141eb silly_brahmagupta Exited (137) 13 hours ago | 2026-10-09 23:40:20 +0800 +08
+ff248c983f0f confident_hermann Exited (137) 13 hours ago | 2026-10-09 23:40:29 +0800 +08
+17ba563d03b3 funny_shirley Exited (137) 13 hours ago | 2026-10-09 23:40:37 +0800 +08
+c4f1d18cd912 gallant_margulis Exited (1) 10 hours ago | 2026-10-10 02:16:43 +0800 +08
+f52b51a15a64 frosty_mcnulty Exited (137) 10 hours ago | 2026-10-10 02:23:46 +0800 +08
+66dc2806fa33 reverent_chatelet Exited (137) About an hour ago | 2026-10-10 10:54:22 +0800 +08
+10a7e55c4454 stupefied_visvesvaraya Exited (137) About an hour ago | 2026-10-10 10:56:38 +0800 +08
+24117a15710e stupefied_ardinghelli Exited (137) About an hour ago | 2026-10-10 11:09:04 +0800 +08
+0868d30d3058 adoring_bhaskara Exited (137) About an hour ago | 2026-10-10 11:10:06 +0800 +08
+71e27756ad4f hardcore_neumann Exited (137) 6 minutes ago | 2026-10-10 12:07:10 +0800 +08
+
+layerfs-r8-full-proof-20261010-2aca347ad746
+layerfs-r8-full-proof-20261010-2cd69f68db34
+layerfs-r8-full-proof-20261010-8d7d083aaa8d
+layerfs-r8-full-proof-20261010-cd9345cf061e

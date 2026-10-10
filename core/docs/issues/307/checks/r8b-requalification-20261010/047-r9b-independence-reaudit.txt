@@ -1,0 +1,35 @@
+R9b independence re-audit at b22fa088fd36e1f21af19af3ce7bf2345db1c209 (tracked files; core/ excluding core/docs, core/vendor, core/reference-tests)
+
+## path dependencies in tracked core manifests that leave core/
+core/tools/substitution-proof/arms/baseline/Cargo.toml -> /tmp/subst/baseline/crates/layerfs-content (absolute)
+core/tools/substitution-proof/arms/baseline/Cargo.toml -> /tmp/subst/baseline/crates/layerfs-storage (absolute)
+core/tools/substitution-proof/arms/baseline/Cargo.toml -> /tmp/subst/baseline/crates/layerfs-telemetry (absolute)
+core/tools/substitution-proof/arms/c1-only/Cargo.toml -> /tmp/subst/c1-only/crates/layerfs-content (absolute)
+core/tools/substitution-proof/arms/c1-only/Cargo.toml -> /tmp/subst/c1-only/crates/layerfs-storage (absolute)
+core/tools/substitution-proof/arms/c1-only/Cargo.toml -> /tmp/subst/c1-only/crates/layerfs-telemetry (absolute)
+core/tools/substitution-proof/arms/c2-only/Cargo.toml -> /tmp/subst/c2-only/crates/layerfs-content (absolute)
+core/tools/substitution-proof/arms/c2-only/Cargo.toml -> /tmp/subst/c2-only/crates/layerfs-storage (absolute)
+core/tools/substitution-proof/arms/c2-only/Cargo.toml -> /tmp/subst/c2-only/crates/layerfs-telemetry (absolute)
+core/tools/substitution-proof/arms/combined/Cargo.toml -> /tmp/subst/combined/crates/layerfs-content (absolute)
+core/tools/substitution-proof/arms/combined/Cargo.toml -> /tmp/subst/combined/crates/layerfs-storage (absolute)
+core/tools/substitution-proof/arms/combined/Cargo.toml -> /tmp/subst/combined/crates/layerfs-telemetry (absolute)
+(end)
+
+## root-only package names in tracked core manifests
+(none)
+
+## core sources that join upward to root crates/, benchmark/, tools/ or containers/
+core/benchmark/fs-bench-pro-storage-content/shared/test_isolation.py:185:        Path(__file__).resolve().parents[3] / "benchmark" / "fs-bench-pro",
+core/benchmark/fs-bench-pro/families/workspace_commit.py:14:PRIOR_IMAGE = write.ROOT / "benchmark-results/fs-bench-pro/issue286-family3-cold-r044/prepared.json"
+core/benchmark/fs-bench-pro/runner.py:19:RESULTS = ROOT / "benchmark-results/fs-bench-pro"
+core/benchmark/fs-bench-pro/shell_package.py:16:RESULTS = ROOT / "benchmark-results/fs-bench-pro"
+
+## fixture_seal.rs reads
+28:    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/filesystem")
+33:    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/filesystem.seal")
+231:    let record = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/filesystem.generator");
+242:    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+267:        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/filesystem.generator"),
+
+## references to core/reference-tests from manifests, harnesses or tools
+core/README.md:24:the Server were retired. The root reference and archived `reference-tests`

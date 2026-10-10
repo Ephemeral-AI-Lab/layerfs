@@ -1,0 +1,691 @@
+{
+  "cases": [
+    {
+      "label": "sizes-0-0",
+      "runtime_delivered": [
+        0,
+        0
+      ],
+      "stderr": {
+        "expected_bytes": 0,
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "observed_bytes": 0,
+        "observed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr_bytes": 0,
+      "stdout": {
+        "expected_bytes": 0,
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "observed_bytes": 0,
+        "observed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout_bytes": 0
+    },
+    {
+      "label": "sizes-1-0",
+      "runtime_delivered": [
+        1,
+        0
+      ],
+      "stderr": {
+        "expected_bytes": 0,
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "observed_bytes": 0,
+        "observed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr_bytes": 0,
+      "stdout": {
+        "expected_bytes": 1,
+        "expected_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+        "observed_bytes": 1,
+        "observed_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+      },
+      "stdout_bytes": 1
+    },
+    {
+      "label": "sizes-0-1",
+      "runtime_delivered": [
+        0,
+        1
+      ],
+      "stderr": {
+        "expected_bytes": 1,
+        "expected_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+        "observed_bytes": 1,
+        "observed_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+      },
+      "stderr_bytes": 1,
+      "stdout": {
+        "expected_bytes": 0,
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "observed_bytes": 0,
+        "observed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout_bytes": 0
+    },
+    {
+      "label": "sizes-8191-8193",
+      "runtime_delivered": [
+        8191,
+        8193
+      ],
+      "stderr": {
+        "expected_bytes": 8193,
+        "expected_sha256": "a038922bd4c2de646722445cb2ebc715f9e0e1debe7b9e0f12c80044def4b611",
+        "observed_bytes": 8193,
+        "observed_sha256": "a038922bd4c2de646722445cb2ebc715f9e0e1debe7b9e0f12c80044def4b611"
+      },
+      "stderr_bytes": 8193,
+      "stdout": {
+        "expected_bytes": 8191,
+        "expected_sha256": "79a2327e02865a5ceca6e6fa955697912612b3a8b6a71499346879e0ad514f71",
+        "observed_bytes": 8191,
+        "observed_sha256": "79a2327e02865a5ceca6e6fa955697912612b3a8b6a71499346879e0ad514f71"
+      },
+      "stdout_bytes": 8191
+    },
+    {
+      "label": "sizes-8192-8192",
+      "runtime_delivered": [
+        8192,
+        8192
+      ],
+      "stderr": {
+        "expected_bytes": 8192,
+        "expected_sha256": "efc3f18f0a61cda672b53492deb08724fe933bbc4f32e38201b1d7f91e2c375b",
+        "observed_bytes": 8192,
+        "observed_sha256": "efc3f18f0a61cda672b53492deb08724fe933bbc4f32e38201b1d7f91e2c375b"
+      },
+      "stderr_bytes": 8192,
+      "stdout": {
+        "expected_bytes": 8192,
+        "expected_sha256": "acfb9230ec5099f595e7ef7149e394ded923d08d8ab4537176021fd550748a60",
+        "observed_bytes": 8192,
+        "observed_sha256": "acfb9230ec5099f595e7ef7149e394ded923d08d8ab4537176021fd550748a60"
+      },
+      "stdout_bytes": 8192
+    },
+    {
+      "label": "sizes-8193-8191",
+      "runtime_delivered": [
+        8193,
+        8191
+      ],
+      "stderr": {
+        "expected_bytes": 8191,
+        "expected_sha256": "3e3c5f13dd22bc8d4f8a7005d4f5c136c18dcbc94cf939f5ca97ba85574d7df6",
+        "observed_bytes": 8191,
+        "observed_sha256": "3e3c5f13dd22bc8d4f8a7005d4f5c136c18dcbc94cf939f5ca97ba85574d7df6"
+      },
+      "stderr_bytes": 8191,
+      "stdout": {
+        "expected_bytes": 8193,
+        "expected_sha256": "7c6fc035c07f729398593a2972752348191166adac7616c6ecda7a5945ac8640",
+        "observed_bytes": 8193,
+        "observed_sha256": "7c6fc035c07f729398593a2972752348191166adac7616c6ecda7a5945ac8640"
+      },
+      "stdout_bytes": 8193
+    },
+    {
+      "label": "sizes-65535-65537",
+      "runtime_delivered": [
+        65535,
+        65537
+      ],
+      "stderr": {
+        "expected_bytes": 65537,
+        "expected_sha256": "e3a8a707e50fdc73ff5b4d642f02f347cbc67dc939e69b19a31f2b098888d1f4",
+        "observed_bytes": 65537,
+        "observed_sha256": "e3a8a707e50fdc73ff5b4d642f02f347cbc67dc939e69b19a31f2b098888d1f4"
+      },
+      "stderr_bytes": 65537,
+      "stdout": {
+        "expected_bytes": 65535,
+        "expected_sha256": "13ab80dcabece235b8fe8482ed09eb8bc036830110947a10943d7d28e3a0581a",
+        "observed_bytes": 65535,
+        "observed_sha256": "13ab80dcabece235b8fe8482ed09eb8bc036830110947a10943d7d28e3a0581a"
+      },
+      "stdout_bytes": 65535
+    },
+    {
+      "label": "sizes-1048576-1048577",
+      "runtime_delivered": [
+        1048576,
+        1048577
+      ],
+      "stderr": {
+        "bytes_retained": false,
+        "expected_bytes": 1048577,
+        "expected_sha256": "69fe1dfe1b7f73ebeef153887b27b44f7a16b90ac9c5bc417d2420c9b4367e6b",
+        "observed_bytes": 1048577,
+        "observed_sha256": "69fe1dfe1b7f73ebeef153887b27b44f7a16b90ac9c5bc417d2420c9b4367e6b"
+      },
+      "stderr_bytes": 1048577,
+      "stdout": {
+        "bytes_retained": false,
+        "expected_bytes": 1048576,
+        "expected_sha256": "122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486",
+        "observed_bytes": 1048576,
+        "observed_sha256": "122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486"
+      },
+      "stdout_bytes": 1048576
+    },
+    {
+      "label": "sizes-67108864-67108864",
+      "runtime_delivered": [
+        67108864,
+        67108864
+      ],
+      "stderr": {
+        "bytes_retained": false,
+        "expected_bytes": 67108864,
+        "expected_sha256": "19ef6ea64979a7a90963d5831814759088978ffdf8930fa357690e9b932d4ddd",
+        "observed_bytes": 67108864,
+        "observed_sha256": "19ef6ea64979a7a90963d5831814759088978ffdf8930fa357690e9b932d4ddd"
+      },
+      "stderr_bytes": 67108864,
+      "stdout": {
+        "bytes_retained": false,
+        "expected_bytes": 67108864,
+        "expected_sha256": "483ad0ec43fbb9dbbada98f8b5245d21188ecd51a00d6dfcafabc6d88a77d793",
+        "observed_bytes": 67108864,
+        "observed_sha256": "483ad0ec43fbb9dbbada98f8b5245d21188ecd51a00d6dfcafabc6d88a77d793"
+      },
+      "stdout_bytes": 67108864
+    },
+    {
+      "exit_code": "0",
+      "held_seconds": 3,
+      "host_seconds_not_a_measurement": 2.067,
+      "label": "descendant-held",
+      "late_line": "RECORDED, not judged: the stream contract for bytes written by a descendant after the command exited is disputed",
+      "late_line_delivered": false,
+      "runtime_delivered": [
+        6,
+        0
+      ],
+      "stderr_bytes": 0,
+      "stdout": {
+        "command_bytes": 6,
+        "command_sha256": "b0f66adc83641586656866813fd9dd0b8ebb63796075661ba45d1aa8089e1d44",
+        "observed_bytes": 6,
+        "observed_sha256": "b0f66adc83641586656866813fd9dd0b8ebb63796075661ba45d1aa8089e1d44"
+      },
+      "stdout_bytes": 6
+    },
+    {
+      "exit_code": "7",
+      "label": "exit-7-with-output",
+      "original_failure": "original command exit is not known zero: 7",
+      "runtime_delivered": [
+        1048576,
+        1048576
+      ],
+      "stderr": {
+        "bytes_retained": false,
+        "expected_bytes": 1048576,
+        "expected_sha256": "ac1d31809564c888674d6cf62e76a84d3ff9887b0987136f489061a12fcff467",
+        "observed_bytes": 1048576,
+        "observed_sha256": "ac1d31809564c888674d6cf62e76a84d3ff9887b0987136f489061a12fcff467"
+      },
+      "stderr_bytes": 1048576,
+      "stdout": {
+        "bytes_retained": false,
+        "expected_bytes": 1048576,
+        "expected_sha256": "122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486",
+        "observed_bytes": 1048576,
+        "observed_sha256": "122f7de1640cd0153e4523ec21831100adf576674ed9acac967812e7b8e0b486"
+      },
+      "stdout_bytes": 1048576,
+      "typed_status_in_event": true
+    }
+  ],
+  "construction_workers": 1,
+  "container_stop": "EXPLICIT docker stop by this controller, exit 0",
+  "custody": {
+    "cause": "protocol loop ended by the nonzero-exit case",
+    "cause_type": "RuntimeError",
+    "child_event_receipts": [
+      "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.jsonl"
+    ],
+    "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+    "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+    "exec_ids": [
+      "b213125496806078c7b40cc06995a8624a348b1fd5857368d5c7a28863b90bf8",
+      "b213125496806078c7b40cc06995a8624a348b1fd5857368d5c7a28863b90bf8",
+      "5fa358a2442b9f2082623cd11a4abb1071e52a62f44da0f5669dcecbc9f437a9",
+      "5fa358a2442b9f2082623cd11a4abb1071e52a62f44da0f5669dcecbc9f437a9",
+      "edae230a05763e95a5a1d9be21692ffcfebedf0fc8be59264234b8ffe2f55bb5",
+      "edae230a05763e95a5a1d9be21692ffcfebedf0fc8be59264234b8ffe2f55bb5",
+      "2126fbf1ad8a0531dc35dd7a2220999a90786a1468655aeff54ae4dd55a8f8f7",
+      "2126fbf1ad8a0531dc35dd7a2220999a90786a1468655aeff54ae4dd55a8f8f7",
+      "8409f652d134434de760f50fddd37ffee3fda1e38ae3bec2cae2cfacaebdb4a1",
+      "8409f652d134434de760f50fddd37ffee3fda1e38ae3bec2cae2cfacaebdb4a1",
+      "3daffd8ea910fe16da537648af23c87a3d21c2182ab866fea109789f8799fc35",
+      "3daffd8ea910fe16da537648af23c87a3d21c2182ab866fea109789f8799fc35",
+      "a9e18334174c6f5b4e97aa806ec98dc359347ce669c80a1a877c50fc3d555726",
+      "a9e18334174c6f5b4e97aa806ec98dc359347ce669c80a1a877c50fc3d555726",
+      "805b47838d0ccf372000d098c0e6e10d20df3cd4fc048cdb30027f90d543406f",
+      "805b47838d0ccf372000d098c0e6e10d20df3cd4fc048cdb30027f90d543406f",
+      "1074594bd140d233be887f128f24bd6e41a8d43c3d5c41d0096c396baa4247b0",
+      "1074594bd140d233be887f128f24bd6e41a8d43c3d5c41d0096c396baa4247b0",
+      "4cf33cb5abe1c91f3bc9296d7ef2f8800bab0418cce5cd95fb57f94dd0296a72",
+      "4cf33cb5abe1c91f3bc9296d7ef2f8800bab0418cce5cd95fb57f94dd0296a72",
+      "ae193819519414fdc3742e9fd6e8abb62828139baf6d5c873b32b054927a1bc2",
+      "ae193819519414fdc3742e9fd6e8abb62828139baf6d5c873b32b054927a1bc2"
+    ],
+    "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+    "host_pid": 95532,
+    "host_signal": "NOT_ATTEMPTED",
+    "host_wait_stop_seconds": 1,
+    "independent_failures": [],
+    "observed_host_exit": 1,
+    "original_operations_replayed": false,
+    "original_phase": null
+  },
+  "global_profile": "Disposable/WAL/OFF",
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "judged_failures": [],
+  "not_constructible": [
+    "stalled or failing sink (backpressure)",
+    "fast exit with a delayed consumer",
+    "connection cut between frames"
+  ],
+  "operation_attempts": 1,
+  "overall_wall_stop_seconds": 60,
+  "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+  "phases": [
+    {
+      "host_end_ns": 879829811207125,
+      "host_start_ns": 879829802570125,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 370921667,
+        "elapsed_ns": 7946250,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 3,
+          "control_send_records_before": 1,
+          "directory": "/workspaces/1",
+          "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 7,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 7946250,
+          "end_ns": 370879334,
+          "start_ns": 362933084
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10), namespace: 1 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10), namespace: 1 }, directory: \"/workspaces/1\", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879829853264500,
+      "host_start_ns": 879829811561000,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 413125667,
+        "elapsed_ns": 41043000,
+        "event": "command",
+        "fields": {
+          "command_sha256": "e5e97d619221716889536547c81348baed9a44599b4732234e86aa2491613171",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "b213125496806078c7b40cc06995a8624a348b1fd5857368d5c7a28863b90bf8",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000008-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000008-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 14,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 41043000,
+          "end_ns": 413077334,
+          "start_ns": 372034334
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"b213125496806078c7b40cc06995a8624a348b1fd5857368d5c7a28863b90bf8\"), running: false, exit_code: Some(0), pid: Some(45956) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879829909658875,
+      "host_start_ns": 879829853809375,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 469516000,
+        "elapsed_ns": 55295792,
+        "event": "command",
+        "fields": {
+          "command_sha256": "0897cadd3666d7368c90a479875efebb91c42613aee4024971f16b5d501418c5",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "5fa358a2442b9f2082623cd11a4abb1071e52a62f44da0f5669dcecbc9f437a9",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000015-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000015-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 21,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 55295792,
+          "end_ns": 469471917,
+          "start_ns": 414176125
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"5fa358a2442b9f2082623cd11a4abb1071e52a62f44da0f5669dcecbc9f437a9\"), running: false, exit_code: Some(0), pid: Some(45976) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879829963950666,
+      "host_start_ns": 879829910161458,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 523791417,
+        "elapsed_ns": 53193750,
+        "event": "command",
+        "fields": {
+          "command_sha256": "2d11ecb54dcbd307b5ba018d5d355fcf253189e5824953578c27e8e400a776d4",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "edae230a05763e95a5a1d9be21692ffcfebedf0fc8be59264234b8ffe2f55bb5",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000022-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000022-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 28,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 53193750,
+          "end_ns": 523683167,
+          "start_ns": 470489417
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"edae230a05763e95a5a1d9be21692ffcfebedf0fc8be59264234b8ffe2f55bb5\"), running: false, exit_code: Some(0), pid: Some(45992) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879830018247916,
+      "host_start_ns": 879829964625333,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 578102417,
+        "elapsed_ns": 52699708,
+        "event": "command",
+        "fields": {
+          "command_sha256": "fd9aad752236a72635cad481f82d38db4edacc0672ef82b6878cf77836d82fbf",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "2126fbf1ad8a0531dc35dd7a2220999a90786a1468655aeff54ae4dd55a8f8f7",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000029-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000029-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 35,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 52699708,
+          "end_ns": 578048500,
+          "start_ns": 525348792
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"2126fbf1ad8a0531dc35dd7a2220999a90786a1468655aeff54ae4dd55a8f8f7\"), running: false, exit_code: Some(0), pid: Some(46012) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879830066862958,
+      "host_start_ns": 879830018844666,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 626665000,
+        "elapsed_ns": 47336334,
+        "event": "command",
+        "fields": {
+          "command_sha256": "3d1fc9654a1bd607bc129f4ffb71cee4ef74e44f19a36c8489793d8c5116549d",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "8409f652d134434de760f50fddd37ffee3fda1e38ae3bec2cae2cfacaebdb4a1",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000036-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000036-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 42,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 47336334,
+          "end_ns": 626567209,
+          "start_ns": 579230875
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"8409f652d134434de760f50fddd37ffee3fda1e38ae3bec2cae2cfacaebdb4a1\"), running: false, exit_code: Some(0), pid: Some(46030) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879830121083916,
+      "host_start_ns": 879830067772625,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 680970917,
+        "elapsed_ns": 52310125,
+        "event": "command",
+        "fields": {
+          "command_sha256": "f68eb40a9c65e7bd68b445f368e909d98f9fdf24812a9d33d18cb5268596dfd8",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "3daffd8ea910fe16da537648af23c87a3d21c2182ab866fea109789f8799fc35",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000043-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000043-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 49,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 52310125,
+          "end_ns": 680935250,
+          "start_ns": 628625125
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"3daffd8ea910fe16da537648af23c87a3d21c2182ab866fea109789f8799fc35\"), running: false, exit_code: Some(0), pid: Some(46047) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879830169531583,
+      "host_start_ns": 879830121587833,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 729382334,
+        "elapsed_ns": 47473833,
+        "event": "command",
+        "fields": {
+          "command_sha256": "cd99a4add390e782f8a567ad9e2b7b615bd0c75af39cdf2b9f4566a45fd88386",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "a9e18334174c6f5b4e97aa806ec98dc359347ce669c80a1a877c50fc3d555726",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000050-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000050-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 56,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 47473833,
+          "end_ns": 729334042,
+          "start_ns": 681860209
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"a9e18334174c6f5b4e97aa806ec98dc359347ce669c80a1a877c50fc3d555726\"), running: false, exit_code: Some(0), pid: Some(46064) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879830242079458,
+      "host_start_ns": 879830170237875,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 801945084,
+        "elapsed_ns": 71240792,
+        "event": "command",
+        "fields": {
+          "command_sha256": "1699fe5360c06caa8407d9da3f286057d45cb255a172ba928babf67a7f0b40d3",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "805b47838d0ccf372000d098c0e6e10d20df3cd4fc048cdb30027f90d543406f",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000057-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000057-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 63,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 71240792,
+          "end_ns": 801908792,
+          "start_ns": 730668000
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"805b47838d0ccf372000d098c0e6e10d20df3cd4fc048cdb30027f90d543406f\"), running: false, exit_code: Some(0), pid: Some(46084) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879831131457958,
+      "host_start_ns": 879830246409291,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 1691322959,
+        "elapsed_ns": 884554250,
+        "event": "command",
+        "fields": {
+          "command_sha256": "9e3dc2c60f93c886e60a0ab1adf88766722a15f7ed782fd97768aaaa103deefe",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "1074594bd140d233be887f128f24bd6e41a8d43c3d5c41d0096c396baa4247b0",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000064-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000064-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 70,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 884554250,
+          "end_ns": 1691287834,
+          "start_ns": 806733584
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"1074594bd140d233be887f128f24bd6e41a8d43c3d5c41d0096c396baa4247b0\"), running: false, exit_code: Some(0), pid: Some(46103) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 20000000000
+    },
+    {
+      "host_end_ns": 879831306729458,
+      "host_start_ns": 879831302446666,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "unmount",
+      "original_event": {
+        "at_ns": 1866590667,
+        "elapsed_ns": 3868833,
+        "event": "unmount",
+        "fields": {
+          "control_send_records_after": 4,
+          "control_send_records_before": 3,
+          "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 71,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 3868833,
+          "end_ns": 1866578250,
+          "start_ns": 1862709417
+        },
+        "value": "key=832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10 token=WorkspaceToken { workspace: WorkspaceId(832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10), namespace: 1 }; logical_terminal=true; physical_cleanup requires its own original observation"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879831308832625,
+      "host_start_ns": 879831306756583,
+      "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+      "operation": "cleanup",
+      "original_event": {
+        "at_ns": 1868725875,
+        "elapsed_ns": 1876708,
+        "event": "cleanup",
+        "fields": {
+          "control_send_records_after": 5,
+          "control_send_records_before": 4,
+          "key": "832ec68979e11de0bbce0066c2991a2ea36bf31f048d1313f936ad2ccc740e10",
+          "state": "Gone"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 72,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 1876708,
+          "end_ns": 1868720167,
+          "start_ns": 1866843459
+        },
+        "value": "original read-only cleanup observation; no replay or maintenance invocation"
+      },
+      "wall_stop_ns": 4999998750
+    },
+    {
+      "host_end_ns": 879833376198000,
+      "host_start_ns": 879831309078041,
+      "key": "native:/tmp",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 3936055584,
+        "elapsed_ns": 2066501625,
+        "event": "command",
+        "fields": {
+          "command_sha256": "e607791c32b353a2f749108fc50c18ea503460c47e211f2c037e6b251900d609",
+          "container": "666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa",
+          "exec": "4cf33cb5abe1c91f3bc9296d7ef2f8800bab0418cce5cd95fb57f94dd0296a72",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000073-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/043-streams/runtime.events.artifacts/000073-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 79,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 2066501625,
+          "end_ns": 3936004000,
+          "start_ns": 1869502375
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"666e7af01e49b1b7004ff233ca9dec55a19150c17bb9e3b11dcd3c65f3aba0fa\"), exec: ExecId(\"4cf33cb5abe1c91f3bc9296d7ef2f8800bab0418cce5cd95fb57f94dd0296a72\"), running: false, exit_code: Some(0), pid: Some(46125) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 9000000000
+    }
+  ],
+  "schema": "r8b-runtime-streams-controller-v1",
+  "seals": {
+    "controller": "01a222b51178674c833b86d488d0fbe1a717cc751721a687e1de75d00479abe0",
+    "daemon": "632b17eab921696935ed5e486a7bf01f7168e0284bb73c47864d7e8af56b7bf4",
+    "inputs": "611836ae4376516a5e6b253d591c6fec647dec1763637af62b324973121c6be6",
+    "runtime": "2aaaf31782b1669eb17f6b10ce585290a4f5caa88b245e615efbd2efe0cf310b",
+    "source": "5cef3a278e04cfd84303280e5230386515286d0b9f2140f7c294909925e96776"
+  },
+  "status": "PASS",
+  "timing_claim": "NOT_MEASURED",
+  "volume": "layerfs-r8-full-proof-20261010-2aca347ad746",
+  "workspace": "Unmounted, Gone observed before the cases outside a mount"
+}

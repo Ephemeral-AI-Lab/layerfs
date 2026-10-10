@@ -1,0 +1,1 @@
+{"arrangement": "private", "command_mount_namespace": "mnt:[4026532962]", "cwd": "/workspaces/1", "descriptors": {"0": "/dev/null", "1": "/dev/null", "2": "/dev/null", "4": "pipe:[53321325]"}, "hold_seconds": 9.0, "mount": "/workspaces/1", "mount_namespace": "mnt:[4026533100]", "pid": 31, "schema": "r8b-mount-holder-v1", "unshare": "ALLOWED"}

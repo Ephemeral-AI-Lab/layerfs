@@ -1,0 +1,20 @@
+{
+  "cause": "original event wall stop: unmount",
+  "cause_type": "RuntimeError",
+  "child_event_receipts": [
+    "core/docs/issues/307/checks/r8b-requalification-20261010/042-holder-private/runtime.events.jsonl"
+  ],
+  "container": "71e27756ad4fd8fb55d7210aeff137a22d35a9cc44b43d71244f465587393c6e",
+  "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+  "exec_ids": [
+    "f3a6fcdb52cb169cc27f9521fd053ccd4250a646bfd51aa8dbdc6d607cabc49e",
+    "f3a6fcdb52cb169cc27f9521fd053ccd4250a646bfd51aa8dbdc6d607cabc49e"
+  ],
+  "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+  "host_pid": 95472,
+  "host_signal": "NOT_ATTEMPTED",
+  "host_wait_stop_seconds": 1,
+  "independent_failures": [],
+  "original_operations_replayed": false,
+  "original_phase": null
+}

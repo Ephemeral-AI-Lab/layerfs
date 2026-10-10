@@ -1,0 +1,840 @@
+{
+  "before_commit_oracle": {
+    "gid": 20,
+    "hardlink_aliases": 1,
+    "names": 26,
+    "payload_set_sha256": "b26e497d2bd6b716cc0f0399bb7d46d8cbd42f7fa72fa46fe85a0e8df682f058",
+    "regular_files": 24,
+    "schema": "r7-lifecycle-scoped-oracle-v1",
+    "scope": "r7-survival",
+    "status": "PASS",
+    "symlinks": 1,
+    "uid": 501
+  },
+  "commit_kind": "Committed",
+  "construction_workers": 1,
+  "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+  "container_stop": "ACKNOWLEDGED",
+  "daemon_instance": "377883cfdc421aab55da4fe3aac0b5cdc46b017c6c098fcc53f64930eb4c1300",
+  "durable": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "fresh_mount_oracle": {
+    "gid": 20,
+    "hardlink_aliases": 1,
+    "names": 26,
+    "payload_set_sha256": "b26e497d2bd6b716cc0f0399bb7d46d8cbd42f7fa72fa46fe85a0e8df682f058",
+    "regular_files": 24,
+    "schema": "r7-lifecycle-scoped-oracle-v1",
+    "scope": "r7-survival",
+    "status": "PASS",
+    "symlinks": 1,
+    "uid": 501
+  },
+  "gid": 20,
+  "global_profile": "Disposable/WAL/OFF",
+  "host_exit": 0,
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "judged_failures": [],
+  "not_asserted": [
+    "native gauges after Unmounted: no product observation exists",
+    "Exec registration: the product has no registration interface to observe"
+  ],
+  "operation_attempts": 1,
+  "overall_wall_stop_seconds": 60,
+  "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+  "phases": [
+    {
+      "host_end_ns": 879842366341208,
+      "host_start_ns": 879842265812875,
+      "key": "",
+      "operation": "observe",
+      "original_event": {
+        "at_ns": 345952834,
+        "elapsed_ns": 99840500,
+        "event": "external_snapshot",
+        "fields": {
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000007-external_snapshot.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000007-external_snapshot.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 9,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 99840500,
+          "end_ns": 345935875,
+          "start_ns": 246095375
+        },
+        "value": "status=ExitStatus(unix_wait_status(0))"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879842447448833,
+      "host_start_ns": 879842427518333,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 426994084,
+        "elapsed_ns": 19298542,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 3,
+          "control_send_records_before": 1,
+          "directory": "/workspaces/1",
+          "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 10,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 19298542,
+          "end_ns": 426959959,
+          "start_ns": 407661417
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214), namespace: 1 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214), namespace: 1 }, directory: \"/workspaces/1\", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 10000000000
+    },
+    {
+      "host_end_ns": 879842559663541,
+      "host_start_ns": 879842447475666,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "snapshot",
+      "original_event": {
+        "at_ns": 539265667,
+        "elapsed_ns": 109636541,
+        "event": "external_snapshot",
+        "fields": {
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000012-external_snapshot.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000012-external_snapshot.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 14,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 109636541,
+          "end_ns": 539246000,
+          "start_ns": 429609459
+        },
+        "value": "status=ExitStatus(unix_wait_status(0))"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879842715850500,
+      "host_start_ns": 879842625779666,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 695496584,
+        "elapsed_ns": 89174166,
+        "event": "command",
+        "fields": {
+          "command_sha256": "1f5b2682b5308f825074ffd021790673f391528eeb02da357906945efa0d5da2",
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "exec": "b4fb1ce6717995da6cdc020dfd45893aa93a8825c16c3a0c5ea11f09c68e2c9d",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000015-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000015-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 21,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 89174166,
+          "end_ns": 695449125,
+          "start_ns": 606274959
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9\"), exec: ExecId(\"b4fb1ce6717995da6cdc020dfd45893aa93a8825c16c3a0c5ea11f09c68e2c9d\"), running: false, exit_code: Some(0), pid: Some(46522) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 9500000000
+    },
+    {
+      "host_end_ns": 879842783190291,
+      "host_start_ns": 879842715869166,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "verify",
+      "original_event": {
+        "at_ns": 762641709,
+        "elapsed_ns": 66319375,
+        "event": "verify",
+        "fields": {
+          "command_sha256": "cd7a54c0873fa9020c2f1f1b5035c2e53eb7f18a20e28d672122cc93d9bbf515",
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "exec": "b0d8a35550b882a03647cede84e0cf167d702622abada8b7f5f03b2adcf3fa89",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000022-verify.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000022-verify.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 28,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 66319375,
+          "end_ns": 762547000,
+          "start_ns": 696227625
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9\"), exec: ExecId(\"b0d8a35550b882a03647cede84e0cf167d702622abada8b7f5f03b2adcf3fa89\"), running: false, exit_code: Some(0), pid: Some(46538) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 9500000000
+    },
+    {
+      "host_end_ns": 879843266776333,
+      "host_start_ns": 879842783608208,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "commit",
+      "original_event": {
+        "at_ns": 1246379709,
+        "elapsed_ns": 482690792,
+        "event": "commit",
+        "fields": {
+          "commit_kind": "Committed",
+          "control_send_records_after": 5,
+          "control_send_records_before": 4,
+          "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 29,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 482690792,
+          "end_ns": 1246361542,
+          "start_ns": 763670750
+        },
+        "value": "key=19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214 original_outcome=Committed(CommitRecord { id: CommitId(12fb7d64c7b04df9a770d4e99f92f6e2fc8e7df5dd8a504097ef40c50e247b6aa9), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), root: ObjectId(\"acc70fa7cf3bd74333e5f5d63e382d4a8c9faf960f50959a816fb3d3595db5f6\"), parent: None, base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63) })"
+      },
+      "wall_stop_ns": 15000000000
+    },
+    {
+      "host_end_ns": 879843368102625,
+      "host_start_ns": 879843266805958,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "snapshot",
+      "original_event": {
+        "at_ns": 1347725875,
+        "elapsed_ns": 98831750,
+        "event": "external_snapshot",
+        "fields": {
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000031-external_snapshot.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000031-external_snapshot.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 33,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 98831750,
+          "end_ns": 1347710042,
+          "start_ns": 1248878292
+        },
+        "value": "status=ExitStatus(unix_wait_status(0))"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879843434372541,
+      "host_start_ns": 879843430400416,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "unmount",
+      "original_event": {
+        "at_ns": 1413973667,
+        "elapsed_ns": 3450083,
+        "event": "unmount",
+        "fields": {
+          "control_send_records_after": 7,
+          "control_send_records_before": 6,
+          "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 34,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 3450083,
+          "end_ns": 1413961792,
+          "start_ns": 1410511709
+        },
+        "value": "key=19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214 token=WorkspaceToken { workspace: WorkspaceId(19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214), namespace: 1 }; logical_terminal=true; physical_cleanup requires its own original observation"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879843436599250,
+      "host_start_ns": 879843434407458,
+      "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+      "operation": "cleanup",
+      "original_event": {
+        "at_ns": 1416300375,
+        "elapsed_ns": 1943542,
+        "event": "cleanup",
+        "fields": {
+          "control_send_records_after": 8,
+          "control_send_records_before": 7,
+          "key": "19f0a9f3770273df47e47d549c483e8a1c4fc5117b35b6048b02f4b0a8bfa214",
+          "state": "Gone"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 35,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 1943542,
+          "end_ns": 1416295417,
+          "start_ns": 1414351875
+        },
+        "value": "original read-only cleanup observation; no replay or maintenance invocation"
+      },
+      "wall_stop_ns": 4999997749
+    },
+    {
+      "host_end_ns": 879843531959791,
+      "host_start_ns": 879843436610500,
+      "key": "",
+      "operation": "observe",
+      "original_event": {
+        "at_ns": 1511584334,
+        "elapsed_ns": 94875000,
+        "event": "external_snapshot",
+        "fields": {
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000036-external_snapshot.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000036-external_snapshot.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 38,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 94875000,
+          "end_ns": 1511562875,
+          "start_ns": 1416687875
+        },
+        "value": "status=ExitStatus(unix_wait_status(0))"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879843602493083,
+      "host_start_ns": 879843592821333,
+      "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 1582018375,
+        "elapsed_ns": 8953459,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 10,
+          "control_send_records_before": 8,
+          "directory": "/workspaces/2",
+          "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 39,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 8953459,
+          "end_ns": 1581988209,
+          "start_ns": 1573034750
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4), namespace: 2 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: Some(CommitId(12fb7d64c7b04df9a770d4e99f92f6e2fc8e7df5dd8a504097ef40c50e247b6aa9)) }, head_root: Some(ObjectId(\"acc70fa7cf3bd74333e5f5d63e382d4a8c9faf960f50959a816fb3d3595db5f6\")), base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"acc70fa7cf3bd74333e5f5d63e382d4a8c9faf960f50959a816fb3d3595db5f6\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4), namespace: 2 }, directory: \"/workspaces/2\", receipt: NativeReceipt { mount: 582, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 10000000000
+    },
+    {
+      "host_end_ns": 879843687909416,
+      "host_start_ns": 879843602519458,
+      "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4",
+      "operation": "verify",
+      "original_event": {
+        "at_ns": 1667530500,
+        "elapsed_ns": 84621167,
+        "event": "verify",
+        "fields": {
+          "command_sha256": "cd7a54c0873fa9020c2f1f1b5035c2e53eb7f18a20e28d672122cc93d9bbf515",
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "exec": "5999f00dc5aba0a4ff6dc064edac5d2c9556b9548719163947bdc83082e8f108",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000040-verify.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000040-verify.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 46,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 84621167,
+          "end_ns": 1667461417,
+          "start_ns": 1582840250
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9\"), exec: ExecId(\"5999f00dc5aba0a4ff6dc064edac5d2c9556b9548719163947bdc83082e8f108\"), running: false, exit_code: Some(0), pid: Some(46812) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 9500000000
+    },
+    {
+      "host_end_ns": 879843791128250,
+      "host_start_ns": 879843688101833,
+      "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4",
+      "operation": "snapshot",
+      "original_event": {
+        "at_ns": 1770712709,
+        "elapsed_ns": 100238833,
+        "event": "external_snapshot",
+        "fields": {
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000048-external_snapshot.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000048-external_snapshot.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 50,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 100238833,
+          "end_ns": 1770693375,
+          "start_ns": 1670454542
+        },
+        "value": "status=ExitStatus(unix_wait_status(0))"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879843860516666,
+      "host_start_ns": 879843856521375,
+      "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4",
+      "operation": "unmount",
+      "original_event": {
+        "at_ns": 1840102250,
+        "elapsed_ns": 3343833,
+        "event": "unmount",
+        "fields": {
+          "control_send_records_after": 12,
+          "control_send_records_before": 11,
+          "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 51,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 3343833,
+          "end_ns": 1840090500,
+          "start_ns": 1836746667
+        },
+        "value": "key=dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4 token=WorkspaceToken { workspace: WorkspaceId(dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4), namespace: 2 }; logical_terminal=true; physical_cleanup requires its own original observation"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879843862666708,
+      "host_start_ns": 879843860545000,
+      "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4",
+      "operation": "cleanup",
+      "original_event": {
+        "at_ns": 1842345959,
+        "elapsed_ns": 1763750,
+        "event": "cleanup",
+        "fields": {
+          "control_send_records_after": 13,
+          "control_send_records_before": 12,
+          "key": "dc86231ae73307b0fd403c0c79bde8120700e43c84d89924dcb542436d3c71e4",
+          "state": "Gone"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 52,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 1763750,
+          "end_ns": 1842340084,
+          "start_ns": 1840576334
+        },
+        "value": "original read-only cleanup observation; no replay or maintenance invocation"
+      },
+      "wall_stop_ns": 4999998250
+    },
+    {
+      "host_end_ns": 879843960352000,
+      "host_start_ns": 879843862677291,
+      "key": "",
+      "operation": "observe",
+      "original_event": {
+        "at_ns": 1939974917,
+        "elapsed_ns": 97146000,
+        "event": "external_snapshot",
+        "fields": {
+          "container": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000053-external_snapshot.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/044-lifecycle/runtime.events.artifacts/000053-external_snapshot.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 55,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 97146000,
+          "end_ns": 1939954292,
+          "start_ns": 1842808292
+        },
+        "value": "status=ExitStatus(unix_wait_status(0))"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879845277725750,
+      "host_start_ns": 879844028277583,
+      "key": "",
+      "operation": "stop",
+      "original_event": {
+        "at_ns": 3257033417,
+        "elapsed_ns": null,
+        "event": "container_stopped",
+        "fields": {},
+        "schema": "r7-runtime-events-v1",
+        "sequence": 56,
+        "span": null,
+        "value": "6ecff553acedcdc56ff3c799fa9915b0bbe4ebc2a60edb9edafb6dd252efb0b9"
+      },
+      "wall_stop_ns": 5000000000
+    }
+  ],
+  "points": [
+    {
+      "backing": {
+        "/layerfs-local/overlay/overlay.sqlite": {
+          "allocated": 268435456,
+          "bytes": 229376
+        },
+        "/layerfs-local/overlay/overlay.sqlite-journal": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-shm": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-wal": "ABSENT",
+        "/layerfs-store/global/store.sqlite": {
+          "allocated": 1417289728,
+          "bytes": 1417285632
+        },
+        "/layerfs-store/global/store.sqlite-journal": "ABSENT",
+        "/layerfs-store/global/store.sqlite-shm": {
+          "allocated": 32768,
+          "bytes": 32768
+        },
+        "/layerfs-store/global/store.sqlite-wal": {
+          "allocated": 0,
+          "bytes": 0
+        }
+      },
+      "cgroup": {
+        "memory.current": 6250496,
+        "memory.peak": 6938624,
+        "memory.stat.anon": 3559424,
+        "memory.stat.file": 409600,
+        "memory.stat.kernel": 1667072,
+        "memory.stat.shmem": 0
+      },
+      "directory": null,
+      "label": "before any mount",
+      "mount_rows": [],
+      "mounted": false,
+      "status": {
+        "RssAnon": "3100 kB",
+        "RssFile": "5804 kB",
+        "Threads": "7",
+        "VmHWM": "8904 kB",
+        "VmRSS": "8904 kB"
+      },
+      "threads": {
+        "layerfs-control": 1,
+        "layerfs-daemon": 1,
+        "layerfs-fuse-0": 1,
+        "layerfs-fuse-1": 1,
+        "layerfs-fuse-2": 1,
+        "layerfs-fuse-3": 1,
+        "layerfs-overlay": 1
+      }
+    },
+    {
+      "backing": {
+        "/layerfs-local/overlay/overlay.sqlite": {
+          "allocated": 268664832,
+          "bytes": 229376
+        },
+        "/layerfs-local/overlay/overlay.sqlite-journal": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-shm": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-wal": "ABSENT",
+        "/layerfs-store/global/store.sqlite": {
+          "allocated": 1417289728,
+          "bytes": 1417285632
+        },
+        "/layerfs-store/global/store.sqlite-journal": "ABSENT",
+        "/layerfs-store/global/store.sqlite-shm": {
+          "allocated": 32768,
+          "bytes": 32768
+        },
+        "/layerfs-store/global/store.sqlite-wal": {
+          "allocated": 0,
+          "bytes": 0
+        }
+      },
+      "cgroup": {
+        "memory.current": 9641984,
+        "memory.peak": 12259328,
+        "memory.stat.anon": 6180864,
+        "memory.stat.file": 1064960,
+        "memory.stat.kernel": 1806336,
+        "memory.stat.shmem": 0
+      },
+      "directory": "/workspaces/1",
+      "label": "first Workspace mounted",
+      "mount_rows": [
+        "/workspaces/1"
+      ],
+      "mounted": true,
+      "status": {
+        "RssAnon": "5652 kB",
+        "RssFile": "6700 kB",
+        "Threads": "10",
+        "VmHWM": "12352 kB",
+        "VmRSS": "12352 kB"
+      },
+      "threads": {
+        "fuser-0": 1,
+        "layerfs-control": 1,
+        "layerfs-daemon": 1,
+        "layerfs-fence-1": 1,
+        "layerfs-fuse-0": 1,
+        "layerfs-fuse-1": 1,
+        "layerfs-fuse-2": 1,
+        "layerfs-fuse-3": 1,
+        "layerfs-mount-1": 1,
+        "layerfs-overlay": 1
+      }
+    },
+    {
+      "backing": {
+        "/layerfs-local/overlay/overlay.sqlite": {
+          "allocated": 268726272,
+          "bytes": 290816
+        },
+        "/layerfs-local/overlay/overlay.sqlite-journal": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-shm": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-wal": "ABSENT",
+        "/layerfs-store/global/store.sqlite": {
+          "allocated": 1417289728,
+          "bytes": 1417285632
+        },
+        "/layerfs-store/global/store.sqlite-journal": "ABSENT",
+        "/layerfs-store/global/store.sqlite-shm": {
+          "allocated": 32768,
+          "bytes": 32768
+        },
+        "/layerfs-store/global/store.sqlite-wal": {
+          "allocated": 983040,
+          "bytes": 980592
+        }
+      },
+      "cgroup": {
+        "memory.current": 55508992,
+        "memory.peak": 56332288,
+        "memory.stat.anon": 36270080,
+        "memory.stat.file": 16392192,
+        "memory.stat.kernel": 2084864,
+        "memory.stat.shmem": 0
+      },
+      "directory": "/workspaces/1",
+      "label": "after Commit, still mounted",
+      "mount_rows": [
+        "/workspaces/1"
+      ],
+      "mounted": true,
+      "status": {
+        "RssAnon": "35040 kB",
+        "RssFile": "7020 kB",
+        "Threads": "10",
+        "VmHWM": "42060 kB",
+        "VmRSS": "42060 kB"
+      },
+      "threads": {
+        "fuser-0": 1,
+        "layerfs-control": 1,
+        "layerfs-daemon": 1,
+        "layerfs-fence-1": 1,
+        "layerfs-fuse-0": 1,
+        "layerfs-fuse-1": 1,
+        "layerfs-fuse-2": 1,
+        "layerfs-fuse-3": 1,
+        "layerfs-mount-1": 1,
+        "layerfs-overlay": 1
+      }
+    },
+    {
+      "backing": {
+        "/layerfs-local/overlay/overlay.sqlite": {
+          "allocated": 268726272,
+          "bytes": 290816
+        },
+        "/layerfs-local/overlay/overlay.sqlite-journal": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-shm": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-wal": "ABSENT",
+        "/layerfs-store/global/store.sqlite": {
+          "allocated": 1417289728,
+          "bytes": 1417285632
+        },
+        "/layerfs-store/global/store.sqlite-journal": "ABSENT",
+        "/layerfs-store/global/store.sqlite-shm": {
+          "allocated": 32768,
+          "bytes": 32768
+        },
+        "/layerfs-store/global/store.sqlite-wal": {
+          "allocated": 983040,
+          "bytes": 980592
+        }
+      },
+      "cgroup": {
+        "memory.current": 55316480,
+        "memory.peak": 61890560,
+        "memory.stat.anon": 36446208,
+        "memory.stat.file": 16293888,
+        "memory.stat.kernel": 1945600,
+        "memory.stat.shmem": 0
+      },
+      "directory": null,
+      "label": "first Workspace Unmounted and Gone",
+      "mount_rows": [],
+      "mounted": false,
+      "status": {
+        "RssAnon": "35212 kB",
+        "RssFile": "7084 kB",
+        "Threads": "7",
+        "VmHWM": "42296 kB",
+        "VmRSS": "42296 kB"
+      },
+      "threads": {
+        "layerfs-control": 1,
+        "layerfs-daemon": 1,
+        "layerfs-fuse-0": 1,
+        "layerfs-fuse-1": 1,
+        "layerfs-fuse-2": 1,
+        "layerfs-fuse-3": 1,
+        "layerfs-overlay": 1
+      }
+    },
+    {
+      "backing": {
+        "/layerfs-local/overlay/overlay.sqlite": {
+          "allocated": 268726272,
+          "bytes": 290816
+        },
+        "/layerfs-local/overlay/overlay.sqlite-journal": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-shm": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-wal": "ABSENT",
+        "/layerfs-store/global/store.sqlite": {
+          "allocated": 1417289728,
+          "bytes": 1417285632
+        },
+        "/layerfs-store/global/store.sqlite-journal": "ABSENT",
+        "/layerfs-store/global/store.sqlite-shm": {
+          "allocated": 32768,
+          "bytes": 32768
+        },
+        "/layerfs-store/global/store.sqlite-wal": {
+          "allocated": 983040,
+          "bytes": 980592
+        }
+      },
+      "cgroup": {
+        "memory.current": 78532608,
+        "memory.peak": 83382272,
+        "memory.stat.anon": 59596800,
+        "memory.stat.file": 16396288,
+        "memory.stat.kernel": 2097152,
+        "memory.stat.shmem": 0
+      },
+      "directory": "/workspaces/2",
+      "label": "fresh Workspace mounted",
+      "mount_rows": [
+        "/workspaces/2"
+      ],
+      "mounted": true,
+      "status": {
+        "RssAnon": "57824 kB",
+        "RssFile": "7084 kB",
+        "Threads": "10",
+        "VmHWM": "64908 kB",
+        "VmRSS": "64908 kB"
+      },
+      "threads": {
+        "fuser-0": 1,
+        "layerfs-control": 1,
+        "layerfs-daemon": 1,
+        "layerfs-fence-2": 1,
+        "layerfs-fuse-0": 1,
+        "layerfs-fuse-1": 1,
+        "layerfs-fuse-2": 1,
+        "layerfs-fuse-3": 1,
+        "layerfs-mount-2": 1,
+        "layerfs-overlay": 1
+      }
+    },
+    {
+      "backing": {
+        "/layerfs-local/overlay/overlay.sqlite": {
+          "allocated": 268726272,
+          "bytes": 290816
+        },
+        "/layerfs-local/overlay/overlay.sqlite-journal": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-shm": "ABSENT",
+        "/layerfs-local/overlay/overlay.sqlite-wal": "ABSENT",
+        "/layerfs-store/global/store.sqlite": {
+          "allocated": 1417289728,
+          "bytes": 1417285632
+        },
+        "/layerfs-store/global/store.sqlite-journal": "ABSENT",
+        "/layerfs-store/global/store.sqlite-shm": {
+          "allocated": 32768,
+          "bytes": 32768
+        },
+        "/layerfs-store/global/store.sqlite-wal": {
+          "allocated": 983040,
+          "bytes": 980592
+        }
+      },
+      "cgroup": {
+        "memory.current": 78499840,
+        "memory.peak": 86138880,
+        "memory.stat.anon": 59629568,
+        "memory.stat.file": 16297984,
+        "memory.stat.kernel": 1966080,
+        "memory.stat.shmem": 0
+      },
+      "directory": null,
+      "label": "fresh Workspace Unmounted and Gone",
+      "mount_rows": [],
+      "mounted": false,
+      "status": {
+        "RssAnon": "57852 kB",
+        "RssFile": "7084 kB",
+        "Threads": "7",
+        "VmHWM": "64936 kB",
+        "VmRSS": "64936 kB"
+      },
+      "threads": {
+        "layerfs-control": 1,
+        "layerfs-daemon": 1,
+        "layerfs-fuse-0": 1,
+        "layerfs-fuse-1": 1,
+        "layerfs-fuse-2": 1,
+        "layerfs-fuse-3": 1,
+        "layerfs-overlay": 1
+      }
+    }
+  ],
+  "sampling": "one observation per phase boundary; not a continuous peak",
+  "schema": "r8b-lifecycle-controller-v1",
+  "seals": {
+    "controller": "e3198f6d506f07acaee781ca66e11fb204b070823fef1d13da2a70b934e459a7",
+    "daemon": "632b17eab921696935ed5e486a7bf01f7168e0284bb73c47864d7e8af56b7bf4",
+    "inputs": "b31f9a08c59deb6bf16cbd1b12b488e9eae80e8d86405af2703604ae10cc5212",
+    "mutation": "1f5b2682b5308f825074ffd021790673f391528eeb02da357906945efa0d5da2",
+    "oracle": "cd7a54c0873fa9020c2f1f1b5035c2e53eb7f18a20e28d672122cc93d9bbf515",
+    "r7_lifecycle": "4848fae00e74435f84a7b77c30a55f6a62acc319c6df19cece7f60a97e5fafa7",
+    "runtime": "2aaaf31782b1669eb17f6b10ce585290a4f5caa88b245e615efbd2efe0cf310b"
+  },
+  "status": "PASS",
+  "timing_claim": "NOT_MEASURED",
+  "uid": 501,
+  "volume": "layerfs-r8-full-proof-20261010-f1291be40649"
+}

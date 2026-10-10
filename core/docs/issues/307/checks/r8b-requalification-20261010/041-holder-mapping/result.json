@@ -1,0 +1,207 @@
+{
+  "arrangement": "mapping",
+  "construction_workers": 1,
+  "container_stop": "EXPLICIT docker stop by this controller, exit 0",
+  "custody": {
+    "cause": "OriginalFailure: original runtime failure: original_failure=SDK operation: Remote(ControlRefusal { code: Busy, phase: \"unmount:kernel\", moved: None, published: None, detail: \"kernel reported the mount busy; no terminal effect\" }); no replay or automatic teardown",
+    "cause_type": "RuntimeError",
+    "child_event_receipts": [
+      "core/docs/issues/307/checks/r8b-requalification-20261010/041-holder-mapping/runtime.events.jsonl"
+    ],
+    "container": "d9003f91e04de45c7c674085944047988cf3fdd99d6b30c98bc90e6d14738dc0",
+    "container_disposition": "NO_ACTION_OR_INFERENCE; original child evidence retained",
+    "exec_ids": [
+      "8b649c8d16b959436582e44deac281890df9986f72217256be76c31de6967b91",
+      "8b649c8d16b959436582e44deac281890df9986f72217256be76c31de6967b91"
+    ],
+    "filesystem_drain": "NOT_ESTABLISHED_BY_HOST_FENCE",
+    "host_pid": 95451,
+    "host_signal": "NOT_ATTEMPTED",
+    "host_wait_stop_seconds": 1,
+    "independent_failures": [],
+    "observed_host_exit": 1,
+    "original_operations_replayed": false,
+    "original_phase": null
+  },
+  "global_profile": "Disposable/WAL/OFF",
+  "held_mount_present_after_busy": true,
+  "hold_seconds": 9,
+  "holder": {
+    "arrangement": "mapping",
+    "command_mount_namespace": "mnt:[4026532962]",
+    "cwd": "/",
+    "descriptors": {
+      "0": "/dev/null",
+      "1": "/dev/null",
+      "2": "/dev/null",
+      "4": "pipe:[53314955]",
+      "5": "/workspaces/1/.DS_Store"
+    },
+    "file": "./.DS_Store",
+    "first_byte": 0,
+    "hold_seconds": 9.0,
+    "mount": "/workspaces/1",
+    "mount_namespace": "mnt:[4026532962]",
+    "pid": 31,
+    "schema": "r8b-mount-holder-v1"
+  },
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "judged_failures": [],
+  "operation_attempts": 1,
+  "overall_wall_stop_seconds": 45,
+  "overlay_profile": "MEMORY/OFF/EXCLUSIVE",
+  "phases": [
+    {
+      "host_end_ns": 879773793932250,
+      "host_start_ns": 879773785648166,
+      "key": "88138e6fa667581c40badd59bf624c7d3a0b40d1c9494be2d33259387ed5bcab",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 349955084,
+        "elapsed_ns": 7376042,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 3,
+          "control_send_records_before": 1,
+          "directory": "/workspaces/1",
+          "key": "88138e6fa667581c40badd59bf624c7d3a0b40d1c9494be2d33259387ed5bcab"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 7,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 7376042,
+          "end_ns": 349925584,
+          "start_ns": 342549542
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(88138e6fa667581c40badd59bf624c7d3a0b40d1c9494be2d33259387ed5bcab), namespace: 1 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(88138e6fa667581c40badd59bf624c7d3a0b40d1c9494be2d33259387ed5bcab), namespace: 1 }, directory: \"/workspaces/1\", receipt: NativeReceipt { mount: 1, root: 1, mount_id: 159, device_major: 0, device_minor: 91, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879773799361791,
+      "host_start_ns": 879773793970166,
+      "key": "a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897",
+      "operation": "mount",
+      "original_event": {
+        "at_ns": 355545084,
+        "elapsed_ns": 4921292,
+        "event": "mount",
+        "fields": {
+          "control_send_records_after": 5,
+          "control_send_records_before": 3,
+          "directory": "/workspaces/2",
+          "key": "a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 8,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 4921292,
+          "end_ns": 355523917,
+          "start_ns": 350602625
+        },
+        "value": "bound=BoundWorkspace { token: WorkspaceToken { workspace: WorkspaceId(a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897), namespace: 2 }, binding: BranchSnapshot { branch: BranchRecord { id: BranchId(1190cfd480d8ff8b07662995f417acf59d), stack: LayerStackId(31ddd4c87396dc041fdb6aeac0faa62de4), name: HistoryName(\"main\"), base_layer: LayerId(3265dc53776e2fecad60828d34058c39df094794e82882777cd08902d6c0995e63), head_commit: None }, head_root: None, base_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), effective_root: ObjectId(\"2af2a43a455656611bb42ffa809b929ab938b41dcfe83c61093bd41c059a6fb7\"), scope: ObjectId(\"23d1cdc1240c557ebb56cfa17d758b3890d2cc1232742cf61f12542504e31d0b\"), profile: ObjectId(\"d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0\") } } ready=ReadyMount { token: WorkspaceToken { workspace: WorkspaceId(a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897), namespace: 2 }, directory: \"/workspaces/2\", receipt: NativeReceipt { mount: 3, root: 1, mount_id: 160, device_major: 0, device_minor: 92, abi_major: 7, abi_minor: 41, offered: 2187010768891, selected: 4194337, max_write: 131072, max_readahead: 131072, max_background: 1, congestion_threshold: 1, page_size: 4096, loops: 1, abort_bound: false } }"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879773879358916,
+      "host_start_ns": 879773799695125,
+      "key": "88138e6fa667581c40badd59bf624c7d3a0b40d1c9494be2d33259387ed5bcab",
+      "operation": "command",
+      "original_event": {
+        "at_ns": 435570292,
+        "elapsed_ns": 78815459,
+        "event": "command",
+        "fields": {
+          "command_sha256": "a2a014857c5f6fafc7efdd5c6163bf13c566ce478bc6d02222530aba8f6190ac",
+          "container": "d9003f91e04de45c7c674085944047988cf3fdd99d6b30c98bc90e6d14738dc0",
+          "exec": "8b649c8d16b959436582e44deac281890df9986f72217256be76c31de6967b91",
+          "exit_code": "0",
+          "registered_execs": "0",
+          "stderr": "core/docs/issues/307/checks/r8b-requalification-20261010/041-holder-mapping/runtime.events.artifacts/000009-command.stderr",
+          "stdout": "core/docs/issues/307/checks/r8b-requalification-20261010/041-holder-mapping/runtime.events.artifacts/000009-command.stdout"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 15,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 78815459,
+          "end_ns": 435503709,
+          "start_ns": 356688250
+        },
+        "value": "actual_exit_time=UNAVAILABLE inspection=ExecInspection { container: ContainerId(\"d9003f91e04de45c7c674085944047988cf3fdd99d6b30c98bc90e6d14738dc0\"), exec: ExecId(\"8b649c8d16b959436582e44deac281890df9986f72217256be76c31de6967b91\"), running: false, exit_code: Some(0), pid: Some(45517) }; complete runtime span includes acknowledged-id custody publication; inner operation spans exclude formatting"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879773962054833,
+      "host_start_ns": 879773958492750,
+      "key": "a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897",
+      "operation": "unmount",
+      "original_event": {
+        "at_ns": 518208292,
+        "elapsed_ns": 3176833,
+        "event": "unmount",
+        "fields": {
+          "control_send_records_after": 6,
+          "control_send_records_before": 5,
+          "key": "a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 16,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 3176833,
+          "end_ns": 518195000,
+          "start_ns": 515018167
+        },
+        "value": "key=a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897 token=WorkspaceToken { workspace: WorkspaceId(a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897), namespace: 2 }; logical_terminal=true; physical_cleanup requires its own original observation"
+      },
+      "wall_stop_ns": 5000000000
+    },
+    {
+      "host_end_ns": 879773964408041,
+      "host_start_ns": 879773962101583,
+      "key": "a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897",
+      "operation": "cleanup",
+      "original_event": {
+        "at_ns": 520664542,
+        "elapsed_ns": 1871250,
+        "event": "cleanup",
+        "fields": {
+          "control_send_records_after": 7,
+          "control_send_records_before": 6,
+          "key": "a978e9118917b0fed7db38f3ce584a01c505855334445687f81f598ed75d9897",
+          "state": "Gone"
+        },
+        "schema": "r7-runtime-events-v1",
+        "sequence": 17,
+        "span": {
+          "clock_id": "monotonic",
+          "duration_ns": 1871250,
+          "end_ns": 520657334,
+          "start_ns": 518786084
+        },
+        "value": "original read-only cleanup observation; no replay or maintenance invocation"
+      },
+      "wall_stop_ns": 4999997791
+    }
+  ],
+  "schema": "r8b-mount-holder-controller-v1",
+  "seals": {
+    "controller": "a21807d8ff67ea6c28e705556b1aab1989d36c049b72b210eb93d96511a079b6",
+    "daemon": "632b17eab921696935ed5e486a7bf01f7168e0284bb73c47864d7e8af56b7bf4",
+    "holder": "a484356bf81712cc19230844cfef8eeb18bae416f1627d82f04ca142f28e7d9f",
+    "inputs": "611836ae4376516a5e6b253d591c6fec647dec1763637af62b324973121c6be6",
+    "runtime": "2aaaf31782b1669eb17f6b10ce585290a4f5caa88b245e615efbd2efe0cf310b"
+  },
+  "sibling_unmount": "Unmounted, Gone observed",
+  "status": "PASS",
+  "timing_claim": "NOT_MEASURED",
+  "unmount_original_failure": "OriginalFailure: original runtime failure: original_failure=SDK operation: Remote(ControlRefusal { code: Busy, phase: \"unmount:kernel\", moved: None, published: None, detail: \"kernel reported the mount busy; no terminal effect\" }); no replay or automatic teardown",
+  "unmount_seconds_not_a_measurement": 0.002,
+  "unmount_while_held": "BUSY",
+  "volume": "layerfs-r8-full-proof-20261010-2aca347ad746"
+}

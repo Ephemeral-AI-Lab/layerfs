@@ -22,13 +22,16 @@ normal drain. Live Commit and scoped forced teardown are implemented; their
 remaining proof limits are recorded in the R5/R6 completion records linked by
 the ledger. R7 and R7-retire are closed. All seven excluded predecessors and
 the Server were retired. The root reference and archived `reference-tests`
-remain for conditional R9; the active fixture-seal test still reads the root
-reference generator. Product runtime has no reference dependency or fallback.
+remain: R9b closed without removal because two written conditions are unmet.
+The active fixture-seal test no longer reads the root reference generator.
+Product runtime has no reference dependency or fallback.
 
 Project Init includes ignored/dependency/cache/output/.git paths and opaque symlink
 targets, and has removed the inherited4GiB refusal. Native acquisition uses
 indexed backing and preserves regular hard-link identity. Component checks
-retain their declared scopes; complete integrated R8 qualification remains open.
+retain their declared scopes; complete integrated R8 qualification remains open
+(the R8b requalification closed not qualified, with the full-byte mounted
+fixture proof passing).
 Historical cluster-one evidence below
 retains its source/profile/cache pins and original verdicts.
 
