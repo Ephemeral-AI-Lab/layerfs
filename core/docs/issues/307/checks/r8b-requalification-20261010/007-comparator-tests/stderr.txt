@@ -1,0 +1,43 @@
+test_copied_rows_must_match_original_oracle_digests (test_full_controller.ControllerCustody.test_copied_rows_must_match_original_oracle_digests) ... ok
+test_independent_export_failure_does_not_skip_another_source (test_full_controller.ControllerCustody.test_independent_export_failure_does_not_skip_another_source) ... ok
+test_startup_no_child_custody_preserves_original_and_writes_receipt (test_full_controller.ControllerCustody.test_startup_no_child_custody_preserves_original_and_writes_receipt) ... ok
+test_timeout_exports_partial_rows_even_without_final_json (test_full_controller.ControllerCustody.test_timeout_exports_partial_rows_even_without_final_json) ... ok
+test_changed_mode (test_full_oracle.FullOracleTests.test_changed_mode) ... ok
+test_changed_mtime (test_full_oracle.FullOracleTests.test_changed_mtime) ... ok
+test_changed_size (test_full_oracle.FullOracleTests.test_changed_size) ... ok
+test_complete_tree_reads_every_byte_in_bounded_windows (test_full_oracle.FullOracleTests.test_complete_tree_reads_every_byte_in_bounded_windows) ... ok
+test_data_after_completion (test_full_oracle.FullOracleTests.test_data_after_completion) ... ok
+test_directory_nlink_uses_expected_child_count (test_full_oracle.FullOracleTests.test_directory_nlink_uses_expected_child_count) ... ok
+test_duplicate_inventory_path (test_full_oracle.FullOracleTests.test_duplicate_inventory_path) ... ok
+test_every_walker_count_observes_each_name_exactly_once (test_full_oracle.FullOracleTests.test_every_walker_count_observes_each_name_exactly_once) ... ok
+test_existing_output_is_never_overwritten (test_full_oracle.FullOracleTests.test_existing_output_is_never_overwritten) ... ok
+test_extra_name (test_full_oracle.FullOracleTests.test_extra_name) ... ok
+test_file_changed_to_symlink_is_not_followed (test_full_oracle.FullOracleTests.test_file_changed_to_symlink_is_not_followed) ... ok
+test_inventory_external_alias_names_refused (test_full_oracle.FullOracleTests.test_inventory_external_alias_names_refused) ... ok
+test_merged_distinct_alias_classes_detected (test_full_oracle.FullOracleTests.test_merged_distinct_alias_classes_detected) ... ok
+test_mismatch_stops_walkers_and_leaves_no_owner (test_full_oracle.FullOracleTests.test_mismatch_stops_walkers_and_leaves_no_owner) ... ok
+test_missing_inventory_parent (test_full_oracle.FullOracleTests.test_missing_inventory_parent) ... ok
+test_missing_name (test_full_oracle.FullOracleTests.test_missing_name) ... ok
+test_missing_name_in_wide_tree_is_reported_after_complete_walk (test_full_oracle.FullOracleTests.test_missing_name_in_wide_tree_is_reported_after_complete_walk) ... ok
+test_negative_portable_timestamp_is_preserved (test_full_oracle.FullOracleTests.test_negative_portable_timestamp_is_preserved) ... ok
+test_nonportable_mode_is_not_silently_masked (test_full_oracle.FullOracleTests.test_nonportable_mode_is_not_silently_masked) ... ok
+test_refuses_output_inside_mount (test_full_oracle.FullOracleTests.test_refuses_output_inside_mount) ... ok
+test_regular_alias_names_are_all_hashed (test_full_oracle.FullOracleTests.test_regular_alias_names_are_all_hashed) ... ok
+test_same_size_changed_bytes (test_full_oracle.FullOracleTests.test_same_size_changed_bytes) ... ok
+test_source_u64_identity_has_no_signed_sqlite_limit (test_full_oracle.FullOracleTests.test_source_u64_identity_has_no_signed_sqlite_limit) ... ok
+test_split_alias_detected_even_with_counterfeit_nlink (test_full_oracle.FullOracleTests.test_split_alias_detected_even_with_counterfeit_nlink) ... ok
+test_timestamp_outside_signed64_nanoseconds_is_preserved (test_full_oracle.FullOracleTests.test_timestamp_outside_signed64_nanoseconds_is_preserved) ... ok
+test_unsafe_inventory_path (test_full_oracle.FullOracleTests.test_unsafe_inventory_path) ... ok
+test_walker_count_is_validated_before_any_observation (test_full_oracle.FullOracleTests.test_walker_count_is_validated_before_any_observation) ... ok
+test_walker_failure_is_the_original_failure_and_leaves_no_owner (test_full_oracle.FullOracleTests.test_walker_failure_is_the_original_failure_and_leaves_no_owner) ... ok
+test_wrong_digest_reads_no_mount_payload_and_retains_failure (test_full_oracle.FullOracleTests.test_wrong_digest_reads_no_mount_payload_and_retains_failure) ... ok
+test_wrong_footer_count (test_full_oracle.FullOracleTests.test_wrong_footer_count) ... ok
+test_wrong_footer_set_digest (test_full_oracle.FullOracleTests.test_wrong_footer_set_digest) ... ok
+test_wrong_projected_ctime (test_full_oracle.FullOracleTests.test_wrong_projected_ctime) ... ok
+test_wrong_projected_owner (test_full_oracle.FullOracleTests.test_wrong_projected_owner) ... ok
+test_wrong_symlink_target (test_full_oracle.FullOracleTests.test_wrong_symlink_target) ... ok
+
+----------------------------------------------------------------------
+Ran 38 tests in 0.708s
+
+OK

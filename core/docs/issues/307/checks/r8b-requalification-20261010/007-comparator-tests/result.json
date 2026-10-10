@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-v",
+    "-s",
+    "core/benchmark/r8-tools/tests",
+    "-p",
+    "test_*.py"
+  ],
+  "complete_command_ns": 889833959,
+  "exit_code": 0,
+  "files": {
+    "core/benchmark/r8-tools/full_oracle.py": "25529fcbf2cd9c0db535b3842c1022f6d80c8d222c95cb26bcf864ca10d30088",
+    "core/benchmark/r8-tools/run_full_oracle.py": "6211bedcff2227f887e22d333bdcdad61e0de3e45c1d5cad144b498452201e62",
+    "core/benchmark/r8-tools/tests/test_full_controller.py": "220add77c760343ca9c5928388ea813e1e9beec2cb093e398c23a2ae205607e7",
+    "core/benchmark/r8-tools/tests/test_full_oracle.py": "9f7324b9021bc46a90048b1f334d7af524440357d43be4eb5560664c0f014f64"
+  },
+  "kind": "external harness tests; no Docker, runtime or product execution",
+  "limit_seconds": 100,
+  "schema": "r8b-tool-test-v1",
+  "source_commit": "496bb5643956be7ab77db0b8544347721176d569",
+  "status": "PASS",
+  "worktree": "uncommitted comparator/controller/tests at the hashes below"
+}

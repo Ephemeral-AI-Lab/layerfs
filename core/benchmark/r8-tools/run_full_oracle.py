@@ -163,15 +163,18 @@ def proof(args):
         body = args.output / "full-oracle.sh"
         body.write_text("set -euo pipefail\nexec timeout --kill-after=1s 85s python3 /code/full_oracle.py "
                         "--root . --inventory /code/full-inventory.jsonl --inventory-sha256 "
-                        + config["inventory_sha256"] + " --uid 501 --gid 20 --output /tmp/r8-full-oracle.json\n")
+                        + config["inventory_sha256"] + " --uid 501 --gid 20 --walkers "
+                        + str(int(registered["comparator_walkers"])) + " --output /tmp/r8-full-oracle.json\n")
         result["oracle_requested"] = True
         event = lifecycle.attempt(runtime, result, "verify", key, body, 87, deadline)
         fields = event.get("fields", {})
         if fields.get("registered_execs") != "0" or fields.get("exit_code") != "0":
             raise OriginalFailure("full verifier lacks original zero exit without registration")
         observed = json.loads(Path(fields["stdout"]).read_text())
-        if observed.get("schema") != "r8-full-mounted-oracle-v1" or observed.get("status") != "PASS":
+        if observed.get("schema") != "r8-full-mounted-oracle-v2" or observed.get("status") != "PASS":
             raise OriginalFailure("full independent mounted oracle failed")
+        if observed.get("walkers") != registered["comparator_walkers"]:
+            raise OriginalFailure("actual comparator walker count differs from registration")
         if (observed.get("oracle_source_sha256") != registered["binaries_and_tools"]["comparator"]["sha256"]
                 or observed.get("inventory_sha256_before") != config["inventory_sha256"]
                 or observed.get("inventory_sha256_after") != config["inventory_sha256"]

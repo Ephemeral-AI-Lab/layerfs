@@ -1,0 +1,32 @@
+8
+Python 3.11.2
+3.40.1
+{
+ "eligible": false,
+ "expected_totals": {
+  "entries": 130046,
+  "regular_bytes": 3475776149,
+  "regular_files": 103108
+ },
+ "hashed_bytes_equivalent": 2824199089,
+ "oracle_sha256": "1a4ee652f1f9eb74eb8e74c82a17f82c1f48f3f92b18cc9429ba3e4b976c340e",
+ "per_entry_bookkeeping_ns": 23125,
+ "phases": {
+  "expected_jsonl_sha256": 25687292,
+  "final_alias_queries": 106398208,
+  "inventory_sha256_1": 37620750,
+  "inventory_sha256_2": 33737959,
+  "load_expected": 3586747168,
+  "per_entry_sql_and_emit_autocommit": 1648861584,
+  "sha256_same_byte_count_from_memory": 1443421959,
+  "write_expected": 744057417
+ },
+ "preparation_ns": 4427850586,
+ "projected_full_bookkeeping_ns": 3007313750,
+ "replayed_rows": 71300,
+ "schema": "r8b-comparator-bookkeeping-diagnostic-v1",
+ "statements": [
+  71300,
+  71300
+ ]
+}

@@ -60,7 +60,8 @@ class ControllerCustody(unittest.TestCase):
                  ("comparator", SOURCE.with_name("full_oracle.py")))}
             registration = folder / "registration.json"
             registration.write_text(json.dumps(dict(identities=dict(source_commit="registered-source"),
-                full_fixture_proof=dict(binaries_and_tools=tools, inputs_sha256=controller.lifecycle.sha(inputs)))))
+                full_fixture_proof=dict(binaries_and_tools=tools, comparator_walkers=8,
+                                        inputs_sha256=controller.lifecycle.sha(inputs)))))
             original = OSError("original Popen refusal without child")
             retained = []
             carrier = SimpleNamespace(process=None, selector=None, raw=None, stderr=None)

@@ -6,6 +6,14 @@ its SHA-256 is checked before the first mount observation. Expected rows and
 alias classes are indexed in external SQLite scratch, never obtained from the
 product's output. Every regular name is read to EOF in 65536-byte windows.
 
+Observation and comparison are separate. A fixed number of walker threads
+observe names, metadata, complete payload digests and symlink targets with one
+unchanged system-call sequence per name; one thread compares every observed
+row with the sealed expectation and owns the scratch index. The serial
+arrangement of receipt 053 could not finish inside its registered stop (see
+checks/r8b-requalification-20261010/006-full-oracle-timeout-diagnosis.md);
+every assertion of that arrangement is retained here.
+
 Portable projections, reviewed at 9e4de35fc:
 * Project import/scan.rs:53-64 preserves supported regular/directory modes and
   mtime; symlink mode is 0777. Source uid/gid are not portable attributes.
@@ -29,12 +37,17 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import queue
 import sqlite3
 import stat
 import sys
+import threading
 
 WINDOW = 65536
-SCHEMA = "r8-full-mounted-oracle-v1"
+WALKERS = 8
+ROWS = 1024
+DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+SCHEMA = "r8-full-mounted-oracle-v2"
 INPUT_SCHEMA = "r7-deployment-tree-v1"
 PROJECTION = "portable-init-fuse-r7-directory-links-v1"
 
@@ -283,83 +296,164 @@ def read_file(parent_fd, name, before):
     return checksum.hexdigest(), total
 
 
-def walk(root):
-    """One directory stream per depth; dirfd traversal never follows symlinks."""
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-    descriptor = os.open(root, flags)
-    with closing(descriptor, os.close):
-        initial = os.fstat(descriptor)
-        require(stable(initial) == stable(root.lstat()), "root changed before traversal")
-        yield ".", descriptor, None, initial
-        stack = [(".", descriptor, os.scandir(descriptor), initial)]
-        original = None
+class Traversal:
+    """Bounded concurrent dirfd traversal; observation only, never comparison.
+
+    WALKERS threads each own one directory stream per depth and never follow a
+    symlink. A walker opens a child directory under its parent descriptor and
+    hands it to an idle walker through a queue of at most 2*WALKERS entries, or
+    descends itself when that queue is full, so open descriptors stay bounded
+    by walkers times depth. Every name, its metadata and its complete payload
+    digest or symlink target reach the single comparing thread as one row, in
+    arrival order, through a queue of at most ROWS entries. A walker's first
+    original failure travels through the same queue, after its earlier rows.
+    """
+    def __init__(self, root, walkers):
+        self.root, self.walkers = root, walkers
+        self.rows = queue.Queue(maxsize=ROWS)
+        self.pending = queue.Queue(maxsize=2 * walkers)
+        self.lock = threading.Lock()
+        self.stop = threading.Event()
+        self.outstanding = 0
+        self.close_failures = []
+        self.threads = [threading.Thread(target=self.walker, name="oracle-walker-%d" % index)
+                        for index in range(walkers)]
+
+    def release(self, value, close):
         try:
-            while stack:
-                relative, parent_fd, iterator, before = stack[-1]
-                try:
-                    entry = next(iterator)
-                except StopIteration:
+            close(value)
+        except BaseException as error:
+            with self.lock:
+                self.close_failures.append(str(error))
+
+    def finished(self):
+        with self.lock:
+            self.outstanding -= 1
+            last = self.outstanding == 0
+        if last:
+            for _ in self.threads:
+                self.pending.put(None)
+
+    def offer(self, frame):
+        with self.lock:
+            self.outstanding += 1
+        try:
+            self.pending.put_nowait(frame)
+            return True
+        except queue.Full:
+            with self.lock:
+                self.outstanding -= 1
+            return False
+
+    def entry(self, relative, parent_fd, name, info):
+        value = observe(info)
+        if value["kind"] == "file":
+            value["content_sha256"], value["read_bytes"] = read_file(parent_fd, name, info)
+        elif value["kind"] == "symlink":
+            value["target_hex"] = os.fsencode(os.readlink(name, dir_fd=parent_fd)).hex()
+            require(stable(os.stat(name, dir_fd=parent_fd, follow_symlinks=False)) == stable(info),
+                    "symlink changed during observation: " + relative)
+        self.rows.put((relative, info, value))
+
+    def directory(self, frame):
+        stack = [(*frame, os.scandir(frame[1]))]
+        try:
+            while stack and not self.stop.is_set():
+                relative, parent_fd, before, iterator = stack[-1]
+                entry = next(iterator, None)
+                if entry is None:
                     require(stable(before) == stable(os.fstat(parent_fd)), "directory changed: " + relative)
-                    error = close_frame(stack.pop(), descriptor)
-                    if error is not None:
-                        raise error
+                    stack.pop()
+                    iterator.close()
+                    os.close(parent_fd)
                     continue
                 child = entry.name if relative == "." else relative + "/" + entry.name
                 safe_relative(child)
                 info = os.stat(entry.name, dir_fd=parent_fd, follow_symlinks=False)
-                yield child, parent_fd, entry.name, info
+                self.entry(child, parent_fd, entry.name, info)
                 if stat.S_ISDIR(info.st_mode):
-                    child_fd = os.open(entry.name, flags, dir_fd=parent_fd)
+                    child_fd = os.open(entry.name, DIRECTORY, dir_fd=parent_fd)
                     try:
                         require(stable(os.fstat(child_fd)) == stable(info), "directory changed before open: " + child)
-                        child_iterator = os.scandir(child_fd)
-                    except BaseException as error:
-                        try:
-                            os.close(child_fd)
-                        except OSError as closing_error:
-                            error.independent_close_failures = [str(closing_error)]
+                        if not self.offer((child, child_fd, info)):
+                            stack.append((child, child_fd, info, os.scandir(child_fd)))
+                    except BaseException:
+                        self.release(child_fd, os.close)
                         raise
-                    stack.append((child, child_fd, child_iterator, info))
-            require(stable(initial) == stable(root.lstat()), "root changed during traversal")
-        except BaseException as error:
-            original = error
-            raise
         finally:
-            for frame in reversed(stack):
-                original = close_frame(frame, descriptor, original)
-            if original is not None and sys.exc_info()[0] is None:
-                raise original
+            for _, parent_fd, _, iterator in reversed(stack):
+                self.release(iterator, lambda value: value.close())
+                self.release(parent_fd, os.close)
 
-
-def close_frame(frame, root_fd, original=None):
-    _, descriptor, iterator, _ = frame
-    resources = [(iterator, lambda value: value.close())]
-    if descriptor != root_fd:
-        resources.append((descriptor, os.close))
-    for value, close in resources:
+    def walker(self):
         try:
-            close(value)
-        except BaseException as error:
-            if original is None:
-                original = error
-            else:
-                original.independent_close_failures = [
-                    *getattr(original, "independent_close_failures", []), str(error)]
-    return original
+            while True:
+                frame = self.pending.get()
+                if frame is None:
+                    return
+                try:
+                    if self.stop.is_set():
+                        self.release(frame[1], os.close)
+                    else:
+                        self.directory(frame)
+                except BaseException as error:
+                    self.stop.set()
+                    self.rows.put(error)
+                finally:
+                    self.finished()
+        finally:
+            self.rows.put(None)
+
+    def observations(self):
+        """Yield (relative, lstat, observation) rows; raise the first failure."""
+        descriptor = os.open(self.root, DIRECTORY)
+        initial = os.fstat(descriptor)
+        try:
+            require(stable(initial) == stable(self.root.lstat()), "root changed before traversal")
+        except BaseException:
+            self.release(descriptor, os.close)
+            raise
+        yield ".", initial, observe(initial)
+        self.outstanding = 1
+        self.pending.put((".", descriptor, initial))
+        for thread in self.threads:
+            thread.start()
+        live = self.walkers
+        try:
+            while live:
+                row = self.rows.get()
+                if row is None:
+                    live -= 1
+                elif isinstance(row, BaseException):
+                    raise row
+                else:
+                    yield row
+            require(stable(initial) == stable(self.root.lstat()), "root changed during traversal")
+        finally:
+            # Stop at the next name boundary and receive every walker's exit,
+            # so no thread, directory stream or descriptor outlives the proof.
+            self.stop.set()
+            while live:
+                if self.rows.get() is None:
+                    live -= 1
+            for thread in self.threads:
+                thread.join()
+        require(not self.close_failures, "independent close failures: " + "; ".join(self.close_failures))
 
 
-def check_namespace(database, root, output, totals):
+def check_namespace(database, root, output, totals, walkers=WALKERS):
+    traversal = Traversal(root, walkers)
     with closing(Path(output).open("x", encoding="utf-8"), lambda stream: stream.close()) as stream:
-        emit(stream, dict(schema="r8-full-byte-observations-v1", root=str(root)))
-        traversal = walk(root)
-        with closing(traversal, lambda iterator: iterator.close()):
-            for relative, parent_fd, name, info in traversal:
+        emit(stream, dict(schema="r8-full-byte-observations-v2", root=str(root), walkers=walkers,
+                          order="arrival at the comparing thread"))
+        observations = traversal.observations()
+        try:
+            for relative, info, value in observations:
                 expected = database.execute("SELECT kind,mode,uid,gid,mtime,size,checksum,target,nlink,seen "
                                             "FROM expected WHERE path=?", (relative,)).fetchone()
                 require(expected is not None, "extra namespace name: " + relative)
                 expected = (*expected[:4], int(expected[4]), *expected[5:])
                 require(expected[9] == 0, "duplicate observed name: " + relative)
-                value = observe(info)
                 fields = ("kind", "mode", "uid", "gid", "mtime_ns")
                 for index, field in enumerate(fields):
                     require(value[field] == expected[index], "metadata mismatch " + field + ": " + relative)
@@ -367,22 +461,25 @@ def check_namespace(database, root, output, totals):
                 require(value["nlink"] == expected[8], "metadata mismatch nlink: " + relative)
                 if value["kind"] == "file":
                     require(value["size"] == expected[5], "regular size mismatch: " + relative)
-                    checksum, length = read_file(parent_fd, name, info)
                     totals["hashed_files"] += 1
-                    totals["hashed_bytes"] += length
-                    value["content_sha256"] = checksum
-                    require(checksum == expected[6], "regular content mismatch: " + relative)
+                    totals["hashed_bytes"] += value.pop("read_bytes")
+                    require(value["content_sha256"] == expected[6], "regular content mismatch: " + relative)
                 elif value["kind"] == "symlink":
-                    target = os.fsencode(os.readlink(name, dir_fd=parent_fd))
-                    value["target_hex"] = target.hex()
-                    require(target.hex() == expected[7] and value["size"] == expected[5],
+                    require(value["target_hex"] == expected[7] and value["size"] == expected[5],
                             "symlink target/size mismatch: " + relative)
-                    require(stable(os.stat(name, dir_fd=parent_fd, follow_symlinks=False)) == stable(info),
-                            "symlink changed during observation: " + relative)
                 database.execute("UPDATE expected SET seen=1,observed_device=?,observed_inode=?,observed_nlink=? "
                                  "WHERE path=?", (str(info.st_dev), str(info.st_ino), value["nlink"], relative))
                 totals["paths"] += 1
                 emit(stream, dict(path=relative, match=True, observation=value))
+        except BaseException as error:
+            try:
+                observations.close()
+            except BaseException as closing_error:
+                error.independent_close_failures = [
+                    *getattr(error, "independent_close_failures", []), str(closing_error)]
+            error.independent_close_failures = [
+                *getattr(error, "independent_close_failures", []), *traversal.close_failures]
+            raise
         missing = database.execute("SELECT path FROM expected WHERE seen=0 LIMIT 1").fetchone()
         require(missing is None, "missing namespace name: " + (missing[0] if missing else ""))
         alias = database.execute("SELECT source_device,source_inode FROM expected WHERE kind='file' "
@@ -397,7 +494,7 @@ def check_namespace(database, root, output, totals):
                           hashed_files=totals["hashed_files"], hashed_bytes=totals["hashed_bytes"]))
 
 
-def prove(root, inventory, expected_sha256, output, uid=501, gid=20):
+def prove(root, inventory, expected_sha256, output, uid=501, gid=20, walkers=WALKERS):
     root, inventory, output = Path(root), Path(inventory), Path(output)
     require(not root.is_symlink(), "root must not be a symlink")
     root = root.resolve(strict=False)
@@ -413,11 +510,12 @@ def prove(root, inventory, expected_sha256, output, uid=501, gid=20):
                   expected_inventory_sha256=expected_sha256, output=str(output),
                   artifacts=str(artifacts),
                   projection=PROJECTION, owner_uid=uid, owner_gid=gid, read_window_bytes=WINDOW,
-                  paths=0, hashed_files=0, hashed_bytes=0, phase="argument_admission", differences=[])
+                  walkers=walkers, paths=0, hashed_files=0, hashed_bytes=0, phase="argument_admission", differences=[])
     try:
         integer(uid, "configured uid", 0)
         integer(gid, "configured gid", 0)
         require(uid <= 0xffffffff and gid <= 0xffffffff, "configured ownership exceeds u32")
+        require(1 <= integer(walkers, "walker count") <= 64, "walker count outside 1..64")
         require(root.is_dir() and not root.is_symlink(), "root must be an actual directory")
         result["oracle_source_sha256"] = sha256(__file__)
         result["phase"] = "input_seal"
@@ -433,7 +531,7 @@ def prove(root, inventory, expected_sha256, output, uid=501, gid=20):
             # Recheck the external seal before touching product names or payloads.
             require(sha256(inventory) == expected_sha256, "inventory changed during expectation preparation")
             result["phase"] = "namespace"
-            check_namespace(database, root, artifacts / "observed.jsonl", result)
+            check_namespace(database, root, artifacts / "observed.jsonl", result, walkers)
             result["phase"] = "input_seal_after"
             result["inventory_sha256_after"] = sha256(inventory)
             require(result["inventory_sha256_after"] == expected_sha256, "inventory changed during proof")
@@ -475,11 +573,12 @@ def main():
     parser.add_argument("--inventory-sha256", "--expected-sha256", dest="expected_sha256", required=True)
     parser.add_argument("--uid", type=int, default=501)
     parser.add_argument("--gid", type=int, default=20)
+    parser.add_argument("--walkers", type=int, default=WALKERS)
     parser.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
     try:
         result = prove(arguments.root, arguments.inventory, arguments.expected_sha256,
-                       arguments.output, arguments.uid, arguments.gid)
+                       arguments.output, arguments.uid, arguments.gid, arguments.walkers)
     except Exception as error:
         result = dict(schema=SCHEMA, status="FAIL", original_error=str(error),
                       original_error_type=type(error).__name__, phase="argument_admission")

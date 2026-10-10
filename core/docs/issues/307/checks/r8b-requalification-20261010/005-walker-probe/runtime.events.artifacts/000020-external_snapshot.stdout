@@ -1,0 +1,158 @@
+DAEMON_STATUS
+Name:	layerfs-daemon
+Umask:	0077
+State:	S (sleeping)
+Tgid:	1
+Ngid:	0
+Pid:	1
+PPid:	0
+TracerPid:	0
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+FDSize:	64
+Groups:	0 
+NStgid:	1
+NSpid:	1
+NSpgid:	1
+NSsid:	1
+Kthread:	0
+VmPeak:	  620796 kB
+VmSize:	  620796 kB
+VmLck:	       0 kB
+VmPin:	       0 kB
+VmHWM:	   45452 kB
+VmRSS:	   45452 kB
+RssAnon:	   38604 kB
+RssFile:	    6848 kB
+RssShmem:	       0 kB
+VmData:	   73328 kB
+VmStk:	     132 kB
+VmExe:	    6568 kB
+VmLib:	    2320 kB
+VmPTE:	     192 kB
+VmSwap:	       0 kB
+HugetlbPages:	       0 kB
+CoreDumping:	0
+THP_enabled:	1
+untag_mask:	0xffffffffffffff
+Threads:	10
+SigQ:	0/15665
+SigPnd:	0000000000000000
+ShdPnd:	0000000000000000
+SigBlk:	0000000000000000
+SigIgn:	0000000000001000
+SigCgt:	0000000100000440
+CapInh:	0000000000000000
+CapPrm:	00000000a82425fb
+CapEff:	00000000a82425fb
+CapBnd:	00000000a82425fb
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	2
+Seccomp_filters:	1
+Speculation_Store_Bypass:	vulnerable
+SpeculationIndirectBranch:	unknown
+Cpus_allowed:	ff
+Cpus_allowed_list:	0-7
+Mems_allowed:	1
+Mems_allowed_list:	0
+voluntary_ctxt_switches:	28
+nonvoluntary_ctxt_switches:	3
+BACKING_BYTES
+/layerfs-store/global/store.sqlite 1417285632 2768144 512
+/layerfs-store/global/store.sqlite-wal 0 0 512
+/layerfs-store/global/store.sqlite-shm 32768 64 512
+/layerfs-store/global/store.sqlite-journal ABSENT
+/layerfs-local/overlay/overlay.sqlite 626688 525512 512
+/layerfs-local/overlay/overlay.sqlite-wal ABSENT
+/layerfs-local/overlay/overlay.sqlite-shm ABSENT
+/layerfs-local/overlay/overlay.sqlite-journal ABSENT
+OWN_CONTAINER_CGROUP
+/sys/fs/cgroup/memory.stat
+anon 39923712
+file 114024448
+kernel 9240576
+kernel_stack 180224
+pagetables 286720
+sec_pagetables 0
+percpu 22640
+sock 0
+vmalloc 24576
+shmem 0
+zswap 0
+zswapped 0
+file_mapped 28672
+file_dirty 675840
+file_writeback 0
+swapcached 0
+anon_thp 0
+file_thp 0
+shmem_thp 0
+inactive_anon 0
+active_anon 39854080
+inactive_file 113836032
+active_file 188416
+unevictable 0
+slab_reclaimable 7350328
+slab_unreclaimable 727264
+slab 8077592
+workingset_refault_anon 0
+workingset_refault_file 6680
+workingset_activate_anon 0
+workingset_activate_file 0
+workingset_restore_anon 0
+workingset_restore_file 0
+workingset_nodereclaim 0
+pgdemote_kswapd 0
+pgdemote_direct 0
+pgdemote_khugepaged 0
+pgscan 0
+pgsteal 0
+pgscan_kswapd 0
+pgscan_direct 0
+pgscan_khugepaged 0
+pgsteal_kswapd 0
+pgsteal_direct 0
+pgsteal_khugepaged 0
+pgfault 30225
+pgmajfault 2
+pgrefill 0
+pgactivate 0
+pgdeactivate 0
+pglazyfree 0
+pglazyfreed 0
+swpin_zero 0
+swpout_zero 0
+zswpin 0
+zswpout 0
+zswpwb 0
+thp_fault_alloc 0
+thp_collapse_alloc 0
+thp_swpout 0
+thp_swpout_fallback 0
+/sys/fs/cgroup/memory.current
+163880960
+/sys/fs/cgroup/memory.peak
+168763392
+DAEMON_THREADS
+THREAD	1	layerfs-daemon	19608751 192708 31	28 3 	1947 1 0 1
+THREAD	10	layerfs-fuse-2	710295319 671291 3273	3273 0 	2102 58 12 1
+THREAD	11	layerfs-fuse-3	968998199 301377 3188	3188 0 	1991 85 11 1
+THREAD	12	layerfs-control	10225877 13750 50	50 0 	885 0 0 4
+THREAD	19	layerfs-mount-1	106083 0 1	1 0 	5 0 0 5
+THREAD	20	layerfs-fence-1	66459 0 3	3 0 	2 0 0 0
+THREAD	21	fuser-0	1563558791 4410588 23495	23495 0 	358 122 34 5
+THREAD	7	layerfs-overlay	5614708 6541 7	7 0 	227 0 0 6
+THREAD	8	layerfs-fuse-0	958102133 487250 3179	3179 0 	1880 82 13 1
+THREAD	9	layerfs-fuse-1	695462182 1044915 3191	3189 2 	1912 56 13 1
+CGROUP_CPU
+usage_usec 5587560
+user_usec 4308267
+system_usec 1279292
+nice_usec 0
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+nr_bursts 0
+burst_usec 0
+KERNEL	6.12.76-linuxkit	8

@@ -1,0 +1,1 @@
+{"budget_seconds": 7.0, "bytes": 56654224, "clock": "in-container CLOCK_MONOTONIC", "directories": 703, "elapsed_ns": 7003236170, "eligible": false, "entries": 5358, "files_complete": 4409, "files_partial": 1, "large_skipped": 2, "phase": "tree-serial", "read_calls_min": 4959, "schema": "r8b-full-mount-count-probe-v1", "symlinks": 242, "workers": 0}

@@ -16,6 +16,7 @@ from pathlib import Path
 import shutil
 import stat
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -118,7 +119,7 @@ class FullOracleTests(unittest.TestCase):
         with mock.patch.object(oracle, "observe", side_effect=observe or self.fuse_observation):
             result = oracle.prove(self.root, self.inventory, digest or sealed, self.output)
         self.assertEqual(json.loads(self.output.read_text()), result)
-        self.assertEqual(result["schema"], "r8-full-mounted-oracle-v1")
+        self.assertEqual(result["schema"], "r8-full-mounted-oracle-v2")
         return result
 
     def assert_failed(self, result, phrase, phase=None):
@@ -315,6 +316,105 @@ class FullOracleTests(unittest.TestCase):
 
     def test_negative_portable_timestamp_is_preserved(self):
         self.timestamp_proof(-123_456_789_000_000_001)
+
+    def widen(self, directories=40, files=3, depth=6):
+        """Author a wider and deeper fake mount plus its independent rows."""
+        inode = 100
+        chain = "dir"
+        for level in range(depth):
+            chain += "/deep%d" % level
+            (self.root / chain).mkdir()
+            inode += 1
+            self.rows.append(self.row(chain, "directory", inode))
+        for index in range(directories):
+            name = "wide%02d" % index
+            (self.root / name).mkdir()
+            inode += 1
+            self.rows.append(self.row(name, "directory", inode))
+            for member in range(files):
+                relative = "%s/f%d" % (name, member)
+                data = ("%s payload" % relative).encode() * (member * 9000 + 1)
+                (self.root / relative).write_bytes(data)
+                os.chmod(self.root / relative, 0o640)
+                os.utime(self.root / relative, ns=(MTIME, MTIME))
+                inode += 1
+                self.rows.append(self.row(relative, "file", inode, data=data))
+        for path in sorted(self.root.rglob("*"), reverse=True):
+            if path.is_dir() and not path.is_symlink():
+                os.chmod(path, 0o750)
+                os.utime(path, ns=(MTIME, MTIME))
+        self.reset_times()
+        self.directory_links = {}
+        for path in (self.root, *(item for item in self.root.rglob("*")
+                                  if item.is_dir() and not item.is_symlink())):
+            info = path.lstat()
+            self.directory_links[(info.st_dev, info.st_ino)] = 2 + sum(
+                child.is_dir() and not child.is_symlink() for child in path.iterdir())
+
+    def open_descriptors(self):
+        return len(os.listdir("/dev/fd"))
+
+    def test_every_walker_count_observes_each_name_exactly_once(self):
+        self.widen()
+        for walkers in (1, 2, 8, 64):
+            output = self.folder / ("proof-%d.json" % walkers)
+            sealed = self.write_inventory()
+            threads, descriptors = threading.active_count(), self.open_descriptors()
+            with mock.patch.object(oracle, "observe", side_effect=self.fuse_observation):
+                result = oracle.prove(self.root, self.inventory, sealed, output, walkers=walkers)
+            self.assertEqual(result["status"], "PASS", result)
+            self.assertEqual((result["walkers"], result["paths"]), (walkers, len(self.rows)))
+            self.assertEqual(result["hashed_bytes"],
+                             sum(row["metadata"].get("size", 0) for row in self.rows
+                                 if row["metadata"]["kind"] == "file"))
+            observed = [json.loads(line) for line in
+                        (Path(result["artifacts"]) / "observed.jsonl").read_text().splitlines()]
+            self.assertEqual(observed[0]["walkers"], walkers)
+            self.assertEqual(sorted(row["path"] for row in observed[1:-1]),
+                             sorted(row["path"] for row in self.rows))
+            self.assertEqual((threading.active_count(), self.open_descriptors()), (threads, descriptors))
+
+    def test_walker_failure_is_the_original_failure_and_leaves_no_owner(self):
+        self.widen()
+        real = oracle.read_file
+
+        def failing(parent_fd, name, before):
+            if name == "f1":
+                raise oracle.ProofError("regular file changed during full-byte read: " + name)
+            return real(parent_fd, name, before)
+        threads, descriptors = threading.active_count(), self.open_descriptors()
+        with mock.patch.object(oracle, "read_file", side_effect=failing):
+            result = self.run_proof()
+        self.assert_failed(result, "regular file changed during full-byte read: f1", "namespace")
+        self.assertEqual(result["original_error_type"], "ProofError")
+        self.assertLess(result["paths"], len(self.rows))
+        self.assertEqual((threading.active_count(), self.open_descriptors()), (threads, descriptors))
+
+    def test_mismatch_stops_walkers_and_leaves_no_owner(self):
+        self.widen()
+        (self.root / "wide00/f0").write_bytes(b"changed")
+        os.utime(self.root / "wide00/f0", ns=(MTIME, MTIME))
+        os.utime(self.root / "wide00", ns=(MTIME, MTIME))
+        threads, descriptors = threading.active_count(), self.open_descriptors()
+        self.assert_failed(self.run_proof(), "regular size mismatch: wide00/f0", "namespace")
+        self.assertEqual((threading.active_count(), self.open_descriptors()), (threads, descriptors))
+
+    def test_missing_name_in_wide_tree_is_reported_after_complete_walk(self):
+        self.widen()
+        (self.root / "wide39/f2").unlink()
+        os.utime(self.root / "wide39", ns=(MTIME, MTIME))
+        result = self.run_proof()
+        self.assert_failed(result, "missing namespace name: wide39/f2", "namespace")
+        self.assertEqual(result["paths"], len(self.rows) - 1)
+
+    def test_walker_count_is_validated_before_any_observation(self):
+        sealed = self.write_inventory()
+        for walkers in (0, 65, True, 2.0):
+            output = self.folder / ("refused-%r.json" % (walkers,))
+            with mock.patch.object(oracle, "read_file") as read:
+                result = oracle.prove(self.root, self.inventory, sealed, output, walkers=walkers)
+            self.assertEqual((result["status"], result["original_phase"]), ("FAIL", "argument_admission"))
+            read.assert_not_called()
 
     def test_refuses_output_inside_mount(self):
         digest = self.write_inventory()

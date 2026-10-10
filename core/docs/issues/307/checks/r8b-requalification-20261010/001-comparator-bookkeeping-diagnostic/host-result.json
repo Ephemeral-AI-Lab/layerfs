@@ -1,0 +1,29 @@
+{
+  "eligible": false,
+  "expected_totals": {
+    "entries": 130046,
+    "regular_bytes": 3475776149,
+    "regular_files": 103108
+  },
+  "hashed_bytes_equivalent": 2824199089,
+  "oracle_sha256": "1a4ee652f1f9eb74eb8e74c82a17f82c1f48f3f92b18cc9429ba3e4b976c340e",
+  "per_entry_bookkeeping_ns": 32239,
+  "phases": {
+    "expected_jsonl_sha256": 25351667,
+    "final_alias_queries": 100323083,
+    "inventory_sha256_1": 29247375,
+    "inventory_sha256_2": 28628500,
+    "load_expected": 4161193833,
+    "per_entry_sql_and_emit_autocommit": 2298701500,
+    "sha256_same_byte_count_from_memory": 1425507375,
+    "write_expected": 823224959
+  },
+  "preparation_ns": 5067646334,
+  "projected_full_bookkeeping_ns": 4192552994,
+  "replayed_rows": 71300,
+  "schema": "r8b-comparator-bookkeeping-diagnostic-v1",
+  "statements": [
+    71300,
+    71300
+  ]
+}
