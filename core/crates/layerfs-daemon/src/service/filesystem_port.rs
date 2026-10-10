@@ -367,7 +367,9 @@ impl RequestServices for FilesystemPort {
             // A contended early refill reserved nothing and is not asked
             // again: this create keeps the serial it took.
             Ok((serial, Some(early))) if writer_contended(&early) => Ok(Some(serial)),
-            // Any other early failure ends this create; its serial is spent.
+            // Any other early failure is this create's original error; its
+            // serial is spent. As on the exhausted path, the request service
+            // retains it and the mount then serves nothing further.
             Ok((_, Some(early))) => Err(Box::new(early)),
             Err(error) if writer_contended(&error) => Ok(None),
             Err(error) => Err(Box::new(error)),

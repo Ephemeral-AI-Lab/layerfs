@@ -88,8 +88,10 @@ never retained as the request's own first Store failure and the request's
 later base demand is still admitted. Its outcome is decided in
 [`reserve_serial`](../../crates/layerfs-daemon/src/service/filesystem_port.rs):
 writer contention is that attempt's before-effect refusal and the create
-continues with the serial it took; any other early failure ends that create
-with the original error, its serial consumed. Nothing is replayed, waited for
+continues with the serial it took; any other early failure is that create's
+original error, its serial consumed, and, exactly as for the exhausted path,
+the request service retains it, so the mount then serves nothing further and
+its unmount stops at retained requests. Nothing is replayed, waited for
 or timed: a later create is a new operation with its own single attempt, and a
 create that finds no local range and whose one attempt is contended is still
 `EAGAIN` with no effect. A Workspace's first create always finds no range.

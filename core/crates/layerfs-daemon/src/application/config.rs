@@ -32,7 +32,8 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     if config.command_uid == uid {
         return Err(invalid("command and daemon identities must differ"));
     }
-    // At or above the refill window every create would attempt a reservation.
+    // One early reservation restores any value below the refill window; a
+    // larger one would have consecutive creates each attempt a reservation.
     if config.limits.serial_low_water >= layerfs_workspace::SERIAL_REFILL {
         return Err(invalid("serial low-water must be below the refill window"));
     }

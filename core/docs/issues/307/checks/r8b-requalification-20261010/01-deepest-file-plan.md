@@ -256,3 +256,31 @@ proofs; outcomes for every selection; R9b; completion records.
 | L-5 | Mount is refused on stopped maintenance only; no headroom number is invented and Status is unchanged | Add a configured headroom and an additive Status record | Additive later; nothing built here blocks it |
 | L-6 | A still-dirty mapped page is proved to be outside the Commit, following the #303 contract and architecture 79 over the R5-9 handoff sentence read alone | Treat "in the next Commit" as requiring a flush | A product change with its own contract revision; the new test then documents the old behaviour |
 | L-7 | Rows that need a ruling in section 6 are reported against the written text and left PARTIAL; none is closed by reinterpretation | Close them at component scope | Rescope and reuse the receipts recorded here |
+
+## 10. Corrections after independent review (2026-10-10)
+
+Appended after the fixes were committed (`c127b6d55`, `ea812d3f8`); the rows
+above are left as written. Review record:
+[019-product-review.md](019-product-review.md).
+
+- **L-4, consequence understated.** "Fails that create" is true of the reply,
+  but the request service retains any mutation failure that is neither fenced
+  nor a base demand, and a retained request makes the mount serve nothing
+  further; its unmount then stops at retained requests. A non-contention early
+  failure therefore ends the Workspace's service, exactly as the same failure
+  on the exhausted path always has. The behaviour is kept as the exact-custody
+  treatment of an uncertain Store write; the comment, the port contract and
+  architecture 77 now say so. Alternative for the owner: fail only that create
+  and keep serving, which needs a new failure class in the request service.
+  No test reaches this arm, and it is unreachable while the value is 0.
+- **L-3, reason misstated.** A finite value at or above the window does not
+  make every create attempt a reservation: held ranges are summed, so 1,024
+  behaves like 1,023. The actual property of the bound is that one early
+  reservation of 1,024 always restores a low-water below 1,024, while a larger
+  one would have consecutive creates each attempt one until enough windows are
+  held. The bound also caps the reserve P-1 provides at under 1,024 creates.
+  Code unchanged; the comment is corrected.
+- **P-B, scope of the proof.** The staged failure is a quarantined engine, for
+  which the previous product already refused the Mount (as `Unknown`, leaving
+  a binding entry and an owner job). Maintenance stopped while the engine is
+  otherwise usable is not staged. FP-26 stays PARTIAL.

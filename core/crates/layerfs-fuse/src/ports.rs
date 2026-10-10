@@ -242,8 +242,11 @@ pub trait RequestServices: Send + Sync {
     ) -> ServiceFuture<'_, ServiceReply<()>>;
     /// One unused inode serial for a creating mutation. Local while the bound
     /// Workspace's reserved range lasts; a refill is one bounded allocator
-    /// write that never waits. `None` is that allocator's exact contended
-    /// refusal: nothing was reserved and no mutation was attempted.
+    /// write that never waits, and one call makes at most one. `None` is that
+    /// allocator's exact contended refusal with no local range: nothing was
+    /// reserved and no mutation was attempted. An implementation may also
+    /// refill early while a range lasts; an error from that attempt other
+    /// than contention is returned after its serial was taken.
     fn reserve_serial(&self) -> Result<Option<u64>, ServiceError>;
     /// Releases one publication ticket after its single reply attempt.
     fn reply_attempted(&self, publication: Publication) -> ServiceFuture<'_, ServiceReply<()>>;
