@@ -1,0 +1,17 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD a8aa0b2b6, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/mount_debt-b8b84a1c516ea56d --test-threads=1 --nocapture (cwd core/crates/layerfs-daemon)
+
+running 1 test
+test a_new_mount_is_refused_capacity_at_mount_debt_while_maintenance_is_stopped ... MOUNT_DEBT control: Mount admitted, owner admitted 1 -> 2, Store statements 252 -> 257, maintenance_failure=None
+MOUNT_DEBT stage: unattempted publication revision=1 write under the changed identity=Some(Overlay(Uncertain { cause: Invalid("allocation path identity"), completion: None })) maintenance_failure=Quarantined owner (admitted, completed, outstanding, queued, maintenance_jobs)=(7, [0, 2, 0, 4, 0, 0], 1, 1, 0)
+MOUNT_DEBT Mount 73: reply=Refused(ControlRefusal { code: Capacity, phase: "mount:debt", moved: None, published: None, detail: "Quarantined" }) receipt=Refused { code: Capacity, phase: "mount:debt", detail: "Quarantined", completions: 0, original: true } owner (admitted, completed, outstanding, queued, maintenance_jobs) (7, [0, 2, 0, 4, 0, 0], 1, 1, 0) -> (7, [0, 2, 0, 4, 0, 0], 1, 1, 0) Store statements 257 -> 257
+MOUNT_DEBT Mount 74: reply=Refused(ControlRefusal { code: Capacity, phase: "mount:debt", moved: None, published: None, detail: "Quarantined" }) receipt=Refused { code: Capacity, phase: "mount:debt", detail: "Quarantined", completions: 0, original: true } owner (admitted, completed, outstanding, queued, maintenance_jobs) (7, [0, 2, 0, 4, 0, 0], 1, 1, 0) -> (7, [0, 2, 0, 4, 0, 0], 1, 1, 0) Store statements 257 -> 257
+MOUNT_DEBT Mount 73: reply=Refused(ControlRefusal { code: Capacity, phase: "mount:debt", moved: None, published: None, detail: "Quarantined" }) receipt=Refused { code: Capacity, phase: "mount:debt", detail: "Quarantined", completions: 0, original: true } owner (admitted, completed, outstanding, queued, maintenance_jobs) (7, [0, 2, 0, 4, 0, 0], 1, 1, 0) -> (7, [0, 2, 0, 4, 0, 0], 1, 1, 0) Store statements 257 -> 257
+MOUNT_DEBT anchor Status: activity=Idle epoch=1 local=None local_failure=Some(ControlRefusal { code: Unknown, phase: "owner completion", moved: None, published: None, detail: "Overlay(Quarantined)" })
+MOUNT_DEBT owner stop: Ok(()); parked capture answered=Ok(true)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+R4_WALL seconds<=3 limit=100s lock_wait=0s
+EXIT 0

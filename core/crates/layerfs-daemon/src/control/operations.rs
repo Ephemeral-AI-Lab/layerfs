@@ -1,6 +1,7 @@
 //! Explicit control operations with short local admission and original receipts.
 use super::{
     registry::{bound_mut, Binding, Entry},
+    types::NativeFailure,
     Failure, Service, Success,
 };
 use crate::{
@@ -96,6 +97,18 @@ impl Service {
                     ControlCode::Capacity,
                     "daemon Workspace capacity",
                 ));
+            }
+            // Stopped maintenance reclaims nothing further, so no new
+            // Workspace is admitted. The retained first failure is read
+            // here; no owner job is submitted and no entry is created.
+            if let Some(stopped) = self.owner.maintenance_failure().map_err(Failure::Owner)? {
+                return Err(Failure::Native(Box::new(NativeFailure {
+                    code: ControlCode::Capacity,
+                    phase: "mount:debt",
+                    detail: stopped.to_string(),
+                    completions: Vec::new(),
+                    evidence: Some(Box::new(stopped)),
+                })));
             }
             entries.insert(workspace, Entry::Binding);
         }

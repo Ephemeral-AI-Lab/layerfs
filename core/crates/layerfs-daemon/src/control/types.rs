@@ -26,7 +26,8 @@ pub struct Success {
     /// Original native connection receipt of a terminal unmount.
     pub native: Option<Box<NativeEvidence>>,
 }
-/// A native attach or unmount refusal with its original evidence.
+/// A native attach or unmount refusal, or a Mount refused while maintenance
+/// is stopped, with its original evidence.
 #[derive(Debug)]
 pub struct NativeFailure {
     pub code: ControlCode,

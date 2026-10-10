@@ -32,6 +32,20 @@ Reply::Bound with the original token and binding. This is the Store/engine half 
 mount; it does not claim a kernel attachment or execution directory. S8 attaches
 FUSE and supplies full mount readiness. No whole-root qualification occurs here.
 
+R8b update, 2026-10-10 (specification 4.2, D-13): registry admission of a new
+incarnation, after the duplicate and capacity checks and before the entry is
+created, reads the owner's retained first maintenance failure
+(`OwnerClient::maintenance_failure`, a mutex read and no owner job). While one
+is retained, Mount is refused `Capacity` with phase `mount:debt` and the
+original error as bounded detail; no entry is created, no History or Store
+read is made and no owner job is submitted. A stopped or poisoned owner keeps
+its existing answer. Already bound Workspaces are not touched by this check.
+Not implemented: a declared debt headroom, and maintenance failure in Status.
+Proof and its scope: `layerfs-daemon/tests/mount_debt.rs`, where the retained
+failure is `Quarantined` after a foreground write met a changed backing-file
+identity; a maintenance turn that is itself first to meet a failing resource
+is not staged.
+
 Commit forwards the existing Content producer callback over the original capture
 and saved base. No test-selected product constructor or Init cleanup exists.
 Before S8, an application can build the intended changes directly through Content;

@@ -1,0 +1,20 @@
+# host macOS arm64, cargo +1.85.1 --locked, HEAD a8aa0b2b6, uncommitted product/test paths=25, LAYERFS_CONSTRUCTION_WORKERS=1
+# command: perl core/target/r4-locked.pl 100 core/target/debug/deps/mount_debt-b8b84a1c516ea56d --test-threads=1 --nocapture (cwd core/crates/layerfs-daemon)
+
+running 1 test
+test a_new_mount_is_refused_capacity_at_mount_debt_while_maintenance_is_stopped ... MOUNT_DEBT control: Mount admitted, owner admitted 1 -> 2, Store statements 252 -> 257, maintenance_failure=None
+
+thread 'a_new_mount_is_refused_capacity_at_mount_debt_while_maintenance_is_stopped' panicked at crates/layerfs-daemon/tests/mount_debt.rs:114:9:
+publish: no completion
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    a_new_mount_is_refused_capacity_at_mount_debt_while_maintenance_is_stopped
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.05s
+
+R4_WALL seconds<=13 limit=100s lock_wait=0s
+EXIT 101
