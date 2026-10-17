@@ -61,6 +61,10 @@ pub(super) fn host<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
         } else if key.equals("Devices") {
             once(&mut bits, 32)?;
             valid &= fuse_device(j)?;
+        } else if key.equals("Init") {
+            // the Engine's init reaps what commands leave behind
+            once(&mut bits, 64)?;
+            valid &= j.boolean()?;
         } else if key.equals("RestartPolicy") {
             once(&mut bits, 4)?;
             let mut seen = 0;
@@ -92,7 +96,7 @@ pub(super) fn host<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
         }
         Ok(())
     })?;
-    Ok(bits == 63 && valid)
+    Ok(bits == 127 && valid)
 }
 /// Exactly the one FUSE character device, under its own path.
 fn fuse_device<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
