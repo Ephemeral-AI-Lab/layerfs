@@ -13,12 +13,15 @@ impl SandboxRequest {
     /// container stays unprivileged with no-new-privileges; commands run as
     /// their own nonroot identity and inherit neither.
     /// Nothing in it may create a user namespace: see [`SECCOMP`].
+    /// The Engine's init is PID 1 and the daemon its child: a process a
+    /// command leaves behind is reaped when it exits instead of staying a
+    /// zombie, and the daemon's own waits keep their children's statuses.
     fn encode(&self, w: &mut dyn Write) -> io::Result<()> {
         w.write_all(b"{\"Image\":")?;
         quoted(w, &self.image)?;
         w.write_all(b",\"User\":\"0:0\",\"Entrypoint\":[\"/usr/local/bin/layerfs-daemon\"],\"Cmd\":[\"--config\",\"/layerfs-local/config/daemon.setup\"],\"Tty\":false,\"ExposedPorts\":{")?;
         quoted(w, &format!("{}/tcp", self.port))?;
-        w.write_all(b":{}},\"HostConfig\":{\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\"},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\",")?;
+        w.write_all(b":{}},\"HostConfig\":{\"Init\":true,\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\"},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\",")?;
         quoted(w, SECCOMP)?;
         w.write_all(b"],\"Mounts\":[{\"Type\":\"volume\",\"Source\":")?;
         quoted(w, &self.store_volume)?;
