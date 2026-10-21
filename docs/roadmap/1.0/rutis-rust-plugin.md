@@ -204,10 +204,39 @@ capability question.
   not shipped, and the Node adapter remains a stopgap rather than a product
   answer.
 
+## Scope ladder: the first tier needs no LayerFS change
+
+The large refactor is not a prerequisite for a Rust plugin. It is the cost of
+reusing the existing Workspace/Sandbox placement logic instead of writing it
+twice.
+
+| Tier | Coverage | LayerFS changes | Where the work is |
+| --- | --- | --- | --- |
+| 0 | `project.init`, `project.list_branches`, `fs.*`, `branch.*` | None; use public `layerfs-api` and `layerfs-store-service` | `layerfs-rutis` only |
+| 1 | Tier 0 plus `workspace.mount/exec/status/commit/unmount` | Reuse or extract the session logic; no product behavior change | `layerfs-session` plus the plugin |
+| 2 | Tier 1 plus a remote Rust worker and node link | None beyond Tier 1 | worker host and link configuration |
+
+Tier 0 is a real plugin, not a stub: `StoreService::open_direct`,
+`layerfs_api::call`, `ProjectApi::init` and `ProjectApi::install_local` are
+public. The plugin still has to read the project record, check the private
+LayerFS home, and convert between `SdkValue` and the service values. That is
+plugin code, not a change to the core crates.
+
+Tier 1 is where the existing native binding has the placement and discovery
+logic. Reusing it is cheaper and safer than a second implementation, but it is
+a refactor of `sdk/js/native/src`, not a change to the Store, daemon, FUSE or
+content products. The extracted crate can live under `sdk/` or a new
+integration workspace; it does not have to enter `core/`. The earlier
+`core/crates/layerfs-session` placement in this document was too strong.
+
+If Tier 0 is enough for the first Rust plugin, ship it first. Do not take the
+session refactor until Workspace support is actually required.
+
 ## Common prerequisite: extract `layerfs-session`
 
-Both A and B need the same Rust session layer. The logic exists today in
-`sdk/js/native/src` but is `pub(crate)` and napi-coupled at the top:
+For the full Workspace surface (Tier 1), both A and B need the same Rust
+session layer. The logic exists today in `sdk/js/native/src` but is
+`pub(crate)` and napi-coupled at the top:
 
 - project records and discovery;
 - Store open/call registry;
@@ -216,10 +245,11 @@ Both A and B need the same Rust session layer. The logic exists today in
 - exec spool and output;
 - Init request/counters.
 
-Extract that logic into a napi-free crate, for example
-`core/crates/layerfs-session`. The Node binding becomes a thin napi wrapper.
-The rutis plugin depends on the same crate, so there is one deployment and
-placement implementation, not a second one.
+Extract that logic into a napi-free crate, for example under `sdk/` or a
+small integration workspace; it does not have to enter `core/`. The Node
+binding becomes a thin napi wrapper. The rutis plugin depends on the same
+crate, so there is one deployment and placement implementation, not a second
+one.
 
 This is a relocation, not a rewrite. The production LOC total should stay
 close to unchanged; the commit must report the migration and keep the
@@ -227,8 +257,8 @@ close to unchanged; the commit must report the migration and keep the
 (`convert.rs`) stays in the napi crate; the session crate exposes `SdkValue`
 or a small serde conversion.
 
-The extraction should be its own PR, before the plugin PR. It is the largest
-piece of work and the easiest to review separately.
+When Tier 1 is needed, the extraction should be its own PR before the
+Workspace PR. Tier 0 does not wait for it.
 
 ## Shared service contract
 
@@ -281,21 +311,25 @@ with a different authorization scope.
 
 ## Implementation phases
 
-1. **Extract `layerfs-session`.** No behavior change; native binding tests
-   stay green. Report relocation and production LOC.
-2. **Add the typed Rust service (A).** Start with `info`, `call`,
-   `project_init`, `project_list_branches`, `fs.*`, `branch.*`. Use a temporary
-   Store and the existing native test fixtures. No `#[rutis::service]` yet.
-3. **Add Workspace methods (A).** Reuse the session crate; add per-Workspace
-   lanes; test mount/exec/status/commit/unmount against the real Linux
-   deployment.
-4. **Expose `#[rutis::service]` only if needed.** Decide Rust-only versus
+1. **Tier 0: Rust Store-only plugin.** Add `layerfs-rutis` with `info`,
+   `call`, `project_init`, `project_list_branches`, `fs.*` and `branch.*`.
+   No LayerFS core changes. Test against a temporary Store and the existing
+   native fixtures.
+2. **Decide whether Workspace support is required.** If not, stop here; the
+   plugin is a complete Rust Store service. If yes, continue.
+3. **Tier 1: extract `layerfs-session`.** No behavior change; native binding
+   tests stay green. Report relocation and production LOC. This is a separate
+   PR from the plugin.
+4. **Tier 1: add Workspace methods (A).** Reuse the session crate; add
+   per-Workspace lanes; test mount/exec/status/commit/unmount against the real
+   Linux deployment.
+5. **Expose `#[rutis::service]` only if needed.** Decide Rust-only versus
    cross-language. If cross-language, settle the error-code mapping and the
    contract review first.
-5. **Add the remote worker (B).** Reuse the A plugin in a Rust host binary,
-   configure the node link, and test disconnect/reconnect, worker restart,
-   auth failures and bounded output.
-6. **Optional dylib variant.** Build the same plugin with `rutis-sdk` and the
+6. **Tier 2: add the remote worker (B).** Reuse the A plugin in a Rust host
+   binary, configure the node link, and test disconnect/reconnect, worker
+   restart, auth failures and bounded output.
+7. **Optional dylib variant.** Build the same plugin with `rutis-sdk` and the
    dylib toolchain only if hot replacement without rebuilding the host is a
    requirement.
 
