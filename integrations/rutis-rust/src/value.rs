@@ -9,6 +9,7 @@ use layerfs_bridge::control::SdkValue;
 use serde_json::{Map, Value};
 
 const DEPTH: usize = 16;
+const SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 pub(crate) fn to_sdk(value: Value) -> Result<SdkValue, LayerFsError> {
     convert(value, 0)
@@ -27,6 +28,11 @@ fn convert(value: Value, depth: usize) -> Result<SdkValue, LayerFsError> {
                     "numbers must be signed 64-bit integers",
                 ));
             };
+            if value.unsigned_abs() > SAFE_INTEGER {
+                return Err(LayerFsError::invalid(
+                    "numbers must be within the JavaScript safe integer range",
+                ));
+            }
             SdkValue::Int(value)
         }
         Value::String(text) => SdkValue::Text(text),
@@ -45,15 +51,10 @@ fn convert(value: Value, depth: usize) -> Result<SdkValue, LayerFsError> {
     })
 }
 
-pub(crate) fn to_json(value: &SdkValue) -> Result<Value, LayerFsError> {
-    convert_json(value, 0)
-}
-
-fn convert_json(value: &SdkValue, depth: usize) -> Result<Value, LayerFsError> {
-    if depth > DEPTH {
-        return Err(LayerFsError::invalid("value nests too deeply"));
-    }
-    Ok(match value {
+/// Converts a trusted core result. Values from the core are already bounded by
+/// the SDK channel; conversion cannot fail after a mutation has committed.
+pub(crate) fn to_json(value: &SdkValue) -> Value {
+    match value {
         SdkValue::Null => Value::Null,
         SdkValue::Bool(value) => Value::Bool(*value),
         SdkValue::Int(value) => Value::Number((*value).into()),
@@ -64,18 +65,13 @@ fn convert_json(value: &SdkValue, depth: usize) -> Result<Value, LayerFsError> {
                 .map(|byte| Value::Number((*byte).into()))
                 .collect(),
         ),
-        SdkValue::List(items) => Value::Array(
-            items
-                .iter()
-                .map(|item| convert_json(item, depth + 1))
-                .collect::<Result<_, _>>()?,
-        ),
+        SdkValue::List(items) => Value::Array(items.iter().map(to_json).collect()),
         SdkValue::Map(fields) => {
             let mut map = Map::new();
             for (name, value) in fields {
-                map.insert(name.clone(), convert_json(value, depth + 1)?);
+                map.insert(name.clone(), to_json(value));
             }
             Value::Object(map)
         }
-    })
+    }
 }

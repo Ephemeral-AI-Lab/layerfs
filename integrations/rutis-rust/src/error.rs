@@ -60,7 +60,7 @@ impl LayerFsError {
 
 impl From<SdkRefusal> for LayerFsError {
     fn from(refusal: SdkRefusal) -> Self {
-        let data = crate::value::to_json(&refusal.detail).unwrap_or(Value::Null);
+        let data = crate::value::to_json(&refusal.detail);
         Self::Refused {
             code: refusal.code,
             message: refusal.message,

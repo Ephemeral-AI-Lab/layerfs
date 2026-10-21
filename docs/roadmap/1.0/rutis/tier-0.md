@@ -67,7 +67,8 @@ store_path  installed Store file (required)
 
 Validation:
 
-- project name matches the SDK alphabet (1-63, lowercase/digits/`_-.`);
+- project name matches the SDK alphabet (1-63, lowercase/digits/`_-.`, with
+  alphanumeric first and last characters);
 - `home` and `store_path` are absolute;
 - `home` is private, owned by the effective user, no group/other bits;
 - `store_path` exists and is a regular file (not a symlink);
@@ -83,8 +84,9 @@ On the first call:
 1. Read `<home>/<project>/project.record` and decode the control
    `Answer`; its `Reply::Sdk` value is a map.
 2. Decode `manifest` and `installed` with `StoreManifest::decode`.
-3. Require a Disposable manifest, an installed manifest with
-   `daemon_sqlite`, and matching binding/cursor keys.
+3. Require a Disposable sealed manifest with no `daemon_sqlite`, and an
+   installed manifest that equals the sealed one except for a present
+   `daemon_sqlite`.
 4. Create a private temporary directory for the overlay template.
 5. `StoreService::open_direct(store_path, manifest.binding,
    manifest.cursor_key, overlay_template)`.
@@ -111,7 +113,9 @@ The plugin never writes the project record and never installs a Store.
 
 - `apply`: validate config, construct state, provide `layerfs`. No Store I/O.
 - First `call`: open the Store.
-- Unload: disable new calls and release the Store; an in-flight call may finish.
+- Unload: disable new Store calls; `info` remains available. An in-flight call
+  may finish. A sole-owner close reports Store/overlay cleanup errors; while a
+  call still holds the `Opened`, cleanup is deferred to its last drop.
   The overlay directory is removed when the last `Arc<Opened>` drops.
 - Reload: a new plugin opens the same Store.
 - No Workspace Commit, no unmount, no implicit Commit; `fs.*`/`branch.*`
@@ -139,9 +143,10 @@ design a cross-language code mapping in Tier 0; that is a Tier 2 concern.
 - Refusals keep `code` and `data` (`NoSuchPath` with its path).
 - Unknown methods return `UnknownMethod` before the Store is opened.
 - Missing installed manifest returns `NoStore`; a non-private record returns
-  `Unauthorized`.
-- Plugin load/unload through a Rust rutis host; after unload the retained
-  service fails closed.
+  `Unauthorized`; a symlinked record is rejected at `apply`; a mismatched
+  installed manifest returns `Failed`.
+- Plugin load/unload through a Rust rutis host; after unload `call` fails
+  closed while `info` remains available.
 - A non-Linux build has a separate `Unsupported` test; Linux tests run under
   `CARGO_TARGET_TMPDIR`.
 - No Docker, Sandbox or daemon test.

@@ -37,7 +37,6 @@ impl Config {
             }
             private_dir(&self.home)?;
             let project = self.home.join(&self.project);
-            private_dir(&project)?;
             let record = project.join("project.record");
             if !regular_file(&record)? {
                 return Err(LayerFsError::refused(
@@ -46,6 +45,7 @@ impl Config {
                     serde_json::Value::Null,
                 ));
             }
+            private_dir(&project)?;
             if !regular_file(&self.store_path)? {
                 return Err(LayerFsError::refused(
                     "NoStore",

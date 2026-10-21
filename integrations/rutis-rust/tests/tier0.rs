@@ -12,7 +12,7 @@ use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use serde_json::json;
 use std::io::Write;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{symlink, DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
@@ -245,6 +245,64 @@ async fn a_public_record_is_unauthorized() {
 }
 
 #[tokio::test]
+async fn unknown_method_fails_before_the_store_opens() {
+    let (_root, config, _manifest) = fixture();
+    let store = config.store_path.clone();
+    let layerfs = LayerFs::new(config).unwrap();
+    std::fs::remove_file(store).unwrap();
+
+    let error = layerfs
+        .call("workspace.mount".into(), json!({ "branch": "main" }))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "UnknownMethod");
+
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "NoStore");
+}
+
+#[test]
+fn a_symlinked_record_is_rejected() {
+    let (_root, config, _manifest) = fixture();
+    let record = config.home.join(PROJECT).join("project.record");
+    let target = config.home.join(PROJECT).join("moved.record");
+    std::fs::rename(&record, &target).unwrap();
+    symlink(&target, &record).unwrap();
+    match LayerFs::new(config) {
+        Ok(_) => panic!("a symlinked record must be rejected"),
+        Err(error) => assert_eq!(error.code(), "NoSuchProject"),
+    }
+}
+
+#[tokio::test]
+async fn a_mismatched_installed_manifest_fails() {
+    let (_root, config, manifest) = fixture();
+    let mut installed = manifest.clone();
+    installed.daemon_sqlite = Some(installed.host_sqlite.clone());
+    installed.root = [9; 32];
+    write_record(
+        &config.home.join(PROJECT).join("project.record"),
+        &manifest,
+        Some(&installed),
+    );
+    let layerfs = LayerFs::new(config).unwrap();
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "Failed");
+}
+
+#[tokio::test]
 async fn a_rutis_host_requires_and_calls_the_service() {
     let (_root, config, _manifest) = fixture();
     let ctx = rutis::Ctx::root().unwrap();
@@ -262,6 +320,7 @@ async fn a_rutis_host_requires_and_calls_the_service() {
 
     view.dispose().await.unwrap();
     assert!(ctx.get::<LayerFs>().is_none());
+    assert_eq!(service.info().await.project, PROJECT);
     let error = service
         .call(
             "fs.read".into(),
@@ -269,6 +328,9 @@ async fn a_rutis_host_requires_and_calls_the_service() {
         )
         .await
         .unwrap_err();
-    assert_eq!(error.code(), "InvalidInput");
+    assert!(matches!(
+        error,
+        LayerFsError::Invalid(message) if message.contains("closed")
+    ));
     ctx.shutdown().await.unwrap();
 }

@@ -38,7 +38,7 @@ reads `<home>/<project>/project.record` and opens the Store at `store_path`.
 ## Test
 
 ```sh
-cargo test --test tier0
+cargo test
 ```
 
 The test initializes a temporary Store, copies the sealed file to the
