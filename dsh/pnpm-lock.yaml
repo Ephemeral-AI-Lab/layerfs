@@ -37,6 +37,9 @@ importers:
       '@dsh-layerfs/model':
         specifier: workspace:*
         version: link:../model
+      '@layerfs/port':
+        specifier: link:../../../port
+        version: link:../../../port
       '@layerfs/sdk':
         specifier: link:../../../sdk/js
         version: link:../../../sdk/js

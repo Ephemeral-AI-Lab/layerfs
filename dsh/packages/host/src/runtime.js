@@ -16,9 +16,8 @@ import { execFile } from "node:child_process";
 import { readFileSync, statfsSync } from "node:fs";
 import { connect } from "node:net";
 import { promisify } from "node:util";
-import { buildOf, ensureBox, storeFile, VOLUMES } from "./box.js";
+import { buildOf, ensureBox, frame, readFrames, storeFile, VOLUMES } from "@layerfs/port";
 import { isSim, within } from "./layerfs-client.js";
-import { frame, readFrames } from "./port/frames.mjs";
 
 const run = promisify(execFile);
 /** Workspaces one Sandbox's daemon admits (the SDK's daemon setup, `namespaces`). */

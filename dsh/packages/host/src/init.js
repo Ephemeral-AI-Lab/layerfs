@@ -10,7 +10,7 @@ import { basename, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as pause } from "node:timers/promises";
 import { promisify } from "node:util";
-import { ensureBox } from "./box.js";
+import { ensureBox } from "@layerfs/port";
 import { missingDeployment } from "./config.js";
 import { clientFor, isSim, release } from "./layerfs-client.js";
 
@@ -136,7 +136,7 @@ export function prepareInit(spec, bindings, { folder, source = folder, name, bac
  * makes it `folder`'s default. `report` sees each step (scan, volume,
  * import) and, while LayerFS imports in this process, its counts as
  * `imported`. On macOS the import runs in its own container beside the
- * Store container (box.js), where no counts are read. One attempt; a failure
+ * Store container (@layerfs/port), where no counts are read. One attempt; a failure
  * leaves no project, and the volume and project entry it made are removed.
  */
 export async function runInit(spec, bindings, { folder, project }, report = () => {}) {

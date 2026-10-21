@@ -1,7 +1,7 @@
-// The Store container of ported Live projects (macOS; port/binding.js),
+// The Store container of ported Live projects (macOS; binding.js),
 // `<prefix>store` (`layerfs-store` by default, #373): one long-lived Linux
-// container per LayerFS home whose main process is the worker (port/
-// worker.mjs) that makes every ported SDK call with the real Linux binding
+// container per LayerFS home whose main process is the worker (worker.mjs)
+// that makes every ported SDK call with the real Linux binding
 // (owner direction of 2026-10-20, AGENTS.md). The worker's port is published
 // to the Mac's loopback only, and its secret and port are written to the
 // LayerFS home (storeFile) for the Host's and agents' processes. It is
@@ -11,7 +11,7 @@
 // It mounts only what the calls use, each at its own path so a path means the
 // same inside as outside, for Docker too: the Docker socket, Docker's volume
 // directory (inside Docker's VM), the LayerFS home (writable), the LayerFS
-// build and port/ (read-only). Never a broad host folder: Docker Desktop
+// build and this folder (read-only). Never a broad host folder: Docker Desktop
 // forwards every file event under a shared folder into its VM, and sharing
 // /Users stalled it (2026-10-20). Init, the one call that reads a source
 // folder, runs in its own container with that folder (binding.js).
@@ -22,11 +22,12 @@ import { connect } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { frame, readFrames } from "./port/frames.mjs";
+import { frame, readFrames } from "./frames.mjs";
 
 const run = promisify(execFile);
 export const VOLUMES = "/var/lib/docker/volumes";
-export const PORT = dirname(fileURLToPath(new URL("./port/run.mjs", import.meta.url)));
+/** This folder, which every call's container mounts for worker.mjs and run.mjs. */
+export const PORT = dirname(fileURLToPath(import.meta.url));
 /** Where a Store container process reaches a daemon's loopback-published port: the Mac. */
 export const DAEMON_HOST = "host.docker.internal";
 const WORKER_PORT = 7070;
@@ -53,9 +54,13 @@ const OLD_FILE = ".dsh-layerfs-box.json";
 /** A short id of a build folder, as the Store container's label. */
 export const buildOf = (bundle) => createHash("sha256").update(bundle).digest("hex").slice(0, 12);
 
-/** The worker's code, as the Store container's label: a changed worker replaces it. */
+/**
+ * The worker's code and the folder it runs from, as the Store container's
+ * label: a changed worker replaces it, and so does a moved one, since the
+ * container mounts and starts the worker from the folder it was made with.
+ */
 const workerVersion = () => {
-  const hash = createHash("sha256");
+  const hash = createHash("sha256").update(PORT);
   for (const file of ["worker.mjs", "call.mjs", "frames.mjs"]) hash.update(readFileSync(join(PORT, file)));
   return hash.digest("hex").slice(0, 12);
 };

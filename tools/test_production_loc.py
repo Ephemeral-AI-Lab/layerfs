@@ -208,6 +208,15 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(entry["scope"], "core")
         self.assertEqual(entry["crate"], "candidate")
 
+    def test_port_scope_counts_its_src_javascript_and_not_its_tests(self):
+        write(self.root, "port/src/box.js", "// a comment\nexport const a = 1;\n")
+        write(self.root, "port/src/frames.mjs", "export const f = 1;\n")
+        write(self.root, "port/tests/real.mjs", "export const t = 1;\n")
+        entry = production_loc.scan(self.root)["scopes"]["port"]
+        self.assertEqual(entry["files"], 2)
+        self.assertEqual(entry["lines"], 2)
+        self.assertEqual(entry["crates"], {"@layerfs/port": 2})
+
     def test_per_file_and_total_use_the_same_classification(self):
         write(self.root, "crates/reference/src/lib.rs", "// only a comment\n\npub const R: u8 = 2;\n")
         write(self.root, "core/crates/candidate/src/lib.rs", "pub const C: u8 = 3;\n")

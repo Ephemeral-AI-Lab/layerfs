@@ -10,9 +10,8 @@
 //   ctx.systemPrompt each agent's runtime context names its conversation's
 //                    LayerFS project (where a system prompt is assembled)
 import { BindingStore } from "./binding.js";
-import { ensureBox } from "./box.js";
+import { ensureBox, onUnreachable } from "@layerfs/port";
 import { migrate } from "./migrate.js";
-import { onUnreachable } from "./port/binding.js";
 import { Collector } from "./collector.js";
 import z from "@deepseek-ai/schemastery";
 import { resolveConfig } from "./config.js";
@@ -42,7 +41,7 @@ export const Config = z.object({
 export function apply(ctx, config) {
   const spec = resolveConfig(config, ctx.get("profileContext"));
   if (spec.box) {
-    // the Host's own clients use the ported SDK too (port/sdk.js)
+    // the Host's own clients use the ported SDK too (@layerfs/port/sdk)
     Object.assign(process.env, { DSH_LAYERFS_STORE_CONTAINER: spec.box, DSH_LAYERFS_BUNDLE: spec.bundle });
     ensureBox(spec).catch((error) => ctx.logger?.warn?.(`layerfs: the Store container did not start: ${error.message}`));
   }

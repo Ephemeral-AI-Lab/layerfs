@@ -1,4 +1,4 @@
-// The ported SDK of Live projects on macOS (src/port/, src/box.js), with real
+// The ported SDK of Live projects on macOS (@layerfs/port), with real
 // Docker and a sealed Linux LayerFS build:
 //   node packages/host/tests/port_real.mjs <bundle folder> <image digest>
 // A plain Mac script uses the ported SDK as an agent would: Init (which
@@ -19,7 +19,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DAEMON_HOST, ensureBox, storeName, storePathOf } from "../src/box.js";
+import { DAEMON_HOST, ensureBox, onUnreachable, storeName, storePathOf } from "@layerfs/port";
 
 const [bundle, image] = process.argv.slice(2);
 if (process.platform !== "darwin" || !bundle || !image) {
@@ -58,8 +58,8 @@ try {
   const other = await ensureBox({ ...spec, home: join(work, "other") }).catch((e) => e);
   assert.match(String(other?.message), /serves the LayerFS home .*its own containerPrefix/);
   assert.equal(docker("inspect", "-f", "{{.State.Running}}", spec.box), "true");
-  const { LayerFS, isRefusal } = await import("../src/port/sdk.js");
-  const { LayerFSOperator } = await import("../src/port/operator.js");
+  const { LayerFS, isRefusal } = await import("@layerfs/port/sdk");
+  const { LayerFSOperator } = await import("@layerfs/port/operator");
   layerfs = new LayerFS("shop");
   const operator = new LayerFSOperator(layerfs);
   // as the Host does: settings exist only while the client is made, so a call
@@ -92,7 +92,6 @@ try {
   assert.deepEqual(branches.items.map((b) => b.name).sort(), ["main", "work"]);
   // self-heal, as the Host wires it: a call that finds the Store container stopped
   // or missing reports its own error, and the hook starts it again; the next call works
-  const { onUnreachable } = await import("../src/port/binding.js");
   let healing = null;
   const unhook = onUnreachable(() => { healing ??= ensureBox(spec); });
   try {

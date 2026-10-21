@@ -141,7 +141,8 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   directly and keeps it and its daemon connections open while the project is
   in use (closed after a quiet minute). The worker listens on loopback only,
   behind a secret. The product SDK and daemon do not change. Nothing else may
-  route Store calls this way.
+  route Store calls this way. Its code is the ported SDK in
+  [`port/`](port/README.md), outside `sdk/js` because it is not the product SDK.
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

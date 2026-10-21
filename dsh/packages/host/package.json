@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@dsh-layerfs/model": "workspace:*",
+    "@layerfs/port": "link:../../../port",
     "@layerfs/sdk": "link:../../../sdk/js"
   },
   "peerDependencies": {

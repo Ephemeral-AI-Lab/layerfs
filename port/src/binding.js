@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 import { deserialize, serialize } from "node:v8";
-import { callMounts, DAEMON_HOST, storeFile } from "../box.js";
+import { callMounts, DAEMON_HOST, storeFile } from "./box.js";
 import { frame, readFrames } from "./frames.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
