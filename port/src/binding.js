@@ -13,12 +13,12 @@ import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 import { deserialize, serialize } from "node:v8";
 import { CALL_DOCKER, callMounts, DAEMON_HOST, DEFAULT_DOCKER, storeFile } from "./box.js";
+import { setting } from "./env.js";
 import { frame, readFrames } from "./frames.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
 /** Stores this process has opened, by path, with their clients. */
 const opened = new Map();
-const setting = (name) => process.env[`LAYERFS_${name}`] || process.env[`DSH_LAYERFS_${name}`];
 const refused = (code, message) => ({ refused: { code, message, detail: null } });
 
 /** Whose calls found the Store container down or unreachable: the Host, which starts it again. */
@@ -43,7 +43,7 @@ export const UNREACHABLE = /the Store container [^\s']+(?:'s worker did not answ
  */
 function inBox(fn, op, args) {
   const box = setting("STORE_CONTAINER"), bundle = setting("BUNDLE");
-  if (!box || !bundle) return Promise.resolve(refused("Unsupported", "no Store container is set (DSH_LAYERFS_STORE_CONTAINER, DSH_LAYERFS_BUNDLE): Store calls run only in Linux"));
+  if (!box || !bundle) return Promise.resolve(refused("Unsupported", "no Store container is set (LAYERFS_STORE_CONTAINER, LAYERFS_BUNDLE): Store calls run only in Linux"));
   const sent = { ...args, deploy: { ...args.deploy, docker: CALL_DOCKER, daemonHost: args.deploy?.daemonHost ?? DAEMON_HOST } };
   const request = { fn, op, args: sent, open: opened.has(args.storePath) };
   return op === "project.init" ? initCall(box, bundle, args.deploy?.docker ?? DEFAULT_DOCKER, request) : worker(box, args.home ?? setting("HOME")).call(request);
@@ -78,7 +78,7 @@ function worker(box, home) {
   if (link && !link.closed) return link;
   let info;
   try { info = JSON.parse(readFileSync(storeFile(home), "utf8")); } catch { info = null; }
-  if (!info || info.box !== box) return { call: async () => down("Failed", `the Store container ${box} has not started for ${home}: dsh starts it; run the call again once it is up`) };
+  if (!info || info.box !== box) return { call: async () => down("Failed", `the Store container ${box} has not started for ${home}: the Host or session using it starts it; run the call again once it is up`) };
   const pending = new Map(), waiting = [];
   let next = 1, greeted = false;
   const socket = connect({ host: "127.0.0.1", port: info.port });
@@ -104,7 +104,7 @@ function worker(box, home) {
     const why = error ? ` (${error.message})` : "";
     const answer = greeted
       ? down("Unknown", `the connection to the Store container ${box} was lost${why}: check the project before going on`)
-      : down("Failed", `the Store container ${box}'s worker did not answer${why}: dsh starts it again; run the call again once it is up`);
+      : down("Failed", `the Store container ${box}'s worker did not answer${why}: the Host or session using it starts it again; run the call again once it is up`);
     for (const p of pending.values()) p.resolve(answer);
     pending.clear();
     waiting.length = 0;

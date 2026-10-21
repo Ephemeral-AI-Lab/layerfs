@@ -23,7 +23,8 @@ by the same JavaScript scanner.
 
 The ported SDK that adapters share on macOS is its own scope, `port`: the
 JavaScript under port/src, one crate (@layerfs/port), counted as the dsh scope
-is.
+is. The Pi package is its own scope, `pi`, the same way: pi/src, one crate
+(pi-layerfs). Their tests are excluded.
 
 Runtime SQL is counted for both scopes: a candidate package that ships schema or
 query text under <crate>/sql/ contributes it exactly like the reference schema.
@@ -349,7 +350,7 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "reference", "sdk", "dsh", "port")
+SCOPES = ("core", "reference", "sdk", "dsh", "port", "pi")
 
 
 def scope_base(root: Path, scope: str) -> Path:
@@ -361,6 +362,8 @@ def scope_base(root: Path, scope: str) -> Path:
         return root / "dsh" / "packages"
     if scope == "port":
         return root / "port"
+    if scope == "pi":
+        return root / "pi"
     return root / "crates"
 
 
@@ -405,6 +408,8 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
         return dsh_crate(base, path)
     if scope == "port":
         return "@layerfs/port"
+    if scope == "pi":
+        return "pi-layerfs"
     parts = path.relative_to(root).parts
     return parts[2] if scope == "core" else parts[1]
 
@@ -421,7 +426,7 @@ def scope_files(root: Path, scope: str) -> list:
         return sdk_files(base)
     if scope == "dsh":
         return dsh_files(base)
-    if scope == "port":
+    if scope in ("port", "pi"):
         return package_src_files(base)
     files = []
     for path in sorted(base.rglob("*")):

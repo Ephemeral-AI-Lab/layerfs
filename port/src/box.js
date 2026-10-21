@@ -17,7 +17,7 @@
 // folder, runs in its own container with that folder (binding.js).
 import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,6 +80,8 @@ export function ensureBox(spec) {
 async function start(spec) {
   const docker = (...args) => run("docker", ["-H", `unix://${spec.docker}`, ...args]).then((r) => r.stdout.trim());
   const version = workerVersion(), build = buildOf(spec.bundle);
+  // made here, private as the SDK requires: Docker would make a missing mount source 0755
+  mkdirSync(spec.home, { recursive: true, mode: 0o700 });
   // the older naming's box on this home (its home folder is mounted): replaced
   const old = (await docker("ps", "-aq", "--filter", "label=dsh-layerfs.box=1", "--filter", `volume=${spec.home}`)).split("\n").filter(Boolean);
   if (old.length) await docker("rm", "-f", ...old);

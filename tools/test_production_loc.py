@@ -217,6 +217,15 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(entry["lines"], 2)
         self.assertEqual(entry["crates"], {"@layerfs/port": 2})
 
+    def test_pi_scope_counts_its_src_javascript_and_not_its_tests(self):
+        write(self.root, "pi/src/index.js", "// a comment\nexport const a = 1;\n")
+        write(self.root, "pi/tests/e2e.mjs", "export const t = 1;\n")
+        write(self.root, "pi/package.json", "{}\n")
+        entry = production_loc.scan(self.root)["scopes"]["pi"]
+        self.assertEqual(entry["files"], 1)
+        self.assertEqual(entry["lines"], 1)
+        self.assertEqual(entry["crates"], {"pi-layerfs": 1})
+
     def test_per_file_and_total_use_the_same_classification(self):
         write(self.root, "crates/reference/src/lib.rs", "// only a comment\n\npub const R: u8 = 2;\n")
         write(self.root, "core/crates/candidate/src/lib.rs", "pub const C: u8 = 3;\n")
