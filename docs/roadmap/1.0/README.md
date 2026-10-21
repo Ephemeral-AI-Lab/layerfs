@@ -25,8 +25,9 @@ inputs to 1.0.0 unless a 1.0.0 issue picks them up explicitly.
 
 ## Integrations under review
 
-- [Rust rutis plugin: in-process and remote architectures](rutis-rust-plugin.md):
-  proposal for a Rust-first LayerFS plugin; not a released contract.
+- [Rust rutis plugin: tiers 0-2](rutis/README.md): in-process Store service,
+  in-process Workspace support and remote worker; proposals, not released
+  contracts.
 
 ## Decisions still needed from the owner
 
