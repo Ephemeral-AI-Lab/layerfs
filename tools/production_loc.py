@@ -21,6 +21,10 @@ TypeScript under dsh/packages/<package>/src, one crate per package
 and the untracked dsh/assets art are excluded. TypeScript comments are blanked
 by the same JavaScript scanner.
 
+Application integrations are their own scope, `integrations`: each
+integrations/<crate>/ with a Cargo.toml contributes its src/ Rust and its
+sql/ runtime SQL. Tests, target and generated files are excluded.
+
 Runtime SQL is counted for both scopes: a candidate package that ships schema or
 query text under <crate>/sql/ contributes it exactly like the reference schema.
 Per-file reporting uses the same classification as the totals, and prints the
@@ -387,11 +391,15 @@ def dsh_crate(base: Path, path: Path) -> str:
 
 
 def integration_files(base: Path) -> list:
-    """Each integration crate's Rust src/."""
+    """Each integration crate's Rust src/ and runtime SQL."""
     files = []
     for package in sorted(p for p in base.iterdir() if p.is_dir()):
+        if not (package / "Cargo.toml").is_file():
+            continue
         if (package / "src").is_dir():
             files += sorted((package / "src").rglob("*.rs"))
+        if (package / "sql").is_dir():
+            files += sorted((package / "sql").rglob("*.sql"))
     return [
         path
         for path in files

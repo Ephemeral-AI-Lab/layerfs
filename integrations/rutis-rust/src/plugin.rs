@@ -25,8 +25,16 @@ impl Plugin for LayerFsPlugin {
         Box::pin(async move {
             let layerfs = LayerFs::new(self.config.clone())
                 .map_err(|error| CordisError::PluginFailed(Box::new(error)))?;
+            let cleanup = layerfs.clone();
             ctx.provide(layerfs)?;
-            Ok(Effect::Done)
+            Ok(Effect::AsyncDisposer(Box::new(move || {
+                Box::pin(async move {
+                    cleanup
+                        .close()
+                        .await
+                        .map_err(|error| CordisError::PluginFailed(Box::new(error)))
+                })
+            })))
         })
     }
 }

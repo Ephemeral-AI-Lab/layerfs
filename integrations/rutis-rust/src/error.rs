@@ -53,9 +53,7 @@ impl LayerFsError {
             Self::Refused { code, .. } => code,
             Self::Invalid(_) => "InvalidInput",
             Self::Unsupported(_) => "Unsupported",
-            Self::Io(_) => "Io",
-            Self::Control(_) => "Control",
-            Self::Join(_) => "Failed",
+            Self::Io(_) | Self::Control(_) | Self::Join(_) => "Failed",
         }
     }
 }

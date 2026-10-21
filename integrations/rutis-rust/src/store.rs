@@ -9,11 +9,35 @@ use layerfs_store_service::{OpenRefusal, StoreService};
 use serde_json::Value;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const RECORD_LIMIT: u64 = 65_535;
-static OVERLAY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+const STORE_METHODS: &[&str] = &[
+    "project.list_branches",
+    "fs.read",
+    "fs.list",
+    "fs.stat",
+    "fs.grep",
+    "fs.glob",
+    "fs.diff_files",
+    "fs.blame",
+    "fs.write",
+    "fs.edit",
+    "fs.apply",
+    "fs.mkdir",
+    "fs.rm",
+    "fs.cp",
+    "fs.mv",
+    "branch.fork",
+    "branch.list_commits",
+    "branch.diff_commits",
+    "branch.diff_branches",
+    "branch.merge",
+    "branch.publish",
+];
 
 /// Public integration state for one project.
 #[derive(Clone, Debug)]
@@ -22,21 +46,33 @@ pub struct Info {
     pub project: String,
 }
 
-struct OpenStore {
-    service: Arc<StoreService>,
+struct Opened {
+    service: Option<StoreService>,
     overlay: PathBuf,
 }
 
-struct Record {
-    manifest: StoreManifest,
+impl Drop for Opened {
+    fn drop(&mut self) {
+        if let Some(service) = self.service.take() {
+            let _ = service.close();
+        }
+        let _ = std::fs::remove_dir_all(&self.overlay);
+    }
+}
+
+struct Inner {
+    config: Config,
+    opening: tokio::sync::Mutex<()>,
+    state: Mutex<Option<Arc<Opened>>>,
+    closed: AtomicBool,
 }
 
 /// One project's Store service. The Store is opened lazily on the first call;
-/// `Drop` releases it. No global state and no environment mutation.
+/// `close` disables new calls and releases the Store. No Store registry or
+/// process-global mutable state is kept.
+#[derive(Clone)]
 pub struct LayerFs {
-    config: Config,
-    opening: tokio::sync::Mutex<()>,
-    state: Mutex<Option<OpenStore>>,
+    inner: Arc<Inner>,
 }
 
 impl LayerFs {
@@ -44,68 +80,112 @@ impl LayerFs {
     pub fn new(config: Config) -> Result<Self, LayerFsError> {
         config.validate()?;
         Ok(Self {
-            config,
-            opening: tokio::sync::Mutex::new(()),
-            state: Mutex::new(None),
+            inner: Arc::new(Inner {
+                config,
+                opening: tokio::sync::Mutex::new(()),
+                state: Mutex::new(None),
+                closed: AtomicBool::new(false),
+            }),
         })
     }
 
     /// The service name and project. Does not open the Store.
     pub async fn info(&self) -> Info {
         Info {
-            project: self.config.project.clone(),
+            project: self.inner.config.project.clone(),
         }
     }
 
     /// Runs one public Store method once.
     pub async fn call(&self, method: String, args: Value) -> Result<Value, LayerFsError> {
-        if !allowed(&method) {
-            return Err(LayerFsError::invalid(format!("UnknownMethod: {method}")));
-        }
-        let args = with_project(value::to_sdk(args)?, &self.config.project)?;
-        let service = self.service().await?;
-        let result = tokio::task::spawn_blocking(move || {
-            layerfs_api::call(&service, &SdkCall { method, args })
+        self.ensure_open()?;
+        let method = exact_method(&method)?.to_owned();
+        let args = with_project(value::to_sdk(args)?, &self.inner.config.project)?;
+        let opened = self.service().await?;
+        tokio::task::spawn_blocking(move || {
+            let service = opened
+                .service
+                .as_ref()
+                .ok_or_else(|| LayerFsError::invalid("layerfs service is closed"))?;
+            let value = layerfs_api::call(service, &SdkCall { method, args })?;
+            value::to_json(&value)
         })
         .await
-        .map_err(|error| LayerFsError::Join(error.to_string()))??;
-        value::to_json(&result)
+        .map_err(|error| LayerFsError::Join(error.to_string()))?
     }
 
-    async fn service(&self) -> Result<Arc<StoreService>, LayerFsError> {
-        if let Some(open) = self.state().as_ref() {
-            return Ok(open.service.clone());
+    /// Disables new calls and releases the Store when the last in-flight call
+    /// ends. Idempotent.
+    pub async fn close(&self) -> Result<(), LayerFsError> {
+        self.inner.closed.store(true, Ordering::Release);
+        let _opening = self.inner.opening.lock().await;
+        let opened = {
+            let mut state = self.state();
+            state.take()
+        };
+        if let Some(opened) = opened {
+            tokio::task::spawn_blocking(move || drop(opened))
+                .await
+                .map_err(|error| LayerFsError::Join(error.to_string()))?;
         }
-        let _opening = self.opening.lock().await;
-        if let Some(open) = self.state().as_ref() {
-            return Ok(open.service.clone());
+        Ok(())
+    }
+
+    async fn service(&self) -> Result<Arc<Opened>, LayerFsError> {
+        self.ensure_open()?;
+        if let Some(opened) = self.state().as_ref().cloned() {
+            return Ok(opened);
         }
-        let config = self.config.clone();
+        let _opening = self.inner.opening.lock().await;
+        self.ensure_open()?;
+        if let Some(opened) = self.state().as_ref().cloned() {
+            return Ok(opened);
+        }
+        let config = self.inner.config.clone();
         let opened = tokio::task::spawn_blocking(move || open_store(&config))
             .await
             .map_err(|error| LayerFsError::Join(error.to_string()))??;
-        let service = opened.service.clone();
-        *self.state() = Some(opened);
-        Ok(service)
+        self.ensure_open()?;
+        *self.state() = Some(opened.clone());
+        Ok(opened)
     }
 
-    fn state(&self) -> std::sync::MutexGuard<'_, Option<OpenStore>> {
-        self.state
+    fn ensure_open(&self) -> Result<(), LayerFsError> {
+        if self.inner.closed.load(Ordering::Acquire) {
+            return Err(LayerFsError::invalid("layerfs service is closed"));
+        }
+        Ok(())
+    }
+
+    fn state(&self) -> std::sync::MutexGuard<'_, Option<Arc<Opened>>> {
+        self.inner
+            .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
-impl Drop for LayerFs {
+impl Drop for Inner {
     fn drop(&mut self) {
-        let Some(open) = self.state().take() else {
-            return;
-        };
-        if Arc::strong_count(&open.service) == 1 {
-            drop(open.service);
-            let _ = std::fs::remove_dir_all(open.overlay);
+        self.closed.store(true, Ordering::Release);
+        if let Ok(mut state) = self.state.lock() {
+            drop(state.take());
         }
     }
+}
+
+fn exact_method(method: &str) -> Result<&'static str, LayerFsError> {
+    STORE_METHODS
+        .iter()
+        .find(|known| **known == method)
+        .copied()
+        .ok_or_else(|| {
+            LayerFsError::refused(
+                "UnknownMethod",
+                format!("no Store method {method}"),
+                Value::Null,
+            )
+        })
 }
 
 fn with_project(args: SdkValue, project: &str) -> Result<SdkValue, LayerFsError> {
@@ -119,30 +199,21 @@ fn with_project(args: SdkValue, project: &str) -> Result<SdkValue, LayerFsError>
     Ok(SdkValue::Map(fields))
 }
 
-fn allowed(method: &str) -> bool {
-    method.starts_with("fs.") || method.starts_with("branch.") || method == "project.list_branches"
-}
-
-fn open_store(config: &Config) -> Result<OpenStore, LayerFsError> {
+fn open_store(config: &Config) -> Result<Arc<Opened>, LayerFsError> {
     let record = read_record(config)?;
-    let overlay = std::env::temp_dir().join(format!(
-        "layerfs-rutis-{}-{}",
-        std::process::id(),
-        OVERLAY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-    ));
+    let overlay = unique_overlay();
     make_private_dir(&overlay)?;
     let template = overlay.join("overlay.sqlite");
-    let opened = StoreService::open_direct(
+    match StoreService::open_direct(
         &config.store_path,
         &record.manifest.binding,
         record.manifest.cursor_key,
         &template,
-    );
-    match opened {
-        Ok(service) => Ok(OpenStore {
-            service: Arc::new(service),
+    ) {
+        Ok(service) => Ok(Arc::new(Opened {
+            service: Some(service),
             overlay,
-        }),
+        })),
         Err(refusal) => {
             let _ = std::fs::remove_dir_all(&overlay);
             Err(match refusal {
@@ -154,6 +225,18 @@ fn open_store(config: &Config) -> Result<OpenStore, LayerFsError> {
             })
         }
     }
+}
+
+fn unique_overlay() -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    std::env::temp_dir().join(format!("layerfs-rutis-{}-{}", std::process::id(), nanos))
+}
+
+struct Record {
+    manifest: StoreManifest,
 }
 
 fn read_record(config: &Config) -> Result<Record, LayerFsError> {
@@ -176,7 +259,7 @@ fn read_record(config: &Config) -> Result<Record, LayerFsError> {
     if manifest.profile != StoreProfile::Disposable {
         return Err(LayerFsError::invalid("Disposable Store required"));
     }
-    let _installed = match fields
+    let installed = match fields
         .iter()
         .find(|(name, _)| name == "installed")
         .map(|(_, value)| value)
@@ -190,6 +273,17 @@ fn read_record(config: &Config) -> Result<Record, LayerFsError> {
             ));
         }
     };
+    installed
+        .check()
+        .map_err(|error| LayerFsError::Control(error.into()))?;
+    if installed.daemon_sqlite.is_none()
+        || installed.binding != manifest.binding
+        || installed.cursor_key != manifest.cursor_key
+    {
+        return Err(LayerFsError::Control(
+            "installed manifest does not match the project".into(),
+        ));
+    }
     Ok(Record { manifest })
 }
 

@@ -6,6 +6,7 @@ Tier 0 of the Rust rutis plugin: one existing LayerFS project exposed as
 - No Init, no Workspace, no Sandbox, no daemon.
 - No Node runtime and no IPC: the host process opens the Store directly.
 - Linux only.
+- Text/JSON only; binary `fs.write`/`fs.apply` input is out of Tier 0.
 
 The design is [docs/roadmap/1.0/rutis/tier-0.md](../../docs/roadmap/1.0/rutis/tier-0.md).
 
@@ -41,5 +42,7 @@ cargo test --test tier0
 ```
 
 The test initializes a temporary Store, copies the sealed file to the
-installed path and exercises read, write, fork and a refusal. It does not need
-Docker; `install_local` itself requires root and is out of Tier 0.
+installed path and exercises read, write, fork, list, publish, refusals,
+permissions and a real rutis host load. It does not need Docker;
+`install_local` itself requires root and is out of Tier 0. A non-Linux test
+asserts `Unsupported` without touching a Store.

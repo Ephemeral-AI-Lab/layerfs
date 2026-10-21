@@ -39,14 +39,14 @@ impl Config {
             let project = self.home.join(&self.project);
             private_dir(&project)?;
             let record = project.join("project.record");
-            if !record.is_file() {
+            if !regular_file(&record)? {
                 return Err(LayerFsError::refused(
                     "NoSuchProject",
                     format!("no project record at {}", record.display()),
                     serde_json::Value::Null,
                 ));
             }
-            if !self.store_path.is_file() {
+            if !regular_file(&self.store_path)? {
                 return Err(LayerFsError::refused(
                     "NoStore",
                     format!("no installed Store at {}", self.store_path.display()),
@@ -55,6 +55,14 @@ impl Config {
             }
             Ok(())
         }
+    }
+}
+
+fn regular_file(path: &Path) -> Result<bool, LayerFsError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) => Ok(meta.is_file() && !meta.file_type().is_symlink()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
     }
 }
 

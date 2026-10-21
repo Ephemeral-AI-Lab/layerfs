@@ -222,16 +222,25 @@ class CounterTests(unittest.TestCase):
 
 
     def test_integration_crates_count_product_source_only(self):
+        write(self.root, "integrations/rutis-rust/Cargo.toml", "[package]\nname = \"rutis-rust\"\n")
         write(self.root, "integrations/rutis-rust/src/lib.rs", "pub const I: u8 = 1;\n")
+        write(self.root, "integrations/rutis-rust/sql/schema.sql", "CREATE TABLE t (id INTEGER);\n")
         write(self.root, "integrations/rutis-rust/tests/it.rs", "pub const T: u8 = 2;\n")
         write(self.root, "integrations/rutis-rust/target/generated.rs", "pub const G: u8 = 3;\n")
+        write(self.root, "integrations/other/Cargo.toml", "[package]\nname = \"other\"\n")
+        write(self.root, "integrations/other/src/lib.rs", "pub const O: u8 = 4;\n")
+        write(self.root, "integrations/no-cargo/src/lib.rs", "pub const N: u8 = 5;\n")
         files = production_loc.scope_files(self.root, "integrations")
         self.assertEqual(
             [str(path.relative_to(self.root)) for path in files],
-            ["integrations/rutis-rust/src/lib.rs"],
+            [
+                "integrations/other/src/lib.rs",
+                "integrations/rutis-rust/src/lib.rs",
+                "integrations/rutis-rust/sql/schema.sql",
+            ],
         )
         self.assertEqual(
-            production_loc.scan(self.root)["scopes"]["integrations"]["lines"], 1
+            production_loc.scan(self.root)["scopes"]["integrations"]["lines"], 3
         )
 
 

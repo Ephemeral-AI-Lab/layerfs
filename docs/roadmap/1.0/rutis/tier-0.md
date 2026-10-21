@@ -51,8 +51,8 @@ One service, `layerfs`:
 | `info` | none | `{ project }` |
 | `call` | `{ method, args }` | the Store method's result |
 
-Allowed methods: `fs.*`, `branch.*`, `project.list_branches`. Everything else
-is `UnknownMethod`.
+Allowed methods are the exact public Store table: `fs.*` (14), `branch.*` (6)
+and `project.list_branches`. Everything else is `UnknownMethod`.
 
 `call` is the contract; no typed wrappers in Tier 0. Rust consumers can add a
 typed client around it without changing the service.
@@ -70,8 +70,9 @@ Validation:
 - project name matches the SDK alphabet (1-63, lowercase/digits/`_-.`);
 - `home` and `store_path` are absolute;
 - `home` is private, owned by the effective user, no group/other bits;
-- `store_path` exists and is a file;
-- the project record has a Disposable manifest and an installed manifest.
+- `store_path` exists and is a regular file (not a symlink);
+- the project record exists and is a regular non-symlink file; its content,
+  Disposable profile and installed manifest are checked on the first call.
 
 No Docker socket, daemon path or image.
 
@@ -82,11 +83,13 @@ On the first call:
 1. Read `<home>/<project>/project.record` and decode the control
    `Answer`; its `Reply::Sdk` value is a map.
 2. Decode `manifest` and `installed` with `StoreManifest::decode`.
-3. Require `manifest.profile == Disposable` and `installed.is_some()`.
+3. Require a Disposable manifest, an installed manifest with
+   `daemon_sqlite`, and matching binding/cursor keys.
 4. Create a private temporary directory for the overlay template.
 5. `StoreService::open_direct(store_path, manifest.binding,
    manifest.cursor_key, overlay_template)`.
-6. Keep one `Arc<StoreService>`; remove the overlay directory on close.
+6. Keep one `Arc<Opened>`; its drop closes the Store and removes the overlay
+   directory.
 
 The plugin never writes the project record and never installs a Store.
 
@@ -94,11 +97,13 @@ The plugin never writes the project record and never installs a Store.
 
 - Add the configured `project` to the argument map; the Store table expects
   that field.
-- Convert serde JSON to `SdkValue`: null/bool/safe integer/text/bytes/list/
-  ordered map; no floats, functions, symbols or big integers; depth at most 16.
+- Convert serde JSON to `SdkValue`: null/bool/safe integer/text/list/ordered
+  map; no floats, functions, symbols or big integers; depth at most 16.
+- Tier 0 is text/JSON only. Binary `SdkValue::Bytes` output is returned as an
+  array of numbers; binary `fs.write`/`fs.apply` input is not supported.
 - Run `layerfs_api::call(&service, &SdkCall { method, args })`.
-- Convert the result back; `SdkRefusal` becomes `LayerFsError { code, message,
-  data }`.
+- Convert the result back inside the blocking task; `SdkRefusal` becomes
+  `LayerFsError { code, message, data }`.
 - Run the synchronous call on `spawn_blocking`; no mutex held across it.
 - One attempt. No retry.
 
@@ -106,9 +111,11 @@ The plugin never writes the project record and never installs a Store.
 
 - `apply`: validate config, construct state, provide `layerfs`. No Store I/O.
 - First `call`: open the Store.
-- Cleanup: drop and close the StoreService, remove the overlay directory.
+- Unload: disable new calls and release the Store; an in-flight call may finish.
+  The overlay directory is removed when the last `Arc<Opened>` drops.
 - Reload: a new plugin opens the same Store.
-- No Commit, no data deletion, no project mutation.
+- No Workspace Commit, no unmount, no implicit Commit; `fs.*`/`branch.*`
+  writes and deletes happen only when the caller asks for them.
 
 ## Errors
 
@@ -129,10 +136,14 @@ design a cross-language code mapping in Tier 0; that is a Tier 2 concern.
 - The test copies a sealed Store to the installed path because
   `install_local` requires the daemons' user (root); installation itself is
   out of Tier 0.
-- Refusals keep `code` and `data` (`NoSuchPath`, `Conflict`, `InvalidInput`).
-- Non-Linux host fails `Unsupported` before opening.
-- Wrong owner/mode or missing installed manifest fails before any Store effect.
-- Plugin load/unload through a Rust rutis host; unload closes the Store.
+- Refusals keep `code` and `data` (`NoSuchPath` with its path).
+- Unknown methods return `UnknownMethod` before the Store is opened.
+- Missing installed manifest returns `NoStore`; a non-private record returns
+  `Unauthorized`.
+- Plugin load/unload through a Rust rutis host; after unload the retained
+  service fails closed.
+- A non-Linux build has a separate `Unsupported` test; Linux tests run under
+  `CARGO_TARGET_TMPDIR`.
 - No Docker, Sandbox or daemon test.
 - No core diff.
 
@@ -142,5 +153,5 @@ design a cross-language code mapping in Tier 0; that is a Tier 2 concern.
 | --- | --- |
 | Project record format drifts | Use the public `SdkValue`/`StoreManifest` codecs; test against a native record |
 | `StoreService` is not `Send + Sync` | Compile-time assertion; one actor per project if needed |
-| Large `fs.write` content | Caller sends bytes; document the size cost; no streaming in Tier 0 |
+| Large `fs.write` content | Tier 0 accepts text/JSON only; no binary or streaming; document the size cost |
 | Error mapping later | Keep Rust-only; decide cross-language in Tier 2 |
