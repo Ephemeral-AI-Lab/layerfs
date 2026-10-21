@@ -1,14 +1,15 @@
 // A client in a container reaches its Sandbox's daemon through the configured
 // host (#352 F-020, lead decision 2026-10-18). Each daemon publishes its port
 // on the Docker host's 127.0.0.1 only; a container does not share that
-// loopback, so the client dials LAYERFS_DAEMON_HOST (host.docker.internal on
-// Docker Desktop). The publish and its check are unchanged.
+// loopback. Docker Desktop clients use host.docker.internal; native Linux
+// Docker clients use the host network namespace and dial 127.0.0.1. The
+// publish and its check are unchanged.
 //
 //   node sdk/js/test/verify/daemon_host_real.mjs outer <daemon> <addon> <image>
 //
-// `outer` (on the Docker host) makes a fresh volume and runs `inner` twice in
-// the runtime image, each in its own container with the Docker socket and the
-// volume at /layerfs-store: once with LAYERFS_DAEMON_HOST set (mount, which
+// `outer` (on the Docker host) makes a fresh volume for each `inner` run
+// in the runtime image. Each run gets its own container, Docker socket and
+// /layerfs-store volume: once with LAYERFS_DAEMON_HOST set (mount, which
 // starts the project's first Sandbox, exec and unmount must succeed) and once
 // without it (the control: the mount's Sandbox start must fail to connect). Then it removes every container its runs
 // named and the volume. One attempt per step; nothing is retried.
@@ -18,12 +19,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { RUNTIME_DAEMON_HOST, RUNTIME_NETWORK_ARGS } from "./container.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../../..");
 const RUNTIME = "layerfs-352-runtime:node24";
 const STORE = "/layerfs-store/global/store.sqlite";
-const HOST = "host.docker.internal";
 
 async function inner(mode) {
   const { LayerFS } = await import("../../src/index.js");
@@ -64,22 +65,23 @@ async function inner(mode) {
 function outer([daemon, addon, image]) {
   assert.ok(daemon && addon && image, "usage: outer <daemon> <addon> <image digest>");
   const stamp = `f020-host-${Date.now().toString(36)}`;
-  const volume = `layerfs-issue352-${stamp}`;
   const docker = (args, options = {}) => spawnSync("docker", args, { encoding: "utf8", ...options });
-  execFileSync("docker", ["volume", "create", volume], { stdio: "ignore" });
   const results = [];
-  try {
-    for (const mode of ["host", "loopback"]) {
-      const prefix = `${stamp}-${mode}-`;
-      const env = { LAYERFS_DOCKER: "/var/run/docker.sock", LAYERFS_IMAGE: image, LAYERFS_VOLUME: volume, LAYERFS_DAEMON: daemon, LAYERFS_NATIVE: addon, LAYERFS_CONTAINER_PREFIX: prefix, LAYERFS_CONSTRUCTION_WORKERS: "1", ...(mode === "host" ? { LAYERFS_DAEMON_HOST: HOST } : {}) };
-      const run = docker(["run", "--rm", "--name", `layerfs-issue352-${prefix}client`, "-v", `${REPO}:${REPO}`, "-v", `${dirname(daemon)}:${dirname(daemon)}:ro`, "-v", `${dirname(addon)}:${dirname(addon)}:ro`, "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", `${volume}:/layerfs-store`, ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]), "-w", REPO, "--entrypoint", "node", RUNTIME, fileURLToPath(import.meta.url), "inner", mode], { timeout: 55_000 });
+  for (const mode of ["host", "loopback"]) {
+    const prefix = `${stamp}-${mode}-`;
+    const volume = `layerfs-issue352-${stamp}-${mode}`;
+    execFileSync("docker", ["volume", "create", volume], { stdio: "ignore" });
+    try {
+      const env = { LAYERFS_DOCKER: "/var/run/docker.sock", LAYERFS_IMAGE: image, LAYERFS_VOLUME: volume, LAYERFS_DAEMON: daemon, LAYERFS_NATIVE: addon, LAYERFS_CONTAINER_PREFIX: prefix, LAYERFS_CONSTRUCTION_WORKERS: "1", ...(mode === "host" ? { LAYERFS_DAEMON_HOST: RUNTIME_DAEMON_HOST } : {}) };
+      const network = mode === "host" ? RUNTIME_NETWORK_ARGS : [];
+      const run = docker(["run", "--rm", ...network, "--name", `layerfs-issue352-${prefix}client`, "-v", `${REPO}:${REPO}`, "-v", `${dirname(daemon)}:${dirname(daemon)}:ro`, "-v", `${dirname(addon)}:${dirname(addon)}:ro`, "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", `${volume}:/layerfs-store`, ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]), "-w", REPO, "--entrypoint", "node", RUNTIME, fileURLToPath(import.meta.url), "inner", mode], { timeout: 55_000 });
       results.push({ mode, status: run.status, out: (run.stdout + run.stderr).trim().split("\n").slice(-6).join("\n") });
       // Containers this run named, whatever their state: the test's own.
       const left = docker(["ps", "-aq", "--filter", `name=^${prefix}`]).stdout.trim().split("\n").filter(Boolean);
       if (left.length) docker(["rm", "-f", ...left]);
+    } finally {
+      docker(["volume", "rm", volume]);
     }
-  } finally {
-    docker(["volume", "rm", volume]);
   }
   for (const r of results) console.log(`== ${r.mode} exit ${r.status}\n${r.out}`);
   assert.equal(results[0].status, 0, "the client reaches the daemon through the configured host");

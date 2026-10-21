@@ -11,6 +11,11 @@ import { fileURLToPath } from "node:url";
 export const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 export const RUNTIME = "layerfs-352-runtime:node24";
 export const STORE_PATH = "/layerfs-store/global/store.sqlite";
+// The daemon is intentionally published on the Docker host's loopback. Docker
+// Desktop exposes that loopback through host.docker.internal, while native
+// Linux Docker can share it directly with --network host.
+export const RUNTIME_DAEMON_HOST = process.platform === "linux" ? "127.0.0.1" : "host.docker.internal";
+export const RUNTIME_NETWORK_ARGS = process.platform === "linux" ? ["--network", "host"] : [];
 
 export const docker = (args, options = {}) => spawnSync("docker", args, { encoding: "utf8", ...options });
 
@@ -20,10 +25,10 @@ export function inRuntime({ script, args = [], daemon, addon, image, volume, pre
     LAYERFS_DOCKER: "/var/run/docker.sock", LAYERFS_IMAGE: image, LAYERFS_VOLUME: volume,
     LAYERFS_DAEMON: daemon, LAYERFS_NATIVE: addon, LAYERFS_CONTAINER_PREFIX: prefix,
     LAYERFS_CONSTRUCTION_WORKERS: "1", LAYERFS_STORE_PATH: STORE_PATH,
-    LAYERFS_DAEMON_HOST: "host.docker.internal", ...env,
+    LAYERFS_DAEMON_HOST: RUNTIME_DAEMON_HOST, ...env,
   };
   const folders = [...new Set([dirname(daemon), dirname(addon)])].flatMap((f) => ["-v", `${f}:${f}:ro`]);
-  const run = docker(["run", "--rm", "--name", `layerfs-issue352-${prefix}client`,
+  const run = docker(["run", "--rm", ...RUNTIME_NETWORK_ARGS, "--name", `layerfs-issue352-${prefix}client`,
     "-v", `${REPO}:${REPO}`, ...folders, ...mounts.flatMap((m) => ["-v", m]),
     "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", `${volume}:/layerfs-store`,
     ...Object.entries(all).filter(([, v]) => v !== "").flatMap(([k, v]) => ["-e", `${k}=${v}`]),
