@@ -38,12 +38,23 @@ impl Config {
             private_dir(&self.home)?;
             let project = self.home.join(&self.project);
             let record = project.join("project.record");
-            if !regular_file(&record)? {
-                return Err(LayerFsError::refused(
-                    "NoSuchProject",
-                    format!("no project record at {}", record.display()),
-                    serde_json::Value::Null,
-                ));
+            match std::fs::symlink_metadata(&record) {
+                Ok(meta) if meta.file_type().is_symlink() || !meta.is_file() => {
+                    return Err(LayerFsError::refused(
+                        "Unauthorized",
+                        format!("{} must be a regular file", record.display()),
+                        serde_json::Value::Null,
+                    ));
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(LayerFsError::refused(
+                        "NoSuchProject",
+                        format!("no project record at {}", record.display()),
+                        serde_json::Value::Null,
+                    ));
+                }
+                Err(error) => return Err(error.into()),
             }
             private_dir(&project)?;
             if !regular_file(&self.store_path)? {
@@ -67,7 +78,7 @@ fn regular_file(path: &Path) -> Result<bool, LayerFsError> {
 }
 
 #[cfg(target_os = "linux")]
-fn private_dir(path: &Path) -> Result<(), LayerFsError> {
+pub(crate) fn private_dir(path: &Path) -> Result<(), LayerFsError> {
     use std::os::unix::fs::MetadataExt;
 
     let meta = std::fs::symlink_metadata(path)?;
@@ -85,6 +96,18 @@ fn private_dir(path: &Path) -> Result<(), LayerFsError> {
             format!("{} must be owned by this user and private", path.display()),
             serde_json::Value::Null,
         ));
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn private_dir(path: &Path) -> Result<(), LayerFsError> {
+    let meta = std::fs::symlink_metadata(path)?;
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return Err(LayerFsError::invalid(format!(
+            "{} must be a directory",
+            path.display()
+        )));
     }
     Ok(())
 }

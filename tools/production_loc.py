@@ -330,12 +330,40 @@ def blank_js(source: str) -> str:
 
 
 def blank_sql(source: str) -> str:
-    """Blank -- line comments and block comments, keeping line numbering."""
-    lines = []
-    for line in source.splitlines():
-        stripped = line.lstrip()
-        lines.append("" if stripped.startswith("--") else line)
-    return "\n".join(lines)
+    """Blank -- and /* */ comments, keeping line numbering."""
+    chars = list(source)
+    out = list(chars)
+    index = 0
+    length = len(chars)
+    while index < length:
+        if chars[index] == "-" and index + 1 < length and chars[index + 1] == "-":
+            while index < length and chars[index] != "\n":
+                out[index] = " "
+                index += 1
+            continue
+        if chars[index] == "/" and index + 1 < length and chars[index + 1] == "*":
+            out[index] = " "
+            out[index + 1] = " "
+            index += 2
+            while index < length:
+                if chars[index] == "*" and index + 1 < length and chars[index + 1] == "/":
+                    out[index] = " "
+                    out[index + 1] = " "
+                    index += 2
+                    break
+                if chars[index] != "\n":
+                    out[index] = " "
+                index += 1
+            continue
+        if chars[index] in ("'", '"'):
+            quote = chars[index]
+            index += 1
+            while index < length and chars[index] != quote:
+                index += 2 if chars[index] == "\\" else 1
+            index += 1
+            continue
+        index += 1
+    return "".join(out)
 
 
 def counted_lines(path: Path) -> int:
@@ -400,11 +428,14 @@ def integration_files(base: Path) -> list:
             files += sorted((package / "src").rglob("*.rs"))
         if (package / "sql").is_dir():
             files += sorted((package / "sql").rglob("*.sql"))
-    return [
+    files = [
         path
         for path in files
         if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)
     ]
+    rust = [path for path in files if path.suffix == ".rs"]
+    excluded = test_only_files(rust)
+    return [path for path in files if path not in excluded]
 
 
 def integration_crate(base: Path, path: Path) -> str:

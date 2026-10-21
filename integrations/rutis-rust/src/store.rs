@@ -55,7 +55,6 @@ struct Opened {
 impl Opened {
     fn close(mut self) -> Result<(), LayerFsError> {
         let service = self.service.take();
-        let overlay = std::mem::take(&mut self.overlay);
         let mut result = Ok(());
         if let Some(service) = service {
             if let Err(error) = service.close() {
@@ -66,22 +65,59 @@ impl Opened {
                 ));
             }
         }
-        if let Err(error) = std::fs::remove_dir_all(&overlay) {
-            if result.is_ok() {
-                result = Err(LayerFsError::Io(error));
+        let overlay = std::mem::take(&mut self.overlay);
+        if !overlay.as_os_str().is_empty() {
+            if let Err(error) = std::fs::remove_dir_all(&overlay) {
+                if error.kind() != std::io::ErrorKind::NotFound && result.is_ok() {
+                    result = Err(LayerFsError::Io(error));
+                }
             }
         }
         result
+    }
+
+    fn discard(mut self) {
+        let service = self.service.take();
+        if let Some(service) = service {
+            let _ = service.close();
+        }
+        let overlay = std::mem::take(&mut self.overlay);
+        if !overlay.as_os_str().is_empty() {
+            let _ = std::fs::remove_dir_all(overlay);
+        }
+    }
+}
+
+fn discard_opened(opened: Arc<Opened>) {
+    match Arc::try_unwrap(opened) {
+        Ok(opened) => opened.discard(),
+        Err(opened) => drop(opened),
     }
 }
 
 impl Drop for Opened {
     fn drop(&mut self) {
-        if let Some(service) = self.service.take() {
-            let _ = service.close();
+        let service = self.service.take();
+        let overlay = std::mem::take(&mut self.overlay);
+        if service.is_none() && overlay.as_os_str().is_empty() {
+            return;
         }
-        if !self.overlay.as_os_str().is_empty() {
-            let _ = std::fs::remove_dir_all(&self.overlay);
+        let job = move || {
+            let overlay = if overlay.as_os_str().is_empty() {
+                None
+            } else {
+                Some(OverlayGuard::new(overlay))
+            };
+            if let Some(service) = service {
+                let _ = service.close();
+            }
+            drop(overlay);
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                drop(handle.spawn_blocking(job));
+            }
+            Err(_) => job(),
         }
     }
 }
@@ -145,8 +181,8 @@ impl LayerFs {
     /// Disables new calls and releases the Store when the last in-flight call
     /// ends. Idempotent.
     pub async fn close(&self) -> Result<(), LayerFsError> {
-        self.inner.closed.store(true, Ordering::Release);
         let _opening = self.inner.opening.lock().await;
+        self.inner.closed.store(true, Ordering::Release);
         let opened = {
             let mut state = self.state();
             state.take()
@@ -180,7 +216,7 @@ impl LayerFs {
             .await
             .map_err(|error| LayerFsError::Join(error.to_string()))??;
         if let Err(error) = self.ensure_open() {
-            let _ = tokio::task::spawn_blocking(move || drop(opened)).await;
+            let _ = tokio::task::spawn_blocking(move || discard_opened(opened)).await;
             return Err(error);
         }
         *self.state() = Some(opened.clone());
@@ -211,9 +247,9 @@ impl Drop for Inner {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(opened) = state.take() {
             if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                handle.spawn_blocking(move || drop(opened));
+                drop(handle.spawn_blocking(move || discard_opened(opened)));
             } else {
-                drop(opened);
+                discard_opened(opened);
             }
         }
     }
@@ -246,8 +282,9 @@ fn with_project(args: SdkValue, project: &str) -> Result<SdkValue, LayerFsError>
 
 fn open_store(config: &Config) -> Result<Arc<Opened>, LayerFsError> {
     let record = read_record(config)?;
-    let mut overlay = OverlayGuard::new(unique_overlay());
-    make_private_dir(overlay.path())?;
+    let path = unique_overlay();
+    make_private_dir(&path)?;
+    let mut overlay = OverlayGuard::new(path);
     let canonical = std::fs::canonicalize(overlay.path())?;
     overlay.replace(canonical.clone());
     let template = canonical.join("overlay.sqlite");
@@ -313,8 +350,11 @@ struct Record {
 }
 
 fn read_record(config: &Config) -> Result<Record, LayerFsError> {
-    let path = config.home.join(&config.project).join("project.record");
+    let project = config.home.join(&config.project);
+    let path = project.join("project.record");
     let bytes = read_private(&path)?;
+    crate::config::private_dir(&config.home)?;
+    crate::config::private_dir(&project)?;
     let answer =
         ControlAnswer::decode(&bytes).map_err(|error| LayerFsError::Control(error.to_string()))?;
     let Reply::Sdk(value) = answer.reply else {
@@ -409,10 +449,11 @@ fn read_private(path: &Path) -> Result<Vec<u8>, LayerFsError> {
         Err(error) => return Err(error.into()),
     };
     if meta.file_type().is_symlink() || !meta.is_file() {
-        return Err(LayerFsError::invalid(format!(
-            "{} must be a regular file",
-            path.display()
-        )));
+        return Err(LayerFsError::refused(
+            "Unauthorized",
+            format!("{} must be a regular file", path.display()),
+            Value::Null,
+        ));
     }
     if meta.len() > RECORD_LIMIT {
         return Err(LayerFsError::invalid("project record is too large"));

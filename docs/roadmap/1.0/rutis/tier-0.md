@@ -40,7 +40,8 @@ serde_json, tokio
 libc                  Linux owner and O_NOFOLLOW checks
 ```
 
-Rust 1.88 (rutis). No `napi`, no `layerfs-node`, no `layerfs-project`.
+Rust 1.88 (rutis). No direct dependency on `napi`, `layerfs-node` or
+`layerfs-project`; `layerfs-api` brings the last transitively.
 
 ## Service
 
@@ -141,10 +142,13 @@ design a cross-language code mapping in Tier 0; that is a Tier 2 concern.
   `install_local` requires the daemons' user (root); installation itself is
   out of Tier 0.
 - Refusals keep `code` and `data` (`NoSuchPath` with its path).
-- Unknown methods return `UnknownMethod` before the Store is opened.
-- Missing installed manifest returns `NoStore`; a non-private record returns
-  `Unauthorized`; a symlinked record is rejected at `apply`; a mismatched
-  installed manifest returns `Failed`.
+- Unknown methods return `UnknownMethod` before the Store is opened; `info`
+  never opens the Store.
+- Missing installed manifest (absent key or `Null`) returns `NoStore`; a
+  malformed installed value returns `InvalidInput`; an installed manifest
+  without a daemon SQLite version, or one that differs from the sealed
+  manifest, returns `Failed`.
+- A non-private record and a symlinked record return `Unauthorized`.
 - Plugin load/unload through a Rust rutis host; after unload `call` fails
   closed while `info` remains available.
 - A non-Linux build has a separate `Unsupported` test; Linux tests run under
@@ -157,6 +161,6 @@ design a cross-language code mapping in Tier 0; that is a Tier 2 concern.
 | Risk | Mitigation |
 | --- | --- |
 | Project record format drifts | Use the public `SdkValue`/`StoreManifest` codecs; test against a native record |
-| `StoreService` is not `Send + Sync` | Compile-time assertion; one actor per project if needed |
-| Large `fs.write` content | Tier 0 accepts text/JSON only; no binary or streaming; document the size cost |
+| `StoreService` is not `Send + Sync` | Compile-time assertion on `LayerFs`; one actor per project if needed |
+| Large `fs.write` content | Tier 0 accepts text/JSON only; the whole value is held as a JSON string, then an `SdkValue::Text`, with no streaming and no protocol record cap |
 | Error mapping later | Keep Rust-only; decide cross-language in Tier 2 |

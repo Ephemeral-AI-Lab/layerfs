@@ -23,17 +23,7 @@ fn private_dir(path: &Path) {
     std::fs::DirBuilder::new().mode(0o700).create(path).unwrap();
 }
 
-fn write_record(path: &Path, manifest: &StoreManifest, installed: Option<&StoreManifest>) {
-    let mut fields = vec![(
-        "manifest".to_owned(),
-        SdkValue::Bytes(manifest.encode().unwrap()),
-    )];
-    if let Some(installed) = installed {
-        fields.push((
-            "installed".to_owned(),
-            SdkValue::Bytes(installed.encode().unwrap()),
-        ));
-    }
+fn write_control(path: &Path, fields: Vec<(String, SdkValue)>) {
     let bytes = Answer {
         id: 1,
         reply: Reply::Sdk(SdkValue::Map(fields)),
@@ -50,6 +40,22 @@ fn write_record(path: &Path, manifest: &StoreManifest, installed: Option<&StoreM
         .open(path)
         .unwrap();
     file.write_all(&bytes).unwrap();
+}
+
+fn write_record(path: &Path, manifest: &StoreManifest, installed: Option<&StoreManifest>) {
+    let fields = vec![
+        (
+            "manifest".to_owned(),
+            SdkValue::Bytes(manifest.encode().unwrap()),
+        ),
+        (
+            "installed".to_owned(),
+            installed.map_or(SdkValue::Null, |manifest| {
+                SdkValue::Bytes(manifest.encode().unwrap())
+            }),
+        ),
+    ];
+    write_control(path, fields);
 }
 
 fn fixture() -> (TempDir, Config, StoreManifest) {
@@ -229,6 +235,92 @@ async fn missing_installed_manifest_is_no_store() {
 }
 
 #[tokio::test]
+async fn a_missing_installed_key_is_no_store() {
+    let (_root, config, manifest) = fixture();
+    write_control(
+        &config.home.join(PROJECT).join("project.record"),
+        vec![(
+            "manifest".to_owned(),
+            SdkValue::Bytes(manifest.encode().unwrap()),
+        )],
+    );
+    let layerfs = LayerFs::new(config).unwrap();
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "NoStore");
+}
+
+#[tokio::test]
+async fn a_malformed_installed_value_is_invalid() {
+    for installed in [SdkValue::Bytes(Vec::new()), SdkValue::Text("bad".into())] {
+        let (_root, config, manifest) = fixture();
+        write_control(
+            &config.home.join(PROJECT).join("project.record"),
+            vec![
+                (
+                    "manifest".to_owned(),
+                    SdkValue::Bytes(manifest.encode().unwrap()),
+                ),
+                ("installed".to_owned(), installed),
+            ],
+        );
+        let layerfs = LayerFs::new(config).unwrap();
+        let error = layerfs
+            .call(
+                "fs.read".into(),
+                json!({ "branch": "main", "path": "/README.md" }),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "InvalidInput");
+    }
+}
+
+#[tokio::test]
+async fn an_installed_manifest_without_daemon_sqlite_fails() {
+    let (_root, config, manifest) = fixture();
+    write_record(
+        &config.home.join(PROJECT).join("project.record"),
+        &manifest,
+        Some(&manifest),
+    );
+    let layerfs = LayerFs::new(config).unwrap();
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        LayerFsError::Control(message) if message.contains("no daemon SQLite")
+    ));
+}
+
+#[tokio::test]
+async fn info_does_not_open_the_store() {
+    let (_root, config, _manifest) = fixture();
+    let store = config.store_path.clone();
+    let layerfs = LayerFs::new(config).unwrap();
+    std::fs::remove_file(store).unwrap();
+    assert_eq!(layerfs.info().await.project, PROJECT);
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "NoStore");
+}
+
+#[tokio::test]
 async fn a_public_record_is_unauthorized() {
     let (_root, config, _manifest) = fixture();
     let record = config.home.join(PROJECT).join("project.record");
@@ -276,7 +368,7 @@ fn a_symlinked_record_is_rejected() {
     symlink(&target, &record).unwrap();
     match LayerFs::new(config) {
         Ok(_) => panic!("a symlinked record must be rejected"),
-        Err(error) => assert_eq!(error.code(), "NoSuchProject"),
+        Err(error) => assert_eq!(error.code(), "Unauthorized"),
     }
 }
 
@@ -299,7 +391,17 @@ async fn a_mismatched_installed_manifest_fails() {
         )
         .await
         .unwrap_err();
-    assert_eq!(error.code(), "Failed");
+    assert!(matches!(
+        error,
+        LayerFsError::Control(message)
+            if message.contains("installed manifest does not match the project")
+    ));
+}
+
+#[test]
+fn layerfs_is_send_and_sync() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<LayerFs>();
 }
 
 #[tokio::test]

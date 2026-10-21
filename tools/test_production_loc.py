@@ -39,6 +39,14 @@ class CounterTests(unittest.TestCase):
         )
         self.assertEqual(production_loc.counted_lines(path), 3)
 
+    def test_sql_block_comments_do_not_count(self):
+        path = write(
+            self.root,
+            "crates/example/sql/block.sql",
+            "/*\n  a block\n  comment\n*/\nCREATE TABLE t (id INTEGER);\n",
+        )
+        self.assertEqual(production_loc.counted_lines(path), 1)
+
     def test_nested_block_comments_and_doc_comments_do_not_count(self):
         path = write(
             self.root,
@@ -223,7 +231,12 @@ class CounterTests(unittest.TestCase):
 
     def test_integration_crates_count_product_source_only(self):
         write(self.root, "integrations/rutis-rust/Cargo.toml", "[package]\nname = \"rutis-rust\"\n")
-        write(self.root, "integrations/rutis-rust/src/lib.rs", "pub const I: u8 = 1;\n")
+        write(
+            self.root,
+            "integrations/rutis-rust/src/lib.rs",
+            "pub const I: u8 = 1;\n#[cfg(test)]\nmod helper;\n",
+        )
+        write(self.root, "integrations/rutis-rust/src/helper.rs", "pub const H: u8 = 6;\n")
         write(self.root, "integrations/rutis-rust/sql/schema.sql", "CREATE TABLE t (id INTEGER);\n")
         write(self.root, "integrations/rutis-rust/tests/it.rs", "pub const T: u8 = 2;\n")
         write(self.root, "integrations/rutis-rust/target/generated.rs", "pub const G: u8 = 3;\n")
