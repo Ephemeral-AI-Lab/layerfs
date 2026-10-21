@@ -1,0 +1,29 @@
+[package]
+name = "layerfs-rutis"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+layerfs-api = { path = "../../core/crates/layerfs-api" }
+layerfs-bridge = { path = "../../core/crates/layerfs-bridge" }
+layerfs-history = { path = "../../core/crates/layerfs-history" }
+layerfs-store-service = { path = "../../core/crates/layerfs-store-service" }
+rutis = "0.13.0"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+layerfs-persistence = { path = "../../core/crates/layerfs-persistence" }
+layerfs-storage = { path = "../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../core/crates/layerfs-telemetry" }
+tempfile = "3"

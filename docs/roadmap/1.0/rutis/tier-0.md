@@ -35,7 +35,9 @@ rutis 0.13
 layerfs-api           Store method table
 layerfs-store-service StoreService
 layerfs-bridge        SdkValue, SdkCall, SdkRefusal, StoreManifest
-serde, serde_json, thiserror, tokio
+layerfs-history       project name validation
+serde_json, tokio
+libc                  Linux owner and O_NOFOLLOW checks
 ```
 
 Rust 1.88 (rutis). No `napi`, no `layerfs-node`, no `layerfs-project`.
@@ -77,7 +79,8 @@ No Docker socket, daemon path or image.
 
 On the first call:
 
-1. Read `<home>/<project>/project.record` with `SdkValue::decode`.
+1. Read `<home>/<project>/project.record` and decode the control
+   `Answer`; its `Reply::Sdk` value is a map.
 2. Decode `manifest` and `installed` with `StoreManifest::decode`.
 3. Require `manifest.profile == Disposable` and `installed.is_some()`.
 4. Create a private temporary directory for the overlay template.
@@ -89,6 +92,8 @@ The plugin never writes the project record and never installs a Store.
 
 ## Call
 
+- Add the configured `project` to the argument map; the Store table expects
+  that field.
 - Convert serde JSON to `SdkValue`: null/bool/safe integer/text/bytes/list/
   ordered map; no floats, functions, symbols or big integers; depth at most 16.
 - Run `layerfs_api::call(&service, &SdkCall { method, args })`.
@@ -120,7 +125,10 @@ design a cross-language code mapping in Tier 0; that is a Tier 2 concern.
 ## Tests and acceptance
 
 - Open an existing installed Store from a fixture; `fs.read`, `fs.write`,
-  `fs.apply`, `branch.fork`, `branch.list_commits`, `branch.publish`.
+  `branch.fork`, `branch.list_commits`, `branch.publish`.
+- The test copies a sealed Store to the installed path because
+  `install_local` requires the daemons' user (root); installation itself is
+  out of Tier 0.
 - Refusals keep `code` and `data` (`NoSuchPath`, `Conflict`, `InvalidInput`).
 - Non-Linux host fails `Unsupported` before opening.
 - Wrong owner/mode or missing installed manifest fails before any Store effect.

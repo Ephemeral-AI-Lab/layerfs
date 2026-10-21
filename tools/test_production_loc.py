@@ -221,5 +221,19 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(by_scope["reference"], totals["reference"]["lines"])
 
 
+    def test_integration_crates_count_product_source_only(self):
+        write(self.root, "integrations/rutis-rust/src/lib.rs", "pub const I: u8 = 1;\n")
+        write(self.root, "integrations/rutis-rust/tests/it.rs", "pub const T: u8 = 2;\n")
+        write(self.root, "integrations/rutis-rust/target/generated.rs", "pub const G: u8 = 3;\n")
+        files = production_loc.scope_files(self.root, "integrations")
+        self.assertEqual(
+            [str(path.relative_to(self.root)) for path in files],
+            ["integrations/rutis-rust/src/lib.rs"],
+        )
+        self.assertEqual(
+            production_loc.scan(self.root)["scopes"]["integrations"]["lines"], 1
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

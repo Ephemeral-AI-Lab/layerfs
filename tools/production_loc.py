@@ -345,7 +345,7 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "reference", "sdk", "dsh")
+SCOPES = ("core", "reference", "sdk", "dsh", "integrations")
 
 
 def scope_base(root: Path, scope: str) -> Path:
@@ -355,6 +355,8 @@ def scope_base(root: Path, scope: str) -> Path:
         return root / "sdk" / "js"
     if scope == "dsh":
         return root / "dsh" / "packages"
+    if scope == "integrations":
+        return root / "integrations"
     return root / "crates"
 
 
@@ -384,12 +386,31 @@ def dsh_crate(base: Path, path: Path) -> str:
     return package if package == "dsh-layerfs" else f"@dsh-layerfs/{package}"
 
 
+def integration_files(base: Path) -> list:
+    """Each integration crate's Rust src/."""
+    files = []
+    for package in sorted(p for p in base.iterdir() if p.is_dir()):
+        if (package / "src").is_dir():
+            files += sorted((package / "src").rglob("*.rs"))
+    return [
+        path
+        for path in files
+        if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)
+    ]
+
+
+def integration_crate(base: Path, path: Path) -> str:
+    return path.relative_to(base).parts[0]
+
+
 def crate_of(root: Path, scope: str, path: Path) -> str:
     base = scope_base(root, scope)
     if scope == "sdk":
         return sdk_crate(base, path)
     if scope == "dsh":
         return dsh_crate(base, path)
+    if scope == "integrations":
+        return integration_crate(base, path)
     parts = path.relative_to(root).parts
     return parts[2] if scope == "core" else parts[1]
 
@@ -406,6 +427,8 @@ def scope_files(root: Path, scope: str) -> list:
         return sdk_files(base)
     if scope == "dsh":
         return dsh_files(base)
+    if scope == "integrations":
+        return integration_files(base)
     files = []
     for path in sorted(base.rglob("*")):
         if not path.is_file():
