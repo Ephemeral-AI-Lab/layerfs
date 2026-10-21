@@ -102,12 +102,12 @@ impl Drop for Opened {
         if service.is_none() && overlay.as_os_str().is_empty() {
             return;
         }
+        let overlay = if overlay.as_os_str().is_empty() {
+            None
+        } else {
+            Some(OverlayGuard::new(overlay))
+        };
         let job = move || {
-            let overlay = if overlay.as_os_str().is_empty() {
-                None
-            } else {
-                Some(OverlayGuard::new(overlay))
-            };
             if let Some(service) = service {
                 let _ = service.close();
             }

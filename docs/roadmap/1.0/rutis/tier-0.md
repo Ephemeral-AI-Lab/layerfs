@@ -144,10 +144,11 @@ design a cross-language code mapping in Tier 0; that is a Tier 2 concern.
 - Refusals keep `code` and `data` (`NoSuchPath` with its path).
 - Unknown methods return `UnknownMethod` before the Store is opened; `info`
   never opens the Store.
-- Missing installed manifest (absent key or `Null`) returns `NoStore`; a
-  malformed installed value returns `InvalidInput`; an installed manifest
-  without a daemon SQLite version, or one that differs from the sealed
-  manifest, returns `Failed`.
+- Missing installed manifest (absent key or `Null`) returns `NoStore`; an
+  empty or wrong-type installed value returns `InvalidInput`; non-empty bytes
+  that fail to decode return `Failed`; an installed manifest without a daemon
+  SQLite version, or one that differs from the sealed manifest, returns
+  `Failed`.
 - A non-private record and a symlinked record return `Unauthorized`.
 - Plugin load/unload through a Rust rutis host; after unload `call` fails
   closed while `info` remains available.

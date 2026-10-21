@@ -213,6 +213,7 @@ async fn opens_an_installed_store_and_runs_the_public_table() {
             .unwrap_err();
         assert_eq!(error.code(), "UnknownMethod");
     }
+    layerfs.close().await.unwrap();
 }
 
 #[tokio::test]
@@ -256,7 +257,7 @@ async fn a_missing_installed_key_is_no_store() {
 }
 
 #[tokio::test]
-async fn a_malformed_installed_value_is_invalid() {
+async fn an_empty_or_wrong_type_installed_value_is_invalid() {
     for installed in [SdkValue::Bytes(Vec::new()), SdkValue::Text("bad".into())] {
         let (_root, config, manifest) = fixture();
         write_control(
@@ -279,6 +280,30 @@ async fn a_malformed_installed_value_is_invalid() {
             .unwrap_err();
         assert_eq!(error.code(), "InvalidInput");
     }
+}
+
+#[tokio::test]
+async fn undecodable_installed_bytes_fail() {
+    let (_root, config, manifest) = fixture();
+    write_control(
+        &config.home.join(PROJECT).join("project.record"),
+        vec![
+            (
+                "manifest".to_owned(),
+                SdkValue::Bytes(manifest.encode().unwrap()),
+            ),
+            ("installed".to_owned(), SdkValue::Bytes(b"junk".to_vec())),
+        ],
+    );
+    let layerfs = LayerFs::new(config).unwrap();
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "Failed");
 }
 
 #[tokio::test]
@@ -396,6 +421,40 @@ async fn a_mismatched_installed_manifest_fails() {
         LayerFsError::Control(message)
             if message.contains("installed manifest does not match the project")
     ));
+}
+
+#[tokio::test]
+async fn a_loosened_project_directory_fails_on_first_call() {
+    let (_root, config, _manifest) = fixture();
+    let project = config.home.join(PROJECT);
+    let layerfs = LayerFs::new(config).unwrap();
+    std::fs::set_permissions(&project, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "Unauthorized");
+}
+
+#[tokio::test]
+async fn a_record_replaced_with_a_symlink_fails_on_first_call() {
+    let (_root, config, _manifest) = fixture();
+    let record = config.home.join(PROJECT).join("project.record");
+    let target = config.home.join(PROJECT).join("moved.record");
+    let layerfs = LayerFs::new(config).unwrap();
+    std::fs::rename(&record, &target).unwrap();
+    symlink(&target, &record).unwrap();
+    let error = layerfs
+        .call(
+            "fs.read".into(),
+            json!({ "branch": "main", "path": "/README.md" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "Unauthorized");
 }
 
 #[test]
