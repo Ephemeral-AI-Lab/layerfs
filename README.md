@@ -19,6 +19,7 @@
   <a href="https://layerfs.ai/benchmarks/"><b>Benchmarks</b></a> ·
   <a href="https://layerfs.ai/video/layerfs-v1.0.0-release.mp4"><b>Video</b></a> ·
   <a href="dsh/README.md"><b>LayerFS × DSH</b></a> ·
+  <a href="pi/README.md"><b>LayerFS × Pi</b></a> ·
   <a href="#community"><b>Community</b></a>
 </p>
 

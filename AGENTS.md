@@ -134,14 +134,16 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   retired, not extended. See the
   [integration contract](core/docs/issues/303/06-cluster-one-integration.md)
   and [direct Store access](core/docs/issues/352/DIRECT_STORE.md).
-  **Exception (owner, 2026-10-20, revised the same day): dsh Live on macOS
-  only.** The dsh-layerfs plugin may give macOS processes a ported SDK with
+  **Exception (owner, 2026-10-20, revised the same day; extended to the Pi
+  package in #382): dsh and Pi Live on macOS only.** The dsh-layerfs plugin,
+  and the Pi package (`pi/`), may give macOS processes a ported SDK with
   the SDK's API whose calls run in one long-lived worker per LayerFS box: a
   Linux container running the real SDK, which opens each project's Store
   directly and keeps it and its daemon connections open while the project is
   in use (closed after a quiet minute). The worker listens on loopback only,
   behind a secret. The product SDK and daemon do not change. Nothing else may
-  route Store calls this way.
+  route Store calls this way. Its code is the ported SDK both adapters share,
+  [`port/`](port/README.md), outside `sdk/js` because it is not the product SDK.
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

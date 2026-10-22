@@ -21,6 +21,11 @@ TypeScript under dsh/packages/<package>/src, one crate per package
 and the untracked dsh/assets art are excluded. TypeScript comments are blanked
 by the same JavaScript scanner.
 
+The ported SDK that adapters share on macOS is its own scope, `port`: the
+JavaScript under port/src, one crate (@layerfs/port), counted as the dsh scope
+is. The Pi package is its own scope, `pi`, the same way: pi/src, one crate
+(pi-layerfs). Their tests are excluded.
+
 Runtime SQL is counted for both scopes: a candidate package that ships schema or
 query text under <crate>/sql/ contributes it exactly like the reference schema.
 Per-file reporting uses the same classification as the totals, and prints the
@@ -42,7 +47,7 @@ import sys
 
 SKIP_DIRS = {"target", "tests", "examples", "benches", "node_modules"}
 DSH_SKIP_DIRS = SKIP_DIRS | {"dist", "assets"}
-JS_SUFFIXES = (".js", ".ts", ".tsx")
+JS_SUFFIXES = (".js", ".mjs", ".ts", ".tsx")
 CODE_SUFFIXES = (".rs",)
 
 
@@ -345,7 +350,7 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "reference", "sdk", "dsh")
+SCOPES = ("core", "reference", "sdk", "dsh", "port", "pi")
 
 
 def scope_base(root: Path, scope: str) -> Path:
@@ -355,6 +360,10 @@ def scope_base(root: Path, scope: str) -> Path:
         return root / "sdk" / "js"
     if scope == "dsh":
         return root / "dsh" / "packages"
+    if scope == "port":
+        return root / "port"
+    if scope == "pi":
+        return root / "pi"
     return root / "crates"
 
 
@@ -379,6 +388,13 @@ def dsh_files(base: Path) -> list:
     return [path for path in files if not any(part in DSH_SKIP_DIRS for part in path.relative_to(base).parts)]
 
 
+def package_src_files(base: Path) -> list:
+    """One package's src/ JavaScript and TypeScript."""
+    if not (base / "src").is_dir():
+        return []
+    return sorted(f for f in (base / "src").rglob("*") if f.is_file() and f.suffix in JS_SUFFIXES)
+
+
 def dsh_crate(base: Path, path: Path) -> str:
     package = path.relative_to(base).parts[0]
     return package if package == "dsh-layerfs" else f"@dsh-layerfs/{package}"
@@ -390,6 +406,10 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
         return sdk_crate(base, path)
     if scope == "dsh":
         return dsh_crate(base, path)
+    if scope == "port":
+        return "@layerfs/port"
+    if scope == "pi":
+        return "pi-layerfs"
     parts = path.relative_to(root).parts
     return parts[2] if scope == "core" else parts[1]
 
@@ -406,6 +426,8 @@ def scope_files(root: Path, scope: str) -> list:
         return sdk_files(base)
     if scope == "dsh":
         return dsh_files(base)
+    if scope in ("port", "pi"):
+        return package_src_files(base)
     files = []
     for path in sorted(base.rglob("*")):
         if not path.is_file():

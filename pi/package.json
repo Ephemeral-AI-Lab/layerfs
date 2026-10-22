@@ -1,0 +1,16 @@
+{
+  "name": "pi-layerfs",
+  "version": "0.1.0",
+  "description": "LayerFS × Pi: Pi's file and bash tools on a LayerFS Branch",
+  "private": true,
+  "type": "module",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./src/pi-layerfs/index.js"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}

@@ -22,7 +22,7 @@ const { registerRoutes } = await import("../src/route.js");
 const { TreeReader } = await import("../src/trees.js");
 const { removeProject } = await import("../src/remove.js");
 const { migrate } = await import("../src/migrate.js");
-const { UNREACHABLE } = await import("../src/port/binding.js");
+const { UNREACHABLE } = await import("@layerfs/port");
 const { hostAccess, prepareInit, randomName, scanSource, watching } = await import("../src/init.js");
 const { InitJobs } = await import("../src/jobs.js");
 const { CALL, PROJECT } = await import("@dsh-layerfs/model/sources/records.js");
@@ -66,15 +66,15 @@ try {
   assert.equal(vars.DSH_LAYERFS_VOLUME, "dsh-layerfs-website-1");
   assert.equal(vars.DSH_LAYERFS_STORE_PATH, "/var/lib/docker/volumes/dsh-layerfs-website-1/_data/global/store.sqlite");
   if (process.platform === "darwin") {
-    // macOS: the SDK is ported, its calls run in the Store container (src/port/, src/box.js)
-    assert.match(vars.DSH_LAYERFS_SDK, /\/port\/sdk\.js$/);
+    // macOS: the SDK is ported, its calls run in the Store container (@layerfs/port)
+    assert.match(vars.DSH_LAYERFS_SDK, /\/port\/src\/sdk\.js$/);
     assert.equal(vars.DSH_LAYERFS_DAEMON_HOST, "host.docker.internal");
     assert.equal(vars.DSH_LAYERFS_STORE_CONTAINER, "layerfs-store", "one per home, named by its prefix");
     assert.equal(vars.DSH_LAYERFS_BUNDLE, "/b");
   }
   assert.equal(vars.DSH_LAYERFS_IMAGE, "sha256:img");
   assert.equal(vars.DSH_LAYERFS_CONTAINER_PREFIX, "layerfs-", "Sandboxes are layerfs-<project>-<n>");
-  assert.match(vars.DSH_LAYERFS_OPERATOR, process.platform === "darwin" ? /^file:.*\/port\/operator\.js$/ : /^file:.*\/operator\/index\.js$/);
+  assert.match(vars.DSH_LAYERFS_OPERATOR, process.platform === "darwin" ? /^file:.*\/port\/src\/operator\.js$/ : /^file:.*\/operator\/index\.js$/);
   assert.equal(vars.DSH_LAYERFS_TRACE_STEP, "r1");
   assert.equal(vars.DSH_LAYERFS_TRACE, join(h.spec.traceDir, "child-1.jsonl"));
   assert.ok(Object.keys(vars).every((key) => key in h.env.variables), "every value is a declared variable");

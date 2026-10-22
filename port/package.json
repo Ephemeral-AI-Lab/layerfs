@@ -1,0 +1,17 @@
+{
+  "name": "@layerfs/port",
+  "version": "0.1.0",
+  "description": "The ported LayerFS SDK of adapters on macOS: SDK calls made in a Linux Store container",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./sdk": "./src/sdk.js",
+    "./operator": "./src/operator.js"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}

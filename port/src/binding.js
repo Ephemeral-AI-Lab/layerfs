@@ -12,13 +12,13 @@ import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 import { deserialize, serialize } from "node:v8";
-import { callMounts, DAEMON_HOST, storeFile } from "../box.js";
+import { CALL_DOCKER, callMounts, DAEMON_HOST, DEFAULT_DOCKER, storeFile } from "./box.js";
+import { setting } from "./env.js";
 import { frame, readFrames } from "./frames.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
 /** Stores this process has opened, by path, with their clients. */
 const opened = new Map();
-const setting = (name) => process.env[`LAYERFS_${name}`] || process.env[`DSH_LAYERFS_${name}`];
 const refused = (code, message) => ({ refused: { code, message, detail: null } });
 
 /** Whose calls found the Store container down or unreachable: the Host, which starts it again. */
@@ -36,14 +36,17 @@ export const UNREACHABLE = /the Store container [^\s']+(?:'s worker did not answ
 /**
  * One binding call in Linux: its answer, `{ value }` or `{ refused }`. A call
  * to a named Sandbox (the operator's) carries no deployment, and the Linux
- * binding takes the daemon's host only from one: every call gets the Store container's.
+ * binding takes the daemon's host only from one: every call gets the Store
+ * container's. The deployment's Docker socket is this Mac's; the call's
+ * process reaches Docker at the socket it mounts, and this process's own
+ * Docker commands use the Mac's.
  */
 function inBox(fn, op, args) {
   const box = setting("STORE_CONTAINER"), bundle = setting("BUNDLE");
-  if (!box || !bundle) return Promise.resolve(refused("Unsupported", "no Store container is set (DSH_LAYERFS_STORE_CONTAINER, DSH_LAYERFS_BUNDLE): Store calls run only in Linux"));
-  const sent = { ...args, deploy: { ...args.deploy, daemonHost: args.deploy?.daemonHost ?? DAEMON_HOST } };
+  if (!box || !bundle) return Promise.resolve(refused("Unsupported", "no Store container is set (LAYERFS_STORE_CONTAINER, LAYERFS_BUNDLE): Store calls run only in Linux"));
+  const sent = { ...args, deploy: { ...args.deploy, docker: CALL_DOCKER, daemonHost: args.deploy?.daemonHost ?? DAEMON_HOST } };
   const request = { fn, op, args: sent, open: opened.has(args.storePath) };
-  return op === "project.init" ? initCall(box, bundle, request) : worker(box, args.home ?? setting("HOME")).call(request);
+  return op === "project.init" ? initCall(box, bundle, args.deploy?.docker ?? DEFAULT_DOCKER, request) : worker(box, args.home ?? setting("HOME")).call(request);
 }
 
 export const call = (op, args) => inBox("call", op, args);
@@ -75,7 +78,7 @@ function worker(box, home) {
   if (link && !link.closed) return link;
   let info;
   try { info = JSON.parse(readFileSync(storeFile(home), "utf8")); } catch { info = null; }
-  if (!info || info.box !== box) return { call: async () => down("Failed", `the Store container ${box} has not started for ${home}: dsh starts it; run the call again once it is up`) };
+  if (!info || info.box !== box) return { call: async () => down("Failed", `the Store container ${box} has not started for ${home}: the Host or session using it starts it; run the call again once it is up`) };
   const pending = new Map(), waiting = [];
   let next = 1, greeted = false;
   const socket = connect({ host: "127.0.0.1", port: info.port });
@@ -101,7 +104,7 @@ function worker(box, home) {
     const why = error ? ` (${error.message})` : "";
     const answer = greeted
       ? down("Unknown", `the connection to the Store container ${box} was lost${why}: check the project before going on`)
-      : down("Failed", `the Store container ${box}'s worker did not answer${why}: dsh starts it again; run the call again once it is up`);
+      : down("Failed", `the Store container ${box}'s worker did not answer${why}: the Host or session using it starts it again; run the call again once it is up`);
     for (const p of pending.values()) p.resolve(answer);
     pending.clear();
     waiting.length = 0;
@@ -125,12 +128,13 @@ function worker(box, home) {
  * (the project's Sandboxes may run another), with the source folder mounted
  * read-only, so the Store container shares no host folder beyond the ones every call uses.
  */
-async function initCall(box, bundle, request) {
+async function initCall(box, bundle, engine, request) {
   const { args } = request;
+  const docker = ["-H", `unix://${engine}`];
   let image;
-  try { image = await boxImage(box); } catch { return down("Failed", `the Store container ${box} is not there to run project.init`); }
+  try { image = await boxImage(docker, box); } catch { return down("Failed", `the Store container ${box} is not there to run project.init`); }
   const env = Object.keys(process.env).filter((k) => /^(DSH_)?LAYERFS_/.test(k) && !k.endsWith("_NATIVE")).flatMap((k) => ["-e", k]);
-  const where = ["run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home: args.home, bundle }), "-v", `${args.path}:${args.path}:ro`, ...env, "--entrypoint", "node", image, RUN];
+  const where = [...docker, "run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home: args.home, bundle }), "-v", `${args.path}:${args.path}:ro`, ...env, "--entrypoint", "node", image, RUN];
   return new Promise((resolve, reject) => {
     const child = spawn("docker", where, { stdio: ["pipe", "pipe", "inherit"] });
     const out = [];
@@ -152,6 +156,6 @@ async function initCall(box, bundle, request) {
 }
 
 /** The image the Store container runs. */
-function boxImage(box) {
-  return new Promise((resolve, reject) => execFile("docker", ["container", "inspect", "-f", "{{.Image}}", box], (error, out) => (error ? reject(error) : resolve(out.trim()))));
+function boxImage(docker, box) {
+  return new Promise((resolve, reject) => execFile("docker", [...docker, "container", "inspect", "-f", "{{.Image}}", box], (error, out) => (error ? reject(error) : resolve(out.trim()))));
 }

@@ -6,7 +6,7 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Mirror } from "@dsh-layerfs/model/mirror.js";
-import { DAEMON_HOST, storePathOf } from "./box.js";
+import { DAEMON_HOST, storePathOf } from "@layerfs/port";
 import { simClient } from "./sim/client.js";
 
 export const isSim = (project) => project.backend === "sim";

@@ -6,7 +6,7 @@
 // live in temporary storage.
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { UNREACHABLE } from "./port/binding.js";
+import { UNREACHABLE } from "@layerfs/port";
 import { appendCall } from "./records.js";
 
 const MAX_CHUNK = 1 << 20;

@@ -2,6 +2,11 @@
 
 > **Status:** Current documentation entry point; v0.1.7 release documentation.
 
+## Use LayerFS with an agent
+
+- [LayerFS × DSH](../dsh/README.md): agents in a DeepSeek Harness session work on LayerFS Branches, with the Work and History tabs
+- [LayerFS × Pi](../pi/README.md): Pi's file and bash tools on a LayerFS Branch (Linux, and macOS through the ported SDK)
+
 ## Use LayerFS v0.1.7
 
 - [Manual](versioned/0.1.7/README.md)
