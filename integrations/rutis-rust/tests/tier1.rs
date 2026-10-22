@@ -86,6 +86,11 @@ async fn unknown_sandbox_is_refused_before_any_engine_call() {
         .unwrap_err();
     assert_eq!(error.code(), "NoSuchSandbox");
     let error = layerfs
+        .workspace_commit(json!({ "sandbox": "1", "path": "/ws" }))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "NoSuchSandbox");
+    let error = layerfs
         .workspace_exec(json!({ "sandbox": "1", "path": "/ws", "command": "true" }))
         .await
         .unwrap_err();

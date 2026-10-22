@@ -489,6 +489,37 @@ struct Sink {
     stderr: Option<PathBuf>,
 }
 
+/// Releases a spooled output once, even when filling a sink fails.
+struct OutputGuard(Option<String>);
+
+impl OutputGuard {
+    fn new(output: Option<String>) -> Self {
+        Self(output)
+    }
+
+    fn id(&self) -> Option<&str> {
+        self.0.as_deref()
+    }
+
+    fn release(&mut self) -> Result<(), LayerFsError> {
+        let Some(output) = self.0.take() else {
+            return Ok(());
+        };
+        let release = SdkValue::map([("output", SdkValue::Text(output))]);
+        layerfs_session::dispatch("workspace.exec_release", release)?;
+        Ok(())
+    }
+}
+
+impl Drop for OutputGuard {
+    fn drop(&mut self) {
+        if let Some(output) = self.0.take() {
+            let release = SdkValue::map([("output", SdkValue::Text(output))]);
+            let _ = layerfs_session::dispatch("workspace.exec_release", release);
+        }
+    }
+}
+
 fn take_sink(args: Value) -> Result<(Value, Option<Sink>), LayerFsError> {
     let Value::Object(mut fields) = args else {
         return Err(LayerFsError::invalid("arguments must be an object"));
@@ -542,6 +573,7 @@ fn exec_into_sink(args: SdkValue, sink: Sink) -> Result<Value, LayerFsError> {
         Some((_, SdkValue::Text(output))) => Some(output.clone()),
         _ => None,
     };
+    let mut output = OutputGuard::new(output);
     let size = |name: &str| match fields
         .iter()
         .find(|(key, _)| key == name)
@@ -562,7 +594,7 @@ fn exec_into_sink(args: SdkValue, sink: Sink) -> Result<Value, LayerFsError> {
             Some((_, SdkValue::Text(text))) => Some(text.as_str()),
             _ => None,
         };
-        let bytes = write_stream(&path, inline, output.as_deref(), name, size(name))?;
+        let bytes = write_stream(&path, inline, output.id(), name, size(name))?;
         streams.push((
             name.to_owned(),
             SdkValue::map([
@@ -574,10 +606,7 @@ fn exec_into_sink(args: SdkValue, sink: Sink) -> Result<Value, LayerFsError> {
             ]),
         ));
     }
-    if let Some(output) = output {
-        let release = SdkValue::map([("output", SdkValue::Text(output))]);
-        layerfs_session::dispatch("workspace.exec_release", release)?;
-    }
+    output.release()?;
     let field = |name: &str| {
         fields
             .iter()
