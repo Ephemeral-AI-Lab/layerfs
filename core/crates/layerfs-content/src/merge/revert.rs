@@ -114,11 +114,12 @@ pub fn revert_units(
         let (path, b, s) = &pair;
         let name = PathName::new(path.rsplit('/').next().unwrap_or_default())?;
         let parent = frames.last_mut().expect("the root frame");
-        let current = if parent.rebuilt { None } else { s.map(|s| s.serial) };
-        let lost = input
-            .units
-            .unit_of(path)
-            .filter(|unit| input.lost[*unit]);
+        let current = if parent.rebuilt {
+            None
+        } else {
+            s.map(|s| s.serial)
+        };
+        let lost = input.units.unit_of(path).filter(|unit| input.lost[*unit]);
         let Some(unit) = lost else {
             // Outside a lost unit: the side's entry, below which a lost
             // unit may still lie.
