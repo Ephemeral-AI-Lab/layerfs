@@ -181,7 +181,9 @@ fn wide_nested_aliased_root_equals_the_whole_namespace_constructor() {
                 namespace_ref_count: 0,
                 // The constructor must derive every directory root and count.
                 content_root: match value.kind {
-                    InodeKind::Directory => value.metadata_root.root().unwrap_or(value.content_root),
+                    InodeKind::Directory => {
+                        value.metadata_root.root().unwrap_or(value.content_root)
+                    }
                     _ => value.content_root,
                 },
                 ..*value
