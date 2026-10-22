@@ -47,7 +47,58 @@ pub(crate) struct Dial {
     pub(crate) instance: [u8; 32],
 }
 
+/// How long a process waits for the daemon to admit its first connection
+/// while other processes hold every admitted one (the same bound as the
+/// project's placement lock).
+pub(crate) const ADMISSION_WAIT: Duration = Duration::from_secs(60);
+
+/// Whether a failed open is the daemon closing a connection it did not admit:
+/// the stream ended before the Hello reply. Through a port proxy the client
+/// reads the end (`UnexpectedEof`); dialing the daemon directly, its handshake
+/// write can meet the closed socket first (`BrokenPipe`, `ConnectionReset`).
+/// Nothing but Hello was sent, so no operation was attempted and opening
+/// again is safe.
+fn not_admitted(refusal: &SdkRefusal) -> bool {
+    refusal.code == "Failed"
+        && ["UnexpectedEof", "BrokenPipe", "ConnectionReset"]
+            .iter()
+            .any(|kind| refusal.message.contains(kind))
+}
+
 impl Dial {
+    /// The first connection a process opens to a Sandbox. While the daemon
+    /// admits no more connections (other processes hold all of them), waits
+    /// for one to be released, up to [`ADMISSION_WAIT`], instead of failing
+    /// the caller's operation with a bare `UnexpectedEof`.
+    pub(crate) fn open_waiting(&self) -> Result<Control, SdkRefusal> {
+        self.open_admitted(ADMISSION_WAIT)
+    }
+
+    /// [`Dial::open_waiting`], waiting at most `wait`.
+    fn open_admitted(&self, wait: Duration) -> Result<Control, SdkRefusal> {
+        let started = Instant::now();
+        let mut pause = Duration::from_millis(20);
+        loop {
+            match self.open() {
+                Err(refusal) if not_admitted(&refusal) && started.elapsed() < wait => {
+                    std::thread::sleep(pause);
+                    pause = (pause * 2).min(Duration::from_millis(500));
+                }
+                Err(refusal) if not_admitted(&refusal) => {
+                    return Err(refused(
+                        "Busy",
+                        format!(
+                            "the Sandbox's daemon admitted no connection for {}s: other processes hold all {} of its connections",
+                            wait.as_secs(),
+                            crate::sandbox::DAEMON_CONNECTIONS
+                        ),
+                    ))
+                }
+                other => return other,
+            }
+        }
+    }
+
     /// One authenticated connection, checked to reach the same daemon.
     pub(crate) fn open(&self) -> Result<Control, SdkRefusal> {
         let address =
@@ -125,8 +176,14 @@ impl Controls {
             }
             if pool.open < pool.limit {
                 pool.open += 1;
+                // the only connection: like a process's first, wait to be admitted
+                let only = pool.open == 1;
                 drop(pool);
-                let opened = self.dial.open();
+                let opened = if only {
+                    self.dial.open_waiting()
+                } else {
+                    self.dial.open()
+                };
                 pool = self.pool.lock().map_err(|_| poisoned())?;
                 match opened {
                     Ok(control) => return Ok((self.lease(control), started.elapsed())),
@@ -187,3 +244,7 @@ impl DerefMut for Lease<'_> {
         self.control.as_mut().expect("lent connection")
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/admission.rs"]
+mod admission_tests;

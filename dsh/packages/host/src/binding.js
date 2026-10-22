@@ -2,8 +2,11 @@
 // project (the one chosen there last), which project each root session uses,
 // and the names of the agents seen. A session may use any project; the folder
 // only remembers a default. One JSON file under the state directory, replaced
-// atomically on every change.
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+// atomically on every change. Several dsh processes may share the directory
+// (dsh web and a headless profile pointed at it): every change re-reads the
+// file under a lock and applies itself to what is there, and reads pick up
+// another process's changes, so no process overwrites another's bindings.
+import { existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -39,13 +42,58 @@ export class BindingStore {
   /** @param {string} stateDir */
   constructor(stateDir) {
     this.file = join(stateDir, "bindings.json");
-    this.data = existsSync(this.file) ? upgrade(JSON.parse(readFileSync(this.file, "utf8"))) : { version: 3, projects: {}, workspaces: {}, sessions: {}, agents: {} };
+    this.lockDir = `${this.file}.lock`;
+    this.stamp = null;
+    this.depth = 0;
+    this._data = { version: 3, projects: {}, workspaces: {}, sessions: {}, agents: {} };
+    this.reload();
+  }
+
+  /** Reads the file again when another process replaced it since the last read. */
+  reload() {
+    let stat;
+    try { stat = statSync(this.file); } catch { return; }
+    const stamp = `${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+    if (stamp === this.stamp) return;
+    this._data = upgrade(JSON.parse(readFileSync(this.file, "utf8")));
+    this.stamp = stamp;
+  }
+
+  /** The current bindings, re-read when another process changed them. */
+  get data() { if (this.depth === 0) this.reload(); return this._data; }
+
+  /**
+   * One change: under the directory's lock, re-reads the file, applies `change`
+   * to its current content and writes it back, so concurrent processes' changes
+   * all survive. A lock older than 10 s is a crashed holder's and is taken over.
+   */
+  update(change) {
+    if (this.depth > 0) return change(this._data);
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      try { mkdirSync(this.lockDir); break; } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        try { if (Date.now() - statSync(this.lockDir).mtimeMs > 10_000) { rmdirSync(this.lockDir); continue; } } catch { continue; }
+        if (Date.now() > deadline) throw Object.assign(new Error(`bindings are locked: ${this.lockDir}`), { code: "busy" });
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+      }
+    }
+    this.depth++;
+    try {
+      this.stamp = null;
+      this.reload();
+      const result = change(this._data);
+      this.save();
+      return result;
+    } finally { this.depth--; try { rmdirSync(this.lockDir); } catch {} }
   }
 
   save() {
     const tmp = `${this.file}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify(this.data, null, 1) + "\n");
+    writeFileSync(tmp, JSON.stringify(this._data, null, 1) + "\n");
     renameSync(tmp, this.file);
+    const stat = statSync(this.file);
+    this.stamp = `${stat.ino}:${stat.size}:${stat.mtimeMs}`;
   }
 
   /**
@@ -75,8 +123,7 @@ export class BindingStore {
 
   /** Adds a project, as the default of the folder it was imported for. @param {string} folder @param {Project} project */
   addProject(folder, project) {
-    this.data.projects[project.name] = project;
-    this.setDefault(folder, project.name);
+    this.update((data) => { data.projects[project.name] = project; this.setDefault(folder, project.name); });
   }
 
   /** @param {string} name @returns {Project|null} */
@@ -90,9 +137,10 @@ export class BindingStore {
    * @param {string} folder @param {string} name
    */
   setDefault(folder, name) {
-    if (!this.byName(name)) throw Object.assign(new Error(`no LayerFS project named ${name}`), { code: "not-found", status: 404 });
-    (this.data.workspaces[folder] ||= { lastUsed: null }).lastUsed = name;
-    this.save();
+    this.update((data) => {
+      if (!this.byName(name)) throw Object.assign(new Error(`no LayerFS project named ${name}`), { code: "not-found", status: 404 });
+      (data.workspaces[folder] ||= { lastUsed: null }).lastUsed = name;
+    });
   }
 
   /** The session's own choice: { project, locked, folder }, or null before one is made. */
@@ -118,13 +166,14 @@ export class BindingStore {
    * @returns {boolean} whether the choice was taken
    */
   choose(rootId, folder, name) {
-    const current = this.session(rootId);
-    if (current && current.locked) return false;
-    if (name !== null && !this.byName(name)) throw Object.assign(new Error(`no LayerFS project named ${name}`), { code: "not-found" });
-    this.data.sessions[rootId] = { project: name, locked: false, folder };
-    if (name !== null) (this.data.workspaces[folder] ||= { lastUsed: null }).lastUsed = name;
-    this.save();
-    return true;
+    return this.update((data) => {
+      const current = this.session(rootId);
+      if (current && current.locked) return false;
+      if (name !== null && !this.byName(name)) throw Object.assign(new Error(`no LayerFS project named ${name}`), { code: "not-found" });
+      data.sessions[rootId] = { project: name, locked: false, folder };
+      if (name !== null) (data.workspaces[folder] ||= { lastUsed: null }).lastUsed = name;
+      return true;
+    });
   }
 
   /**
@@ -133,18 +182,21 @@ export class BindingStore {
    * @param {string} name
    */
   remove(name) {
-    delete this.data.projects[name];
-    for (const w of Object.values(this.data.workspaces)) if (w.lastUsed === name) w.lastUsed = null;
-    for (const choice of Object.values(this.data.sessions)) if (choice.project === name) choice.project = null;
-    this.save();
+    this.update((data) => {
+      delete data.projects[name];
+      for (const w of Object.values(data.workspaces)) if (w.lastUsed === name) w.lastUsed = null;
+      for (const choice of Object.values(data.sessions)) if (choice.project === name) choice.project = null;
+    });
   }
 
   /** Locks a session's project at its first LayerFS-bound bash call. */
   lock(rootId, name, folder) {
-    const current = this.session(rootId);
-    if (current && current.locked) return;
-    this.data.sessions[rootId] = { project: name, locked: true, folder };
-    this.save();
+    if (this.session(rootId)?.locked) return;
+    this.update((data) => {
+      const current = this.session(rootId);
+      if (current && current.locked) return;
+      data.sessions[rootId] = { project: name, locked: true, folder };
+    });
   }
 
   /** @param {string} sessionId @returns {{ root: string, name: string }|null} */
@@ -156,8 +208,7 @@ export class BindingStore {
   setAgent(sessionId, root, name) {
     const known = this.data.agents[sessionId];
     if (known && known.root === root && known.name === name) return;
-    this.data.agents[sessionId] = { root, name };
-    this.save();
+    this.update((data) => { data.agents[sessionId] = { root, name }; });
   }
 
   /** Agents of one root session, as { id: name }. */

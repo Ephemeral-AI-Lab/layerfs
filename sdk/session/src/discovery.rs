@@ -462,7 +462,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         peer: bytes(&value, "peer")?,
         instance: bytes(&value, "instance")?,
     };
-    let control = dial.open()?;
+    let control = dial.open_waiting()?;
     let state = Arc::new(SandboxState {
         id: id.to_owned(),
         project: project.to_owned(),
