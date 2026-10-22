@@ -66,6 +66,11 @@ pub struct KernelSession {
     pub(super) drain_wait: Duration,
     /// Kernel cache invalidation for this connection, once it is serving.
     pub(super) invalidator: Option<super::Invalidator>,
+    #[cfg(target_os = "macos")]
+    pub(super) channel: Option<(
+        std::os::unix::net::UnixStream,
+        std::os::unix::net::UnixStream,
+    )>,
 }
 /// Maintained observations only: no syscall, SQL job or filesystem request.
 #[derive(Clone, Copy, Debug)]
@@ -137,7 +142,10 @@ impl KernelSession {
             accounting: self.accounting.clone(),
             monitor: self.monitor.clone(),
             detached: self.detached.clone(),
+            #[cfg(not(target_os = "macos"))]
             abort_bound: self.abort.is_some() || self.aborted.get().is_some(),
+            #[cfg(target_os = "macos")]
+            abort_bound: self.entry.is_some() || self.aborted.get().is_some(),
             aborted: self.aborted.clone(),
         }
     }

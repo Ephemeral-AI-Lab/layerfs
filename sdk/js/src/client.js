@@ -45,7 +45,7 @@ export function deployment(options = {}) {
   const env = (name) => process.env[`LAYERFS_${name}`] || process.env[`DSH_LAYERFS_${name}`] || undefined;
   const deploy = {
     docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
-    image: options.image ?? env("IMAGE"),
+    image: options.image ?? env("IMAGE") ?? (process.platform === "darwin" ? `sha256:${"0".repeat(64)}` : undefined),
     volume: options.volume ?? env("VOLUME"),
     daemon: options.daemon ?? env("DAEMON"),
     containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),

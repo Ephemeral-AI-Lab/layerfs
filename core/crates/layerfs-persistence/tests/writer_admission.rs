@@ -4,7 +4,7 @@ use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::{location::PackInfo, port::*, Storage, StoragePolicy};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::{
     io::{Read, Write},
     os::unix::net::{UnixListener, UnixStream},
@@ -26,7 +26,7 @@ fn config(path: &Path) -> PersistenceConfig {
 fn create(path: &Path) -> Handles {
     Handles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn open(path: &Path) -> Handles {
     Handles::open_writable(
         config(path),
@@ -130,12 +130,12 @@ fn shared_session_reservation_waits_for_an_ordinary_public_read_owner() {
     assert_eq!(after.rollbacks, before.rollbacks);
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 struct Held {
     child: Child,
     socket: UnixStream,
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Held {
     fn start(path: &Path, socket_path: &Path) -> Self {
         let listener = UnixListener::bind(socket_path).unwrap();
@@ -169,6 +169,7 @@ impl Held {
             }
         };
         let mut held = Self { child, socket };
+        held.socket.set_nonblocking(false).unwrap();
         held.socket
             .set_read_timeout(Some(Duration::from_secs(3)))
             .unwrap();
@@ -193,7 +194,7 @@ impl Held {
         }
     }
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Drop for Held {
     fn drop(&mut self) {
         let _ = self.child.kill();
@@ -202,7 +203,7 @@ impl Drop for Held {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn another_process_admission_precedes_the_single_sqlite_begin() {
     // Keep the owned AF_UNIX path below Darwin's sockaddr_un capacity.
     let temp = support::Temp::new("wa");
@@ -243,7 +244,7 @@ fn another_process_admission_precedes_the_single_sqlite_begin() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn two_opened_handles_admit_eight_distinct_reservations_without_conflict() {
     let temp = support::Temp::new("writer-admission-two-handles");
     let path = temp.join("store.sqlite");
@@ -373,7 +374,7 @@ fn queued_writers_outlive_the_old_window_and_all_succeed() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn a_cross_process_waiter_outlives_the_old_window_and_succeeds() {
     let temp = support::Temp::new("wl");
     let path = temp.join("store.sqlite");
@@ -497,7 +498,7 @@ fn writers_queue_behind_a_held_publication_lane_without_deadlock() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn a_holder_process_that_exits_hands_the_lock_to_the_waiter() {
     let temp = support::Temp::new("wx");
     let path = temp.join("store.sqlite");
@@ -518,20 +519,20 @@ fn a_holder_process_that_exits_hands_the_lock_to_the_waiter() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn a_signalled_kernel_waiter_is_cancelled_and_leaves_the_queue_cleanly() {
-    use nix::sys::{
-        pthread,
-        signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal},
-    };
     extern "C" fn interrupt(_: i32) {}
     // No SA_RESTART: the signal interrupts the blocking flock with EINTR.
-    let action = SigAction::new(
-        SigHandler::Handler(interrupt),
-        SaFlags::empty(),
-        SigSet::empty(),
-    );
-    unsafe { signal::sigaction(Signal::SIGUSR1, &action) }.unwrap();
+    unsafe {
+        let mut action: nix::libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = interrupt as *const () as nix::libc::sighandler_t;
+        nix::libc::sigemptyset(&mut action.sa_mask);
+        action.sa_flags = 0;
+        assert_eq!(
+            nix::libc::sigaction(nix::libc::SIGUSR1, &action, std::ptr::null_mut()),
+            0
+        );
+    }
     let temp = support::Temp::new("wc");
     let path = temp.join("store.sqlite");
     let original = create(&path);
@@ -540,7 +541,9 @@ fn a_signalled_kernel_waiter_is_cancelled_and_leaves_the_queue_cleanly() {
     let (thread_tx, thread_rx) = mpsc::channel();
     let provider = handles.storage.clone();
     let first = std::thread::spawn(move || {
-        thread_tx.send(pthread::pthread_self()).unwrap();
+        thread_tx
+            .send(unsafe { nix::libc::pthread_self() } as usize)
+            .unwrap();
         provider.reserve(reserve())
     });
     let waiting = thread_rx.recv_timeout(Duration::from_secs(2)).unwrap();
@@ -548,7 +551,10 @@ fn a_signalled_kernel_waiter_is_cancelled_and_leaves_the_queue_cleanly() {
     let provider = handles.storage.clone();
     let second = std::thread::spawn(move || provider.reserve(reserve()));
     std::thread::sleep(Duration::from_millis(300));
-    pthread::pthread_kill(waiting, Signal::SIGUSR1).unwrap();
+    assert_eq!(
+        unsafe { nix::libc::pthread_kill(waiting as nix::libc::pthread_t, nix::libc::SIGUSR1) },
+        0
+    );
     let first = first.join().unwrap();
     assert!(refused(&first, "Cancelled"), "{first:?}");
     // The next waiter took the turn and waits in the kernel in its place.

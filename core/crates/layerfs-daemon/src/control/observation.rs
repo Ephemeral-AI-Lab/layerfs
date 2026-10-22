@@ -45,7 +45,7 @@ impl Service {
             .map(|operation| operation.overlay().clone())
             .map_err(Failure::Workspace)
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub(crate) fn observed_kernel(
         &self,
         token: WorkspaceToken,

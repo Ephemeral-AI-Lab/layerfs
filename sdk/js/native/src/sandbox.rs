@@ -113,6 +113,20 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
             format!("project {name} has no installed Store: its Import did not finish, so import it again"),
         ));
     };
+    #[cfg(target_os = "macos")]
+    let docker_owned;
+    #[cfg(target_os = "macos")]
+    let docker = match text(deploy, "docker")? {
+        "/var/run/docker.sock" => {
+            docker_owned = crate::discovery::home(args)?
+                .join("_sandboxes")
+                .to_string_lossy()
+                .into_owned();
+            docker_owned.as_str()
+        }
+        other => other,
+    };
+    #[cfg(not(target_os = "macos"))]
     let docker = text(deploy, "docker")?;
     let image = deploy
         .get_text("image")
@@ -189,6 +203,20 @@ fn start_claimed(
     let mut existing = project.manifest.clone();
     existing.daemon_sqlite = installed.daemon_sqlite;
     daemon_setup.existing_store = Some(existing);
+    #[cfg(target_os = "macos")]
+    if !Path::new(&store_volume).is_absolute()
+        && Path::new(docker).extension() != Some("sock".as_ref())
+    {
+        if let Some(vol) = args
+            .get_text("storePath")
+            .and_then(|p| Path::new(p).parent())
+            .and_then(Path::parent)
+        {
+            let volumes = Path::new(docker).join("_volumes");
+            let _ = std::fs::create_dir_all(&volumes);
+            let _ = std::os::unix::fs::symlink(vol, volumes.join(&store_volume));
+        }
+    }
     // The container is `<prefix><project>-<n>`: the deployment's prefix
     // (`layerfs-` by default; another LayerFS home on the same Engine sets
     // its own), so `docker ps` says what each one is and whose.

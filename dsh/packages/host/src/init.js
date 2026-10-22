@@ -3,7 +3,7 @@
 // (backend "sim") is imported into the simulator (sim/) instead: no Docker,
 // no deployment settings.
 import { execFile } from "node:child_process";
-import { accessSync, constants, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { lstat, opendir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join } from "node:path";
@@ -85,7 +85,7 @@ export function liveOnlyDemo(name, scenarios = SCENARIOS) {
  * @returns {string|null}
  */
 export function hostAccess(spec, { platform = process.platform, uid = process.getuid?.() } = {}) {
-  if (platform !== "linux" || spec.box || uid === undefined) return null;
+  if (platform !== "linux" || uid === undefined) return null;
   try {
     accessSync(spec.volumes, constants.R_OK | constants.W_OK | constants.X_OK);
   } catch (error) {
@@ -150,8 +150,12 @@ async function initFrom(spec, bindings, { folder, project }, report) {
   report({ step: "scan" });
   const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
   report({ step: "volume", totals });
+  const nativeMac = process.platform === "darwin" && !spec.box;
   const docker = ["-H", `unix://${spec.docker}`];
-  if (!isSim(project)) await run("docker", [...docker, "volume", "create", project.volume]);
+  if (!isSim(project)) {
+    if (nativeMac) mkdirSync(join(spec.volumes, project.volume), { recursive: true });
+    else await run("docker", [...docker, "volume", "create", project.volume]);
+  }
   report({ step: "import" });
   let client;
   try {
@@ -163,7 +167,10 @@ async function initFrom(spec, bindings, { folder, project }, report) {
     if (client) await release(client).catch(() => {});
     // Init made the project's entry unless another project holds the name
     if (!isSim(project) && error?.code !== "Exists") rmSync(join(spec.home, project.name), { recursive: true, force: true });
-    if (!isSim(project)) await run("docker", [...docker, "volume", "rm", project.volume]).catch(() => {});
+    if (!isSim(project)) {
+      if (nativeMac) rmSync(join(spec.volumes, project.volume), { recursive: true, force: true });
+      else await run("docker", [...docker, "volume", "rm", project.volume]).catch(() => {});
+    }
     throw error;
   }
   await release(client);

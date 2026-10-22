@@ -1,8 +1,8 @@
 //! Bounded kernel control over a direct Store and one local overlay owner.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod attach;
 mod cleanup;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod detach;
 mod dirty;
 mod failure;
@@ -14,7 +14,7 @@ mod observation;
 mod operations;
 mod registry;
 mod serve;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod serving;
 mod status;
 mod types;

@@ -68,12 +68,12 @@ thread_local! {
 }
 
 /// Makes `phases` current on this thread; returns the previous ones.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
 pub(crate) fn enter(phases: Arc<Phases>) -> Option<Arc<Phases>> {
     CURRENT.with(|current| current.borrow_mut().replace(phases))
 }
 /// Restores what [`enter`] returned.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
 pub(crate) fn restore(previous: Option<Arc<Phases>>) {
     CURRENT.with(|current| *current.borrow_mut() = previous);
 }

@@ -30,18 +30,53 @@ impl Negotiation {
 }
 pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
     let offered = config.capabilities();
-    let defaults = InitFlags::FUSE_ASYNC_READ | InitFlags::FUSE_BIG_WRITES;
-    if !offered.contains(defaults) {
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "required kernel capability absent",
-        ));
-    }
-    let selected = defaults | (offered & InitFlags::FUSE_MAX_PAGES);
+    #[cfg(not(target_os = "macos"))]
+    let selected = {
+        let defaults = InitFlags::FUSE_ASYNC_READ | InitFlags::FUSE_BIG_WRITES;
+        if !offered.contains(defaults) {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "required kernel capability absent",
+            ));
+        }
+        defaults | (offered & InitFlags::FUSE_MAX_PAGES)
+    };
+    #[cfg(target_os = "macos")]
+    let selected = {
+        let wanted =
+            InitFlags::FUSE_ASYNC_READ | InitFlags::FUSE_BIG_WRITES | InitFlags::FUSE_MAX_PAGES;
+        let available = offered & wanted;
+        let _ = config.add_capabilities(available);
+        available
+    };
     let refused = |_| io::Error::new(io::ErrorKind::Unsupported, "kernel profile limit refused");
     let window = layerfs_overlay::READ_WINDOW as u32;
-    config.set_max_write(window).map_err(refused)?;
-    config.set_max_readahead(window).map_err(refused)?;
+    #[cfg(not(target_os = "macos"))]
+    let (max_write, max_readahead) = {
+        config.set_max_write(window).map_err(refused)?;
+        config.set_max_readahead(window).map_err(refused)?;
+        (window, window)
+    };
+    #[cfg(target_os = "macos")]
+    let (max_write, max_readahead) = {
+        let max_write = match config.set_max_write(window) {
+            Ok(_) => window,
+            Err(0) => return Err(refused(0)),
+            Err(limit) => {
+                let _ = config.set_max_write(limit);
+                limit
+            }
+        };
+        let max_readahead = match config.set_max_readahead(window) {
+            Ok(_) => window,
+            Err(0) => 0,
+            Err(limit) => {
+                let _ = config.set_max_readahead(limit);
+                limit
+            }
+        };
+        (max_write, max_readahead)
+    };
     config.set_max_background(1).map_err(|_| refused(0))?;
     config.set_congestion_threshold(1).map_err(|_| refused(0))?;
     config
@@ -56,8 +91,8 @@ pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
         abi: config.kernel_abi(),
         offered,
         selected,
-        max_write: window,
-        max_readahead: window,
+        max_write,
+        max_readahead,
         max_background: 1,
         congestion_threshold: 1,
         page_size,

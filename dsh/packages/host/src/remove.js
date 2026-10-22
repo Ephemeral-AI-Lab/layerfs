@@ -57,6 +57,13 @@ export async function removeProject(spec, bindings, trees, name, run = execute, 
     bindings.remove(project.name);
     return { removed: project.name, volume: project.volume };
   }
+  if (run === execute && process.platform === "darwin" && !spec.box && !String(spec.docker).endsWith(".sock")) {
+    rmSync(join(spec.volumes, project.volume), { recursive: true, force: true });
+    forgetSandboxes(spec, project.name, project.volume);
+    if (existsSync(home)) rmSync(home, { recursive: true, force: true });
+    bindings.remove(project.name);
+    return { removed: project.name, volume: project.volume };
+  }
   const docker = ["-H", `unix://${spec.docker}`];
   const { stdout } = await run("docker", [...docker, "ps", "-a", "--filter", `volume=${project.volume}`, "--format", "{{.ID}} {{.State}}"]);
   const containers = stdout.split("\n").filter(Boolean).map((line) => line.split(" "));

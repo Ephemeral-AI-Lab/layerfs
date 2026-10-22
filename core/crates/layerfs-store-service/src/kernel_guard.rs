@@ -56,7 +56,28 @@ pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
                 ))
             })
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        let directory = store
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let stat = nix::sys::statfs::statfs(directory).map_err(|error| {
+            Unsupported(format!(
+                "the Store's directory {} cannot be examined: {error}",
+                directory.display()
+            ))
+        })?;
+        match stat.filesystem_type_name() {
+            "apfs" => Ok("apfs"),
+            other => Err(Unsupported(format!(
+                "filesystem {other} at {} does not carry SQLite locks; \
+                 direct Store access on macOS needs apfs",
+                directory.display()
+            ))),
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = store;
         Err(Unsupported(

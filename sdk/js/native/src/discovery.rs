@@ -339,6 +339,13 @@ pub(crate) fn save_sandbox(
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "deploy"))?;
+    #[cfg(target_os = "macos")]
+    let docker = match registry::text(deploy, "docker")? {
+        "/var/run/docker.sock" => home(args)?.join("_sandboxes").to_string_lossy().into_owned(),
+        other => other.to_owned(),
+    };
+    #[cfg(not(target_os = "macos"))]
+    let docker = registry::text(deploy, "docker")?;
     save(
         &directory.join("sandbox.record"),
         SdkValue::map([
@@ -349,7 +356,7 @@ pub(crate) fn save_sandbox(
                 "container",
                 SdkValue::text(state.runtime.identity().to_string()),
             ),
-            ("docker", SdkValue::text(registry::text(deploy, "docker")?)),
+            ("docker", SdkValue::text(&docker)),
             ("image", SdkValue::text(&state.runtime.request().image)),
             (
                 "volume",

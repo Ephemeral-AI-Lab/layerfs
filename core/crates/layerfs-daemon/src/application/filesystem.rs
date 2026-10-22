@@ -21,16 +21,16 @@ pub(super) fn service(
         None => Service::new(store, owner),
     })
 }
-/// Kernel serving is a Linux capability; elsewhere control alone is assembled.
-#[cfg(not(target_os = "linux"))]
+/// Kernel serving is a Linux and macOS capability; elsewhere control alone is assembled.
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub(super) fn assemble(
     _setup: &layerfs_bridge::daemon_setup::DaemonSetup,
 ) -> std::io::Result<Option<Arc<KernelServing>>> {
     Ok(None)
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(super) use linux::assemble;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod linux {
     use crate::control::{KernelConfig, KernelServing};
     use layerfs_bridge::daemon_setup::DaemonSetup;
@@ -38,6 +38,7 @@ mod linux {
         fcntl::OFlag,
         unistd::{Gid, Uid},
     };
+    #[cfg_attr(target_os = "macos", allow(unused_imports))]
     use std::{
         fs::{self, OpenOptions, Permissions},
         io,
@@ -59,6 +60,7 @@ mod linux {
         setup: &DaemonSetup,
     ) -> io::Result<Option<Arc<KernelServing>>> {
         let mounts = Path::new(&setup.mounts);
+        #[cfg(target_os = "linux")]
         device()?;
         home(mounts)?;
         KernelServing::start(KernelConfig {
@@ -77,6 +79,7 @@ mod linux {
     /// supplies the daemon's own device node; one attempt narrows it to its
     /// owner before control readiness. A node the daemon does not own, or one
     /// that stays reachable, refuses startup rather than serving unprotected.
+    #[cfg(target_os = "linux")]
     fn device() -> io::Result<()> {
         let path = Path::new("/dev/fuse");
         let protected = |metadata: &fs::Metadata| {

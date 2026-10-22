@@ -4,7 +4,10 @@ use std::{any::Any, error::Error, fmt, future::Future, pin::Pin};
 /// Plain receive workers per Workspace. Two lets one request proceed while
 /// another waits on a Store read; a second worker also contends for the one
 /// Workspace lock, so more workers slow writers of the same Workspace.
+#[cfg(not(target_os = "macos"))]
 pub const RECEIVE_SLOTS: usize = 2;
+#[cfg(target_os = "macos")]
+pub const RECEIVE_SLOTS: usize = 1;
 pub const MAX_INPUT_BYTES: usize = layerfs_overlay::WRITE_WINDOW + 2 * 255;
 
 /// Completion means original reply/result/source consumers are disposed. A

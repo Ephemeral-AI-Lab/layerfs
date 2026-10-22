@@ -7,13 +7,21 @@ use std::{sync::atomic::Ordering, time::Instant};
 impl KernelSession {
     /// The abort control bound at attach is still held, unused.
     pub fn abort_bound(&self) -> bool {
-        self.abort.is_some()
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.abort.is_some()
+        }
+        #[cfg(target_os = "macos")]
+        {
+            self.entry.is_some() && !self.is_detached() && self.aborted.get().is_none()
+        }
     }
     /// The connection's single abort write. Refused before any effect when
     /// the session is already detached or aborted, or when no control was
     /// bound. The control leaves the session before the write, so no second
     /// write can follow any result. Only `Written` stops the mount's request
     /// service; a short or failed write does nothing further.
+    #[cfg(not(target_os = "macos"))]
     pub fn abort(&mut self) -> Result<AbortWrite, ForceRefusal> {
         if self.is_detached() || self.aborted.get().is_some() {
             return Err(ForceRefusal::NotServing);
@@ -27,6 +35,29 @@ impl KernelSession {
         if written == AbortWrite::Written {
             // Refuse later receives and wake every request waiting inside its
             // service so that it observes the stop.
+            let _ = self.queue.stop_service();
+        }
+        Ok(written)
+    }
+    #[cfg(target_os = "macos")]
+    pub fn abort(&mut self) -> Result<AbortWrite, ForceRefusal> {
+        if self.is_detached() || self.aborted.get().is_some() {
+            return Err(ForceRefusal::NotServing);
+        }
+        if self.entry.is_none() {
+            return Err(ForceRefusal::AbortUnavailable);
+        }
+        let written = syscalls::abort(&self.directory);
+        if written == AbortWrite::Written {
+            self.forced_detach = DetachAttempt::Detached;
+            self.detached.store(true, Ordering::Release);
+            if let Some((comm, mon)) = self.channel.take() {
+                let _ = comm.shutdown(std::net::Shutdown::Both);
+                let _ = mon.shutdown(std::net::Shutdown::Both);
+            }
+        }
+        let _ = self.aborted.set(written);
+        if written == AbortWrite::Written {
             let _ = self.queue.stop_service();
         }
         Ok(written)

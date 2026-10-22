@@ -77,12 +77,29 @@ impl KernelSession {
         }
         if let (Some(monitor), true) = (&self.monitor, self.owner.is_some()) {
             let mut loops = monitor.snapshot();
+            #[cfg(target_os = "macos")]
+            let grace = Instant::now() + std::time::Duration::from_millis(200);
             while loops.phase != SessionPhase::Joined {
+                #[cfg(target_os = "macos")]
+                if Instant::now() >= grace {
+                    if let Some((comm, mon)) = self.channel.take() {
+                        let _ = comm.shutdown(std::net::Shutdown::Both);
+                        let _ = mon.shutdown(std::net::Shutdown::Both);
+                    }
+                }
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 if remaining.is_zero() {
                     return Err(stop(DrainStage::Join, None));
                 }
-                loops = monitor.wait_for_change(loops.revision, remaining);
+                #[cfg(target_os = "linux")]
+                let wait = remaining;
+                #[cfg(target_os = "macos")]
+                let wait = if self.channel.is_some() {
+                    remaining.min(grace.saturating_duration_since(Instant::now()))
+                } else {
+                    remaining
+                };
+                loops = monitor.wait_for_change(loops.revision, wait);
             }
         }
         if let Some(owner) = self.owner.take() {

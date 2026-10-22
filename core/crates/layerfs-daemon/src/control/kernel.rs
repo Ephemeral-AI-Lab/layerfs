@@ -19,24 +19,24 @@ pub struct KernelConfig {
     pub drain_wait: Duration,
 }
 /// Kernel serving is a Linux capability; elsewhere it cannot be constructed.
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 #[derive(Debug)]
 pub enum KernelServing {}
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use super::serving::KernelServing;
 
 /// The registry is the sole authority for which connection an entry owns.
 pub(super) enum Kernel {
     Unattached,
     /// One Attach is admitted, or its engine outcome is unknown.
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Attaching,
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Ready(Box<super::serving::Attached>),
     /// A terminal operation owns the session; status still observes it.
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Leaving(Box<super::serving::Leaving>),
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Retained(Box<super::serving::Kept>),
 }
 impl Kernel {
@@ -50,9 +50,9 @@ impl Kernel {
         };
         match self {
             Self::Unattached => plain(MountPhase::Unattached),
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Attaching => plain(MountPhase::Attaching),
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Ready(attached) => {
                 let facts = attached.session.facts();
                 MountStatus {
@@ -62,7 +62,7 @@ impl Kernel {
                     work: Some(super::serving::work(&facts)),
                 }
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Leaving(leaving) => {
                 let facts = leaving.observer.facts();
                 MountStatus {
@@ -72,7 +72,7 @@ impl Kernel {
                     work: Some(super::serving::work(&facts)),
                 }
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Retained(kept) => {
                 let facts = kept.observer.as_ref().map(|observer| observer.facts());
                 MountStatus {

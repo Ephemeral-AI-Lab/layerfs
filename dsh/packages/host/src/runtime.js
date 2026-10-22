@@ -192,12 +192,17 @@ export async function cleanLeftovers(spec, bindings, names) {
 }
 
 async function engineState(spec) {
+  if (process.platform === "darwin" && !spec.box && !String(spec.docker).endsWith(".sock")) return { level: "ok", version: "darwin-native" };
   try { return { level: "ok", version: await docker(spec, "version", "--format", "{{.Server.Version}}") }; } catch (error) { return { level: "down", error: error.stderr?.trim() || error.message }; }
 }
 
 /** Gives each Sandbox (`{ image }`, an exact digest; one project's may differ) its `imageName`: the
  * image's first tag, else null. One `docker image inspect` for all; an image Docker no longer has stays unnamed. */
 export async function nameImages(spec, sandboxes) {
+  if (process.platform === "darwin" && !spec.box && !String(spec.docker).endsWith(".sock")) {
+    for (const s of sandboxes) s.imageName = null;
+    return sandboxes;
+  }
   const digests = [...new Set(sandboxes.map((s) => s.image).filter(Boolean))];
   const names = new Map();
   if (digests.length) {
@@ -215,6 +220,7 @@ export async function nameImages(spec, sandboxes) {
 
 /** This home's Sandbox containers (named `<prefix><project>-<n>`), running or not. */
 async function containersOf(spec) {
+  if (process.platform === "darwin" && !spec.box && !String(spec.docker).endsWith(".sock")) return [];
   const out = await docker(spec, "ps", "-a", "--no-trunc", "--filter", "label=layerfs.role=sandbox", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Label \"layerfs.project\"}}\t{{.Label \"layerfs.sandbox\"}}\t{{.Image}}\t{{.Ports}}");
   return out.split("\n").filter(Boolean).map((row) => {
     const [name, state, status, project, sandbox, image, ports] = row.split("\t");

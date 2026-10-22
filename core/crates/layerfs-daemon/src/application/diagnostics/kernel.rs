@@ -1,5 +1,5 @@
 //! Exact transient kernel observer facts, including final terminal accounting.
-#![cfg(target_os = "linux")]
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 use super::Records;
 use layerfs_fuse::{mount::AbortWrite, session::SessionFacts, MountWork};
 use std::io::{self, Write};

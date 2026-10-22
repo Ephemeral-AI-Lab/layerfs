@@ -120,14 +120,18 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   during live activity and idle periods. Terminal unmount drains requests,
   closes the Workspace's overlay connection and deletes its file. Neither
   deletes global history.
-- Target (owner direction 2026-10-07, Store calls revised 2026-10-18): every
+- Target (owner direction 2026-10-07, Store calls revised 2026-10-18, native
+  macOS stack added 2026-10-21): every
   daemon opens the global Store directly from a volume the daemons share and
   reads, saves and publishes in-process. Project Init creates and seals one
   Store file, installed into that volume. **SDK Store calls (fs, branch,
   project, operator) run in the SDK's own process, which opens the same Store
-  directly; this is the only route.** It is Linux only: every opener shares
-  one Linux kernel and a local filesystem holding the Store (ext4, xfs,
-  btrfs). Anywhere else Store calls fail `Unsupported`, with no fallback; the
+  directly; this is the only route.** Supported on Linux (every opener shares
+  one Linux kernel and a local filesystem holding the Store: ext4, xfs,
+  btrfs) and native macOS (`aarch64-apple-darwin`, sharing one Darwin kernel
+  and a local APFS/HFS+ filesystem holding the Store, with FUSE-T mounts and
+  local process-isolated Sandboxes). Anywhere else Store calls fail
+  `Unsupported`, with no fallback; the
   daemon does not serve Store calls. Workspace calls (mount, Exec, Commit,
   status, unmount) go to the daemon. Do not revive `layerfs-server` or build a
   host/server adapter in the data path; the host-mediated SDK runtime is
