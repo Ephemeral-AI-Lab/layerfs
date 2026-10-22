@@ -114,7 +114,14 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
         ));
     };
     if crate::runtime::local(deploy)? {
+        #[cfg(target_os = "linux")]
         return crate::local::start(args, directory, (&project, installed));
+        #[cfg(not(target_os = "linux"))]
+        return Err(refused(
+            "Unsupported",
+            "LAYERFS_SANDBOX=local runs its daemon as a process of this kernel, which needs \
+             Linux; run it inside a Linux VM or CI box, or use Docker",
+        ));
     }
     let docker = text(deploy, "docker")?;
     let image = deploy
@@ -377,7 +384,10 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
         ));
     }
     if stopped {
-        match crate::discovery::recorded(&value)?.stopped().delete() {
+        match crate::discovery::recorded(args, id, &value)?
+            .stopped()
+            .delete()
+        {
             Err(failure) if !failure.container_gone() => return Err(failed(failure)),
             _ => {}
         }
