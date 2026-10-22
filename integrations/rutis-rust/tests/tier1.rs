@@ -64,12 +64,15 @@ fn deploy_shape_is_validated_at_apply() {
     for change in cases {
         let (root, config, _manifest) = fixture();
         let mut deploy = deploy(root.path());
+        let socket = deploy.docker.clone();
         change(&mut deploy);
         let config = Config {
             deploy: Some(deploy),
             ..config
         };
-        match LayerFs::new(config) {
+        let result = LayerFs::new(config);
+        let _ = std::fs::remove_file(socket);
+        match result {
             Ok(_) => panic!("an invalid deployment must be refused"),
             Err(error) => assert_eq!(error.code(), "InvalidInput"),
         }
@@ -79,7 +82,8 @@ fn deploy_shape_is_validated_at_apply() {
 #[tokio::test]
 async fn unknown_sandbox_is_refused_before_any_engine_call() {
     let (root, config, _manifest) = fixture();
-    let layerfs = LayerFs::new(deployed(config, root.path())).unwrap();
+    let config = deployed(config, root.path());
+    let layerfs = LayerFs::new(config.clone()).unwrap();
     let error = layerfs
         .workspace_status(json!({ "sandbox": "1", "path": "/ws" }))
         .await
@@ -101,12 +105,14 @@ async fn unknown_sandbox_is_refused_before_any_engine_call() {
         .unwrap_err();
     assert_eq!(error.code(), "NoSuchSandbox");
     layerfs.close().await.unwrap();
+    support::cleanup(&config);
 }
 
 #[tokio::test]
 async fn exec_sink_requires_absolute_paths() {
     let (root, config, _manifest) = fixture();
-    let layerfs = LayerFs::new(deployed(config, root.path())).unwrap();
+    let config = deployed(config, root.path());
+    let layerfs = LayerFs::new(config.clone()).unwrap();
     let error = layerfs
         .workspace_exec(json!({
             "sandbox": "1",
@@ -137,13 +143,15 @@ async fn exec_sink_requires_absolute_paths() {
         .await
         .unwrap_err();
     assert_eq!(error.code(), "InvalidInput");
+    support::cleanup(&config);
 }
 
 #[tokio::test]
 async fn a_public_project_directory_is_refused_on_the_first_workspace_call() {
     let (root, config, _manifest) = fixture();
     let project = config.home.join(support::PROJECT);
-    let layerfs = LayerFs::new(deployed(config, root.path())).unwrap();
+    let config = deployed(config, root.path());
+    let layerfs = LayerFs::new(config.clone()).unwrap();
     std::fs::set_permissions(&project, std::fs::Permissions::from_mode(0o755)).unwrap();
     let error = layerfs
         .workspace_status(json!({ "sandbox": "1", "path": "/ws" }))
@@ -151,4 +159,5 @@ async fn a_public_project_directory_is_refused_on_the_first_workspace_call() {
         .unwrap_err();
     assert_eq!(error.code(), "Unauthorized");
     assert!(matches!(error, LayerFsError::Refused { .. }));
+    support::cleanup(&config);
 }

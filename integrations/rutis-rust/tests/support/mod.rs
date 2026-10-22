@@ -111,6 +111,13 @@ pub fn fixture() -> (TempDir, Config, StoreManifest) {
     (root, config, sealed.manifest)
 }
 
+/// Removes the short-lived Engine socket a fixture made.
+pub fn cleanup(config: &Config) {
+    if let Some(deploy) = &config.deploy {
+        let _ = std::fs::remove_file(&deploy.docker);
+    }
+}
+
 /// A deployment whose socket and daemon path exist; no Engine answers.
 pub fn deploy(root: &Path) -> Deploy {
     use std::sync::atomic::{AtomicUsize, Ordering};
