@@ -75,8 +75,10 @@ pub struct LocalCreateFailure {
 
 impl Local {
     /// Selects `root`: an existing absolute directory owned by this user,
-    /// writable by it alone and traversable by others (commands run as
-    /// another identity and must reach their Workspace below it).
+    /// writable by it alone and traversable by others, as is every directory
+    /// above it (commands enter their Workspace below it only after taking
+    /// another identity, so one closed directory on the way, such as a 0700
+    /// `/root`, would fail every command at spawn).
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         let root = root.as_ref();
         if !root.is_absolute()
@@ -95,6 +97,21 @@ impl Local {
             return Err(RuntimeError::Protocol(
                 "local runtime root must be a directory of this user, not group/other writable, traversable by others (0755)",
             ));
+        }
+        // every directory on the path as given and on the path it resolves to
+        let resolved = fs::canonicalize(root)?;
+        for directory in root.ancestors().chain(resolved.ancestors()) {
+            let metadata = fs::metadata(directory)?;
+            if !metadata.is_dir() || metadata.mode() & 0o001 == 0 {
+                return Err(RuntimeError::Io(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!(
+                        "{} is not traversable by others (o+x); local Sandbox commands run as \
+                         another identity and must pass it to reach their Workspace",
+                        directory.display()
+                    ),
+                )));
+            }
         }
         Ok(Self {
             root: root.to_owned(),
