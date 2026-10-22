@@ -34,11 +34,7 @@ fn scope(db: &Overlay) -> IndexedOperationRecordScope {
 }
 type Rows = Vec<([u8; 32], Vec<u8>)>;
 /// Every (key, value) of one kind, a window at a time, with the window sizes.
-fn walk(
-    db: &Overlay,
-    scope: IndexedOperationRecordScope,
-    kind: u32,
-) -> (Rows, Vec<usize>) {
+fn walk(db: &Overlay, scope: IndexedOperationRecordScope, kind: u32) -> (Rows, Vec<usize>) {
     let (mut all, mut sizes, mut after) = (Vec::new(), Vec::new(), None);
     loop {
         let (window, ended) = db
