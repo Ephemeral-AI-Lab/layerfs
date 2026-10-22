@@ -1,6 +1,9 @@
 //! One local Sandbox: its directory, its daemon process and its exact
-//! attempts. No Drop cleanup or replay, as for a container.
-use super::{mounts, process::LocalProcess};
+//! attempts. No Drop cleanup or replay, as for a container; a Drop only
+//! reaps a daemon this process started that has already exited. A stop
+//! returns only once a daemon this process started is reaped, so it never
+//! stays a zombie of this process.
+use super::{groups, mounts, process::LocalProcess};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use nix::sys::signal::Signal;
 use std::{
@@ -34,6 +37,8 @@ pub struct Sandbox {
     pub(super) child: Mutex<Option<Child>>,
     pub(super) stop_attempted: bool,
     pub(super) stopped: bool,
+    /// Its process groups were killed and found empty (by its stop).
+    pub(super) ended: bool,
     pub(super) delete_attempted: bool,
     pub(super) deleted: bool,
 }
@@ -54,6 +59,7 @@ impl Sandbox {
             child: Mutex::new(None),
             stop_attempted: false,
             stopped: false,
+            ended: false,
             delete_attempted: false,
             deleted: false,
         }
@@ -135,8 +141,10 @@ impl Sandbox {
         Ok(SocketAddr::from((Ipv4Addr::LOCALHOST, self.port)))
     }
     /// Stops the daemon once: TERM, up to `seconds` for it to end, then
-    /// KILL. A daemon already gone is the same stopped state. Crash
-    /// teardown, not a graceful filesystem drain.
+    /// KILL (a daemon this process started has ended once reaped); then
+    /// KILL to every process group of its commands and its daemon, as a
+    /// container's end kills what ran in it. A daemon already gone is the
+    /// same stopped state. Crash teardown, not a graceful filesystem drain.
     pub fn stop(&mut self, seconds: u16) -> Result<(), Box<WireFailure>> {
         if self.stop_attempted || self.delete_attempted {
             return Err(self.invalid("original local Stop admission"));
@@ -148,7 +156,7 @@ impl Sandbox {
                 Signal::SIGTERM,
                 Duration::from_secs(u64::from(seconds)),
             )?;
-            if process.alive() {
+            if !self.gone(process) {
                 self.end(process, Signal::SIGKILL, KILL_WAIT)?;
             }
             if process.alive() {
@@ -156,11 +164,15 @@ impl Sandbox {
             }
         }
         self.stopped = true;
+        groups::end(&self.directory, self.process, KILL_WAIT).map_err(|error| self.io(error))?;
+        self.ended = true;
         Ok(())
     }
-    /// Deletes its directory once, after a known stop: any mount its daemon
-    /// left is detached first, so nothing is removed through a mount. The
-    /// shared Store is outside it and never touched.
+    /// Deletes its directory once, after a known stop: any process left in
+    /// its groups is killed first (when its stop did not run here, as for a
+    /// daemon found stopped), and any mount its daemon left is detached, so
+    /// nothing writes into it or is removed through a mount. The shared
+    /// Store is outside it and never touched.
     pub fn delete(&mut self) -> Result<(), Box<WireFailure>> {
         if self.delete_attempted || (self.process.is_some() && !self.stopped) {
             return Err(self.invalid("original local Delete admission; known stop required"));
@@ -169,6 +181,11 @@ impl Sandbox {
         self.reap();
         if self.process.is_some_and(LocalProcess::alive) {
             return Err(self.invalid("local daemon runs again; nothing was deleted"));
+        }
+        if !self.ended {
+            groups::end(&self.directory, self.process, KILL_WAIT)
+                .map_err(|error| self.io(error))?;
+            self.ended = true;
         }
         mounts::detach(&self.directory).map_err(|error| self.io(error))?;
         match fs::remove_dir_all(&self.directory) {
@@ -207,16 +224,41 @@ impl Sandbox {
         let tail = &bytes[start..];
         Ok(tail[tail.len().saturating_sub(cap)..].to_vec())
     }
-    /// Reaps the daemon this process started, if it exited.
-    pub(super) fn reap(&self) {
-        let mut child = self.child.lock().unwrap_or_else(|error| error.into_inner());
-        if let Some(started) = child.as_mut() {
-            if matches!(started.try_wait(), Ok(Some(_))) {
-                *child = None;
+    /// Names the process group `pid` leads or is about to lead: a process
+    /// started at `start` by a command of this Sandbox in a session of its
+    /// own (the SDK's `setsid` background process), so it ends with the
+    /// Sandbox too. One already gone needs nothing.
+    pub fn track(&self, pid: u32, start: u64) -> Result<(), Box<WireFailure>> {
+        match LocalProcess::observe(pid) {
+            Ok(process) if process.start == start && process.alive() => {
+                groups::name(&self.directory, process).map_err(|error| self.io(error))
             }
+            _ => Ok(()),
         }
     }
-    /// Sends `signal` once and waits up to `wait` for the process to end.
+    /// Reaps the daemon this process started, if it exited. True when no
+    /// daemon this process started is left unreaped.
+    pub(super) fn reap(&self) -> bool {
+        let mut child = self.child.lock().unwrap_or_else(|error| error.into_inner());
+        let Some(started) = child.as_mut() else {
+            return true;
+        };
+        let reaped = matches!(started.try_wait(), Ok(Some(_)));
+        if reaped {
+            *child = None;
+        }
+        reaped
+    }
+    /// The daemon has ended and, if this process started it, is reaped. Its
+    /// main thread can end (a zombie id, so not alive) while its other
+    /// threads still run and it cannot be reaped yet: not gone.
+    fn gone(&self, process: LocalProcess) -> bool {
+        self.reap() && !process.alive()
+    }
+    /// Sends `signal` once and waits up to `wait` for the process to be gone.
+    /// A KILL also goes to the daemon this process started and has not
+    /// reaped: its id cannot be reused until reaped, so it is still the one
+    /// started, though its main thread may have ended already.
     fn end(
         &self,
         process: LocalProcess,
@@ -224,10 +266,15 @@ impl Sandbox {
         wait: Duration,
     ) -> Result<(), Box<WireFailure>> {
         process.signal(signal).map_err(|error| self.io(error))?;
+        if signal == Signal::SIGKILL {
+            let mut child = self.child.lock().unwrap_or_else(|error| error.into_inner());
+            if let Some(started) = child.as_mut() {
+                let _ = started.kill();
+            }
+        }
         let deadline = Instant::now() + wait;
         loop {
-            self.reap();
-            if !process.alive() || Instant::now() >= deadline {
+            if self.gone(process) || Instant::now() >= deadline {
                 return Ok(());
             }
             std::thread::sleep(PAUSE);
@@ -255,5 +302,14 @@ impl Sandbox {
             requested_exec: None,
             error_body: None,
         })
+    }
+}
+
+impl Drop for Sandbox {
+    /// A daemon this process started and that has exited is reaped, so a
+    /// Sandbox dropped on any path leaves no zombie of it. A running daemon
+    /// is left alone: stopping it is [`Sandbox::stop`]'s, once.
+    fn drop(&mut self) {
+        self.reap();
     }
 }
