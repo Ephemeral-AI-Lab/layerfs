@@ -226,3 +226,86 @@ fn a_stopped_container_the_engine_will_not_delete_keeps_its_records() {
     assert!(dir(&home).join("sandbox.record").exists());
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// Sandbox 1 recorded as a local Sandbox in `directory` named `name`, its
+/// daemon long gone (no process has id u32::MAX).
+#[cfg(target_os = "linux")]
+fn local_record(home: &Path, directory: &Path, name: &str) {
+    let bytes = |n: u8| SdkValue::Bytes(vec![n; 32]);
+    crate::discovery::save(
+        &dir(home).join("sandbox.record"),
+        SdkValue::map([
+            ("id", SdkValue::text(ID)),
+            ("project", SdkValue::text("proj")),
+            ("name", SdkValue::text(name)),
+            ("container", SdkValue::text(CID)),
+            ("runtime", SdkValue::text("local")),
+            ("directory", SdkValue::text(directory.to_str().unwrap())),
+            ("pid", SdkValue::Int(i64::from(u32::MAX))),
+            ("start", SdkValue::text("1")),
+            ("port", SdkValue::Int(40404)),
+            ("image", SdkValue::text("local")),
+            ("secret", bytes(1)),
+            ("peer", bytes(2)),
+            ("instance", bytes(3)),
+        ]),
+    )
+    .unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_local_record_outside_its_configured_directory_is_never_deleted() {
+    let home = home();
+    let root = home.join("local");
+    std::fs::create_dir(&root).unwrap();
+    let local = || {
+        let mut args = args(&home);
+        if let SdkValue::Map(fields) = &mut args {
+            fields.push((
+                "deploy".into(),
+                SdkValue::map([
+                    ("sandbox", SdkValue::text("local")),
+                    ("localDir", SdkValue::text(root.to_str().unwrap())),
+                ]),
+            ));
+        }
+        args
+    };
+    // an edited or damaged record naming a data directory by its own name
+    let data = home.join("data");
+    std::fs::create_dir(&data).unwrap();
+    std::fs::write(data.join("keep"), b"x").unwrap();
+    local_record(&home, &data, "data");
+    let refusal = reclaim(&local(), ID, CID, true).unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput");
+    assert!(
+        refusal.message.contains("neither used nor deleted"),
+        "{}",
+        refusal.message
+    );
+    assert!(
+        data.join("keep").exists(),
+        "a delete reached {}",
+        data.display()
+    );
+    assert!(dir(&home).join("sandbox.record").exists());
+    // the same from a record of another LAYERFS_LOCAL_DIR
+    let old = home.join("old");
+    std::fs::create_dir_all(old.join("layerfs-proj-1")).unwrap();
+    local_record(&home, &old.join("layerfs-proj-1"), "layerfs-proj-1");
+    assert_eq!(
+        reclaim(&local(), ID, CID, true).unwrap_err().code,
+        "InvalidInput"
+    );
+    assert!(old.join("layerfs-proj-1").exists());
+    // where this deployment puts it, the stopped Sandbox is deleted and reclaimed
+    let own = root.join("layerfs-proj-1");
+    std::fs::create_dir_all(own.join("tmp")).unwrap();
+    local_record(&home, &own, "layerfs-proj-1");
+    let reclaimed = reclaim(&local(), ID, CID, true).unwrap();
+    assert_eq!(reclaimed.get_text("kind"), Some("Reclaimed"));
+    assert!(!own.exists());
+    assert!(!dir(&home).exists(), "its number is free again");
+    std::fs::remove_dir_all(home).unwrap();
+}
