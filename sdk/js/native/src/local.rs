@@ -23,7 +23,7 @@ use layerfs_bridge::provision::StoreManifest;
 use layerfs_sandbox::backend::local::{Local, LocalCreateFailure, Sandbox};
 use layerfs_sandbox::CommandIdentity;
 use std::net::{SocketAddr, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 /// Starts the project's next Sandbox as a local daemon. Called by
@@ -93,12 +93,7 @@ fn start_claimed(
     (local, executable, store): (Local, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
-    let prefix = args
-        .get("deploy")
-        .and_then(|d| d.get_text("containerPrefix"))
-        .filter(|prefix| !prefix.is_empty())
-        .unwrap_or(crate::sandbox::PREFIX);
-    let sandbox_name = format!("{prefix}{name}-{id}");
+    let sandbox_name = sandbox_name(args, id)?;
     let local = local
         .naming(&sandbox_name)
         .map_err(|_| refused("InvalidInput", format!("local Sandbox name {sandbox_name}")))?;
@@ -167,7 +162,7 @@ fn start_claimed(
         peer: daemon.public,
         instance,
     };
-    let state = Arc::new(SandboxState {
+    let state = SandboxState {
         id: id.to_owned(),
         project: name.to_owned(),
         name: sandbox_name,
@@ -177,22 +172,89 @@ fn start_claimed(
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
-    });
-    crate::discovery::save_sandbox(
-        &state.directory,
-        &state,
-        args,
-        controller.private,
-        daemon.public,
-        instance,
-    )?;
-    crate::discovery::save_text(
-        &state.directory.join("container"),
-        &state.runtime.identity().to_string(),
-    )?;
-    std::fs::remove_file(directory.join("create.intent")).map_err(failed)?;
+    };
+    let recorded = (|| {
+        crate::discovery::save_sandbox(
+            &state.directory,
+            &state,
+            args,
+            controller.private,
+            daemon.public,
+            instance,
+        )?;
+        crate::discovery::save_text(
+            &state.directory.join("container"),
+            &state.runtime.identity().to_string(),
+        )?;
+        std::fs::remove_file(directory.join("create.intent")).map_err(failed)
+    })();
+    if let Err(refusal) = recorded {
+        // The daemon runs and is this start's own: it is stopped and its
+        // directory deleted like any failed start's, and the records written
+        // so far are removed, so its number is free again.
+        let SandboxState { runtime, .. } = state;
+        let Runtime::Local(sandbox) = runtime else {
+            unreachable!("a local start owns a local Sandbox")
+        };
+        for record in ["sandbox.record", "container"] {
+            let _ = std::fs::remove_file(saved_directory.join(record));
+        }
+        return Err(abandon(
+            directory,
+            id,
+            format!("local sandbox records: {}", refusal.message),
+            Some(sandbox),
+        ));
+    }
+    let state = Arc::new(state);
     lock(&SANDBOXES)?.insert(state.directory.clone(), state.clone());
     Ok(state)
+}
+
+/// A local Sandbox's directory name: `<prefix><project>-<id>`, the name its
+/// container would have.
+fn sandbox_name(args: &SdkValue, id: &str) -> Result<String, SdkRefusal> {
+    let prefix = args
+        .get("deploy")
+        .and_then(|d| d.get_text("containerPrefix"))
+        .filter(|prefix| !prefix.is_empty())
+        .unwrap_or(crate::sandbox::PREFIX);
+    Ok(format!("{prefix}{}-{id}", text(args, "project")?))
+}
+
+/// Where this deployment puts Sandbox `id`:
+/// `<LAYERFS_LOCAL_DIR>/<prefix><project>-<id>`, computed from the
+/// configuration alone, as a record's directory must be.
+pub(crate) fn directory(args: &SdkValue, id: &str) -> Result<PathBuf, SdkRefusal> {
+    let root = (args.get("deploy"))
+        .and_then(|deploy| deploy.get_text("localDir"))
+        .map(Path::new)
+        .ok_or_else(|| {
+            refused(
+                "InvalidInput",
+                format!(
+                    "Sandbox {id} is a local Sandbox; its record is used only with \
+                     LAYERFS_LOCAL_DIR (deploy.localDir) configured"
+                ),
+            )
+        })?;
+    let name = sandbox_name(args, id)?;
+    let plain = |path: &Path| {
+        !path
+            .components()
+            .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+    };
+    let single = matches!(
+        Path::new(&name).components().collect::<Vec<_>>()[..],
+        [Component::Normal(_)]
+    );
+    if !root.is_absolute() || !plain(root) || !single {
+        return Err(refused(
+            "InvalidInput",
+            format!("local Sandbox directory {}/{name}", root.display()),
+        ));
+    }
+    Ok(root.join(name))
 }
 
 /// The first control connection to a new daemon: one connect, one
