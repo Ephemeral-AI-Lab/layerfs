@@ -71,6 +71,7 @@
 
 ## Explore
 
+- [Claude Code plugin candidate](../claude/README.md) and its [acceptance checklist](../claude/TESTING.md); not released.
 - [Research and historical design material](research/README.md)
 
 The directory classes are deliberately small:

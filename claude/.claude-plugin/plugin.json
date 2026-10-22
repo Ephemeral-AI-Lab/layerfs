@@ -1,0 +1,10 @@
+{
+  "name": "layerfs",
+  "version": "0.1.0",
+  "description": "Develop LayerFS projects through the JavaScript SDK, with isolated agent Branches and native Claude Code tools.",
+  "author": { "name": "LayerFS contributors" },
+  "license": "MIT",
+  "homepage": "https://github.com/Ephemeral-AI-Lab/layerfs",
+  "repository": "https://github.com/Ephemeral-AI-Lab/layerfs",
+  "keywords": ["layerfs", "filesystem", "agents"]
+}

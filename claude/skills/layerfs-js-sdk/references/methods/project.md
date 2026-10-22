@@ -1,0 +1,109 @@
+# project methods
+
+> **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Examples were
+> captured live in issue #334 Phase A at `b30e4fb8f`. Opaque IDs are shortened;
+> the full replies and trace are in `core/target/issue334/phase-a/`.
+
+Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).
+
+## `project.init(sourcePath)`
+
+Creates the project: copies a host folder into a new Store, once. Afterwards the files
+live only in LayerFS.
+
+| Arg | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `sourcePath` | string | yes | Host folder to copy. Everything in it is imported, including `.git` and ignored files |
+
+The project name comes from `new LayerFS(name)`: 1–63 characters from `a-z`, `0-9`,
+`_`, `-`, `.`, starting and ending with a letter or digit. A bad name throws
+`InvalidInput` from the constructor.
+
+**Returns:** `{ kind: "Initialized", project, layer, … }`, where `layer` is `main`'s
+first Layer.
+
+**Refusals**
+
+| Code | Meaning | Do |
+| --- | --- | --- |
+| `Exists` | This `LAYERFS_HOME` already has the project | Don't init again: the project is ready to use |
+| `InvalidInput` | Bad path or name | Use an absolute folder path |
+| `Unknown`, `Failed` | Init is uncertain or failed | Stop and report |
+
+**Start from a small skeleton** (shell): a folder with a `README.md` and a `.git/HEAD`,
+the shape the SDK's own test harness uses.
+
+```bash
+mkdir -p /work/shop-skeleton/.git
+printf 'ref: refs/heads/main\n' > /work/shop-skeleton/.git/HEAD
+printf '# Shop\n' > /work/shop-skeleton/README.md
+```
+
+```js
+const r = await layerfs.project.init("/work/shop-skeleton");
+console.log(JSON.stringify(r, null, 2));
+```
+```json
+{
+  "kind": "Initialized",
+  "project": "shop-a-methods",
+  "layer": "324afe090aa7…",
+  "root": "e34e2dc43565…",
+  "store": "/Users/yifanxu/.codex/worktrees/issue334-shop-run/layerfs/core/target/issue334/phase-a/home/shop-a-methods/sealed.sqlite"
+}
+```
+
+**Notes:** run it once per project. Later processes with the same `LAYERFS_HOME` find
+the project without it; `fs.*` and `branch.*` calls work right away.
+
+## `project.list_branches(pageSize?, pagePos?)`
+
+Lists the project's Branches, including the synthetic `main` entry. For `main`,
+`id` and `head` are null and `base` is its current publication Layer, even after
+publication. Record the Layer and its published source Commit when reporting the
+final main reference.
+
+| Arg | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `pageSize` | number | no | 1–1000, default 50 |
+| `pagePos` | number | no | Offset, default 0 |
+
+**Returns:** a page `{ items, hasMore, nextPagePos }`. Each item:
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Branch name |
+| `id` | Branch id |
+| `base` | The `main` Layer it's based on |
+| `head` | Newest Commit, or `null` before its first Commit |
+| `forkedFrom` | The node it was forked from, or `null` |
+
+**Refusals:** `NoSuchProject` (wrong name, or `init` not run with this `LAYERFS_HOME`),
+`InvalidInput`.
+
+```js
+const page = await layerfs.project.list_branches();
+const exists = page.items.some((b) => b.name === "cart");
+console.log(JSON.stringify(page, null, 2));
+```
+```json
+{
+  "items": [
+    {
+      "name": "main",
+      "id": null,
+      "base": "3279dac7de68…",
+      "head": null
+    },
+    {
+      "name": "work",
+      "id": "1190a141ae4473594aaf0536f674a3fb99",
+      "base": "32a35edb1f9f…",
+      "head": "12804de7ce8d…",
+      "forkedFrom": "32a35edb1f9f…"
+    }
+  ],
+  "hasMore": false,
+  "nextPagePos": null
+}
+```

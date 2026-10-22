@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "pluginVersion": "0.1.0",
+  "claudeCode": {
+    "minimum": "2.1.295",
+    "documentedAt": "2.1.307",
+    "runtimeTested": false
+  },
+  "layerfsRevision": "5fb68ddc1acc3163e3ac3486133bde014c5fbed3",
+  "sdk": {
+    "version": "1.0.0",
+    "sha256": "75fac73055b18c86596a04a6e6037b448b93647421e35d9a02d2095d2e661b10"
+  },
+  "skill": {
+    "source": ".agents/skills/layerfs-js-sdk",
+    "files": {
+      "references/methods/branch.md": "564cd9c5b770c87f0b2e7936d4eaca80166bbb7f788165f8f5fc75779bd9e0dd",
+      "references/methods/fs-read.md": "a3202ea01164e729d7fa01fed643e538014d924117904a79d43e71acac2858db",
+      "references/methods/fs-write.md": "25b13a316f1da8fd9a2f3e7da01aa983390e1ec38c2652fe9d429cfa150960d1",
+      "references/methods/project.md": "e7a259fb81465b5e94b8262e73042d6cce2d21a9ecc2e53f7a0991d6422a8f5f",
+      "references/methods/workspace.md": "d5ffae4721163d32a2eecf06c8690a3ccefbe55d614ad8a97643b9a9b1162c56",
+      "references/rules/cargo.md": "01522ea349af31d0fa633a201d963eb760a8466935482543300f2ae4562b5bea",
+      "references/rules/conflicts.md": "6725250a67ff180c288c5444f4320a7f7c00ec121e3b33bc7aaab4c131ecbbc5",
+      "references/rules/lww.md": "5534af413df32836ff759a5e55908f7cb5cac7ac691433646500b1e75dd15b60",
+      "SKILL.md": "1d1b0fcfdaa06a8aaad3086d41d6584e5567d8795ab9e44092f6c3e8fcd435cf"
+    }
+  },
+  "deployment": "The control configuration records native addon and daemon hashes. Build both from the matching LayerFS source."
+}

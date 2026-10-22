@@ -21,6 +21,10 @@ TypeScript under dsh/packages/<package>/src, one crate per package
 and the untracked dsh/assets art are excluded. TypeScript comments are blanked
 by the same JavaScript scanner.
 
+The Claude Code plugin is its own scope, `claude`: shipped JavaScript under
+claude/scripts. Skill copies, agent/config declarations, tests and build/check
+tools are excluded, as in the dsh scope.
+
 Runtime SQL is counted for both scopes: a candidate package that ships schema or
 query text under <crate>/sql/ contributes it exactly like the reference schema.
 Per-file reporting uses the same classification as the totals, and prints the
@@ -42,7 +46,7 @@ import sys
 
 SKIP_DIRS = {"target", "tests", "examples", "benches", "node_modules"}
 DSH_SKIP_DIRS = SKIP_DIRS | {"dist", "assets"}
-JS_SUFFIXES = (".js", ".ts", ".tsx")
+JS_SUFFIXES = (".js", ".mjs", ".ts", ".tsx")
 CODE_SUFFIXES = (".rs",)
 
 
@@ -345,7 +349,7 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "reference", "sdk", "dsh")
+SCOPES = ("core", "reference", "sdk", "dsh", "claude")
 
 
 def scope_base(root: Path, scope: str) -> Path:
@@ -355,6 +359,8 @@ def scope_base(root: Path, scope: str) -> Path:
         return root / "sdk" / "js"
     if scope == "dsh":
         return root / "dsh" / "packages"
+    if scope == "claude":
+        return root / "claude" / "scripts"
     return root / "crates"
 
 
@@ -390,6 +396,8 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
         return sdk_crate(base, path)
     if scope == "dsh":
         return dsh_crate(base, path)
+    if scope == "claude":
+        return "layerfs-claude-plugin"
     parts = path.relative_to(root).parts
     return parts[2] if scope == "core" else parts[1]
 
@@ -406,6 +414,8 @@ def scope_files(root: Path, scope: str) -> list:
         return sdk_files(base)
     if scope == "dsh":
         return dsh_files(base)
+    if scope == "claude":
+        return sorted(path for path in base.glob("*.mjs") if path.is_file())
     files = []
     for path in sorted(base.rglob("*")):
         if not path.is_file():

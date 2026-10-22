@@ -55,6 +55,10 @@ session fork Branches, test them in Sandboxes, merge and publish, and the **Work
 
 ## Core ideas
 
+A [Claude Code plugin candidate](claude/README.md) follows the same SDK and
+Branch workflow through native Custom Agents and Hooks. Its Claude and real
+Docker/FUSE acceptance is pending; see the [testing checklist](claude/TESTING.md).
+
 <table>
   <tr>
     <td width="33%" valign="top">

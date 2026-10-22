@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "profile": "Disposable",
+  "project": "shop",
+  "sdk": "/absolute/layerfs/sdk/js",
+  "native": "/absolute/matched-build/layerfs.node",
+  "daemon": "/absolute/matched-build/layerfs-daemon",
+  "home": "/absolute/layerfs-home",
+  "docker": "/var/run/docker.sock",
+  "volume": "layerfs-shop",
+  "storePath": "/var/lib/docker/volumes/layerfs-shop/_data/store.sqlite",
+  "image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "containerPrefix": "layerfs-cc-"
+}

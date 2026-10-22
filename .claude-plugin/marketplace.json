@@ -1,0 +1,12 @@
+{
+  "name": "layerfs-plugins",
+  "owner": { "name": "LayerFS contributors" },
+  "plugins": [
+    {
+      "name": "layerfs",
+      "source": "./claude",
+      "description": "LayerFS development through native Claude Code agents, Bash and the JavaScript SDK.",
+      "version": "0.1.0"
+    }
+  ]
+}

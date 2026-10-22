@@ -1,0 +1,12 @@
+{
+  "name": "layerfs-claude-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "sync-skill": "node tools/sync-skill.mjs",
+    "check": "node tools/check.mjs",
+    "test": "timeout 120 node --test tests/*.test.mjs"
+  }
+}

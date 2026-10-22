@@ -237,6 +237,11 @@ release-defining main task alongside the portable projection foundation.
 
 ## Ecosystem
 
+### Claude Code plugin
+
+- [Claude Code plugin](../../claude/README.md): implementation candidate using Custom Agents, the original LayerFS Skill, direct SDK calls and lifecycle hooks. Local Node checks are separate from the pending Claude/Docker/FUSE acceptance.
+- [Integration design](claude-code-plugin-design.md) and [owner acceptance checklist](../../claude/TESTING.md); not a released integration.
+
 ### DeepSeek Harness plugin
 
 - [ ] Define a DSH plugin using only the public LayerFS SDK.

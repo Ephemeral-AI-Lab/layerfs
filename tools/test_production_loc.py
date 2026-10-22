@@ -15,6 +15,13 @@ def write(root: Path, relative: str, text: str) -> Path:
 
 
 class CounterTests(unittest.TestCase):
+    def test_claude_runtime_counts_without_tools_tests_or_skill_copies(self):
+        runtime = write(self.root, "claude/scripts/hook.mjs", "// comment\nexport const ready = true;\n")
+        for path in ("claude/tests/plugin.test.mjs", "claude/tools/check.mjs", "claude/skills/sdk/SKILL.md"):
+            write(self.root, path, "excluded\n")
+        self.assertEqual(production_loc.scope_files(self.root, "claude"), [runtime])
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["claude"]["lines"], 1)
+
     def setUp(self):
         self._temporary = tempfile.TemporaryDirectory()
         self.root = Path(self._temporary.name)
