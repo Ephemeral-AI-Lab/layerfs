@@ -51,7 +51,9 @@ fn golden_rows() -> (Row, Row) {
             kind: InodeKind::RegularFile,
             namespace_ref_count: 2,
             content_root: synthetic("ordering/golden-content"),
-            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic("ordering/golden-meta")),
+            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+                "ordering/golden-meta",
+            )),
         }),
         count: 2,
     };
