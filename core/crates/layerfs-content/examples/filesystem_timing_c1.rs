@@ -72,7 +72,9 @@ fn file(content: &str) -> InodeValue {
         kind: InodeKind::RegularFile,
         namespace_ref_count: 0,
         content_root: synthetic(content),
-        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic("example/meta")),
+        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+            "example/meta",
+        )),
     }
 }
 
@@ -81,7 +83,9 @@ fn directory() -> InodeValue {
         kind: InodeKind::Directory,
         namespace_ref_count: 0,
         content_root: synthetic("example/unused"),
-        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic("example/dir-meta")),
+        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+            "example/dir-meta",
+        )),
     }
 }
 
@@ -251,7 +255,8 @@ fn base(
         bag.objects.extend(attribute_sink.objects);
         for update in &mut inodes {
             if update.serial == 1 {
-                update.value.metadata_root = layerfs_content::object::inode_leaf::InodeMetadata::Root(metadata_root);
+                update.value.metadata_root =
+                    layerfs_content::object::inode_leaf::InodeMetadata::Root(metadata_root);
             }
         }
         stored_attribute_tree = Some(metadata_root);
