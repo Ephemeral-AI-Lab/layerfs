@@ -5,6 +5,7 @@ mod discovery;
 mod dispatch;
 mod exec;
 mod job;
+#[cfg(target_os = "linux")]
 mod local;
 mod output;
 mod pool;
