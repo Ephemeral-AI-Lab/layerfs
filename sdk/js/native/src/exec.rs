@@ -5,46 +5,37 @@
 //! daemon is not involved. A background command is started in its own session
 //! with its output in a log file, and this binding keeps its process id. The
 //! Engine offers no per-exec cancel, so `cancel` signals the process group
-//! from a second command and waits (bounded) until it is gone.
-use crate::job::{failed, refused, Outcome};
+//! from a second command and waits (bounded) until it is gone. A local
+//! Sandbox (`runtime::Runtime::Local`) runs the same commands as processes of
+//! this kernel, so the same probes and signals apply.
+use crate::job::{refused, Outcome};
 use crate::output::Spool;
 use crate::registry::{lock, naming, sandbox, sandbox_live, text, Process, SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::time::Duration;
 
-/// Home of the command identity, which has no account in the image.
-const HOME: &str = "HOME=/tmp";
 /// Checks that a cancelled process group is gone.
 const GONE_CHECKS: u32 = 50;
 /// Pause between those checks.
 const GONE_PAUSE: Duration = Duration::from_millis(100);
 
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
-/// non-empty stream to its file instead of keeping it inline.
+/// non-empty stream to its file instead of keeping it inline. Its home is
+/// the Sandbox's scratch directory (`/tmp` in a container), since the
+/// command identity has no account there.
 fn run(
     state: &SandboxState,
     directory: &str,
     arguments: Vec<String>,
     spool: bool,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
-    let created = layerfs_api::internal::exec(
-        &state.runtime,
+    state.runtime.run(
         state.identity,
         arguments,
-        vec![HOME.to_owned()],
-        directory.to_owned(),
-        false,
+        vec![format!("HOME={}", state.runtime.scratch())],
+        directory,
+        spool,
     )
-    .map_err(failed)?;
-    let attached = created.start().map_err(failed)?;
-    let (_input, output, handle) = attached.into_parts().map_err(failed)?;
-    let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
-    output.copy_to(&mut stdout, &mut stderr).map_err(failed)?;
-    let inspected = handle.inspect().map_err(failed)?;
-    let code = inspected
-        .known_root_exit()
-        .ok_or_else(|| refused("Unknown", "the command's exit code is not known"))?;
-    Ok((code, stdout, stderr))
 }
 
 /// `workspace.exec(ws, command, { background?, spool? })`; with
@@ -91,11 +82,14 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
         state.id,
         layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
     );
-    let script = format!("setsid bash -c \"$0\" >/tmp/layerfs-{id}.log 2>&1 </dev/null & echo $!");
+    // the log path is an argument, not script text: a local Sandbox's
+    // scratch directory is under a configured path
+    let script = "setsid bash -c \"$0\" >\"$1\" 2>&1 </dev/null & echo $!".to_owned();
+    let log = format!("{}/layerfs-{id}.log", state.runtime.scratch());
     let (code, stdout, stderr) = run(
         &state,
         &directory,
-        vec!["bash".into(), "-c".into(), script, command.into()],
+        vec!["bash".into(), "-c".into(), script, command.into(), log],
         false,
     )?;
     let pid = String::from_utf8_lossy(stdout.kept())
@@ -136,7 +130,7 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
 /// The container's first process is the daemon, which does not reap orphans,
 /// so a finished member can stay a zombie that `kill -0` still finds.
 fn start_time(state: &SandboxState, pid: u32) -> Result<Option<String>, SdkRefusal> {
-    let (code, out, _) = run(state, "/tmp", vec!["bash".into(), "-c".into(), format!("s=$(cat /proc/{pid}/stat 2>/dev/null) || exit 1; set -- ${{s##*) }}; shift 19; printf '%s' \"$1\"")], false)?;
+    let (code, out, _) = run(state, &state.runtime.scratch(), vec!["bash".into(), "-c".into(), format!("s=$(cat /proc/{pid}/stat 2>/dev/null) || exit 1; set -- ${{s##*) }}; shift 19; printf '%s' \"$1\"")], false)?;
     if code == 0 {
         Ok(Some(String::from_utf8_lossy(out.kept()).into_owned()))
     } else {
@@ -151,7 +145,7 @@ fn alive(state: &SandboxState, pid: u32) -> Result<bool, SdkRefusal> {
     );
     let (code, _, _) = run(
         state,
-        "/tmp",
+        &state.runtime.scratch(),
         vec!["bash".into(), "-c".into(), probe],
         false,
     )?;
@@ -283,7 +277,7 @@ pub(crate) fn cancel(args: &SdkValue) -> Outcome {
     }
     run(
         &state,
-        "/tmp",
+        &state.runtime.scratch(),
         vec![
             "bash".into(),
             "-c".into(),
