@@ -38,7 +38,9 @@ fn value(seed: u64) -> [u8; 73] {
         kind: InodeKind::RegularFile,
         namespace_ref_count: 1,
         content_root: ObjectId::for_bytes(&seed.to_le_bytes()),
-        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(ObjectId::for_bytes(b"metadata")),
+        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+            ObjectId::for_bytes(b"metadata"),
+        ),
     })
 }
 fn rows(ordinals: impl IntoIterator<Item = u32>) -> Vec<InodeValueRow> {
