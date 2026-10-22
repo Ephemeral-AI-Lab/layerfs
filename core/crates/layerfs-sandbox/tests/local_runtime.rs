@@ -2,6 +2,8 @@
 //! Sandbox directory, observed by process id and start time, its commands run
 //! as their own identity, and its stop and delete each attempted once. A
 //! small shell script stands in for the daemon; nothing here needs root.
+//! The runtime is Linux only, and so are these tests.
+#![cfg(target_os = "linux")]
 use layerfs_sandbox::{
     backend::{
         docker::ExecRequest,
@@ -410,4 +412,225 @@ fn a_zombie_is_not_alive() {
     }
     assert!(!process.alive(), "an exited, unreaped child counted alive");
     child.wait().unwrap();
+}
+
+#[test]
+fn every_directory_above_a_root_must_be_traversable_by_others() {
+    let (root, _) = fixture("exit 0");
+    let base = root.parent().unwrap().to_owned();
+    // a root inside a directory others cannot pass, as `/root` (0700) is
+    let closed = base.join("closed");
+    fs::create_dir(&closed).unwrap();
+    fs::create_dir(closed.join("root")).unwrap();
+    fs::set_permissions(closed.join("root"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(&closed, fs::Permissions::from_mode(0o700)).unwrap();
+    let refused = |path: &Path| match Local::new(path) {
+        Err(RuntimeError::Io(error)) => {
+            assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+            error.to_string()
+        }
+        other => panic!("{} admitted: {other:?}", path.display()),
+    };
+    let message = refused(&closed.join("root"));
+    assert!(
+        message.contains(&format!("{} is not traversable", closed.display())),
+        "{message}"
+    );
+    // the same through a symlinked parent: the directory it resolves to counts
+    std::os::unix::fs::symlink(&closed, base.join("link")).unwrap();
+    let message = refused(&base.join("link").join("root"));
+    assert!(message.contains("is not traversable"), "{message}");
+    // traversable without being listable is enough
+    fs::set_permissions(&closed, fs::Permissions::from_mode(0o711)).unwrap();
+    Local::new(closed.join("root")).unwrap();
+    Local::new(base.join("link").join("root")).unwrap();
+}
+
+/// The process ids a command printed, one per line.
+fn pids(out: &str) -> Vec<u32> {
+    out.lines()
+        .map(|line| line.trim().parse().unwrap())
+        .collect()
+}
+
+/// True once none of `pids` runs any more (a zombie has ended).
+fn gone(pids: &[u32]) -> bool {
+    pids.iter().all(
+        |pid| match fs::read_to_string(format!("/proc/{pid}/stat")) {
+            Ok(stat) => matches!(
+                stat.rsplit_once(") ").map(|(_, rest)| &rest[..1]),
+                Some("Z" | "X")
+            ),
+            Err(_) => true,
+        },
+    )
+}
+
+/// Leaves behind what an exec can: a `nohup` server writing into the
+/// Sandbox's scratch directory, and a `setsid` one named with
+/// [`Sandbox::track`] as the SDK names its background processes.
+fn leave_running(sandbox: &Sandbox) -> Vec<u32> {
+    let home = format!("HOME={}", sandbox.tmp().display());
+    let (code, out, err) = run(
+        sandbox,
+        &[
+            "bash",
+            "-c",
+            "cd \"$HOME\"; nohup sh -c 'while :; do echo x >> \"$HOME/server.out\"; sleep 0.01; done' >/dev/null 2>&1 & echo $!",
+        ],
+        &[&home],
+    );
+    assert_eq!(code, 0, "{err}");
+    let mut left = pids(&out);
+    let (code, out, err) = run(
+        sandbox,
+        &[
+            "bash",
+            "-c",
+            "setsid sleep 300 >/dev/null 2>&1 </dev/null & echo $!",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{err}");
+    let detached = pids(&out)[0];
+    let start = LocalProcess::observe(detached).unwrap().start;
+    sandbox.track(detached, start).unwrap();
+    left.push(detached);
+    // a command that leaves nothing running leaves no group named
+    let groups = || {
+        fs::read_dir(sandbox.directory().join("groups"))
+            .unwrap()
+            .count()
+    };
+    let named = groups();
+    assert!(named >= 2, "{named}");
+    let (code, _, _) = run(sandbox, &["true"], &[]);
+    assert_eq!(code, 0);
+    assert_eq!(groups(), named);
+    let deadline = Instant::now() + WAIT;
+    while !sandbox.tmp().join("server.out").exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!gone(&left));
+    left
+}
+
+#[test]
+fn what_commands_leave_running_ends_with_the_sandbox() {
+    // stopped and deleted by its owner
+    let (root, daemon) = fixture(LISTENS);
+    let mut sandbox = started(&root, &daemon, "layerfs-shop-8");
+    let left = leave_running(&sandbox);
+    sandbox.stop(1).unwrap();
+    assert!(gone(&left), "{left:?} outlived the stop");
+    sandbox.delete().unwrap();
+    assert!(!root.join("layerfs-shop-8").exists());
+    // its daemon killed from outside, then found stopped from its record
+    // and deleted, as a reclaim does
+    let sandbox = started(&root, &daemon, "layerfs-shop-9");
+    let left = leave_running(&sandbox);
+    let process = sandbox.process().unwrap();
+    assert!(Command::new("kill")
+        .args(["-9", &process.pid.to_string()])
+        .status()
+        .unwrap()
+        .success());
+    let deadline = Instant::now() + WAIT;
+    while sandbox.endpoint().is_ok() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(!gone(&left), "a command ended with its daemon");
+    let directory = sandbox.directory().to_owned();
+    let mut stopped = Sandbox::stopped(
+        directory.clone(),
+        sandbox.identity(),
+        process,
+        40404,
+        Vec::new(),
+    );
+    stopped.delete().unwrap();
+    assert!(gone(&left), "{left:?} outlived the delete");
+    assert!(!directory.exists());
+}
+
+#[test]
+fn a_process_of_another_boot_is_not_alive_and_one_without_a_boot_is_never_signalled() {
+    let (root, daemon) = fixture(LISTENS);
+    let sandbox = started(&root, &daemon, "layerfs-shop-10");
+    let process = sandbox.process().unwrap();
+    let boot = fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap();
+    let boot = u128::from_str_radix(&boot.trim().replace('-', ""), 16).unwrap();
+    assert_eq!(process.boot, Some(boot));
+    // the same id and start time in another boot (a reboot or a restored
+    // snapshot) is another process
+    let other = LocalProcess {
+        boot: Some(boot ^ 1),
+        ..process
+    };
+    assert!(!other.alive());
+    assert!(Sandbox::reopen(
+        root.join("layerfs-shop-10"),
+        sandbox.identity(),
+        other,
+        40404,
+        Vec::new()
+    )
+    .unwrap_err()
+    .container_stopped());
+    // a record from before boot ids is matched by id and start as then, and
+    // a stop through it signals nothing
+    let legacy = LocalProcess {
+        boot: None,
+        ..process
+    };
+    assert!(legacy.alive());
+    let mut reopened = Sandbox::reopen(
+        root.join("layerfs-shop-10"),
+        sandbox.identity(),
+        legacy,
+        40404,
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(reopened.stop(1).is_err());
+    assert!(process.alive());
+    let mut sandbox = sandbox;
+    sandbox.stop(1).unwrap();
+    assert!(!process.alive());
+    sandbox.delete().unwrap();
+}
+
+/// A daemon whose main thread ends while another thread still runs: its
+/// id is then a zombie that cannot be reaped yet, so it is not alive, but
+/// its exit has not happened. A stop ends and reaps it before returning,
+/// so it never stays a zombie of this process (the stand-in needs python3).
+#[test]
+fn a_stop_reaps_a_daemon_whose_main_thread_ended_first() {
+    let python = Command::new("python3").args(["-c", ""]).status();
+    if !python.is_ok_and(|status| status.success()) {
+        eprintln!("skipped: the stand-in daemon needs python3");
+        return;
+    }
+    let (root, daemon) = fixture(
+        r#"echo "LAYERFS_DAEMON_LISTEN 127.0.0.1:40404"
+exec python3 -c 'import ctypes, threading, time; threading.Thread(target=time.sleep, args=(60,)).start(); ctypes.CDLL(None).pthread_exit(None)'"#,
+    );
+    let mut sandbox = started(&root, &daemon, "layerfs-shop-11");
+    let process = sandbox.process().unwrap();
+    let deadline = Instant::now() + WAIT;
+    while process.alive() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!process.alive(), "its main thread did not end");
+    let tasks = fs::read_dir(format!("/proc/{}/task", process.pid))
+        .unwrap()
+        .count();
+    assert!(tasks >= 2, "its other thread ended already ({tasks})");
+    sandbox.stop(1).unwrap();
+    assert!(
+        fs::metadata(format!("/proc/{}", process.pid)).is_err(),
+        "the stopped daemon is still a process of this kernel (unreaped)"
+    );
+    sandbox.delete().unwrap();
+    assert!(!root.join("layerfs-shop-11").exists());
 }
