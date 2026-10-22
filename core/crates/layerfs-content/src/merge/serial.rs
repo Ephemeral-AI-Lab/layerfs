@@ -442,6 +442,12 @@ impl Ctx<'_, '_> {
             return Ok(());
         }
         if f.value.kind == InodeKind::Directory {
+            if f.value.content_root != b.value.content_root {
+                let path = self.path(self.from, s)?;
+                if let Some(there) = self.rebound_at(s, &path)? {
+                    return self.replaced_directory(&path, b, f, there);
+                }
+            }
             let c = Change {
                 serial: s,
                 b: Some(b.value),
@@ -455,15 +461,8 @@ impl Ctx<'_, '_> {
             return Ok(());
         }
         let from_path = self.path(self.from, s)?;
-        let base_path = self.path(BASE, s)?;
-        let replaced = if from_path == base_path {
-            self.resolver.entry(self.into, &base_path)?
-        } else {
-            None
-        };
-        if let Some(there) = replaced {
-            // `into` bound another inode at this path: decided at the path.
-            return self.replaced(&base_path, b, f, there);
+        if let Some(there) = self.rebound_at(s, &from_path)? {
+            return self.replaced(&from_path, b, f, there);
         }
         let result = self.decide(&from_path, [Some(b), Some(f), None])?;
         let c = Change {
@@ -478,6 +477,16 @@ impl Ctx<'_, '_> {
             self.place(s, &from_path)?;
         }
         Ok(())
+    }
+
+    /// The inode `into` binds at `path`, `from`'s path of a serial `into`
+    /// lacks, when that is the serial's base path: another inode `into`
+    /// put there, decided at the path.
+    fn rebound_at(&mut self, serial: u64, path: &str) -> ContentResult<Option<EntryFacts>> {
+        if path != self.path(BASE, serial)? {
+            return Ok(None);
+        }
+        self.resolver.entry(self.into, path)
     }
 
     /// A deferred file whose path `into` rebound to `there`.

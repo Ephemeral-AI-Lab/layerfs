@@ -107,12 +107,19 @@ text) go through `construct_bytes` into the same consumer first.
    binding `from` changed, and `into`'s listing gives the third binding. A
    name `into` binds as `from` does needs nothing. A name `into` left as in
    the base takes `from`'s binding: an add, a move away, a deletion or a
-   replacement. Two different bindings collide. Two new directories at one
-   name are merged by name into `into`'s. Otherwise the entries decide.
+   replacement. Two different bindings collide, and so does a replacement
+   of a directory whose names the other side changed, whichever side made
+   it: `into`'s is found at the name, `from`'s at the directory's unchanged
+   path once `into` is known to lack the directory. Two directories new to
+   the other side at one name are merged by name into `into`'s. Otherwise
+   the entries decide.
 3. **Decisions.** A file changed on both sides, or two entries colliding at
    a name, is decided with the simulator's rules. An entry is its kind plus,
    for a file or symlink, its content. Two directories are the same entry,
-   and their children decide.
+   and their children decide. So a directory one side only added to or
+   removed from is the base's entry: a file or symlink the other side put
+   at its name wins in either direction, with no `/.lww` decision, and the
+   new names below the directory go with it.
 
    | Case | Result |
    | --- | --- |
@@ -141,6 +148,7 @@ text) go through `construct_bytes` into the same consumer first.
    | `from` deleted a directory below which `into` changed | the directory survives with what `into` keeps; a deleted file against an edit is `modify/delete` |
    | `from` bound a serial `into` deleted | resurrected with `from`'s subtree; a file `from` edited there is decided as a deletion against an edit (`modify/delete`), as in the case above |
    | `from` changed a serial `into` deleted | decided as a deletion against a change; a kept file is placed at `from`'s path, its missing parents revived |
+   | one side changed a directory's names, the other replaced it at the same path | decided at the path in either direction: a new directory there takes the changed directory's names; otherwise the entries decide (step 3), so a file or symlink there wins; a lost directory leaves its new serials unbound, a kept one stays whole |
    | a serial new on `from` that loses a collision | left unbound, with the new subtree below it; a file `from` hard-linked at other names only once every link is lost, else it stays at the names the merge keeps |
 
 5. **Paths.** Only a serial that needs a path is named: a decision (for its
