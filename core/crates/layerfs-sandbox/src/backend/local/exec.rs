@@ -1,8 +1,11 @@
 //! One ordinary command to its end in a local Sandbox: the command identity,
 //! the Workspace directory and a search path; nothing of this process's
-//! environment, no shell of its own and no implicit timeout.
-use super::sandbox::Sandbox;
+//! environment, no shell of its own and no implicit timeout. Each command
+//! leads a process group of its own, named in the Sandbox until it is empty,
+//! so what it leaves running ends with the Sandbox.
+use super::{groups, process, process::LocalProcess, sandbox::Sandbox};
 use crate::{backend::docker::ExecRequest, RuntimeError, WireFailure};
+use nix::sys::signal::{killpg, Signal};
 use std::{
     io::{self, Read, Write},
     os::unix::process::{CommandExt, ExitStatusExt},
@@ -47,6 +50,7 @@ impl Sandbox {
             // std drops supplementary groups (setgroups 0) when it sets a uid as root
             .uid(request.identity.uid)
             .gid(request.identity.gid)
+            .process_group(0)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -61,6 +65,23 @@ impl Sandbox {
             failure
         })?;
         let pid = child.id();
+        // named before anything is waited for: the leader is not reaped
+        // before the wait below, so it is observable even once it exited
+        let named = LocalProcess::observe(pid)
+            .and_then(|leader| groups::name(self.directory(), leader).map(|()| leader));
+        let leader = match named {
+            Ok(leader) => leader,
+            Err(error) => {
+                // an unnamed group would outlive the Sandbox: it ends here, once
+                if let Ok(group) = process::pid(pid) {
+                    let _ = killpg(group, Signal::SIGKILL);
+                }
+                let _ = child.wait();
+                let mut failure = self.io(error);
+                failure.attempted = true;
+                return Err(failure);
+            }
+        };
         let out = child.stdout.take();
         let err = child.stderr.take();
         let copied = std::thread::scope(|scope| {
@@ -73,6 +94,8 @@ impl Sandbox {
         });
         // the pipes are closed here either way; the exit is still waited for
         let status = child.wait();
+        // a name left behind is harmless: its group is checked again when ended
+        let _ = groups::forget_if_empty(self.directory(), leader);
         let (out_bytes, err_bytes) = copied.map_err(|error| self.io(error))?;
         let status = status.map_err(|error| self.io(error))?;
         let code = status
