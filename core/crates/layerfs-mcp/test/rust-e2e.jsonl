@@ -9,3 +9,21 @@
 {"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"fs_list","arguments":{"branch":"merge","path":"/"}}}
 {"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"fs_read","arguments":{"branch":"merge","path":"/side.txt"}}}
 {"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"project_list_branches","arguments":{}}}
+{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"branch_fork","arguments":{"name":"tools","from":"main"}}}
+{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"fs_write","arguments":{"branch":"tools","path":"/edit.txt","content":"hello world\n","message":"seed edit"}}}
+{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"fs_edit","arguments":{"branch":"tools","path":"/edit.txt","oldText":"world","newText":"layerfs","message":"edit"}}}
+{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"fs_read","arguments":{"branch":"tools","path":"/edit.txt"}}}
+{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"fs_mkdir","arguments":{"branch":"tools","path":"/notes","message":"mkdir"}}}
+{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"fs_cp","arguments":{"branch":"tools","from":"/edit.txt","to":"/notes/copy.txt","message":"cp"}}}
+{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"fs_mv","arguments":{"branch":"tools","from":"/notes/copy.txt","to":"/notes/moved.txt","message":"mv"}}}
+{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"fs_read","arguments":{"branch":"tools","path":"/notes/moved.txt"}}}
+{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"fs_rm","arguments":{"branch":"tools","path":"/notes/moved.txt","message":"rm"}}}
+{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"fs_list","arguments":{"branch":"tools","path":"/notes"}}}
+{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"fs_apply","arguments":{"branch":"tools","message":"apply batch","changes":[{"op":"mkdir","path":"/batch"},{"op":"write","path":"/batch/a.txt","content":"alpha\n"},{"op":"cp","from":"/batch/a.txt","to":"/batch/b.txt"},{"op":"mv","from":"/batch/b.txt","to":"/batch/c.txt"},{"op":"edit","path":"/batch/c.txt","oldText":"alpha","newText":"beta"},{"op":"rm","path":"/batch/a.txt"}]}}}
+{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"fs_read","arguments":{"branch":"tools","path":"/batch/c.txt"}}}
+{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"fs_list","arguments":{"branch":"tools","path":"/batch"}}}
+{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"bash","arguments":{"command":"printf hello"}}}
+{"jsonrpc":"2.0","id":25,"method":"tools/call","params":{"name":"bash","arguments":{"command":"echo oops >&2; exit 7"}}}
+{"jsonrpc":"2.0","id":26,"method":"tools/call","params":{"name":"bash","arguments":{"command":"sleep 5","timeout_ms":100}}}
+{"jsonrpc":"2.0","id":27,"method":"tools/call","params":{"name":"bash","arguments":{"command":"pwd","cwd":"/work/layerfs/core"}}}
+{"jsonrpc":"2.0","id":28,"method":"tools/call","params":{"name":"fs_list","arguments":{"branch":"main","path":"/"}}}

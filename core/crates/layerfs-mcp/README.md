@@ -5,8 +5,11 @@ Native MCP stdio server for peri. It opens a sealed LayerFS Store through
 in the loop.
 
 Scope: `project_init`, `project_list_branches`, branch fork/merge/publish,
-and `fs` read/list/stat/write/glob/grep. Workspace `mount`/`exec` are not
-included: they need the Linux Sandbox daemon and FUSE.
+`fs` read/list/stat/write/apply/rm/mkdir/mv/cp/edit/glob/grep, and `store_open`.
+The `bash` tool runs `/bin/sh -c` inside the Store container; it is not
+LayerFS-backed, so command changes do not create a branch commit.
+Workspace `mount`/`exec` are not included: they need the Linux Sandbox daemon
+and FUSE.
 
 ## Build
 

@@ -23,14 +23,20 @@ use serde_json::{json, Value as Json};
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tokio::process::Command;
 
 const SERVER: &str = "layerfs";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const INSTRUCTIONS: &str = "LayerFS Store tools. Call project_init with a source path, or store_open with an existing project record. workspace.exec needs the Linux Sandbox bridge and is not exposed here.";
+const INSTRUCTIONS: &str = "LayerFS Store tools. Call project_init with a source path, or store_open with an existing project record. workspace.exec needs the Linux Sandbox bridge and is not exposed here; use bash for shell commands in the Store container.";
 const LOCATOR: &str = "/layerfs-store/global/store.sqlite";
 const INIT_DEADLINE: Duration = Duration::from_secs(60);
+const BASH_DEFAULT_CWD: &str = "/work/layerfs";
+const BASH_DEFAULT_TIMEOUT_MS: u64 = 30_000;
+const BASH_MAX_TIMEOUT_MS: u64 = 120_000;
+const BASH_OUTPUT_CAP: usize = 200_000;
 
 struct App {
     service: Option<StoreService>,
@@ -87,11 +93,18 @@ impl Service<RoleServer> for LayerfsServer {
                     .arguments
                     .map(Json::Object)
                     .unwrap_or_else(|| json!({}));
-                let mut app = self
-                    .app
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                ServerResult::CallToolResult(app.call_tool(&request.params.name, &args))
+                if request.params.name == "bash" {
+                    // `bash` touches no Store state. Running it without the
+                    // App lock keeps a slow command from serializing Store
+                    // calls behind it.
+                    ServerResult::CallToolResult(bash_tool(&args).await)
+                } else {
+                    let mut app = self
+                        .app
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    ServerResult::CallToolResult(app.call_tool(&request.params.name, &args))
+                }
             }
             // peri's client probes 2026-07-28 discovery first; refusing it
             // makes rmcp fall back to the legacy initialize handshake. This
@@ -204,6 +217,12 @@ impl App {
                     "fs_list" => "fs.list",
                     "fs_stat" => "fs.stat",
                     "fs_write" => "fs.write",
+                    "fs_apply" => "fs.apply",
+                    "fs_rm" => "fs.rm",
+                    "fs_mkdir" => "fs.mkdir",
+                    "fs_mv" => "fs.mv",
+                    "fs_cp" => "fs.cp",
+                    "fs_edit" => "fs.edit",
                     "fs_glob" => "fs.glob",
                     "fs_grep" => "fs.grep",
                     other => return tool_error(&format!("unknown tool {other}")),
@@ -450,9 +469,121 @@ fn tool_error(message: &str) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message)])
 }
 
+/// Run `/bin/sh -c` in the Store container. A non-zero exit status is a
+/// normal result; only setup or spawn failure is an MCP error. A command that
+/// outlives `timeout_ms` is killed and reported as exit code 124.
+async fn bash_tool(args: &Json) -> CallToolResult {
+    match run_bash(args).await {
+        Ok(value) => tool_text(value),
+        Err(error) => tool_error(&error),
+    }
+}
+
+async fn run_bash(args: &Json) -> Result<Json, String> {
+    let command = text_arg(args, "command")?;
+    let cwd = args
+        .get("cwd")
+        .and_then(Json::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(BASH_DEFAULT_CWD);
+    let timeout_ms = match args.get("timeout_ms") {
+        None | Some(Json::Null) => BASH_DEFAULT_TIMEOUT_MS,
+        Some(value) => value
+            .as_u64()
+            .ok_or_else(|| "timeout_ms must be a non-negative integer".to_owned())?
+            .min(BASH_MAX_TIMEOUT_MS),
+    };
+    let started = Instant::now();
+    let mut shell = Command::new("/bin/sh");
+    shell
+        .arg("-c")
+        .arg(command)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    {
+        // Put the shell in its own process group. Killing the group on
+        // timeout also terminates grandchildren that outlive the shell.
+        shell.process_group(0);
+    }
+    let child = shell.spawn().map_err(|error| format!("bash: {error}"))?;
+    let pid = child.id();
+    let wait = child.wait_with_output();
+    tokio::pin!(wait);
+    let output = tokio::time::timeout(Duration::from_millis(timeout_ms), &mut wait).await;
+    let duration_ms = started.elapsed().as_millis() as u64;
+    match output {
+        Ok(Ok(output)) => {
+            let (stdout, stdout_truncated) = capped(&output.stdout);
+            let (stderr, stderr_truncated) = capped(&output.stderr);
+            Ok(json!({
+                "exitCode": output.status.code().unwrap_or(-1),
+                "stdout": String::from_utf8_lossy(stdout),
+                "stderr": String::from_utf8_lossy(stderr),
+                "truncated": stdout_truncated || stderr_truncated,
+                "cwd": cwd,
+                "durationMs": duration_ms
+            }))
+        }
+        Ok(Err(error)) => Err(format!("bash: {error}")),
+        Err(_) => {
+            #[cfg(unix)]
+            {
+                if let Some(pid) = pid {
+                    // SAFETY: the child is a process-group leader, so a
+                    // negative pid sends SIGKILL only to its own group.
+                    unsafe {
+                        libc::kill(-(pid as i32), libc::SIGKILL);
+                    }
+                }
+                // Reap the killed tree. The future owns the Child and its
+                // pipes; if the shell exits first, this completes normally.
+                let _ = tokio::time::timeout(Duration::from_secs(2), &mut wait).await;
+            }
+            Ok(json!({
+                "exitCode": 124,
+                "stdout": "",
+                "stderr": "",
+                "truncated": false,
+                "cwd": cwd,
+                "durationMs": duration_ms
+            }))
+        }
+    }
+}
+
+fn capped(bytes: &[u8]) -> (&[u8], bool) {
+    if bytes.len() > BASH_OUTPUT_CAP {
+        (&bytes[..BASH_OUTPUT_CAP], true)
+    } else {
+        (bytes, false)
+    }
+}
+
 fn tools() -> Vec<Tool> {
     let string = || json!({ "type": "string" });
     let integer = || json!({ "type": "integer", "minimum": 0 });
+    let change = || {
+        json!({
+            "type": "object",
+            "properties": {
+                "op": {
+                    "type": "string",
+                    "enum": ["write", "edit", "mkdir", "rm", "cp", "mv"]
+                },
+                "path": string(),
+                "content": string(),
+                "oldText": string(),
+                "newText": string(),
+                "from": string(),
+                "to": string()
+            },
+            "required": ["op"]
+        })
+    };
     vec![
         tool(
             "project_init",
@@ -549,6 +680,62 @@ fn tools() -> Vec<Tool> {
             &["branch", "path", "content"],
         ),
         tool(
+            "fs_apply",
+            "Apply a list of changes on a branch and publish one commit.",
+            json!({
+                "changes": { "type": "array", "items": change() },
+                "branch": string(),
+                "message": string()
+            }),
+            &["changes", "branch"],
+        ),
+        tool(
+            "fs_rm",
+            "Remove a path on a branch and publish one commit.",
+            json!({ "path": string(), "branch": string(), "message": string() }),
+            &["path", "branch"],
+        ),
+        tool(
+            "fs_mkdir",
+            "Create a directory on a branch and publish one commit.",
+            json!({ "path": string(), "branch": string(), "message": string() }),
+            &["path", "branch"],
+        ),
+        tool(
+            "fs_mv",
+            "Move a path on a branch and publish one commit.",
+            json!({
+                "from": string(),
+                "to": string(),
+                "branch": string(),
+                "message": string()
+            }),
+            &["from", "to", "branch"],
+        ),
+        tool(
+            "fs_cp",
+            "Copy a path on a branch and publish one commit.",
+            json!({
+                "from": string(),
+                "to": string(),
+                "branch": string(),
+                "message": string()
+            }),
+            &["from", "to", "branch"],
+        ),
+        tool(
+            "fs_edit",
+            "Replace one occurrence of a text in a file on a branch and publish one commit.",
+            json!({
+                "path": string(),
+                "oldText": string(),
+                "newText": string(),
+                "branch": string(),
+                "message": string()
+            }),
+            &["path", "oldText", "newText", "branch"],
+        ),
+        tool(
             "fs_glob",
             "Glob paths at a branch or commit.",
             json!({ "branch": string(), "commit": string(), "pattern": string() }),
@@ -559,6 +746,16 @@ fn tools() -> Vec<Tool> {
             "Grep file contents at a branch or commit.",
             json!({ "branch": string(), "commit": string(), "pattern": string(), "path": string() }),
             &["pattern"],
+        ),
+        tool(
+            "bash",
+            "Run a shell command with /bin/sh -c in the Store container. A non-zero exit code is a normal result; timeout_ms caps it and reports exit code 124.",
+            json!({
+                "command": string(),
+                "cwd": string(),
+                "timeout_ms": { "type": "integer", "minimum": 0, "maximum": BASH_MAX_TIMEOUT_MS }
+            }),
+            &["command"],
         ),
     ]
 }

@@ -18,6 +18,7 @@ layerfs-persistence = { path = "../layerfs-persistence" }
 layerfs-storage = { path = "../layerfs-storage" }
 layerfs-store-service = { path = "../layerfs-store-service" }
 layerfs-telemetry = { path = "../layerfs-telemetry" }
+libc = "0.2"
 rmcp = { version = "=3.5.1", default-features = false, features = ["server", "transport-io"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt", "io-std"] }
+tokio = { version = "1", features = ["rt", "io-std", "process", "time"] }
