@@ -10,8 +10,10 @@
 //! where this process opens it (`storePath`), so the daemon setup and the
 //! Store's locator name that path instead of `/layerfs-store`. The daemon
 //! listens on 127.0.0.1 only. Commands run as the same nonroot identity as
-//! in a container. Start, failure and reclaim follow the Docker route: one
-//! attempt, a creation intent while the outcome is open, and a failed start's
+//! in a container. A native Sandbox (`deploy.sandbox` `native`) needs no
+//! root: its daemon serves Workspaces over loopback NFS (`LAYERFS_KERNEL=nfs`)
+//! to this host's own client, and its commands run as this user. Start,
+//! failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
 //! daemon stopped and its directory deleted, each once.
 use crate::job::{failed, refused};
 use crate::registry::{lock, text, SandboxState, SANDBOXES};
@@ -37,8 +39,9 @@ pub(crate) fn start(
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
+    let native = crate::runtime::native(deploy);
     // Inputs are read first, so a refused request leaves no creation intent.
-    if !crate::discovery::root() {
+    if !native && !crate::discovery::root() {
         return Err(refused(
             "Unsupported",
             "LAYERFS_SANDBOX=local needs root: its daemon mounts FUSE and its commands run as \
@@ -51,8 +54,12 @@ pub(crate) fn start(
             "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a local Sandbox needs it",
         )
     })?;
-    let local = Local::new(root)
-        .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
+    let local = if native {
+        Local::native(root).map(|local| local.environment(native_environment()))
+    } else {
+        Local::new(root)
+    }
+    .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let store = match args.get_text("storePath") {
         Some(path) if Path::new(path).is_absolute() => path.to_owned(),
@@ -74,7 +81,7 @@ pub(crate) fn start(
         &saved_directory,
         &id,
         project,
-        (local, executable, store),
+        (local, executable, store, native),
     );
     if made.is_err() {
         let _ = std::fs::remove_dir(&saved_directory);
@@ -90,7 +97,7 @@ fn start_claimed(
     saved_directory: &Path,
     id: &str,
     (project, installed): (&crate::registry::Project, StoreManifest),
-    (local, executable, store): (Local, PathBuf, String),
+    (local, executable, store, native): (Local, PathBuf, String, bool),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let sandbox_name = sandbox_name(args, id)?;
@@ -106,6 +113,10 @@ fn start_claimed(
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let mut setup = crate::sandbox::setup(daemon.private, controller.public);
+    if native {
+        // the native route's commands run as this user, unconfined
+        (setup.command_uid, setup.command_gid) = crate::discovery::user();
+    }
     setup.listen = "127.0.0.1:0".into();
     setup.store = store.clone();
     setup.overlay = path_text(&paths.overlay)?;
@@ -209,6 +220,25 @@ fn start_claimed(
     let state = Arc::new(state);
     lock(&SANDBOXES)?.insert(state.directory.clone(), state.clone());
     Ok(state)
+}
+
+/// What a native Sandbox's daemon starts with besides `PATH`: the NFS
+/// route, and the mount helper and reference overrides this process was
+/// given (`LAYERFS_NFS_*`), so a test host can name its own client.
+fn native_environment() -> Vec<(String, String)> {
+    let mut environment = vec![("LAYERFS_KERNEL".to_owned(), "nfs".to_owned())];
+    for name in [
+        "LAYERFS_NFS_MOUNT",
+        "LAYERFS_NFS_UNMOUNT",
+        "LAYERFS_NFS_FORCE",
+        "LAYERFS_NFS_FLUSH",
+        "LAYERFS_NFS_REFRESH",
+    ] {
+        if let Ok(value) = std::env::var(name) {
+            environment.push((name.to_owned(), value));
+        }
+    }
+    environment
 }
 
 /// A local Sandbox's directory name: `<prefix><project>-<id>`, the name its

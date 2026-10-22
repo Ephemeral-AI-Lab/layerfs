@@ -5,7 +5,7 @@ mod discovery;
 mod dispatch;
 mod exec;
 mod job;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod local;
 mod output;
 mod pool;

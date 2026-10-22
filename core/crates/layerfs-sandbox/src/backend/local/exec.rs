@@ -1,9 +1,10 @@
 //! One ordinary command to its end in a local Sandbox: the command identity,
-//! the Workspace directory and a search path; nothing of this process's
-//! environment, no shell of its own and no implicit timeout. Each command
-//! leads a process group of its own, named in the Sandbox until it is empty,
-//! so what it leaves running ends with the Sandbox.
-use super::{groups, process, process::LocalProcess, sandbox::Sandbox};
+//! the Workspace directory and a search path (on macOS this process's own);
+//! nothing else of this process's environment, no shell of its own and no
+//! implicit timeout. Each command leads a process group of its own, named in
+//! the Sandbox until it is empty, so what it leaves running ends with the
+//! Sandbox.
+use super::{groups, process, process::LocalProcess, sandbox::Sandbox, search::search_path};
 use crate::{backend::docker::ExecRequest, RuntimeError, WireFailure};
 use nix::sys::signal::{killpg, Signal};
 use std::{
@@ -12,9 +13,6 @@ use std::{
     path::Path,
     process::{Command, Stdio},
 };
-
-/// The search path a command starts with, before its own environment.
-const PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 /// One command's end: its exit code (128 + the signal for one a signal
 /// ended, as the Engine reports it), its process id (diagnostic only) and the
@@ -45,7 +43,7 @@ impl Sandbox {
         command
             .args(&request.arguments[1..])
             .env_clear()
-            .env("PATH", PATH)
+            .env("PATH", search_path())
             .current_dir(Path::new(&request.directory))
             // std drops supplementary groups (setgroups 0) when it sets a uid as root
             .uid(request.identity.uid)

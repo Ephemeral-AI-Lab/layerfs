@@ -1,6 +1,6 @@
 //! Which runtime a deployment selects, and what a local Sandbox record may
 //! name. Included by runtime.rs.
-use super::{local, placement};
+use super::{local, native, placement};
 use layerfs_bridge::control::SdkValue;
 
 fn deploy(fields: &[(&str, &str)]) -> SdkValue {
@@ -79,6 +79,28 @@ fn placement_keeps_runtimes_apart_even_for_an_image_named_local() {
             .unwrap()
             .is_none()
     );
+}
+
+#[test]
+fn native_is_a_local_daemon_placed_apart_from_local_and_docker() {
+    let native_deploy = deploy(&[("sandbox", "native")]);
+    assert!(local(&native_deploy).unwrap());
+    assert!(native(&native_deploy));
+    assert!(!native(&deploy(&[("sandbox", "local")])));
+    assert!(!native(&deploy(&[])));
+    let native_record = placed(Some("native"), "local");
+    let local_record = placed(Some("local"), "local");
+    let docker_record = placed(None, &format!("sha256:{}", "a".repeat(64)));
+    let natively = SdkValue::map([("deploy", native_deploy)]);
+    let natively = placement(&natively).unwrap().unwrap();
+    assert!(natively.admits(&native_record));
+    assert!(!natively.admits(&local_record));
+    assert!(!natively.admits(&docker_record));
+    let locally = SdkValue::map([("deploy", deploy(&[("sandbox", "local")]))]);
+    let locally = placement(&locally).unwrap().unwrap();
+    assert!(!locally.admits(&native_record));
+    let docker = SdkValue::map([("deploy", deploy(&[]))]);
+    assert!(!placement(&docker).unwrap().unwrap().admits(&native_record));
 }
 
 /// A call's fields for Sandbox 1 of project `p` deployed locally under `root`.

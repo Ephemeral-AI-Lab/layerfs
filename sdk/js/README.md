@@ -75,7 +75,7 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process; the client option `storePath` wins. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. Linux only, on a local filesystem the daemons share; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional; the client option `daemonHost` wins. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
-| `LAYERFS_SANDBOX` | Optional; the client option `sandbox` wins. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `local`: a Sandbox is a daemon process on this machine, with no container and no Docker setting read (see [Local Sandboxes](#local-sandboxes-no-docker)). Any other value is refused as `InvalidInput` before anything is made. |
+| `LAYERFS_SANDBOX` | Optional; the client option `sandbox` wins. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `local`: a Sandbox is a daemon process on this machine, with no container and no Docker setting read (see [Local Sandboxes](#local-sandboxes-no-docker)). `native`: the same on macOS without root: Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user (see [Native Sandboxes](#native-sandboxes-macos)). Any other value is refused as `InvalidInput` before anything is made. |
 | `LAYERFS_LOCAL_DIR` | With `LAYERFS_SANDBOX=local`, required: an existing absolute directory, owned by the running user, not group/other writable and traversable by others (0755). Each local Sandbox gets its own directory under it. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [Call trace](#call-trace)); unset means no trace. |
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
@@ -287,6 +287,41 @@ observation: Workspace calls to it are refused, and the next mount or
 `operator.sandbox.list()` reclaims it, detaching any mount the dead daemon
 left before deleting its directory. Nothing outside that directory is
 removed; the Store is never touched.
+
+## Native Sandboxes (macOS)
+
+`LAYERFS_SANDBOX=native` is the local runtime for macOS, with no root, no
+Docker, no kernel extension and no macFUSE or FUSE-T. Each Sandbox's daemon
+runs as a process of this user and serves its Workspaces over NFSv3 on
+127.0.0.1 (`LAYERFS_KERNEL=nfs`); macOS's own client mounts them
+(`/sbin/mount_nfs`, as this user) under the Sandbox's `workspaces/`. Commands
+run as this user, in this machine's namespaces: like `local`, **it isolates
+nothing** beyond what the caller's own sandbox (for instance Seatbelt)
+imposes. A command starts with this process's `PATH` (so `node`, Homebrew's
+tools and the like are found as in the caller's own shell) and its own
+environment, nothing else of this process's; a `local` Sandbox on Linux keeps
+a container's fixed search path.
+
+It needs the daemon executable (`LAYERFS_DAEMON`), `LAYERFS_LOCAL_DIR` (owned
+by this user, 0755; the directories above it need not be traversable by
+others) and the client's `storePath` on a local apfs or hfs volume; a Store on
+any other filesystem is refused `Unsupported`. Directory layout, records, idle
+close and reclaim are those of local Sandboxes; a record's `runtime` is
+`native`, and native, local and Docker Sandboxes of one project are never
+mixed. Before a Commit the daemon writes back what the client buffered; after
+a Commit or merge installs another root, it makes the client drop the replaced
+files' cached attributes at once.
+
+`LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE` and `_FLUSH` replace the daemon's
+helper commands (`{port}` and `{dir}` are filled in). The default mount is
+`/sbin/mount_nfs -o vers=3,tcp,port={port},mountport={port},locallocks,nfc,actimeo=60,rsize=131072,wsize=131072,soft,intr,timeo=20,retrans=6,nobrowse 127.0.0.1:/ {dir}`.
+`LAYERFS_NFS_REFRESH=0` turns the refresh after an install off (the client
+then revalidates within `actimeo`, 60 s).
+
+Limits: background processes (`operator.process.*`) still read `/proc` and are
+not available on macOS; many small writes cost about six times APFS's time;
+checked on Apple silicon with macOS 27.2. On Linux the Store install needs
+root, which a native Sandbox's commands may not be: use `local` there.
 
 ## Internal operator
 

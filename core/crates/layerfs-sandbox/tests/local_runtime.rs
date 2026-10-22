@@ -286,6 +286,30 @@ fn a_command_runs_as_its_identity_in_its_directory_with_only_its_environment() {
 }
 
 #[test]
+fn the_daemon_and_its_commands_start_with_a_containers_search_path() {
+    // on Linux, whatever this process's PATH is (macOS: tests/local_search_path.rs)
+    const CONTAINER: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+    let (root, daemon) = fixture(LISTENS);
+    let mut sandbox = started(&root, &daemon, "layerfs-shop-path");
+    let log = String::from_utf8(sandbox.log_tail(100, 4096).unwrap()).unwrap();
+    assert!(
+        log.lines().any(|line| line == format!("PATH={CONTAINER}")),
+        "{log}"
+    );
+    let (code, out, _) = run(&sandbox, &["/bin/sh", "-c", "printf %s \"$PATH\""], &[]);
+    assert_eq!((code, out.as_str()), (0, CONTAINER));
+    // a command's own PATH still wins
+    let (code, out, _) = run(
+        &sandbox,
+        &["/bin/sh", "-c", "printf %s \"$PATH\""],
+        &["PATH=/opt/tools/bin:/usr/bin:/bin"],
+    );
+    assert_eq!((code, out.as_str()), (0, "/opt/tools/bin:/usr/bin:/bin"));
+    sandbox.stop(1).unwrap();
+    sandbox.delete().unwrap();
+}
+
+#[test]
 fn a_daemon_that_ends_is_the_stopped_observation_and_only_its_delete_remains() {
     let (root, daemon) = fixture(LISTENS);
     let sandbox = started(&root, &daemon, "layerfs-shop-3");

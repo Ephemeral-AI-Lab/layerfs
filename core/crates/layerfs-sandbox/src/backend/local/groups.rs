@@ -124,6 +124,11 @@ fn members(table: &[(u32, process::Stat)], leader: LocalProcess) -> Vec<u32> {
 
 /// Every process of this kernel now, with its stat. One that ends while
 /// being read is left out.
+#[cfg(target_os = "macos")]
+fn processes() -> io::Result<Vec<(u32, process::Stat)>> {
+    super::darwin::processes()
+}
+#[cfg(target_os = "linux")]
 fn processes() -> io::Result<Vec<(u32, process::Stat)>> {
     let mut table = Vec::new();
     for item in fs::read_dir("/proc")? {

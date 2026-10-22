@@ -3,6 +3,7 @@
 use super::{
     process::LocalProcess,
     sandbox::{Sandbox, LOG},
+    search::search_path,
 };
 use crate::{ContainerId, RuntimeError};
 use nix::fcntl::OFlag;
@@ -23,14 +24,14 @@ use std::{
 const MARKER: &[u8] = b"LAYERFS_DAEMON_LISTEN ";
 /// Pause between two reads of a starting daemon's output.
 const PAUSE: Duration = Duration::from_millis(10);
-/// The daemon's environment: a search path and nothing of this process's.
-const PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 /// A local runtime root: one directory per Sandbox under it.
 #[derive(Clone, Debug)]
 pub struct Local {
     root: PathBuf,
     name: Option<String>,
+    /// Variables the daemon starts with besides `PATH`.
+    environment: Vec<(String, String)>,
 }
 
 /// Where one Sandbox keeps its parts, all under its directory.
@@ -80,6 +81,30 @@ impl Local {
     /// another identity, so one closed directory on the way, such as a 0700
     /// `/root`, would fail every command at spawn).
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
+        let local = Self::native(root.as_ref())?;
+        let root = root.as_ref();
+        // every directory on the path as given and on the path it resolves to
+        let resolved = fs::canonicalize(root)?;
+        for directory in root.ancestors().chain(resolved.ancestors()) {
+            let metadata = fs::metadata(directory)?;
+            if !metadata.is_dir() || metadata.mode() & 0o001 == 0 {
+                return Err(RuntimeError::Io(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!(
+                        "{} is not traversable by others (o+x); local Sandbox commands run as \
+                         another identity and must pass it to reach their Workspace",
+                        directory.display()
+                    ),
+                )));
+            }
+        }
+        Ok(local)
+    }
+    /// Selects `root` for the native route, whose commands run as this user
+    /// (no other identity): the root's own checks as in [`Self::new`], but
+    /// the directories above it need not be traversable by others (a macOS
+    /// home is 0750).
+    pub fn native(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         let root = root.as_ref();
         if !root.is_absolute()
             || root
@@ -98,25 +123,18 @@ impl Local {
                 "local runtime root must be a directory of this user, not group/other writable, traversable by others (0755)",
             ));
         }
-        // every directory on the path as given and on the path it resolves to
-        let resolved = fs::canonicalize(root)?;
-        for directory in root.ancestors().chain(resolved.ancestors()) {
-            let metadata = fs::metadata(directory)?;
-            if !metadata.is_dir() || metadata.mode() & 0o001 == 0 {
-                return Err(RuntimeError::Io(io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    format!(
-                        "{} is not traversable by others (o+x); local Sandbox commands run as \
-                         another identity and must pass it to reach their Workspace",
-                        directory.display()
-                    ),
-                )));
-            }
-        }
         Ok(Self {
             root: root.to_owned(),
             name: None,
+            environment: Vec::new(),
         })
+    }
+    /// Starts the next daemon with `environment` besides its search path (the
+    /// native route's `LAYERFS_KERNEL=nfs` and its mount helpers). Nothing
+    /// else of this process's environment reaches it.
+    pub fn environment(mut self, environment: Vec<(String, String)>) -> Self {
+        self.environment = environment;
+        self
     }
     /// Names the next Sandbox's directory `name`, under the Docker name rule
     /// (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at
@@ -154,8 +172,8 @@ impl Local {
     /// Makes the named Sandbox's directory, writes `config` (the encoded
     /// daemon setup naming [`Self::paths`]) 0600, spawns `executable
     /// --config <setup>` in its own process group with no inherited
-    /// environment, and waits up to `wait` for its listener line. Once
-    /// anything is made, a failure returns it.
+    /// environment but the search path, and waits up to `wait` for its
+    /// listener line. Once anything is made, a failure returns it.
     pub fn create(
         &self,
         executable: &Path,
@@ -204,7 +222,8 @@ impl Local {
                 .arg("--config")
                 .arg(&paths.config)
                 .env_clear()
-                .env("PATH", PATH)
+                .env("PATH", search_path())
+                .envs(self.environment.iter().map(|(k, v)| (k, v)))
                 .current_dir(&paths.directory)
                 .stdin(Stdio::null())
                 .stdout(output)

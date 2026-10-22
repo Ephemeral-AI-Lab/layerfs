@@ -1,8 +1,13 @@
 //! A local process named by its id, kernel start time and boot, so a reused
 //! id, or the same id and start time after a reboot or snapshot restore, is
-//! never taken for the process that was started.
+//! never taken for the process that was started. On macOS the same three
+//! facts come from `proc_pidinfo` and `sysctl` (see `darwin.rs`).
+#[cfg(target_os = "macos")]
+pub(super) use super::darwin::{boot, stat};
 use nix::{sys::signal::Signal, unistd::Pid};
-use std::{io, sync::OnceLock};
+use std::io;
+#[cfg(target_os = "linux")]
+use std::sync::OnceLock;
 
 /// One started process: its id, its start time in clock ticks since boot
 /// (`/proc/<pid>/stat` field 22) and the boot it started in
@@ -61,6 +66,7 @@ impl LocalProcess {
 
 /// This boot's id (`/proc/sys/kernel/random/boot_id`, a UUID) as a number,
 /// read once per process.
+#[cfg(target_os = "linux")]
 pub(super) fn boot() -> io::Result<u128> {
     static BOOT: OnceLock<u128> = OnceLock::new();
     if let Some(boot) = BOOT.get() {
@@ -92,6 +98,7 @@ impl Stat {
 
 /// State, process group and start time of `pid`. The command name may hold
 /// spaces and parentheses, so fields are counted after its last `)`.
+#[cfg(target_os = "linux")]
 pub(super) fn stat(pid: u32) -> io::Result<Stat> {
     let text = std::fs::read_to_string(format!("/proc/{pid}/stat"))?;
     let invalid = || io::Error::new(io::ErrorKind::InvalidData, "process stat fields");

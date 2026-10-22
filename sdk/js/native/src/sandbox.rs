@@ -114,9 +114,9 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
         ));
     };
     if crate::runtime::local(deploy)? {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         return crate::local::start(args, directory, (&project, installed));
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         return Err(refused(
             "Unsupported",
             "LAYERFS_SANDBOX=local runs its daemon as a process of this kernel, which needs \

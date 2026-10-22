@@ -1,4 +1,4 @@
 //! Concrete ordinary runtime providers.
 pub mod docker;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod local;

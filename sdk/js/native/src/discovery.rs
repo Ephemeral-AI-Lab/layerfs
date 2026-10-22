@@ -10,7 +10,7 @@ use layerfs_bridge::{
     provision::StoreManifest,
 };
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_sandbox::backend::local::{self, LocalProcess};
 use layerfs_sandbox::{
     backend::docker::{Docker, Sandbox, SandboxRequest},
@@ -29,6 +29,7 @@ use std::{
 };
 extern "C" {
     fn geteuid() -> u32;
+    fn getegid() -> u32;
     fn flock(fd: i32, operation: i32) -> i32;
 }
 const LOCK_EX: i32 = 2;
@@ -73,9 +74,14 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
 }
 /// Whether this process runs as root, which the local runtime needs: its
 /// daemon mounts FUSE and its commands run as another uid/gid.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) fn root() -> bool {
     unsafe { geteuid() == 0 }
+}
+/// This process's effective uid and gid: a native Sandbox's command
+/// identity (its commands run as this user).
+pub(crate) fn user() -> (u32, u32) {
+    unsafe { (geteuid(), getegid()) }
 }
 /// Where a project's Sandboxes live: `LAYERFS_HOME/<project>/sandboxes/<n>/`
 /// (#373), numbered from 1 within the project.
@@ -376,7 +382,7 @@ pub(crate) fn save_sandbox(
             ("volume", SdkValue::text(&runtime.request().store_volume)),
             ("labels", labels(&runtime.request().labels)),
         ]),
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         Runtime::Local(runtime) => {
             let process = runtime
                 .process()
@@ -385,7 +391,16 @@ pub(crate) fn save_sandbox(
                 .boot
                 .ok_or_else(|| refused("Failed", "local Sandbox daemon has no boot id"))?;
             fields.extend([
-                ("runtime", SdkValue::text(crate::runtime::LOCAL)),
+                (
+                    "runtime",
+                    SdkValue::text(if crate::runtime::native(deploy) {
+                        crate::runtime::NATIVE
+                    } else {
+                        crate::runtime::LOCAL
+                    }),
+                ),
+                ("uid", SdkValue::Int(i64::from(state.identity.uid))),
+                ("gid", SdkValue::Int(i64::from(state.identity.gid))),
                 (
                     "directory",
                     SdkValue::text(runtime.directory().display().to_string()),
@@ -477,7 +492,7 @@ fn runtime(value: &SdkValue) -> Result<(Docker, ContainerId, SandboxRequest)> {
 /// a local daemon process, its directory and port.
 pub(crate) enum Recorded {
     Docker(Docker, ContainerId, SandboxRequest),
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Local {
         directory: PathBuf,
         id: ContainerId,
@@ -488,7 +503,10 @@ pub(crate) enum Recorded {
 }
 /// Reads Sandbox `id`'s record's runtime.
 pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
-    if value.get_text("runtime") != Some(crate::runtime::LOCAL) {
+    if !matches!(
+        value.get_text("runtime"),
+        Some(crate::runtime::LOCAL | crate::runtime::NATIVE)
+    ) {
         let (docker, container, request) = runtime(value)?;
         return Ok(Recorded::Docker(docker, container, request));
     }
@@ -500,7 +518,7 @@ pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Re
 /// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere. A record
 /// without `boot` was written before boot ids were kept: its daemon is
 /// matched by id and start time as then, and never signalled.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
     let directory = PathBuf::from(registry::text(value, "directory")?);
     let expected = crate::local::directory(args, id)?;
@@ -550,7 +568,7 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
         labels: labels(value)?,
     })
 }
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn local_record(_: &SdkValue, id: &str, _: &SdkValue) -> Result<Recorded> {
     Err(refused(
         "Unsupported",
@@ -564,7 +582,7 @@ impl Recorded {
             Self::Docker(docker, id, request) => {
                 Sandbox::reopen(docker, id, request).map(Runtime::Docker)
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {
                 directory,
                 id,
@@ -580,7 +598,7 @@ impl Recorded {
             Self::Docker(docker, id, request) => {
                 Runtime::Docker(Sandbox::stopped(docker, id, request))
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {
                 directory,
                 id,
@@ -613,7 +631,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     // a local daemon listens on this kernel's loopback; no other host reaches it
     let host = match recorded {
         Recorded::Docker(..) => crate::pool::daemon_host(args),
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         Recorded::Local { .. } => None,
     };
     let runtime = recorded.reopen().map_err(|failure| {
@@ -638,13 +656,22 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         name: value.get_text("name").unwrap_or_default().to_owned(),
         directory,
         runtime,
-        identity: CommandIdentity { uid: 501, gid: 20 },
+        identity: recorded_identity(&value),
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
     });
     refresh(&state)?;
     Ok(state)
+}
+/// The command identity a Sandbox record names: a native Sandbox's is the
+/// user who started it (`uid`, `gid`); every other runs as 501:20.
+fn recorded_identity(value: &SdkValue) -> CommandIdentity {
+    let id = |key: &str| value.get_int(key).and_then(|n| u32::try_from(n).ok());
+    match (id("uid"), id("gid")) {
+        (Some(uid), Some(gid)) => CommandIdentity { uid, gid },
+        _ => CommandIdentity { uid: 501, gid: 20 },
+    }
 }
 /// Refresh shared executor/mount metadata without repeating an operation.
 pub(crate) fn refresh(state: &SandboxState) -> Result<()> {
