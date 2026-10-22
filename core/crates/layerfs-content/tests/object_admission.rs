@@ -104,7 +104,9 @@ fn cases() -> Vec<Case> {
                             kind: InodeKind::Directory,
                             namespace_ref_count: 0,
                             content_root: a,
-                            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(b),
+                            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+                                b,
+                            ),
                         },
                     ),
                     (
@@ -113,7 +115,9 @@ fn cases() -> Vec<Case> {
                             kind: InodeKind::RegularFile,
                             namespace_ref_count: 2,
                             content_root: b,
-                            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(a),
+                            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+                                a,
+                            ),
                         },
                     ),
                 ],
