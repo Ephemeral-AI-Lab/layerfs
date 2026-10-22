@@ -79,7 +79,9 @@ impl Kind for Inodes {
             kind: InodeKind::RegularFile,
             namespace_ref_count: 1 + payload % 3,
             content_root: synthetic(&format!("localized/content/{payload}")),
-            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(&format!("localized/metadata/{}", payload % 5))),
+            metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+                &format!("localized/metadata/{}", payload % 5),
+            )),
         }
     }
     fn apply(
