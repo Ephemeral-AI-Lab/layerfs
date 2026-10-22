@@ -54,13 +54,21 @@ fn main() {
     let record = Answer {
         id: 1,
         reply: Reply::Sdk(SdkValue::map([
-            ("manifest", SdkValue::Bytes(manifest.encode().expect("manifest"))),
-            ("installed", SdkValue::Bytes(installed.encode().expect("installed"))),
+            (
+                "manifest",
+                SdkValue::Bytes(manifest.encode().expect("manifest")),
+            ),
+            (
+                "installed",
+                SdkValue::Bytes(installed.encode().expect("installed")),
+            ),
         ])),
     }
     .encode()
     .expect("record");
-    let path = std::path::Path::new(home).join(project).join("project.record");
+    let path = std::path::Path::new(home)
+        .join(project)
+        .join("project.record");
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
