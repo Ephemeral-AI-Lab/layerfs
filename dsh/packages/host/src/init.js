@@ -1,4 +1,4 @@
-// "Init LayerFS": imports a folder as a new LayerFS project on its own
+﻿// "Init LayerFS": imports a folder as a new LayerFS project on its own
 // Docker volume, the dsh workspace folder's default project. A simulated project
 // (backend "sim") is imported into the simulator (sim/) instead: no Docker,
 // no deployment settings.
@@ -13,6 +13,7 @@ import { promisify } from "node:util";
 import { ensureBox } from "./box.js";
 import { missingDeployment } from "./config.js";
 import { clientFor, isSim, release } from "./layerfs-client.js";
+import { dockerHost } from "./container.js";
 
 const run = promisify(execFile);
 const NAME = /^[a-z0-9](?:[a-z0-9_.-]{0,61}[a-z0-9])?$/;
@@ -30,7 +31,7 @@ export function nameFrom(folder) {
 }
 
 const free = (name, taken, home) => !taken.has(name) && !existsSync(join(home, name));
-/** The first free name: `base`, then `base-1`, `base-2`, … (the same folder imported again). */
+/** The first free name: `base`, then `base-1`, `base-2`, 鈥?(the same folder imported again). */
 function freeName(base, taken, home) {
   for (let i = 0; ; i++) {
     const name = i === 0 ? base : `${base.slice(0, 60)}-${i}`;
@@ -121,7 +122,7 @@ export function prepareInit(spec, bindings, { folder, source = folder, name, bac
   const taken = new Set([...bindings.allNames(), ...pending]);
   const project = { name: name ?? (empty ? randomName(taken, spec.home) : freeName(nameFrom(source), taken, spec.home)), source, volume: "", created: Date.now() };
   if (taken.has(project.name) || existsSync(join(spec.home, project.name))) throw refuse("name-taken", `a LayerFS project named ${project.name} exists`);
-  // a project made before #373 keeps its `dsh-layerfs-…` volume, recorded in its binding
+  // a project made before #373 keeps its `dsh-layerfs-鈥 volume, recorded in its binding
   project.volume = `${spec.prefix}${project.name}-store-${project.created.toString(36)}`;
   if (image) project.image = image;
   if (backend === "sim") Object.assign(project, { backend, volume: `sim-${project.name}` });
@@ -150,7 +151,7 @@ async function initFrom(spec, bindings, { folder, project }, report) {
   report({ step: "scan" });
   const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
   report({ step: "volume", totals });
-  const docker = ["-H", `unix://${spec.docker}`];
+  const docker = dockerHost(spec.docker);
   if (!isSim(project)) await run("docker", [...docker, "volume", "create", project.volume]);
   report({ step: "import" });
   let client;

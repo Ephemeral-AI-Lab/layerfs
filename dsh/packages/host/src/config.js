@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { storeName, VOLUMES } from "./box.js";
+import { containerized, portedHost, ROOT } from "./container.js";
 
 /**
  * @typedef {object} Config
@@ -55,16 +56,17 @@ import { storeName, VOLUMES } from "./box.js";
 export function resolveConfig(config, profile) {
   const temp = join(realpathSync(tmpdir()), "dsh-layerfs");
   const bundle = config.bundle || null, home = config.home || join(temp, "home");
-  // macOS runs no Store call itself: a bundle's SDK calls run in the Store container (port/)
-  const ported = process.platform === "darwin" && bundle !== null;
+  // macOS and Windows run no Store call themselves: a bundle's SDK calls run in the Store container (port/)
+  const ported = portedHost() && bundle !== null;
   const prefix = config.containerPrefix || "layerfs-";
   const spec = {
     image: config.image || null,
-    daemon: config.daemon || (bundle && join(bundle, "layerfs-daemon")),
+    // a Windows host cannot run the Linux daemon itself: the Store container runs it, at the build's container path
+    daemon: config.daemon || (bundle && (containerized ? `${ROOT}/bundle/layerfs-daemon` : join(bundle, "layerfs-daemon"))),
     bundle,
     prefix,
     box: ported ? storeName(prefix) : null,
-    docker: config.docker || "/var/run/docker.sock",
+    docker: config.docker || (containerized ? null : "/var/run/docker.sock"),
     volumes: config.volumes || VOLUMES,
     home,
     stateDir: config.stateDir || join(profile ? profile.dir : join(homedir(), ".dsh"), "dsh-layerfs"),
@@ -81,7 +83,7 @@ export function resolveConfig(config, profile) {
 }
 
 /** Deployment settings Init and bash calls need that are not configured (macOS: a bundle too). */
-export const missingDeployment = (spec) => ["image", "daemon", ...(process.platform === "darwin" ? ["bundle"] : [])].filter((name) => !spec[name]);
+export const missingDeployment = (spec) => ["image", "daemon", ...(portedHost() ? ["bundle"] : [])].filter((name) => !spec[name]);
 
 /** The SDK entry as a path, for Node imports in the Host. */
 export const sdkPath = (spec) => fileURLToPath(spec.sdk);

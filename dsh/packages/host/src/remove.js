@@ -1,4 +1,4 @@
-// Removes a LayerFS project: what Init made, in reverse. One attempt, no
+﻿// Removes a LayerFS project: what Init made, in reverse. One attempt, no
 // retry. It refuses while a running container (a Sandbox) still uses the
 // project's volume, unless the caller asks to stop them (a demo's Replay:
 // a stopped run leaves Workspaces mounted, which keep their Sandboxes from
@@ -19,6 +19,7 @@ import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import { isSim } from "./layerfs-client.js";
 import { stopProcesses } from "./sim/binding.js";
+import { dockerHost } from "./container.js";
 
 const execute = promisify(execFile);
 /** Container states that hold the volume but run nothing: what a failed start leaves. */
@@ -57,7 +58,7 @@ export async function removeProject(spec, bindings, trees, name, run = execute, 
     bindings.remove(project.name);
     return { removed: project.name, volume: project.volume };
   }
-  const docker = ["-H", `unix://${spec.docker}`];
+  const docker = dockerHost(spec.docker);
   const { stdout } = await run("docker", [...docker, "ps", "-a", "--filter", `volume=${project.volume}`, "--format", "{{.ID}} {{.State}}"]);
   const containers = stdout.split("\n").filter(Boolean).map((line) => line.split(" "));
   const users = containers.filter(([, state]) => !STOPPED.has(state)).length;

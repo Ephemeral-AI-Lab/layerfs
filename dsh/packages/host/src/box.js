@@ -22,6 +22,7 @@ import { connect } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { dockerHost, layout } from "./container.js";
 import { frame, readFrames } from "./port/frames.mjs";
 
 const run = promisify(execFile);
@@ -33,11 +34,21 @@ const WORKER_PORT = 7070;
 const READY_MS = 15_000;
 
 /** `docker run` mounts and settings of a ported call's process: the Store container's worker, or Init's own. */
-export const callMounts = ({ home, bundle }) => [
-  "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", `${VOLUMES}:${VOLUMES}`,
-  "-v", `${home}:${home}`, "-v", `${bundle}:${bundle}:ro`, "-v", `${PORT}:${PORT}:ro`,
-  "-e", `LAYERFS_NATIVE=${join(bundle, "layerfs.node")}`,
-];
+export const callMounts = ({ home, bundle, source }) => {
+  const path = layout({ home, bundle, port: PORT, source });
+  const mounts = [
+    ["/var/run/docker.sock", "/var/run/docker.sock"],
+    [VOLUMES, VOLUMES],
+    [home, path.home],
+    [bundle, path.bundle, true],
+    [PORT, path.port, true],
+  ];
+  if (source != null) mounts.push([source, path.source, true]);
+  return [
+    ...mounts.flatMap(([from, to, readOnly]) => ["-v", `${from}:${to}${readOnly ? ":ro" : ""}`]),
+    "-e", `LAYERFS_NATIVE=${path.bundle}/layerfs.node`,
+  ];
+};
 
 /** Where a ported call opens the Store of the project volume `volume`. */
 export const storePathOf = (volume) => `${VOLUMES}/${volume}/_data/global/store.sqlite`;
@@ -68,7 +79,8 @@ export function ensureBox(spec) {
 }
 
 async function start(spec) {
-  const docker = (...args) => run("docker", ["-H", `unix://${spec.docker}`, ...args]).then((r) => r.stdout.trim());
+  const docker = (...args) => run("docker", [...dockerHost(spec.docker), ...args]).then((r) => r.stdout.trim());
+  const path = layout({ home: spec.home, bundle: spec.bundle, port: PORT });
   const version = workerVersion(), build = buildOf(spec.bundle);
   // the older naming's box on this home (its home folder is mounted): replaced
   const old = (await docker("ps", "-aq", "--filter", "label=dsh-layerfs.box=1", "--filter", `volume=${spec.home}`)).split("\n").filter(Boolean);
@@ -91,7 +103,7 @@ async function start(spec) {
       "--restart", "unless-stopped",
       "--label", "layerfs.role=store", "--label", `layerfs.worker=${version}`, "--label", `layerfs.build=${build}`, "--label", `layerfs.home=${spec.home}`,
       "-p", `127.0.0.1::${WORKER_PORT}`, "-e", `DSH_BOX_SECRET=${secret}`, "-e", "UV_THREADPOOL_SIZE=64",
-      ...callMounts(spec), "--entrypoint", "node", spec.image, join(PORT, "worker.mjs"));
+      ...callMounts(spec), "--entrypoint", "node", spec.image, `${path.port}/worker.mjs`);
   } else {
     if (state.startsWith("false")) await docker("start", spec.box);
     const env = await docker("inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", spec.box);

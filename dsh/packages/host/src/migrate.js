@@ -1,4 +1,4 @@
-// The move to #373's layout, when the Host starts. Sandboxes of the older
+﻿// The move to #373's layout, when the Host starts. Sandboxes of the older
 // kinds (each project's service Sandbox and named ones, records under
 // <home>/_sandboxes/) are removed only when they have nothing to lose: a
 // container that no longer runs, or a running one with no mounted Workspace
@@ -12,6 +12,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { dockerHost } from "./container.js";
 
 const execute = promisify(execFile);
 const gone = (error) => /No such (container|object)/i.test(String(error?.stderr ?? error?.message));
@@ -24,7 +25,7 @@ const gone = (error) => /No such (container|object)/i.test(String(error?.stderr 
  */
 export async function migrate(spec, run = execute, warn = console.warn) {
   const root = join(spec.home, "_sandboxes"), kept = [];
-  const docker = (...args) => run("docker", ["-H", `unix://${spec.docker}`, ...args]);
+  const docker = (...args) => run("docker", [...dockerHost(spec.docker), ...args]);
   if (existsSync(root)) {
     for (const sandbox of readdirSync(root)) {
       const dir = join(root, sandbox);

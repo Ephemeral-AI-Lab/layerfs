@@ -1,4 +1,4 @@
-// Sandbox management for the LayerFS page (#373): what runs, and the few
+﻿// Sandbox management for the LayerFS page (#373): what runs, and the few
 // actions on it.
 //   one project   its Sandboxes from one inspect.snapshot (which starts none),
 //                 each mounted Workspace with its Branch, uncommitted changes,
@@ -19,6 +19,7 @@ import { promisify } from "node:util";
 import { buildOf, ensureBox, storeFile, VOLUMES } from "./box.js";
 import { isSim, within } from "./layerfs-client.js";
 import { frame, readFrames } from "./port/frames.mjs";
+import { dockerHost } from "./container.js";
 
 const run = promisify(execFile);
 /** Workspaces one Sandbox's daemon admits (the SDK's daemon setup, `namespaces`). */
@@ -28,7 +29,7 @@ export const LEFT_MS = 10 * 60_000;
 const DOCKER_MS = 5_000, PING_MS = 1_000, RESTART_MS = 20_000;
 const RANK = { down: 0, degraded: 1, ok: 2 };
 
-const docker = (spec, ...args) => run("docker", ["-H", `unix://${spec.docker}`, ...args], { timeout: DOCKER_MS }).then((r) => r.stdout.trim());
+const docker = (spec, ...args) => run("docker", [...dockerHost(spec.docker), ...args], { timeout: DOCKER_MS }).then((r) => r.stdout.trim());
 const key = (sandbox, path) => `${sandbox}\n${path}`;
 const worst = (levels) => levels.reduce((a, b) => (RANK[b] < RANK[a] ? b : a), "ok");
 const refuse = (status, code, message) => Object.assign(new Error(message), { status, code });
@@ -171,7 +172,7 @@ export async function restartStore(spec, body) {
   if (state.state === "unknown") throw refuse(409, "no-docker", "Docker does not answer; start Docker first");
   if (state.state !== "running") throw refuse(409, state.state, `layerfs-store is ${state.state}; start it instead`);
   // up to 5 s for the worker to stop, then its start: longer than other Docker calls
-  await run("docker", ["-H", `unix://${spec.docker}`, "restart", "-t", "5", spec.box], { timeout: RESTART_MS });
+  await run("docker", [...dockerHost(spec.docker), "restart", "-t", "5", spec.box], { timeout: RESTART_MS });
   await ensureBox(spec);
   return storeState(spec, await engineState(spec));
 }

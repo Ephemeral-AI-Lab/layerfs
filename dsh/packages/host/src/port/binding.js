@@ -10,9 +10,11 @@
 import { execFile, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { connect } from "node:net";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deserialize, serialize } from "node:v8";
 import { callMounts, DAEMON_HOST, storeFile } from "../box.js";
+import { layout } from "../container.js";
 import { frame, readFrames } from "./frames.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
@@ -130,7 +132,9 @@ async function initCall(box, bundle, request) {
   let image;
   try { image = await boxImage(box); } catch { return down("Failed", `the Store container ${box} is not there to run project.init`); }
   const env = Object.keys(process.env).filter((k) => /^(DSH_)?LAYERFS_/.test(k) && !k.endsWith("_NATIVE")).flatMap((k) => ["-e", k]);
-  const where = ["run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home: args.home, bundle }), "-v", `${args.path}:${args.path}:ro`, ...env, "--entrypoint", "node", image, RUN];
+  // the source folder is mounted at its own path on a POSIX host, under the container root on Windows
+  const path = layout({ home: args.home, bundle, port: dirname(RUN), source: args.path });
+  const where = ["run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home: args.home, bundle, source: args.path }), ...env, "--entrypoint", "node", image, `${path.port}/run.mjs`];
   return new Promise((resolve, reject) => {
     const child = spawn("docker", where, { stdio: ["pipe", "pipe", "inherit"] });
     const out = [];
@@ -147,7 +151,8 @@ async function initCall(box, bundle, request) {
         ? refused("Failed", `the Store container ${box} did not run project.init (docker run exit ${code})`)
         : refused("Unknown", `project.init ended without an answer (exit ${code}): check the project before going on`));
     });
-    child.stdin.end(serialize(request));
+    // the container opens the source folder at its container path
+    child.stdin.end(serialize({ ...request, args: { ...args, path: path.source } }));
   });
 }
 
