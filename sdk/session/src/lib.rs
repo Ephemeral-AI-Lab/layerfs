@@ -19,6 +19,6 @@ mod trace;
 mod workspace;
 
 pub use call::{dispatch, exec_output, operator_call};
-pub use direct::{acquire, branch_id_in, head_in, release};
+pub use direct::{acquire, release};
 pub use outcome::{failed, refused, Outcome};
 pub use trace::{run, take_scope, take_waited};

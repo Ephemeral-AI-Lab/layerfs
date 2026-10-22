@@ -18,18 +18,51 @@ use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 
 /// One opened Store and the clients that hold it.
 struct Opened {
-    service: Arc<StoreService>,
-    clients: usize,
+    service: Option<StoreService>,
+    clients: AtomicUsize,
     /// This service's private overlay directory.
-    directory: PathBuf,
+    directory: Option<PathBuf>,
 }
 
-static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
+impl Opened {
+    /// Closes the service and removes its overlay directory, reporting both.
+    fn close(mut self) -> Result<(), SdkRefusal> {
+        let mut result = Ok(());
+        if let Some(service) = self.service.take() {
+            if let Err(error) = service.close() {
+                result = Err(refused("Failed", format!("Store close: {error}")));
+            }
+        }
+        if let Some(directory) = self.directory.take() {
+            if let Err(error) = std::fs::remove_dir_all(&directory) {
+                if error.kind() != std::io::ErrorKind::NotFound && result.is_ok() {
+                    result = Err(failed(error));
+                }
+            }
+        }
+        result
+    }
+}
+
+impl Drop for Opened {
+    fn drop(&mut self) {
+        let service = self.service.take();
+        let directory = self.directory.take();
+        if let Some(service) = service {
+            let _ = service.close();
+        }
+        if let Some(directory) = directory {
+            let _ = std::fs::remove_dir_all(directory);
+        }
+    }
+}
+
+static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Arc<Opened>>>> = LazyLock::new(Default::default);
 static DIRECTORIES: AtomicU64 = AtomicU64::new(0);
 
 /// The Store path a call names.
@@ -44,7 +77,7 @@ fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 }
 
 /// Opens the Store at `store` for this process, or refuses.
-fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
+fn open(store: &Path, args: &SdkValue) -> Result<Arc<Opened>, SdkRefusal> {
     let project = crate::discovery::project(args)?;
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
@@ -59,11 +92,11 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
         &directory.join("overlay.sqlite"),
     );
     match opened {
-        Ok(service) => Ok(Opened {
-            service: Arc::new(service),
-            clients: 0,
-            directory,
-        }),
+        Ok(service) => Ok(Arc::new(Opened {
+            service: Some(service),
+            clients: AtomicUsize::new(0),
+            directory: Some(directory),
+        })),
         Err(refusal) => {
             let _ = std::fs::remove_dir_all(&directory);
             Err(match refusal {
@@ -79,57 +112,67 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
 pub fn acquire(args: &SdkValue) -> Outcome {
     let store = path(args)?;
     let mut stores = lock(&STORES)?;
-    if !stores.contains_key(&store) {
-        let opened = open(&store, args)?;
-        stores.insert(store.clone(), opened);
-    }
-    let opened = stores.get_mut(&store).expect("opened above");
-    opened.clients += 1;
-    Ok(SdkValue::map([(
-        "clients",
-        SdkValue::Int(opened.clients as i64),
-    )]))
+    let opened = match stores.get(&store) {
+        Some(opened) => Arc::clone(opened),
+        None => {
+            let opened = open(&store, args)?;
+            stores.insert(store.clone(), Arc::clone(&opened));
+            opened
+        }
+    };
+    let clients = opened.clients.fetch_add(1, Ordering::AcqRel) + 1;
+    Ok(SdkValue::map([("clients", SdkValue::Int(clients as i64))]))
 }
 
-/// `storeClose`: one client less; the last one closes the Store and removes
-/// its overlay directory. A call still running keeps the service alive until
-/// it returns, and the service closes when it is dropped then.
+/// `storeClose`: one client less; the last one stops the service and removes
+/// its overlay directory. A call still running keeps the Opened alive, and
+/// the last owner closes both when it drops.
 pub fn release(args: &SdkValue) -> Outcome {
     let store = path(args)?;
-    let mut stores = lock(&STORES)?;
-    let Some(opened) = stores.get_mut(&store) else {
-        return Err(refused("InvalidInput", "this process holds no such Store"));
+    let opened = {
+        let mut stores = lock(&STORES)?;
+        let Some(opened) = stores.get(&store).cloned() else {
+            return Err(refused("InvalidInput", "this process holds no such Store"));
+        };
+        let previous = opened
+            .clients
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |clients| {
+                Some(clients.saturating_sub(1))
+            })
+            .unwrap_or(0);
+        if previous > 1 {
+            return Ok(SdkValue::map([(
+                "clients",
+                SdkValue::Int((previous - 1) as i64),
+            )]));
+        }
+        stores.remove(&store);
+        opened
     };
-    opened.clients = opened.clients.saturating_sub(1);
-    if opened.clients > 0 {
-        return Ok(SdkValue::map([(
-            "clients",
-            SdkValue::Int(opened.clients as i64),
-        )]));
+    match Arc::try_unwrap(opened) {
+        Ok(opened) => opened.close()?,
+        // In-flight calls keep the Opened alive; its drop closes both.
+        Err(_) => {}
     }
-    let opened = stores.remove(&store).expect("present above");
-    drop(stores);
-    let closed = match Arc::try_unwrap(opened.service) {
-        Ok(service) => service.close().map_err(failed),
-        Err(_) => Ok(()),
-    };
-    let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
-    closed.and(removed)?;
     Ok(SdkValue::map([("clients", SdkValue::Int(0))]))
 }
 
-/// The open service of the Store a call names.
-fn service(args: &SdkValue) -> Result<Arc<StoreService>, SdkRefusal> {
+/// The open Store a call names.
+fn service(args: &SdkValue) -> Result<Arc<Opened>, SdkRefusal> {
     let store = path(args)?;
     lock(&STORES)?
         .get(&store)
-        .map(|opened| opened.service.clone())
+        .cloned()
         .ok_or_else(|| refused("InvalidInput", "the client has not opened its Store"))
 }
 
 /// Runs one Store call (`operator` for the operator table) in this process.
 pub(crate) fn call(method: &str, args: SdkValue, operator: bool) -> Outcome {
-    let service = service(&args)?;
+    let opened = service(&args)?;
+    let service = opened
+        .service
+        .as_ref()
+        .ok_or_else(|| refused("Failed", "the Store is closing"))?;
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
@@ -147,9 +190,9 @@ pub(crate) fn call(method: &str, args: SdkValue, operator: bool) -> Outcome {
     };
     let run = || {
         if operator {
-            layerfs_store_service::operator::dispatch(&service, &call)
+            layerfs_store_service::operator::dispatch(service, &call)
         } else {
-            layerfs_api::call(&service, &call)
+            layerfs_api::call(service, &call)
         }
     };
     if !crate::trace::traced() {
@@ -177,17 +220,11 @@ pub(crate) fn branch_id(
     args: &SdkValue,
     name: &str,
 ) -> Result<layerfs_history::BranchId, SdkRefusal> {
-    let service = service(args)?;
-    branch_id_in(&service, args, name)
-}
-
-/// The Branch id of `name` in the project `args` names, read through an
-/// already opened Store.
-pub fn branch_id_in(
-    service: &StoreService,
-    args: &SdkValue,
-    name: &str,
-) -> Result<layerfs_history::BranchId, SdkRefusal> {
+    let opened = service(args)?;
+    let service = opened
+        .service
+        .as_ref()
+        .ok_or_else(|| refused("Failed", "the Store is closing"))?;
     let stack = layerfs_store_service::operator::args::project(&service.store, args)?;
     Ok(layerfs_store_service::history::lookup::branch(&service.store, &stack, name)?.id)
 }
@@ -197,16 +234,11 @@ pub(crate) fn head(
     args: &SdkValue,
     branch: layerfs_history::BranchId,
 ) -> Result<Option<layerfs_history::CommitId>, SdkRefusal> {
-    let service = service(args)?;
-    head_in(&service, branch)
-}
-
-/// The newest Commit of `branch`, read through an already opened Store;
-/// `None` when it has none.
-pub fn head_in(
-    service: &StoreService,
-    branch: layerfs_history::BranchId,
-) -> Result<Option<layerfs_history::CommitId>, SdkRefusal> {
+    let opened = service(args)?;
+    let service = opened
+        .service
+        .as_ref()
+        .ok_or_else(|| refused("Failed", "the Store is closing"))?;
     let page = service
         .store
         .published(|history| {
