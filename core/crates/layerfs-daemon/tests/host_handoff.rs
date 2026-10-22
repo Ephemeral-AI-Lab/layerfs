@@ -23,7 +23,7 @@ fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
     )
     .unwrap();
     let ack = layerfs_api::internal::install(&fixture.project, &mut connection).unwrap();
-    assert_eq!(ack.manifest.host_sqlite, "3.51.0");
+    assert_eq!(ack.manifest.host_sqlite, "3.53.2");
     assert_eq!(ack.manifest.daemon_sqlite.as_deref(), Some("3.53.2"));
     assert_eq!(ack.work.sent_bytes, fixture.project.store.bytes);
     // The VM never received a bind mount of this path. Removing the sealed
@@ -41,7 +41,7 @@ fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
     );
     let output = daemon.finish();
     assert!(output.contains("INSTALL_ROOT_ORACLE paths=6"));
-    assert!(output.contains("host_sqlite=3.51.0 daemon_sqlite=3.53.2"));
+    assert!(output.contains("host_sqlite=3.53.2 daemon_sqlite=3.53.2"));
     println!(
         "HOST_HANDOFF manifest={:?} work={:?} source_removed=true sealed_removed=true",
         ack.manifest, ack.work

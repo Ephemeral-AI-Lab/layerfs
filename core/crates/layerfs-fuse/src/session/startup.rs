@@ -169,7 +169,12 @@ impl KernelSession {
             Err(cause) => return Err(session.abandon(AttachPhase::Receipt, cause)),
         };
         #[cfg(target_os = "macos")]
-        let entry = match wait_macos_mount_entry(&session.directory, &monitor, config.ready_wait) {
+        let entry = match wait_macos_mount_entry(
+            &session.directory,
+            &monitor,
+            session.channel.as_mut().map(|(_, mon)| mon),
+            config.ready_wait,
+        ) {
             Ok(entry) => entry,
             Err(cause) => return Err(session.abandon(AttachPhase::Receipt, cause)),
         };
@@ -223,9 +228,23 @@ fn fence_first_exit(monitor: SessionMonitor, queue: MountRequests) {
 fn wait_macos_mount_entry(
     target: &std::path::Path,
     monitor: &SessionMonitor,
+    mon_sock: Option<&mut std::os::unix::net::UnixStream>,
     ready_wait: Duration,
 ) -> io::Result<crate::mount::MountEntry> {
+    use std::io::Read;
+
     let deadline = std::time::Instant::now() + ready_wait;
+    if let Some(mon_sock) = mon_sock {
+        let _ = mon_sock.set_read_timeout(Some(ready_wait));
+        let mut status_bytes = [0u8; 4];
+        mon_sock.read_exact(&mut status_bytes)?;
+        let status = i32::from_ne_bytes(status_bytes);
+        if status != 0 {
+            return Err(io::Error::other(format!(
+                "go-nfsv4 mount failed with status {status}"
+            )));
+        }
+    }
     loop {
         match syscalls::mount_entry(target) {
             Ok(entry) => return Ok(entry),
@@ -256,7 +275,10 @@ fn attach_macos_channel(
     use std::os::unix::net::UnixStream;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
-    use std::sync::{Condvar, Mutex};
+    use std::sync::{
+        atomic::{AtomicU64, Ordering},
+        Condvar, Mutex,
+    };
 
     let mut candidates = vec![
         PathBuf::from("/Library/Application Support/fuse-t/bin/go-nfsv4"),
@@ -282,6 +304,7 @@ fn attach_macos_channel(
     fcntl(&mon_child, FcntlArg::F_SETFD(FdFlag::empty())).map_err(io::Error::from)?;
 
     let mut daemon = Command::new(bin)
+        .arg("--backend=nfs")
         .arg(format!("--volname=layerfs-{}-{owner_id}", std::process::id()))
         .arg("--namedattr=true")
         .arg("--dontbrowse=true")
@@ -306,6 +329,8 @@ fn attach_macos_channel(
     let mut proxy_write = proxy_end;
     let sync_pair = Arc::new((Mutex::new(false), Condvar::new()));
     let sync_req = Arc::clone(&sync_pair);
+    let init_unique = Arc::new(AtomicU64::new(0));
+    let init_unique_req = Arc::clone(&init_unique);
 
     thread::Builder::new()
         .name(format!("layerfs-fuset-req-{owner_id}"))
@@ -318,11 +343,17 @@ fn attach_macos_channel(
                 }
                 let len = u32::from_ne_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
                 let opcode = u32::from_ne_bytes([buf[4], buf[5], buf[6], buf[7]]);
+                let unique = u64::from_ne_bytes([
+                    buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15],
+                ]);
                 if !(40..=buf.len()).contains(&len) {
                     break;
                 }
                 if len > 40 && comm_read.read_exact(&mut buf[40..len]).is_err() {
                     break;
+                }
+                if opcode == 26 {
+                    init_unique_req.store(unique, Ordering::Release);
                 }
                 let expects_reply = opcode != 2 && opcode != 42;
                 let (lock, cvar) = &*sync_req;
@@ -354,6 +385,7 @@ fn attach_macos_channel(
                     break;
                 }
                 let len = u32::from_ne_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
+                let error = i32::from_ne_bytes([buf[4], buf[5], buf[6], buf[7]]);
                 let unique = u64::from_ne_bytes([
                     buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15],
                 ]);
@@ -363,7 +395,22 @@ fn attach_macos_channel(
                 if len > 16 && proxy_read.read_exact(&mut buf[16..len]).is_err() {
                     break;
                 }
-                if comm_write.write_all(&buf[..len]).is_err() {
+                // FUSE-T 1.2.9+ selects its v2 (macOS 120-byte fuse_attr_out) vs v3
+                // (libfuse3 104-byte fuse_attr_out) codec from the FUSE_INIT reply length.
+                // fuser negotiates ABI 7.19 (v2 attr layout) on macOS; emit the 24-byte
+                // ABI 7.19 fuse_init_out body (40-byte frame) so go-nfsv4 selects v2.
+                let out_len = if unique != 0
+                    && unique == init_unique.swap(0, Ordering::AcqRel)
+                    && len == 80
+                    && error == 0
+                {
+                    let v2_len: u32 = 40;
+                    buf[0..4].copy_from_slice(&v2_len.to_ne_bytes());
+                    40
+                } else {
+                    len
+                };
+                if comm_write.write_all(&buf[..out_len]).is_err() {
                     break;
                 }
                 if unique != 0 {
