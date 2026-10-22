@@ -185,7 +185,9 @@ export class BindingStore {
     this.update((data) => {
       delete data.projects[name];
       for (const w of Object.values(data.workspaces)) if (w.lastUsed === name) w.lastUsed = null;
-      for (const choice of Object.values(data.sessions)) if (choice.project === name) choice.project = null;
+      // the project is gone, so the session may choose again: a lock it kept would
+      // leave it with no project and both of the client's buttons disabled
+      for (const choice of Object.values(data.sessions)) if (choice.project === name) { choice.project = null; choice.locked = false; }
     });
   }
 

@@ -2,6 +2,17 @@
 // worker (worker.mjs) or by Init's own process (run.mjs). A spooled exec's
 // output is read here and returned whole, then released, so no spool is left
 // for the Mac to read.
+import { chmodSync } from "node:fs";
+
+// The LayerFS home is a host folder when the Host is Windows, and Docker Desktop's
+// sharing layer hands it to a container as mode 0777: the binding refuses a home
+// that is not private. This process runs as the folder's owner, so it is the one
+// that can tighten it. Done here because the worker and Init's process both load this.
+const mountedHome = process.env.LAYERFS_HOME_DIR;
+if (mountedHome) {
+  try { chmodSync(mountedHome, 0o700); } catch { /* the binding reports a home it cannot use */ }
+}
+
 const PAGE = 1 << 20;
 
 /** The Store a call names, as the binding's storeOpen and storeClose take it. */

@@ -18,7 +18,9 @@ export function deploymentEnv(spec, project) {
   if (isSim(project)) return { HOME: spec.home, DOCKER: "sim", IMAGE: "sim", DAEMON: "sim", VOLUME: project.volume, STORE_PATH: "sim" };
   return {
     HOME: spec.home,
-    DOCKER: spec.docker,
+    // a ported call runs in the Store container, where callMounts puts the socket at this path;
+    // the Host's own endpoint may be none at all (a Windows host uses the CLI's default context)
+    DOCKER: spec.box ? "/var/run/docker.sock" : spec.docker,
     IMAGE: project.image ?? spec.image ?? "",
     DAEMON: spec.daemon ?? "",
     VOLUME: project.volume,
@@ -39,7 +41,12 @@ export async function clientFor(spec, project) {
   const { LayerFS } = await import(spec.sdk);
   const { LayerFSOperator } = await import(spec.operator);
   const env = deploymentEnv(spec, project), saved = {};
-  for (const [name, value] of Object.entries(env)) { saved[name] = process.env[`LAYERFS_${name}`]; process.env[`LAYERFS_${name}`] = value; }
+  for (const [name, value] of Object.entries(env)) {
+    saved[name] = process.env[`LAYERFS_${name}`];
+    // a setting this host does not have (a Windows host has no Docker socket path) is absent, not the text "null"
+    if (value === undefined || value === null) delete process.env[`LAYERFS_${name}`];
+    else process.env[`LAYERFS_${name}`] = value;
+  }
   try {
     const layerfs = new LayerFS(project.name);
     const { invokeOperator } = await import(clientEntryOf(spec));

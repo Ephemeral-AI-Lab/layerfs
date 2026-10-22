@@ -31,7 +31,9 @@ export const PORT = dirname(fileURLToPath(new URL("./port/run.mjs", import.meta.
 /** Where a Store container process reaches a daemon's loopback-published port: the Mac. */
 export const DAEMON_HOST = "host.docker.internal";
 const WORKER_PORT = 7070;
-const READY_MS = 15_000;
+// Docker Desktop starts its first container slowly on Windows; the 15 s that
+// suffices on macOS can be missed on a cold start there, so give it longer.
+const READY_MS = process.platform === "win32" ? 60_000 : 15_000;
 
 /** `docker run` mounts and settings of a ported call's process: the Store container's worker, or Init's own. */
 export const callMounts = ({ home, bundle, source }) => {
@@ -47,6 +49,9 @@ export const callMounts = ({ home, bundle, source }) => {
   return [
     ...mounts.flatMap(([from, to, readOnly]) => ["-v", `${from}:${to}${readOnly ? ":ro" : ""}`]),
     "-e", `LAYERFS_NATIVE=${path.bundle}/layerfs.node`,
+    // the home's path in here, so the process can make it private (a Windows host's
+    // folder arrives 0777 through Docker Desktop's sharing layer; the binding refuses it)
+    "-e", `LAYERFS_HOME_DIR=${path.home}`,
   ];
 };
 
@@ -88,8 +93,10 @@ async function start(spec) {
   rmSync(join(spec.home, OLD_FILE), { force: true });
   let state = await docker("inspect", "-f", '{{.State.Running}} {{index .Config.Labels "layerfs.worker"}} {{index .Config.Labels "layerfs.build"}} {{index .Config.Labels "layerfs.home"}}', spec.box).catch(() => null);
   const home = state?.split(" ").slice(3).join(" ");
-  // another home's: never replaced, since that home's runs use it
-  if (home && home !== spec.home) throw new Error(`the Store container ${spec.box} serves the LayerFS home ${home}; give this home its own containerPrefix`);
+  // another home's: never replaced, since that home's runs use it. One folder has
+  // two spellings on Windows (`F:/a` and `F:\a`), so compare it normalized.
+  const sameHome = (a, b) => a === b || a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
+  if (home && !sameHome(home, spec.home)) throw new Error(`the Store container ${spec.box} serves the LayerFS home ${home}; give this home its own containerPrefix`);
   if (state && (state.split(" ")[1] !== version || state.split(" ")[2] !== build || !home)) {
     // another worker or another build (or one made before the home label): replaced
     await docker("rm", "-f", spec.box);

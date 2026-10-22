@@ -19,6 +19,9 @@ export const portedHost = () => process.platform === "darwin" || process.platfor
 /** The path `host` has inside a container, mounted under `name`. */
 const at = (host, name) => (containerized ? `${ROOT}/${name}` : host);
 
+/** The LayerFS home as a container sees it; the Host still uses its own path to find the Store file. */
+export const homeInContainer = (home) => at(home, "home");
+
 /**
  * The folders a ported container mounts and the path each has inside it: the
  * home (writable), the build and the port's code (read-only), and Init's

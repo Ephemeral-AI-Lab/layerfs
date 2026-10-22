@@ -12,10 +12,9 @@ import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deserialize, serialize } from "node:v8";
 import { callMounts, DAEMON_HOST, storeFile } from "../box.js";
-import { layout } from "../container.js";
-import { frame, readFrames } from "./frames.mjs";
+import { layout, containerized, homeInContainer } from "../container.js";
+import { frame, parseValue, readFrames, stringifyValue } from "./frames.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
 /** Stores this process has opened, by path, with their clients. */
@@ -44,8 +43,14 @@ function inBox(fn, op, args) {
   const box = setting("STORE_CONTAINER"), bundle = setting("BUNDLE");
   if (!box || !bundle) return Promise.resolve(refused("Unsupported", "no Store container is set (DSH_LAYERFS_STORE_CONTAINER, DSH_LAYERFS_BUNDLE): Store calls run only in Linux"));
   const sent = { ...args, deploy: { ...args.deploy, daemonHost: args.deploy?.daemonHost ?? DAEMON_HOST } };
+  // a Windows host's paths mean nothing in the container: a call names the home
+  // as it is mounted there, while this process keeps its own path to find the Store file
+  if (containerized) sent.home = homeInContainer(sent.home ?? setting("HOME"));
   const request = { fn, op, args: sent, open: opened.has(args.storePath) };
-  return op === "project.init" ? initCall(box, bundle, request) : worker(box, args.home ?? setting("HOME")).call(request);
+  // this process's own home: the mounts and the Store file are the Host's, while
+  // `sent` already carries the path the container knows (line above)
+  const home = args.home ?? setting("HOME");
+  return op === "project.init" ? initCall(box, bundle, request, home) : worker(box, home).call(request);
 }
 
 export const call = (op, args) => inBox("call", op, args);
@@ -127,14 +132,16 @@ function worker(box, home) {
  * (the project's Sandboxes may run another), with the source folder mounted
  * read-only, so the Store container shares no host folder beyond the ones every call uses.
  */
-async function initCall(box, bundle, request) {
+async function initCall(box, bundle, request, home) {
   const { args } = request;
   let image;
   try { image = await boxImage(box); } catch { return down("Failed", `the Store container ${box} is not there to run project.init`); }
   const env = Object.keys(process.env).filter((k) => /^(DSH_)?LAYERFS_/.test(k) && !k.endsWith("_NATIVE")).flatMap((k) => ["-e", k]);
-  // the source folder is mounted at its own path on a POSIX host, under the container root on Windows
-  const path = layout({ home: args.home, bundle, port: dirname(RUN), source: args.path });
-  const where = ["run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home: args.home, bundle, source: args.path }), ...env, "--entrypoint", "node", image, `${path.port}/run.mjs`];
+  // the mounts name the HOST's folders: `args.home` is the container's path, which a
+  // container cannot mount. The source folder is mounted at its own path on a POSIX
+  // host, under the container root on Windows.
+  const path = layout({ home, bundle, port: dirname(RUN), source: args.path });
+  const where = ["run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home, bundle, source: args.path }), ...env, "--entrypoint", "node", image, `${path.port}/run.mjs`];
   return new Promise((resolve, reject) => {
     const child = spawn("docker", where, { stdio: ["pipe", "pipe", "inherit"] });
     const out = [];
@@ -143,7 +150,7 @@ async function initCall(box, bundle, request) {
     child.on("close", (code) => {
       const bytes = Buffer.concat(out);
       if (code === 0 && bytes.length) {
-        const answer = deserialize(bytes);
+        const answer = parseValue(bytes.toString("utf8"));
         return answer.thrown ? reject(new Error(answer.thrown)) : resolve(answer);
       }
       // 125 and up: docker could not start the process, so the call did not run
@@ -152,7 +159,7 @@ async function initCall(box, bundle, request) {
         : refused("Unknown", `project.init ended without an answer (exit ${code}): check the project before going on`));
     });
     // the container opens the source folder at its container path
-    child.stdin.end(serialize({ ...request, args: { ...args, path: path.source } }));
+    child.stdin.end(stringifyValue({ ...request, args: { ...args, path: path.source } }));
   });
 }
 
