@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LayerFS trajectory</title>
+<link rel="stylesheet" href="style.css">
+<script src="_magpie/bridge.js"></script>
+<script src="trajectory.js"></script>
+<script src="view.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<header>
+  <div class="hist">
+    <h1 id="histLine">HISTORY</h1>
+    <p class="hist-meta" id="histMeta"></p>
+  </div>
+  <select id="project" aria-label="project"></select>
+  <p class="stamp" id="stamp"></p>
+</header>
+
+<div class="stage" id="stage"><svg id="graph" role="img" aria-label="worktree trajectory"></svg></div>
+<div class="legend" id="legend" hidden></div>
+
+<section class="controls" id="controls">
+  <button type="button" id="play">Replay</button>
+  <input type="range" id="scrub" min="0" value="0" step="1" aria-label="replay position">
+  <select id="speed" aria-label="speed">
+    <option value="0.5">0.5×</option>
+    <option value="1" selected>1×</option>
+    <option value="2">2×</option>
+    <option value="4">4×</option>
+  </select>
+</section>
+
+<section class="stats" id="stats">
+  <div class="nums"><span id="nCommits"></span><span class="saved" id="vSaved"></span></div>
+  <div class="bar-row"><span class="bar-label" data-t="asCopies">as copies</span><div class="bar"><i id="barCopies" class="copies"></i></div><span class="bar-val" id="vCopies"></span></div>
+  <div class="bar-row"><span class="bar-label" data-t="stored">stored</span><div class="bar"><i id="barStored" class="stored"></i></div><span class="bar-val" id="vStored"></span></div>
+  <p class="stats-line" id="statsLine"></p>
+</section>
+
+<section class="detail" id="detail">
+  <div class="d-head"><span id="dBranch"></span><span class="d-time" id="dTime"></span></div>
+  <p class="d-msg" id="dMsg"></p>
+  <p class="d-meta"><span id="dMeta"></span> <span id="dDelta" class="delta"></span></p>
+</section>
+
+<p class="empty" id="empty" hidden></p>
+</body>
+</html>

@@ -1,1 +1,45 @@
-{"description":"LayerFS workspaces for every agent in magpie: deduplicated checkpoints and branches behind stable filesystem paths, instead of a fresh copy of the tree for every agent","files":["index.mjs","layerfs.mjs","README.md"],"keywords":["magpie","magpie-tools","mcp","opencode","opencode-plugin","layerfs","filesystem","workspace","checkpoint","dedup"],"license":"MIT","main":"./index.mjs","name":"@magpie-community/tools-layerfs","repository":{"type":"git","url":"git+https://github.com/Mola-maker/magpie-layerfs.git"},"type":"module","version":"0.1.0"}
+{
+  "description": "LayerFS workspaces for every agent in magpie: deduplicated checkpoints and branches behind stable filesystem paths, instead of a fresh copy of the tree for every agent, with a page that replays the worktree trajectory",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "layerfs.mjs",
+    "page",
+    "README.md"
+  ],
+  "keywords": [
+    "magpie",
+    "magpie-tools",
+    "mcp",
+    "opencode",
+    "opencode-plugin",
+    "layerfs",
+    "filesystem",
+    "workspace",
+    "checkpoint",
+    "dedup"
+  ],
+  "license": "MIT",
+  "magpie": {
+    "page": {
+      "file": "page/index.html",
+      "icon": "page/icon.svg",
+      "title": "LayerFS trajectory",
+      "titles": {
+        "ja": "LayerFS の軌跡",
+        "zh": "LayerFS 轨迹",
+        "zh-TW": "LayerFS 軌跡"
+      }
+    }
+  },
+  "main": "./index.mjs",
+  "name": "@magpie-community/tools-layerfs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mola-maker/magpie-layerfs.git"
+  },
+  "type": "module",
+  "version": "0.4.0"
+}

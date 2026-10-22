@@ -7,6 +7,9 @@
 // Backends: the real LayerFS through its JavaScript SDK when configured
 // (LAYERFS_SDK_PATH + LAYERFS_STORE_PATH), otherwise a local content-
 // addressed store with the same model. See layerfs.mjs and the README.
+import { existsSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { checkBranch, checkInnerPath, checkProject, createBackend } from "./layerfs.mjs"
 
 const str = (v, name) => {
@@ -15,10 +18,29 @@ const str = (v, name) => {
 }
 const opt = (v, name, dflt) => (v === undefined || v === "" ? dflt : str(v, name))
 
+// The plugin's page (magpie.page in package.json) replays the worktree
+// trajectory. A page may read no live data — its sandbox allows no fetch —
+// so after every tool call the backend's recorded trajectory is written
+// beside the page as a classic script, and the page animates that. A
+// failure here must never fail the tool call itself.
+const pageDir = join(dirname(fileURLToPath(import.meta.url)), "page")
+async function refreshTrajectory(b) {
+  try {
+    if (typeof b.trajectory !== "function" || !existsSync(pageDir)) return
+    const data = await b.trajectory()
+    writeFileSync(join(pageDir, "trajectory.js"), `globalThis.LayerfsTrajectory = ${JSON.stringify(data)};\n`)
+  } catch { /* the picture is a bonus, never a dependency */ }
+}
+
 export const LayerfsTools = async (ctx = {}) => {
   let backendPromise
   const backend = () => (backendPromise ??= createBackend())
-  const call = async (fn) => fn(await backend())
+  const call = async (fn) => {
+    const b = await backend()
+    const out = await fn(b)
+    await refreshTrajectory(b)
+    return out
+  }
 
   return {
     tool: {
@@ -82,6 +104,51 @@ export const LayerfsTools = async (ctx = {}) => {
           const branch = checkBranch(str(args.branch, "branch"))
           const from = checkBranch(opt(args.from, "from", "main"))
           return call((b) => b.fork(project, branch, from))
+        },
+      },
+      publish: {
+        description:
+          "Publishes a branch's head as main's new state (a Layer), so the work every agent did on that branch becomes what new work forks from. " +
+          "Guarded: main's current head must be in the branch's history, so a publish can only move main forward; if main has newer checkpoints the branch never saw, " +
+          "the publish is refused and says so. Pass force: true only to overwrite deliberately; the result then reports overwrote and the previous main head.",
+        args: {
+          type: "object",
+          properties: {
+            project: { type: "string", description: "LayerFS project name" },
+            branch: { type: "string", description: "branch to publish to main" },
+            force: { type: "boolean", description: "overwrite main even if it has checkpoints the branch never saw (default false)" },
+          },
+          required: ["project", "branch"],
+        },
+        async execute(args) {
+          const project = checkProject(str(args.project, "project"))
+          const branch = checkBranch(str(args.branch, "branch"))
+          return call((b) => b.publish(project, branch, { force: args.force === true }))
+        },
+      },
+      exec: {
+        description:
+          "Runs a shell command inside a branch's provisioned workspace and checkpoints whatever it changed as one commit: run, test, fix, all captured in the branch's history. " +
+          "A command that changes nothing commits nothing. A failing command's changes are still checkpointed (history can be rewound), and its exit code, stdout and stderr are returned. " +
+          "The command runs with the plugin host's privileges in the workspace directory; the timeout is capped at 55 seconds, the tools budget.",
+        args: {
+          type: "object",
+          properties: {
+            project: { type: "string", description: "LayerFS project name" },
+            branch: { type: "string", description: "branch whose workspace to run in (default main)" },
+            command: { type: "string", description: "the shell command to run in the workspace" },
+            message: { type: "string", description: "checkpoint message (default: the command itself)" },
+            timeoutMs: { type: "number", description: "timeout in milliseconds (default 50000, capped at 55000)" },
+          },
+          required: ["project", "command"],
+        },
+        async execute(args) {
+          const project = checkProject(str(args.project, "project"))
+          const branch = checkBranch(opt(args.branch, "branch", "main"))
+          const command = str(args.command, "command")
+          const message = args.message === undefined ? "" : str(args.message, "message")
+          const timeoutMs = args.timeoutMs === undefined ? 50000 : Number(args.timeoutMs) || 50000
+          return call((b) => b.exec(project, branch, command, message, timeoutMs))
         },
       },
       history: {
