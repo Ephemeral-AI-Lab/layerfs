@@ -148,7 +148,9 @@ and unmount when done. CLI `keep`, `release`, `start`, `cancel`, `commit` and
 `unmount` expose the same operations. TaskStop and termination of an outer Bash
 are not proof that a daemon-side process stopped.
 
-`resources` reports owned handles and unfinished/uncertain operations. A Stop
+`resources` reports owned handles and unfinished/uncertain operations. The Lead
+also sees its Workers' registered resources and unresolved calls. Its Stop
+check covers those Workers as well. A Stop
 Hook asks once for unresolved resources; it does not loop forever or discard
 changes. SessionEnd only records termination. No automatic SDK retries or
 uncertain-call replay occur. Trace is diagnostic, not the resource authority.

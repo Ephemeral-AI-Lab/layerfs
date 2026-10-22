@@ -79,8 +79,11 @@ const commands = {
   async status() { json({ project: lf.projectName, branch: owner().agent.branch, branches: await branches(lf) }); },
   async resources() {
     const { agent } = owner();
-    json({ agent, operations: records(join(agent.directory, 'operations')).filter((r) => r.agent === agent.id && ['pending','unknown','bookkeeping-failed'].includes(r.status)),
-      calls: records(join(agent.directory, 'calls')).filter((r) => r.agent === agent.id && r.id !== process.env.CC_LAYERFS_CALL && ['running','interrupted'].includes(r.status)).map(({ env, command, ...record }) => record),
+    const agents = agent.role === 'lead' ? records(join(agent.directory, 'agents')) : [agent];
+    const ids = new Set(agents.map((a) => a.id));
+    json({ agent, workers: agents.filter((a) => a.role === 'worker'),
+      operations: records(join(agent.directory, 'operations')).filter((r) => ids.has(r.agent) && ['pending','unknown','bookkeeping-failed'].includes(r.status)),
+      calls: records(join(agent.directory, 'calls')).filter((r) => ids.has(r.agent) && r.id !== process.env.CC_LAYERFS_CALL && ['running','interrupted'].includes(r.status)).map(({ env, command, ...record }) => record),
       processes: await op.process.list() });
   },
   async log() { need(1); json(await lf.branch.list_commits(args[0], Number(args[1] || 20))); },

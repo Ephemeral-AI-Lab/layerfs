@@ -182,6 +182,10 @@ test('Lead cleanup respects Worker ownership, stopped state and retention', (t) 
   const mounted=x.script(`const ws=await lf.workspace.mount(process.env.CC_LAYERFS_BRANCH); console.log(JSON.stringify(ws));`,worker);
   assert.equal(mounted.status,0,mounted.stderr);
   const ws=JSON.parse(mounted.stdout);
+  const resources=x.run('node "$DSH_LAYERFS_CLI" resources');
+  assert.equal(resources.status,0,resources.stderr);
+  assert(JSON.parse(resources.stdout).workers.some((a)=>a.id==='cleanup-worker'));
+  assert.equal(x.hook('Stop').decision,'block');
   const clean=`node "$DSH_LAYERFS_CLI" clean-worker cleanup-worker '${ws.sandbox}' '${ws.path}'`;
   assert.match(x.run(clean).stderr,/must have stopped/);
   x.hook('SubagentStop',worker);

@@ -151,9 +151,11 @@ export async function handle(input, { deploymentCheck = checkDeployment } = {}) 
     return {};
   }
   if (event === 'Stop' || event === 'SubagentStop') {
-    const pending = files(join(dir, 'operations')).filter((o) => o.agent === agent.id && ['pending','unknown','bookkeeping-failed'].includes(o.status));
-    const held = Object.values(agent.workspaces).filter((w) => w.status === 'mounted' && !w.keep);
-    const calls = files(join(dir, 'calls')).filter((c) => c.agent === agent.id && ['running','interrupted'].includes(c.status));
+    const agents = agent.role === 'lead' ? files(join(dir, 'agents')) : [agent];
+    const ids = new Set(agents.map((a) => a.id));
+    const pending = files(join(dir, 'operations')).filter((o) => ids.has(o.agent) && ['pending','unknown','bookkeeping-failed'].includes(o.status));
+    const held = agents.flatMap((a) => Object.values(a.workspaces)).filter((w) => w.status === 'mounted' && !w.keep);
+    const calls = files(join(dir, 'calls')).filter((c) => ids.has(c.agent) && ['running','interrupted'].includes(c.status));
     await update(path, (state) => { state.lastReport = input.last_assistant_message; state.stopped = new Date().toISOString(); });
     if ((pending.length || held.length || calls.length) && !input.stop_hook_active) return {
       decision: 'block', reason: `LayerFS has ${held.length} unretained Workspaces, ${pending.length} uncertain operations and ${calls.length} unfinished/interrupted calls. Inspect lfs resources, commit/unmount or explicitly retain long jobs; report unknown outcomes. Do not discard automatically.`
