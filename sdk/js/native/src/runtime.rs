@@ -2,21 +2,25 @@
 //! `deploy.sandbox` `local` (LAYERFS_SANDBOX=local) a daemon process on this
 //! kernel, for a VM or CI box that is itself the isolation boundary. Both run
 //! the same daemon and answer the same calls; only how it is started, how
-//! commands are launched and how it is observed differ.
+//! commands are launched and how it is observed differ. The local runtime
+//! is Linux only; elsewhere selecting it is refused as Unsupported.
 use crate::job::{failed, refused};
 use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_sandbox::backend::{docker, local};
+use layerfs_sandbox::backend::docker;
+#[cfg(target_os = "linux")]
+use layerfs_sandbox::backend::local;
 use layerfs_sandbox::{CommandIdentity, ContainerId, WireFailure};
 use std::net::SocketAddr;
 
-/// The image a local Sandbox records: placement keeps local and Docker
-/// Sandboxes of one project apart by it.
+/// A local Sandbox record's `runtime`, and the image it records (a Docker
+/// record has no `runtime`).
 pub(crate) const LOCAL: &str = "local";
 
 /// One Sandbox's runtime owner.
 pub(crate) enum Runtime {
     Docker(docker::Sandbox),
+    #[cfg(target_os = "linux")]
     Local(local::Sandbox),
 }
 
@@ -34,17 +38,38 @@ pub(crate) fn local(deploy: &SdkValue) -> Result<bool, SdkRefusal> {
     }
 }
 
-/// The image a new Workspace of this deployment is placed by: `local` for
-/// the local runtime, else `deploy.image`.
-pub(crate) fn image(args: &SdkValue) -> Result<Option<String>, SdkRefusal> {
+/// What a new Workspace of a deployment is placed by: its runtime and, for
+/// Docker, its image (`deploy.image`).
+#[derive(Debug)]
+pub(crate) struct Placement {
+    local: bool,
+    image: Option<String>,
+}
+
+/// The call's placement; none without a deployment (no filter, as before).
+pub(crate) fn placement(args: &SdkValue) -> Result<Option<Placement>, SdkRefusal> {
     let Some(deploy) = args.get("deploy") else {
         return Ok(None);
     };
-    Ok(if local(deploy)? {
-        Some(LOCAL.to_owned())
-    } else {
-        deploy.get_text("image").map(str::to_owned)
-    })
+    let local = local(deploy)?;
+    Ok(Some(Placement {
+        local,
+        image: (!local)
+            .then(|| deploy.get_text("image").map(str::to_owned))
+            .flatten(),
+    }))
+}
+
+impl Placement {
+    /// Whether a Sandbox record may take this Workspace: the same runtime
+    /// (the record's `runtime`, which a Docker record does not have) and, for
+    /// Docker, the same image. The image string alone does not tell them
+    /// apart: `local` is also a valid Docker image name.
+    pub(crate) fn admits(&self, record: &SdkValue) -> bool {
+        let local = record.get_text("runtime") == Some(LOCAL);
+        local == self.local
+            && (local || self.image.is_none() || record.get_text("image") == self.image.as_deref())
+    }
 }
 
 impl Runtime {
@@ -52,6 +77,7 @@ impl Runtime {
     pub(crate) fn identity(&self) -> ContainerId {
         match self {
             Self::Docker(sandbox) => sandbox.identity(),
+            #[cfg(target_os = "linux")]
             Self::Local(sandbox) => sandbox.identity(),
         }
     }
@@ -59,6 +85,7 @@ impl Runtime {
     pub(crate) fn image(&self) -> &str {
         match self {
             Self::Docker(sandbox) => &sandbox.request().image,
+            #[cfg(target_os = "linux")]
             Self::Local(_) => LOCAL,
         }
     }
@@ -68,6 +95,7 @@ impl Runtime {
     pub(crate) fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
         match self {
             Self::Docker(sandbox) => sandbox.endpoint(),
+            #[cfg(target_os = "linux")]
             Self::Local(sandbox) => sandbox.endpoint(),
         }
     }
@@ -77,6 +105,7 @@ impl Runtime {
     pub(crate) fn scratch(&self) -> String {
         match self {
             Self::Docker(_) => "/tmp".to_owned(),
+            #[cfg(target_os = "linux")]
             Self::Local(sandbox) => sandbox.tmp().display().to_string(),
         }
     }
@@ -84,7 +113,22 @@ impl Runtime {
     pub(crate) fn delete(&mut self) -> Result<(), Box<WireFailure>> {
         match self {
             Self::Docker(sandbox) => sandbox.delete(),
+            #[cfg(target_os = "linux")]
             Self::Local(sandbox) => sandbox.delete(),
+        }
+    }
+    /// Names a background process a command started in a session of its own
+    /// (`pid`, started at `start`), so it ends with a local Sandbox as it
+    /// ends with a container.
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
+    pub(crate) fn track(&self, pid: u32, start: &str) -> Result<(), SdkRefusal> {
+        match self {
+            Self::Docker(_) => Ok(()),
+            #[cfg(target_os = "linux")]
+            Self::Local(sandbox) => {
+                let start = start.parse::<u64>().map_err(failed)?;
+                sandbox.track(pid, start).map_err(failed)
+            }
         }
     }
     /// One command to its end: exit code, stdout, stderr. `spool` sends
@@ -117,6 +161,7 @@ impl Runtime {
                     .known_root_exit()
                     .ok_or_else(|| refused("Unknown", "the command's exit code is not known"))?
             }
+            #[cfg(target_os = "linux")]
             Self::Local(sandbox) => {
                 let request = docker::ExecRequest {
                     identity,
