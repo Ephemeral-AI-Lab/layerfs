@@ -44,7 +44,7 @@ impl Service {
                 value.epoch,
                 value.published.clone(),
                 // Copied with the control fields: maintained counters only.
-                self.kernel.as_ref().map(|_| value.kernel.block()),
+                (self.kernel.is_some() || self.export.is_some()).then(|| value.kernel.block()),
             )
         };
         let observed = self.job(

@@ -11,6 +11,8 @@ layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-store-service = { path = "../layerfs-store-service" }
 layerfs-workspace = { path = "../layerfs-workspace" }
 layerfs-fuse = { path = "../layerfs-fuse" }
+# NFS kernel serving: the native route's mount entry beside FUSE.
+layerfs-nfs = { path = "../layerfs-nfs" }
 layerfs-bridge = { path = "../layerfs-bridge" }
 layerfs-content = { path = "../layerfs-content" }
 layerfs-storage = { path = "../layerfs-storage" }
@@ -19,7 +21,7 @@ layerfs-telemetry = { path = "../layerfs-telemetry" }
 # Concrete Store opening stays in application bootstrap, outside store/.
 layerfs-persistence = { path = "../layerfs-persistence" }
 
-nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+nix = { version = "=0.31.3", features = ["fs", "user", "process", "resource"] }
 
 [dev-dependencies]
 blake3 = { version = "=1.8.5", default-features = false }

@@ -43,18 +43,19 @@ fn refused(code: ControlCode, phase: &'static str, detail: &'static str) -> Fail
 /// The whole before-effect decision, made under the registry lock and in this
 /// order. A refusal changes nothing. Admitted, it returns the Commit knowledge
 /// the receipt will carry: copied here, never settled by a later read.
-fn guard(
+pub(super) fn guard(
     value: &Binding,
     token: WorkspaceToken,
     relinquish_unknown: bool,
 ) -> Result<CommitKnowledge, Failure> {
     // Stored custody answers first: no second abort or detach ever follows it.
+    if let Kernel::ExportKept(kept) = &value.kernel {
+        return Err(Failure::Retained(Box::new(kept.custody(token))));
+    }
     #[cfg(target_os = "linux")]
     if let Kernel::Retained(kept) = &value.kernel {
         return Err(Failure::Retained(Box::new(kept.custody(token))));
     }
-    #[cfg(not(target_os = "linux"))]
-    let _ = token;
     if matches!(
         value.activity,
         Activity::Committing | Activity::Attaching | Activity::Closing
@@ -106,7 +107,6 @@ fn connection(kernel: &Kernel) -> Result<bool, Failure> {
             ADMISSION,
             "Workspace owns no kernel connection",
         )),
-        #[cfg(target_os = "linux")]
         Kernel::Attaching => Err(refused(
             ControlCode::Unknown,
             ADMISSION,
@@ -122,6 +122,13 @@ fn connection(kernel: &Kernel) -> Result<bool, Failure> {
         )),
         #[cfg(target_os = "linux")]
         Kernel::Ready(attached) => Ok(attached.session.abort_bound()),
+        // The forced client unmount is the export's abort.
+        Kernel::Exported(_) => Ok(true),
+        Kernel::ExportLeaving(_) | Kernel::ExportKept(_) => Err(refused(
+            ControlCode::Busy,
+            ADMISSION,
+            "terminal unmount already admitted",
+        )),
     }
 }
 #[cfg(not(target_os = "linux"))]
@@ -132,6 +139,9 @@ impl Service {
         token: WorkspaceToken,
         relinquish_unknown: bool,
     ) -> Result<Success, Failure> {
+        if self.export.is_some() {
+            return self.force_export(token, relinquish_unknown);
+        }
         let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         guard(bound_mut(&mut entries, token)?, token, relinquish_unknown)?;
         Err(refused(
@@ -167,6 +177,9 @@ impl Service {
         token: WorkspaceToken,
         relinquish_unknown: bool,
     ) -> Result<Success, Failure> {
+        if self.export.is_some() {
+            return self.force_export(token, relinquish_unknown);
+        }
         let admitted = self.admit_force(token, relinquish_unknown)?;
         self.force_admitted(token, admitted)
     }

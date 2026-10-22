@@ -1,10 +1,72 @@
 //! Kernel serving assembly over the daemon's one Store and one overlay owner.
 use crate::{
-    control::{KernelServing, Service},
+    control::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service},
     store::Store,
     Owner,
 };
-use std::sync::Arc;
+use layerfs_bridge::daemon_setup::DaemonSetup;
+use std::{path::Path, sync::Arc};
+
+/// Selects the kernel route: `nfs` serves every mount over loopback NFSv3
+/// (the native route); anything else, or unset, is FUSE.
+pub const KERNEL_ROUTE: &str = "LAYERFS_KERNEL";
+/// Optional helper command lines (`{port}`, `{dir}` replaced) overriding the
+/// host client's defaults for the NFS route.
+pub const NFS_MOUNT: &str = "LAYERFS_NFS_MOUNT";
+pub const NFS_UNMOUNT: &str = "LAYERFS_NFS_UNMOUNT";
+pub const NFS_FORCE: &str = "LAYERFS_NFS_FORCE";
+pub const NFS_FLUSH: &str = "LAYERFS_NFS_FLUSH";
+
+/// Whether this daemon serves its mounts over NFS.
+/// macOS has no other route: there it is always NFS.
+pub(super) fn nfs_route() -> bool {
+    cfg!(target_os = "macos") || std::env::var(KERNEL_ROUTE).is_ok_and(|route| route == "nfs")
+}
+/// NFS serving for the native route, from the protected setup and the
+/// declared helper overrides. Nothing is mounted until an explicit Attach.
+pub(super) fn assemble_export(setup: &DaemonSetup) -> std::io::Result<Option<Arc<ExportServing>>> {
+    if !nfs_route() {
+        return Ok(None);
+    }
+    let mounts = Path::new(&setup.mounts);
+    if !mounts.is_absolute() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "mount home must be absolute",
+        ));
+    }
+    if !mounts.is_dir() {
+        std::fs::create_dir(mounts)?;
+    }
+    let mut mounter = Mounter::host();
+    let helper = |name: &str| {
+        std::env::var(name)
+            .ok()
+            .and_then(|line| Helper::words(&line))
+    };
+    if let Some(mount) = helper(NFS_MOUNT) {
+        mounter.mount = mount;
+    }
+    if let Some(unmount) = helper(NFS_UNMOUNT) {
+        mounter.unmount = unmount;
+    }
+    if let Some(force) = helper(NFS_FORCE) {
+        mounter.force = force;
+    }
+    mounter.flush = helper(NFS_FLUSH);
+    let serving = ExportServing::start(ExportServingConfig::new(
+        mounts.to_owned(),
+        setup.command_uid,
+        setup.command_gid,
+        mounter,
+    ));
+    // A daemon of this mount home that ended without unmounting left its
+    // client mounts; they are forced off before this one serves.
+    for line in serving.reclaim() {
+        eprintln!("LAYERFS_NFS_RECLAIM {line}");
+    }
+    Ok(Some(Arc::new(serving)))
+}
 
 /// Control and kernel serving share the same Store handle and overlay owner;
 /// the Service's registry stays the sole authority for every mount. The
@@ -13,19 +75,19 @@ pub(super) fn service(
     store: Arc<Store>,
     owner: &Owner,
     kernel: Option<&Arc<KernelServing>>,
+    export: Option<&Arc<ExportServing>>,
     serial_low_water: u64,
 ) -> Arc<Service> {
     store.set_serial_low_water(serial_low_water);
-    Arc::new(match kernel {
-        Some(kernel) => Service::with_kernel(store, owner, kernel.clone()),
-        None => Service::new(store, owner),
+    Arc::new(match (export, kernel) {
+        (Some(export), _) => Service::with_export(store, owner, export.clone()),
+        (None, Some(kernel)) => Service::with_kernel(store, owner, kernel.clone()),
+        (None, None) => Service::new(store, owner),
     })
 }
 /// Kernel serving is a Linux capability; elsewhere control alone is assembled.
 #[cfg(not(target_os = "linux"))]
-pub(super) fn assemble(
-    _setup: &layerfs_bridge::daemon_setup::DaemonSetup,
-) -> std::io::Result<Option<Arc<KernelServing>>> {
+pub(super) fn assemble(_setup: &DaemonSetup) -> std::io::Result<Option<Arc<KernelServing>>> {
     Ok(None)
 }
 #[cfg(target_os = "linux")]
@@ -58,6 +120,10 @@ mod linux {
     pub(in crate::application) fn assemble(
         setup: &DaemonSetup,
     ) -> io::Result<Option<Arc<KernelServing>>> {
+        // The NFS route opens no FUSE device.
+        if super::nfs_route() {
+            return Ok(None);
+        }
         let mounts = Path::new(&setup.mounts);
         device()?;
         home(mounts)?;

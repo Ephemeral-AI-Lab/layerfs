@@ -61,7 +61,7 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-store-service": {"layerfs-overlay", "layerfs-workspace", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry"},
     # Concrete Store open/install belongs to application composition. The
     # provider-independent daemon store/ subtree has a narrower source boundary.
-    "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-store-service", "layerfs-fuse", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry"},
+    "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-store-service", "layerfs-fuse", "layerfs-nfs", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry"},
     "layerfs-api": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry", "layerfs-bridge", "layerfs-project", "layerfs-sandbox", "layerfs-store-service"},
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     "layerfs-sandbox": set(),

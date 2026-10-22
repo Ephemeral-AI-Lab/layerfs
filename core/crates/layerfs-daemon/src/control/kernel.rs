@@ -29,7 +29,6 @@ pub use super::serving::KernelServing;
 pub(super) enum Kernel {
     Unattached,
     /// One Attach is admitted, or its engine outcome is unknown.
-    #[cfg(target_os = "linux")]
     Attaching,
     #[cfg(target_os = "linux")]
     Ready(Box<super::serving::Attached>),
@@ -38,6 +37,12 @@ pub(super) enum Kernel {
     Leaving(Box<super::serving::Leaving>),
     #[cfg(target_os = "linux")]
     Retained(Box<super::serving::Kept>),
+    /// NFS route: a serving export the host client has mounted.
+    Exported(Box<super::export::Exported>),
+    /// NFS route: a terminal operation owns the export.
+    ExportLeaving(Box<super::export::ExportLeaving>),
+    /// NFS route: export custody a teardown could not finish disposing.
+    ExportKept(Box<super::export::ExportKept>),
 }
 impl Kernel {
     /// Maintained observations only: no syscall, SQL job or kernel request.
@@ -50,8 +55,10 @@ impl Kernel {
         };
         match self {
             Self::Unattached => plain(MountPhase::Unattached),
-            #[cfg(target_os = "linux")]
             Self::Attaching => plain(MountPhase::Attaching),
+            Self::Exported(_) | Self::ExportLeaving(_) | Self::ExportKept(_) => {
+                super::export::block(self).unwrap_or_else(|| plain(MountPhase::Unattached))
+            }
             #[cfg(target_os = "linux")]
             Self::Ready(attached) => {
                 let facts = attached.session.facts();

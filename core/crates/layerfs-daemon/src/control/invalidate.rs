@@ -17,6 +17,12 @@ impl Service {
         shown: ObjectId,
         installed: ObjectId,
     ) -> Result<(), Failure> {
+        // An NFS client holds no invalidation channel: the export closes its
+        // descriptors of the replaced tree and refreshes the stale inodes the
+        // client may cache through the mount point.
+        if self.installed_export(token, workspace, shown, installed)? {
+            return Ok(());
+        }
         #[cfg(target_os = "linux")]
         {
             use super::{kernel::Kernel, registry::bound};

@@ -17,6 +17,8 @@ pub(super) enum Departure {
     Unattached,
     #[cfg(target_os = "linux")]
     Session(Box<super::serving::Attached>),
+    /// NFS route: the export and the client mount of it.
+    Export(Box<super::export::Exported>),
 }
 impl Service {
     /// Refuses uncommitted changes with their paths unless `discard`.
@@ -30,6 +32,7 @@ impl Service {
         let (workspace, departure) = self.admit_unmount(token)?;
         match departure {
             Departure::Unattached => {}
+            Departure::Export(exported) => return self.unmount_export(token, workspace, *exported),
             #[cfg(target_os = "linux")]
             Departure::Session(attached) => {
                 return self.unmount_kernel(token, workspace, *attached)
@@ -46,6 +49,9 @@ impl Service {
         let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         let value = bound_mut(&mut entries, token)?;
         // Retained custody answers before ordinary activity admission.
+        if let Kernel::ExportKept(kept) = &value.kernel {
+            return Err(Failure::Retained(Box::new(kept.custody(token))));
+        }
         #[cfg(target_os = "linux")]
         if let Kernel::Retained(kept) = &value.kernel {
             return Err(Failure::Retained(Box::new(kept.custody(token))));
@@ -53,7 +59,12 @@ impl Service {
         idle(value)?;
         let departure = match value.kernel {
             Kernel::Unattached => Departure::Unattached,
-            #[cfg(target_os = "linux")]
+            Kernel::Exported(_) | Kernel::ExportLeaving(_) | Kernel::ExportKept(_) => {
+                Departure::Export(Box::new(super::export::take(
+                    &mut value.kernel,
+                    layerfs_bridge::control::MountPhase::Probing,
+                )?))
+            }
             Kernel::Attaching => {
                 return Err(Failure::kernel(
                     layerfs_bridge::control::ControlCode::Unknown,
@@ -170,13 +181,16 @@ impl Service {
         }
         failure
     }
-    /// Attach is a Linux capability; elsewhere it is refused before effects.
+    /// FUSE Attach is a Linux capability; elsewhere only NFS serving attaches.
     #[cfg(not(target_os = "linux"))]
     pub(super) fn attach(
         &self,
-        _token: WorkspaceToken,
+        token: WorkspaceToken,
         _timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
     ) -> Result<Success, Failure> {
+        if let Some(export) = self.export.clone() {
+            return self.attach_export(&export, token);
+        }
         Err(Failure::Rejected(
             layerfs_bridge::control::ControlCode::Invalid,
             "kernel serving requires Linux",

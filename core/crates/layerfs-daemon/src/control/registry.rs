@@ -33,6 +33,10 @@ pub struct Service {
     pub(super) entries: Mutex<BTreeMap<WorkspaceId, Entry>>,
     /// Absent for a control-only Service: Attach is then refused before effects.
     pub(super) kernel: Option<Arc<KernelServing>>,
+    /// NFS serving (native route); when present, Attach serves NFS.
+    pub(super) export: Option<Arc<super::export::ExportServing>>,
+    /// What the last stopped export gave back, for diagnostics.
+    pub(super) released: Mutex<Option<(WorkspaceToken, layerfs_nfs::Released)>>,
 }
 impl Service {
     /// Binds control to the already initialized owner and its configured capacity.
@@ -43,7 +47,25 @@ impl Service {
             capacity: owner.configuration().namespaces,
             entries: Mutex::new(BTreeMap::new()),
             kernel: None,
+            export: None,
+            released: Mutex::new(None),
         }
+    }
+    /// Binds control and NFS serving (the native route's mount entry) to the
+    /// same Store and overlay owner.
+    pub fn with_export(
+        store: Arc<Store>,
+        owner: &Owner,
+        export: Arc<super::export::ExportServing>,
+    ) -> Self {
+        Self {
+            export: Some(export),
+            ..Self::new(store, owner)
+        }
+    }
+    /// Whether Attach serves NFS rather than FUSE.
+    pub fn serves_nfs(&self) -> bool {
+        self.export.is_some()
     }
     /// Binds control and kernel serving to the same Store and overlay owner.
     pub fn with_kernel(store: Arc<Store>, owner: &Owner, kernel: Arc<KernelServing>) -> Self {

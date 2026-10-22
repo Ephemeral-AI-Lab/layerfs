@@ -5,6 +5,7 @@ mod cleanup;
 #[cfg(target_os = "linux")]
 mod detach;
 mod dirty;
+mod export;
 mod failure;
 mod force;
 mod inspect;
@@ -19,6 +20,7 @@ mod serving;
 mod status;
 mod types;
 mod unmount;
+pub use export::{ExportServing, ExportServingConfig, Helper, Mounter, HELPER_WAIT};
 pub use kernel::{KernelConfig, KernelServing};
 pub(crate) use observation::{reply_token, request_token};
 pub use registry::Service;
