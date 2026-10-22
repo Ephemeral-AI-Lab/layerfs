@@ -23,7 +23,7 @@ UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
     "layerfs-persistence": "src/backend/sqlite/file_control.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-store-service", "layerfs-fuse", "layerfs-daemon", "layerfs-api", "layerfs-bridge", "layerfs-sandbox")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-store-service", "layerfs-fuse", "layerfs-nfs", "layerfs-daemon", "layerfs-api", "layerfs-bridge", "layerfs-sandbox")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
@@ -34,6 +34,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",
+    "layerfs-nfs": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
@@ -53,6 +54,8 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
     "layerfs-fuse": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
+    # The NFS export reuses the kernel ports and operations; never daemon.
+    "layerfs-nfs": {"layerfs-content", "layerfs-overlay", "layerfs-workspace", "layerfs-fuse"},
     # The Store engine (#352 F-020): the SDK's Store calls in-process and the
     # Store/overlay ports daemon Workspace Commits use; it opens the Store.
     "layerfs-store-service": {"layerfs-overlay", "layerfs-workspace", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry"},
@@ -66,7 +69,7 @@ ALLOWED_DEPENDENCIES = {
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
 ENGINES_AND_CLUSTER2 = {
     "layerfs-s3", "layerfs-metadata", "layerfs-persistence", "layerfs-overlay", "layerfs-workspace",
-    "layerfs-store-service", "layerfs-fuse", "layerfs-daemon", "layerfs-bridge", "layerfs-sandbox",
+    "layerfs-store-service", "layerfs-fuse", "layerfs-nfs", "layerfs-daemon", "layerfs-bridge", "layerfs-sandbox",
     "layerfs-server", "layerfs-sdk", "layerfs-api", "layerfs-api-core",
 }
 

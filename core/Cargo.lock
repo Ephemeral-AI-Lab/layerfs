@@ -619,6 +619,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-nfs"
+version = "1.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-fuse",
+ "layerfs-history",
+ "layerfs-overlay",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-storage",
+ "layerfs-telemetry",
+ "layerfs-workspace",
+]
+
+[[package]]
 name = "layerfs-node"
 version = "1.0.0"
 dependencies = [
