@@ -33,7 +33,9 @@ fn value_of(state: u64) -> [u8; 73] {
         kind: InodeKind::RegularFile,
         namespace_ref_count: 1,
         content_root: content,
-        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(ObjectId::from_bytes(&[0xA5; 32]).expect("32-byte identity")),
+        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+            ObjectId::from_bytes(&[0xA5; 32]).expect("32-byte identity"),
+        ),
     })
 }
 
