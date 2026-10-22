@@ -1140,7 +1140,9 @@ fn late_final_row_failure_is_forwarded_as_error_without_eof_finalization_or_late
         .map(|serial| InodeUpdate {
             serial,
             value: InodeValue {
-                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic("references/late-final-new")),
+                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+                    "references/late-final-new",
+                )),
                 ..typed(InodeKind::RegularFile)
             },
         })
