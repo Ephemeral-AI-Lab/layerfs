@@ -1,7 +1,8 @@
 //! Workspace calls (#373). `workspace.mount(branch)` places the new
 //! Workspace: under the project's guard it takes the lowest-numbered running
-//! Sandbox of the call's image (`deploy.image`) with a free slot, reclaiming
-//! any whose container is gone, and starts the next Sandbox, on that image,
+//! Sandbox of the call's runtime and image (`deploy.image`) with a free
+//! slot, reclaiming any whose container is gone, and starts the next
+//! Sandbox, on that image,
 //! when every such one is full. Sandboxes of one project may run different
 //! images. A Workspace is
 //! `{ sandbox, path }`; status, Commit and unmount go to its Sandbox's
@@ -35,9 +36,8 @@ fn recorded(directory: &Path) -> Result<usize, SdkRefusal> {
 /// lowest-numbered running one of the call's image with a free slot, else a
 /// new one.
 fn place(args: &SdkValue, project: &Path) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let image = args
-        .get("deploy")
-        .and_then(|deploy| deploy.get_text("image"));
+    // by runtime, then image: local and Docker Sandboxes never share
+    let placement = crate::runtime::placement(args)?;
     for id in crate::discovery::sandbox_ids(args)? {
         let directory = crate::discovery::sandbox_dir(args, &id)?;
         let record = directory.join("sandbox.record");
@@ -45,8 +45,10 @@ fn place(args: &SdkValue, project: &Path) -> Result<Arc<SandboxState>, SdkRefusa
         if !record.exists() || recorded(&directory)? >= WORKSPACES as usize {
             continue;
         }
-        if image.is_some() && crate::discovery::load(&record)?.get_text("image") != image {
-            continue;
+        if let Some(placement) = &placement {
+            if !placement.admits(&crate::discovery::load(&record)?) {
+                continue;
+            }
         }
         match sandbox_live(&naming(args, &id)) {
             Ok(state) => return Ok(state),
@@ -81,7 +83,7 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
-        let image = state.runtime.request().image.as_str();
+        let image = state.runtime.image();
         fields.push(("image".to_owned(), SdkValue::text(image)));
     }
     crate::discovery::save_workspace(&state, &mounted, branch)?;
@@ -96,7 +98,8 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
 }
 
 /// `operator.sandbox.list()`: the project's running Sandboxes, lowest
-/// number first: `{ id, name, image }`. Each recorded container is inspected once
+/// number first: `{ id, name, image }`. Each recorded container (or local
+/// daemon) is inspected once
 /// (no daemon is dialed); one found gone or stopped, an idle-closed
 /// Sandbox's, is reclaimed under the project's guard and left out. It starts
 /// nothing.
@@ -123,11 +126,9 @@ pub(crate) fn list(args: &SdkValue) -> Outcome {
         let cached = lock(&crate::registry::SANDBOXES)?.get(&directory).cloned();
         let observed = match cached {
             Some(state) => state.runtime.endpoint().map(drop),
-            None => {
-                let (docker, selector, request) = crate::discovery::runtime(&value)?;
-                layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request)
-                    .map(drop)
-            }
+            None => crate::discovery::recorded(args, &id, &value)?
+                .reopen()
+                .map(drop),
         };
         match observed {
             Ok(()) => items.push(item),

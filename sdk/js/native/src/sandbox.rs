@@ -28,12 +28,12 @@ use std::time::Duration;
 /// Port the daemon listens on inside its container.
 const PORT: u16 = 30421;
 /// Wait for the daemon's listener after Start.
-const STARTUP: Duration = Duration::from_secs(30);
+pub(crate) const STARTUP: Duration = Duration::from_secs(30);
 /// Wait for one Engine control response.
 const ENGINE: Duration = Duration::from_secs(30);
 /// A failed create's report keeps its daemon's last log lines, up to this many bytes.
-const LOG_LINES: u16 = 20;
-const LOG_BYTES: usize = 2048;
+pub(crate) const LOG_LINES: u16 = 20;
+pub(crate) const LOG_BYTES: usize = 2048;
 
 pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
     values::refusal(&failure).unwrap_or_else(|| failed(failure))
@@ -52,7 +52,7 @@ pub(crate) const WORKSPACES: u32 = 16;
 /// for this process and the rest for others (#352 F-017).
 pub(crate) const DAEMON_CONNECTIONS: u16 = 8;
 
-fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
+pub(crate) fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
     DaemonSetup {
         listen: format!("0.0.0.0:{PORT}"),
         private_key: private,
@@ -82,7 +82,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
 }
 
 /// A container name prefix when the deployment sets none.
-const PREFIX: &str = "layerfs-";
+pub(crate) const PREFIX: &str = "layerfs-";
 
 /// The container labels of Sandbox `id` of `project`: what it is, whose,
 /// and which. Saved in its record, so a reopen expects the same.
@@ -113,6 +113,16 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
             format!("project {name} has no installed Store: its Import did not finish, so import it again"),
         ));
     };
+    if crate::runtime::local(deploy)? {
+        #[cfg(target_os = "linux")]
+        return crate::local::start(args, directory, (&project, installed));
+        #[cfg(not(target_os = "linux"))]
+        return Err(refused(
+            "Unsupported",
+            "LAYERFS_SANDBOX=local runs its daemon as a process of this kernel, which needs \
+             Linux; run it inside a Linux VM or CI box, or use Docker",
+        ));
+    }
     let docker = text(deploy, "docker")?;
     let image = deploy
         .get_text("image")
@@ -138,23 +148,10 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
     }
     let store_volume = text(deploy, "volume")?.to_owned();
     let executable = PathBuf::from(text(deploy, "daemon")?);
-    // A creation whose outcome is unknown is never silently attempted again.
-    let intent = directory.join("create.intent");
-    if intent.exists() {
-        let state = match crate::discovery::load(&intent) {
-            Ok(SdkValue::Text(state)) => state,
-            _ => "its record is unreadable".to_owned(),
-        };
-        return Err(refused(
-            "Unknown",
-            format!(
-                "a prior Sandbox creation has an unresolved discovery intent: {state}. Its outcome \
-                 is unknown, so it is neither retried nor taken as done. Remove any container it \
-                 left (docker ps -a --filter volume={store_volume}), then delete {}",
-                intent.display()
-            ),
-        ));
-    }
+    unresolved(
+        directory,
+        &format!("docker ps -a --filter volume={store_volume}"),
+    )?;
     // The number is claimed before anything is made; a failed start gives it
     // back (its directory holds no record yet), so the number is used again.
     let (id, saved_directory) = crate::discovery::claim_next(args)?;
@@ -170,6 +167,29 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
         let _ = std::fs::remove_dir(&saved_directory);
     }
     made
+}
+
+/// A creation whose outcome is unknown is never silently attempted again:
+/// while the project's creation intent stays, starts are refused. `left`
+/// says where to look for what that creation may have left.
+pub(crate) fn unresolved(directory: &Path, left: &str) -> Result<(), SdkRefusal> {
+    let intent = directory.join("create.intent");
+    if intent.exists() {
+        let state = match crate::discovery::load(&intent) {
+            Ok(SdkValue::Text(state)) => state,
+            _ => "its record is unreadable".to_owned(),
+        };
+        return Err(refused(
+            "Unknown",
+            format!(
+                "a prior Sandbox creation has an unresolved discovery intent: {state}. Its outcome \
+                 is unknown, so it is neither retried nor taken as done. Remove any container it \
+                 left ({left}), then delete {}",
+                intent.display()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// Starts the claimed Sandbox `id`: container, daemon on the installed
@@ -241,7 +261,7 @@ fn start_claimed(
         project: name.to_owned(),
         name: container_name,
         directory: saved_directory.to_owned(),
-        runtime,
+        runtime: crate::runtime::Runtime::Docker(runtime),
         identity,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
@@ -339,7 +359,7 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkR
     }
 }
 
-/// Reclaims Sandbox `id`, whose container a reopen found gone or stopped
+/// Reclaims Sandbox `id`, whose container (or local daemon) a reopen found gone or stopped
 /// (`container`, `stopped`): one unforced Delete of a stopped container, then
 /// its records, so its number is free again. Called under the project's
 /// guard; the Sandbox's own guard is taken too. The record is read again
@@ -364,8 +384,9 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
         ));
     }
     if stopped {
-        let (docker, selector, request) = crate::discovery::runtime(&value)?;
-        match layerfs_sandbox::backend::docker::Sandbox::stopped(docker, selector, request).delete()
+        match crate::discovery::recorded(args, id, &value)?
+            .stopped()
+            .delete()
         {
             Err(failure) if !failure.container_gone() => return Err(failed(failure)),
             _ => {}

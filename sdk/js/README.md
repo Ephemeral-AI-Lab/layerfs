@@ -75,10 +75,12 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process; the client option `storePath` wins. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. Linux only, on a local filesystem the daemons share; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional; the client option `daemonHost` wins. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
+| `LAYERFS_SANDBOX` | Optional; the client option `sandbox` wins. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `local`: a Sandbox is a daemon process on this machine, with no container and no Docker setting read (see [Local Sandboxes](#local-sandboxes-no-docker)). Any other value is refused as `InvalidInput` before anything is made. |
+| `LAYERFS_LOCAL_DIR` | With `LAYERFS_SANDBOX=local`, required: an existing absolute directory, owned by the running user, not group/other writable and traversable by others (0755). Each local Sandbox gets its own directory under it. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [Call trace](#call-trace)); unset means no trace. |
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
 | `LAYERFS_TRACE_START` | `1` adds a start line before each traced call; read at every call. |
-| `DSH_LAYERFS_HOME`, `DSH_LAYERFS_DOCKER`, `DSH_LAYERFS_IMAGE`, `DSH_LAYERFS_VOLUME`, `DSH_LAYERFS_DAEMON`, `DSH_LAYERFS_STORE_PATH`, `DSH_LAYERFS_TRACE`, `DSH_LAYERFS_TRACE_STEP`, `DSH_LAYERFS_TRACE_START` | Each is used when its `LAYERFS_` name is unset or empty. A host that may only set `DSH_*` names in a command's environment (deepseek-harness) configures and traces the SDK through these. |
+| `DSH_LAYERFS_HOME`, `DSH_LAYERFS_DOCKER`, `DSH_LAYERFS_IMAGE`, `DSH_LAYERFS_VOLUME`, `DSH_LAYERFS_DAEMON`, `DSH_LAYERFS_STORE_PATH`, `DSH_LAYERFS_SANDBOX`, `DSH_LAYERFS_LOCAL_DIR`, `DSH_LAYERFS_TRACE`, `DSH_LAYERFS_TRACE_STEP`, `DSH_LAYERFS_TRACE_START` | Each is used when its `LAYERFS_` name is unset or empty. A host that may only set `DSH_*` names in a command's environment (deepseek-harness) configures and traces the SDK through these. |
 
 A Sandbox is a container running one daemon on the project's Store. The
 project has numbered Sandboxes, `1`, `2`, …, each on one image:
@@ -249,6 +251,42 @@ or `fs.diff_files`. Resolve on working forks of both inputs. A Workspace conflic
 keeps its markers in that Workspace; inspect them through ordinary bounded
 `exec` commands and Commit each command. An omitted diagnostic is not a clean
 merge, and a failed/unknown operation must be inspected before a new operation.
+
+## Local Sandboxes (no Docker)
+
+`LAYERFS_SANDBOX=local` runs each Sandbox's daemon as a process of this
+machine instead of in a container, for a Linux VM or CI job that has no Docker
+and is itself the isolation boundary (a microVM, for instance). **It isolates
+nothing**: the daemon runs as root in this machine's namespaces, and commands
+share its processes, network and filesystem; they only run as their own uid
+501 and gid 20, with no supplementary groups. Use it only where everything on
+the machine belongs to the same trust domain. Docker stays the default.
+
+It needs root (the daemon mounts FUSE and commands run as another identity;
+otherwise `workspace.mount` is refused `Unsupported`), `/dev/fuse` (the
+daemon narrows it to 0600, as it does in a container), the daemon executable
+(`LAYERFS_DAEMON`), `LAYERFS_LOCAL_DIR` and the client's `storePath`, which
+the daemon opens directly: the Store calls and the daemons use the same file,
+on ext4, xfs or btrfs. `LAYERFS_DOCKER`, `_IMAGE`, `_VOLUME` and
+`_DAEMON_HOST` are not read. Everything else above holds: numbered
+Sandboxes of up to 16 Workspaces, placement, idle close after 2 minutes,
+reclaim, records under `LAYERFS_HOME/<project>/sandboxes/<n>/`, background
+processes, start intents and their refusals.
+
+Sandbox `n` lives in `LAYERFS_LOCAL_DIR/<prefix><project>-<n>/`:
+`config/daemon.setup` (its daemon setup, 0600 in a 0700 directory),
+`overlay/` (0700), `workspaces/<k>` (the Workspace mounts, so a Workspace's
+`path` is under this directory), `tmp/` (1777, the commands' `HOME` and the
+background processes' logs) and `daemon.log` (the daemon's output, what
+`docker logs` shows for a container; a failed start's report carries its last
+20 lines). The daemon listens on 127.0.0.1 only. Its records name the daemon
+by process id and start time, so a reused id is never taken for it. A mount
+result's `image` is `local`; local and Docker Sandboxes of one project are
+never mixed. A daemon that ends (idle close, crash, kill) is the stopped
+observation: Workspace calls to it are refused, and the next mount or
+`operator.sandbox.list()` reclaims it, detaching any mount the dead daemon
+left before deleting its directory. Nothing outside that directory is
+removed; the Store is never touched.
 
 ## Internal operator
 
