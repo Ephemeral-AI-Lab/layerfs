@@ -17,6 +17,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { promisify } from "node:util";
+import { storeDirOf } from "./config.js";
 import { isSim } from "./layerfs-client.js";
 import { stopProcesses } from "./sim/binding.js";
 import { removeWindowsHome, releaseWindowsStore, windowsDocker } from "./windows/host.js";
@@ -58,6 +59,7 @@ export async function removeProject(spec, bindings, trees, name, run = execute, 
     bindings.remove(project.name);
     return { removed: project.name, volume: project.volume };
   }
+  if (spec.native) return removeNative(spec, bindings, project, home, run);
   const docker = ["-H", `unix://${spec.docker}`];
   if (spec.windows) run = (_file, args) => windowsDocker(spec, args.slice(2));
   const { stdout } = await run("docker", [...docker, "ps", "-a", "--filter", `volume=${project.volume}`, "--format", "{{.ID}} {{.State}}"]);
@@ -75,3 +77,39 @@ export async function removeProject(spec, bindings, trees, name, run = execute, 
   bindings.remove(project.name);
   return { removed: project.name, volume: project.volume };
 }
+
+/** pgrep's matching lines, "" when none matches (it exits 1). Any other failure (pgrep missing or
+ * refused) refuses the removal: a daemon that cannot be ruled out may still serve a mount there. */
+const daemons = (run, args) => Promise.resolve().then(() => run("pgrep", args)).then((r) => r.stdout, (error) => {
+  if (error?.code === 1) return "";
+  throw refuse("busy", `cannot tell whether a Sandbox daemon still runs (pgrep: ${error?.message ?? error}); nothing was removed`);
+});
+/** The mount table; when it cannot be read the removal is refused. */
+const mountTable = (run) => Promise.resolve().then(() => run("mount", [])).then((r) => r.stdout, (error) => {
+  throw refuse("busy", `cannot read the mount table (mount: ${error?.message ?? error}); nothing was removed`);
+});
+
+/**
+ * The native route's removal: the project's local Sandboxes are folders
+ * `<localDir>/<prefix><project>-<n>` with a daemon process each. It refuses
+ * while one of their daemons runs or a Workspace of theirs is still in the
+ * mount table (a live NFS mount must never be deleted through), else
+ * deletes their folders, the Store folder and the home entry.
+ */
+async function removeNative(spec, bindings, project, home, run) {
+  const own = new RegExp(`^${escape(spec.prefix + project.name)}-[0-9]+$`);
+  const folders = existsSync(spec.localDir) ? readdirSync(spec.localDir).filter((entry) => own.test(entry)).map((entry) => join(spec.localDir, entry)) : [];
+  // each match with its command line in one pgrep (macOS -l, Linux -a), never ps: macOS's
+  // ps is setuid root, which a Seatbelt-sandboxed Host may not execute
+  const listed = (await daemons(run, [process.platform === "darwin" ? "-lf" : "-af", `layerfs-daemon --config ${spec.localDir}/`])).split("\n").filter(Boolean);
+  const running = listed.filter((line) => folders.some((folder) => line.includes(`${folder}/`))).map((line) => line.split(" ")[0]);
+  const mounts = (await mountTable(run)).split("\n").filter((line) => folders.some((folder) => line.includes(` on ${folder}/`)));
+  if (running.length || mounts.length) throw refuse("busy", `${running.length} Sandbox daemon${running.length === 1 ? "" : "s"} and ${mounts.length} Workspace mount${mounts.length === 1 ? "" : "s"} of ${project.name} are live; a Sandbox closes 2 minutes after its last Workspace is unmounted`);
+  for (const folder of folders) rmSync(folder, { recursive: true, force: true });
+  rmSync(storeDirOf(spec, project.volume), { recursive: true, force: true });
+  if (existsSync(home)) rmSync(home, { recursive: true, force: true });
+  bindings.remove(project.name);
+  return { removed: project.name, volume: project.volume };
+}
+
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

@@ -84,7 +84,18 @@ function localDeployment(options, env, sandbox) {
     if (!deploy[name]) throw new LayerFSError("InvalidInput", `deploy.${name} is not configured (LAYERFS_${setting})`, null);
   }
   if (!deploy.containerPrefix) delete deploy.containerPrefix;
+  if (sandbox === "native") nfsFallbacks();
   return deploy;
+}
+
+/** The native route's daemon reads its NFS mount helpers from this process's
+ * LAYERFS_NFS_* (a Sandbox start passes them on); a dsh bash call can only be
+ * given DSH_* names, so DSH_LAYERFS_NFS_<NAME> stands in for an unset one. */
+function nfsFallbacks() {
+  for (const name of ["MOUNT", "UNMOUNT", "FORCE", "FLUSH", "REFRESH"]) {
+    const fallback = process.env[`DSH_LAYERFS_NFS_${name}`];
+    if (!process.env[`LAYERFS_NFS_${name}`] && fallback) process.env[`LAYERFS_NFS_${name}`] = fallback;
+  }
 }
 
 /** One client's deployment selection, including cross-process discovery

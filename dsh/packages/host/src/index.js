@@ -37,6 +37,10 @@ export const Config = z.object({
   home: z.string().description("LayerFS home for discovery records (default: <temp>/dsh-layerfs/home)"),
   stateDir: z.string().description("Project bindings and agent names (default: <profile>/dsh-layerfs)"),
   traceDir: z.string().description("Per-agent SDK traces (Windows default: <workspace>/.dsh-layerfs-traces; other platforms: <temp>/dsh-layerfs/traces)"),
+  sandbox: z.union(["docker", "native"]).description("Where Live projects run: docker (default) or native (macOS: local daemons, loopback NFS, no Docker)"),
+  localDir: z.string().description("native: the folder local Sandboxes live in (default: <temp>/dsh-layerfs/local)"),
+  stores: z.string().description("native: the folder of each project's Store (default: <temp>/dsh-layerfs/stores)"),
+  nfsMount: z.string().description("native: LAYERFS_NFS_MOUNT for Sandbox daemons, when mount_nfs needs other options"),
   pollMs: z.natural().min(50).max(10_000).default(400).description("How often trace files are read, in milliseconds"),
 });
 
@@ -50,6 +54,8 @@ export function apply(ctx, config) {
     ensureWindows(spec).catch((error) => ctx.logger?.warn?.(`layerfs: WSL worker did not start: ${error.message}`));
     ctx.effect(() => () => closeWindows(spec).catch((error) => ctx.logger?.warn?.(`layerfs: ${error.message}`)), "layerfs-host: WSL worker");
   }
+  // native: a Sandbox this process starts reads the daemon's mount command from its environment
+  if (spec.nfsMount) process.env.LAYERFS_NFS_MOUNT = spec.nfsMount;
   if (spec.box) {
     // the Host's own clients use the ported SDK too (port/sdk.js)
     Object.assign(process.env, { DSH_LAYERFS_STORE_CONTAINER: spec.box, DSH_LAYERFS_BUNDLE: spec.bundle });
@@ -79,7 +85,7 @@ export function apply(ctx, config) {
       // right after the working directory, the other fact about where the agent works
       order: scope.systemPrompt.getContextOrder("WORKING_DIRECTORY") + 1,
       interpolate: false,
-      text: (context) => (context.agent ? projectContext(bindings, collector, context.agent.session) : ""),
+      text: (context) => (context.agent ? projectContext(bindings, collector, context.agent.session, spec) : ""),
     });
   });
 }

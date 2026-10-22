@@ -3,7 +3,7 @@
 // (backend "sim") is imported into the simulator (sim/) instead: no Docker,
 // no deployment settings.
 import { execFile } from "node:child_process";
-import { accessSync, appendFileSync, constants, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { accessSync, appendFileSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { lstat, opendir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join } from "node:path";
@@ -12,7 +12,7 @@ import { setTimeout as pause } from "node:timers/promises";
 import { promisify } from "node:util";
 import { ensureBox } from "./box.js";
 import { ensureWindows, windowsDocker } from "./windows/host.js";
-import { missingDeployment } from "./config.js";
+import { missingDeployment, storeDirOf } from "./config.js";
 import { clientFor, isSim, release } from "./layerfs-client.js";
 
 const run = promisify(execFile);
@@ -86,12 +86,18 @@ export function liveOnlyDemo(name, scenarios = SCENARIOS) {
  * @returns {string|null}
  */
 export function hostAccess(spec, { platform = process.platform, uid = process.getuid?.() } = {}) {
+  if (spec.native && uid !== undefined) return homeOwner(spec, uid);
   if (platform !== "linux" || spec.box || uid === undefined) return null;
   try {
     accessSync(spec.volumes, constants.R_OK | constants.W_OK | constants.X_OK);
   } catch (error) {
     if (error.code !== "ENOENT") return `this Host runs as uid ${uid} and cannot write Docker's volumes directory ${spec.volumes} (${error.code}), where Init installs the Store; run dsh as a user that can, such as root`;
   }
+  return homeOwner(spec, uid);
+}
+
+/** The native binding requires the LayerFS home to belong to this process's user (the native route: any OS). */
+function homeOwner(spec, uid) {
   const owner = existsSync(spec.home) ? statSync(spec.home).uid : uid;
   if (owner !== uid) return `the LayerFS home ${spec.home} belongs to uid ${owner}, not this Host's uid ${uid}; set layerfs-host home to a folder this user owns`;
   return null;
@@ -153,7 +159,9 @@ async function initFrom(spec, bindings, { folder, project }, report) {
   report({ step: "volume", totals });
   const docker = ["-H", `unix://${spec.docker}`];
   if (spec.windows && !isSim(project)) await ensureWindows(spec);
-  if (!isSim(project)) await (spec.windows ? windowsDocker(spec, ["volume", "create", project.volume]) : run("docker", [...docker, "volume", "create", project.volume]));
+  // the native route's "volume" is a local folder <stores>/<volume>, made here as Docker makes a volume
+  if (!isSim(project) && spec.native) mkdirSync(storeDirOf(spec, project.volume), { mode: 0o700 });
+  else if (!isSim(project)) await (spec.windows ? windowsDocker(spec, ["volume", "create", project.volume]) : run("docker", [...docker, "volume", "create", project.volume]));
   report({ step: "import" });
   let client;
   try {
@@ -170,7 +178,8 @@ async function initFrom(spec, bindings, { folder, project }, report) {
     }
     // Init made the project's entry unless another project holds the name
     if (!isSim(project) && error?.code !== "Exists") rmSync(join(spec.home, project.name), { recursive: true, force: true });
-    if (!isSim(project)) await run("docker", [...docker, "volume", "rm", project.volume]).catch(() => {});
+    if (!isSim(project) && spec.native) rmSync(storeDirOf(spec, project.volume), { recursive: true, force: true });
+    else if (!isSim(project)) await run("docker", [...docker, "volume", "rm", project.volume]).catch(() => {});
     throw error;
   }
   await release(client);

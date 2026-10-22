@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Mirror } from "@dsh-layerfs/model/mirror.js";
 import { DAEMON_HOST, storePathOf } from "./box.js";
+import { storeDirOf } from "./config.js";
 import { simClient } from "./sim/client.js";
 
 export const isSim = (project) => project.backend === "sim";
@@ -16,6 +17,18 @@ export function deploymentEnv(spec, project) {
   // the SDK asks for every deployment setting and, for Store calls, a Store
   // path (#352 F-020); a simulated project uses none of them
   if (isSim(project)) return { HOME: spec.home, DOCKER: "sim", IMAGE: "sim", DAEMON: "sim", VOLUME: project.volume, STORE_PATH: "sim" };
+  // the native route: Store calls in this process on <stores>/<volume>, Sandboxes as local
+  // daemons under localDir whose Workspaces this machine's NFS client mounts (SDK `native`)
+  if (spec.native) return {
+    HOME: spec.home,
+    SANDBOX: "native",
+    DAEMON: spec.daemon ?? "",
+    LOCAL_DIR: spec.localDir,
+    VOLUME: project.volume,
+    STORE_PATH: join(storeDirOf(spec, project.volume), "global", "store.sqlite"),
+    CONTAINER_PREFIX: spec.prefix,
+    ...(spec.nfsMount ? { NFS_MOUNT: spec.nfsMount } : {}),
+  };
   return {
     HOME: spec.windows?.home ?? spec.home,
     DOCKER: spec.docker,

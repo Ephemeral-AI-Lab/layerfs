@@ -316,7 +316,8 @@ files' cached attributes at once.
 helper commands (`{port}` and `{dir}` are filled in). The default mount is
 `/sbin/mount_nfs -o vers=3,tcp,port={port},mountport={port},locallocks,nfc,actimeo=60,rsize=131072,wsize=131072,soft,intr,timeo=20,retrans=6,nobrowse 127.0.0.1:/ {dir}`.
 `LAYERFS_NFS_REFRESH=0` turns the refresh after an install off (the client
-then revalidates within `actimeo`, 60 s).
+then revalidates within `actimeo`, 60 s). A `DSH_LAYERFS_NFS_<NAME>` stands in
+for an unset `LAYERFS_NFS_<NAME>` (a dsh bash call is given only `DSH_*` names).
 
 Limits: background processes (`operator.process.*`) still read `/proc` and are
 not available on macOS; many small writes cost about six times APFS's time;

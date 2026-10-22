@@ -73,7 +73,7 @@ export function registerRoutes(ctx, { spec, bindings, collector, trees, jobs = n
     const url = new URL(String(req.url), "http://localhost"), parts = url.pathname.slice(PREFIX.length).split("/").filter(Boolean);
     try {
       if (req.method === "GET" && parts[0] === "status" && parts.length === 1)
-        return send(res, 200, { configured: missingDeployment(spec).length === 0, missing: missingDeployment(spec), sdk: spec.sdk, operator: spec.operator, box: spec.box, bundle: spec.bundle, traceDir: spec.traceDir, home: spec.home, docker: spec.docker, image: spec.image, daemon: spec.daemon, empty: true, migration: spec.migration ?? null, ...(spec.windows ? { windows: spec.windows } : {}) });
+        return send(res, 200, { configured: missingDeployment(spec).length === 0, missing: missingDeployment(spec), sdk: spec.sdk, operator: spec.operator, box: spec.box, bundle: spec.bundle, sandbox: spec.native ? "native" : "docker", localDir: spec.localDir ?? null, stores: spec.stores ?? null, traceDir: spec.traceDir, home: spec.home, docker: spec.docker, image: spec.image, daemon: spec.daemon, empty: true, migration: spec.migration ?? null, ...(spec.windows ? { windows: spec.windows } : {}) });
       if (req.method === "GET" && parts[0] === "workspace" && parts.length === 1) {
         const folder = url.searchParams.get("folder");
         if (!folder) return send(res, 400, { code: "invalid-folder", message: "folder is required" });

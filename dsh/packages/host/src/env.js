@@ -29,6 +29,9 @@ const VARIABLES = {
   DSH_LAYERFS_STORE_CONTAINER: "macOS: the Store container (Linux) the SDK's calls run in",
   DSH_LAYERFS_BUNDLE: "macOS: the LayerFS build whose SDK DSH_LAYERFS_SDK runs",
   DSH_LAYERFS_WSL_ENDPOINT: "Windows: private endpoint file of the WSL LayerFS worker",
+  DSH_LAYERFS_SANDBOX: "native: Sandboxes are local daemons on this machine (no Docker); Workspaces are NFS mounts under DSH_LAYERFS_LOCAL_DIR and commands run as you",
+  DSH_LAYERFS_LOCAL_DIR: "native: the folder local Sandboxes and their Workspace mounts live in",
+  DSH_LAYERFS_NFS_MOUNT: "native: the NFS mount command the Sandbox daemon uses, when the default is overridden",
   DSH_LAYERFS_TRACE: "File the SDK appends one line per call to",
   DSH_LAYERFS_TRACE_STEP: "Label of this bash call on the SDK's trace lines",
   DSH_LAYERFS_TRACE_START: "1: the SDK also writes a line when each call starts",
@@ -41,13 +44,17 @@ const VARIABLES = {
  * bash call that uses the project still locks the choice.
  * @param {import("./binding.js").BindingStore} bindings
  * @param {import("./collector.js").Collector} collector
+ * @param {object} [spec] resolved Host settings (the native route adds one sentence)
  */
-export function projectContext(bindings, collector, session) {
+export function projectContext(bindings, collector, session, spec) {
   if (!session) return "";
   const agent = collector.agentOf(session);
   const project = bindings.projectFor(agent.root, agent.cwd);
   if (!project) return "";
-  return `LayerFS project of this conversation: ${project.name} (${isSim(project) ? "simulated" : "live"}). Every bash call has it as DSH_LAYERFS_PROJECT; work on it through the LayerFS SDK.`;
+  const native = spec?.native && !isSim(project)
+    ? " Its Sandboxes run natively on this machine: a Workspace is an NFS mount, and the path workspace.mount returns may also be your bash commands' working directory (commit through the SDK)."
+    : "";
+  return `LayerFS project of this conversation: ${project.name} (${isSim(project) ? "simulated" : "live"}). Every bash call has it as DSH_LAYERFS_PROJECT; work on it through the LayerFS SDK.${native}`;
 }
 
 /**
