@@ -30,7 +30,9 @@ fn leaf(first_serial: u64, rewrites: u64) -> FinalizedObject {
                     ]
                     .concat(),
                 ),
-                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(ObjectId::for_bytes(b"metadata")),
+                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+                    ObjectId::for_bytes(b"metadata"),
+                ),
             }),
         })
         .collect();
