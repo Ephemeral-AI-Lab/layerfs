@@ -32,6 +32,7 @@ pub fn failure(e: WorkspaceError) -> SdkRefusal {
         layerfs_workspace::WorkspaceError::Content(layerfs_content::ContentError::PathNotFound) => {
             "NoSuchPath"
         }
+        WorkspaceError::Service(inner) if capacity(inner.as_ref()) => "Capacity",
         _ => "Unknown",
     };
     args::refuse(code, e.to_string(), SdkValue::Null)
@@ -45,6 +46,20 @@ pub fn read_failure(e: WorkspaceError) -> SdkRefusal {
         refusal.code = "Failed".to_owned();
     }
     refusal
+}
+/// A Store port's definite refusal for lack of space (#379): the write had no
+/// effect, so it is `Capacity`, not `Unknown`.
+fn capacity(inner: &(dyn std::error::Error + Send + Sync + 'static)) -> bool {
+    match inner
+        .downcast_ref::<std::sync::Arc<crate::store::PortError>>()
+        .map(std::sync::Arc::as_ref)
+    {
+        Some(crate::store::PortError::History(error)) => {
+            matches!(error.cause(), layerfs_history::HistoryError::Capacity(_))
+        }
+        Some(crate::store::PortError::Storage(error)) => error.is_capacity_refusal(),
+        _ => false,
+    }
 }
 impl<'a> Mutation<'a> {
     pub fn new(workspace: &'a BoundWorkspace) -> Result<Self> {
