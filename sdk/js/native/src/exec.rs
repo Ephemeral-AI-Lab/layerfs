@@ -110,6 +110,18 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
             "background process exited before its identity was observed",
         )
     })?;
+    // its own session leaves the command's process group; named, it still
+    // ends with a local Sandbox. Unnamed it would outlive it: it ends here, once.
+    if let Err(refusal) = state.runtime.track(pid, &start) {
+        let end = format!("kill -KILL -- -{pid} 2>/dev/null; true");
+        let _ = run(
+            &state,
+            &directory,
+            vec!["bash".into(), "-c".into(), end],
+            false,
+        );
+        return Err(refusal);
+    }
     let process = Process {
         path: path.to_owned(),
         command: command.to_owned(),
