@@ -51,10 +51,12 @@ impl KernelSession {
         if let Err(cause) = syscalls::create_directory(&config.directory) {
             return Err(unmounted(AttachPhase::Directory, cause, false, &queue));
         }
+        #[cfg(target_os = "linux")]
         let device = match syscalls::open_device() {
             Ok(device) => device,
             Err(cause) => return Err(unmounted(AttachPhase::Device, cause, true, &queue)),
         };
+        #[cfg(target_os = "linux")]
         if let Err(errno) = syscalls::attach(
             &device,
             &config.directory,
@@ -63,6 +65,11 @@ impl KernelSession {
         ) {
             return Err(unmounted(AttachPhase::Mount, errno.into(), true, &queue));
         }
+        #[cfg(target_os = "macos")]
+        let mount_path = match syscalls::resolve_mount_path(&config.directory) {
+            Ok(path) => path,
+            Err(cause) => return Err(unmounted(AttachPhase::Directory, cause, true, &queue)),
+        };
         let negotiated = filesystem.negotiation();
         let mut session = Self {
             mount: queue.identity(),
@@ -82,16 +89,44 @@ impl KernelSession {
             detached: Arc::default(),
             drain_wait: config.drain_wait,
             invalidator: None,
+            #[cfg(target_os = "macos")]
+            channel: None,
         };
-        let mut options = Config::default();
-        // The command identity differs from the mount owner; kernel permission
-        // checks, not a library uid filter, decide access.
-        options.acl = SessionACL::All;
-        options.n_threads = Some(RECEIVE_LOOPS);
-        // The session takes the only descriptor: losing it aborts the connection.
-        let kernel = match Session::from_fd(filesystem, device, SessionACL::All, options) {
-            Ok(kernel) => kernel,
-            Err(cause) => return Err(session.abandon(AttachPhase::Handshake, cause)),
+        #[cfg(target_os = "linux")]
+        let kernel = {
+            let mut options = Config::default();
+            // The command identity differs from the mount owner; kernel permission
+            // checks, not a library uid filter, decide access.
+            options.acl = SessionACL::All;
+            options.n_threads = Some(RECEIVE_LOOPS);
+            // The session takes the only descriptor: losing it aborts the connection.
+            match Session::from_fd(filesystem, device, SessionACL::All, options) {
+                Ok(kernel) => kernel,
+                Err(cause) => return Err(session.abandon(AttachPhase::Handshake, cause)),
+            }
+        };
+        #[cfg(target_os = "macos")]
+        let kernel = {
+            let mut options = Config::default();
+            options.acl = SessionACL::Owner;
+            options.n_threads = Some(RECEIVE_LOOPS);
+            let (fuser_fd, channel) =
+                match attach_macos_channel(&mount_path, session.mount.owner_id()) {
+                    Ok(pair) => pair,
+                    Err(cause) => {
+                        return Err(unmounted(AttachPhase::Mount, cause, true, &session.queue))
+                    }
+                };
+            session.channel = Some(channel);
+            match Session::from_fd(filesystem, fuser_fd, SessionACL::Owner, options) {
+                Ok(kernel) => kernel,
+                Err(cause) => {
+                    if syscalls::mount_entry(&session.directory).is_ok() {
+                        return Err(session.abandon(AttachPhase::Handshake, cause));
+                    }
+                    return Err(unmounted(AttachPhase::Mount, cause, true, &session.queue));
+                }
+            }
         };
         session.negotiation = negotiated.get().copied();
         session.invalidator = Some(super::Invalidator::new(kernel.notifier(), identity));
@@ -128,7 +163,13 @@ impl KernelSession {
             let cause = io::Error::other("completed handshake recorded no negotiation");
             return Err(session.abandon(AttachPhase::Receipt, cause));
         }
+        #[cfg(target_os = "linux")]
         let entry = match syscalls::mount_entry(&session.directory) {
+            Ok(entry) => entry,
+            Err(cause) => return Err(session.abandon(AttachPhase::Receipt, cause)),
+        };
+        #[cfg(target_os = "macos")]
+        let entry = match wait_macos_mount_entry(&session.directory, &monitor, config.ready_wait) {
             Ok(entry) => entry,
             Err(cause) => return Err(session.abandon(AttachPhase::Receipt, cause)),
         };
@@ -177,4 +218,163 @@ fn fence_first_exit(monitor: SessionMonitor, queue: MountRequests) {
     }
     // A request owner already released by a completed drain has no waiter to wake.
     let _ = queue.stop_receive();
+}
+#[cfg(target_os = "macos")]
+fn wait_macos_mount_entry(
+    target: &std::path::Path,
+    monitor: &SessionMonitor,
+    ready_wait: Duration,
+) -> io::Result<crate::mount::MountEntry> {
+    let deadline = std::time::Instant::now() + ready_wait;
+    loop {
+        match syscalls::mount_entry(target) {
+            Ok(entry) => return Ok(entry),
+            Err(cause) => {
+                if monitor.snapshot().phase != SessionPhase::Serving
+                    || std::time::Instant::now() >= deadline
+                {
+                    return Err(cause);
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+}
+#[cfg(target_os = "macos")]
+fn attach_macos_channel(
+    mount_path: &std::path::Path,
+    owner_id: u64,
+) -> io::Result<(
+    std::os::fd::OwnedFd,
+    (std::os::unix::net::UnixStream, std::os::unix::net::UnixStream),
+)> {
+    use nix::fcntl::{fcntl, FcntlArg, FdFlag};
+    use nix::sys::socket::{setsockopt, sockopt};
+    use std::io::{Read, Write};
+    use std::net::Shutdown;
+    use std::os::fd::{AsRawFd, OwnedFd};
+    use std::os::unix::net::UnixStream;
+    use std::path::PathBuf;
+    use std::process::{Command, Stdio};
+    use std::sync::{Condvar, Mutex};
+
+    let mut candidates = vec![
+        PathBuf::from("/Library/Application Support/fuse-t/bin/go-nfsv4"),
+        PathBuf::from("/usr/local/bin/go-nfsv4"),
+    ];
+    if let Ok(home) = std::env::var("HOME") {
+        candidates.push(PathBuf::from(home).join(".fuse-t/usr/local/bin/go-nfsv4"));
+    }
+    let bin = candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .unwrap_or_else(|| PathBuf::from("go-nfsv4"));
+
+    let (comm_parent, comm_child) = UnixStream::pair()?;
+    let (mut mon_parent, mon_child) = UnixStream::pair()?;
+    let (fuser_end, proxy_end) = UnixStream::pair()?;
+    let buf_size = 4 * 1024 * 1024;
+    for sock in [&comm_parent, &comm_child, &fuser_end, &proxy_end] {
+        let _ = setsockopt(sock, sockopt::RcvBuf, &buf_size);
+        let _ = setsockopt(sock, sockopt::SndBuf, &buf_size);
+    }
+    fcntl(&comm_child, FcntlArg::F_SETFD(FdFlag::empty())).map_err(io::Error::from)?;
+    fcntl(&mon_child, FcntlArg::F_SETFD(FdFlag::empty())).map_err(io::Error::from)?;
+
+    let mut daemon = Command::new(bin)
+        .arg(format!("--volname=layerfs-{}-{owner_id}", std::process::id()))
+        .arg("--namedattr=true")
+        .arg("--dontbrowse=true")
+        .arg("--noatime=true")
+        .arg(mount_path)
+        .env("_FUSE_COMMFD", comm_child.as_raw_fd().to_string())
+        .env("_FUSE_MONFD", mon_child.as_raw_fd().to_string())
+        .env("_FUSE_COMMVERS", "2")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    drop(comm_child);
+    drop(mon_child);
+    mon_parent.write_all(b"mount")?;
+
+    let abort_comm = comm_parent.try_clone()?;
+    let abort_mon = mon_parent.try_clone()?;
+    let mut comm_read = comm_parent.try_clone()?;
+    let mut comm_write = comm_parent;
+    let mut proxy_read = proxy_end.try_clone()?;
+    let mut proxy_write = proxy_end;
+    let sync_pair = Arc::new((Mutex::new(false), Condvar::new()));
+    let sync_req = Arc::clone(&sync_pair);
+
+    thread::Builder::new()
+        .name(format!("layerfs-fuset-req-{owner_id}"))
+        .spawn(move || {
+            let _mon = mon_parent;
+            let mut buf = vec![0u8; 4 * 1024 * 1024];
+            loop {
+                if comm_read.read_exact(&mut buf[..40]).is_err() {
+                    break;
+                }
+                let len = u32::from_ne_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
+                let opcode = u32::from_ne_bytes([buf[4], buf[5], buf[6], buf[7]]);
+                if !(40..=buf.len()).contains(&len) {
+                    break;
+                }
+                if len > 40 && comm_read.read_exact(&mut buf[40..len]).is_err() {
+                    break;
+                }
+                let expects_reply = opcode != 2 && opcode != 42;
+                let (lock, cvar) = &*sync_req;
+                if expects_reply {
+                    *lock.lock().unwrap() = true;
+                }
+                if proxy_write.write_all(&buf[..len]).is_err() {
+                    break;
+                }
+                if expects_reply {
+                    let mut in_flight = lock.lock().unwrap();
+                    while *in_flight {
+                        in_flight = cvar.wait(in_flight).unwrap();
+                    }
+                } else {
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
+            let _ = proxy_write.shutdown(Shutdown::Both);
+            let _ = daemon.wait();
+        })?;
+
+    thread::Builder::new()
+        .name(format!("layerfs-fuset-rsp-{owner_id}"))
+        .spawn(move || {
+            let mut buf = vec![0u8; 4 * 1024 * 1024];
+            loop {
+                if proxy_read.read_exact(&mut buf[..16]).is_err() {
+                    break;
+                }
+                let len = u32::from_ne_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
+                let unique = u64::from_ne_bytes([
+                    buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15],
+                ]);
+                if !(16..=buf.len()).contains(&len) {
+                    break;
+                }
+                if len > 16 && proxy_read.read_exact(&mut buf[16..len]).is_err() {
+                    break;
+                }
+                if comm_write.write_all(&buf[..len]).is_err() {
+                    break;
+                }
+                if unique != 0 {
+                    let (lock, cvar) = &*sync_pair;
+                    let mut in_flight = lock.lock().unwrap();
+                    *in_flight = false;
+                    cvar.notify_all();
+                }
+            }
+            let _ = comm_write.shutdown(Shutdown::Both);
+        })?;
+
+    Ok((OwnedFd::from(fuser_end), (abort_comm, abort_mon)))
 }

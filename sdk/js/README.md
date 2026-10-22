@@ -34,10 +34,11 @@ Store calls (`fs`, `branch`, `project.list_branches`) run in this process: the
 first one opens the installed Store file at `storePath` (else
 `LAYERFS_STORE_PATH`) and `close()` releases it; no Sandbox is involved. That
 file is `global/store.sqlite` in the project's volume, so the process runs where
-that volume is mounted (`/layerfs-store` in a Sandbox). This is Linux only, with
-the Store on a local filesystem the daemons share (ext4, xfs, btrfs); anywhere
-else Store calls fail `Unsupported`, and without a `storePath` they fail
-`InvalidInput`. Mount does not scan or materialize the complete tree.
+that volume is mounted (`/layerfs-store` in a Sandbox, or a host path on native
+macOS). This is supported on Linux with a local filesystem the daemons share
+(ext4, xfs, btrfs) and on native macOS (`darwin-arm64`) with a local filesystem
+(APFS, HFS+); anywhere else Store calls fail `Unsupported`, and without a
+`storePath` they fail `InvalidInput`. Mount does not scan or materialize the complete tree.
 A project is its home entry, `LAYERFS_HOME/<name>/`; the binding keeps no other
 record of which names it initialized. Init refuses a name whose entry exists
 (`Exists`). Once that entry is deleted, after the project's Sandboxes are

@@ -54,8 +54,12 @@ fn root() -> bool {
     use std::os::unix::fs::MetadataExt;
     std::fs::metadata("/proc/self").is_ok_and(|m| m.uid() == 0)
 }
+#[cfg(target_os = "macos")]
+fn root() -> bool {
+    true
+}
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn import_installs_the_store_in_process() {
     use std::os::unix::fs::PermissionsExt;
@@ -117,7 +121,7 @@ fn an_installed_manifest_is_refused_before_anything_is_written() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 #[test]
 fn local_install_is_unsupported_off_linux() {
     let directory = scratch("host");

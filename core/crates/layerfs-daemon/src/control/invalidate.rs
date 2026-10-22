@@ -17,7 +17,7 @@ impl Service {
         shown: ObjectId,
         installed: ObjectId,
     ) -> Result<(), Failure> {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             use super::{kernel::Kernel, registry::bound};
             use crate::store::Stale;
@@ -44,7 +44,7 @@ impl Service {
                     )
                 })
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
             let _ = (token, workspace, shown, installed);
             Ok(())

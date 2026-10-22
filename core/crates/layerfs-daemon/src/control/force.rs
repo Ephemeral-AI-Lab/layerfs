@@ -1,6 +1,6 @@
 //! Forced terminal unmount: a before-effect guard, one abort write, the local
 //! drain with its one plain detach, then Revoke and Close. Nothing is repeated.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::serving::{stage, work, Attached};
 use super::{
     kernel::Kernel,
@@ -8,24 +8,24 @@ use super::{
     types::KernelFailure,
     Failure, Service, Success,
 };
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::store::BoundWorkspace;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_bridge::control::{
     AbortDisposition, DetachDisposition, ForceUnmounted, ForcedCleanup, ForcedFacts, ForcedOutcome,
     MountPhase, Reply, TeardownStage,
 };
 use layerfs_bridge::control::{Activity, CommitKnowledge, ControlCode, WorkspaceToken};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_fuse::{
     mount::AbortWrite,
     session::{DetachAttempt, SessionFacts},
 };
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_overlay::CleanupState;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::errno::Errno;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::sync::Arc;
 
 const ADMISSION: &str = "force:admission";
@@ -49,11 +49,11 @@ fn guard(
     relinquish_unknown: bool,
 ) -> Result<CommitKnowledge, Failure> {
     // Stored custody answers first: no second abort or detach ever follows it.
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     if let Kernel::Retained(kept) = &value.kernel {
         return Err(Failure::Retained(Box::new(kept.custody(token))));
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     let _ = token;
     if matches!(
         value.activity,
@@ -106,7 +106,7 @@ fn connection(kernel: &Kernel) -> Result<bool, Failure> {
             ADMISSION,
             "Workspace owns no kernel connection",
         )),
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         Kernel::Attaching => Err(refused(
             ControlCode::Unknown,
             ADMISSION,
@@ -114,17 +114,17 @@ fn connection(kernel: &Kernel) -> Result<bool, Failure> {
         )),
         // A terminal operation owns the connection; its activity or stored
         // custody answered above.
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         Kernel::Leaving(_) | Kernel::Retained(_) => Err(refused(
             ControlCode::Busy,
             ADMISSION,
             "terminal unmount already admitted",
         )),
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         Kernel::Ready(attached) => Ok(attached.session.abort_bound()),
     }
 }
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 impl Service {
     /// The same guard as on Linux; no entry here can pass it.
     pub(super) fn force_unmount(
@@ -142,7 +142,7 @@ impl Service {
     }
 }
 /// What forced admission took out of the registry entry.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 struct Admitted {
     workspace: Arc<BoundWorkspace>,
     attached: Box<Attached>,
@@ -150,7 +150,7 @@ struct Admitted {
     prior: Activity,
     commit: CommitKnowledge,
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn detach(attempt: DetachAttempt) -> DetachDisposition {
     match attempt {
         DetachAttempt::NotAttempted => DetachDisposition::NotAttempted,
@@ -160,7 +160,7 @@ fn detach(attempt: DetachAttempt) -> DetachDisposition {
         DetachAttempt::Failed(_) => DetachDisposition::Failed,
     }
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Service {
     pub(super) fn force_unmount(
         &self,

@@ -29,6 +29,7 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
         return Err(invalid("private config record size"));
     }
     let config = DaemonSetup::decode(&bytes).map_err(|_| invalid("private config fields"))?;
+    #[cfg(not(target_os = "macos"))]
     if config.command_uid == uid {
         return Err(invalid("command and daemon identities must differ"));
     }
@@ -108,7 +109,12 @@ fn secure_process() -> io::Result<()> {
     }
     Ok(())
 }
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+fn secure_process() -> io::Result<()> {
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
+    Ok(())
+}
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn secure_process() -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,

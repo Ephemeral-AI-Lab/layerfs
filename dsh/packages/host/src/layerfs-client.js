@@ -24,7 +24,7 @@ export function deploymentEnv(spec, project) {
     VOLUME: project.volume,
     // the Store in the volume, under Docker's volume directory: Import
     // installs it there and Store calls open it
-    STORE_PATH: storePathOf(project.volume),
+    STORE_PATH: process.platform === "darwin" && !spec.box ? join(spec.volumes, project.volume, "global/store.sqlite") : storePathOf(project.volume),
     // the project's Sandboxes are <prefix><project>-<n>
     CONTAINER_PREFIX: spec.prefix,
     // macOS: the calls run in the Store container, which sees that directory and

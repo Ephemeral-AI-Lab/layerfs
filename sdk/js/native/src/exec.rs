@@ -91,6 +91,11 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
         state.id,
         layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
     );
+    #[cfg(target_os = "macos")]
+    let script = format!(
+        "/usr/bin/perl -e 'setpgrp(0, 0); exec @ARGV' bash -c \"$0\" >/tmp/layerfs-{id}.log 2>&1 </dev/null & echo $!"
+    );
+    #[cfg(not(target_os = "macos"))]
     let script = format!("setsid bash -c \"$0\" >/tmp/layerfs-{id}.log 2>&1 </dev/null & echo $!");
     let (code, stdout, stderr) = run(
         &state,
@@ -135,6 +140,7 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
 /// True while the process group of `pid` has a member that is not a zombie.
 /// The container's first process is the daemon, which does not reap orphans,
 /// so a finished member can stay a zombie that `kill -0` still finds.
+#[cfg(not(target_os = "macos"))]
 fn start_time(state: &SandboxState, pid: u32) -> Result<Option<String>, SdkRefusal> {
     let (code, out, _) = run(state, "/tmp", vec!["bash".into(), "-c".into(), format!("s=$(cat /proc/{pid}/stat 2>/dev/null) || exit 1; set -- ${{s##*) }}; shift 19; printf '%s' \"$1\"")], false)?;
     if code == 0 {
@@ -143,11 +149,48 @@ fn start_time(state: &SandboxState, pid: u32) -> Result<Option<String>, SdkRefus
         Ok(None)
     }
 }
+#[cfg(target_os = "macos")]
+fn start_time(state: &SandboxState, pid: u32) -> Result<Option<String>, SdkRefusal> {
+    let (code, out, _) = run(
+        state,
+        "/tmp",
+        vec![
+            "bash".into(),
+            "-c".into(),
+            format!("ps -p {pid} -o state=,lstart= 2>/dev/null"),
+        ],
+        false,
+    )?;
+    if code != 0 {
+        return Ok(None);
+    }
+    let text = String::from_utf8_lossy(out.kept()).trim().to_owned();
+    let mut parts = text.split_whitespace();
+    if parts.next().is_none_or(|st| st.starts_with('Z')) {
+        return Ok(None);
+    }
+    let start = parts.collect::<Vec<_>>().join(" ");
+    Ok((!start.is_empty()).then_some(start))
+}
+#[cfg(not(target_os = "macos"))]
 fn alive(state: &SandboxState, pid: u32) -> Result<bool, SdkRefusal> {
     // After the `(comm) ` field: state, parent, process group.
     let probe = format!(
         "for f in /proc/[0-9]*/stat; do s=$(cat \"$f\" 2>/dev/null) || continue; \
          set -- ${{s##*) }}; [ \"$1\" != Z ] && [ \"$3\" = {pid} ] && exit 0; done; exit 1"
+    );
+    let (code, _, _) = run(
+        state,
+        "/tmp",
+        vec!["bash".into(), "-c".into(), probe],
+        false,
+    )?;
+    Ok(code == 0)
+}
+#[cfg(target_os = "macos")]
+fn alive(state: &SandboxState, pid: u32) -> Result<bool, SdkRefusal> {
+    let probe = format!(
+        "ps -axo pid=,pgid=,state= 2>/dev/null | awk '$2 == {pid} && $3 !~ /^Z/ {{ found=1; exit 0 }} END {{ exit(found ? 0 : 1) }}'"
     );
     let (code, _, _) = run(
         state,

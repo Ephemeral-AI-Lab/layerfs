@@ -23,6 +23,7 @@ const gone = (error) => /No such (container|object)/i.test(String(error?.stderr 
  *   the older Sandboxes left running, each with why
  */
 export async function migrate(spec, run = execute, warn = console.warn) {
+  if (process.platform === "darwin" && !spec.box && !String(spec.docker).endsWith(".sock")) return { kept: [] };
   const root = join(spec.home, "_sandboxes"), kept = [];
   const docker = (...args) => run("docker", ["-H", `unix://${spec.docker}`, ...args]);
   if (existsSync(root)) {

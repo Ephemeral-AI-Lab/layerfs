@@ -172,7 +172,7 @@ impl Application {
             .lock()
             .ok()
             .and_then(|state| state.startup.service.clone());
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let observer = service.as_ref().and_then(|service| {
             crate::control::request_token(operation)
                 .and_then(|token| service.observed_kernel(token).ok().flatten())
@@ -208,12 +208,12 @@ impl Application {
             .and_then(|(store, before)| crate::telemetry::delta(before, store.save_counters()));
         // A traced status or unmount carries the Workspace's kernel opcode
         // counts since attach.
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let fuse = observer
             .as_ref()
             .filter(|_| *traced && matches!(operation, Request::Status(_) | Request::Unmount(_)))
             .map(|observer| crate::telemetry::fuse(&observer.facts().opcodes));
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         let fuse = None;
         // One explicitly charged read-only observer call. It transfers its typed
         // value before the snapshot. This observation never replaces the
@@ -273,7 +273,7 @@ impl Application {
                     rows.row(section, 0, None)?;
                 }
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
                 let observer = observer.or_else(|| {
                     service.as_ref().and_then(|service| {
@@ -293,7 +293,7 @@ impl Application {
                     drained,
                 )?;
             }
-            #[cfg(not(target_os = "linux"))]
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             rows.row(12, 0, None)?;
             schema::sql(&mut rows, 13, -1, self.observed_sql(None))?;
             for index in self.observed_reader_indices() {

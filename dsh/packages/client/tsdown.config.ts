@@ -9,11 +9,13 @@ import { pathToFileURL } from 'node:url'
 const source = process.env.DSH_SOURCE ?? resolve(import.meta.dirname, '../../../../deepseek-harness')
 const { clientBundle } = await import(pathToFileURL(resolve(source, 'packages/client/tsdown.client.ts')).href)
 
+const IMAGES: Record<string, string> = { '.gif': 'image/gif', '.png': 'image/png', '.svg': 'image/svg+xml', '.webp': 'image/webp' }
 const gif = {
   name: 'dsh-layerfs:gif',
   load(id: string) {
-    if (!id.endsWith('.gif')) return null
-    return `export default ${JSON.stringify(`data:image/gif;base64,${readFileSync(id).toString('base64')}`)}`
+    const ext = Object.keys(IMAGES).find((e) => id.endsWith(e))
+    if (!ext) return null
+    return `export default ${JSON.stringify(`data:${IMAGES[ext]};base64,${readFileSync(id).toString('base64')}`)}`
   },
 }
 

@@ -21,6 +21,7 @@ use std::sync::Arc;
 /// The daemon's user inside its Sandbox (the runtime's `User` is `0:0`). A
 /// daemon opens only a Store file and directory it owns, so an installer
 /// must run as this user too.
+#[cfg(target_os = "linux")]
 const DAEMON_UID: u32 = 0;
 
 /// The destination and its exclusive temporary name.
@@ -203,6 +204,7 @@ pub fn install_local(
 }
 
 /// Refuses an installer that is not the daemons' user.
+#[cfg(target_os = "linux")]
 fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user
@@ -215,5 +217,9 @@ fn installer_user() -> Result<(), String> {
              daemons' user, which opens only a Store it owns"
         ));
     }
+    Ok(())
+}
+#[cfg(not(target_os = "linux"))]
+fn installer_user() -> Result<(), String> {
     Ok(())
 }

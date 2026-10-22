@@ -49,7 +49,7 @@ pub(crate) fn value(
 
 /// The Workspace's kernel opcode counts, frame dispositions, largest request
 /// sizes and per-opcode callback nanoseconds (`ns`) since attach.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) fn fuse(w: &layerfs_fuse::request::OpcodeWork) -> SdkValue {
     use layerfs_fuse::request::Opcode;
     let extra = [

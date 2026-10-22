@@ -55,17 +55,19 @@ import { storeName, VOLUMES } from "./box.js";
 export function resolveConfig(config, profile) {
   const temp = join(realpathSync(tmpdir()), "dsh-layerfs");
   const bundle = config.bundle || null, home = config.home || join(temp, "home");
-  // macOS runs no Store call itself: a bundle's SDK calls run in the Store container (port/)
+  // macOS runs no Store call itself when a Linux bundle is configured (port/); without a bundle it runs natively
   const ported = process.platform === "darwin" && bundle !== null;
+  const nativeMac = process.platform === "darwin" && !ported;
   const prefix = config.containerPrefix || "layerfs-";
+  const docker = config.docker || (nativeMac ? join(home, "_sandboxes") : "/var/run/docker.sock");
   const spec = {
-    image: config.image || null,
+    image: config.image || (nativeMac ? `sha256:${"0".repeat(64)}` : null),
     daemon: config.daemon || (bundle && join(bundle, "layerfs-daemon")),
     bundle,
     prefix,
     box: ported ? storeName(prefix) : null,
-    docker: config.docker || "/var/run/docker.sock",
-    volumes: config.volumes || VOLUMES,
+    docker,
+    volumes: config.volumes || (nativeMac ? join(docker, "_volumes") : VOLUMES),
     home,
     stateDir: config.stateDir || join(profile ? profile.dir : join(homedir(), ".dsh"), "dsh-layerfs"),
     traceDir: config.traceDir || join(temp, "traces"),
@@ -80,8 +82,8 @@ export function resolveConfig(config, profile) {
   return spec;
 }
 
-/** Deployment settings Init and bash calls need that are not configured (macOS: a bundle too). */
-export const missingDeployment = (spec) => ["image", "daemon", ...(process.platform === "darwin" ? ["bundle"] : [])].filter((name) => !spec[name]);
+/** Deployment settings Init and bash calls need that are not configured (macOS: a bundle when no native daemon is set). */
+export const missingDeployment = (spec) => ["image", "daemon", ...(process.platform === "darwin" && !spec.daemon ? ["bundle"] : [])].filter((name) => !spec[name]);
 
 /** The SDK entry as a path, for Node imports in the Host. */
 export const sdkPath = (spec) => fileURLToPath(spec.sdk);

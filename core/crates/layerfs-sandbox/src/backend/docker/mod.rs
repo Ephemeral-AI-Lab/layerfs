@@ -3,6 +3,9 @@ mod archive;
 mod body;
 mod container;
 mod container_types;
+#[cfg(target_os = "macos")]
+#[path = "../darwin/mod.rs"]
+pub mod darwin;
 mod endpoint;
 mod headers;
 mod http;

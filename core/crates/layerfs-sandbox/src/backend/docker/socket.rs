@@ -17,6 +17,14 @@ pub(super) struct Socket {
 impl Socket {
     /// One nonblocking connect attempt; only genuine EINPROGRESS has a completion wait.
     pub fn connect(path: &Path, wait: Duration, deadline: Option<Instant>) -> io::Result<Self> {
+        #[cfg(target_os = "macos")]
+        if super::super::darwin::is_darwin_root(path) {
+            return Ok(Self {
+                stream: super::super::darwin::connect(path)?,
+                wait: Some(wait),
+                deadline,
+            });
+        }
         use nix::{
             errno::Errno,
             sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, UnixAddr},

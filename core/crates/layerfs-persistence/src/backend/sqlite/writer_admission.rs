@@ -1,7 +1,7 @@
 //! Linux local-volume cooperative ownership before one SQLite write attempt.
 use crate::backend::records::BackendError;
 use std::path::Path;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use {
     nix::{
         errno::Errno,
@@ -11,13 +11,13 @@ use {
 };
 
 pub(crate) struct Writer {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     lock: Flock<File>,
 }
 
 impl Writer {
     pub(crate) fn acquire(path: &Path) -> Result<Self, BackendError> {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             // Never open another FD to SQLite's main/WAL/SHM files here:
             // closing any main-file FD cancels every process POSIX lock on
@@ -47,13 +47,6 @@ impl Writer {
                 Err(_) => Err(BackendError::Integrity),
             }
         }
-        #[cfg(target_os = "macos")]
-        {
-            // Darwin's flock conflicts with SQLite's open-file locks. Host Init
-            // is sole-owner; cross-session contention retains exact SQLite Busy.
-            let _ = path;
-            Ok(Self {})
-        }
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
             let _ = path;
@@ -62,7 +55,7 @@ impl Writer {
     }
 
     pub(crate) fn release(self) -> Result<(), Self> {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             match self.lock.unlock() {
                 Ok(file) => {
@@ -72,7 +65,7 @@ impl Writer {
                 Err((lock, _)) => Err(Self { lock }),
             }
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
             Ok(())
         }
