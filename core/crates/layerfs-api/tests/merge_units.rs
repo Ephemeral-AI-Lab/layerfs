@@ -138,7 +138,10 @@ fn int(value: &SdkValue, name: &str) -> i64 {
 
 fn read(fixture: &Fixture, branch: &str, path: &str) -> Option<String> {
     fixture
-        .try_call("fs.read", vec![("branch", text(branch)), ("path", text(path))])
+        .try_call(
+            "fs.read",
+            vec![("branch", text(branch)), ("path", text(path))],
+        )
         .ok()
         .map(|reply| reply.get_text("text").unwrap().to_owned())
 }
@@ -156,8 +159,14 @@ fn a_unit_one_side_changed_merges_as_today() {
     let united = merge(&fixture, "united", Some(bare(&["nm"]))).unwrap();
     assert_eq!(plain.get_text("root"), united.get_text("root"));
     assert!(units_of(&united).is_empty());
-    assert_eq!(read(&fixture, "united", "/nm/a").as_deref(), Some("a, ours\n"));
-    assert_eq!(read(&fixture, "united", "/src/t").as_deref(), Some("t, theirs\n"));
+    assert_eq!(
+        read(&fixture, "united", "/nm/a").as_deref(),
+        Some("a, ours\n")
+    );
+    assert_eq!(
+        read(&fixture, "united", "/src/t").as_deref(),
+        Some("t, theirs\n")
+    );
     // Neither side changed `src`; theirs alone changed `nm/lib`'s unit.
     let other = merge(&fixture, "other", Some(bare(&["src/s", "lib"]))).unwrap();
     assert_eq!(plain.get_text("root"), other.get_text("root"));
@@ -233,7 +242,10 @@ fn ours_is_kept_on_a_tie() {
     let reply = merge(&fixture, "m", Some(bare(&["nm"]))).unwrap();
     let units = units_of(&reply);
     assert_eq!(units[0].get_text("kept"), Some("ours"), "{reply:?}");
-    assert!(units[0].get_text("keptTime").unwrap().starts_with("1970-01-01T00:02:03"));
+    assert!(units[0]
+        .get_text("keptTime")
+        .unwrap()
+        .starts_with("1970-01-01T00:02:03"));
     assert_eq!(read(&fixture, "m", "/nm/a").as_deref(), Some("L\n"));
     assert_eq!(read(&fixture, "m", "/nm/b").as_deref(), Some("b\n"));
     fixture.cleanup();
@@ -249,7 +261,11 @@ fn deleting_or_retyping_the_unit_root_is_a_change() {
         ("l", vec![rm("/nm")]),
     );
     let reply = merge(&fixture, "m", Some(bare(&["nm"]))).unwrap();
-    assert_eq!(units_of(&reply)[0].get_text("kept"), Some("ours"), "{reply:?}");
+    assert_eq!(
+        units_of(&reply)[0].get_text("kept"),
+        Some("ours"),
+        "{reply:?}"
+    );
     let merged = view(&fixture, reply.get_text("root").unwrap());
     assert!(under(&merged, "/nm").is_empty(), "{merged:?}");
     fixture.cleanup();
@@ -261,7 +277,11 @@ fn deleting_or_retyping_the_unit_root_is_a_change() {
         ("l", vec![rm("/nm"), write("/nm", "a file now\n")]),
     );
     let reply = merge(&fixture, "m", Some(bare(&["nm"]))).unwrap();
-    assert_eq!(units_of(&reply)[0].get_text("kept"), Some("ours"), "{reply:?}");
+    assert_eq!(
+        units_of(&reply)[0].get_text("kept"),
+        Some("ours"),
+        "{reply:?}"
+    );
     assert_eq!(read(&fixture, "m", "/nm").as_deref(), Some("a file now\n"));
     fixture.cleanup();
     // Theirs, later, keeps the directory it changed: ours' file is dropped.
@@ -355,12 +375,21 @@ fn two_patterns_make_one_unit() {
     let decided = &units_of(&reply)[0];
     assert_eq!(decided.get_text("unit"), Some("build"));
     assert_eq!(decided.get_text("kept"), Some("ours"));
-    assert_eq!(read(&fixture, "m", "/lib/i.js").as_deref(), Some("i, ours\n"));
-    assert_eq!(read(&fixture, "m", "/p.tsbuildinfo").as_deref(), Some("p\n"));
+    assert_eq!(
+        read(&fixture, "m", "/lib/i.js").as_deref(),
+        Some("i, ours\n")
+    );
+    assert_eq!(
+        read(&fixture, "m", "/p.tsbuildinfo").as_deref(),
+        Some("p\n")
+    );
     // As two units, each side's change stands.
     let apart = merge(&fixture, "apart", Some(bare(&["lib", "*.tsbuildinfo"]))).unwrap();
     assert!(units_of(&apart).is_empty());
-    assert_eq!(read(&fixture, "apart", "/p.tsbuildinfo").as_deref(), Some("p, theirs\n"));
+    assert_eq!(
+        read(&fixture, "apart", "/p.tsbuildinfo").as_deref(),
+        Some("p, theirs\n")
+    );
     fixture.cleanup();
 }
 
@@ -379,8 +408,14 @@ fn overlapping_units_belong_to_the_first_listed() {
     // `**/lib` first: each unit one side changed.
     let second = merge(&fixture, "second", Some(bare(&["**/lib", "nm"]))).unwrap();
     assert!(units_of(&second).is_empty());
-    assert_eq!(read(&fixture, "second", "/nm/lib/x").as_deref(), Some("x, ours\n"));
-    assert_eq!(read(&fixture, "second", "/nm/a").as_deref(), Some("a, theirs\n"));
+    assert_eq!(
+        read(&fixture, "second", "/nm/lib/x").as_deref(),
+        Some("x, ours\n")
+    );
+    assert_eq!(
+        read(&fixture, "second", "/nm/a").as_deref(),
+        Some("a, theirs\n")
+    );
     fixture.cleanup();
 }
 
@@ -407,7 +442,10 @@ fn a_hard_link_across_the_boundary_takes_the_units_value() {
     } else {
         // The write replaced the outside name: no shared serial is left.
         assert!(units_of(&reply).is_empty(), "{reply:?}");
-        assert_eq!(read(&fixture, "m", "/out/hl").as_deref(), Some("edited outside\n"));
+        assert_eq!(
+            read(&fixture, "m", "/out/hl").as_deref(),
+            Some("edited outside\n")
+        );
     }
     fixture.cleanup();
 }
@@ -425,7 +463,13 @@ fn units_come_before_lww_rules_which_still_apply_outside() {
     sides(
         &fixture,
         ("r", vec![write("/out.gen", "o, theirs\n")]),
-        ("l", vec![write("/nm/x.gen", "x, ours\n"), write("/out.gen", "o, ours\n")]),
+        (
+            "l",
+            vec![
+                write("/nm/x.gen", "x, ours\n"),
+                write("/out.gen", "o, ours\n"),
+            ],
+        ),
     );
     // Theirs changes the unit last.
     fixture.apply("r", vec![write("/nm/y", "y, theirs\n")]);
@@ -433,7 +477,10 @@ fn units_come_before_lww_rules_which_still_apply_outside() {
     assert_eq!(units_of(&reply)[0].get_text("kept"), Some("theirs"));
     assert_eq!(read(&fixture, "m", "/nm/x.gen").as_deref(), Some("x\n"));
     // Outside the unit the rule decided, newer wins.
-    assert_eq!(read(&fixture, "m", "/out.gen").as_deref(), Some("o, ours\n"));
+    assert_eq!(
+        read(&fixture, "m", "/out.gen").as_deref(),
+        Some("o, ours\n")
+    );
     let lww = match reply.get("lww") {
         Some(SdkValue::List(lww)) => lww,
         other => panic!("lww: {other:?}"),
@@ -460,7 +507,12 @@ fn a_long_unit_list_is_truncated_by_its_byte_window() {
     sides(&fixture, ("l", edits("ours")), ("r", edits("theirs")));
     let units = SdkValue::List(
         (0..UNITS)
-            .map(|unit| group(&format!("{unit:02}{}", "n".repeat(300)), &[&format!("/u{unit:02}")]))
+            .map(|unit| {
+                group(
+                    &format!("{unit:02}{}", "n".repeat(300)),
+                    &[&format!("/u{unit:02}")],
+                )
+            })
             .collect(),
     );
     let reply = merge(&fixture, "m", Some(units)).unwrap();
@@ -474,7 +526,11 @@ fn a_long_unit_list_is_truncated_by_its_byte_window() {
 #[test]
 fn malformed_units_are_refused_before_any_work() {
     let fixture = seeded("f057-admission");
-    sides(&fixture, ("l", vec![write("/nm/a", "l\n")]), ("r", vec![write("/nm/b", "r\n")]));
+    sides(
+        &fixture,
+        ("l", vec![write("/nm/a", "l\n")]),
+        ("r", vec![write("/nm/b", "r\n")]),
+    );
     for units in [
         bare(&[""]),
         bare(&["#nm"]),
@@ -485,9 +541,15 @@ fn malformed_units_are_refused_before_any_work() {
         text("nm"),
     ] {
         let refused = merge(&fixture, "m", Some(units.clone())).expect_err("refused");
-        assert!(format!("{refused:?}").contains("InvalidInput"), "{units:?}: {refused:?}");
+        assert!(
+            format!("{refused:?}").contains("InvalidInput"),
+            "{units:?}: {refused:?}"
+        );
     }
-    assert!(read(&fixture, "m", "/nm/a").is_none(), "nothing was created");
+    assert!(
+        read(&fixture, "m", "/nm/a").is_none(),
+        "nothing was created"
+    );
     fixture.cleanup();
 }
 
@@ -496,8 +558,14 @@ fn units_that_decide_nothing_leave_the_root_byte_identical() {
     let fixture = seeded("f057-golden");
     sides(
         &fixture,
-        ("l", vec![write("/src/s", "1, ours\n2\n3\n"), mv("/nm/a", "/nm/a2")]),
-        ("r", vec![write("/src/s", "1\n2\n3, theirs\n"), rm("/top.txt")]),
+        (
+            "l",
+            vec![write("/src/s", "1, ours\n2\n3\n"), mv("/nm/a", "/nm/a2")],
+        ),
+        (
+            "r",
+            vec![write("/src/s", "1\n2\n3, theirs\n"), rm("/top.txt")],
+        ),
     );
     let plain = merge(&fixture, "plain", None).unwrap();
     for (name, units) in [
