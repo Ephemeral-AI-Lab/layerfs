@@ -229,6 +229,29 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(by_scope["reference"], totals["reference"]["lines"])
 
 
+    def test_sdk_scope_counts_the_binding_the_session_layer_and_javascript(self):
+        write(self.root, "sdk/js/native/src/lib.rs", "pub const N: u8 = 1;\n")
+        write(self.root, "sdk/session/src/lib.rs", "pub const S: u8 = 2;\n")
+        write(self.root, "sdk/js/src/client.js", "export const C = 3;\n")
+        write(self.root, "sdk/js/operator/index.js", "export const O = 4;\n")
+        write(self.root, "sdk/session/tests/it.rs", "pub const T: u8 = 5;\n")
+        write(self.root, "sdk/js/native/tests/it.rs", "pub const B: u8 = 6;\n")
+        files = production_loc.scope_files(self.root, "sdk")
+        self.assertEqual(
+            [str(path.relative_to(self.root)) for path in files],
+            [
+                "sdk/js/native/src/lib.rs",
+                "sdk/session/src/lib.rs",
+                "sdk/js/src/client.js",
+                "sdk/js/operator/index.js",
+            ],
+        )
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["sdk"]["lines"], 4)
+        crates = {
+            production_loc.sdk_crate(self.root / "sdk", path) for path in files
+        }
+        self.assertEqual(crates, {"layerfs-node", "layerfs-session", "@layerfs/sdk"})
+
     def test_integration_crates_count_product_source_only(self):
         write(self.root, "integrations/rutis-rust/Cargo.toml", "[package]\nname = \"rutis-rust\"\n")
         write(

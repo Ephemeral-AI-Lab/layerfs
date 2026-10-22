@@ -622,14 +622,8 @@ dependencies = [
 name = "layerfs-node"
 version = "1.0.0"
 dependencies = [
- "layerfs-api",
  "layerfs-bridge",
- "layerfs-history",
- "layerfs-persistence",
- "layerfs-sandbox",
- "layerfs-storage",
- "layerfs-store-service",
- "layerfs-telemetry",
+ "layerfs-session",
  "napi",
  "napi-build",
  "napi-derive",
@@ -674,6 +668,20 @@ name = "layerfs-sandbox"
 version = "1.0.0"
 dependencies = [
  "nix",
+]
+
+[[package]]
+name = "layerfs-session"
+version = "1.0.0"
+dependencies = [
+ "layerfs-api",
+ "layerfs-bridge",
+ "layerfs-history",
+ "layerfs-persistence",
+ "layerfs-sandbox",
+ "layerfs-storage",
+ "layerfs-store-service",
+ "layerfs-telemetry",
 ]
 
 [[package]]

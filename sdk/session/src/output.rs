@@ -9,10 +9,9 @@
 //! `workspace.exec_release` closes it. The Sandbox backend reads the command's stream only as fast as
 //! this sink takes it (an 8 KiB window), so a slow disk holds the command
 //! back. No total is capped: a spooled stream is bounded by free space.
-use crate::job::{failed, refused, Outcome};
+use crate::outcome::{failed, refused, Outcome};
 use crate::registry::{lock, text};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use napi::bindgen_prelude::Buffer;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
@@ -158,7 +157,7 @@ pub(crate) fn fields(
 /// and answers how many it wrote and whether they end the stream. Reading
 /// into the caller's buffer leaves no per-page allocation behind on either
 /// side, so a stream of any size passes through one page of memory.
-pub(crate) fn page(args: &SdkValue, mut page: Buffer) -> Outcome {
+pub(crate) fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
     let id = text(args, "output")?;
     let stream = text(args, "stream")?;
     let offset = args

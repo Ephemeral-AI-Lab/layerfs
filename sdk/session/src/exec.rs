@@ -6,7 +6,7 @@
 //! with its output in a log file, and this binding keeps its process id. The
 //! Engine offers no per-exec cancel, so `cancel` signals the process group
 //! from a second command and waits (bounded) until it is gone.
-use crate::job::{failed, refused, Outcome};
+use crate::outcome::{failed, refused, Outcome};
 use crate::output::Spool;
 use crate::registry::{lock, naming, sandbox, sandbox_live, text, Process, SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};

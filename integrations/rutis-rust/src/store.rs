@@ -1,20 +1,20 @@
-//! Open an installed Store in this process and run the public Store table.
+//! Open an installed Store in this process and run the public Store table,
+//! plus the Tier 1 Workspace calls over the shared session layer.
 
-use crate::config::Config;
+use crate::config::{Config, Deploy};
 use crate::error::LayerFsError;
 use crate::value;
-use layerfs_bridge::control::{Answer as ControlAnswer, Reply, SdkCall, SdkValue};
+use layerfs_bridge::control::{Answer as ControlAnswer, Reply, SdkValue};
 use layerfs_bridge::provision::{StoreManifest, StoreProfile};
-use layerfs_store_service::{OpenRefusal, StoreService};
 use serde_json::Value;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 const RECORD_LIMIT: u64 = 65_535;
-static OVERLAY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+/// Bytes per spooled-output page while filling a sink.
+const PAGE: usize = 64 * 1024;
 
 const STORE_METHODS: &[&str] = &[
     "project.list_branches",
@@ -47,91 +47,15 @@ pub struct Info {
     pub project: String,
 }
 
-struct Opened {
-    service: Option<StoreService>,
-    overlay: PathBuf,
-}
-
-impl Opened {
-    fn close(mut self) -> Result<(), LayerFsError> {
-        let service = self.service.take();
-        let mut result = Ok(());
-        if let Some(service) = service {
-            if let Err(error) = service.close() {
-                result = Err(LayerFsError::refused(
-                    "Failed",
-                    format!("Store close: {error}"),
-                    Value::Null,
-                ));
-            }
-        }
-        let overlay = std::mem::take(&mut self.overlay);
-        if !overlay.as_os_str().is_empty() {
-            if let Err(error) = std::fs::remove_dir_all(&overlay) {
-                if error.kind() != std::io::ErrorKind::NotFound && result.is_ok() {
-                    result = Err(LayerFsError::Io(error));
-                }
-            }
-        }
-        result
-    }
-
-    fn discard(mut self) {
-        let service = self.service.take();
-        if let Some(service) = service {
-            let _ = service.close();
-        }
-        let overlay = std::mem::take(&mut self.overlay);
-        if !overlay.as_os_str().is_empty() {
-            let _ = std::fs::remove_dir_all(overlay);
-        }
-    }
-}
-
-fn discard_opened(opened: Arc<Opened>) {
-    match Arc::try_unwrap(opened) {
-        Ok(opened) => opened.discard(),
-        Err(opened) => drop(opened),
-    }
-}
-
-impl Drop for Opened {
-    fn drop(&mut self) {
-        let service = self.service.take();
-        let overlay = std::mem::take(&mut self.overlay);
-        if service.is_none() && overlay.as_os_str().is_empty() {
-            return;
-        }
-        let overlay = if overlay.as_os_str().is_empty() {
-            None
-        } else {
-            Some(OverlayGuard::new(overlay))
-        };
-        let job = move || {
-            if let Some(service) = service {
-                let _ = service.close();
-            }
-            drop(overlay);
-        };
-        match tokio::runtime::Handle::try_current() {
-            Ok(handle) => {
-                drop(handle.spawn_blocking(job));
-            }
-            Err(_) => job(),
-        }
-    }
-}
-
 struct Inner {
     config: Config,
     opening: tokio::sync::Mutex<()>,
-    state: Mutex<Option<Arc<Opened>>>,
+    opened: AtomicBool,
     closed: AtomicBool,
 }
 
-/// One project's Store service. The Store is opened lazily on the first call;
-/// `close` disables new calls and releases the Store. No shared Store registry
-/// is kept; only a process-local temp-name sequence is global.
+/// One project's Store and Workspace service. The Store is opened lazily on
+/// the first call; `close` disables new calls and releases it.
 #[derive(Clone)]
 pub struct LayerFs {
     inner: Arc<Inner>,
@@ -145,7 +69,7 @@ impl LayerFs {
             inner: Arc::new(Inner {
                 config,
                 opening: tokio::sync::Mutex::new(()),
-                state: Mutex::new(None),
+                opened: AtomicBool::new(false),
                 closed: AtomicBool::new(false),
             }),
         })
@@ -162,17 +86,57 @@ impl LayerFs {
     /// Runs one public Store method once.
     pub async fn call(&self, method: String, args: Value) -> Result<Value, LayerFsError> {
         self.ensure_open()?;
-        let method = exact_method(&method)?.to_owned();
-        let opened = self.service().await?;
+        let method = exact_method(&method)?;
+        self.open_store().await?;
+        let args = self.session_args(args)?;
         let project = self.inner.config.project.clone();
         tokio::task::spawn_blocking(move || {
-            let args = with_project(value::to_sdk(args)?, &project)?;
-            let service = opened
-                .service
-                .as_ref()
-                .ok_or_else(|| LayerFsError::invalid("layerfs service is closed"))?;
-            let value = layerfs_api::call(service, &SdkCall { method, args })?;
+            let args = with_project(args, &project)?;
+            let value = layerfs_session::dispatch(method, args)?;
             Ok(value::to_json(&value))
+        })
+        .await
+        .map_err(|error| LayerFsError::Join(error.to_string()))?
+    }
+
+    /// `workspace_mount({ branch })`: a new Workspace of the Branch.
+    pub async fn workspace_mount(&self, args: Value) -> Result<Value, LayerFsError> {
+        self.workspace_call("workspace.mount", args, true).await
+    }
+
+    /// `workspace_status({ sandbox, path })`.
+    pub async fn workspace_status(&self, args: Value) -> Result<Value, LayerFsError> {
+        self.workspace_call("workspace.status", args, true).await
+    }
+
+    /// `workspace_commit({ sandbox, path, message?, force? })`.
+    pub async fn workspace_commit(&self, args: Value) -> Result<Value, LayerFsError> {
+        self.workspace_call("workspace.commit", args, false).await
+    }
+
+    /// `workspace_unmount({ sandbox, path, discard? })`.
+    pub async fn workspace_unmount(&self, args: Value) -> Result<Value, LayerFsError> {
+        self.workspace_call("workspace.unmount", args, false).await
+    }
+
+    /// `workspace_exec({ sandbox, path, command, message?, sink? })`.
+    ///
+    /// Without `sink` the SDK result is returned unchanged. With `sink`
+    /// (`{ stdout?: path, stderr?: path }`, absolute paths), the command
+    /// spools its output, every page is written to the named file in order,
+    /// and the result carries the byte counts. A slow sink holds the command
+    /// back.
+    pub async fn workspace_exec(&self, args: Value) -> Result<Value, LayerFsError> {
+        self.ensure_open()?;
+        self.ensure_deploy("workspace.exec")?;
+        let (args, sink) = take_sink(args)?;
+        let args = self.session_args(args)?;
+        tokio::task::spawn_blocking(move || match sink {
+            None => {
+                let value = layerfs_session::dispatch("workspace.exec", args)?;
+                Ok(value::to_json(&value))
+            }
+            Some(sink) => exec_into_sink(args, sink),
         })
         .await
         .map_err(|error| LayerFsError::Join(error.to_string()))?
@@ -183,44 +147,60 @@ impl LayerFs {
     pub async fn close(&self) -> Result<(), LayerFsError> {
         let _opening = self.inner.opening.lock().await;
         self.inner.closed.store(true, Ordering::Release);
-        let opened = {
-            let mut state = self.state();
-            state.take()
-        };
-        if let Some(opened) = opened {
-            let result = tokio::task::spawn_blocking(move || match Arc::try_unwrap(opened) {
-                Ok(opened) => opened.close(),
-                // In-flight calls keep the Opened alive; their drop performs
-                // the deferred cleanup.
-                Err(_) => Ok(()),
-            })
+        if !self.inner.opened.swap(false, Ordering::AcqRel) {
+            return Ok(());
+        }
+        let config = self.inner.config.clone();
+        tokio::task::spawn_blocking(move || release_store(&config))
             .await
-            .map_err(|error| LayerFsError::Join(error.to_string()))?;
-            result?;
+            .map_err(|error| LayerFsError::Join(error.to_string()))?
+    }
+
+    async fn workspace_call(
+        &self,
+        method: &'static str,
+        args: Value,
+        store: bool,
+    ) -> Result<Value, LayerFsError> {
+        self.ensure_open()?;
+        self.ensure_deploy(method)?;
+        if store {
+            self.open_store().await?;
+        }
+        let args = self.session_args(args)?;
+        tokio::task::spawn_blocking(move || {
+            let value = layerfs_session::dispatch(method, args)?;
+            Ok(value::to_json(&value))
+        })
+        .await
+        .map_err(|error| LayerFsError::Join(error.to_string()))?
+    }
+
+    fn ensure_deploy(&self, method: &str) -> Result<(), LayerFsError> {
+        if self.inner.config.deploy.is_none() {
+            return Err(LayerFsError::invalid(format!(
+                "{method} needs deploy.docker, deploy.image, deploy.volume and deploy.daemon"
+            )));
         }
         Ok(())
     }
 
-    async fn service(&self) -> Result<Arc<Opened>, LayerFsError> {
+    async fn open_store(&self) -> Result<(), LayerFsError> {
         self.ensure_open()?;
-        if let Some(opened) = self.state().as_ref().cloned() {
-            return Ok(opened);
+        if self.inner.opened.load(Ordering::Acquire) {
+            return Ok(());
         }
         let _opening = self.inner.opening.lock().await;
         self.ensure_open()?;
-        if let Some(opened) = self.state().as_ref().cloned() {
-            return Ok(opened);
+        if self.inner.opened.load(Ordering::Acquire) {
+            return Ok(());
         }
         let config = self.inner.config.clone();
-        let opened = tokio::task::spawn_blocking(move || open_store(&config))
+        tokio::task::spawn_blocking(move || open_store(&config))
             .await
             .map_err(|error| LayerFsError::Join(error.to_string()))??;
-        if let Err(error) = self.ensure_open() {
-            let _ = tokio::task::spawn_blocking(move || discard_opened(opened)).await;
-            return Err(error);
-        }
-        *self.state() = Some(opened.clone());
-        Ok(opened)
+        self.inner.opened.store(true, Ordering::Release);
+        Ok(())
     }
 
     fn ensure_open(&self) -> Result<(), LayerFsError> {
@@ -230,28 +210,105 @@ impl LayerFs {
         Ok(())
     }
 
-    fn state(&self) -> std::sync::MutexGuard<'_, Option<Arc<Opened>>> {
-        self.inner
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    fn session_args(&self, args: Value) -> Result<SdkValue, LayerFsError> {
+        let SdkValue::Map(mut fields) = value::to_sdk(args)? else {
+            return Err(LayerFsError::invalid("arguments must be an object"));
+        };
+        let config = &self.inner.config;
+        let fixed = [
+            ("project", SdkValue::Text(config.project.clone())),
+            ("home", SdkValue::Text(config.home.display().to_string())),
+            (
+                "storePath",
+                SdkValue::Text(config.store_path.display().to_string()),
+            ),
+        ];
+        for (name, value) in fixed {
+            set(&mut fields, name, value);
+        }
+        if let Some(deploy) = &config.deploy {
+            set(&mut fields, "deploy", deploy_value(deploy));
+        }
+        Ok(SdkValue::Map(fields))
     }
 }
 
 impl Drop for Inner {
     fn drop(&mut self) {
         self.closed.store(true, Ordering::Release);
-        let state = self
-            .state
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(opened) = state.take() {
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                drop(handle.spawn_blocking(move || discard_opened(opened)));
-            } else {
-                discard_opened(opened);
-            }
+        if !self.opened.swap(false, Ordering::AcqRel) {
+            return;
         }
+        let config = self.config.clone();
+        let job = move || {
+            let _ = release_store(&config);
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                drop(handle.spawn_blocking(job));
+            }
+            Err(_) => job(),
+        }
+    }
+}
+
+fn open_store(config: &Config) -> Result<(), LayerFsError> {
+    read_record(config)?;
+    let args = base_args(config);
+    layerfs_session::acquire(&args)?;
+    Ok(())
+}
+
+fn release_store(config: &Config) -> Result<(), LayerFsError> {
+    let args = base_args(config);
+    layerfs_session::release(&args)?;
+    Ok(())
+}
+
+fn base_args(config: &Config) -> SdkValue {
+    let mut fields = vec![
+        ("project".to_owned(), SdkValue::Text(config.project.clone())),
+        (
+            "home".to_owned(),
+            SdkValue::Text(config.home.display().to_string()),
+        ),
+        (
+            "storePath".to_owned(),
+            SdkValue::Text(config.store_path.display().to_string()),
+        ),
+    ];
+    if let Some(deploy) = &config.deploy {
+        fields.push(("deploy".to_owned(), deploy_value(deploy)));
+    }
+    SdkValue::Map(fields)
+}
+
+fn deploy_value(deploy: &Deploy) -> SdkValue {
+    let mut fields = vec![
+        (
+            "docker".to_owned(),
+            SdkValue::Text(deploy.docker.display().to_string()),
+        ),
+        ("image".to_owned(), SdkValue::Text(deploy.image.clone())),
+        ("volume".to_owned(), SdkValue::Text(deploy.volume.clone())),
+        (
+            "daemon".to_owned(),
+            SdkValue::Text(deploy.daemon.display().to_string()),
+        ),
+    ];
+    if let Some(host) = &deploy.daemon_host {
+        fields.push(("daemonHost".to_owned(), SdkValue::Text(host.clone())));
+    }
+    if let Some(prefix) = &deploy.container_prefix {
+        fields.push(("containerPrefix".to_owned(), SdkValue::Text(prefix.clone())));
+    }
+    SdkValue::Map(fields)
+}
+
+fn set(fields: &mut Vec<(String, SdkValue)>, name: &str, value: SdkValue) {
+    match fields.iter_mut().find(|(known, _)| known == name) {
+        Some((_, current)) => *current = value,
+        None => fields.push((name.to_owned(), value)),
     }
 }
 
@@ -273,81 +330,11 @@ fn with_project(args: SdkValue, project: &str) -> Result<SdkValue, LayerFsError>
     let SdkValue::Map(mut fields) = args else {
         return Err(LayerFsError::invalid("arguments must be an object"));
     };
-    match fields.iter_mut().find(|(name, _)| name == "project") {
-        Some((_, value)) => *value = SdkValue::Text(project.to_owned()),
-        None => fields.push(("project".to_owned(), SdkValue::Text(project.to_owned()))),
-    }
+    set(&mut fields, "project", SdkValue::Text(project.to_owned()));
     Ok(SdkValue::Map(fields))
 }
 
-fn open_store(config: &Config) -> Result<Arc<Opened>, LayerFsError> {
-    let record = read_record(config)?;
-    let path = unique_overlay();
-    make_private_dir(&path)?;
-    let mut overlay = OverlayGuard::new(path);
-    let canonical = std::fs::canonicalize(overlay.path())?;
-    overlay.replace(canonical.clone());
-    let template = canonical.join("overlay.sqlite");
-    match StoreService::open_direct(
-        &config.store_path,
-        &record.manifest.binding,
-        record.manifest.cursor_key,
-        &template,
-    ) {
-        Ok(service) => Ok(Arc::new(Opened {
-            service: Some(service),
-            overlay: overlay.disarm(),
-        })),
-        Err(refusal) => Err(match refusal {
-            OpenRefusal::Unsupported(reason) => LayerFsError::unsupported(reason.0),
-            OpenRefusal::Missing(reason) => LayerFsError::refused("NoStore", reason, Value::Null),
-            OpenRefusal::Failed(reason) => LayerFsError::refused("Failed", reason, Value::Null),
-        }),
-    }
-}
-
-struct OverlayGuard(Option<PathBuf>);
-
-impl OverlayGuard {
-    fn new(path: PathBuf) -> Self {
-        Self(Some(path))
-    }
-    fn path(&self) -> &Path {
-        self.0.as_deref().expect("overlay path")
-    }
-    fn replace(&mut self, path: PathBuf) {
-        self.0 = Some(path);
-    }
-    fn disarm(mut self) -> PathBuf {
-        self.0.take().expect("overlay path")
-    }
-}
-
-impl Drop for OverlayGuard {
-    fn drop(&mut self) {
-        if let Some(path) = self.0.take() {
-            let _ = std::fs::remove_dir_all(path);
-        }
-    }
-}
-
-fn unique_overlay() -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
-    let sequence = OVERLAY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "layerfs-rutis-{}-{}-{}",
-        std::process::id(),
-        nanos,
-        sequence
-    ))
-}
-
-struct Record {
-    manifest: StoreManifest,
-}
+struct Record;
 
 fn read_record(config: &Config) -> Result<Record, LayerFsError> {
     let project = config.home.join(&config.project);
@@ -414,7 +401,7 @@ fn read_record(config: &Config) -> Result<Record, LayerFsError> {
             "installed manifest does not match the project".into(),
         ));
     }
-    Ok(Record { manifest })
+    Ok(Record)
 }
 
 fn manifest_bytes(fields: &[(String, SdkValue)]) -> Result<&[u8], LayerFsError> {
@@ -475,7 +462,7 @@ fn read_private(path: &Path) -> Result<Vec<u8>, LayerFsError> {
             .custom_flags(libc::O_NOFOLLOW)
             .open(path)?;
         let mut bytes = Vec::new();
-        file.by_ref()
+        std::io::Read::by_ref(&mut file)
             .take(RECORD_LIMIT + 1)
             .read_to_end(&mut bytes)?;
         if bytes.len() as u64 > RECORD_LIMIT {
@@ -496,16 +483,162 @@ fn read_private(path: &Path) -> Result<Vec<u8>, LayerFsError> {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn make_private_dir(path: &Path) -> Result<(), LayerFsError> {
-    use std::os::unix::fs::DirBuilderExt;
-    std::fs::DirBuilder::new()
-        .mode(0o700)
-        .create(path)
-        .map_err(LayerFsError::from)
+/// One exec sink: absolute files that receive the streams in order.
+struct Sink {
+    stdout: Option<PathBuf>,
+    stderr: Option<PathBuf>,
 }
 
-#[cfg(not(target_os = "linux"))]
-fn make_private_dir(path: &Path) -> Result<(), LayerFsError> {
-    std::fs::create_dir(path).map_err(LayerFsError::from)
+fn take_sink(args: Value) -> Result<(Value, Option<Sink>), LayerFsError> {
+    let Value::Object(mut fields) = args else {
+        return Err(LayerFsError::invalid("arguments must be an object"));
+    };
+    let Some(sink) = fields.remove("sink") else {
+        return Ok((Value::Object(fields), None));
+    };
+    if sink.is_null() {
+        return Ok((Value::Object(fields), None));
+    }
+    let Value::Object(streams) = sink else {
+        return Err(LayerFsError::invalid(
+            "sink must be an object with stdout/stderr paths",
+        ));
+    };
+    let path = |name: &str| -> Result<Option<PathBuf>, LayerFsError> {
+        match streams.get(name) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::String(path)) => {
+                let path = PathBuf::from(path);
+                if !path.is_absolute() {
+                    return Err(LayerFsError::invalid(format!(
+                        "sink.{name} must be absolute"
+                    )));
+                }
+                Ok(Some(path))
+            }
+            Some(_) => Err(LayerFsError::invalid(format!("sink.{name} must be a path"))),
+        }
+    };
+    let sink = Sink {
+        stdout: path("stdout")?,
+        stderr: path("stderr")?,
+    };
+    if sink.stdout.is_none() && sink.stderr.is_none() {
+        return Err(LayerFsError::invalid("sink needs a stdout or stderr path"));
+    }
+    Ok((Value::Object(fields), Some(sink)))
+}
+
+fn exec_into_sink(args: SdkValue, sink: Sink) -> Result<Value, LayerFsError> {
+    let SdkValue::Map(mut fields) = args else {
+        return Err(LayerFsError::invalid("arguments must be an object"));
+    };
+    set(&mut fields, "spool", SdkValue::Bool(true));
+    let result = layerfs_session::dispatch("workspace.exec", SdkValue::Map(fields))?;
+    let SdkValue::Map(fields) = result else {
+        return Err(LayerFsError::invalid("workspace.exec returned no result"));
+    };
+    let output = match fields.iter().find(|(name, _)| name == "output") {
+        Some((_, SdkValue::Text(output))) => Some(output.clone()),
+        _ => None,
+    };
+    let size = |name: &str| match fields
+        .iter()
+        .find(|(key, _)| key == name)
+        .map(|(_, value)| value)
+    {
+        Some(SdkValue::Int(value)) => u64::try_from(*value).ok(),
+        _ => None,
+    };
+    let mut streams = Vec::new();
+    for (name, path, inline) in [
+        ("stdout", sink.stdout, "stdout"),
+        ("stderr", sink.stderr, "stderr"),
+    ] {
+        let Some(path) = path else {
+            continue;
+        };
+        let inline = match fields.iter().find(|(key, _)| key == inline) {
+            Some((_, SdkValue::Text(text))) => Some(text.as_str()),
+            _ => None,
+        };
+        let bytes = write_stream(&path, inline, output.as_deref(), name, size(name))?;
+        streams.push((
+            name.to_owned(),
+            SdkValue::map([
+                ("path", SdkValue::text(path.display().to_string())),
+                (
+                    "bytes",
+                    SdkValue::Int(i64::try_from(bytes).unwrap_or(i64::MAX)),
+                ),
+            ]),
+        ));
+    }
+    if let Some(output) = output {
+        let release = SdkValue::map([("output", SdkValue::Text(output))]);
+        layerfs_session::dispatch("workspace.exec_release", release)?;
+    }
+    let field = |name: &str| {
+        fields
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.clone())
+    };
+    let mut answer = Vec::new();
+    for name in ["kind", "exitCode", "message", "truncated"] {
+        if let Some(value) = field(name) {
+            answer.push((name.to_owned(), value));
+        }
+    }
+    for name in ["stdoutBytes", "stderrBytes"] {
+        if let Some(value) = field(name) {
+            answer.push((name.to_owned(), value));
+        }
+    }
+    answer.push(("sink".to_owned(), SdkValue::Map(streams)));
+    Ok(value::to_json(&SdkValue::Map(answer)))
+}
+
+fn write_stream(
+    path: &Path,
+    inline: Option<&str>,
+    output: Option<&str>,
+    stream: &str,
+    size: Option<u64>,
+) -> Result<u64, LayerFsError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    if let Some(text) = inline {
+        file.write_all(text.as_bytes())?;
+        return Ok(text.len() as u64);
+    }
+    let Some(output) = output else {
+        return Ok(0);
+    };
+    let size = size.unwrap_or(0);
+    let mut offset = 0u64;
+    let mut page = [0u8; PAGE];
+    while offset < size {
+        let args = SdkValue::map([
+            ("output", SdkValue::text(output)),
+            ("stream", SdkValue::text(stream)),
+            ("offset", SdkValue::Int(offset as i64)),
+        ]);
+        let answer = layerfs_session::exec_output(&args, &mut page)?;
+        let length = answer
+            .get_int("length")
+            .and_then(|length| usize::try_from(length).ok())
+            .ok_or_else(|| LayerFsError::invalid("spooled output page has no length"))?;
+        if length == 0 {
+            break;
+        }
+        file.write_all(&page[..length])?;
+        offset += length as u64;
+    }
+    Ok(offset)
 }

@@ -1,6 +1,7 @@
 # Tier 1: add Workspace support
 
-> **Status:** Proposal; target LayerFS 1.0.0; not a released contract.
+> **Status:** Proposal with an implemented, unreleased Tier 1; target LayerFS
+> 1.0.0; not a released contract.
 
 ## Delta
 
@@ -28,7 +29,7 @@ Tier 0 only opens a Store. Workspace support also needs:
 - daemon connection pool;
 - exec spool/output.
 
-That logic exists only in `sdk/js/native/src`. Reusing it needs a napi-free
+That logic lived only in `sdk/js/native/src`. Reusing it needs a napi-free
 `layerfs-session` crate. Writing it again in the plugin is the second
 implementation this design avoids.
 
@@ -39,8 +40,12 @@ project modules into `layerfs-session`; `layerfs-node` becomes a thin napi
 wrapper. `convert.rs` stays in the napi layer. The crate can live under
 `sdk/session` or an integration workspace; it does not have to enter `core/`.
 
-The move is behavior-preserving. Run the native tests before and after; one
-placement implementation must serve both bindings.
+Implemented as `sdk/session`, a member of the core workspace. It carries
+discovery, Sandboxes, Workspaces, the control-connection pool, exec, output
+spooling, direct Store calls, tracing and the two method tables. `layerfs-node`
+keeps only `convert.rs`, the napi `Job` and the public entry points. The move
+is behavior-preserving: the discovery/reclaim tests moved with the modules and
+the JavaScript packaging, exec-output and trace checks still pass.
 
 ## Configuration
 
@@ -57,7 +62,9 @@ deploy.container_prefix optional Sandbox name prefix
 
 Validate the digest, volume, daemon path and Docker socket at `apply`. Missing
 deployment leaves Store calls working and makes `workspace_*` fail
-`InvalidInput`.
+`InvalidInput`. The Rust configuration is `layerfs_rutis::Deploy`; the exact
+digest is lowercase `sha256:<64 hex>`, all paths must be absolute, the Engine
+path must be an existing socket and the daemon path an existing file.
 
 ## Lifecycle
 
@@ -75,9 +82,15 @@ deployment leaves Store calls working and makes `workspace_*` fail
 
 ## Exec
 
-- `workspace_exec` with no sink returns the SDK result for bounded output.
+- `workspace_exec` with no sink returns the SDK result for bounded output. If
+  a stream exceeds the SDK's inline window, the result names a spool but Tier
+  1 exposes no page method; such a call must use a sink.
 - With a sink, raw pages are delivered in order and the result carries the
   byte counts; a slow sink applies backpressure.
+- A Rust rutis method cannot carry a callback. The implemented sink is
+  `{ stdout?: <absolute path>, stderr?: <absolute path> }`; each page is
+  written to its file in order, and the result names both files and their byte
+  counts. `workspace_exec` is not a streaming callback API.
 - `ctx.signal` is not command cancellation. Background processes and
   cancellation are out of scope.
 
@@ -105,6 +118,13 @@ deployment leaves Store calls working and makes `workspace_*` fail
   stopped Sandbox is reclaimed once.
 - Reload: mounted Workspaces remain; a new plugin can list and unmount them.
 - No test over 120 seconds; Docker tests selected individually.
+
+Run at this implementation: Tier 0 (15 tests), Tier 1 without Docker (5
+tests: deployment validation, missing deployment, unknown Sandbox, sink
+argument validation, private-project enforcement), `layerfs-session` (6 moved
+tests), JavaScript `packaging/lazy`, `packaging/dispatch`,
+`test/exec_output.mjs` and `test/trace.mjs off`. The live Docker acceptance
+items below are **NOT_RUN**; no LayerFS image is installed on this host.
 
 ## Risks
 

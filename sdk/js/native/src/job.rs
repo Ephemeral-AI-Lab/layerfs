@@ -5,25 +5,9 @@
 //! message, detail } }` for a refusal with a stable code. The JavaScript SDK
 //! turns a refusal into a typed error. Nothing is retried here.
 use crate::convert::to_js;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkValue;
+use layerfs_session::Outcome;
 use napi::{Env, JsUnknown, Task};
-
-/// What one operation answers.
-pub(crate) type Outcome = Result<SdkValue, SdkRefusal>;
-
-/// A refusal with a stable code.
-pub(crate) fn refused(code: &str, message: impl Into<String>) -> SdkRefusal {
-    SdkRefusal {
-        code: code.to_owned(),
-        message: message.into(),
-        detail: SdkValue::Null,
-    }
-}
-
-/// A failure that has no SDK code of its own.
-pub(crate) fn failed(error: impl std::fmt::Debug) -> SdkRefusal {
-    refused("Failed", format!("{error:?}"))
-}
 
 /// One queued operation, traced when it has a scope.
 pub struct Job {
@@ -60,10 +44,10 @@ impl Task for Job {
         let started = std::time::Instant::now();
         match self.work.take() {
             Some(work) => {
-                let (outcome, telemetry) = crate::trace::run(self.scope, work);
+                let (outcome, telemetry) = layerfs_session::run(self.scope, work);
                 let client = self.scope.map(|_| Client {
                     run: started.elapsed().as_micros(),
-                    waited: crate::trace::take_waited().as_micros(),
+                    waited: layerfs_session::take_waited().as_micros(),
                 });
                 Ok((outcome, telemetry, client))
             }

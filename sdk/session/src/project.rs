@@ -6,7 +6,7 @@
 //! Sandbox opens (#373: no Sandbox is started to install it). Init's first
 //! Branch is named `main` and the SDK never shows it: `main` is the line of
 //! Layers.
-use crate::job::{failed, refused, Outcome};
+use crate::outcome::{failed, refused, Outcome};
 use crate::registry::{lock, random, text, Project, INITS};
 use layerfs_api::{InitCounters, InitRequest, InitStep, ProjectApi};
 use layerfs_bridge::control::SdkValue;

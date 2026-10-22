@@ -15,6 +15,7 @@ layerfs-api = { path = "../../core/crates/layerfs-api" }
 layerfs-bridge = { path = "../../core/crates/layerfs-bridge" }
 layerfs-history = { path = "../../core/crates/layerfs-history" }
 layerfs-store-service = { path = "../../core/crates/layerfs-store-service" }
+layerfs-session = { path = "../../sdk/session" }
 rutis = "0.13.0"
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }

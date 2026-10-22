@@ -20,13 +20,13 @@ thread_local! {
 }
 
 /// The connection wait of the call this thread runs, and resets it.
-pub(crate) fn take_waited() -> Duration {
+pub fn take_waited() -> Duration {
     WAITED.replace(Duration::ZERO)
 }
 
 /// Takes the trace scope a call's `observe` argument names out of its
 /// arguments; an absent or malformed one leaves the call untraced.
-pub(crate) fn take_scope(args: &mut SdkValue) -> Option<[u8; 32]> {
+pub fn take_scope(args: &mut SdkValue) -> Option<[u8; 32]> {
     let SdkValue::Map(fields) = args else {
         return None;
     };
@@ -40,7 +40,7 @@ pub(crate) fn take_scope(args: &mut SdkValue) -> Option<[u8; 32]> {
 
 /// Runs `work` with this thread traced under `scope` and returns the
 /// telemetry its exchanges received. The scope is cleared on every exit.
-pub(crate) fn run<T>(scope: Option<[u8; 32]>, work: impl FnOnce() -> T) -> (T, Vec<SdkValue>) {
+pub fn run<T>(scope: Option<[u8; 32]>, work: impl FnOnce() -> T) -> (T, Vec<SdkValue>) {
     struct Reset;
     impl Drop for Reset {
         fn drop(&mut self) {

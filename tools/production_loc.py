@@ -10,8 +10,8 @@ inline #[cfg(test)] items are removed before counting, because the reference tre
 keeps tests inside src/.
 
 The JavaScript SDK is its own scope, `sdk`: the Node binding's Rust under
-sdk/js/native/src and the package's JavaScript under sdk/js/src and
-sdk/js/operator. JavaScript comments are blanked by a scanner that knows line
+sdk/js/native/src, the shared napi-free session layer under sdk/session/src
+and the package's JavaScript under sdk/js/src and sdk/js/operator. JavaScript comments are blanked by a scanner that knows line
 and block comments and single, double and template strings. Current regex
 literals contain no comment delimiters or string quotes.
 
@@ -384,7 +384,7 @@ def scope_base(root: Path, scope: str) -> Path:
     if scope == "core":
         return root / "core" / "crates"
     if scope == "sdk":
-        return root / "sdk" / "js"
+        return root / "sdk"
     if scope == "dsh":
         return root / "dsh" / "packages"
     if scope == "integrations":
@@ -393,14 +393,16 @@ def scope_base(root: Path, scope: str) -> Path:
 
 
 def sdk_files(base: Path) -> list:
-    """The binding's Rust and the package's JavaScript."""
+    """The binding's Rust, the session layer and the package's JavaScript."""
     files = []
-    if (base / "native" / "src").is_dir():
-        files += sorted((base / "native" / "src").rglob("*.rs"))
-    if (base / "src").is_dir():
-        files += sorted((base / "src").rglob("*.js"))
-    if (base / "operator").is_dir():
-        files += sorted((base / "operator").rglob("*.js"))
+    if (base / "js" / "native" / "src").is_dir():
+        files += sorted((base / "js" / "native" / "src").rglob("*.rs"))
+    if (base / "session" / "src").is_dir():
+        files += sorted((base / "session" / "src").rglob("*.rs"))
+    if (base / "js" / "src").is_dir():
+        files += sorted((base / "js" / "src").rglob("*.js"))
+    if (base / "js" / "operator").is_dir():
+        files += sorted((base / "js" / "operator").rglob("*.js"))
     return [path for path in files if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)]
 
 
@@ -455,7 +457,12 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
 
 
 def sdk_crate(base: Path, path: Path) -> str:
-    return "layerfs-node" if path.relative_to(base).parts[0] == "native" else "@layerfs/sdk"
+    parts = path.relative_to(base).parts
+    if parts[0] == "session":
+        return "layerfs-session"
+    if parts[0] == "js" and parts[1] == "native":
+        return "layerfs-node"
+    return "@layerfs/sdk"
 
 
 def scope_files(root: Path, scope: str) -> list:

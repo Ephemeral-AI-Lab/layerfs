@@ -1,17 +1,7 @@
 //! Node entry points for the public SDK and internal operator.
 mod convert;
-mod direct;
-mod discovery;
 mod dispatch;
-mod exec;
 mod job;
-mod output;
-mod pool;
-mod project;
-mod registry;
-mod sandbox;
-mod trace;
-mod workspace;
 
 use job::Job;
 use napi::{bindgen_prelude::AsyncTask, JsUnknown};
@@ -35,13 +25,13 @@ pub fn exec_output(
 /// One more client of the Store at `args.storePath` in this process.
 #[napi]
 pub fn store_open(args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
-    dispatch::store(args, direct::acquire)
+    dispatch::store(args, layerfs_session::acquire)
 }
 
 /// One client less of the Store at `args.storePath`; the last one closes it.
 #[napi]
 pub fn store_close(args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
-    dispatch::store(args, direct::release)
+    dispatch::store(args, layerfs_session::release)
 }
 
 /// Runs one internal operator operation on its separate method table.

@@ -12,7 +12,7 @@
 //! process's temporary directory and are removed with the service. Each call
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
-use crate::job::{failed, refused, Outcome};
+use crate::outcome::{failed, refused, Outcome};
 use crate::registry::lock;
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
@@ -76,7 +76,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
 }
 
 /// `storeOpen`: one more client of the Store a call names, opening it first.
-pub(crate) fn acquire(args: &SdkValue) -> Outcome {
+pub fn acquire(args: &SdkValue) -> Outcome {
     let store = path(args)?;
     let mut stores = lock(&STORES)?;
     if !stores.contains_key(&store) {
@@ -94,7 +94,7 @@ pub(crate) fn acquire(args: &SdkValue) -> Outcome {
 /// `storeClose`: one client less; the last one closes the Store and removes
 /// its overlay directory. A call still running keeps the service alive until
 /// it returns, and the service closes when it is dropped then.
-pub(crate) fn release(args: &SdkValue) -> Outcome {
+pub fn release(args: &SdkValue) -> Outcome {
     let store = path(args)?;
     let mut stores = lock(&STORES)?;
     let Some(opened) = stores.get_mut(&store) else {
@@ -178,6 +178,16 @@ pub(crate) fn branch_id(
     name: &str,
 ) -> Result<layerfs_history::BranchId, SdkRefusal> {
     let service = service(args)?;
+    branch_id_in(&service, args, name)
+}
+
+/// The Branch id of `name` in the project `args` names, read through an
+/// already opened Store.
+pub fn branch_id_in(
+    service: &StoreService,
+    args: &SdkValue,
+    name: &str,
+) -> Result<layerfs_history::BranchId, SdkRefusal> {
     let stack = layerfs_store_service::operator::args::project(&service.store, args)?;
     Ok(layerfs_store_service::history::lookup::branch(&service.store, &stack, name)?.id)
 }
@@ -188,6 +198,15 @@ pub(crate) fn head(
     branch: layerfs_history::BranchId,
 ) -> Result<Option<layerfs_history::CommitId>, SdkRefusal> {
     let service = service(args)?;
+    head_in(&service, branch)
+}
+
+/// The newest Commit of `branch`, read through an already opened Store;
+/// `None` when it has none.
+pub fn head_in(
+    service: &StoreService,
+    branch: layerfs_history::BranchId,
+) -> Result<Option<layerfs_history::CommitId>, SdkRefusal> {
     let page = service
         .store
         .published(|history| {

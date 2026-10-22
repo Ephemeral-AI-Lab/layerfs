@@ -8,7 +8,7 @@
 //! daemon. Nothing is retried: a refused or failed step is the call's answer.
 //! A Sandbox whose daemon ended itself when idle is found stopped by the
 //! next mount or listing, which reclaims it.
-use crate::job::{failed, Outcome};
+use crate::outcome::{failed, Outcome};
 use crate::registry::{
     lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount, SandboxState,
 };

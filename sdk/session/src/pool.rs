@@ -10,7 +10,7 @@
 //! When the daemon admits no more connections, the Sandbox keeps the ones it
 //! has and callers take turns on them. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
-use crate::job::{failed, refused};
+use crate::outcome::{failed, refused};
 use layerfs_api::internal::Control;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
 use layerfs_bridge::duplex::initiate_observed;

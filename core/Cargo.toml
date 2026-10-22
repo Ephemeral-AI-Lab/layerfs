@@ -25,6 +25,8 @@ members = [
     "crates/layerfs-fuse",
     # Node binding of the JavaScript SDK (owner-approved napi-rs, 2026-10-15).
     "../sdk/js/native",
+    # napi-free session layer shared by the JavaScript binding and layerfs-rutis.
+    "../sdk/session",
 ]
 exclude = [
     "vendor/fuser-0.18.0",

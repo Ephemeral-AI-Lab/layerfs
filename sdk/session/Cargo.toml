@@ -1,0 +1,19 @@
+[package]
+name = "layerfs-session"
+description = "napi-free LayerFS session layer: project discovery, Sandboxes, Workspaces and direct Store calls"
+publish = false
+workspace = "../../core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-api = { path = "../../core/crates/layerfs-api" }
+layerfs-bridge = { path = "../../core/crates/layerfs-bridge" }
+layerfs-history = { path = "../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../../core/crates/layerfs-persistence" }
+layerfs-sandbox = { path = "../../core/crates/layerfs-sandbox" }
+layerfs-storage = { path = "../../core/crates/layerfs-storage" }
+layerfs-store-service = { path = "../../core/crates/layerfs-store-service" }
+layerfs-telemetry = { path = "../../core/crates/layerfs-telemetry" }

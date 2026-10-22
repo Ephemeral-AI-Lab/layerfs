@@ -13,14 +13,8 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-layerfs-api = { path = "../../../core/crates/layerfs-api" }
 layerfs-bridge = { path = "../../../core/crates/layerfs-bridge" }
-layerfs-history = { path = "../../../core/crates/layerfs-history" }
-layerfs-persistence = { path = "../../../core/crates/layerfs-persistence" }
-layerfs-sandbox = { path = "../../../core/crates/layerfs-sandbox" }
-layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
-layerfs-store-service = { path = "../../../core/crates/layerfs-store-service" }
-layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+layerfs-session = { path = "../../session" }
 napi = "=2.16.17"
 napi-derive = "=2.16.13"
 

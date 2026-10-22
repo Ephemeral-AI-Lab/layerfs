@@ -1,6 +1,6 @@
 //! Private, permission-authorized project and Sandbox discovery. No mutation replay.
 use crate::{
-    job::{failed, refused},
+    outcome::{failed, refused},
     registry::{self, Mount, Process, Project, SandboxState},
 };
 use layerfs_api::{internal::workspace, BoundWorkspace, MountedWorkspace};
