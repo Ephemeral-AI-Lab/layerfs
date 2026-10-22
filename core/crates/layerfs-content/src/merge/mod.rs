@@ -24,5 +24,5 @@ pub use lww::{Rule, Rules};
 pub use markers::paths_with_markers;
 pub use revert::{revert_units, RevertInput, Reverted};
 pub use text::{has_markers, merge3, Hunk, TextMerge};
-pub use units::{decide_units, unit_changes, MergeUnit, UnitChange, UnitReport, Units};
 pub use types::{Conflict, ConflictKind, LwwDecision, MergeInput, MergeOutcome, RulesFrom, Side};
+pub use units::{decide_units, unit_changes, MergeUnit, UnitChange, UnitReport, Units};
