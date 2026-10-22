@@ -83,14 +83,18 @@ path must be an existing socket and the daemon path an existing file.
 ## Exec
 
 - `workspace_exec` with no sink returns the SDK result for bounded output. If
-  a stream exceeds the SDK's inline window, the result names a spool but Tier
-  1 exposes no page method; such a call must use a sink.
-- With a sink, raw pages are delivered in order and the result carries the
-  byte counts; a slow sink applies backpressure.
+  a stream exceeds the SDK's inline window, the call releases the spool and
+  fails `InvalidInput`; Tier 1 exposes no page method, so large output must
+  use a sink.
 - A Rust rutis method cannot carry a callback. The implemented sink is
-  `{ stdout?: <absolute path>, stderr?: <absolute path> }`; each page is
-  written to its file in order, and the result names both files and their byte
+  `{ stdout?: <absolute path>, stderr?: <absolute path> }`; both paths must be
+  different absolute files. They are opened (`O_NOFOLLOW`, 0600, truncated)
+  before the command runs, so a bad sink fails first. Each page is written in
+  order after the command ends, and the result names both files and their byte
   counts. `workspace_exec` is not a streaming callback API.
+- The sink does not apply backpressure to the command: output is spooled to a
+  temporary file while the command runs, then copied to the sink files. The
+  spool is bounded by free space, not by the sink's speed.
 - `ctx.signal` is not command cancellation. Background processes and
   cancellation are out of scope.
 

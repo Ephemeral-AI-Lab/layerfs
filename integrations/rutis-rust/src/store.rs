@@ -7,10 +7,12 @@ use crate::value;
 use layerfs_bridge::control::{Answer as ControlAnswer, Reply, SdkValue};
 use layerfs_bridge::provision::{StoreManifest, StoreProfile};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Weak};
 
 const RECORD_LIMIT: u64 = 65_535;
 /// Bytes per spooled-output page while filling a sink.
@@ -47,11 +49,41 @@ pub struct Info {
     pub project: String,
 }
 
+#[derive(Default)]
+struct State {
+    closed: bool,
+    inflight: usize,
+}
+
 struct Inner {
     config: Config,
     opening: tokio::sync::Mutex<()>,
     opened: AtomicBool,
-    closed: AtomicBool,
+    state: Mutex<State>,
+    drained: tokio::sync::Notify,
+    /// One lane per `{sandbox, path}`; weak entries are pruned on lookup.
+    lanes: Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>,
+}
+
+/// One call that `close` waits for before releasing the Store.
+struct InFlight {
+    inner: Arc<Inner>,
+}
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.inflight -= 1;
+        let drained = state.inflight == 0;
+        drop(state);
+        if drained {
+            self.inner.drained.notify_waiters();
+        }
+    }
 }
 
 /// One project's Store and Workspace service. The Store is opened lazily on
@@ -70,7 +102,9 @@ impl LayerFs {
                 config,
                 opening: tokio::sync::Mutex::new(()),
                 opened: AtomicBool::new(false),
-                closed: AtomicBool::new(false),
+                state: Mutex::new(State::default()),
+                drained: tokio::sync::Notify::new(),
+                lanes: Mutex::new(HashMap::new()),
             }),
         })
     }
@@ -85,7 +119,7 @@ impl LayerFs {
 
     /// Runs one public Store method once.
     pub async fn call(&self, method: String, args: Value) -> Result<Value, LayerFsError> {
-        self.ensure_open()?;
+        let _inflight = self.enter()?;
         let method = exact_method(&method)?;
         self.open_store().await?;
         let args = self.session_args(args)?;
@@ -101,39 +135,53 @@ impl LayerFs {
 
     /// `workspace_mount({ branch })`: a new Workspace of the Branch.
     pub async fn workspace_mount(&self, args: Value) -> Result<Value, LayerFsError> {
-        self.workspace_call("workspace.mount", args, true).await
+        self.workspace_call("workspace.mount", args, true, false)
+            .await
     }
 
     /// `workspace_status({ sandbox, path })`.
     pub async fn workspace_status(&self, args: Value) -> Result<Value, LayerFsError> {
-        self.workspace_call("workspace.status", args, true).await
+        self.workspace_call("workspace.status", args, true, true)
+            .await
     }
 
     /// `workspace_commit({ sandbox, path, message?, force? })`.
     pub async fn workspace_commit(&self, args: Value) -> Result<Value, LayerFsError> {
-        self.workspace_call("workspace.commit", args, false).await
+        self.workspace_call("workspace.commit", args, false, true)
+            .await
     }
 
     /// `workspace_unmount({ sandbox, path, discard? })`.
     pub async fn workspace_unmount(&self, args: Value) -> Result<Value, LayerFsError> {
-        self.workspace_call("workspace.unmount", args, false).await
+        self.workspace_call("workspace.unmount", args, false, true)
+            .await
     }
 
     /// `workspace_exec({ sandbox, path, command, message?, sink? })`.
     ///
-    /// Without `sink` the SDK result is returned unchanged. With `sink`
-    /// (`{ stdout?: path, stderr?: path }`, absolute paths), the command
-    /// spools its output, every page is written to the named file in order,
-    /// and the result carries the byte counts. A slow sink holds the command
-    /// back.
+    /// Without `sink` the SDK result is returned unchanged; a spooled stream
+    /// is released and refused because Tier 1 has no page method. With
+    /// `sink` (`{ stdout?: path, stderr?: path }`, distinct absolute paths),
+    /// the files are opened before the command runs, every page is written in
+    /// order after it ends, and the result carries the byte counts. Output is
+    /// spooled while the command runs; the sink does not hold it back.
     pub async fn workspace_exec(&self, args: Value) -> Result<Value, LayerFsError> {
-        self.ensure_open()?;
+        let _inflight = self.enter()?;
         self.ensure_deploy("workspace.exec")?;
+        let lane = self.lane(&args);
+        let _lane = lane.lock_owned().await;
         let (args, sink) = take_sink(args)?;
         let args = self.session_args(args)?;
         tokio::task::spawn_blocking(move || match sink {
             None => {
                 let value = layerfs_session::dispatch("workspace.exec", args)?;
+                if let Some(SdkValue::Text(output)) = value.get("output") {
+                    let release = SdkValue::map([("output", SdkValue::Text(output.clone()))]);
+                    let _ = layerfs_session::dispatch("workspace.exec_release", release);
+                    return Err(LayerFsError::invalid(
+                        "workspace.exec output exceeds the inline window; use a sink",
+                    ));
+                }
                 Ok(value::to_json(&value))
             }
             Some(sink) => exec_into_sink(args, sink),
@@ -145,8 +193,19 @@ impl LayerFs {
     /// Disables new calls and releases the Store when the last in-flight call
     /// ends. Idempotent.
     pub async fn close(&self) -> Result<(), LayerFsError> {
+        {
+            let mut state = self.state();
+            state.closed = true;
+        }
+        // Calls that entered before the flag finish before the Store goes.
+        loop {
+            let notified = self.inner.drained.notified();
+            if self.state().inflight == 0 {
+                break;
+            }
+            notified.await;
+        }
         let _opening = self.inner.opening.lock().await;
-        self.inner.closed.store(true, Ordering::Release);
         if !self.inner.opened.swap(false, Ordering::AcqRel) {
             return Ok(());
         }
@@ -161,9 +220,15 @@ impl LayerFs {
         method: &'static str,
         args: Value,
         store: bool,
+        lane: bool,
     ) -> Result<Value, LayerFsError> {
-        self.ensure_open()?;
+        let _inflight = self.enter()?;
         self.ensure_deploy(method)?;
+        let lane = if lane { Some(self.lane(&args)) } else { None };
+        let _lane = match lane {
+            Some(lane) => Some(lane.lock_owned().await),
+            None => None,
+        };
         if store {
             self.open_store().await?;
         }
@@ -203,11 +268,49 @@ impl LayerFs {
         Ok(())
     }
 
+    fn state(&self) -> std::sync::MutexGuard<'_, State> {
+        self.inner
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Marks one call in flight; `close` waits for every such call.
+    fn enter(&self) -> Result<InFlight, LayerFsError> {
+        let mut state = self.state();
+        if state.closed {
+            return Err(LayerFsError::invalid("layerfs service is closed"));
+        }
+        state.inflight += 1;
+        Ok(InFlight {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
     fn ensure_open(&self) -> Result<(), LayerFsError> {
-        if self.inner.closed.load(Ordering::Acquire) {
+        if self.state().closed {
             return Err(LayerFsError::invalid("layerfs service is closed"));
         }
         Ok(())
+    }
+
+    /// One lane per `{sandbox, path}`; different Workspaces run in parallel.
+    fn lane(&self, args: &Value) -> Arc<tokio::sync::Mutex<()>> {
+        let sandbox = args.get("sandbox").and_then(Value::as_str).unwrap_or("");
+        let path = args.get("path").and_then(Value::as_str).unwrap_or("");
+        let key = format!("{sandbox}\u{0}{path}");
+        let mut lanes = self
+            .inner
+            .lanes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        lanes.retain(|_, lane| lane.strong_count() > 0);
+        if let Some(lane) = lanes.get(&key).and_then(Weak::upgrade) {
+            return lane;
+        }
+        let lane = Arc::new(tokio::sync::Mutex::new(()));
+        lanes.insert(key, Arc::downgrade(&lane));
+        lane
     }
 
     fn session_args(&self, args: Value) -> Result<SdkValue, LayerFsError> {
@@ -235,7 +338,9 @@ impl LayerFs {
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        self.closed.store(true, Ordering::Release);
+        if let Ok(state) = self.state.get_mut() {
+            state.closed = true;
+        }
         if !self.opened.swap(false, Ordering::AcqRel) {
             return;
         }
@@ -484,9 +589,60 @@ fn read_private(path: &Path) -> Result<Vec<u8>, LayerFsError> {
 }
 
 /// One exec sink: absolute files that receive the streams in order.
+#[derive(Debug)]
 struct Sink {
     stdout: Option<PathBuf>,
     stderr: Option<PathBuf>,
+}
+
+/// Sink files opened before the command runs, so a bad sink fails first.
+struct OpenedSink {
+    stdout: Option<File>,
+    stderr: Option<File>,
+}
+
+impl Sink {
+    fn open(&self) -> Result<OpenedSink, LayerFsError> {
+        if matches!((&self.stdout, &self.stderr), (Some(out), Some(err)) if out == err) {
+            return Err(LayerFsError::invalid(
+                "sink.stdout and sink.stderr must be different files",
+            ));
+        }
+        let opened = OpenedSink {
+            stdout: self.stdout.as_deref().map(open_sink).transpose()?,
+            stderr: self.stderr.as_deref().map(open_sink).transpose()?,
+        };
+        #[cfg(unix)]
+        if let (Some(out), Some(err)) = (&opened.stdout, &opened.stderr) {
+            use std::os::unix::fs::MetadataExt;
+            let (out, err) = (out.metadata()?, err.metadata()?);
+            if out.dev() == err.dev() && out.ino() == err.ino() {
+                return Err(LayerFsError::invalid(
+                    "sink.stdout and sink.stderr must be different files",
+                ));
+            }
+        }
+        Ok(opened)
+    }
+}
+
+fn open_sink(path: &Path) -> Result<File, LayerFsError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        options.mode(0o600);
+        #[cfg(target_os = "linux")]
+        options.custom_flags(libc::O_NOFOLLOW);
+        let file = options.open(path)?;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        Ok(file)
+    }
+    #[cfg(not(unix))]
+    {
+        options.open(path).map_err(Into::into)
+    }
 }
 
 /// Releases a spooled output once, even when filling a sink fails.
@@ -557,6 +713,11 @@ fn take_sink(args: Value) -> Result<(Value, Option<Sink>), LayerFsError> {
     if sink.stdout.is_none() && sink.stderr.is_none() {
         return Err(LayerFsError::invalid("sink needs a stdout or stderr path"));
     }
+    if matches!((&sink.stdout, &sink.stderr), (Some(out), Some(err)) if out == err) {
+        return Err(LayerFsError::invalid(
+            "sink.stdout and sink.stderr must be different files",
+        ));
+    }
     Ok((Value::Object(fields), Some(sink)))
 }
 
@@ -564,6 +725,7 @@ fn exec_into_sink(args: SdkValue, sink: Sink) -> Result<Value, LayerFsError> {
     let SdkValue::Map(mut fields) = args else {
         return Err(LayerFsError::invalid("arguments must be an object"));
     };
+    let mut files = sink.open()?;
     set(&mut fields, "spool", SdkValue::Bool(true));
     let result = layerfs_session::dispatch("workspace.exec", SdkValue::Map(fields))?;
     let SdkValue::Map(fields) = result else {
@@ -574,27 +736,24 @@ fn exec_into_sink(args: SdkValue, sink: Sink) -> Result<Value, LayerFsError> {
         _ => None,
     };
     let mut output = OutputGuard::new(output);
-    let size = |name: &str| match fields
-        .iter()
-        .find(|(key, _)| key == name)
-        .map(|(_, value)| value)
-    {
-        Some(SdkValue::Int(value)) => u64::try_from(*value).ok(),
-        _ => None,
-    };
     let mut streams = Vec::new();
-    for (name, path, inline) in [
-        ("stdout", sink.stdout, "stdout"),
-        ("stderr", sink.stderr, "stderr"),
+    for (name, file, inline) in [
+        ("stdout", files.stdout.as_mut(), "stdout"),
+        ("stderr", files.stderr.as_mut(), "stderr"),
     ] {
-        let Some(path) = path else {
+        let Some(file) = file else {
             continue;
         };
         let inline = match fields.iter().find(|(key, _)| key == inline) {
             Some((_, SdkValue::Text(text))) => Some(text.as_str()),
             _ => None,
         };
-        let bytes = write_stream(&path, inline, output.id(), name, size(name))?;
+        let bytes = write_stream(file, inline, output.id(), name, output_size(&fields, name))?;
+        let path = match name {
+            "stdout" => sink.stdout.as_deref(),
+            _ => sink.stderr.as_deref(),
+        }
+        .expect("requested stream has a path");
         streams.push((
             name.to_owned(),
             SdkValue::map([
@@ -628,28 +787,42 @@ fn exec_into_sink(args: SdkValue, sink: Sink) -> Result<Value, LayerFsError> {
     Ok(value::to_json(&SdkValue::Map(answer)))
 }
 
+/// The byte count a spooled exec result carries for `name` (`stdoutBytes`).
+fn output_size(fields: &[(String, SdkValue)], name: &str) -> Option<u64> {
+    let key = format!("{name}Bytes");
+    match fields
+        .iter()
+        .find(|(field, _)| *field == key)
+        .map(|(_, value)| value)
+    {
+        Some(SdkValue::Int(value)) => u64::try_from(*value).ok(),
+        _ => None,
+    }
+}
+
 fn write_stream(
-    path: &Path,
+    file: &mut File,
     inline: Option<&str>,
     output: Option<&str>,
     stream: &str,
     size: Option<u64>,
 ) -> Result<u64, LayerFsError> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?;
     if let Some(text) = inline {
         file.write_all(text.as_bytes())?;
-        return Ok(text.len() as u64);
+        let written = text.len() as u64;
+        if let Some(size) = size {
+            if written != size {
+                return Err(LayerFsError::invalid(
+                    "inline output does not match its byte count",
+                ));
+            }
+        }
+        return Ok(written);
     }
     let Some(output) = output else {
         return Ok(0);
     };
-    let size = size.unwrap_or(0);
+    let size = size.ok_or_else(|| LayerFsError::invalid("spooled output has no byte count"))?;
     let mut offset = 0u64;
     let mut page = [0u8; PAGE];
     while offset < size {
@@ -664,10 +837,74 @@ fn write_stream(
             .and_then(|length| usize::try_from(length).ok())
             .ok_or_else(|| LayerFsError::invalid("spooled output page has no length"))?;
         if length == 0 {
-            break;
+            return Err(LayerFsError::invalid(
+                "spooled output page is empty before the end",
+            ));
+        }
+        if length as u64 > size - offset {
+            return Err(LayerFsError::invalid(
+                "spooled output page exceeds its byte count",
+            ));
         }
         file.write_all(&page[..length])?;
         offset += length as u64;
+        let end = matches!(answer.get("end"), Some(SdkValue::Bool(true)));
+        if end {
+            break;
+        }
+    }
+    if offset != size {
+        return Err(LayerFsError::invalid(
+            "spooled output ended before its byte count",
+        ));
     }
     Ok(offset)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_sink_needs_distinct_absolute_paths() {
+        for sink in [
+            json!({ "stdout": "relative" }),
+            json!({ "stdout": "/tmp/a", "stderr": "/tmp/a" }),
+            json!({}),
+            json!("/tmp/a"),
+        ] {
+            let error = take_sink(json!({ "sink": sink })).unwrap_err();
+            assert_eq!(error.code(), "InvalidInput");
+        }
+    }
+
+    #[test]
+    fn spool_sizes_use_the_sdk_byte_count_fields() {
+        let fields = vec![
+            ("stdout".to_owned(), SdkValue::Null),
+            ("stdoutBytes".to_owned(), SdkValue::Int(5)),
+            ("stderrBytes".to_owned(), SdkValue::Int(0)),
+        ];
+        assert_eq!(output_size(&fields, "stdout"), Some(5));
+        assert_eq!(output_size(&fields, "stderr"), Some(0));
+        assert_eq!(output_size(&fields, "other"), None);
+    }
+
+    #[test]
+    fn inline_streams_are_written_and_checked() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("stdout.log");
+        let mut file = open_sink(&path).unwrap();
+        assert_eq!(
+            write_stream(&mut file, Some("hello"), None, "stdout", Some(5)).unwrap(),
+            5
+        );
+        drop(file);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello");
+
+        let mut file = open_sink(&path).unwrap();
+        let error = write_stream(&mut file, Some("hello"), None, "stdout", Some(4)).unwrap_err();
+        assert_eq!(error.code(), "InvalidInput");
+    }
 }

@@ -11,6 +11,7 @@ fn non_linux_is_unsupported() {
         project: "website".into(),
         home: PathBuf::from("/tmp/layerfs-home"),
         store_path: PathBuf::from("/tmp/layerfs-store.sqlite"),
+        deploy: None,
     };
     match LayerFs::new(config) {
         Ok(_) => panic!("a non-Linux host must not open a Store"),

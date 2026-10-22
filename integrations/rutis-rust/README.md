@@ -92,10 +92,11 @@ discard. Without `deploy`, Store calls keep working and every
 `workspace_*` call refuses `InvalidInput`.
 
 `workspace_exec` without `sink` returns the SDK result unchanged. If a
-stream exceeds the SDK's inline window, the result names a spool but this
-service exposes no page method; use a sink for large output. With `sink`,
-its absolute `stdout`/`stderr` paths receive every page in order (a slow file
-holds the command back) and the result carries the byte counts.
+stream exceeds the SDK's inline window, the call releases the spool and
+fails `InvalidInput`; use a sink for large output. With `sink`, its absolute
+`stdout`/`stderr` paths are opened before the command runs and receive every
+page in order after it ends; the result carries the byte counts. The sink
+does not hold the command back: output is spooled while it runs.
 
 The project must already be installed by the existing SDK/CLI/dsh. The plugin
 reads `<home>/<project>/project.record` and opens the Store at `store_path`.

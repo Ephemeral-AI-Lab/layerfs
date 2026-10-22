@@ -61,22 +61,45 @@ fn place(args: &SdkValue, project: &Path) -> Result<Arc<SandboxState>, SdkRefusa
     crate::sandbox::start(args, project)
 }
 
+/// A daemon mount failure keeps its code and data, plus the acknowledged
+/// binding when the first step completed.
+fn mount_refusal(failure: Box<layerfs_api::MountFailure>) -> SdkRefusal {
+    let layerfs_api::MountFailure { bound, failure } = *failure;
+    let mut refusal = operation(failure);
+    if let Some(bound) = bound {
+        let mut detail = match refusal.detail {
+            SdkValue::Map(fields) => fields,
+            other => vec![("cause".to_owned(), other)],
+        };
+        detail.push((
+            "workspace".to_owned(),
+            SdkValue::Text(layerfs_bridge::sdk_values::hex(
+                &bound.token.workspace.to_bytes(),
+            )),
+        ));
+        detail.push(("namespace".to_owned(), SdkValue::Int(bound.token.namespace)));
+        refusal.detail = SdkValue::Map(detail);
+    }
+    refusal
+}
+
 /// `workspace.mount(branch)`: a new Workspace of `branch`, placed in one of
 /// the project's Sandboxes; its `sandbox` and `path`.
 pub(crate) fn mount(args: &SdkValue) -> Outcome {
     let branch = text(args, "branch")?;
     let project = crate::discovery::project_dir(args)?;
     let _placing = crate::discovery::guard(&project)?;
+    // The Branch is found by name in this process before placement, so a bad
+    // Branch neither starts nor reclaims a Sandbox.
+    let branch_id = crate::direct::branch_id(args, branch)?;
     let state = place(args, &project)?;
     let _guard = crate::discovery::guard(&state.directory)?;
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
-    // The Branch is found by name in this process; the daemon binds its id.
-    let branch_id = crate::direct::branch_id(args, branch)?;
     let mounted = {
         let mut control = crate::trace::control(&state.controls)?;
         workspace(&mut control).mount(id, branch_id)
     };
-    let mounted = mounted.map_err(failed)?;
+    let mounted = mounted.map_err(mount_refusal)?;
     let mut value = values::mounted(&mounted, branch);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
