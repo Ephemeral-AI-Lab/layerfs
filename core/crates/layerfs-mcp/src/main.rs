@@ -30,10 +30,10 @@ use tokio::process::Command;
 
 const SERVER: &str = "layerfs";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const INSTRUCTIONS: &str = "LayerFS Store tools. Call project_init with a source path, or store_open with an existing project record. workspace.exec needs the Linux Sandbox bridge and is not exposed here; use bash for shell commands in the Store container.";
+const INSTRUCTIONS: &str = "LayerFS Store tools. Call project_init with a source path, or store_open with an existing project record. workspace.exec needs the Linux Sandbox bridge and is not exposed here; use bash for shell commands in the Store environment.";
 const LOCATOR: &str = "/layerfs-store/global/store.sqlite";
 const INIT_DEADLINE: Duration = Duration::from_secs(60);
-const BASH_DEFAULT_CWD: &str = "/work/layerfs";
+const BASH_CWD_ENV: &str = "LAYERFS_MCP_CWD";
 const BASH_DEFAULT_TIMEOUT_MS: u64 = 30_000;
 const BASH_MAX_TIMEOUT_MS: u64 = 120_000;
 const BASH_OUTPUT_CAP: usize = 200_000;
@@ -469,7 +469,7 @@ fn tool_error(message: &str) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message)])
 }
 
-/// Run `/bin/sh -c` in the Store container. A non-zero exit status is a
+/// Run `/bin/sh -c` in the Store environment. A non-zero exit status is a
 /// normal result; only setup or spawn failure is an MCP error. A command that
 /// outlives `timeout_ms` is killed and reported as exit code 124.
 async fn bash_tool(args: &Json) -> CallToolResult {
@@ -479,13 +479,22 @@ async fn bash_tool(args: &Json) -> CallToolResult {
     }
 }
 
+/// `bash` runs in `LAYERFS_MCP_CWD` unless a call names its own `cwd`.
+fn default_bash_cwd() -> PathBuf {
+    match std::env::var_os(BASH_CWD_ENV) {
+        Some(value) if !value.is_empty() => PathBuf::from(value),
+        _ => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+    }
+}
+
 async fn run_bash(args: &Json) -> Result<Json, String> {
     let command = text_arg(args, "command")?;
     let cwd = args
         .get("cwd")
         .and_then(Json::as_str)
         .filter(|value| !value.is_empty())
-        .unwrap_or(BASH_DEFAULT_CWD);
+        .map(PathBuf::from)
+        .unwrap_or_else(default_bash_cwd);
     let timeout_ms = match args.get("timeout_ms") {
         None | Some(Json::Null) => BASH_DEFAULT_TIMEOUT_MS,
         Some(value) => value
@@ -498,7 +507,7 @@ async fn run_bash(args: &Json) -> Result<Json, String> {
     shell
         .arg("-c")
         .arg(command)
-        .current_dir(cwd)
+        .current_dir(&cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -524,7 +533,7 @@ async fn run_bash(args: &Json) -> Result<Json, String> {
                 "stdout": String::from_utf8_lossy(stdout),
                 "stderr": String::from_utf8_lossy(stderr),
                 "truncated": stdout_truncated || stderr_truncated,
-                "cwd": cwd,
+                "cwd": cwd.to_string_lossy().into_owned(),
                 "durationMs": duration_ms
             }))
         }
@@ -548,7 +557,7 @@ async fn run_bash(args: &Json) -> Result<Json, String> {
                 "stdout": "",
                 "stderr": "",
                 "truncated": false,
-                "cwd": cwd,
+                "cwd": cwd.to_string_lossy().into_owned(),
                 "durationMs": duration_ms
             }))
         }
@@ -749,7 +758,7 @@ fn tools() -> Vec<Tool> {
         ),
         tool(
             "bash",
-            "Run a shell command with /bin/sh -c in the Store container. A non-zero exit code is a normal result; timeout_ms caps it and reports exit code 124.",
+            "Run a shell command with /bin/sh -c in the Store environment. A non-zero exit code is a normal result; timeout_ms caps it and reports exit code 124. cwd defaults to LAYERFS_MCP_CWD, then the server's working directory.",
             json!({
                 "command": string(),
                 "cwd": string(),
