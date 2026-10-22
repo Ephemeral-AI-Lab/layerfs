@@ -1,0 +1,15 @@
+# Issue #420 bundle experiment (copy of issue420-pg plus bundle modules).
+# Standalone workspace; not part of the product build.
+[package]
+name = "issue420-bundle"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+postgres = "=0.19.14"
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+nix = { version = "=0.31.3", default-features = false, features = ["fs"] }
+zstd-sys = { version = "=2.0.16", default-features = false }
