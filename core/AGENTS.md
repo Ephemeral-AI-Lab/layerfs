@@ -459,9 +459,9 @@ API, manifest or runtime-source changes, cover tests/examples, warning-denying
 Clippy and formatting, plus the boundary guard and its self-tests:
 
 ```sh
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --all-targets
-cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings
-cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+cargo +1.89.0 test --manifest-path core/Cargo.toml --locked --all-targets
+cargo +1.89.0 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings
+cargo +1.89.0 fmt --manifest-path core/Cargo.toml --all -- --check
 python3 -B core/tools/check_product_boundary.py
 python3 -B -m unittest discover -s core/tools -p 'test_*.py'
 ```
