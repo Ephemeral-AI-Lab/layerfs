@@ -33,14 +33,16 @@ async function call(method,args) {
     ws.dirty = !args.command.includes('no-change');
     ws.conflict = args.command.includes('conflict');
     ws.merged = args.command.includes('merge-during-test');
-    if (args.command.includes('unknown')) fail('Unknown');
+    ws.unmountUnknown = args.command.includes('unmount-unknown');
+    if (args.command === 'unknown') fail('Unknown');
     else value = { exitCode: args.command.includes('fail') ? 7 : 0, stdout: 'out\n', stderr: 'err\n' };
   } else if (method === 'workspace.commit') {
     if (ws.conflict) fail('Conflict');
     else if (!ws.dirty) value = { kind: 'UpToDate', head: state.branches[ws.branch].head };
     else { state.branches[ws.branch].head = `h${++state.n}`; ws.dirty = false; value = { kind: 'Committed', head: state.branches[ws.branch].head, merged: ws.merged ? {from:'other',head:'other'} : null }; }
   } else if (method === 'workspace.unmount') {
-    if (ws.dirty && !args.discard) fail('Dirty');
+    if (ws.unmountUnknown) { fail('Unknown'); refused.detail = { operation: 'unmount', outcome: 'uncertain' }; }
+    else if (ws.dirty && !args.discard) fail('Dirty');
     else { delete state.workspaces[wkey]; value = { kind: 'Unmounted' }; }
   } else if (method === 'workspace.status') value = { branch: ws.branch, activity: 'Idle', overlay: { inodes: ws.dirty ? 1 : 0, entries: 0, pendingMerge: ws.conflict || false } };
   else if (/^fs\.(write|edit|apply|mkdir|rm|cp|mv)$/.test(method)) {

@@ -57,6 +57,7 @@ async function run() {
   const [branch, command, message] = args;
   const workspace = await lf.workspace.mount(branch);
   let saved = false;
+  let unmountAttempted = false;
   try {
     const result = await lf.workspace.exec(workspace, command, undefined, { stdout: process.stdout, stderr: process.stderr });
     exitCode = result.exitCode;
@@ -66,11 +67,14 @@ async function run() {
       console.error(JSON.stringify({ exitCode, commit, workspace }));
       if (validate && exitCode === 0) json(await recordValidation(lf, branch, command, exitCode, commit));
     }
-    if (discard || saved) await lf.workspace.unmount(workspace, discard);
+    if (discard || saved) {
+      unmountAttempted = true;
+      await lf.workspace.unmount(workspace, discard);
+    }
   } catch (error) {
     // A successful Commit can be unmounted without discarding. Otherwise the
     // Workspace is the recovery surface for Conflict, Dirty or a lost reply.
-    if (saved) await lf.workspace.unmount(workspace).catch((e) => console.error(`unmount: ${e.message}`));
+    if (saved && !unmountAttempted) await lf.workspace.unmount(workspace).catch((e) => console.error(`unmount: ${e.message}`));
     console.error(`Workspace retained unless explicitly unmounted: ${JSON.stringify(workspace)}`);
     throw error;
   }
@@ -113,6 +117,10 @@ try {
     if (!commands[command]) throw new Error(USAGE);
     await commands[command]();
   }
-} catch (error) { console.error(`${error.code ?? 'lfs'}: ${error.message}`); exitCode = 2; }
+} catch (error) {
+  console.error(`${error.code ?? 'lfs'}: ${error.message}`);
+  if (error.detail != null) console.error(JSON.stringify(error.detail));
+  exitCode = 2;
+}
 finally { await lf.close(); }
 process.exitCode = exitCode;

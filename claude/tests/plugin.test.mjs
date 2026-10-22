@@ -122,6 +122,19 @@ test('merge selects its returned Branch; publish requires current main and valid
   assert.match(x.run('node "$DSH_LAYERFS_CLI" publish "$CC_LAYERFS_BRANCH"').stderr,/validate/);
 });
 
+test('CLI never retries an uncertain unmount and preserves refusal detail', (t) => {
+  const x=setup(t);
+  const result=x.run('node "$DSH_LAYERFS_CLI" run "$CC_LAYERFS_BRANCH" unmount-unknown');
+  assert.equal(result.status,2);
+  assert.match(result.stderr,/Unknown/);
+  assert.match(result.stderr,/"outcome":"uncertain"/);
+  const state=read(join(x.root,'fake-state.json'));
+  assert.equal(state.calls.filter((c)=>c.method==='workspace.unmount').length,1);
+  const held=Object.values(read(agentPath(x.dir,'lead')).workspaces).filter((w)=>w.status==='mounted');
+  assert.equal(held.length,1);
+  assert.equal(x.hook('Stop').decision,'block');
+});
+
 test('missing/wrong binding denies calls; duplicate call IDs never replay', (t) => {
   const x=setup(t);
   assert.equal(x.hook('PreToolUse',{agent_type:'general-purpose',tool_name:'Bash'}).hookSpecificOutput.permissionDecision,'deny');
