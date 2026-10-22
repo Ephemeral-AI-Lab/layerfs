@@ -56,7 +56,6 @@ fn unescape(text: &str) -> String {
 /// Detaches every mount under `directory` once (lazy unmount: a process
 /// still inside keeps its view; new lookups no longer reach it), then checks
 /// that none is left.
-#[cfg(target_os = "linux")]
 pub(super) fn detach(directory: &Path) -> io::Result<()> {
     use nix::mount::{umount2, MntFlags};
     for point in under(directory)? {
@@ -69,17 +68,5 @@ pub(super) fn detach(directory: &Path) -> io::Result<()> {
         Ok(())
     } else {
         Err(io::Error::other("a mount under the local Sandbox remains"))
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-pub(super) fn detach(directory: &Path) -> io::Result<()> {
-    if under(directory)?.is_empty() {
-        Ok(())
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "detaching a local Sandbox mount needs Linux",
-        ))
     }
 }
