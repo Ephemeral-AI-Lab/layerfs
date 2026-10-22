@@ -21,6 +21,7 @@ use std::sync::Arc;
 /// The daemon's user inside its Sandbox (the runtime's `User` is `0:0`). A
 /// daemon opens only a Store file and directory it owns, so an installer
 /// must run as this user too.
+#[cfg(not(target_os = "macos"))]
 const DAEMON_UID: u32 = 0;
 
 /// The destination and its exclusive temporary name.
@@ -202,7 +203,15 @@ pub fn install_local(
     result.map_err(|cause: String| LocalInstallFailure { cause, ..left })
 }
 
+/// macOS has only the native route, whose daemon runs as the user who
+/// installs its Store (there is no root daemon to match); the daemon's own
+/// check that it owns the Store file still holds.
+#[cfg(target_os = "macos")]
+fn installer_user() -> Result<(), String> {
+    Ok(())
+}
 /// Refuses an installer that is not the daemons' user.
+#[cfg(not(target_os = "macos"))]
 fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user

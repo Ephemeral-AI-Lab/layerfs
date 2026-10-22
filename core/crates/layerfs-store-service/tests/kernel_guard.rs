@@ -1,11 +1,13 @@
 //! Direct Store access is refused `Unsupported` where the Store's locks do
-//! not reach every opener (#352 F-020): on macOS, and on Linux for a
-//! filesystem outside the allowlist (here tmpfs). The refusal comes before any
-//! file is opened: the Store file's bytes are unchanged and no overlay
-//! template is created.
+//! not reach every opener (#352 F-020): off Linux and macOS, and on Linux for
+//! a filesystem outside the allowlist (here tmpfs). The refusal comes before
+//! any file is opened: the Store file's bytes are unchanged and no overlay
+//! template is created. On macOS a local apfs or hfs directory is allowed.
+#[cfg(not(target_os = "macos"))]
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::path::{Path, PathBuf};
 
+#[cfg(not(target_os = "macos"))]
 fn refused(directory: &Path) -> (String, Vec<u8>, Vec<u8>) {
     let store = directory.join("store.sqlite");
     std::fs::write(&store, b"not opened").unwrap();
@@ -30,7 +32,16 @@ fn scratch(parent: &Path, label: &str) -> PathBuf {
     directory
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+#[test]
+fn direct_access_is_allowed_on_a_local_macos_filesystem() {
+    let directory = scratch(&std::env::temp_dir(), "apfs");
+    let checked = layerfs_store_service::kernel_guard::check(&directory.join("store.sqlite"));
+    assert!(matches!(checked, Ok("apfs") | Ok("hfs")), "{checked:?}");
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 #[test]
 fn direct_access_is_unsupported_off_linux() {
     let directory = scratch(&std::env::temp_dir(), "host");
