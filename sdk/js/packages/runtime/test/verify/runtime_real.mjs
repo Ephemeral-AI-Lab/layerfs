@@ -1,6 +1,8 @@
 // @layerfs/runtime on Linux against a real Store and Docker (#428): status,
-// the refused worker, one Init job into a project volume, the project list,
-// get_state, the lfs command, live events from the trace and remove. The
+// the refused worker, one Init job into a project volume (no timeout: no
+// limit), one whose 1 ms timeout fails Deadline and leaves no project
+// (#431), the project list, get_state, the lfs command, live events from
+// the trace and remove. The
 // launcher mounts one Store volume, so a "volume" here is a folder under
 // <Store volume>/rt-volumes, and its image has no docker CLI (the runtime
 // calls the CLI, as the dsh Host did): `volume create/rm` make and remove
@@ -47,12 +49,15 @@ try {
   await assert.rejects(runtime.worker.start(), { code: "InvalidInput" });
 
   // one Init job, read until it ends
-  let job = await runtime.project.start_init(name, source);
-  const started = Date.now();
-  while (!job.ended && Date.now() - started < 60_000) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    job = await runtime.project.get_init(job.id);
-  }
+  const ended = async (job) => {
+    const started = Date.now();
+    while (!job.ended && Date.now() - started < 60_000) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      job = await runtime.project.get_init(job.id);
+    }
+    return job;
+  };
+  const job = await ended(await runtime.project.start_init(name, source));
   assert.equal(job.step, "done", JSON.stringify(job.error));
   assert.deepEqual(job.totals, { entries: 4, files: 2, bytes: 19 });
   const listed = (await runtime.project.list()).find((p) => p.name === name);
@@ -81,6 +86,21 @@ try {
   });
   assert.equal(out.code, 0);
   assert.match(out.text, /- \/README\.md/);
+
+  // #431: a 1 ms timeout on a 2,000-file source fails Deadline, once, and
+  // the runtime removes what the Init made: no record, home entry or volume
+  const late = `${name}-late`, big = mkdtempSync(join(tmpdir(), "layerfs-rt-big-"));
+  for (let i = 0; i < 2000; i++) writeFileSync(join(big, `f${i}.txt`), `file ${i}\n`.repeat(20));
+  const before = docker.length;
+  const timed = await ended(await runtime.project.start_init(late, big, { timeout: 1 }));
+  assert.deepEqual([timed.step, timed.error?.code], ["failed", "Failed"], JSON.stringify(timed.error));
+  assert.match(timed.error.message, /Deadline/);
+  const made = docker.slice(before);
+  assert.deepEqual(made, ["volume create", "volume rm"], "one Init, then its volume removed");
+  assert.equal((await runtime.project.list()).some((p) => p.name === late), false, "no project is left");
+  assert.equal(existsSync(join(process.env.LAYERFS_HOME, late)), false, "no home entry is left");
+  console.log(`deadline: ${timed.error.message.slice(0, 160)}`);
+  rmSync(big, { recursive: true });
 
   // remove names what it destroys
   await assert.rejects(runtime.project.remove(name), { code: "InvalidInput" });

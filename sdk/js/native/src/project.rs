@@ -1,5 +1,7 @@
-//! `project.init(path, { name, home, storePath })`: host Project Init into a
-//! sealed Store, installed into the project volume.
+//! `project.init(path, { name, home, storePath, timeoutMs? })`: host Project
+//! Init into a sealed Store, installed into the project volume. `timeoutMs`
+//! (a positive whole number) bounds Init from when this call starts it;
+//! without it Init has no time limit (#431).
 //!
 //! The Store is Disposable and sealed under `home/<name>/`, then installed in
 //! this process at `storePath`, the project volume's Store file that every
@@ -24,8 +26,9 @@ use std::time::{Duration, Instant};
 
 /// Where the daemon opens the installed Store inside its Sandbox.
 pub(crate) const LOCATOR: &str = "/layerfs-store/global/store.sqlite";
-/// Init's own deadline.
-const INIT_DEADLINE: Duration = Duration::from_secs(60);
+/// Init's deadline when the call gives no timeout: core's `InitRequest`
+/// requires one, so "no limit" is an instant about a century away.
+const NO_LIMIT: Duration = Duration::from_secs(100 * 365 * 24 * 60 * 60);
 
 fn sixteen(bytes: [u8; 32]) -> [u8; 16] {
     let mut out = [0; 16];
@@ -37,8 +40,9 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
     let name = text(args, "name")?;
     let source = PathBuf::from(text(args, "path")?);
     let home = crate::discovery::home(args)?;
-    // checked first: a refused policy or missing Store path leaves no project entry
+    // checked first: a refused policy, timeout or Store path leaves no project entry
     let policy = policy(args)?;
+    let deadline = deadline(args)?;
     let store_path =
         match args.get_text("storePath") {
             Some(path) if !path.is_empty() => PathBuf::from(path),
@@ -84,7 +88,7 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
         branch: BranchId::from_authority(sixteen(random()?)),
         branch_name: history("main")?,
         scope_seed: random()?,
-        deadline: Instant::now() + INIT_DEADLINE,
+        deadline,
     };
     let counters = Arc::new(InitCounters::new());
     lock(&INITS)?.insert(name.to_owned(), Arc::clone(&counters));
@@ -192,6 +196,24 @@ fn policy(args: &SdkValue) -> Result<StoragePolicy, layerfs_bridge::control::Sdk
     .with_metadata_depth(depth("metadataDepth", base.metadata_delta_max_depth())?)
     .validated()
     .map_err(|error| refused("InvalidInput", format!("policy: {error}")))
+}
+
+/// Init's deadline, counted from now: the caller's `timeoutMs` (a positive
+/// whole number of milliseconds), or no limit when it is absent or null.
+fn deadline(args: &SdkValue) -> Result<Instant, layerfs_bridge::control::SdkRefusal> {
+    let limit = match args.get("timeoutMs") {
+        None | Some(SdkValue::Null) => NO_LIMIT,
+        Some(SdkValue::Int(ms)) if *ms > 0 => Duration::from_millis(*ms as u64),
+        Some(_) => {
+            return Err(refused(
+                "InvalidInput",
+                "timeoutMs must be a positive whole number of milliseconds",
+            ))
+        }
+    };
+    Instant::now()
+        .checked_add(limit)
+        .ok_or_else(|| refused("InvalidInput", "timeoutMs is too large"))
 }
 
 /// Removes a finished Init's counts, whichever way it ended.

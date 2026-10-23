@@ -4,7 +4,7 @@
 //   node sdk/js/packages/agent/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-gate|transport-order|dispatch
 // `dispatch` loads the real addon (LAYERFS_NATIVE or native/layerfs.node).
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -79,7 +79,17 @@ if (selected === "surface") {
   // LayerFS.init runs project.init, then the same open
   const made = await LayerFS.init("fresh", "/src/fresh");
   assert.deepEqual(native.calls.slice(-2), ["project.init", "project.list_branches"]);
+  const initArgs = () => native.args[native.calls.lastIndexOf("project.init")];
+  assert.ok(!Object.hasOwn(initArgs(), "timeoutMs"), "an omitted timeout sends no field (no limit)");
   await made.close();
+  // Init's timeout, in milliseconds, is sent as timeoutMs
+  await (await LayerFS.init("fresh", "/src/fresh", {}, 90_000)).close();
+  assert.equal(initArgs().timeoutMs, 90_000);
+  const sent = native.calls.length;
+  for (const timeout of [0, -1, 1.5, "100", null, NaN, Infinity, 2 ** 53]) {
+    await assert.rejects(LayerFS.init("fresh", "/src/fresh", {}, timeout), { code: "InvalidInput", message: /timeout must be a positive whole number of milliseconds/ });
+  }
+  assert.equal(native.calls.length, sent, "a refused timeout sends nothing");
   // `await using` closes at the end of the block
   assert.equal(typeof LayerFS.prototype[Symbol.asyncDispose], "function");
   {
@@ -167,6 +177,29 @@ if (selected === "surface") {
     assert.equal(native.calls.length, local + 1, "the later client never reaches the addon");
     assert.deepEqual(worker.calls.at(-1).op, "fs.read");
     assert.equal(worker.calls.at(-1).open, true, "the worker opens the later client's Store");
+    // Init's timeout reaches the worker unchanged; an omitted one sends no field
+    await (await LayerFS.init("fresh", "/src/fresh", {}, 2500)).close();
+    await (await LayerFS.init("fresh", "/src/fresh")).close();
+    const inits = worker.calls.filter((c) => c.op === "project.init").map((c) => c.args);
+    assert.deepEqual(inits.map((args) => [Object.hasOwn(args, "timeoutMs"), args.timeoutMs]), [[true, 2500], [false, undefined]]);
+    // macOS: Init runs in its own container (a stub docker here), with the same args
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    symlinkSync(fileURLToPath(new URL("./fixture/fake-docker-init.mjs", import.meta.url)), join(bin, "docker"));
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), init: { argv: ["run"], image: "fake-image", script: "/fake/init.js" } }));
+    const path = process.env.PATH;
+    process.env.PATH = `${bin}:${path}`;
+    try {
+      const timed = await LayerFS.init("fresh", "/src/fresh", {}, 7000);
+      assert.deepEqual(timed.created, { kind: "Initialized", project: "fresh", timeoutMs: 7000 });
+      await timed.close();
+      const open = await LayerFS.init("fresh", "/src/fresh");
+      assert.equal(open.created.timeoutMs, null, "no timeout, no field");
+      await open.close();
+    } finally {
+      process.env.PATH = path;
+    }
+    assert.equal(worker.calls.filter((c) => c.op === "project.init").length, 2, "the container made those Inits, not the worker");
     await before.close();
     await after.close();
   } finally {

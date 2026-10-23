@@ -52,6 +52,15 @@ LayerFS.open(...)` closes it at the end of the block. One copy of
 load, so one Store is never opened twice. `LayerFS.init`'s client carries
 Init's answer as `created`.
 
+`LayerFS.init(name, folder, options, timeout)` takes an optional `timeout` in
+milliseconds, a positive whole number, sent as `timeoutMs`. **Omitted, Init has
+no time limit** (#431; there was a fixed 60 s one). Given, it bounds the Init
+from when the native code starts it, on every route (in process, the macOS
+Init container, the Windows worker), and an Init that runs longer fails
+`Failed` with a `Deadline` message, once, keeping its entry as any failure that
+is not a source refusal does. Any other value is refused `InvalidInput` before
+anything is made.
+
 The factories capture environment strings. `LayerFS.init(project, folder, { storePolicy })`
 selects the Store policy Init records instead of the default:
 `{ smallFileThreshold, wholeFileDepth, chunkDepth, metadataDepth }`, each
@@ -376,7 +385,7 @@ import { LayerFSRuntime } from "@layerfs/runtime";
 const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
 try {
   await runtime.status();                  // { platform, missing, docker, worker, oldStore, disk }
-  const job = await runtime.project.start_init("shop", "/src/shop");
+  const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
   await runtime.project.get_state("shop", since);
@@ -432,9 +441,12 @@ and `LAYERFS_WORKER_ADAPTER=dsh`. Without it, `worker.start` is refused
 secret, build, daemonHost?, init? }`, readable by its user only. The worker
 checks every file of the bundle's `manifest.json` before it listens.
 
-`start_init` refuses a bad name, folder or image and a taken name before
-anything changes; then it counts the source, makes the volume and runs one
-Init. A failed Init removes the volume and the home entry it made; an
+`start_init(name, folder, { image, timeout })` refuses a bad name, folder,
+image or timeout and a taken name before anything changes; then it counts the
+source, makes the volume and runs one Init. `timeout` (milliseconds, a positive
+whole number) is passed to `LayerFS.init` and bounds the Init itself, not the
+count or volume steps; omitted, Init has no time limit. A Deadline is a failed
+Init like any other. A failed Init removes the volume and the home entry it made; an
 uncertain one (`Unknown`, or any failure on Windows) keeps everything and is
 recorded in `<stateDir>/init-failures.jsonl`. `remove` needs `confirm` equal
 to the project's name and refuses `Busy` while a running container uses the

@@ -70,10 +70,12 @@ export class LayerFS {
 
   /** Creates the project `projectName` from `folder` (one Init), then opens
    * it. `created` on the client is what Init returned. An uncertain Init
-   * keeps everything it made. */
-  static async init(projectName, folder, options = {}) {
+   * keeps everything it made. `timeout` (milliseconds) bounds Init, which
+   * then fails `Failed` (Deadline) when it runs longer; omitted, Init has
+   * no time limit. */
+  static async init(projectName, folder, options = {}, timeout = undefined) {
     const client = new LayerFS(projectName, options, FACTORY);
-    const created = await init(client, folder);
+    const created = await init(client, folder, timeout);
     await opened(client);
     client.created = created;
     return client;

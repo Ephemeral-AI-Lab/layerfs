@@ -1,11 +1,12 @@
-// runtime.project.start_init(name, folder, { image }): imports a folder as a
+// runtime.project.start_init(name, folder, { image, timeout }): imports a folder as a
 // new project on its own Docker volume, as a background job of this process
 // (jobs.js). Copied from the dsh Host's init.js (#428; its demo-scenario and
 // simulator branches are dropped). The steps: count the source, make the
 // volume, then one Init (LayerFS.init) where the Store lives: in this
 // process on Linux, in a container of its own on macOS, in the worker on
 // Windows. Init seals the Store and installs it into the volume, starting no
-// Sandbox. One attempt. A failed Init removes what it made (the volume, and
+// Sandbox. `timeout` (milliseconds) is LayerFS.init's: it bounds the Init
+// itself, and without it Init has no time limit. One attempt. A failed Init removes what it made (the volume, and
 // the home entry unless another project holds the name); an uncertain one
 // (`Unknown`, or any failure on Windows) keeps everything and is recorded in
 // `<stateDir>/init-failures.jsonl`, never cleaned up on a guess.
@@ -46,10 +47,11 @@ export async function prepare(runtime, name, folder, options = {}, pending = new
   if (gaps.length) throw refuse("InvalidInput", `LayerFS is not configured: set ${gaps.join(" and ")}`);
   if (typeof name !== "string" || !NAME.test(name)) throw refuse("InvalidInput", "a project name is 1-63 lowercase letters, digits, _ . - and starts and ends alphanumeric");
   if (options.image !== undefined && !IMAGE.test(options.image)) throw refuse("InvalidInput", "image is a runtime image digest sha256:<64 hex>");
+  if (options.timeout !== undefined && !(Number.isSafeInteger(options.timeout) && options.timeout > 0)) throw refuse("InvalidInput", "timeout must be a positive whole number of milliseconds");
   if (typeof folder !== "string" || !isAbsolute(folder) || !existsSync(folder) || !statSync(folder).isDirectory()) throw refuse("InvalidInput", `${folder} is not an absolute directory`);
   if (pending.has(name) || record(settings, name) || (await platform.homeNames(settings)).includes(name)) throw refuse("Exists", `a LayerFS project named ${name} exists`);
   const created = Date.now();
-  return { name, source: folder, volume: `${settings.containerPrefix}${name}-store-${created.toString(36)}`, created, ...(options.image ? { image: options.image } : {}) };
+  return { name, source: folder, volume: `${settings.containerPrefix}${name}-store-${created.toString(36)}`, created, ...(options.image ? { image: options.image } : {}), ...(options.timeout !== undefined ? { timeout: options.timeout } : {}) };
 }
 
 /** Runs `making` (LayerFS.init), reading Init's counts every WATCH_MS in this process until it ends. */
@@ -71,8 +73,9 @@ async function watching(runtime, name, making, report) {
 }
 
 /** One prepared Init; `report` sees each step. Answers the project's record. */
-export async function runInit(runtime, project, report = () => {}) {
+export async function runInit(runtime, prepared, report = () => {}) {
   const { settings, platform } = runtime;
+  const { timeout, ...project } = prepared; // the record keeps no timeout
   report({ step: "scan" });
   const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
   report({ step: "volume", totals });
@@ -82,7 +85,7 @@ export async function runInit(runtime, project, report = () => {}) {
   let client;
   try {
     // LayerFS.init reads the environment before its first await
-    const making = withEnv(deploymentEnv(settings, platform, project), () => LayerFS.init(project.name, platform.path(settings, project.source)));
+    const making = withEnv(deploymentEnv(settings, platform, project), () => LayerFS.init(project.name, platform.path(settings, project.source), {}, timeout));
     // macOS: Init runs in its own container, whose counts this process cannot read
     client = await (platform.name === "macos" ? making : watching(runtime, project.name, making, report));
   } catch (error) {

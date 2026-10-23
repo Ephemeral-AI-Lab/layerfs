@@ -28,7 +28,7 @@ try {
 client is refused `InvalidInput`; a second `close()` does nothing. `await using layerfs =
 await LayerFS.open("shop")` closes it at the end of the block.
 
-## `LayerFS.init(name, sourcePath, options?)`
+## `LayerFS.init(name, sourcePath, options?, timeout?)`
 
 Creates the project, then opens it: copies a host folder into a new Store, once.
 Afterwards the files live only in LayerFS.
@@ -37,6 +37,8 @@ Afterwards the files live only in LayerFS.
 | --- | --- | --- | --- |
 | `name` | string | yes | 1–63 characters from `a-z`, `0-9`, `_`, `-`, `.`, starting and ending with a letter or digit |
 | `sourcePath` | string | yes | Host folder to copy. Everything in it is imported, including `.git` and ignored files |
+| `options` | object | no | Client options, as for `LayerFS.open`; pass `{}` to give only a timeout |
+| `timeout` | number | no | Milliseconds Init may take, a positive whole number. **Omitted: no time limit**. Init reads every file, so a large tree (`node_modules`, build output) takes a while |
 
 **Returns:** an open client; what Init returned is on its `created`:
 `{ kind: "Initialized", project, layer, … }`, where `layer` is `main`'s first Layer.
@@ -46,7 +48,8 @@ Afterwards the files live only in LayerFS.
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `Exists` | This `LAYERFS_HOME` already has the project | Don't init again: the project is ready to use |
-| `InvalidInput` | Bad path or name | Use an absolute folder path |
+| `InvalidInput` | Bad path, name or timeout | Use an absolute folder path and a positive whole `timeout` |
+| `Failed` with `Deadline` in the message | Init ran longer than `timeout`; the project's entry is kept | Stop and report; don't init the name again |
 | `Unknown`, `Failed` | Init is uncertain or failed | Stop and report |
 
 **Start from a small skeleton** (shell): a folder with a `README.md` and a `.git/HEAD`,

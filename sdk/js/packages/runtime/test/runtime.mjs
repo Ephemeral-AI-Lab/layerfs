@@ -87,7 +87,7 @@ try {
     writeFileSync(join(source, "src", "a.js"), "1\n");
     const { runtime, calls } = await opened();
     // checked before anything changes
-    for (const [name, folder, options, code] of [["Bad", source, {}, "InvalidInput"], ["shop", "relative", {}, "InvalidInput"], ["shop", join(work, "none"), {}, "InvalidInput"], ["shop", source, { image: "latest" }, "InvalidInput"]]) {
+    for (const [name, folder, options, code] of [["Bad", source, {}, "InvalidInput"], ["shop", "relative", {}, "InvalidInput"], ["shop", join(work, "none"), {}, "InvalidInput"], ["shop", source, { image: "latest" }, "InvalidInput"], ...[0, -5, 2.5, "60000", null].map((timeout) => ["shop", source, { timeout }, "InvalidInput"])]) {
       await assert.rejects(runtime.project.start_init(name, folder, options), { code });
     }
     project("taken");
@@ -109,6 +109,20 @@ try {
     const init = native.args[native.calls.lastIndexOf("project.init")];
     assert.deepEqual([init.path, init.name, init.storePath, init.deploy.volume], [source, "shop", join(work, "volumes", calls[0][2], "_data/global/store.sqlite"), calls[0][2]]);
     assert.equal((await runtime.project.list()).find((p) => p.name === "shop").volume, calls[0][2]);
+    assert.ok(!Object.hasOwn(init, "timeoutMs"), "no timeout: Init has no limit and gets no field");
+    // a timeout passes through to LayerFS.init as timeoutMs; the record keeps none
+    calls.length = 0;
+    const timed = await until(await runtime.project.start_init("timed", source, { timeout: 300_000 }));
+    assert.equal(timed.step, "done", JSON.stringify(timed.error));
+    assert.equal(native.args[native.calls.lastIndexOf("project.init")].timeoutMs, 300_000);
+    assert.ok(!Object.hasOwn((await runtime.project.list()).find((p) => p.name === "timed"), "timeout"));
+    // a Deadline is Failed: what the Init made is removed, as for any failure
+    native.initRefusal = { code: "Failed", message: "InitFailure { error: Project(Deadline), initialized: None }", detail: null };
+    calls.length = 0;
+    const late = await until(await runtime.project.start_init("late", source, { timeout: 1 }));
+    assert.deepEqual([late.step, late.error.code], ["failed", "Failed"]);
+    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "create"], ["volume", "rm"]]);
+    delete native.initRefusal;
     // a failed Init removes what it made; an uncertain one keeps it and is recorded
     native.initRefusal = { code: "InvalidInput", message: "Mode", detail: null };
     calls.length = 0;
