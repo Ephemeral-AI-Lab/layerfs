@@ -54,7 +54,7 @@ async function inner([phase]) {
   const source = mkdtempSync(join(tmpdir(), "layerfs-f029-"));
   writeFileSync(join(source, "README.md"), "workspace file\n");
   const layerfs = await LayerFS.init("site", source, { storePath: STORE_PATH, trace });
-  const { LayerFSOperator } = await import("../../../../operator/index.js");
+  const { LayerFSBackend } = await import("@layerfs/backend");
   rmSync(source, { recursive: true, force: true });
   await layerfs.branch.fork("work", "main");
   const paths = [];
@@ -68,7 +68,7 @@ async function inner([phase]) {
   }
   rmSync(trace, { force: true });
   assert.equal((await layerfs.workspace.exec(paths[0], "cat README.md")).exitCode, 0);
-  await new LayerFSOperator(layerfs).workspace.status(paths[0]);
+  await LayerFSBackend.of(layerfs).daemon.workspace.status(paths[0]);
   const lines = readFileSync(trace, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((l) => l.phase === "end");
   const exec = lines.find((l) => l.method === "workspace.exec");
   const status = lines.find((l) => l.method === "backend.daemon.workspace.status");

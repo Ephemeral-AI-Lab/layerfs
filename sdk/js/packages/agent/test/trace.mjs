@@ -18,7 +18,7 @@ for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "DAEMON_HOST"]) {
   delete process.env[`DSH_LAYERFS_${name}`];
 }
 const { LayerFS } = await import("@layerfs/agent");
-const { LayerFSOperator } = await import("../../../operator/index.js");
+const { LayerFSBackend } = await import("@layerfs/backend");
 
 const BIG = "x".repeat(10000);
 const WS = { sandbox: "1", path: "/workspaces/w1" };
@@ -26,7 +26,7 @@ const WS = { sandbox: "1", path: "/workspaces/w1" };
 const pick = (line, fields) => Object.fromEntries(fields.filter((field) => field in line).map((field) => [field, line[field]]));
 
 async function script(client) {
-  const op = new LayerFSOperator(client);
+  const backend = LayerFSBackend.of(client);
   const steps = [
     () => client.project.list_sandboxes(),
     () => client.project.list_branches(),
@@ -52,20 +52,22 @@ async function script(client) {
     () => client.branch.publish("feature"),
     () => client.workspace.mount("feature"),
     () => client.workspace.exec(WS, "npm test"),
-    () => op.workspace.status(WS),
+    () => backend.daemon.workspace.status(WS),
     () => client.workspace.commit(WS, "Save"),
     () => client.workspace.unmount(WS),
     () => client.fs.read("main", "/missing"),
-    () => op.store.stats(),
-    () => op.store.commits("feature"),
-    () => op.files.stats("main", "/README.md"),
-    () => op.files.history("main", "/README.md"),
-    () => op.workspace.overlay(WS),
-    () => op.workspace.changes(WS),
-    () => op.inspect.snapshot(),
-    () => op.process.start(WS, "npm run dev"),
-    () => op.process.list(),
-    () => op.process.cancel("proc_1_ab"),
+    () => backend.store.project.get_storage(),
+    () => backend.store.project.get_history(),
+    () => backend.store.project.list_overwritten("l4yer"),
+    () => backend.store.branch.list_commit_storage("feature"),
+    () => backend.store.fs.get_storage("main", "/README.md"),
+    () => backend.store.fs.list_revisions("main", "/README.md"),
+    () => backend.daemon.workspace.get_storage(WS),
+    () => backend.daemon.workspace.list_changes(WS),
+    () => backend.daemon.process.start(WS, "npm run dev"),
+    () => backend.daemon.process.list(),
+    () => backend.daemon.process.cancel("proc_1_ab"),
+    () => backend.daemon.sandbox.get_log("1", { lines: 5 }),
     () => client.sandbox.create(),
     () => client.sandbox.list_workspaces("1"),
     () => client.sandbox.close("1"),
@@ -106,7 +108,7 @@ try {
     assert.deepEqual(lines.map((line) => line.scope), native.observed.slice(before), "the binding got each line's scope");
     assert.equal(new Set(lines.map((line) => line.id)).size, lines.length);
     const groups = new Set(lines.map((line) => line.method.split(".").slice(0, line.method.startsWith("backend.") ? 3 : 1).join(".")));
-    for (const group of ["project", "fs", "branch", "workspace", "sandbox", "backend.store.project", "backend.store.branch", "backend.store.fs", "backend.daemon.workspace", "backend.daemon.process"]) assert.ok(groups.has(group), group);
+    for (const group of ["project", "fs", "branch", "workspace", "sandbox", "backend.store.project", "backend.store.branch", "backend.store.fs", "backend.daemon.workspace", "backend.daemon.process", "backend.daemon.sandbox"]) assert.ok(groups.has(group), group);
     const write = lines.find((line) => line.method === "fs.write");
     assert.deepEqual(write.args, { branch: "feature", path: "/big.txt", contentBytes: 10000, message: "Write big" });
     assert.equal(write.commit, "c0ffee");
@@ -182,7 +184,7 @@ try {
     process.env.DSH_LAYERFS_TRACE_STEP = "call_7";
     const results = await script(await LayerFS.open("website"));
     const lines = read(file);
-    assert.equal(lines.length, results.length + 3, "one line per call, plus LayerFS.open's project lookup; the read model makes three: history, the Sandbox listing and the one Sandbox's Workspaces");
+    assert.equal(lines.length, results.length + 1, "one line per call, plus LayerFS.open's project lookup");
     assert.ok(lines.every((line) => line.step === "call_7" && line.phase === "end"));
     // The LAYERFS_ names win over their DSH_ twins.
     const own = join(dir, "own.jsonl");
@@ -210,7 +212,7 @@ try {
     process.env.LAYERFS_TRACE_STEP = "with starts";
     const results = await script(await LayerFS.open("website"));
     const lines = read(file);
-    assert.equal(lines.length, 2 * (results.length + 3));
+    assert.equal(lines.length, 2 * (results.length + 1));
     const starts = lines.filter((line) => line.phase === "start");
     const ends = lines.filter((line) => line.phase === "end");
     assert.equal(starts.length, ends.length);
@@ -279,18 +281,15 @@ try {
     assert.deepEqual(inits().at(-1).policy, { wholeFileDepth: 8, chunkDepth: 4 });
     await LayerFS.init("website3", "/src/website");
     assert.equal("policy" in inits().at(-1), false);
-    // A snapshot reads history from the Store in this process and starts no
-    // Sandbox: with none recorded it asks no daemon.
-    native.sandboxList = [];
+    // History is read from the Store in this process and starts no Sandbox.
     const reader = await LayerFS.open("website");
-    const before = native.calls.length;
-    const snap = await new LayerFSOperator(reader).inspect.snapshot();
-    assert.deepEqual(native.calls.slice(before), ["backend.store.project.get_history", "project.list_sandboxes"]);
-    assert.equal(native.args[before].storePath, "/fake/store.sqlite");
-    assert.deepEqual([snap.kind, snap.sandboxes, snap.gone], ["ok", [], []]);
+    const at = native.calls.length;
+    await LayerFSBackend.of(reader).store.project.get_history();
+    assert.deepEqual(native.calls.slice(at), ["backend.store.project.get_history"]);
+    assert.equal(native.args[at].storePath, "/fake/store.sqlite");
   } else if (selected === "daemon-host") {
     // A client in a container dials its daemonHost on every call that
-    // reaches a Sandbox, operator calls included: the binding reopens or
+    // reaches a Sandbox, backend calls included: the binding reopens or
     // starts the Sandbox with the call's deploy.
     const native = (await import(FAKE)).default;
     await script(await LayerFS.open("website", { daemonHost: "host.docker.internal" }));

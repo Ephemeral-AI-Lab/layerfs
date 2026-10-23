@@ -96,16 +96,14 @@ def cargo(args):
 
 
 def copy_sdk(root, bundle):
-    """The JavaScript packages (#428: sdk/js/packages/<name>) and, while it
-    exists, the old operator folder. A bundle holds no symlink, so each
+    """The JavaScript packages (#428: sdk/js/packages/<name>). A bundle holds
+    no symlink, so each
     package resolves by name through a re-export shim under
     sdk/js/node_modules/@layerfs/<name> that imports its one real copy."""
     destination = bundle / "sdk/js"
     destination.mkdir(parents=True)
-    for child in ("packages", "operator"):
-        if (root / "sdk/js" / child).is_dir():
-            shutil.copytree(root / "sdk/js" / child, destination / child,
-                            ignore=shutil.ignore_patterns("node_modules", "__pycache__", "target"))
+    shutil.copytree(root / "sdk/js/packages", destination / "packages",
+                    ignore=shutil.ignore_patterns("node_modules", "__pycache__", "target"))
     shutil.copy2(root / "sdk/js/package.json", destination / "package.json")
     for package in sorted((destination / "packages").iterdir()):
         manifest = json.loads((package / "package.json").read_text())

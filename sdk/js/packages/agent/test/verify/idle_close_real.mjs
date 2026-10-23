@@ -25,27 +25,25 @@ const engine = (method, path) => new Promise((resolve, reject) => {
 });
 
 const { LayerFS } = await import("@layerfs/agent");
-const { LayerFSOperator } = await import("../../../../operator/index.js");
 const project = `ic-${Date.now().toString(36)}`;
-let layerfs, operator;
+let layerfs;
 const records = join(process.env.LAYERFS_HOME, project, "sandboxes", "1");
 const container = () => readFileSync(join(records, "container"), "utf8").trim();
 const source = mkdtempSync(join(tmpdir(), "layerfs-ic-"));
 writeFileSync(join(source, "README.md"), "idle\n");
 try {
   layerfs = await LayerFS.init(project, source);
-  operator = new LayerFSOperator(layerfs);
   await layerfs.branch.fork("lane");
-  assert.deepEqual((await operator.sandbox.list()).map((s) => s.sandbox), [], "Import starts no Sandbox");
+  assert.deepEqual((await layerfs.project.list_sandboxes()).items.map((s) => s.sandbox), [], "Import starts no Sandbox");
 
   // Listing reclaims a stopped Sandbox this process still knows.
   const first = await layerfs.workspace.mount("lane");
   assert.equal(first.sandbox, "1");
   const one = container();
-  assert.deepEqual((await operator.sandbox.list()).map((s) => s.sandbox), ["1"]);
+  assert.deepEqual((await layerfs.project.list_sandboxes()).items.map((s) => s.sandbox), ["1"]);
   await layerfs.workspace.unmount(first, true);
   assert.equal(await engine("POST", `/v1.54/containers/${one}/stop?t=10`), 204);
-  assert.deepEqual(await operator.sandbox.list(), [], "a stopped Sandbox is not listed");
+  assert.deepEqual((await layerfs.project.list_sandboxes()).items, [], "a stopped Sandbox is not listed");
   assert.equal(existsSync(records), false, "its records are gone");
   assert.equal(await engine("GET", `/v1.54/containers/${one}/json`), 404, "its container is deleted");
 

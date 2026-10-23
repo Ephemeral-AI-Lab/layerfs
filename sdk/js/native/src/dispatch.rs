@@ -125,6 +125,7 @@ pub(crate) fn backend_call(op: String, args: JsUnknown) -> napi::Result<AsyncTas
             "backend.daemon.process.cancel" => exec::cancel(&args),
             "runtime.project.get_init" => crate::project::progress(&args),
             "runtime.sandbox.reclaim" => workspace::reclaim(&args),
+            "backend.daemon.sandbox.get_log" => crate::sandbox::get_log(&args),
             "backend.store.project.get_history"
             | "backend.store.project.get_storage"
             | "backend.store.project.list_overwritten"

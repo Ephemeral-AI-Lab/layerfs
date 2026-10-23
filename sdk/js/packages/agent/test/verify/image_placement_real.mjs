@@ -44,7 +44,6 @@ function tar(name, text) {
 }
 
 const { LayerFS } = await import("@layerfs/agent");
-const { LayerFSOperator } = await import("../../../../operator/index.js");
 const A = process.env.LAYERFS_IMAGE;
 const tag = `layerfs-image-placement:${Date.now().toString(36)}`;
 const built = await engine("POST", `/v1.54/build?version=1&q=1&t=${encodeURIComponent(tag)}`,
@@ -56,13 +55,12 @@ assert.match(B, /^sha256:[0-9a-f]{64}$/);
 assert.notEqual(B, A);
 
 const project = `ip-${Date.now().toString(36)}`;
-let layerfs, operator;
+let layerfs;
 const container = (id) => readFileSync(join(process.env.LAYERFS_HOME, project, "sandboxes", id, "container"), "utf8").trim();
 const source = mkdtempSync(join(tmpdir(), "layerfs-ip-"));
 writeFileSync(join(source, "README.md"), "images\n");
 try {
   layerfs = await LayerFS.init(project, source);
-  operator = new LayerFSOperator(layerfs);
   await layerfs.branch.fork("lane");
   const a = await layerfs.workspace.mount("lane");
   assert.deepEqual([a.sandbox, a.image], ["1", A], "no image named: the deployment's");
@@ -72,7 +70,7 @@ try {
   assert.deepEqual([c.sandbox, c.image], ["1", A]);
   const d = await layerfs.workspace.mount("lane", { image: B });
   assert.deepEqual([d.sandbox, d.image], ["2", B]);
-  assert.deepEqual((await operator.sandbox.list()).map(({ sandbox, image }) => [sandbox, image]), [["1", A], ["2", B]]);
+  assert.deepEqual((await layerfs.project.list_sandboxes()).items.map(({ sandbox, image }) => [sandbox, image]), [["1", A], ["2", B]]);
   const engineImage = JSON.parse((await engine("GET", `/v1.54/containers/${container("2")}/json`)).body).Image;
   assert.equal(engineImage, B, "Sandbox 2's container runs image B");
   assert.equal((await layerfs.workspace.exec(d, "cat README.md")).stdout, "images\n");
@@ -80,7 +78,7 @@ try {
   // Sandbox 2 stopped (as its idle close leaves it): the listing skips it,
   // the runtime's reclaim removes it, then image B can go
   assert.equal((await engine("POST", `/v1.54/containers/${container("2")}/stop?t=10`)).status, 204);
-  assert.deepEqual((await operator.sandbox.list()).map(({ sandbox, image }) => [sandbox, image]), [["1", A]]);
+  assert.deepEqual((await layerfs.project.list_sandboxes()).items.map(({ sandbox, image }) => [sandbox, image]), [["1", A]]);
   const { invokeClientBackend } = await import("@layerfs/agent/internal");
   assert.deepEqual((await invokeClientBackend(layerfs, "runtime.sandbox.reclaim", {})).reclaimed, ["2"]);
   console.log("image placement: ok");

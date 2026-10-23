@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/agent"
+    "packages/agent",
+    "packages/backend"
   ],
   "engines": {
     "node": ">=20"

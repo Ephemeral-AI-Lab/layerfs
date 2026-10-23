@@ -408,6 +408,52 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
     ]))
 }
 
+/// `backend.daemon.sandbox.get_log({ sandbox, lines })`: the last `lines`
+/// lines (1..=2000) of Sandbox `sandbox`'s daemon log, at most
+/// [`GET_LOG_BYTES`], read once through the Engine: `{ sandbox, container,
+/// text, bytes }`. A stopped container's log is readable until its records
+/// are reclaimed. Refused `NoSuchSandbox` with no record or no container.
+/// Read-only: it starts, stops and reclaims nothing.
+pub(crate) fn get_log(args: &SdkValue) -> Outcome {
+    let id = text(args, "sandbox")?.to_owned();
+    let lines = match args.get("lines") {
+        Some(SdkValue::Int(n)) if (1..=2000).contains(n) => *n as u16,
+        _ => return Err(refused("InvalidInput", "lines is a count from 1 to 2000")),
+    };
+    let directory = crate::discovery::sandbox_dir(args, &id)?;
+    let record = directory.join("sandbox.record");
+    let missing = || refused("NoSuchSandbox", format!("the project has no Sandbox {id}"));
+    if !record.exists() {
+        return Err(missing());
+    }
+    let value = {
+        let _guard = crate::discovery::guard(&directory)?;
+        if !record.exists() {
+            return Err(missing());
+        }
+        crate::discovery::load(&record)?
+    };
+    let container = text(&value, "container")?.to_owned();
+    let (docker, selector, request) = crate::discovery::runtime(&value)?;
+    let sandbox = layerfs_sandbox::backend::docker::Sandbox::stopped(docker, selector, request);
+    let bytes = match sandbox.log_tail(lines, GET_LOG_BYTES) {
+        Ok(bytes) => bytes,
+        Err(failure) if failure.container_gone() => {
+            return Err(crate::discovery::gone(&id, &container, false))
+        }
+        Err(failure) => return Err(failed(failure)),
+    };
+    Ok(SdkValue::map([
+        ("sandbox", SdkValue::text(&id)),
+        ("container", SdkValue::text(&container)),
+        ("text", SdkValue::text(String::from_utf8_lossy(&bytes))),
+        ("bytes", SdkValue::Int(bytes.len() as i64)),
+    ]))
+}
+
+/// What one `get_log` keeps: the final bytes of the tail.
+const GET_LOG_BYTES: usize = 64 * 1024;
+
 /// Seconds a closing Sandbox's daemon has to exit before the Engine kills it.
 const STOP_S: u16 = 5;
 

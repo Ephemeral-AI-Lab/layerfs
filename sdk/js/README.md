@@ -289,32 +289,49 @@ keeps its markers in that Workspace; inspect them through ordinary bounded
 `exec` commands and Commit each command. An omitted diagnostic is not a clean
 merge, and a failed/unknown operation must be inspected before a new operation.
 
-## Internal operator
+## @layerfs/backend
 
 ```js
-import { LayerFSOperator } from "@layerfs/sdk/operator";
-const operator = new LayerFSOperator(layerfs);
-await operator.store.stats();
-await operator.store.commits("feature", 20, 0);
-await operator.store.overwritten(layer, 50, 0); // every Layer a publish overwrote
-await operator.files.stats("feature", "/README.md");
-await operator.files.history("feature", "/README.md", 20, 0);
-await operator.workspace.overlay(ws);
-await operator.workspace.changes(ws, 20, 0);
-await operator.sandbox.list(); // the project's running Sandboxes; reclaims stopped ones
-await operator.inspect.snapshot();
-await operator.project.progress(); // while layerfs.project.init runs in this process
-const process = await operator.process.start(ws, "npm run dev"); // "proc_1_…"
-await operator.process.list(); // every Sandbox's, each with its `sandbox`
-await operator.process.cancel(process.process);
+import { LayerFSBackend } from "@layerfs/backend";
+const backend = LayerFSBackend.of(layerfs); // opens nothing; refused once layerfs is closed
+// backend.store: the project's Store, no Sandbox needed
+await backend.store.project.get_history(since);           // Branches, newest Commits, Layers, version
+await backend.store.project.get_storage();
+await backend.store.project.get_comparable(id);           // { commit, root, exact } or NotComparable
+await backend.store.project.list_overwritten(layer, 50, 0);
+await backend.store.branch.list_commit_storage("feature", 20, 0);
+await backend.store.fs.get_storage("feature", "/README.md");
+await backend.store.fs.list_revisions("feature", "/README.md", 20, 0);
+// backend.daemon: the Sandbox must be running, else NoSuchSandbox
+await backend.daemon.workspace.status(ws);
+await backend.daemon.workspace.list_changes(ws, 20, 0);
+await backend.daemon.workspace.get_storage(ws);
+const process = await backend.daemon.process.start(ws, "npm run dev"); // "proc_1_…"
+await backend.daemon.process.list(50, 0);                 // every Sandbox's, each with its `sandbox`
+await backend.daemon.process.cancel(process.process);
+await backend.daemon.sandbox.get_log("1", { lines: 200 }); // { sandbox, container, text, bytes }
 ```
 
-Operator names are refused by public JS/native/Rust/daemon dispatch. This subpath
-uses its own method table; process control remains exclusively in the binding.
-HTTP exists only in the local demo server, which maps GET reads and POST
-`{args:[...]}` writes at `/api/{sdk|operator}/{group}/{method}`.
+Backend names (`backend.*`) are refused by the agent's public call and by
+public native, Rust and daemon dispatch; they use the binding's backend table.
+Background processes run through the Sandbox's ordinary command launcher; the
+daemon supervises no command. The names before #428 (`operator.*`) map to
+these through `RENAMED_METHODS` in `@layerfs/agent`, for old traces.
 
-`project.progress()` reads the project's Init while `project.init` runs in the
+`get_comparable(id)` takes a saved Commit or Layer id and answers the Commit
+with the same files, so a Layer can be compared through `branch.diff_commits`.
+A Layer whose listed Commit has its root answers `exact: true`; one published
+from a Commit `get_history` does not list answers that Commit with
+`exact: false`, and the caller checks the diff answer's root equals `root`.
+Init's Layer, a publish that merged and an id `get_history` does not list are
+refused `NotComparable`. What it learns is kept per client.
+
+`get_log` reads the Sandbox's daemon log once through the Docker Engine where
+the binding runs (the worker on macOS and Windows): the last `lines` lines
+(1 to 2000, default 200), at most 64 KiB. A stopped Sandbox's log is readable
+until its records are reclaimed. There is no `since`.
+
+`runtime.project.get_init` (native; `@layerfs/runtime`) reads the project's Init while `project.init` runs in the
 same process, without a Sandbox: `{ step, entries, files, bytes }`, or null when
 no Init runs. `step` is `scan` (reading the source), `files` (constructing each
 regular file), `tree` (building the namespace), `publish` (genesis Layer) or
@@ -340,7 +357,7 @@ counts are reported without inventing exclusive byte attribution.
 ## Call trace
 
 `LAYERFS_TRACE=<file>` (else `DSH_LAYERFS_TRACE`), or
-`new LayerFS(project, { trace: file })` (the option wins), appends one JSON line to `file` for every SDK and operator call that
+`LayerFS.open(project, { trace: file })` (the option wins), appends one JSON line to `file` for every agent and backend call that
 reaches the native binding.
 Unset, nothing is written and nothing changes. A failed trace write is dropped;
 it never changes a value, a refusal or the call count. Argument checks the
@@ -356,14 +373,14 @@ without a trace line.
 | `layerfs_trace` | Format version, `1`. |
 | `id` | `<run>-<n>`: a random per-process run prefix and the call's sequence number. |
 | `step` | The step label, cut to 200 characters; absent when none is set. |
-| `method` | The binding method, for example `fs.read`, `workspace.commit`, `operator.store.stats`. |
+| `method` | The binding method, for example `fs.read`, `workspace.commit`, `backend.store.project.get_storage`. |
 | `args` | Short summary: text arguments (paths, refs, names, Sandbox id, command, message) cut to 200 characters; numbers and flags; `content`, `bytes`, `oldText` and `newText` as `<name>Bytes` byte counts; `apply` changes as `changes` (count) and `changeBytes`. Never file contents; `project`, `home` and `deploy` are left out. |
 | `start`, `ms` | Wall-clock start (ISO 8601) and elapsed wall milliseconds measured in the calling process, including the native queue and the daemon round trip. |
 | `queue` | The part of `ms` the call spent waiting before its own work, in milliseconds: `thread`, the wait for a native worker thread (the call's time outside its run in the binding), `connection`, the wait for a free control connection of its Sandbox, and their sum `ms`. Present on every line of a call that reached the binding. |
 | `ok` | `true` for a value; `false` with `code` and `message` for a refusal. |
 | `phase` | `end` on the line written when the call returns; `start` on the optional line written before it (see below). |
-| `branch`, `base`, `head`, `sandbox`, `path`, `baseLayer`, `process`, `exitCode` | Result ids, on a successful end line only. `branch.fork`: the new `branch`, its `base` Layer and its `head` (`null` when forked from main). `branch.merge`: the new `branch` and its `head`. `workspace.mount`: the `sandbox`, the Workspace `path`, its `branch`, its `base` Commit (`null` on a Branch with no Commit) and `baseLayer`. `operator.process.start`: the `process` id. A foreground `workspace.exec`: its `exitCode`; its output is never traced. |
-| `kind`, `commit`, `layer`, `sizes` | The value's `kind`. Every publishing call that succeeds (`fs` write, edit, apply, mkdir, rm, cp, mv, `workspace.commit`, `branch.merge`, `branch.publish`) names a `commit`: its new Commit, or the head it was `UpToDate` with; `branch.publish` names the published source Commit and the new `layer`. `sizes` (`logical`, `newCanonical`, `newStored`, `newMetadata`) appear only when the reply carries the Commit record (`fs` writes and `workspace.commit` that commit); join `commit` to `operator.store.commits` for the rest. No call is added to fetch them. |
+| `branch`, `base`, `head`, `sandbox`, `path`, `baseLayer`, `process`, `exitCode` | Result ids, on a successful end line only. `branch.fork`: the new `branch`, its `base` Layer and its `head` (`null` when forked from main). `branch.merge`: the new `branch` and its `head`. `workspace.mount`: the `sandbox`, the Workspace `path`, its `branch`, its `base` Commit (`null` on a Branch with no Commit) and `baseLayer`. `backend.daemon.process.start`: the `process` id. A foreground `workspace.exec`: its `exitCode`; its output is never traced. |
+| `kind`, `commit`, `layer`, `sizes` | The value's `kind`. Every publishing call that succeeds (`fs` write, edit, apply, mkdir, rm, cp, mv, `workspace.commit`, `branch.merge`, `branch.publish`) names a `commit`: its new Commit, or the head it was `UpToDate` with; `branch.publish` names the published source Commit and the new `layer`. `sizes` (`logical`, `newCanonical`, `newStored`, `newMetadata`) appear only when the reply carries the Commit record (`fs` writes and `workspace.commit` that commit); join `commit` to `backend.store.branch.list_commit_storage` for the rest. No call is added to fetch them. |
 | `scope` | 64 hex characters: the fresh daemon observation scope this call's control exchanges carried. |
 | `daemon` | One entry per traced control exchange the call made (a mount makes at least three: Branch lookup, bind, attach). Absent when the call reached no daemon (for example `project.init`). |
 
@@ -396,7 +413,7 @@ call, not per-call deltas. The container is `cat $LAYERFS_HOME/<project>/sandbox
 
 A step label groups lines by the caller's own unit of work, such as an agent's
 step. `LAYERFS_TRACE_STEP` is read at each call, so a long-lived process can
-change it between calls; `new LayerFS(project, { trace, traceStep })`, or
+change it between calls; `LayerFS.open(project, { trace, traceStep })`, or
 setting `layerfs.options.traceStep` later, overrides it. Unset or empty, lines
 have no `step`. A label alone traces nothing.
 

@@ -257,3 +257,26 @@ control records and its timing names (`sandbox.mount.bind`,
 [#373](../issues/373/README.md); placement and idle close are described in the
 [SDK guide](../../../sdk/js/README.md).
 
+
+## Issue #428 source update (2026-10-23): backend names and packages
+
+The `operator.*` names are now `backend.store.*` (answered by the Store in
+the calling process) and `backend.daemon.*` (the Sandbox must be running).
+The native addon's second entry point is `backendCall`; the daemon admits
+`backend.*` and `sandbox.list_workspaces` (was `operator.inspect.snapshot`)
+through `operator::admits`, and public dispatch still refuses them
+`UnknownMethod`. Runtime-only native calls are `runtime.project.get_init`
+(was `operator.project.progress`) and `runtime.sandbox.reclaim`, which took
+over the reclaim `operator.sandbox.list` did; `project.list_sandboxes` now
+only lists. `@layerfs/agent` exports `RENAMED_METHODS` for reading older
+traces. The Rust module paths (`operator/`) keep their names.
+
+The JavaScript is split into `sdk/js/packages/agent` (`LayerFS`),
+`sdk/js/packages/backend` (`LayerFSBackend.of(shop)`, one file per method)
+and, next, `sdk/js/packages/runtime`. `@layerfs/sdk/operator` and its
+`inspect.snapshot` are gone; the snapshot moves to the runtime as
+`project.get_state`. New calls: `sandbox.create`, `sandbox.close` and
+mounting into a chosen Sandbox (agent), and
+`backend.daemon.sandbox.get_log`, which reads a Sandbox's daemon log once
+through the Engine where the binding runs. See the
+[SDK guide](../../../sdk/js/README.md).

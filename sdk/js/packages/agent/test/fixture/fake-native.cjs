@@ -17,7 +17,7 @@ const answer = (op, args) => {
   if (op === "branch.fork") return { value: { kind: "Forked", branch: args.name, base: "lay0", head: "not-a-publication" } };
   if (/^fs\.(write|edit|apply|mkdir|cp|mv)$/.test(op)) return { value: { commit } };
   if (op === "project.list_sandboxes") return { value: { kind: "ok", items: exports.sandboxList } };
-  if (op === "backend.store.project.get_history") return { value: { kind: "ok", version: "h1", project: "website", branches: [], commits: [], more: {}, layers: [], workspaces: [] } };
+  if (op === "backend.store.project.get_history") return { value: exports.history ?? { kind: "ok", version: "h1", project: "website", branches: [], commits: [], more: {}, layers: [], workspaces: [] } };
   if (op === "sandbox.list_workspaces") return { value: { kind: "ok", version: "1", workspaces: exports.workspaceList } };
   if (op === "backend.store.project.get_storage") return { value: { dedupe: "2", compression: null } };
   return { value: { items: [], hasMore: false } };

@@ -189,7 +189,7 @@ def execute(command, cwd, env=None, timeout=None, log=None):
 def inputs(record):
     root = Path(record["worktree"])
     selected = [".cargo", "core/Cargo.toml", "core/Cargo.lock", "core/crates", "core/vendor",
-                "sdk/js/packages", "sdk/js/operator", "sdk/js/native", "sdk/js/package.json"]
+                "sdk/js/packages", "sdk/js/native", "sdk/js/package.json"]
     result = {}
     for relative in selected:
         source = root / relative

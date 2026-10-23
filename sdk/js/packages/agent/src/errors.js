@@ -21,7 +21,7 @@ export const CODES = Object.freeze([
   "NoSuchProject", "NoCommit", "NoMergeBase", "IsDirectory", "NotDirectory", "NotFile", "Binary",
   "NotText", "NoMatch", "AmbiguousMatch",
   "Exists", "NotEmpty", "NameTaken", "ReservedName", "ReadOnly", "MountsActive", "TooLarge",
-  "InvalidInput", "NotMounted", "NoSuchSandbox", "NoSuchProcess", "Capacity",
+  "InvalidInput", "NotMounted", "NoSuchSandbox", "NoSuchProcess", "Capacity", "NotComparable",
 ]);
 
 /** True when `error` is a LayerFS refusal with `code`. */
