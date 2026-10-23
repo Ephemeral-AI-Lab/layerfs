@@ -3,7 +3,8 @@
 // Disposable Store only. Each part is a list of steps run in order on a fresh
 // project; each step is one call:
 // - `sdk(lf, ctx)` makes it through the SDK and `argv(ctx)` is the same call
-//   as a `layerfs` command line, with `input` its stdin;
+//   as a `layerfs` command line, with `input` its stdin; a `stream` step's
+//   answer is the exit code and streamed output, not a result;
 // - `check(result, ctx)` asserts what a correct answer is; a step with
 //   `refused` expects a LayerFSError with that code instead;
 // - `keep(result, ctx)` records what later steps name (commit ids, the
@@ -14,6 +15,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { Writable } from "node:stream";
 
 /** The project source both runs Init from. */
 export function source(dir) {
@@ -27,6 +29,17 @@ const handle = (ctx) => {
   if (!ctx.ws) throw new Error("no Workspace: the mount failed");
   return `${ctx.ws.sandbox}:${ctx.ws.path}`;
 };
+/** workspace.exec with sinks, as `layerfs workspace exec --stream` runs it:
+ * the exit code and the bytes each sink received, as text. */
+async function streamed(lf, ws, command) {
+  const sink = (chunks) => new Writable({ write(chunk, encoding, done) { chunks.push(Buffer.from(chunk)); done(); } });
+  const [out, err] = [[], []];
+  const result = await lf.workspace.exec(ws, command, undefined, { stdout: sink(out), stderr: sink(err) });
+  return { exitCode: result.exitCode, stdout: Buffer.concat(out).toString(), stderr: Buffer.concat(err).toString() };
+}
+// over the binding's 1 MiB inline output, so stdout is spooled and paged
+const BIG = 2 * 1024 * 1024 + 1;
+const STREAM = `head -c ${BIG} /dev/zero | tr '\\0' a; echo no >&2; exit 4`;
 const kind = (want) => (result) => assert.equal(result.kind, want);
 const lastCommit = (key) => (result, ctx) => { ctx[key] = result.head; };
 const init = {
@@ -104,6 +117,8 @@ export const WORKSPACE = [
     check: (r) => assert.deepEqual([r.exitCode, r.stdout, r.stderr], [0, "# Shop\n", ""]) },
   { name: "workspace exec (exit 3)", sdk: (lf, ctx) => lf.workspace.exec(ctx.ws, "echo no >&2; exit 3"), argv: (ctx) => ["workspace", "exec", handle(ctx), "echo no >&2; exit 3"],
     check: (r) => assert.deepEqual([r.exitCode, r.stdout, r.stderr], [3, "", "no\n"]) },
+  { name: "workspace exec --stream", stream: true, sdk: (lf, ctx) => streamed(lf, ctx.ws, STREAM), argv: (ctx) => ["workspace", "exec", handle(ctx), STREAM, "--stream"],
+    check: (r) => assert.deepEqual([r.exitCode, r.stdout.length, /^a*$/.test(r.stdout), r.stderr], [4, BIG, true, "no\n"]) },
   { name: "sandbox list_workspaces", sdk: (lf) => lf.sandbox.list_workspaces("1"), argv: () => ["sandbox", "list_workspaces", "1"],
     check: (r, ctx) => assert.deepEqual(r.items.map((w) => [w.path, w.branch, w.changed]), [[ctx.ws.path, "lane", true]]) },
   { name: "workspace commit", sdk: (lf, ctx) => lf.workspace.commit(ctx.ws, "step 1"), argv: (ctx) => ["workspace", "commit", handle(ctx), "-m", "step 1"],

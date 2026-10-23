@@ -8,12 +8,13 @@
 //   The SDK run's Store is removed first, and this run's Init creates a new
 //   one at the same path.
 // Each step's command must print the SDK's answer as JSON, or exit 125 with
-// the SDK's refusal. The two runs are compared after masking what differs
+// the SDK's refusal; with --stream, pass through the same output and exit
+// code the SDK's sinks receive. The two runs are compared after masking what differs
 // between any two runs: the project's name, object ids, times, inode numbers
 // and a Commit's stored bytes (PER_RUN).
 // Disposable Store only. Under the E2E launcher (its Store volume,
 // deployment and sealed Linux bundle for this commit):
-//   python3 tools/worktree.py run --resources <resources.json> --bundle <sealed bundle> --timeout 110 -- node cli/test/verify/cli_real.mjs inner <store|workspace>
+//   python3 tools/worktree.py run --resources <resources.json> --bundle <sealed bundle> --timeout 100 -- node cli/test/verify/cli_real.mjs inner <store|workspace>
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -43,10 +44,12 @@ function run(name) {
 function command(step, ctx) {
   const argv = step.argv(ctx);
   const started = Date.now();
-  const r = spawnSync(process.execPath, [CLI, ...argv], { input: step.input ?? "", env: { ...process.env, ...ctx.env, LAYERFS_PROJECT: ctx.project }, timeout: 60_000 });
+  const r = spawnSync(process.execPath, [CLI, ...argv], { input: step.input ?? "", env: { ...process.env, ...ctx.env, LAYERFS_PROJECT: ctx.project }, timeout: 60_000, maxBuffer: 64 << 20 });
   console.log(`layerfs ${argv.join(" ")}  exit ${r.status}  ${Date.now() - started} ms`);
   const [out, err] = [r.stdout.toString(), r.stderr.toString()];
   if (r.status === 125) return { error: JSON.parse(err) };
+  // --stream: the command's own output and exit code, passed through
+  if (step.stream) return { result: { exitCode: r.status, stdout: out, stderr: err } };
   assert.equal(r.status, 0, `layerfs ${argv.join(" ")}: ${err}`);
   assert.equal(err, "");
   const { ws, ...result } = JSON.parse(out);
@@ -103,7 +106,7 @@ try {
       try {
         assert.deepEqual(have, expected);
       } catch {
-        differ.push(`${step.name}:\n  layerfs ${JSON.stringify(have)}\n  sdk     ${JSON.stringify(expected)}`);
+        differ.push(`${step.name}:\n  layerfs ${JSON.stringify(have).slice(0, 4000)}\n  sdk     ${JSON.stringify(expected).slice(0, 4000)}`);
       }
     }
   } finally {
