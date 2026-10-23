@@ -350,7 +350,7 @@ remain legitimate. Put API documentation with the API; examples outside src.
 | Public-API tests and their helpers/fixtures | Package `tests/` |
 | Runnable examples | Package `examples/` |
 | Package benchmarks | Package `benches/` |
-| Product-wide harness/diagnostics | root `benchmark/`; inspect the actual harness manifest/entrypoint |
+| Product-wide harness/diagnostics | the [layerfs-benchmark](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark) repository; inspect the actual harness manifest/entrypoint |
 | Development checks | `core/tools/` |
 
 Tests exercise the production library that normal consumers use. Do not
@@ -475,7 +475,7 @@ Migrations and refactors follow the root
 [delete-rather-than-nurse rule](../AGENTS.md#4-code-build-and-docs): delete a
 test that is tricky to adapt, keep or move only cheap tests of surviving
 behaviour, and re-cover any still-valid fix or contract on the new code.
-`benchmark/fs-bench-pro` is frozen and left broken (owner, 2026-10-18):
+fs-bench-pro (in layerfs-benchmark) is frozen and left broken (owner, 2026-10-18):
 do not build, run, check or repair it.
 
 For docs-only changes, check links/anchors, status/claim accuracy and whitespace;
@@ -490,9 +490,14 @@ or runtime proof. Review ordinary macros, helpers, dependency/target declaration
 and generated inputs; extend scanners for new shipped formats. An excluded
 FUSE/daemon package is not exercised by passing active-workspace tests.
 
-There is no CI or aggregate pre-push gate; `tools/preflight.sh` is retired.
-Do not disable discovery or recreate an equivalent wrapper. Report exact checks,
-failures and gaps. A scan or proposal alone does not establish implementation.
+CI reports after a push and never gates it (see the
+[root rule](../AGENTS.md#4-code-build-and-docs)); test lane selection is
+[tools/ci_tests.py](tools/ci_tests.py). When a test target is renamed, moved or
+measured at 5 s or more, update its `SLOW` list; Linux-only daemon targets go to
+the nightly mount lane automatically. There is no pre-push gate;
+`tools/preflight.sh` is retired. Do not disable discovery or recreate an
+equivalent wrapper. Report exact checks, failures and gaps. A scan or proposal
+alone does not establish implementation.
 
 ### Build flags are part of the check
 
@@ -507,7 +512,7 @@ it. Documentation builds do not prove the binary profile.
 
 Measurement work additionally follows the
 [agent measurement workflow](../docs/general/agent-measurement-policy.md) and
-[owning core harness guide](../benchmark/fs-bench-pro/AGENTS.md). Frozen identities,
+[owning core harness guide](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md). Frozen identities,
 cache states and budgets are evidence contracts, not product runtime limits.
 
 ### Fuser provenance and authorized-patch checks

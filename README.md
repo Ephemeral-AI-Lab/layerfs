@@ -18,7 +18,7 @@
   <a href="https://layerfs.ai/docs/"><b>Docs</b></a> ·
   <a href="https://layerfs.ai/benchmarks/"><b>Benchmarks</b></a> ·
   <a href="https://layerfs.ai/video/layerfs-v1.0.0-release.mp4"><b>Video</b></a> ·
-  <a href="dsh/README.md"><b>LayerFS × DSH</b></a> ·
+  <a href="https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme"><b>LayerFS × DSH</b></a> ·
   <a href="#community"><b>Community</b></a>
 </p>
 
@@ -37,13 +37,13 @@ https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 > crash or power-loss durability: use LayerFS for agent work and its history, not
 > as the only copy of data you cannot rebuild.
 
-Current main also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](dsh/README.md#windows-live). This adapter was added after the v1.0.0 source release.
+Current main also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#windows-live). This adapter was added after the v1.0.0 source release.
 
 <a id="get-started"></a>
 ## Try it with LayerFS × DSH
 
 <p align="center">
-  <a href="dsh/README.md"><img src="docs/assets/readme/layerfs-x-dsh.svg" alt="LayerFS × DSH: the LayerFS logo and the DeepSeek Harness logo" width="220"></a>
+  <a href="https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme"><img src="docs/assets/readme/layerfs-x-dsh.svg" alt="LayerFS × DSH: the LayerFS logo and the DeepSeek Harness logo" width="220"></a>
 </p>
 
 LayerFS runs today through **LayerFS × DSH**, the `dsh-layerfs` plugin for
@@ -52,7 +52,7 @@ session fork Branches, test them in Sandboxes, merge and publish, and the **Work
 **History** tabs show every agent's Branch, live.
 
 <p align="center">
-  <a href="dsh/README.md"><img src="https://img.shields.io/badge/Try%20LayerFS%20%C3%97%20DSH-install%20guide%20%E2%86%92-7C3AED.svg?style=for-the-badge" alt="Try LayerFS × DSH: install guide"></a>
+  <a href="https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme"><img src="https://img.shields.io/badge/Try%20LayerFS%20%C3%97%20DSH-install%20guide%20%E2%86%92-7C3AED.svg?style=for-the-badge" alt="Try LayerFS × DSH: install guide"></a>
 </p>
 
 ## Core ideas
@@ -162,8 +162,8 @@ writable tree, and every result becomes a Commit on a Branch in one shared Store
 
 | Prior work | What it shares with LayerFS | Where LayerFS differs |
 | --- | --- | --- |
-| **overlayfs, UnionFS, container image layers** | A read-only lower tree with a writable upper layer, which is also where the "layer" name comes from | The upper layer is not just thrown away or kept as a directory: Commit turns it into an immutable snapshot on a Branch, with history, merge and `Conflict`. overlayfs is in the kernel and more complete; LayerFS's FUSE view deliberately omits FIFOs, sockets, device nodes, set-id bits and separate atime/ctime ([pjdfstest](benchmark/data/pjdfstest/README.md)) |
-| **Btrfs and ZFS snapshots, reflinks** | Cheap copy-on-write snapshots that share unchanged data | Sharing is by content, not by extent, so a file that is rewritten in full still stores only its new chunks. On a small-file history of 157 snapshots that gives [19.9× less space than Btrfs + zstd](benchmark/data/dsh-dedup/README.md). Btrfs and ZFS also stay cheap for in-place edits of large files, and they are durable, mature kernel filesystems; LayerFS is not ([why Btrfs used more space here](docs/research/layerfs-vs-btrfs-157/REPORT.md#3-why-btrfs-used-more-storage-in-this-workload)) |
+| **overlayfs, UnionFS, container image layers** | A read-only lower tree with a writable upper layer, which is also where the "layer" name comes from | The upper layer is not just thrown away or kept as a directory: Commit turns it into an immutable snapshot on a Branch, with history, merge and `Conflict`. overlayfs is in the kernel and more complete; LayerFS's FUSE view deliberately omits FIFOs, sockets, device nodes, set-id bits and separate atime/ctime ([pjdfstest](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/data/pjdfstest/README.md)) |
+| **Btrfs and ZFS snapshots, reflinks** | Cheap copy-on-write snapshots that share unchanged data | Sharing is by content, not by extent, so a file that is rewritten in full still stores only its new chunks. On a small-file history of 157 snapshots that gives [19.9× less space than Btrfs + zstd](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/data/dsh-dedup/README.md). Btrfs and ZFS also stay cheap for in-place edits of large files, and they are durable, mature kernel filesystems; LayerFS is not ([why Btrfs used more space here](docs/research/layerfs-vs-btrfs-157/REPORT.md#3-why-btrfs-used-more-storage-in-this-workload)) |
 | **Git worktrees** | One repository, many working copies and branches | A Workspace holds the whole tree, including `.git`, ignored files, dependencies and build output, so a new mount needs no reinstall. Commits happen per tool call, not when someone runs `git commit` |
 | **[try](https://github.com/binpash/try)** | Run a command against an overlay of your system, then inspect, apply or discard what it changed | `try` works on one machine with one overlay at a time. LayerFS keeps every result as a Commit, and lets many agents branch from any of them and share one Store |
 | **Apiary and virtual layered file systems** (Potter and Nieh, [USENIX ATC 2010](https://www.usenix.org/conference/usenix-atc-10/apiary-easy-use-desktop-application-fault-containment-commodity-operating), [LISA 2011](https://www.usenix.org/legacy/event/lisa11/tech/full_papers/Potter.pdf)) | Ephemeral containers that start instantly over shared layered filesystems | Apiary isolates desktop applications. LayerFS's target is agent tool calls whose results are kept, branched and merged as history |
@@ -177,7 +177,7 @@ checkouts on one machine, Btrfs snapshots or Git worktrees may be all you need.
 
 | | |
 | --- | --- |
-| Docs | [LayerFS × DSH guide](dsh/README.md) · [layerfs.ai/docs](https://layerfs.ai/docs/) · [Core ideas](https://layerfs.ai/docs/core-ideas/) · [JavaScript SDK guide](sdk/js/README.md) |
+| Docs | [LayerFS × DSH guide](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme) · [layerfs.ai/docs](https://layerfs.ai/docs/) · [Core ideas](https://layerfs.ai/docs/core-ideas/) · [JavaScript SDK guide](sdk/js/README.md) |
 | Concepts | [Core concepts](docs/general/concepts.md) · [Documentation index](docs/README.md) |
 | Benchmarks | [layerfs.ai/benchmarks](https://layerfs.ai/benchmarks/) |
 | Release | [1.0.0 plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/1.0/README.md) · Previous: [0.1.7 release record](docs/release-notes/0.1.7/README.md) and its [manual](docs/versioned/0.1.7/README.md) |

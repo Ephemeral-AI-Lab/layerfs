@@ -25,7 +25,9 @@ node_modules are excluded.
 The deepseek-harness plugin is its own scope, `dsh`: the JavaScript and
 TypeScript under dsh/packages/<package>/src, one crate per package
 (@dsh-layerfs/<package>, and the dsh-layerfs bundle). Its tests, build output
-and the untracked dsh/assets art are excluded. TypeScript comments are blanked
+and the untracked dsh/assets art are excluded. The plugin moved to the
+dsh-layerfs repository on 2026-10-23 (#428); the scope stays so trees before
+the move still count it, and reads 0 after it. TypeScript comments are blanked
 by the same JavaScript scanner.
 
 Runtime SQL is counted for both scopes: a candidate package that ships schema or

@@ -1,5 +1,0 @@
-### group dir=truncate cwd=/tmp/pjd/truncate fs=overlay uid=501:20
-### begin truncate/11.t
-1..1
-ok 1
-### end truncate/11.t exit=0 ms=4 quick_exit=1 residue=0

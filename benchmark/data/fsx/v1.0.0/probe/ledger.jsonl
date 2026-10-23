@@ -1,3 +1,0 @@
-{"step":"setup","init_ms":20.211,"init":{"kind":"Initialized","project":"fsx","layer":"329eb163e6aa3a3d74f5caf33ca8d1b375ce8164718efc184db2bc4b9aa04928a6","root":"2224539a4a1aee3dc920c9428aeaa9c0d59830287651463995918ce42abc1c86","store":"/layerfs-sdk/home/fsx/sealed.sqlite"},"policy":{"wholeFileDepth":16,"chunkDepth":8,"metadataDepth":8},"create_ms":397.005,"sandbox":"bench","fork":{"kind":"Forked","branch":"bench","base":"329eb163e6aa3a3d74f5caf33ca8d1b375ce8164718efc184db2bc4b9aa04928a6","head":null},"path":"/workspaces/1","mount_ms":4.968}
-{"step":"probe","exit":0,"ms":57.518,"layerfs":"/workspaces/1/fsx","disk":"/tmp/fsx"}
-{"step":"teardown","unmount_ms":20.761,"close_ms":239.112}

@@ -227,7 +227,7 @@ def overlay_terminology_violations(path, source):
     return found
 
 
-def production_files(core):
+def production_files(core, include_sdk=True):
     """Known product inputs; tests/examples/tools are deliberately outside this scope."""
     files = set()
     for package in (core / "crates").glob("*"):
@@ -236,6 +236,8 @@ def production_files(core):
         files.update(path for path in (package / "src").rglob("*")
                      if path.is_file() and path.suffix in (".rs", ".sql"))
         files.update(path for path in (package / "sql").rglob("*.sql") if path.is_file())
+    if not include_sdk:
+        return sorted(files)
     sdk = core.parent / "sdk" / "js"
     files.update((sdk / "native" / "src").rglob("*.rs"))
     for directory in (sdk / "src", sdk / "operator"):
@@ -244,8 +246,9 @@ def production_files(core):
 
 
 def main():
+    # --skip-sdk leaves sdk/js out of the scan; CI uses it (owner, 2026-10-23).
     core = Path(__file__).resolve().parents[1]
-    files = production_files(core)
+    files = production_files(core, include_sdk="--skip-sdk" not in sys.argv[1:])
     failures = 0
     for path in files:
         for line, reason in violations(path, path.read_text()):

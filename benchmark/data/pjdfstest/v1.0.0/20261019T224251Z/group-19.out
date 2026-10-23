@@ -1,1 +1,0 @@
-{"arm":"layerfs","dir":"mkfifo","root":"/workspaces/1","ms":2056.15,"exitCode":0,"truncated":false,"tap":"layerfs-mkfifo-1792450074256.tap","stdout_bytes":22327,"stderr":"","started":["mkfifo/00.t","mkfifo/01.t","mkfifo/02.t","mkfifo/03.t","mkfifo/04.t","mkfifo/05.t","mkfifo/06.t","mkfifo/07.t","mkfifo/08.t","mkfifo/09.t","mkfifo/10.t","mkfifo/11.t","mkfifo/12.t"],"deferred":[]}

@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"granular","root":"/tmp","ms":119.705,"exitCode":0,"truncated":false,"tap":"sandbox-disk-granular-1792450027489.tap","stdout_bytes":704,"stderr":"","started":["granular/00.t","granular/01.t","granular/02.t","granular/03.t","granular/04.t","granular/05.t","granular/06.t"],"deferred":[]}

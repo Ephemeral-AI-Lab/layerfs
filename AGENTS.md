@@ -25,7 +25,10 @@ simplification.
 | Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
 
 **The LayerFS UI is the dsh LayerFS plugin** (owner, 2026-10-19): the LayerFS tab in
-DeepSeek Harness, served by `dsh/packages`; see [dsh/README.md](dsh/README.md).
+DeepSeek Harness. It lives in its own repository,
+[dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs) (moved out of `dsh/`
+on 2026-10-23, #428), which pins the LayerFS commit it builds on; this repository
+holds no dsh code.
 Do not build or revive standalone HTML or TUI pages. **The `dsh-layerfs-demo`
 bundle (the LayerFS mock model and its demo workspace) is disabled permanently**
 (owner, 2026-10-21): it loads nothing, is not released and no guide installs it.
@@ -192,7 +195,10 @@ For documentation/release work, read the
 For measurements, read the [agent measurement workflow](docs/general/agent-measurement-policy.md),
 [benchmark rules](docs/general/benchmark_rules.md),
 [report template](docs/general/benchmark_agent_report.md) and owning harness/family contract.
-Core routing is [benchmark/fs-bench-pro/AGENTS.md](benchmark/fs-bench-pro/AGENTS.md).
+Benchmark suites, harnesses and released data live in the
+[layerfs-benchmark](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark) repository, moved out of
+`benchmark/` on 2026-10-23. Core routing is its
+[fs-bench-pro/AGENTS.md](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md).
 **fs-bench-pro is frozen and left broken (owner, 2026-10-18).** Do not edit,
 build, run or repair it, and leave it out of workspace builds and checks. Its
 call sites broken by #352 F-020 (`ProjectApi` fork and commits,
@@ -201,7 +207,10 @@ fix record) stay broken; a product change never adapts it. Only an
 explicit owner instruction reopens it.
 The root `benchmark/` harness that built and measured the retired reference was
 removed from HEAD; read it at tag `reference-v0.1.6-final`. Released
-fs-bench-pro results (v0.1.4–v0.1.6) are in [benchmark/data/fs-bench-pro](benchmark/data/fs-bench-pro/README.md).
+fs-bench-pro results (v0.1.4–v0.1.6) are in layerfs-benchmark's
+[data/fs-bench-pro](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/data/fs-bench-pro/README.md).
+Older documents here still link to `benchmark/` paths; read those files in
+layerfs-benchmark at the same path without the `benchmark/` prefix.
 
 ## 1. A warm cache must never credit a measured phase
 
@@ -286,10 +295,17 @@ remain binding; moving them out of this file does not weaken them.
 - One attempted operation; no automatic retry/busy handler, refresh/reprepare
   or failed-operation replay. Readiness waits are not retries. Preserve exact
   failure/uncertainty and custody; no guessed resend, deletion or success.
-- There is no CI or aggregate pre-push gate. `tools/preflight.sh` is permanently
-  retired; do not restore it or an equivalent wrapper. Verify the changed scope
-  with [core checks](core/AGENTS.md#checks-and-completion), report checks/gaps,
-  and never claim CI green or that an empty guard scan proves implementation.
+- **CI reports; it never gates (owner, 2026-10-23).** GitHub Actions runs a
+  fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
+  guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
+  FUSE mount tests). [core/tools/ci_tests.py](core/tools/ci_tests.py) decides
+  which tests go in which lane. Neither is a required check, and nothing runs
+  before a push. Do not wait for CI, and do not treat a green run as
+  verification of your change: verify the changed scope yourself with
+  [core checks](core/AGENTS.md#checks-and-completion) and report checks/gaps.
+  There is still no pre-push gate: `tools/preflight.sh` stays retired; do not
+  restore it or an equivalent wrapper. An empty guard scan proves no
+  implementation.
 - **Migrations and refactors delete tests rather than nurse them (owner,
   2026-10-18).** When code is moved, replaced or refactored, a test that is
   tricky to adapt (it drives a removed route, internal type or retired model,

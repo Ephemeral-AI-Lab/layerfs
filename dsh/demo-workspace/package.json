@@ -1,5 +1,0 @@
-{
-  "name": "website",
-  "private": true,
-  "scripts": { "install": "sh install.sh", "build": "sh build.sh", "test": "sh test.sh", "start": "sh serve.sh" }
-}
