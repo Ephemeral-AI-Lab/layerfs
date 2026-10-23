@@ -13,6 +13,8 @@
   Do not commit raw run output (`.json`, `.jsonl`, logs, databases) as
   documentation; keep the `.md` record and link to retained evidence.
 - `docs/general/` contains maintained project practices and concepts.
+- `docs/plugins/` contains the plugin listing guide, its template and checker;
+  the listings themselves are `plugins/<plugin-id>/` at the repository root.
 - `docs/research/` contains informative studies and historical design material.
 - `docs/release-notes/<release>/` contains release evidence and announcements.
 - benchmark and research directories contain supporting evidence or design
