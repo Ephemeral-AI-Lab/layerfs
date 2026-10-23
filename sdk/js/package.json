@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "packages/agent",
-    "packages/backend"
+    "packages/backend",
+    "packages/runtime"
   ],
   "engines": {
     "node": ">=20"

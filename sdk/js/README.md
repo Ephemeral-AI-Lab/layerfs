@@ -8,8 +8,10 @@
 
 `sdk/js/` holds the native addon crate (`native/`) and the packages under
 `packages/`: `@layerfs/agent` (what agents call: the client, its transports
-and the agent methods). `npm install` in `sdk/js` links the packages to each
-other; it downloads nothing.
+and the agent methods), `@layerfs/backend` (Store and daemon reads of an open
+client) and `@layerfs/runtime` (what an integration host runs on a LayerFS
+home). `npm install` in `sdk/js` links the packages to each other; it
+downloads nothing.
 
 ```js
 import { LayerFS } from "@layerfs/agent";
@@ -354,6 +356,76 @@ revision diagnostics explicitly disclose their 1000-revision count bound.
 Overlay payload counts stored cell bytes including validity masks; metadata row
 counts are reported without inventing exclusive byte attribution.
 
+## @layerfs/runtime
+
+```js
+import { LayerFSRuntime } from "@layerfs/runtime";
+const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
+try {
+  await runtime.status();                  // { platform, missing, docker, worker, disk }
+  const job = await runtime.project.start_init("shop", "/src/shop");
+  await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
+  await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
+  await runtime.project.get_state("shop", since);
+  await runtime.sandbox.reclaim("shop");   // { reclaimed: [ids] }
+  await runtime.sandbox.list_leftovers();
+  await runtime.sandbox.clean_leftovers(["layerfs-old-1"]);
+  for await (const event of runtime.events.subscribe({ project: "shop" })) { /* a trace line + actor */ }
+  await runtime.project.remove("shop", { confirm: "shop", stopSandboxes: false });
+} finally {
+  await runtime.close();
+}
+```
+
+The runtime opens on a LayerFS home, not a project, so it works before the
+first project exists, after one is removed and while the worker is down.
+Agents don't import it. Settings (`settings.js`): `home` (required), `image`,
+`daemon` (default the bundle's), `bundle`, `docker`, `volumes` (Linux),
+`traceDir` (default `<home>/traces`), `containerPrefix`, `stateDir` (default
+`<home>/.runtime`, the runtime's project records), `adapter`, and on Windows
+`wsl: { distribution, user, node, home }`. A missing setting does not refuse
+`open`: `status().missing` lists it.
+
+Each platform folder implements one interface (`endpoint`, `status`,
+`start`, `restart`, `init`, `path` and the Docker, home and disk helpers):
+
+- **Linux** runs Store calls in this process. There is no worker:
+  `worker.start` and `worker.restart` are refused `InvalidInput`. Init
+  installs the Store under Docker's volumes directory, so the process must be
+  able to write it (`init` checks first).
+- **macOS** runs the worker as one container per home, `<prefix>worker`
+  (label `layerfs.role=worker`), with the bundle's `worker/server.js`; Init
+  runs in a container of its own with the source folder mounted read-only.
+  An older `<prefix>store` container that still runs is refused, not
+  replaced, so a live run is never cut off.
+- **Windows** runs the worker as a Node process in a WSL2 distribution
+  (`server.js --stdin`); Init runs in the worker, which maps the folder with
+  `wslpath`. This process owns the worker through its stdin: `close()` drains
+  and ends it.
+
+The worker route is open only for the dsh adapter (AGENTS.md exceptions):
+with `adapter: "dsh"` the runtime sets `LAYERFS_WORKER_ENDPOINT` and
+`LAYERFS_WORKER_ADAPTER` for its process, and the dsh adapter gives agents'
+bash calls the same two settings. Without it, `worker.start` is refused
+`Unsupported`. The endpoint is `<home>/worker/endpoint.json`, `{ home, port,
+secret, build, daemonHost?, init? }`, readable by its user only. The worker
+checks every file of the bundle's `manifest.json` before it listens.
+
+`start_init` refuses a bad name, folder or image and a taken name before
+anything changes; then it counts the source, makes the volume and runs one
+Init. A failed Init removes the volume and the home entry it made; an
+uncertain one (`Unknown`, or any failure on Windows) keeps everything and is
+recorded in `<stateDir>/init-failures.jsonl`. `remove` needs `confirm` equal
+to the project's name and refuses `Busy` while a running container uses the
+volume, unless `stopSandboxes`. `events.subscribe` reads the trace folder's
+`*.jsonl` files every `pollMs`: lines from now on, or from `since`, each with
+`actor`, its trace file's name.
+
+The `lfs` command (`@layerfs/runtime/cli`, bin `lfs`) runs one agent call per
+command on `LAYERFS_PROJECT` (else `DSH_LAYERFS_PROJECT`) through
+`@layerfs/agent`: `status`, `log`, `ls`, `cat`, `grep`, `diff`, `fork`,
+`write`, `run`. The runtime calls the `docker` CLI, as the dsh Host did.
+
 ## Call trace
 
 `LAYERFS_TRACE=<file>` (else `DSH_LAYERFS_TRACE`), or
@@ -374,6 +446,7 @@ without a trace line.
 | `id` | `<run>-<n>`: a random per-process run prefix and the call's sequence number. |
 | `step` | The step label, cut to 200 characters; absent when none is set. |
 | `method` | The binding method, for example `fs.read`, `workspace.commit`, `backend.store.project.get_storage`. |
+| `project` | The project the call names, when it names one. |
 | `args` | Short summary: text arguments (paths, refs, names, Sandbox id, command, message) cut to 200 characters; numbers and flags; `content`, `bytes`, `oldText` and `newText` as `<name>Bytes` byte counts; `apply` changes as `changes` (count) and `changeBytes`. Never file contents; `project`, `home` and `deploy` are left out. |
 | `start`, `ms` | Wall-clock start (ISO 8601) and elapsed wall milliseconds measured in the calling process, including the native queue and the daemon round trip. |
 | `queue` | The part of `ms` the call spent waiting before its own work, in milliseconds: `thread`, the wait for a native worker thread (the call's time outside its run in the binding), `connection`, the wait for a free control connection of its Sandbox, and their sum `ms`. Present on every line of a call that reached the binding. |

@@ -110,7 +110,7 @@ export async function traced(options, method, args, send) {
   const began = performance.now();
   let line;
   try {
-    line = { layerfs_trace: 1, id, ...step(options), method, args: summary(args), start: start.toISOString(), scope };
+    line = { layerfs_trace: 1, id, ...step(options), method, ...(typeof args?.project === "string" ? { project: args.project } : {}), args: summary(args), start: start.toISOString(), scope };
   } catch {
     line = { layerfs_trace: 1, id, method, args: null, start: start.toISOString(), scope };
   }

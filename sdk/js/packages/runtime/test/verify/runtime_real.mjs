@@ -1,0 +1,95 @@
+// @layerfs/runtime on Linux against a real Store and Docker (#428): status,
+// the refused worker, one Init job into a project volume, the project list,
+// get_state, the lfs command, live events from the trace and remove. The
+// launcher mounts one Store volume, so a "volume" here is a folder under
+// <Store volume>/rt-volumes, and its image has no docker CLI (the runtime
+// calls the CLI, as the dsh Host did): `volume create/rm` make and remove
+// that folder, `version` and `ps` answer an engine with no containers.
+// Store, Init, reads and the lfs command are real.
+// Under the E2E launcher (its Store volume, home and deployment):
+//   node sdk/js/packages/runtime/test/verify/runtime_real.mjs inner
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+if (process.argv[2] !== "inner") throw new Error("usage: runtime_real.mjs inner (under tools/worktree.py run)");
+const { LayerFSRuntime } = await import("@layerfs/runtime");
+const volumes = join(dirname(dirname(process.env.LAYERFS_STORE_PATH)), "rt-volumes");
+mkdirSync(volumes, { recursive: true });
+const runtime = await LayerFSRuntime.open({
+  home: process.env.LAYERFS_HOME, image: process.env.LAYERFS_IMAGE, daemon: process.env.LAYERFS_DAEMON, docker: process.env.LAYERFS_DOCKER,
+  volumes, containerPrefix: process.env.LAYERFS_CONTAINER_PREFIX, traceDir: dirname(process.env.LAYERFS_TRACE), pollMs: 50,
+});
+const docker = [];
+runtime.platform = {
+  ...runtime.platform,
+  async docker(settings, args) {
+    docker.push(args.slice(0, 2).join(" "));
+    if (args[0] === "volume" && args[1] === "create") { mkdirSync(join(volumes, args[2], "_data"), { recursive: true }); return args[2]; }
+    if (args[0] === "volume" && args[1] === "rm") { rmSync(join(volumes, args[2]), { recursive: true }); return args[2]; }
+    if (args[0] === "version") return "stub";
+    if (args[0] === "ps") return "";
+    throw new Error(`unexpected docker ${args.join(" ")}`);
+  },
+};
+const name = `rt-${Date.now().toString(36)}`;
+const source = mkdtempSync(join(tmpdir(), "layerfs-rt-"));
+writeFileSync(join(source, "README.md"), "runtime\n");
+mkdirSync(join(source, "src"));
+writeFileSync(join(source, "src", "index.js"), "export {};\n");
+try {
+  const state = await runtime.status();
+  assert.deepEqual([state.platform, state.missing, state.docker.level, state.worker], ["linux", [], "ok", null]);
+  assert.ok(state.disk.home > 0);
+  await assert.rejects(runtime.worker.start(), { code: "InvalidInput" });
+
+  // one Init job, read until it ends
+  let job = await runtime.project.start_init(name, source);
+  const started = Date.now();
+  while (!job.ended && Date.now() - started < 60_000) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    job = await runtime.project.get_init(job.id);
+  }
+  assert.equal(job.step, "done", JSON.stringify(job.error));
+  assert.deepEqual(job.totals, { entries: 4, files: 2, bytes: 19 });
+  const listed = (await runtime.project.list()).find((p) => p.name === name);
+  assert.deepEqual([listed.initialized, existsSync(join(volumes, listed.volume, "_data/global/store.sqlite"))], [true, true]);
+
+  // live events: the runtime's own traced calls appear with their project
+  const events = runtime.events.subscribe({ project: name });
+  const view = await runtime.project.get_state(name);
+  assert.deepEqual([view.kind, view.sandboxes, view.gone], ["ok", [], []]);
+  assert.ok(view.layers.length >= 1);
+  assert.deepEqual(await runtime.project.get_state(name, view.version), { kind: "unchanged", version: view.version });
+  const seen = (await events.next()).value;
+  assert.equal(seen.project, name);
+  events.close();
+
+  // the lfs command, as an agent's bash call runs it
+  const lfs = fileURLToPath(new URL("../../src/cli/lfs.js", import.meta.url));
+  const out = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [lfs, "ls", "main", "/"], {
+      env: { ...process.env, LAYERFS_PROJECT: name, LAYERFS_VOLUME: listed.volume, LAYERFS_STORE_PATH: join(volumes, listed.volume, "_data/global/store.sqlite") },
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    const parts = [];
+    child.stdout.on("data", (c) => parts.push(c));
+    child.on("close", (code) => resolve({ code, text: Buffer.concat(parts).toString() }));
+  });
+  assert.equal(out.code, 0);
+  assert.match(out.text, /- \/README\.md/);
+
+  // remove names what it destroys
+  await assert.rejects(runtime.project.remove(name), { code: "InvalidInput" });
+  assert.deepEqual(await runtime.project.remove(name, { confirm: name }), { kind: "Removed", project: name, volume: listed.volume });
+  assert.equal((await runtime.project.list()).some((p) => p.name === name), false);
+  assert.equal(existsSync(join(volumes, listed.volume)), false);
+  console.log(`docker CLI calls (stubbed): ${docker.join(", ")}`);
+  console.log("runtime real: ok");
+} finally {
+  await runtime.close();
+  rmSync(source, { recursive: true, force: true });
+}

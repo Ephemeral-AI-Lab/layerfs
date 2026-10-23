@@ -273,9 +273,12 @@ traces. The Rust module paths (`operator/`) keep their names.
 
 The JavaScript is split into `sdk/js/packages/agent` (`LayerFS`),
 `sdk/js/packages/backend` (`LayerFSBackend.of(shop)`, one file per method)
-and, next, `sdk/js/packages/runtime`. `@layerfs/sdk/operator` and its
-`inspect.snapshot` are gone; the snapshot moves to the runtime as
-`project.get_state`. New calls: `sandbox.create`, `sandbox.close` and
+and `sdk/js/packages/runtime` (`LayerFSRuntime.open`, on a LayerFS home).
+`@layerfs/sdk/operator` and its `inspect.snapshot` are gone; the snapshot is
+the runtime's `project.get_state`. On macOS and Windows the runtime's
+`worker/server.js` makes the Store calls with the Linux addon and
+`@layerfs/agent`'s `transport/worker_client.js` reaches it, for the dsh
+adapter only. New calls: `sandbox.create`, `sandbox.close` and
 mounting into a chosen Sandbox (agent), and
 `backend.daemon.sandbox.get_log`, which reads a Sandbox's daemon log once
 through the Engine where the binding runs. See the
