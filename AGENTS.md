@@ -371,20 +371,27 @@ the number. Complete the comparison before committing; do not invent estimates.
 ### File and folder layout listings
 
 When a plan, handoff, review or reply shows a source layout, current or
-planned, use one vertical listing per crate in a fenced block:
+planned, use one vertical listing per crate in a fenced `diff` block, so the
+renderer highlights what changes:
 
-```
-construction/                       [753]
-  mod.rs                               4
-  records.rs                         247
-  driver.rs                            —   new
-  captured/                         [502]  (existing constructor, reused)
-    owner.rs                         256
-    scan.rs                          246
-  scratch/                             —   cond.
-    records.rs                         —
+```diff
+  construction/                       [793]
+    mod.rs                               4
+    records.rs                         247
++   driver.rs                            —   new
+    captured/                         [502]  (existing constructor, reused)
+      owner.rs                         256
+      scan.rs                          246
+-   legacy.rs                           40   (removed: driver.rs replaces it)
++   scratch/                             —   cond.
++     records.rs                         —
 ```
 
+- **Column 1 is the change marker, then one space, then the path.** `+` marks
+  a file or directory that does not exist yet (green); `-` marks one this
+  change removes (red); a space marks one that stays, whether unchanged,
+  edited in place or moved in (say where from in its annotation). A listing of
+  the current tree alone has a space on every line.
 - **One path per line.** Indent two spaces per directory level. Directories end
   in `/`; list a directory's own files before its subdirectories. Do not join
   siblings on one line or use brace groups such as `{mod,cursor}.rs`.
@@ -392,8 +399,9 @@ construction/                       [753]
   column, from the pinned `tools/production_loc.py --files` at a stated commit.
   This is the `prod` column, never physical lines or Git statistics.
 - **Every directory carries its subtotal in brackets**, summing all listed
-  production files beneath it. If only part of a directory is shown, say so in
-  its annotation; the bracketed number then covers only the files shown.
+  production files beneath it as they are at the stated commit, removed files
+  included. If only part of a directory is shown, say so in its annotation;
+  the bracketed number then covers only the files shown.
 - **A file that does not exist yet shows `—`**, followed by `new` (planned) or
   `cond.` (added only if existing code cannot cover the need). Never print an
   estimated LOC for it.

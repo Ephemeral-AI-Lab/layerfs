@@ -1,0 +1,406 @@
+# #428 LayerFS JavaScript SDK and integration design
+
+> **Status:** Proposal; target LayerFS release to be set by the owner; not a
+> released contract.
+
+Issue: [#428](https://github.com/Ephemeral-AI-Lab/layerfs/issues/428).
+Baseline: `main` at `1aa56ece78` (2026-10-23).
+
+This document describes how the LayerFS JavaScript SDK is organised and how
+any integration connects to LayerFS. An integration is a tool that lets agents
+or people work on LayerFS projects: today dsh ([dsh/README.md](../../../../dsh/README.md)),
+Pi ([#382](https://github.com/Ephemeral-AI-Lab/layerfs/pull/382), open) and
+layerfs-wsl ([#425](https://github.com/Ephemeral-AI-Lab/layerfs/issues/425)).
+The design is generic: dsh is the first user, not the shape of the API.
+
+What exists today is marked **current**. Changes this proposal asks for are
+marked **proposed**, and owner decisions are listed in
+[Open decisions](#open-decisions). The current SDK reference is
+[sdk/js/README.md](../../../../sdk/js/README.md); this document does not
+replace it.
+
+## 1. Goals
+
+- **One contract.** Every SDK, transport and integration follows one versioned
+  list of methods. A new integration or language needs no new API.
+- **Same code everywhere.** An integration calls the SDK the same way on
+  Linux, macOS and Windows. Only the transport underneath changes.
+- **Thin integrations.** Runtime management, the read side, the views and the
+  agent skill are shared. An integration adds only what is specific to its
+  host: how sessions map to projects, who the agent is, and where the UI sits.
+- **No private imports.** Integrations use public SDK entry points only.
+
+Out of scope: a standalone LayerFS server or UI page (`AGENTS.md`: the UI is
+the dsh plugin), a plugin registry, and any change to Store, daemon or FUSE
+semantics.
+
+## 2. Layers
+
+```
+ integration adapter    dsh-layerfs, Pi, layerfs-wsl, …   sessions ↔ projects, actor, UI placement
+ integration kit        runtime · read/ops HTTP handler · view-model · view · lfs CLI · skill
+ SDK                    @layerfs/sdk (JS); other languages later   Project · Branch · Files · Workspace
+                                                                    Runtime · Observe · shared base
+ transport              in-process (Linux)  |  worker (loopback, secret, one per LayerFS home)
+ protocol               versioned method list: name, arguments, result, refusal codes
+ core                   Store (one SQLite file) · daemons in Sandboxes
+```
+
+Each layer depends only on the layers below it. Agents' scripts use the SDK
+directly. An integration's backend uses the SDK and the kit. An integration's
+UI talks to its own backend, never to the Store or a daemon.
+
+## 3. Protocol
+
+### 3.1 Call shape (current)
+
+Every SDK method becomes one binding call: a method name and a plain argument
+object. The binding returns either a value or a refusal:
+
+```text
+call(method, args)  →  value
+                    →  { refused: { code, message, detail } }   (thrown as LayerFSError)
+```
+
+The JavaScript methods add argument checks and paging helpers, then call the
+binding through `invokeClient` / `invokeOperator` in
+[sdk/js/src/client.js](../../../../sdk/js/src/client.js). Store calls (`fs`,
+`branch`, `project`, Store operator calls) run against the Store this process
+opened. Workspace calls go to a daemon in one of the project's Sandboxes.
+
+### 3.2 Method list (current names)
+
+| Group | Methods | Runs against |
+| --- | --- | --- |
+| `project` | `init`, `list_branches` | Store |
+| `branch` | `list_commits`, `diff_commits`, `diff_branches`, `fork`, `merge`, `publish` | Store |
+| `fs` | `read`, `list`, `stat`, `grep`, `glob`, `diff_files`, `blame`, `write`, `edit`, `apply`, `mkdir`, `rm`, `cp`, `mv` | Store |
+| `workspace` | `mount`, `exec`, `status`, `commit`, `unmount` | daemon |
+| `workspace` (internal) | `exec_release`: frees an exec's output buffer; called by the SDK's `exec`, never by users | binding |
+| `operator.store` | `stats`, `commits`, `overwritten` | Store |
+| `operator.files` | `stats`, `history` | Store |
+| `operator.inspect` | `snapshot`, `history` | Store |
+| `operator.project` | `progress` | the running Init (no Sandbox) |
+| `operator.sandbox` | `list` | Sandbox records |
+| `operator.process` | `start`, `list`, `cancel` | daemon |
+| `operator.workspace` | `overlay`, `changes` | daemon |
+
+**Proposed:** publish this list as a machine-readable file in the SDK package
+(method, arguments, result shape, refusals each can return, protocol version).
+SDKs, transports and the worker codec check against it. The refusal codes are
+[`CODES`](../../../../sdk/js/src/errors.js): `Conflict`, `HeadMoved`, `Dirty`,
+`Busy`, `NoSuchPath`, `NoSuchBranch`, `NoSuchCommit`, `NoSuchProject`,
+`NoCommit`, `NoMergeBase`, `IsDirectory`, `NotDirectory`, `NotFile`, `Binary`,
+`NotText`, `NoMatch`, `AmbiguousMatch`, `Exists`, `NotEmpty`, `NameTaken`,
+`ReservedName`, `ReadOnly`, `MountsActive`, `TooLarge`, `InvalidInput`,
+`NotMounted`, `NoSuchSandbox`, `NoSuchProcess`.
+
+### 3.3 Calls are attempted once
+
+The repository rule applies to every transport: one attempt, no automatic
+retry, no replay.
+
+- A call that fails before it is sent is `Failed`.
+- A call that was sent and whose reply is lost is `Unknown`, and is never
+  resent. A published mutation stays published even if its reply is lost.
+- **Proposed:** each call carries a call id (today's trace `id`,
+  `<run>-<n>`). A later status query by that id tells the caller whether the
+  call landed. That is a lookup, not a retry, and it lets an integration
+  resolve `Unknown` without guessing.
+
+## 4. Transports
+
+Both transports carry the same calls with the same results. An integration
+picks one by platform; its own code does not change.
+
+### 4.1 In-process (current, Linux)
+
+The SDK loads the native addon `layerfs.node` in the caller's process, from
+`LAYERFS_NATIVE` or `sdk/js/native/layerfs.node`, and opens the Store at
+`storePath` directly. The Store must be on a local Linux filesystem (ext4, xfs,
+btrfs) that the daemons share. This is the only general route today
+(`AGENTS.md`, "SDK Store calls … run in the SDK's own process").
+
+### 4.2 Worker (current for dsh only; proposed as general)
+
+On macOS and Windows, Store calls can't run in the caller's process. The SDK
+runs unchanged in the caller's process, but its binding forwards each call to
+one long-lived Linux worker per LayerFS home. The worker makes the call with
+the real Linux binding and keeps each project's Store and daemon connections
+open while the project is in use, closing them after a quiet minute.
+
+| | macOS (2026-10-20 exception) | Windows (2026-10-22 exception) |
+| --- | --- | --- |
+| Worker runs in | the Store container (`<containerPrefix>store`) | a Node process in a chosen WSL2 distribution |
+| Source today | `dsh/packages/host/src/box.js`, `port/` | `dsh/packages/host/src/windows/` |
+| Bundle | `layerfs.node`, `layerfs-daemon`, `sdk/js` | sealed bundle with `manifest.json`; hashes checked |
+
+Wire format (current, [port/frames.mjs](../../../../dsh/packages/host/src/port/frames.mjs)):
+loopback TCP only, a random secret, and frames made of a 4-byte big-endian
+length followed by versioned JSON. Every compound value is tagged
+(`["buffer", base64]`, `["bigint", "…"]`, `["object", …]`), so binary values
+and user objects can't be confused. It doesn't depend on Node or V8 versions.
+A codec mismatch is a `ProtocolError`, and the call is never replayed. Host
+and worker upgrade together, with no calls in flight.
+
+**HTTP.** The worker does not speak HTTP today. If integrations outside Node
+need it, HTTP (or WebSocket) can frame the same tagged JSON calls, with the
+same secret, loopback-only and no-replay rules. It's another framing of the
+same protocol, not a second API. **Proposed, pending [Open decisions](#open-decisions) 1.**
+
+**Proposed:** move the worker out of `dsh/` into a shared package beside the
+SDK. #382 already does this for macOS as a sibling `port/` package. The
+Windows worker would join it (#425). Today's exceptions name dsh (and, if
+#382 merges, Pi). Extending them to every integration is an owner decision.
+
+## 5. SDK groups
+
+> **Superseded in part (owner, 2026-10-23):** the SDK splits into the
+> `@layerfs/agent`, `@layerfs/backend`, `@layerfs/runtime` and
+> `@layerfs/frontend` packages; agents get `sandbox.create`,
+> `sandbox.list_workspaces` and `sandbox.close` back; `workspace` keeps only
+> `mount`, `exec`, `commit` and `unmount`; and the operator is replaced by
+> `backend` (Store and daemon calls) and `runtime` (the LayerFS home). See
+> [layerfs-agent.md](layerfs-agent.md),
+> [layerfs-backend-runtime.md](layerfs-backend-runtime.md) and the expected
+> folders in [layout.md](layout.md). The tables below show the grouping before
+> those decisions.
+
+The SDK's methods sort into groups by who calls them.
+
+### 5.1 Used by agents' scripts
+
+| Group | Purpose | Current methods |
+| --- | --- | --- |
+| **Project** | create and look at projects | `project.init`, `project.list_branches` |
+| **Branch** | history: fork, merge, publish, compare | `branch.fork`, `merge`, `publish`, `list_commits`, `diff_commits`, `diff_branches` |
+| **Files** | read files at a Branch or Commit; write as one Commit | `fs.read`, `list`, `stat`, `grep`, `glob`, `blame`, `diff_files`, `write`, `edit`, `apply`, `mkdir`, `rm`, `cp`, `mv` |
+| **Workspace** | a mounted, writable view where commands run | `workspace.mount`, `exec`, `status`, `commit`, `unmount` |
+
+**Sandbox is not one of these groups.** An agent asks for a Workspace, and
+LayerFS places it in one of the project's Sandboxes: `mount` returns
+`{ sandbox, path }` and the other Workspace calls take it (#373). An agent
+doesn't need to know about Sandboxes beyond passing that value along.
+
+### 5.2 Used by integration backends and UIs
+
+| Group | Purpose | Current | Proposed additions |
+| --- | --- | --- | --- |
+| **Runtime** | what is running and what to do about it | `operator.sandbox.list`, `operator.process.start/list/cancel`, `operator.workspace.overlay/changes` | worker and Store-container status, start and restart; the settings check behind `GET /layerfs/status`; project removal (now in the dsh Host's `remove.js`) |
+| **Observe** | what happened, for views | `operator.inspect.snapshot`, `operator.store.stats/commits/overwritten`, `operator.files.stats/history`, `operator.project.progress` | `inspect.history` as a public method; a live event stream |
+
+Gaps (current):
+
+- `operator.inspect.history` exists in the native binding, but
+  `LayerFSOperator` has no method for it. The dsh Host reaches it by importing
+  the private `invokeOperator` from `sdk/js/src/client.js`
+  ([layerfs-client.js](../../../../dsh/packages/host/src/layerfs-client.js)).
+  **Proposed:** add `operator.inspect.history()` and remove the deep import.
+- Views learn about new calls by tailing trace files. **Proposed:** an Observe
+  event stream carrying the same fields as a trace line (method, id, step or
+  actor, outcome, result ids), delivered in-process or over the worker.
+
+### 5.3 Shared base
+
+| Part | Current | Proposed |
+| --- | --- | --- |
+| Errors | `LayerFSError`, `isRefusal(error, code)`, `CODES` | listed per method in the method list |
+| Trace | `LAYERFS_TRACE` file, format `layerfs_trace: 1` ([sdk/js/README.md, Call trace](../../../../sdk/js/README.md#call-trace)) | unchanged; event stream reuses its fields |
+| Actor | `LAYERFS_TRACE_STEP` / `traceStep`: a free-text label | an `actor` option `{ id, name, parent }` on the client, written into every trace line and event |
+| Configuration | `LAYERFS_HOME`, `_DOCKER`, `_IMAGE`, `_VOLUME`, `_DAEMON`, `_STORE_PATH`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`, `_TRACE_STEP`, `_TRACE_START`; each falls back to a `DSH_LAYERFS_` twin | the `DSH_LAYERFS_` twins move into the dsh adapter, which is the only integration that needs them (dsh passes only that prefix into bash) |
+
+**Why actor matters.** Every integration that runs several agents wants to
+show who made each Branch and Commit. dsh does it today by labelling trace
+lines with a step and matching them to agents in
+[collector.js](../../../../dsh/packages/host/src/collector.js). A first-class
+actor gives every integration that for free. Whether the actor is also stored
+with each Commit (a Store format change) is
+[Open decisions](#open-decisions) 2.
+
+## 6. The integration kit
+
+An integration needs the same pieces regardless of its host. Most already
+exist inside `dsh/packages/host`, `model` and `view`.
+
+### 6.1 What the kit provides
+
+| Package (proposed name) | Provides | Comes from |
+| --- | --- | --- |
+| `@layerfs/sdk` | the SDK (section 5) | `sdk/js` |
+| `@layerfs/runtime` | deployment settings and their check, the worker transports, Init jobs with progress, project removal, the runtime overview and actions | `box.js`, `port/`, `windows/`, `config.js`, `init.js`, `jobs.js`, `remove.js`, `runtime.js`, `layerfs-client.js` |
+| read/ops HTTP handler | the project read and runtime routes (6.3), mounted on the integration's own server | the project and runtime half of `route.js`, `trees.js`, `reads.js`, `storage.js` |
+| `@layerfs/view-model` | events in, what the views draw out | `dsh/packages/model` |
+| `@layerfs/view` | framework-free DOM views: History, Files, terminals, Branches, Sandboxes | `dsh/packages/view` |
+| `lfs` CLI | the common agent calls as one shell command each | `lfs.js` |
+| SDK skill | what agents read before their first call | `.agents/skills/layerfs-js-sdk/` |
+| simulator backend (optional) | Sim projects without Docker, for demos and tests | `sim/` |
+
+### 6.2 Where today's dsh Host code would go
+
+Scope: `dsh/packages/host/src` at `1aa56ece78`, production LOC from
+`python3 tools/production_loc.py --files` (scope `dsh`). The counter does not
+count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
+`worker.mjs` are not listed here.
+
+```diff
+  host/src/                           [2834]
+    binding.js                           139   (dsh: session ↔ project bindings)
+    box.js                                83   (kit runtime: macOS Store container)
+    collector.js                         213   (dsh: trace lines → agents and nodes)
+    config.js                             37   (kit runtime: deployment settings)
+    env.js                                66   (dsh: bash environment, skill path)
+    index.js                              62   (dsh: cordis plugin entry, settings schema)
+    init.js                              139   (kit runtime: Init jobs)
+    jobs.js                               28   (kit runtime)
+    layerfs-client.js                     76   (kit runtime: per-project clients)
+    lfs.js                               119   (kit: lfs CLI)
+    migrate.js                            44   (#373 one-time upgrade; drop at the move)
+    reads.js                              80   (kit read/ops)
+    records.js                             8   (dsh)
+    remove.js                             47   (kit runtime: project removal)
+    route.js                             112   (split: project and runtime routes kit, session routes dsh)
+    runtime.js                           207   (kit runtime: overview and actions)
+    storage.js                            21   (kit read/ops)
+    trees.js                              98   (kit read/ops)
+    port/                              [133]   (kit transport: macOS worker; #382 moves it)
+      binding.js                         123
+      operator.js                          2
+      sdk.js                               8
+    sim/                               [719]   (kit, optional: simulator backend)
+      binding.js                         321
+      client.js                           43
+      operator.js                          2
+      sdk.js                               3
+      sed.js                             125
+      shell.js                            53
+      state.js                           172
+    windows/                           [403]   (kit transport: WSL worker; #425)
+      binding.js                          88
+      host.js                            165
+      operator.js                          2
+      paths.js                            29
+      sdk.js                              11
+      worker.js                          108
+```
+
+About 488 lines plus the session half of `route.js` are specific to dsh. The
+rest, plus `model` (960) and `view` (2,672), is kit material. `client`
+(1,978) is dsh's UI glue and stays in the dsh adapter.
+
+### 6.3 Read/ops HTTP routes
+
+Today's routes are listed in [route.js](../../../../dsh/packages/host/src/route.js).
+They are used only between an integration's backend and its own UI; LayerFS
+core never serves them.
+
+Kit routes (generic):
+
+| Route | Answer |
+| --- | --- |
+| `GET status` | settings, what is missing, SDK location |
+| `POST init`, `GET init/<job>` | start an Init; its step and counts |
+| `GET projects` | every project |
+| `GET project/<name>/state`, `history` | the project as LayerFS reports it; History alone from the Store |
+| `GET project/<name>/{list,read,blame,changes,diff}` | Files reads |
+| `GET project/<name>/storage` | Store totals and recent Commits' costs |
+| `GET`/`POST project/<name>/runtime` | the project's Sandboxes, Workspaces and processes; unmount, discard, stop |
+| `POST project/<name>/remove` | remove a project (confirmed by name) |
+| `GET runtime`, `POST runtime/store`, `runtime/store/restart`, `runtime/leftovers` | Docker, the worker, disk; start, restart, clean up |
+
+dsh-specific routes stay in the adapter: `session/<id>/…` and the
+workspace-folder defaults (`GET`/`POST workspace`). Each integration mounts the
+kit handler under its own prefix and its own authentication; dsh's prefix is
+`/layerfs`.
+
+## 7. Building an integration
+
+An integration has three sides. The kit covers most of each.
+
+| Side | The integration does | The kit gives it |
+| --- | --- | --- |
+| **Agent** | puts the SDK, the `lfs` CLI, the skill path and the project's settings into the agent's environment; sets the actor | SDK, CLI, skill, configuration names |
+| **Backend** | maps its sessions to projects; records which agent is which; starts and stops the runtime with its own lifecycle; mounts the HTTP handler | `@layerfs/runtime`, HTTP handler, event stream |
+| **UI** | places the views in its own pages or tabs | `@layerfs/view-model`, `@layerfs/view` |
+
+A new integration:
+
+1. Depends on `@layerfs/sdk` and the kit packages, at one pinned LayerFS
+   version (section 8).
+2. Chooses a transport by platform: in-process on Linux, the worker elsewhere
+   (if [Open decisions](#open-decisions) 1 allows it).
+3. Gives each agent the SDK, the skill and an actor.
+4. Mounts the HTTP handler and the views if it has a UI.
+5. Follows the repository rules that apply to callers: one attempt per call,
+   Disposable Store profile only, tests under 2 minutes.
+
+Pi (#382) is close to this shape already: its tools call `fs.*` for reads and
+edits, and `mount → exec → commit → unmount` for bash, through `sdk/js` on
+Linux and `port/` on macOS.
+
+## 8. Versions and distribution
+
+The SDK JavaScript, the native addon and the daemon must come from the same
+build. The Windows worker already enforces this with the sealed bundle's
+`manifest.json`.
+
+| Option | How an integration gets LayerFS | Fits |
+| --- | --- | --- |
+| Sibling checkout | `LAYERFS_SOURCE=<path>` at a pinned commit, built with the existing Docker recipe (like `DSH_SOURCE` for dsh) | first step; nothing is published |
+| Release artifacts | `@layerfs/sdk` and kit packages at a version; `layerfs-daemon` and `layerfs.node` per architecture; the runtime image; the skill | outside integrations and packaged installs (#406) |
+
+The protocol version (3.2) and the worker codec version are checked when a
+transport connects, so a mismatched pair fails clearly instead of misbehaving.
+
+## 9. dsh-layerfs migration
+
+The dsh plugin moves to [Ephemeral-AI-Lab/dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs)
+as the first integration built on this design. Order:
+
+1. **Here first:** add the public methods from 5.2, publish the method list,
+   and pull the kit out of `dsh/packages/host` (coordinated with #382 and
+   #425). dsh keeps working throughout.
+2. **Move:** `packages/` (dsh-layerfs, host, client, model, view; the kit parts
+   once they have moved out), `sim/`, README, TUTORIAL, `media/`, `docs/`,
+   `brand/`, `demo/`, `demo-workspace/`, `tools/build-client.mjs`,
+   `tools/check-session.mjs`, `tools/checks/` and the runtime Dockerfile. Keep
+   history with `git subtree split --prefix=dsh` or use one import commit.
+3. **Drop:** `dsh-layerfs-demo` (disabled permanently, owner 2026-10-21) and
+   `mock`, which exists only for it.
+4. **Keep here:** the #352 replay harness (`tools/history/`, `scenarios/`,
+   `run-scenario`, `restore-store`, `import-run`). It measures LayerFS builds,
+   not the plugin.
+5. **Clean up here:** remove `dsh/`; update README links, the `AGENTS.md` UI
+   rule and Store-call exceptions, and the `dsh` scope in
+   `tools/production_loc.py`. The LOC change is a relocation, not a
+   simplification.
+6. **Check:** `pnpm test` in dsh-layerfs, and an empty `missing` list from
+   `GET /layerfs/status` on a fresh profile.
+
+## Open decisions
+
+1. **Worker route for every integration.** Today a worker may carry Store
+   calls only for dsh on macOS and Windows. Should it become a supported
+   transport for any integration, with optional HTTP framing (4.2)? If not,
+   other integrations are Linux-only and HTTP stays limited to the read/ops
+   handler.
+2. **Actor storage.** Trace and events only, or also recorded with each
+   Commit (a Store format change)?
+3. **Sandbox placement.** Should an integration be able to choose a
+   Workspace's Sandbox, or does LayerFS always place it (current, and this
+   document's suggestion)?
+4. **Distribution.** Sibling checkout first, or release artifacts from the
+   start (section 8)?
+5. **Skill.** Ship the agent skill with the SDK package, or copy it into
+   each integration at a pinned version?
+
+## Related
+
+[#160](https://github.com/Ephemeral-AI-Lab/layerfs/issues/160) (adapters are
+sibling projects that use the SDK),
+[#373](../373/README.md) (Sandbox placement),
+[#382](https://github.com/Ephemeral-AI-Lab/layerfs/pull/382) (Pi, shared `port/`),
+[#406](https://github.com/Ephemeral-AI-Lab/layerfs/issues/406) (packaged
+install), [#413](https://github.com/Ephemeral-AI-Lab/layerfs/issues/413) and
+[#417](https://github.com/Ephemeral-AI-Lab/layerfs/issues/417) (SDK binary
+values), [#425](https://github.com/Ephemeral-AI-Lab/layerfs/issues/425) (shared
+WSL2 route).
