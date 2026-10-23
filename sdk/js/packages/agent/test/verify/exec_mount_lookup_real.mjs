@@ -4,8 +4,8 @@
 //   node sdk/js/packages/agent/test/verify/exec_mount_lookup_real.mjs outer <daemon> <addon> <image>
 //
 // `outer` (on the Docker host) makes a fresh Store volume and runs `inner` in
-// the runtime image. Process A mounts four Workspaces (placement starts the
-// project's Sandbox 1 for them), then traces one `workspace.exec`: its trace line carries no daemon exchange
+// the runtime image. Process A starts Sandbox 1 (sandbox.create) and mounts four
+// Workspaces there, then traces one `workspace.exec`: its trace line carries no daemon exchange
 // (before F-029 it carried one status exchange per mount). A child process
 // sharing LAYERFS_HOME mounts a fifth Workspace and unmounts one of A's. A then
 // execs in the fifth (found from the shared records), is refused NotMounted in
@@ -43,11 +43,11 @@ async function inner([phase]) {
   if (phase === "child") {
     const layerfs = await LayerFS.open("site");
     const paths = JSON.parse(readFileSync(shared, "utf8"));
-    const fifth = await layerfs.workspace.mount("work");
+    const fifth = await layerfs.workspace.mount("1", "work");
     await layerfs.workspace.unmount(paths[1], true);
     // a remount after that unmount: the daemon never reuses a namespace, so
     // never its directory (layerfs-daemon control/serving.rs)
-    const sixth = await layerfs.workspace.mount("work");
+    const sixth = await layerfs.workspace.mount("1", "work");
     writeFileSync(shared, JSON.stringify([...paths, fifth, sixth]));
     console.log("CHILD ok");
     return;
@@ -59,7 +59,8 @@ async function inner([phase]) {
   rmSync(source, { recursive: true, force: true });
   await layerfs.branch.fork("work", "main");
   const paths = [];
-  for (let i = 0; i < MOUNTS; i++) paths.push(await layerfs.workspace.mount("work"));
+  assert.equal((await layerfs.sandbox.create()).sandbox, "1");
+  for (let i = 0; i < MOUNTS; i++) paths.push(await layerfs.workspace.mount("1", "work"));
   assert.deepEqual(paths.map((ws) => ws.sandbox), Array(MOUNTS).fill("1"), "every Workspace in Sandbox 1");
   const container = readFileSync(join(home, "site", "sandboxes", "1", "container"), "utf8").trim();
   const seen = await engine(`/v1.54/containers/${container}/json`);

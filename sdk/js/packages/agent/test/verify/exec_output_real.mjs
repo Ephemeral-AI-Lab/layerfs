@@ -131,7 +131,7 @@ async function inner([phase]) {
   layerfs = await LayerFS.init("site", source);
   rmSync(source, { recursive: true, force: true });
   await layerfs.branch.fork("work", "main");
-  const ws = await layerfs.workspace.mount("work");
+  const ws = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "work");
   try {
     await (phase === "time" ? time : check)(layerfs, ws);
   } finally {

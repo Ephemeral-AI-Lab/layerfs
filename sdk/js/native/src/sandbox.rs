@@ -1,9 +1,10 @@
 //! Project Sandboxes (#373): numbered containers `<prefix><project>-<n>`,
 //! each running a daemon on the Store that Import installed into the project
-//! volume. A Sandbox starts when a Workspace needs one ([`start`], called by
-//! placement in `workspace.rs`) or when an agent asks for one ([`create`],
-//! #428); both start the same kind of Sandbox. Its records go when it is
-//! found gone ([`reclaim`]) or when an agent closes it ([`close`]).
+//! volume. A Sandbox starts only when an agent asks for one ([`create`],
+//! #428; there is no placement since 2026-10-23: a mount names its
+//! Sandbox). Its records go when it is found gone ([`reclaim`], by the next
+//! `create` or `runtime.sandbox.reclaim`) or when an agent closes it
+//! ([`close`]).
 //!
 //! A start that failed before anything reached the Store volume removes the
 //! container it made (stop, then delete, each once) and its creation intent,
@@ -42,11 +43,11 @@ pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
 
 /// A Sandbox's daemon ends itself after this many seconds with no Workspace
 /// and no call (#373 idle close; owner answer, 2026-10-21: 2 minutes). Its
-/// container then stops, and the next mount or `runtime.sandbox.reclaim` reclaims it.
+/// container then stops, and the next `sandbox.create` or `runtime.sandbox.reclaim` reclaims it.
 const IDLE_EXIT_S: u32 = 120;
 
-/// Workspaces one Sandbox holds at once; placement starts another when every
-/// running one is full.
+/// Workspaces one Sandbox holds at once; a mount into a full one is refused
+/// `Capacity`.
 pub(crate) const WORKSPACES: u32 = 16;
 
 /// Control connections a Sandbox's daemon admits: [`crate::pool::CONNECTIONS`]
@@ -340,13 +341,15 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkR
     }
 }
 
-/// `sandbox.create({ image })`: starts the project's lowest free number on
-/// the call's image (`deploy.image`) under the project's guard, the one
-/// placement takes, and waits for its daemon: `{ sandbox, name, image }`.
-/// Failures are a placing start's: `Failed` or `Unknown`, never retried.
+/// `sandbox.create({ image })`: under the project's guard, reclaims the
+/// project's idle-closed Sandboxes, then starts the lowest free number on
+/// the call's image (`deploy.image`) and waits for its daemon:
+/// `{ sandbox, name, image }`. The only call that starts a Sandbox. Failures
+/// are `Failed` or `Unknown`, never retried.
 pub(crate) fn create(args: &SdkValue) -> Outcome {
     let project = crate::discovery::project_dir(args)?;
     let _placing = crate::discovery::guard(&project)?;
+    crate::workspace::reclaim_gone(args)?;
     let state = start(args, &project)?;
     Ok(SdkValue::map([
         ("sandbox", SdkValue::text(&state.id)),

@@ -1,7 +1,9 @@
 // sandbox.create: a new Sandbox of the project, the lowest free number, on
-// `image` (default LAYERFS_IMAGE), started like a placed one and ready when
-// this returns: { sandbox, image }. It closes itself two minutes after it has
-// no Workspace and no process, like every Sandbox; `sandbox.close` stops it now.
+// `image` (default LAYERFS_IMAGE), ready when this returns: { sandbox, image }.
+// The only call that starts a Sandbox (no placement since 2026-10-23); it
+// first reclaims the project's Sandboxes that closed themselves. The new one
+// closes itself two minutes after it has no Workspace and no process, like
+// every Sandbox; `sandbox.close` stops it now.
 import { deployment, invokeClient } from "../client.js";
 import { LayerFSError } from "../errors.js";
 export async function create(client, options = {}) {

@@ -1,17 +1,19 @@
-// Sandboxes of one project on different images (#373): a mount names its
-// image (`{ image }`, else the deployment's), placement only uses a Sandbox
-// of that image, and the listing and the mount say which image each runs.
-// The second image is the deployment's with one label (its own digest),
-// built here through the Engine and deleted at the end. Under the E2E
-// launcher (its Store volume, home and deployment):
-//   node sdk/js/packages/agent/test/verify/image_placement_real.mjs inner
+// Sandboxes of one project on different images (#373; no placement since
+// 2026-10-23): sandbox.create({ image }) starts one on that image (else the
+// deployment's), a mount into it says its image, and the listing says which
+// image each runs. A stopped Sandbox (as its idle close leaves it) is left
+// out of the listing and reclaimed by the next sandbox.create, which then
+// reuses its number. The second image is the deployment's with one label
+// (its own digest), built here through the Engine and deleted at the end.
+// Under the E2E launcher (its Store volume, home and deployment):
+//   node sdk/js/packages/agent/test/verify/sandbox_image_real.mjs inner
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-if (process.argv[2] !== "inner") throw new Error("usage: image_placement_real.mjs inner (under tools/worktree.py run)");
+if (process.argv[2] !== "inner") throw new Error("usage: sandbox_image_real.mjs inner (under tools/worktree.py run)");
 
 /** One Engine exchange over the Docker socket: its status and body. */
 const engine = (method, path, body = null, type = "application/json") => new Promise((resolve, reject) => {
@@ -62,26 +64,26 @@ writeFileSync(join(source, "README.md"), "images\n");
 try {
   layerfs = await LayerFS.init(project, source);
   await layerfs.branch.fork("lane");
-  const a = await layerfs.workspace.mount("lane");
-  assert.deepEqual([a.sandbox, a.image], ["1", A], "no image named: the deployment's");
-  const b = await layerfs.workspace.mount("lane", { image: B });
-  assert.deepEqual([b.sandbox, b.image], ["2", B], "Sandbox 1 has room but runs another image");
-  const c = await layerfs.workspace.mount("lane");
-  assert.deepEqual([c.sandbox, c.image], ["1", A]);
-  const d = await layerfs.workspace.mount("lane", { image: B });
-  assert.deepEqual([d.sandbox, d.image], ["2", B]);
+  assert.deepEqual(await layerfs.sandbox.create(), { sandbox: "1", image: A }, "no image named: the deployment's");
+  assert.deepEqual(await layerfs.sandbox.create({ image: B }), { sandbox: "2", image: B });
+  const a = await layerfs.workspace.mount("1", "lane");
+  const b = await layerfs.workspace.mount("2", "lane");
+  assert.deepEqual([a.sandbox, a.image, b.sandbox, b.image], ["1", A, "2", B], "a mount says its Sandbox's image");
   assert.deepEqual((await layerfs.project.list_sandboxes()).items.map(({ sandbox, image }) => [sandbox, image]), [["1", A], ["2", B]]);
-  const engineImage = JSON.parse((await engine("GET", `/v1.54/containers/${container("2")}/json`)).body).Image;
+  const stopped = container("2");
+  const engineImage = JSON.parse((await engine("GET", `/v1.54/containers/${stopped}/json`)).body).Image;
   assert.equal(engineImage, B, "Sandbox 2's container runs image B");
-  assert.equal((await layerfs.workspace.exec(d, "cat README.md")).stdout, "images\n");
-  await Promise.all([a, b, c, d].map((ws) => layerfs.workspace.unmount(ws, true)));
+  assert.equal((await layerfs.workspace.exec(b, "cat README.md")).stdout, "images\n");
+  await Promise.all([a, b].map((ws) => layerfs.workspace.unmount(ws, true)));
   // Sandbox 2 stopped (as its idle close leaves it): the listing skips it,
-  // the runtime's reclaim removes it, then image B can go
-  assert.equal((await engine("POST", `/v1.54/containers/${container("2")}/stop?t=10`)).status, 204);
+  // and the next sandbox.create reclaims it (records and container) and
+  // starts there again, on the deployment's image
+  assert.equal((await engine("POST", `/v1.54/containers/${stopped}/stop?t=10`)).status, 204);
   assert.deepEqual((await layerfs.project.list_sandboxes()).items.map(({ sandbox, image }) => [sandbox, image]), [["1", A]]);
-  const { invokeClientBackend } = await import("@layerfs/agent/internal");
-  assert.deepEqual((await invokeClientBackend(layerfs, "runtime.sandbox.reclaim", {})).reclaimed, ["2"]);
-  console.log("image placement: ok");
+  assert.deepEqual(await layerfs.sandbox.create(), { sandbox: "2", image: A }, "sandbox.create reclaims the stopped Sandbox 2 and reuses its number");
+  assert.equal((await engine("GET", `/v1.54/containers/${stopped}/json`)).status, 404, "the stopped container is deleted");
+  for (const id of ["1", "2"]) await layerfs.sandbox.close(id);
+  console.log("sandbox image: ok");
 } finally {
   await layerfs.close();
   rmSync(source, { recursive: true, force: true });

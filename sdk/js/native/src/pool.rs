@@ -49,7 +49,7 @@ pub(crate) struct Dial {
 
 /// How long a process waits for the daemon to admit its first connection
 /// while other processes hold every admitted one (the same bound as the
-/// project's placement lock).
+/// project's discovery lock).
 pub(crate) const ADMISSION_WAIT: Duration = Duration::from_secs(60);
 
 /// Whether a failed open is the daemon closing a connection it did not admit:

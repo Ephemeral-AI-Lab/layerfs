@@ -131,7 +131,7 @@ fn args(home: &Path) -> SdkValue {
     ])
 }
 
-/// Reopens Sandbox 1 and, when it is gone, reclaims it, as placement does.
+/// Reopens Sandbox 1 and, when it is gone, reclaims it, as `sandbox.create` does.
 fn place(home: &Path) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
     let refusal = crate::discovery::reopen(&args(home))
         .err()

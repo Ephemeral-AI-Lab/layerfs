@@ -1,16 +1,15 @@
-//! Workspace calls (#373). `workspace.mount(branch)` places the new
-//! Workspace: under the project's guard it takes the lowest-numbered running
-//! Sandbox of the call's image (`deploy.image`) with a free slot, reclaiming
-//! any whose container is gone, and starts the next Sandbox, on that image,
-//! when every such one is full. Sandboxes of one project may run different
-//! images. A Workspace is
+//! Workspace calls (#373). `workspace.mount(sandbox, branch)` mounts the new
+//! Workspace in the running Sandbox the call names, and nowhere else: there
+//! is no placement (owner 2026-10-23), so a mount never starts a Sandbox and
+//! takes no project lock; `sandbox.create` is the only start. A Workspace is
 //! `{ sandbox, path }`; status, Commit and unmount go to its Sandbox's
 //! daemon. Nothing is retried: a refused or failed step is the call's answer.
-//! A Sandbox whose daemon ended itself when idle is found stopped by the
-//! next mount or `runtime.sandbox.reclaim`, which reclaims it.
+//! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
+//! by a mount and reclaimed by the next `sandbox.create` or
+//! `runtime.sandbox.reclaim`.
 use crate::job::{failed, Outcome};
 use crate::registry::{
-    lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount, SandboxState,
+    lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount,
 };
 use crate::sandbox::{operation, WORKSPACES};
 use layerfs_api::internal::workspace;
@@ -18,7 +17,6 @@ use layerfs_api::sandbox::values;
 use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
 use layerfs_history::WorkspaceId;
 use std::path::Path;
-use std::sync::Arc;
 
 /// The Workspaces Sandbox directory `directory` records.
 fn recorded(directory: &Path) -> Result<usize, SdkRefusal> {
@@ -31,82 +29,61 @@ fn recorded(directory: &Path) -> Result<usize, SdkRefusal> {
     Ok(count)
 }
 
-/// The Sandbox for a new Workspace, under the project's guard: the
-/// lowest-numbered running one of the call's image with a free slot, else a
-/// new one.
-fn place(args: &SdkValue, project: &Path) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let image = args
-        .get("deploy")
-        .and_then(|deploy| deploy.get_text("image"));
-    for id in crate::discovery::sandbox_ids(args)? {
-        let directory = crate::discovery::sandbox_dir(args, &id)?;
-        let record = directory.join("sandbox.record");
-        // a number claimed by a start that has not finished is not a Sandbox yet
-        if !record.exists() || recorded(&directory)? >= WORKSPACES as usize {
-            continue;
-        }
-        if image.is_some() && crate::discovery::load(&record)?.get_text("image") != image {
-            continue;
-        }
-        match sandbox_live(&naming(args, &id)) {
-            Ok(state) => return Ok(state),
-            Err(refusal) => match crate::discovery::gone_container(&refusal) {
-                Some((container, stopped)) => {
-                    crate::sandbox::reclaim(args, &id, container, stopped)?;
-                }
-                None => return Err(refusal),
-            },
-        }
-    }
-    crate::sandbox::start(args, project)
+/// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
+/// step in its message, which agents read.
+fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
+    refusal.message.push_str(
+        ". Create a Sandbox with `sandbox.create()` and mount there: `workspace.mount(sandbox, branch)` with the `sandbox` it returns",
+    );
+    refusal
 }
 
-/// The Sandbox an agent chose for a new Workspace (#428): running, of the
-/// call's `image` when one is given, with a free slot. LayerFS moves the
-/// Workspace nowhere else: a full one is refused `Capacity`.
-fn chosen(args: &SdkValue, id: &str) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::discovery::sandbox_dir(args, id)?;
-    let record = directory.join("sandbox.record");
-    if !record.exists() {
-        return Err(crate::job::refused(
-            "NoSuchSandbox",
-            format!("the project has no Sandbox {id}"),
-        ));
-    }
-    let state = sandbox_live(&naming(args, id))?;
-    if let Some(image) = args.get_text("image") {
-        let running = crate::discovery::load(&record)?;
-        if running.get_text("image") != Some(image) {
+/// `workspace.mount(sandbox, branch)`: a new Workspace of `branch` in
+/// Sandbox `sandbox`, which must be running and hold fewer than
+/// [`WORKSPACES`]; its `sandbox`, `path` and `image`. Refused
+/// `NoSuchSandbox` (no such Sandbox, or it closed itself) and `Capacity`
+/// (full), each naming the calls to make instead. Only the Sandbox's own
+/// guard is taken; its record and count are checked under it.
+pub(crate) fn mount(args: &SdkValue) -> Outcome {
+    let branch = text(args, "branch")?;
+    let sandbox = match args.get_text("sandbox") {
+        Some(id) if !id.is_empty() => id,
+        _ => {
             return Err(crate::job::refused(
                 "InvalidInput",
-                format!(
-                    "Sandbox {id} runs {}, not {image}",
-                    running.get_text("image").unwrap_or("another image")
-                ),
-            ));
+                "workspace.mount names its Sandbox: workspace.mount(sandbox, branch), with a Sandbox from `sandbox.create()` or `project.list_sandboxes()`",
+            ))
         }
+    };
+    let directory = crate::discovery::sandbox_dir(args, sandbox)?;
+    let record = directory.join("sandbox.record");
+    let missing = || {
+        no_sandbox(crate::job::refused(
+            "NoSuchSandbox",
+            format!("the project has no Sandbox {sandbox}"),
+        ))
+    };
+    if !record.exists() {
+        return Err(missing());
+    }
+    let state =
+        sandbox_live(&naming(args, sandbox)).map_err(|refusal| match refusal.code.as_str() {
+            "NoSuchSandbox" => no_sandbox(refusal),
+            _ => refusal,
+        })?;
+    let _guard = crate::discovery::guard(&state.directory)?;
+    // under the Sandbox's guard: a close may have removed it, or mounts filled it
+    if !record.exists() {
+        return Err(missing());
     }
     if recorded(&directory)? >= WORKSPACES as usize {
         return Err(crate::job::refused(
             "Capacity",
-            format!("Sandbox {id} already holds {WORKSPACES} Workspaces"),
+            format!(
+                "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `sandbox.create()` and mount there, or list this one's Workspaces with `sandbox.list_workspaces(\"{sandbox}\")` and unmount the ones you are done with (`workspace.unmount(ws)`)"
+            ),
         ));
     }
-    Ok(state)
-}
-
-/// `workspace.mount(branch, { sandbox? })`: a new Workspace of `branch`,
-/// placed in one of the project's Sandboxes, or in the one `sandbox` names;
-/// its `sandbox` and `path`.
-pub(crate) fn mount(args: &SdkValue) -> Outcome {
-    let branch = text(args, "branch")?;
-    let project = crate::discovery::project_dir(args)?;
-    let _placing = crate::discovery::guard(&project)?;
-    let state = match args.get_text("sandbox") {
-        Some(id) => chosen(args, id)?,
-        None => place(args, &project)?,
-    };
-    let _guard = crate::discovery::guard(&state.directory)?;
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     // The Branch is found by name in this process; the daemon binds its id.
     let branch_id = crate::direct::branch_id(args, branch)?;
@@ -170,12 +147,24 @@ fn records(args: &SdkValue) -> Result<Vec<(String, std::path::PathBuf, SdkValue)
     Ok(found)
 }
 
+/// Reclaims every recorded Sandbox of the project found gone or stopped (an
+/// idle-closed one), so its number is free again. `sandbox.create` calls it
+/// under the project's guard before it starts one.
+pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<(), SdkRefusal> {
+    for (id, directory, value) in records(args)? {
+        if let Some((container, stopped)) = observed(&value, &directory)? {
+            crate::sandbox::reclaim(args, &id, &container, stopped)?;
+        }
+    }
+    Ok(())
+}
+
 /// `project.list_sandboxes()`: the project's running Sandboxes, lowest
 /// number first: `{ sandbox, name, image, workspaces }`, where `workspaces`
 /// counts its Workspace records. It reads records and inspects each
 /// container once; it starts nothing and changes nothing. A Sandbox found
 /// gone or stopped (an idle-closed one) is left out and its records kept:
-/// placement and `runtime.sandbox.reclaim` remove them.
+/// `sandbox.create` and `runtime.sandbox.reclaim` remove them.
 pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
     let mut items = Vec::new();
     for (id, directory, value) in records(args)? {

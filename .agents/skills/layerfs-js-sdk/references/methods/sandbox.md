@@ -6,16 +6,15 @@
 
 Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).
 
-**Placement is the default.** `workspace.mount(branch)` puts each Workspace in one of
-the project's Sandboxes and starts one when every one is full; you don't need these
-methods to work. Use them when you want a Sandbox of your own: one your Workspaces
-don't share with other agents' placed ones, such as for a dev server or a long build.
-Close it when you're done.
+**A mount names its Sandbox.** There is no placement: `sandbox.create()` is the only call
+that starts a Sandbox, and `workspace.mount(sandbox, branch)` mounts in the one it
+names. A Sandbox holds up to 16 Workspaces of any Branches; reuse one with room (see
+`project.list_sandboxes()`), or create one, and close it when you're done.
 
 ```js
-const own = await layerfs.sandbox.create();                    // { sandbox: "2", name, image }
+const own = await layerfs.sandbox.create();                    // { sandbox: "2", image }
 try {
-  const ws = await layerfs.workspace.mount("work", { sandbox: own.sandbox });
+  const ws = await layerfs.workspace.mount(own.sandbox, "work");
   try {
     const run = await layerfs.workspace.exec(ws, "timeout 110 npm run build", "step 20");
     await layerfs.workspace.commit(ws, `step 20: npm run build (exit ${run.exitCode})`);
@@ -27,23 +26,30 @@ try {
 }
 ```
 
-Placement may also put another agent's Workspace in a Sandbox you created when it has
-room; `close` then refuses `MountsActive` until it's unmounted.
+Another agent may mount in a Sandbox you created when it names it; `close` then refuses
+`MountsActive` until that Workspace is unmounted.
 
 ## `sandbox.create(options?)`
 
-Starts the project's next Sandbox and waits for its daemon.
+Starts the project's next Sandbox and waits for its daemon. The only call that starts a
+Sandbox. It first reclaims the project's Sandboxes that closed themselves, so their
+numbers are used again.
 
 | Arg | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `options.image` | string | no | Exact local image digest `sha256:<64 hex>`; default `LAYERFS_IMAGE` |
+| `options.image` | string | no | Exact local image digest `sha256:<64 hex>`; default `LAYERFS_IMAGE`. Every Workspace mounted there runs on it |
 
-**Returns:** `{ sandbox, name, image }`: its number, its container name
-(`<prefix><project>-<n>`) and its image.
+**Returns:** `{ sandbox, image }`: its number (pass it to `workspace.mount`) and its
+image. Its container is named `<prefix><project>-<n>`.
 
-**Refusals:** as a mount that starts a Sandbox: `Failed` (with `detail.removed: true`
-nothing of it is left), `Unknown` (an earlier start's outcome is unknown; report it),
-`Busy`, `InvalidInput`.
+**Refusals**
+
+| Code | Meaning | Do |
+| --- | --- | --- |
+| `Failed` | Starting it failed. With `detail.removed: true` its container is already removed and nothing of it is left, and `detail.log` holds its daemon's last log lines (also in the message); otherwise it names what stays | Stop and report the message |
+| `Unknown` | An earlier Sandbox start of this project has an unknown outcome; every start is refused until it is resolved | Stop and report the message, which says what a person must remove; don't remove or retry anything yourself |
+| `Busy` | Another call held the project's lock for 60 seconds | Stop and report |
+| `InvalidInput` | A missing `LAYERFS_*` deployment variable or an image that isn't a digest | Check the environment ([SKILL.md](../../SKILL.md#connect-to-a-project)) |
 
 **Notes:** like any Sandbox, it closes itself two minutes after its last Workspace is
 unmounted, with no call in flight.

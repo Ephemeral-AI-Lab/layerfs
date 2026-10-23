@@ -66,7 +66,7 @@ if (selected === "surface") {
   await shop.close();
   assert.deepEqual(native.stores.at(-1), ["close", "/fake/store.sqlite"]);
   const calls = native.calls.length;
-  for (const call of [() => shop.fs.read("main", "/README.md"), () => shop.workspace.mount("feature"), () => shop.sandbox.create(), () => shop.call("fs.read", {})]) {
+  for (const call of [() => shop.fs.read("main", "/README.md"), () => shop.workspace.mount("1", "feature"), () => shop.sandbox.create(), () => shop.call("fs.read", {})]) {
     await assert.rejects(call(), { code: "InvalidInput", message: /closed/ });
   }
   assert.equal(native.calls.length, calls, "a closed client sends nothing");
@@ -124,15 +124,17 @@ if (selected === "surface") {
   await shop.sandbox.create({ image: "sha256:other" });
   assert.equal(sent("sandbox.create").deploy.image, "sha256:other");
   await assert.rejects(shop.sandbox.create({ image: 7 }), { code: "InvalidInput" });
-  // mount places by default and names a chosen Sandbox only when asked
-  await shop.workspace.mount("feature");
-  assert.equal("sandbox" in sent("workspace.mount"), false);
-  await shop.workspace.mount("feature", { sandbox: "2" });
-  assert.equal(sent("workspace.mount").sandbox, "2");
-  assert.equal("image" in sent("workspace.mount"), false, "only a given image is checked against the Sandbox's");
-  await shop.workspace.mount("feature", { sandbox: "2", image: "sha256:other" });
-  assert.equal(sent("workspace.mount").image, "sha256:other");
-  for (const bad of ["0", "x", 2, ""]) await assert.rejects(shop.workspace.mount("feature", { sandbox: bad }), { code: "InvalidInput" });
+  // mount names its Sandbox (no placement): the native call gets { sandbox, branch }, no image
+  assert.deepEqual(await shop.workspace.mount("2", "feature"), { sandbox: "2", path: "/workspaces/w1", image: undefined });
+  const mounted = sent("workspace.mount");
+  assert.deepEqual([mounted.sandbox, mounted.branch, "image" in mounted], ["2", "feature", false]);
+  const asked = native.calls.length;
+  for (const call of [
+    () => shop.workspace.mount("feature"), () => shop.workspace.mount(undefined, "feature"), () => shop.workspace.mount("2"),
+    ...["0", "x", 2, ""].map((bad) => () => shop.workspace.mount(bad, "feature")),
+    () => shop.workspace.mount("2", "feature", { image: "sha256:other" }), () => shop.workspace.mount("feature", { sandbox: "2" }),
+  ]) await assert.rejects(call(), { code: "InvalidInput", message: /workspace\.mount\(sandbox, branch\)/ });
+  assert.equal(native.calls.length, asked, "a refused mount sends nothing");
   await shop.sandbox.close("2");
   assert.equal(sent("sandbox.close").sandbox, "2");
   // list_sandboxes pages the records and changes nothing

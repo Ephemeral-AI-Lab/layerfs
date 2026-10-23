@@ -50,7 +50,7 @@ async function script(client) {
     () => client.branch.diff_branches("main", "feature"),
     () => client.branch.merge("main", "feature", "merged"),
     () => client.branch.publish("feature"),
-    () => client.workspace.mount("feature"),
+    () => client.workspace.mount("1", "feature"),
     () => client.workspace.exec(WS, "npm test"),
     () => backend.daemon.workspace.status(WS),
     () => client.workspace.commit(WS, "Save"),

@@ -1,7 +1,8 @@
 // Idle close as the binding sees it (#373): a Sandbox whose daemon ended
 // itself is a stopped container. The next listing reclaims it (deletes the
-// container and its records, starts nothing), and the next mount reclaims
-// one too and starts Sandbox 1 again. The container is stopped here through
+// container and its records, starts nothing), and the next sandbox.create
+// reclaims one too and starts Sandbox 1 again (no placement since
+// 2026-10-23: a mount names its Sandbox). The container is stopped here through
 // the Engine, which is what the daemon's own exit leaves; that exit is
 // checked by layerfs-daemon's observed_application test. Under the E2E
 // launcher (its Store volume, home and deployment):
@@ -37,7 +38,7 @@ try {
   assert.deepEqual((await layerfs.project.list_sandboxes()).items.map((s) => s.sandbox), [], "Import starts no Sandbox");
 
   // Listing reclaims a stopped Sandbox this process still knows.
-  const first = await layerfs.workspace.mount("lane");
+  const first = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "lane");
   assert.equal(first.sandbox, "1");
   const one = container();
   assert.deepEqual((await layerfs.project.list_sandboxes()).items.map((s) => s.sandbox), ["1"]);
@@ -47,14 +48,14 @@ try {
   assert.equal(existsSync(records), false, "its records are gone");
   assert.equal(await engine("GET", `/v1.54/containers/${one}/json`), 404, "its container is deleted");
 
-  // A mount reclaims one too, then starts Sandbox 1 again.
-  const second = await layerfs.workspace.mount("lane");
+  // sandbox.create reclaims one too, then starts Sandbox 1 again.
+  const second = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "lane");
   const two = container();
   assert.equal(second.sandbox, "1");
   assert.notEqual(two, one, "a new container");
   await layerfs.workspace.unmount(second, true);
   assert.equal(await engine("POST", `/v1.54/containers/${two}/stop?t=10`), 204);
-  const third = await layerfs.workspace.mount("lane");
+  const third = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "lane");
   assert.equal(third.sandbox, "1");
   assert.notEqual(container(), two);
   assert.equal(await engine("GET", `/v1.54/containers/${two}/json`), 404);

@@ -2,13 +2,13 @@
 // `LayerFS.open(name)` (an existing project) or `LayerFS.init(name, folder,
 // timeout?)` (a new one) and released by `close()`; there is no public
 // constructor and no options argument: settings come from the environment.
-// Calls name their Branch. `workspace.mount(branch)` returns a Workspace,
-// `{ sandbox, path }`, placed by LayerFS in one of the project's Sandboxes,
-// or in the one `{ sandbox }` names; the other Workspace calls take it.
-// `sandbox.create` gives an agent a Sandbox of its own and `sandbox.close`
-// stops it. Store calls (fs, branch, project) run against the project's
-// Store, opened in this process on Linux (#352 F-020) or in the LayerFS
-// home's worker on macOS and Windows (transport/).
+// Calls name their Branch. `sandbox.create()` starts a Sandbox (the only
+// call that does) and `sandbox.close` stops it; `workspace.mount(sandbox,
+// branch)` returns a Workspace, `{ sandbox, path }`, in the Sandbox it names
+// (there is no placement); the other Workspace calls take it. Store calls
+// (fs, branch, project) run against the project's Store, opened in this
+// process on Linux (#352 F-020) or in the LayerFS home's worker on macOS and
+// Windows (transport/).
 import { BACKEND, STATE, invoke, invokeClient, live, projectArgs, storeArgs, storeClose, storeOpen, transportOf } from "./client.js";
 import { binding } from "./transport/index.js";
 import { LayerFSError } from "./errors.js";

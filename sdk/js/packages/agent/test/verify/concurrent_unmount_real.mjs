@@ -20,8 +20,9 @@ writeFileSync(join(source, "README.md"), "base\n");
 try {
   layerfs = await LayerFS.init(name, source);
   await layerfs.branch.fork("lane");
+  const { sandbox } = await layerfs.sandbox.create();
   for (let round = 0; round < 3; round++) {
-    const mounted = await Promise.allSettled([0, 1, 2].map(() => layerfs.workspace.mount("lane")));
+    const mounted = await Promise.allSettled([0, 1, 2].map(() => layerfs.workspace.mount(sandbox, "lane")));
     assert.deepEqual(outcome(mounted), ["ok", "ok", "ok"], `round ${round}: concurrent mounts`);
     const workspaces = mounted.map((r) => r.value);
     assert.deepEqual(workspaces.map((ws) => ws.sandbox), ["1", "1", "1"], `round ${round}: one Sandbox`);

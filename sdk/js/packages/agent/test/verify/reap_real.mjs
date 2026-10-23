@@ -29,7 +29,7 @@ async function inner() {
   layerfs = await LayerFS.init("reap", source);
   rmSync(source, { recursive: true, force: true });
   await layerfs.branch.fork("feature", "main");
-  const ws = await layerfs.workspace.mount("feature");
+  const ws = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "feature");
   const sh = (command) => layerfs.workspace.exec(ws, command);
   // three orphans: each outlives the command that started it, then exits
   const left = await sh("for i in 1 2 3; do (sleep 1 &) ; done; exit 0");

@@ -28,7 +28,7 @@ if (process.argv[2] === "agent") {
     await shop.branch.fork("lane");
     await shop.fs.write("lane", "/note.txt", "one\n", "Add note");
     assert.equal((await shop.fs.read("lane", "/note.txt")).text, "one\n");
-    const ws = await shop.workspace.mount("lane");
+    const ws = await shop.workspace.mount((await shop.sandbox.create()).sandbox, "lane");
     const ran = await shop.workspace.exec(ws, "cat note.txt && echo two > fresh.txt");
     assert.deepEqual([ran.exitCode, ran.stdout], [0, "one\n"]);
     assert.equal((await shop.workspace.commit(ws, "Add fresh")).kind, "Committed");

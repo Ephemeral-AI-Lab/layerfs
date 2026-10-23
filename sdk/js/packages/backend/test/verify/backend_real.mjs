@@ -44,7 +44,7 @@ try {
   assert.equal((await refusal(backend.daemon.sandbox.get_log("1"))).code, "NoSuchSandbox");
 
   // daemon reads: the Workspace's Sandbox runs
-  ws = await shop.workspace.mount("lane");
+  ws = await shop.workspace.mount((await shop.sandbox.create()).sandbox, "lane");
   await shop.workspace.exec(ws, "echo two > fresh.txt");
   const status = await backend.daemon.workspace.status(ws);
   assert.equal(status.headMovedSinceMount, false);

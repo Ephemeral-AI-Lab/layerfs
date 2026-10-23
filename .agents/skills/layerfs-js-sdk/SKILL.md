@@ -7,10 +7,11 @@ description: Use when building, editing, testing or inspecting a project through
 
 > **Status:** Current general guide for the current SDK source. Base example
 > outputs were captured live in issue #334 Phase A at `b30e4fb8f`; the
-> Workspace API, placement and idle close are #373's (section 8 of
+> Workspace API and idle close are #373's (section 8 of
 > [its design](../../../core/docs/issues/373/README.md)). The `@layerfs/agent`
 > package, its client factories and the `sandbox` methods are #428's
-> ([its design](../../../core/docs/issues/428/layerfs-agent.md)).
+> ([its design](../../../core/docs/issues/428/layerfs-agent.md)). There is no
+> placement since 2026-10-23 (owner): a mount names its Sandbox.
 
 Your project lives in LayerFS, not on your local disk. You read and change it through
 the SDK, from small Node scripts you run with `node`.
@@ -96,19 +97,18 @@ Commit, so for one small read or edit prefer `fs.*`.
 - **A Workspace per Bash call is the default.** Mounting is cheap: it doesn't copy or
   scan the tree. Each call sees the Branch as it is right now, and its Commit holds
   exactly what that call did.
-- **Each mount is a new Workspace.** `workspace.mount(branch)` returns a fresh
+- **Each mount is a new Workspace.** `workspace.mount(sandbox, branch)` returns a fresh
   Workspace, `{ sandbox, path }` (such as `{ sandbox: "1", path: "/workspaces/3" }`);
   pass it to `exec`, `commit` and `unmount`. Two mounts of one Branch are two
   separate Workspaces, and a Workspace is never valid after its unmount.
-- **LayerFS places Workspaces.** A project's Sandboxes are numbered `1`, `2`, …, each a
-  container holding up to 16 Workspaces on one image (`LAYERFS_IMAGE`, or a mount's
-  `{ image }`; one project's Sandboxes may differ). A mount takes the lowest-numbered
-  running Sandbox of its image with room and starts the next one when every such one
-  is full. A Sandbox closes
-  itself two minutes after its last Workspace is unmounted. Placement is the default:
-  you don't need to manage Sandboxes. For a Sandbox of your own (a dev server, a long
-  build), `sandbox.create()` starts one, `workspace.mount(branch, { sandbox })` mounts
-  there, and `sandbox.close(sandbox)` stops it when you're done
+- **You name the Sandbox.** A project's Sandboxes are numbered `1`, `2`, …, each a
+  container holding up to 16 Workspaces on one image (`LAYERFS_IMAGE`, or
+  `sandbox.create({ image })`). `sandbox.create()` starts one and returns its number;
+  `workspace.mount(sandbox, branch)` mounts there and never starts one. When a mount
+  is refused `NoSuchSandbox` (it closed itself) or `Capacity` (16 Workspaces), do what
+  its message says: `sandbox.create()` a new one, or `sandbox.list_workspaces(sandbox)`
+  and unmount Workspaces you're done with. A Sandbox closes itself two minutes after
+  its last Workspace is unmounted; `sandbox.close(sandbox)` stops it now
   ([sandbox](references/methods/sandbox.md)).
 - **Inside a command, use relative paths.** `exec` starts in the Workspace root, so
   write `npm test` or `cat src/cart.js`, never the mount path. The path changes with
@@ -199,8 +199,8 @@ A new project needs `LayerFS.init("shop", folder)` once, which returns an open c
 it starts no Sandbox. After that, `LayerFS.open("shop")` in any later process connects
 to the same project. There is no `new LayerFS(…)`: it's refused `InvalidInput`. Store calls
 (`fs.*`, Branch calls and branch listing) run in your process. Workspace calls go to
-the Sandbox that holds the Workspace. Several agents each mount their own Workspaces;
-LayerFS places them, so agents share nothing but the project. Finish each client with
+the Sandbox that holds the Workspace. Several agents each mount their own Workspaces,
+each in a Sandbox they name, so agents share nothing but the project. Finish each client with
 `await layerfs.close()` in a `finally` block; a closed client refuses every call
 `InvalidInput`, and its Workspaces stay mounted.
 
@@ -292,7 +292,8 @@ import { LayerFS } from "@layerfs/agent";
 
 const layerfs = await LayerFS.open("shop");
 try {
-  const ws = await layerfs.workspace.mount("work");   // { sandbox: "1", path: "/workspaces/1" }: never hard-code it
+  const { sandbox } = await layerfs.sandbox.create();   // or one from project.list_sandboxes() with room
+  const ws = await layerfs.workspace.mount(sandbox, "work");   // { sandbox: "1", path: "/workspaces/1" }: never hard-code it
   try {
     const run = await layerfs.workspace.exec(ws, "node hello.js | tee hello.txt", "run hello");
     console.log(run.exitCode, run.stdout);
@@ -354,7 +355,7 @@ Added
 | Compare | `fs.diff_files`, `branch.diff_commits`, `branch.diff_branches` |
 | History | `branch.list_commits`, `fs.blame` |
 | Check a Workspace | `backend.daemon.workspace.status` from `@layerfs/backend` (base, whether the head moved, overlay counts; see [resolving conflicts](references/rules/conflicts.md), Scenario 5) |
-| A Sandbox of your own | `sandbox.create`, `workspace.mount(branch, { sandbox })`, `sandbox.close` |
+| Sandboxes | `sandbox.create`, `project.list_sandboxes`, `workspace.mount(sandbox, branch)`, `sandbox.close` |
 | Combine Branches | `branch.merge(a, b, name)`, then `branch.publish(name)` |
 | Resolve a `Conflict` | [resolving conflicts](references/rules/conflicts.md) |
 
@@ -373,7 +374,7 @@ method, its arguments, result fields, refusals with what to do, limits and examp
 | [fs writes](references/methods/fs-write.md) | `write(branch, path, content, message?)`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message?)`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | [branch](references/methods/branch.md) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?)`, `diff_branches(from, to, pageSize?, pagePos?)`, `merge(a, b, name, message?)`, `publish(branch, commit?)` |
 | [sandbox](references/methods/sandbox.md) | `create(options?)`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
-| [workspace](references/methods/workspace.md) | `mount(branch, { sandbox?, image? })` → `{ sandbox, path }`, `exec(ws, command, message?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
+| [workspace](references/methods/workspace.md) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
 
 A `ref` is `main`, a Branch name, a Commit id or a Layer id. Paths are absolute in the
 view (`/src/index.js`). Pages are `{ items, hasMore }`; advance with

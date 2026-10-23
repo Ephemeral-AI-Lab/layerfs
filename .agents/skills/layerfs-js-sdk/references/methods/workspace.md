@@ -17,16 +17,16 @@ a mounted Workspace of the Branch `"work"`, as `mount` returned it.
 
 - A Workspace is `{ sandbox, path }`: the number of the Sandbox that holds it and its
   path there. It persists: any later process with the same `LAYERFS_HOME` can use it.
-- **LayerFS places Workspaces.** A project's Sandboxes are numbered `1`, `2`, …; each is
-  a container with one LayerFS daemon and holds up to 16 Workspaces, of any Branches of
-  the project. Each runs one image, and one project's Sandboxes may run different
-  images. `mount` takes the lowest-numbered running Sandbox of the mount's image with
-  room and starts the next one, on that image, when every such one is full. Placement
-  is the default; for a Sandbox of your own, `sandbox.create()` starts one, `mount(branch,
-  { sandbox })` mounts there, and you `sandbox.close` it when done ([sandbox](sandbox.md)).
+- **A mount names its Sandbox; there is no placement.** A project's Sandboxes are
+  numbered `1`, `2`, …; each is a container with one LayerFS daemon and holds up to 16
+  Workspaces, of any Branches of the project. Each runs one image, set when
+  `sandbox.create()` starts it; one project's Sandboxes may run different images.
+  `sandbox.create()` is the only call that starts a Sandbox; `mount(sandbox, branch)`
+  never does ([sandbox](sandbox.md)).
 - **A Sandbox closes itself when idle:** its daemon ends two minutes after its last
-  Workspace is unmounted, with no call in flight. The next mount reclaims it, and its
-  number is used again.
+  Workspace is unmounted, with no call in flight. A mount there is then refused
+  `NoSuchSandbox`; the next `sandbox.create()` reclaims it, and its number is used
+  again.
 - Keep each Workspace's operations sequential.
 - No restart recovery: if the container dies, its Workspaces are gone. Stop and report.
 
@@ -57,7 +57,7 @@ in more detail:
 One Bash call as one Workspace:
 
 ```js
-const ws = await layerfs.workspace.mount("work");                  // a NEW Workspace
+const ws = await layerfs.workspace.mount(sandbox, "work");         // a NEW Workspace in your Sandbox
 try {
   const run = await layerfs.workspace.exec(ws, "timeout 110 npm test 2>&1", "step 12");
   await layerfs.workspace.commit(ws, `step 12: npm test (exit ${run.exitCode})`);
@@ -66,16 +66,16 @@ try {
 }
 ```
 
-## `workspace.mount(branch, options?)`
+## `workspace.mount(sandbox, branch)`
 
-Mounts a Workspace showing the Branch head at this moment, in a Sandbox LayerFS
-places it in, or in the one `options.sandbox` names. Doesn't scan or copy the tree.
+Mounts a Workspace showing the Branch head at this moment, in the running Sandbox
+`sandbox` names, and nowhere else: it never starts a Sandbox. Doesn't scan or copy the
+tree.
 
 | Arg | Type | Required | Meaning |
 | --- | --- | --- | --- |
+| `sandbox` | string | yes | A running Sandbox's number, such as `"1"` from `sandbox.create()` or `project.list_sandboxes()`. The Sandbox fixes the image |
 | `branch` | string | yes | Branch to mount. Not `main`: fork a Branch from it |
-| `options.image` | string | no | The Sandbox image, an exact local digest `sha256:<64 hex>`; default `LAYERFS_IMAGE`. Only a Sandbox of this image is used |
-| `options.sandbox` | string | no | A running Sandbox's number, such as `"2"` from `sandbox.create`: mount there instead of placing. With `image` too, the Sandbox must run that image |
 
 **Returns:** the Workspace, `{ sandbox, path, image }`, such as
 `{ sandbox: "1", path: "/workspaces/1", image: "sha256:…" }`. Pass it to `exec`, `commit` and
@@ -87,15 +87,13 @@ places it in, or in the one `options.sandbox` names. Doesn't scan or copy the tr
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `NoSuchBranch` | No such Branch, or `main` | Fork first |
-| `Busy` | Another process held the project's placement lock for 60 seconds | Wait, then mount again |
-| `InvalidInput` | A missing `LAYERFS_*` deployment variable, an image that isn't a digest, a bad `sandbox`, or a chosen Sandbox running another image | Check the environment ([SKILL.md](../../SKILL.md#connect-to-a-project)) and the options |
-| `NoSuchSandbox` | The chosen Sandbox isn't running (it closed itself, or was closed) | Mount without `sandbox`, or `sandbox.create()` again |
-| `Capacity` | The chosen Sandbox already holds 16 Workspaces | Unmount one there, or mount without `sandbox` |
-| `Failed` | Starting a new Sandbox failed. With `detail.removed: true` its container is already removed and nothing of it is left, and `detail.log` holds its daemon's last log lines (also in the message); otherwise it names what stays | Stop and report the message |
-| `Unknown` | An earlier Sandbox start of this project has an unknown outcome; every start is refused until it is resolved | Stop and report the message, which says what a person must remove; don't remove or retry anything yourself |
+| `InvalidInput` | A missing or bad `sandbox` or `branch`, or an options object (there are none) | Pass `mount(sandbox, branch)` with a Sandbox number |
+| `NoSuchSandbox` | The Sandbox isn't running (it closed itself, or was closed). The message says what to do | `sandbox.create()` a new one and mount there |
+| `Capacity` | The Sandbox already holds 16 Workspaces. The message says what to do | `sandbox.create()` a new one and mount there, or `sandbox.list_workspaces(sandbox)` and `workspace.unmount` the ones you're done with |
+| `Failed` | The mount failed in the daemon | Stop and report the message |
 
 ```js
-const ws = await layerfs.workspace.mount("work");   // a NEW Workspace: { sandbox: "1", path: "/workspaces/1" }; never hard-code it
+const ws = await layerfs.workspace.mount("1", "work");   // a NEW Workspace: { sandbox: "1", path: "/workspaces/1" }; never hard-code it
 ```
 
 **Notes:** every call mounts a new Workspace, even on the same Branch (see

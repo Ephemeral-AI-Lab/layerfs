@@ -22,7 +22,7 @@ try {
   layerfs = await LayerFS.init(name, work);
   backend = LayerFSBackend.of(layerfs);
   await layerfs.branch.fork("feature");
-  const ws = await layerfs.workspace.mount("feature");
+  const ws = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "feature");
   await layerfs.workspace.exec(ws, "printf 'SECRET-%s\\n' CONTENT > note.txt && cat note.txt; exit 3").catch(() => {});
   const proc = await backend.daemon.process.start(ws, "sleep 30");
   assert.equal((await backend.daemon.process.list()).items.find((p) => p.id === proc.process)?.sandbox, ws.sandbox);

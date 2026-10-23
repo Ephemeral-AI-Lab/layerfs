@@ -14,8 +14,12 @@ const USAGE = `usage: lfs <command> ...
   diff <a> <b>                   files that differ between two Branches
   fork <name> [from]             new Branch (from main by default)
   write <branch> <path> [msg]    file content from stdin, one Commit
-  run <branch> <command> [msg]   run bash in a new Workspace of the Branch and
-                                 Commit what it changed (--discard: keep nothing)
+  sandbox                        start a Sandbox and print its number
+  sandboxes                      the project's running Sandboxes
+  run <sandbox> <branch> <command> [msg]
+                                 run bash in a new Workspace of the Branch in
+                                 that Sandbox and Commit what it changed
+                                 (--discard: keep nothing)
 A ref is main, a Branch, a Commit id or a Layer id; paths are absolute.`;
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -49,14 +53,13 @@ async function all(first, next) {
 }
 
 /**
- * One Bash call in a new Workspace of the Branch: mount, exec, Commit,
- * unmount. LayerFS places the Workspace in one of the project's Sandboxes,
- * starting one when none has room; a Sandbox closes itself when idle. A call
- * that fails before its unmount discards its Workspace (one unmount either
- * way).
+ * One Bash call in a new Workspace of the Branch in Sandbox `sandbox`:
+ * mount, exec, Commit, unmount. Nothing starts a Sandbox here (`lfs
+ * sandbox` does); one closes itself when idle. A call that fails before its
+ * unmount discards its Workspace (one unmount either way).
  */
-async function run(branch, command, message) {
-  const ws = await lf.workspace.mount(branch);
+async function run(sandbox, branch, command, message) {
+  const ws = await lf.workspace.mount(sandbox, branch);
   let unmounting = false;
   try {
     const r = await lf.workspace.exec(ws, command);
@@ -123,14 +126,23 @@ const commands = {
     const c = await lf.fs.write(args[0], args[1], await stdin(), args[2]);
     console.log(`${c.kind} ${short(c.head)} on ${args[0]}`);
   },
+  async sandbox() {
+    const made = await lf.sandbox.create();
+    console.log(`Sandbox ${made.sandbox} (${made.image}); it closes itself two minutes after its last Workspace`);
+  },
+  async sandboxes() {
+    const items = await all((p) => lf.project.list_sandboxes(50, p), (p) => lf.project.list_sandboxes(50, p));
+    for (const s of items) console.log(`${s.sandbox} ${s.name} ${s.workspaces}/16 Workspaces ${s.image}`);
+    if (!items.length) console.log("no running Sandbox: lfs sandbox");
+  },
   async run() {
-    need(2);
-    await run(args[0], args[1], args[2]);
+    need(3);
+    await run(args[0], args[1], args[2], args[3]);
   },
 };
 
 const MAIN_RO = "main is read-only: it's the published version, not a Branch. Read it (ls, cat, grep main ...),\nor fork a Branch (lfs fork <name>), work there and publish it.";
-if (["log", "write", "run"].includes(cmd) && args[0] === "main") { console.error(MAIN_RO); process.exit(2); }
+if ((["log", "write"].includes(cmd) && args[0] === "main") || (cmd === "run" && args[1] === "main")) { console.error(MAIN_RO); process.exit(2); }
 if (!commands[cmd]) { console.error(`lfs: unknown command ${cmd}\n${USAGE}`); process.exit(1); }
 try {
   await commands[cmd]();

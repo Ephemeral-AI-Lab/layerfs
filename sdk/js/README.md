@@ -34,7 +34,8 @@ await layerfs.branch.fork("feature");
 await layerfs.fs.write("feature", "/README.md", "Hello\n", "Update introduction");
 const page = await layerfs.branch.list_commits("feature", 20, 0);
 const text = await layerfs.fs.read("feature", "/README.md", 1, 20);
-const ws = await layerfs.workspace.mount("feature"); // { sandbox: "1", path: "/workspaces/1" }
+const { sandbox } = await layerfs.sandbox.create();  // "1": the only call that starts a Sandbox
+const ws = await layerfs.workspace.mount(sandbox, "feature"); // { sandbox: "1", path: "/workspaces/1" }
 await layerfs.workspace.exec(ws, "npm test", "Run tests");
 await layerfs.workspace.commit(ws, "Save changes");
 await layerfs.workspace.unmount(ws);
@@ -116,11 +117,10 @@ The SDK has no remove method; a host that removes a project deletes the entry
 and the project's volume itself. `node sdk/js/packages/agent/test/reinit.mjs` checks this with
 the real binding: Init, `Exists`, delete the entry, Init again in one process.
 
-Parallel agents each mount their own Workspaces; LayerFS places them in the
-project's Sandboxes (see below). Placement is the default; an agent that
-wants a Sandbox of its own creates one and closes it when done.
-Mounts of one project take its placement lock one at a time, each for its
-own placement and mount; Exec, status, Commit and unmount do not take it.
+Parallel agents each mount their own Workspaces, each in a Sandbox the
+mount names (see below); there is no placement. A mount takes only its
+Sandbox's own lock; `sandbox.create` and `sandbox.close` also take the
+project's. Exec, status, Commit and unmount take neither.
 Concurrent calls to one Sandbox from one process use separate control
 connections, up to six (a Sandbox admits eight), so a read does not wait behind
 another call's Commit; each call's exchanges stay on one connection and are sent
@@ -137,29 +137,35 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |
 | `LAYERFS_NATIVE` | Optional path of the real addon; defaults to `native/layerfs.node`. |
 | `LAYERFS_WORKER_ENDPOINT`, `LAYERFS_WORKER_ADAPTER` | macOS and Windows, dsh only: the endpoint file of the LayerFS home's worker, which then makes every binding call; the adapter must be `dsh`. |
-| `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process; the client option `storePath` wins. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. Linux only, on a local filesystem the daemons share; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
+| `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. Linux only, on a local filesystem the daemons share; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
-| `LAYERFS_DAEMON_HOST` | Optional; the client option `daemonHost` wins. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
+| `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [Call trace](#call-trace)); unset means no trace. |
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
 | `LAYERFS_TRACE_START` | `1` adds a start line before each traced call; read at every call. |
 | `DSH_LAYERFS_HOME`, `DSH_LAYERFS_DOCKER`, `DSH_LAYERFS_IMAGE`, `DSH_LAYERFS_VOLUME`, `DSH_LAYERFS_DAEMON`, `DSH_LAYERFS_STORE_PATH`, `DSH_LAYERFS_TRACE`, `DSH_LAYERFS_TRACE_STEP`, `DSH_LAYERFS_TRACE_START` | Each is used when its `LAYERFS_` name is unset or empty. A host that may only set `DSH_*` names in a command's environment (deepseek-harness) configures and traces the SDK through these. |
 
 A Sandbox is a container running one daemon on the project's Store. The
-project has numbered Sandboxes, `1`, `2`, …, each on one image:
-`workspace.mount(branch, { image }?)` takes the lowest-numbered running
-Sandbox of that image (default `LAYERFS_IMAGE`) with fewer than 16 Workspaces
-and starts the next number, on that image, when every such one is full. One
-project's Sandboxes may run different images; the mount result and
-`project.list_sandboxes()` give each one's `image`.
-`workspace.mount(branch, { sandbox })` mounts in that Sandbox only: refused
-`NoSuchSandbox` when it is not running, `Capacity` when it holds 16
-Workspaces and `InvalidInput` when a given `image` differs from its image.
-`sandbox.create({ image }?)` starts the project's lowest free number like
-placement does and returns `{ sandbox, image }`; `sandbox.close(sandbox)`
-stops it now (stop, then delete, each once), refused `MountsActive` while a
-Workspace is mounted in it and `NoSuchSandbox` when it is not running. It
-closes Sandboxes made by `create` and by placement alike.
+project has numbered Sandboxes, `1`, `2`, …, each on one image and holding up
+to 16 Workspaces. **There is no placement** (owner 2026-10-23):
+`sandbox.create({ image }?)` is the only call that starts one. Under the
+project's lock it first reclaims Sandboxes that closed themselves, then
+starts the lowest free number on `image` (default `LAYERFS_IMAGE`) and
+returns `{ sandbox, image }`. One project's Sandboxes may run different
+images; the mount result and `project.list_sandboxes()` give each one's
+`image`. `workspace.mount(sandbox, branch)` (both required, no options)
+mounts in that Sandbox only, on its image; the native call gets
+`{ sandbox, branch }` with the client's project, home, deploy and Store
+path. It is refused `NoSuchSandbox` when the Sandbox is not running (or
+closed itself), with a message that says to create one with
+`sandbox.create()` and mount there, and `Capacity` when it holds 16
+Workspaces, with a message that says to create a new Sandbox with
+`sandbox.create()`, or list its Workspaces with
+`sandbox.list_workspaces(sandbox)` and unmount the ones that are done with
+`workspace.unmount`. `sandbox.close(sandbox)` stops one now (stop, then
+delete, each once), refused `MountsActive` while a Workspace is mounted in it
+and `NoSuchSandbox` when it is not running. A Sandbox still closes itself two
+minutes after its last Workspace is unmounted, with no call in flight.
 `project.list_sandboxes(pageSize, pagePos)` lists the running ones, each
 `{ sandbox, name, image, workspaces }`, reading records and starting and
 changing nothing; `sandbox.list_workspaces(sandbox, pageSize, pagePos)` asks
@@ -233,7 +239,7 @@ trace line covers the command's run.
 | fs reads (7) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message?)`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message?)`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | branch (6) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
-| workspace (5) | `mount(branch)` → `{ sandbox, path }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `status(ws)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
+| workspace (5) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `status(ws)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
 
 Every grouped method returns a Promise and takes positional arguments only; no
 method takes an options object. A ref is `main`, a Branch name, a Commit
