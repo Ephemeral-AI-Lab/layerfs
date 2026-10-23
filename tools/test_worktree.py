@@ -32,6 +32,9 @@ class WorktreeTests(unittest.TestCase):
             (self.repo / name).write_text("{}\n")
         (self.repo / "sdk/js/packages/agent/src/index.js").write_text("export const value = 1;\n")
         (self.repo / "sdk/js/packages/agent/package.json").write_text('{"name": "@layerfs/agent", "exports": {".": "./src/index.js", "./package.json": "./package.json"}}\n')
+        (self.repo / "cli/src").mkdir(parents=True)
+        (self.repo / "cli/src/layerfs.js").write_text('import "@layerfs/agent";\n')
+        (self.repo / "cli/package.json").write_text('{"name": "@layerfs/cli"}\n')
         git(self.repo, "init", "-q")
         git(self.repo, "config", "user.name", "Fixture")
         git(self.repo, "config", "user.email", "fixture@example.invalid")
@@ -128,6 +131,9 @@ class WorktreeTests(unittest.TestCase):
         # each package resolves by name through a shim, not a symlink
         self.assertEqual((bundle / "sdk/js/node_modules/@layerfs/agent/index.js").read_text(), 'export * from "../../../packages/agent/src/index.js";\n')
         self.assertEqual(json.loads((bundle / "sdk/js/node_modules/@layerfs/agent/package.json").read_text())["exports"], {".": "./index.js"})
+        # the layerfs command, which reaches the agent through its own shim
+        self.assertIn("cli/src/layerfs.js", manifest["files"])
+        self.assertEqual((bundle / "cli/node_modules/@layerfs/agent/index.js").read_text(), 'export * from "../../../../sdk/js/packages/agent/src/index.js";\n')
         (self.repo / "sdk/js/packages/agent/src/index.js").write_text("later edit\n")
         self.assertEqual((bundle / "sdk/js/packages/agent/src/index.js").read_text(), "export const value = 1;\n")
         file = bundle / "layerfs.node"

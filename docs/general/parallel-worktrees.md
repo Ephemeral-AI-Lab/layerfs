@@ -43,7 +43,7 @@ registered checkout without copying scripts into it or merging branches first.
 | Linux Cargo target | Labelled private Docker volume at `/work/core/target` |
 | Linux Cargo home | Separate labelled private Docker volume at `/cargo-home` |
 | Toolchain/images | Pinned toolchain and shared immutable installed images |
-| E2E artifacts | Unique sealed bundle containing daemon, addon, SDK runtime/operator/test files, hashes and source identity |
+| E2E artifacts | Unique sealed bundle containing daemon, addon, SDK runtime/operator/test files, the `layerfs` command (`cli/src`, `cli/test`), hashes and source identity |
 | E2E writable state | Unique per-run Store volume and SDK home, container prefix, trace, and output receipt |
 
 ## Prepare dependencies and optional target seeds
@@ -98,7 +98,8 @@ publishes the daemon and addon together rather than overwriting a live addon.
 Builds start at the checkout root with `--manifest-path core/Cargo.toml`, preserving
 the root ARM64 Cargo profile. They reject inherited Rust flag/target/compiler
 overrides that would bypass it. Source files, the lockfile, root configuration,
-SDK runtime, operator and test files are fingerprinted; a changed source identity
+SDK runtime, operator and test files, and the `layerfs` command's source and
+tests, are fingerprinted; a changed source identity
 during build prevents publication. The SDK bundle is copied independently of the
 live checkout and all artifact hashes are checked before an E2E run. Failed builds
 remain unsealed. Do not run a partially published directory.
