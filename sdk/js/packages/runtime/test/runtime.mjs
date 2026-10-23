@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|transport-order
+//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|transport-order|macos-worker
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -208,8 +208,48 @@ try {
     } finally {
       worker.close();
     }
+  } else if (selected === "macos-worker") {
+    // the macOS worker's start with a stubbed docker CLI and a stand-in worker
+    const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
+    const macos = (await import("../src/platform/macos/index.js")).default;
+    const worker = await fakeWorker(undefined, { anySecret: true });
+    const bundle = join(work, "bundle");
+    mkdirSync(bundle);
+    writeFileSync(join(bundle, "manifest.json"), JSON.stringify({ build_id: "build-1" }));
+    const calls = [];
+    let started = false;
+    const real = macos.docker;
+    macos.docker = async (_settings, args, options = {}) => {
+      calls.push({ args, env: options.env });
+      const [verb] = args;
+      if (verb === "ps") return "";
+      if (verb === "inspect" && !started) throw Object.assign(new Error("inspect"), { stderr: "Error: No such object: layerfs-worker" });
+      if (verb === "inspect") return `true\tbuild-1\t2026-10-23T00:00:00Z\t${home}`;
+      if (verb === "run") { started = true; return "c0ffee"; }
+      if (verb === "port") return `127.0.0.1:${worker.port}`;
+      throw new Error(`unexpected docker ${args.join(" ")}`);
+    };
+    try {
+      const runtime = await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle, adapter: "dsh" });
+      const state = await runtime.worker.start();
+      assert.deepEqual([state.worker.state, state.worker.build, state.worker.answering], ["running", "build-1", true]);
+      // the secret is in docker's environment and the endpoint file, never on its command line
+      const run = calls.find((c) => c.args[0] === "run");
+      const secret = run.env.LAYERFS_WORKER_SECRET;
+      assert.match(secret, /^[0-9a-f]{64}$/);
+      assert.ok(run.args.includes("LAYERFS_WORKER_SECRET"));
+      assert.ok(!calls.some((c) => c.args.some((arg) => arg.includes(secret))), "no docker argument carries the secret");
+      assert.deepEqual(worker.secrets, [secret, secret], "readiness and status pings used it");
+      const endpoint = JSON.parse(readFileSync(join(home, "worker", "endpoint.json"), "utf8"));
+      assert.deepEqual([endpoint.port, endpoint.secret, endpoint.build, endpoint.daemonHost], [worker.port, secret, "build-1", "host.docker.internal"]);
+      assert.ok(!endpoint.init.argv.some((arg) => arg.includes(secret)), "Init's container gets no secret");
+      await runtime.close();
+    } finally {
+      macos.docker = real;
+      worker.close();
+    }
   } else {
-    throw new Error("select surface, projects, init, state, events, leftovers or transport-order");
+    throw new Error("select surface, projects, init, state, events, leftovers, transport-order or macos-worker");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

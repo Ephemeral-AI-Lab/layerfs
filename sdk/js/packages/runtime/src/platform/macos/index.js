@@ -15,7 +15,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { docker, endpointFile, homeNames, ping, ready, refuse, writeEndpoint } from "../shared.js";
+import { docker as cli, endpointFile, homeNames, ping, ready, refuse, writeEndpoint } from "../shared.js";
 
 const VOLUMES = "/var/lib/docker/volumes";
 const WORKER_PORT = 7070;
@@ -25,6 +25,8 @@ const DAEMON_HOST = "host.docker.internal";
 const SERVER = "sdk/js/packages/runtime/src/worker/server.js";
 const INIT = "sdk/js/packages/runtime/src/worker/init.js";
 
+// every Docker call goes through the platform object, so a test can stub it
+const docker = (...args) => platform.docker(...args);
 const name = (settings) => `${settings.containerPrefix}worker`;
 const build = (settings) => JSON.parse(readFileSync(join(settings.bundle, "manifest.json"), "utf8")).build_id;
 // the socket path is the Docker VM's, as Docker Desktop and colima provide it
@@ -74,10 +76,12 @@ async function launch(settings) {
   let secret;
   if (!row) {
     secret = randomBytes(32).toString("hex");
+    // `-e NAME` with no value: docker copies it from its own environment, so
+    // the secret is never on a command line (the Mac's process list)
     await docker(settings, ["run", "-d", "--pull", "never", "--name", container, "--init", "--restart", "unless-stopped",
       "--label", "layerfs.role=worker", "--label", `layerfs.build=${expected}`, "--label", `layerfs.home=${settings.home}`,
-      "-p", `127.0.0.1::${WORKER_PORT}`, "-e", `LAYERFS_WORKER_SECRET=${secret}`, "-e", `LAYERFS_HOME=${settings.home}`, "-e", `LAYERFS_BUNDLE=${settings.bundle}`,
-      ...mounts(settings), "--entrypoint", "node", settings.image, join(settings.bundle, SERVER)], { timeout: 30_000 });
+      "-p", `127.0.0.1::${WORKER_PORT}`, "-e", "LAYERFS_WORKER_SECRET", "-e", `LAYERFS_HOME=${settings.home}`, "-e", `LAYERFS_BUNDLE=${settings.bundle}`,
+      ...mounts(settings), "--entrypoint", "node", settings.image, join(settings.bundle, SERVER)], { timeout: 30_000, env: { ...process.env, LAYERFS_WORKER_SECRET: secret } });
   } else {
     if (running === "false") await docker(settings, ["start", container]);
     const env = await docker(settings, ["inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", container]);
@@ -107,7 +111,7 @@ async function restart(settings) {
   return start(settings);
 }
 
-export default {
+const platform = {
   name: "macos",
   endpoint: (settings) => endpointFile(settings.home),
   status,
@@ -119,7 +123,7 @@ export default {
     if (worker.state !== "running" || !worker.answering) await start(settings);
   },
   path: (settings, hostPath) => hostPath,
-  docker,
+  docker: cli,
   storePath: (settings, volume) => `${VOLUMES}/${volume}/_data/global/store.sqlite`,
   homeNames: (settings) => homeNames(settings.home),
   async removeHome(settings, project) { rmSync(join(settings.home, project), { recursive: true, force: true }); },
@@ -133,3 +137,5 @@ export default {
     } catch { return null; }
   },
 };
+
+export default platform;
