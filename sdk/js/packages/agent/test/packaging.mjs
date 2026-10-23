@@ -46,6 +46,11 @@ if (selected === "surface") {
     await assert.rejects(shop.call(method, {}), { code: "UnknownMethod" });
   }
   await assert.rejects(LayerFS.open("../foreign"), { code: "InvalidInput" });
+  // the internal entry exports exactly what its header and the README list
+  assert.deepEqual(Object.keys(await import("@layerfs/agent/internal")).sort(), [
+    "STATE", "addonPath", "connection", "decode", "deployment", "encode", "endpointOf", "frame", "invokeBackend", "invokeClient",
+    "invokeClientBackend", "live", "outcome", "page", "pageOf", "projectArgs", "readFrames", "sandboxArg", "storeArgs", "useWorker", "workspaceArgs",
+  ]);
   await shop.close();
 } else if (selected === "lifecycle") {
   // no public constructor

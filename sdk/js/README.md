@@ -13,6 +13,16 @@ client) and `@layerfs/runtime` (what an integration host runs on a LayerFS
 home). `npm install` in `sdk/js` links the packages to each other; it
 downloads nothing.
 
+`@layerfs/agent/internal` is not a public API. It exists only for
+`@layerfs/backend` and `@layerfs/runtime` at the same exact version as
+`@layerfs/agent`, and may change in any release; don't add new uses. It
+exports exactly `STATE`, `invokeBackend`, `invokeClient`,
+`invokeClientBackend`, `live`, `outcome`, `page`, `pageOf`, `projectArgs`,
+`sandboxArg`, `storeArgs`, `workspaceArgs`, `deployment` (call helpers),
+`decode`, `encode`, `frame`, `readFrames` (worker frames), `connection`,
+`endpointOf` (worker client), `addonPath` (in-process addon) and `useWorker`
+(the runtime's worker hand-over).
+
 ```js
 import { LayerFS } from "@layerfs/agent";
 // Store calls open this file; here the project's volume is mounted at /layerfs-store.
