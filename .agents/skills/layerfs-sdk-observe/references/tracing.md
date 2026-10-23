@@ -2,7 +2,7 @@
 
 > **Status:** Current general guide. Part of the `layerfs-sdk-observe` skill. Describes the
 > #333 trace, merged to `main` in `62b225766`. Its source of truth is the "Call trace"
-> section of [`sdk/js/README.md`](../../../../sdk/js/README.md).
+> section of [`api/README.md`](../../../../api/README.md).
 
 ## Turning it on
 

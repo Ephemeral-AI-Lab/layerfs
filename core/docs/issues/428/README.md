@@ -16,7 +16,7 @@ The design is generic: dsh is the first user, not the shape of the API.
 What exists today is marked **current**. Changes this proposal asks for are
 marked **proposed**, and owner decisions are listed in
 [Open decisions](#open-decisions). The current SDK reference is
-[sdk/js/README.md](../../../../sdk/js/README.md); this document does not
+[api/README.md](../../../../api/README.md); this document does not
 replace it. What #428 has changed so far, with its commits and where each
 piece stands, is listed in [CHANGES.md](CHANGES.md).
 
@@ -67,7 +67,7 @@ call(method, args)  →  value
 
 The JavaScript methods add argument checks and paging helpers, then call the
 binding through `invokeClient` / `invokeOperator` in
-[sdk/js/src/client.js](../../../../sdk/js/src/client.js). Store calls (`fs`,
+[api/agent/sdk/src/client.js](../../../../api/agent/sdk/src/client.js). Store calls (`fs`,
 `branch`, `project`, Store operator calls) run against the Store this process
 opened. Workspace calls go to a daemon in one of the project's Sandboxes.
 
@@ -91,7 +91,7 @@ opened. Workspace calls go to a daemon in one of the project's Sandboxes.
 **Proposed:** publish this list as a machine-readable file in the SDK package
 (method, arguments, result shape, refusals each can return, protocol version).
 SDKs, transports and the worker codec check against it. The refusal codes are
-[`CODES`](../../../../sdk/js/src/errors.js): `Conflict`, `HeadMoved`, `Dirty`,
+[`CODES`](../../../../api/agent/sdk/src/errors.js): `Conflict`, `HeadMoved`, `Dirty`,
 `Busy`, `NoSuchPath`, `NoSuchBranch`, `NoSuchCommit`, `NoSuchProject`,
 `NoCommit`, `NoMergeBase`, `IsDirectory`, `NotDirectory`, `NotFile`, `Binary`,
 `NotText`, `NoMatch`, `AmbiguousMatch`, `Exists`, `NotEmpty`, `NameTaken`,
@@ -119,7 +119,7 @@ picks one by platform; its own code does not change.
 ### 4.1 In-process (current, Linux)
 
 The SDK loads the native addon `layerfs.node` in the caller's process, from
-`LAYERFS_NATIVE` or `sdk/js/native/layerfs.node`, and opens the Store at
+`LAYERFS_NATIVE` or `api/binding/layerfs.node`, and opens the Store at
 `storePath` directly. The Store must be on a local Linux filesystem (ext4, xfs,
 btrfs) that the daemons share. This is the only general route today
 (`AGENTS.md`, "SDK Store calls … run in the SDK's own process").
@@ -136,7 +136,7 @@ open while the project is in use, closing them after a quiet minute.
 | --- | --- | --- |
 | Worker runs in | the Store container (`<containerPrefix>store`) | a Node process in a chosen WSL2 distribution |
 | Source today | `dsh/packages/host/src/box.js`, `port/` | `dsh/packages/host/src/windows/` |
-| Bundle | `layerfs.node`, `layerfs-daemon`, `sdk/js` | sealed bundle with `manifest.json`; hashes checked |
+| Bundle | `layerfs.node`, `layerfs-daemon`, `api/` | sealed bundle with `manifest.json`; hashes checked |
 
 Wire format (current, [port/frames.mjs](../../../../dsh/packages/host/src/port/frames.mjs)):
 loopback TCP only, a random secret, and frames made of a 4-byte big-endian
@@ -197,7 +197,7 @@ Gaps (current):
 
 - `operator.inspect.history` exists in the native binding, but
   `LayerFSOperator` has no method for it. The dsh Host reaches it by importing
-  the private `invokeOperator` from `sdk/js/src/client.js`
+  the private `invokeOperator` from `api/agent/sdk/src/client.js`
   ([layerfs-client.js](../../../../dsh/packages/host/src/layerfs-client.js)).
   **Proposed:** add `operator.inspect.history()` and remove the deep import.
 - Views learn about new calls by tailing trace files. **Proposed:** an Observe
@@ -209,7 +209,7 @@ Gaps (current):
 | Part | Current | Proposed |
 | --- | --- | --- |
 | Errors | `LayerFSError`, `isRefusal(error, code)`, `CODES` | listed per method in the method list |
-| Trace | `LAYERFS_TRACE` file, format `layerfs_trace: 1` ([sdk/js/README.md, Call trace](../../../../sdk/js/README.md#call-trace)) | unchanged; event stream reuses its fields |
+| Trace | `LAYERFS_TRACE` file, format `layerfs_trace: 1` ([api/README.md, Call trace](../../../../api/README.md#call-trace)) | unchanged; event stream reuses its fields |
 | Actor | `LAYERFS_TRACE_STEP` / `traceStep`: a free-text label | an `actor` option `{ id, name, parent }` on the client, written into every trace line and event |
 | Configuration | `LAYERFS_HOME`, `_DOCKER`, `_IMAGE`, `_VOLUME`, `_DAEMON`, `_STORE_PATH`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`, `_TRACE_STEP`, `_TRACE_START`; each falls back to a `DSH_LAYERFS_` twin | the `DSH_LAYERFS_` twins move into the dsh adapter, which is the only integration that needs them (dsh passes only that prefix into bash) |
 
@@ -232,9 +232,9 @@ reads, view model and views stay in dsh-layerfs
 
 | Package (proposed name) | Provides | Comes from |
 | --- | --- | --- |
-| `@layerfs/sdk` | the SDK (section 5) | `sdk/js` |
+| `@layerfs/sdk` | the SDK (section 5) | `api/agent/sdk` |
 | `@layerfs/runtime` | deployment settings and their check, the worker transports, Init jobs with progress, project removal, the runtime overview and actions | `box.js`, `port/`, `windows/`, `config.js`, `init.js`, `jobs.js`, `remove.js`, `runtime.js`, `layerfs-client.js` |
-| `layerfs` CLI | one `@layerfs/agent` call per command, JSON out (`cli/`, [cli/sdk-to-cli.md](../../../../cli/sdk-to-cli.md)); replaces dsh's `lfs.js`, retired with its short forms (owner 2026-10-23) | `lfs.js` (retired) |
+| `layerfs` CLI | one `@layerfs/agent` call per command, JSON out (`api/agent/cli/`, [api/agent/cli/sdk-to-cli.md](../../../../api/agent/cli/sdk-to-cli.md)); replaces dsh's `lfs.js`, retired with its short forms (owner 2026-10-23) | `lfs.js` (retired) |
 | SDK skill | what agents read before their first call | `.agents/skills/layerfs-js-sdk/` |
 | simulator backend (optional) | Sim projects without Docker, for demos and tests | `sim/` |
 
@@ -256,7 +256,7 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
     init.js                              139   (kit runtime: Init jobs)
     jobs.js                               28   (kit runtime)
     layerfs-client.js                     76   (kit runtime: per-project clients)
-    lfs.js                               119   (retired: the layerfs CLI in cli/ replaces it)
+    lfs.js                               119   (retired: the layerfs CLI in api/agent/cli/ replaces it)
     migrate.js                            44   (#373 one-time upgrade; drop at the move)
     reads.js                              80   (dsh: UI reads)
     records.js                             8   (dsh)
@@ -322,7 +322,7 @@ A new integration:
    Disposable Store profile only, tests under 2 minutes.
 
 Pi (#382) is close to this shape already: its tools call `fs.*` for reads and
-edits, and `mount → exec → commit → unmount` for bash, through `sdk/js` on
+edits, and `mount → exec → commit → unmount` for bash, through `api/agent/sdk` on
 Linux and `port/` on macOS.
 
 ## 8. Versions and distribution

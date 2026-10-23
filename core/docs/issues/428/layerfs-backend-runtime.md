@@ -19,7 +19,7 @@ in two, plus the runtime code that lives in the dsh Host:
   the worker, Docker, the list of projects, Init jobs, removal, one project's
   live picture and events. It serves no HTTP
   ([ui-frontend.md](ui-frontend.md)) and has no CLI: the `layerfs` command
-  in `cli/` is the agents' CLI (owner 2026-10-23).
+  in `api/agent/cli/` is the agents' CLI (owner 2026-10-23).
 
 The name "operator" is retired.
 
@@ -146,7 +146,7 @@ container id from `$LAYERFS_HOME/<project>/sandboxes/<n>/container` and run
 so it also works on macOS and Windows, where the agent's process may have no
 Docker access.
 
-Today's handlers: [sdk/js/native/src/dispatch.rs](../../../../sdk/js/native/src/dispatch.rs)
+Today's handlers: [api/binding/src/dispatch.rs](../../../../api/binding/src/dispatch.rs)
 (process calls) and [layerfs-daemon/src/operator/dispatch.rs](../../../crates/layerfs-daemon/src/operator/dispatch.rs)
 (Workspace calls).
 
@@ -207,7 +207,7 @@ runtime.events.subscribe({ project, since });              // + live calls from 
 | `worker.start`, `worker.restart` | start a stopped or missing worker; restart a running one | dsh `box.js`, `windows/host.js`, `POST /layerfs/runtime/store[/restart]` |
 | `project.list` | every project in the home | dsh `bindings.projects()` |
 | `project.start_init`, `project.get_init` | run Init as a background job in the runtime's process, and read its step and counts | dsh `init.js`, `jobs.js`; native `operator.project.progress` |
-| `project.get_state` | one project's live picture: `backend.store.project.get_history`, the agent's `project.list_sandboxes` and `sandbox.list_workspaces`, and `backend.daemon.workspace.get_storage`, joined under one version token | [sdk/js/operator/inspect/snapshot.js](../../../../sdk/js/operator/inspect/snapshot.js) |
+| `project.get_state` | one project's live picture: `backend.store.project.get_history`, the agent's `project.list_sandboxes` and `sandbox.list_workspaces`, and `backend.daemon.workspace.get_storage`, joined under one version token | [api/runtime/src/project/state.js](../../../../api/runtime/src/project/state.js) |
 | `project.remove` | delete a project's volume and records, optionally stopping its Sandboxes first | dsh `remove.js` |
 | `sandbox.reclaim` | drop records of Sandboxes whose containers are gone or stopped | the reclaim inside today's `operator.sandbox.list` |
 | `sandbox.clean_leftovers` | remove named stopped containers | dsh `runtime.js`, `POST /layerfs/runtime/leftovers` |
@@ -219,7 +219,7 @@ runtime.events.subscribe({ project, since });              // + live calls from 
 Modules, not methods: the platform folders and the worker program
 ([section 4.4](#44-platforms)). The `lfs` command that was
 `@layerfs/runtime/cli` is retired (owner 2026-10-23): agents use the
-`layerfs` command in `cli/`, one `@layerfs/agent` call each, with no short
+`layerfs` command in `api/agent/cli/`, one `@layerfs/agent` call each, with no short
 forms.
 
 ### 4.3 Safety
@@ -254,7 +254,7 @@ wire format.
 | Docker engine for Sandboxes | `/var/run/docker.sock` | Docker Desktop or colima | the distribution's own Docker Engine |
 | Path mapping | none | the host path, bind-mounted into the container | `wslpath` |
 | Where Init runs | in-process, into the project's volume | its own container with the source folder mounted | in the worker, reading the folder through WSL |
-| Native build | `LAYERFS_NATIVE`, else `sdk/js/native/layerfs.node` | bundle folder | sealed bundle, checked against `manifest.json` |
+| Native build | `LAYERFS_NATIVE`, else `api/binding/layerfs.node` | bundle folder | sealed bundle, checked against `manifest.json` |
 
 **The interface.** Every platform folder exports the same object:
 
@@ -345,7 +345,7 @@ read the same:
   names instead.
 - Old trace files keep the old names. A viewer that replays them needs this
   table as an old-to-new map.
-- The dispatch tables that change: [sdk/js/native/src/dispatch.rs](../../../../sdk/js/native/src/dispatch.rs),
+- The dispatch tables that change: [api/binding/src/dispatch.rs](../../../../api/binding/src/dispatch.rs),
   [layerfs-store-service/src/operator/dispatch.rs](../../../crates/layerfs-store-service/src/operator/dispatch.rs),
   [layerfs-daemon/src/operator/dispatch.rs](../../../crates/layerfs-daemon/src/operator/dispatch.rs),
   and the workers, which forward names unchanged.
@@ -369,7 +369,7 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
 | `remove.js` | 47 | `runtime.project.remove` |
 | `runtime.js` | 207 | `runtime.status`, `runtime.sandbox.clean_leftovers` |
 | `trees.js`, `reads.js`, `storage.js` | 199 | stay in dsh ([ui-frontend.md §6](ui-frontend.md#6-dsh-as-the-worked-example)); `asCommit` in `reads.js` becomes `backend.store.project.get_comparable` |
-| `lfs.js` | 119 | retired; the `layerfs` command in `cli/` replaces it (owner 2026-10-23) |
+| `lfs.js` | 119 | retired; the `layerfs` command in `api/agent/cli/` replaces it (owner 2026-10-23) |
 | `layerfs-client.js` | 76 | `runtime/src/clients.js` (per-project clients), using agent's public API only |
 
 The dsh-specific files stay in the dsh adapter: `index.js`, `binding.js`,

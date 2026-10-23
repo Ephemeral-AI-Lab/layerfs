@@ -187,9 +187,9 @@ goes to.
 
 After the install nothing reads the sealed file (checked at `cdc9493982`):
 
-- Init reads it once, to install it (`sdk/js/native/src/project.rs`).
+- Init reads it once, to install it (`api/binding/src/project.rs`).
 - Starting a Sandbox uses the installed Store and the installed manifest
-  (`existing_store` in `sdk/js/native/src/sandbox.rs`); the core create path
+  (`existing_store` in `api/binding/src/sandbox.rs`); the core create path
   returns before it would read the sealed file.
 - A failed install is not retried from it: starting a Sandbox refuses with
   "its Import did not finish, so import it again".

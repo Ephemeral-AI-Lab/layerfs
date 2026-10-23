@@ -177,7 +177,7 @@ checkouts on one machine, Btrfs snapshots or Git worktrees may be all you need.
 
 | | |
 | --- | --- |
-| Docs | [LayerFS × DSH guide](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme) · [layerfs.ai/docs](https://layerfs.ai/docs/) · [Core ideas](https://layerfs.ai/docs/core-ideas/) · [JavaScript SDK guide](sdk/js/README.md) |
+| Docs | [LayerFS × DSH guide](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme) · [layerfs.ai/docs](https://layerfs.ai/docs/) · [Core ideas](https://layerfs.ai/docs/core-ideas/) · [JavaScript SDK guide](api/README.md) |
 | Concepts | [Core concepts](docs/general/concepts.md) · [Documentation index](docs/README.md) |
 | Benchmarks | [layerfs.ai/benchmarks](https://layerfs.ai/benchmarks/) |
 | Release | [1.0.0 plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/1.0/README.md) · Previous: [0.1.7 release record](docs/release-notes/0.1.7/README.md) and its [manual](docs/versioned/0.1.7/README.md) |

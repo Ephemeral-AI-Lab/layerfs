@@ -144,7 +144,7 @@ chooses what to do with them.
   connections open; dsh releases it after a quiet minute. Open connections do
   not keep an idle Sandbox from closing.
 - **Trace lines hold ids, never file content.** Their format is in
-  [sdk/js/README.md, "Call trace"](../../../../sdk/js/README.md#call-trace);
+  [api/README.md, "Call trace"](../../../../api/README.md#call-trace);
   dsh's `model` replays them into its view.
 
 ## 6. dsh as the worked example
