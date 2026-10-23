@@ -171,3 +171,11 @@ JSON (`workspace mount` adds `ws`) and exit 0, or exit 125 with the SDK's
 refusal. The tests also check parsing, bodies, `--text`, `--stream` and exit
 codes, that every call in the table has a case, and that `cli/src` has a
 command file for every SDK call file.
+
+`cli/test/verify/cli_real.mjs inner <store|workspace>` checks the command
+against a real Store, Docker and daemon, under the E2E launcher. It runs the
+SDK's real-Store scenario (`sdk/js/packages/agent/test/verify/scenario.mjs`,
+every call once) through the SDK and then as `layerfs` commands, one process
+per call. Each command must give the SDK's answer. The comparison masks only
+what differs between any two runs: the project name, object ids, times, inode
+numbers and a Commit's stored bytes.

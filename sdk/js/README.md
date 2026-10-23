@@ -599,3 +599,15 @@ use too.
   `cli/sdk-to-cli.md`).
 - `packaging.mjs`, `trace.mjs`, `exec_output.mjs` and the backend and runtime
   tests each check one case per command (`node <file> <case>`).
+
+Against a real Store, Docker and daemon, `test/verify/scenario.mjs` makes
+every agent call once, in two parts: `store` (Projects, Branches, files and
+history) and `workspace` (a Sandbox, one Workspace, Exec, Commit and close).
+Run each part under the E2E launcher (`tools/worktree.py run`, see
+`docs/general/parallel-worktrees.md`):
+
+- `node sdk/js/packages/agent/test/verify/calls_real.mjs inner <part>` runs the
+  part through the SDK and checks each answer.
+- `node cli/test/verify/cli_real.mjs inner <part>` runs it through the SDK and
+  then as `layerfs` commands, and requires the same answers. Values that differ
+  between any two runs are masked before the comparison.
