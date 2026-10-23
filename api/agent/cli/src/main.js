@@ -57,7 +57,7 @@ export async function main(argv, io) {
     if (entry.init) {
       result = await entry.run(LayerFS, a, o, exits);
     } else {
-      const project = g.project ?? (process.env.LAYERFS_PROJECT || process.env.DSH_LAYERFS_PROJECT);
+      const project = g.project ?? process.env.LAYERFS_PROJECT;
       if (!project) throw new UsageError("no LayerFS project: pass --project <name> or set LAYERFS_PROJECT");
       const layerfs = await LayerFS.open(project);
       try {

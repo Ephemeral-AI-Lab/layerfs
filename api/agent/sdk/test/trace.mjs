@@ -1,5 +1,5 @@
 // Per-call trace checks over a stand-in binding; each case is one command:
-//   node api/agent/sdk/test/trace.mjs on|off|failure|dsh-env|start|ids|no-content|store|daemon-host
+//   node api/agent/sdk/test/trace.mjs on|off|failure|layerfs-env|start|ids|no-content|store|daemon-host
 // No Docker, Store or daemon is used.
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -181,38 +181,23 @@ try {
     process.env.LAYERFS_TRACE = join(dir, "absent/dir/trace.jsonl");
     const traced = await script(await LayerFS.open("website"));
     assert.deepEqual(traced, reference);
-  } else if (selected === "dsh-env") {
-    // With only the DSH_ names set (as dsh sets them in a bash call), the
-    // same lines appear, labelled by DSH_LAYERFS_TRACE_STEP.
+  } else if (selected === "layerfs-env") {
+    // LayerFS reads LAYERFS_ names only: an integration's own prefixed names
+    // (such as dsh's DSH_LAYERFS_) are not settings.
     process.env.DSH_LAYERFS_TRACE = file;
     process.env.DSH_LAYERFS_TRACE_STEP = "call_7";
-    const results = await script(await LayerFS.open("website"));
-    const lines = read(file);
-    assert.equal(lines.length, results.length + 1, "one line per call, plus LayerFS.open's project lookup");
-    assert.ok(lines.every((line) => line.step === "call_7" && line.phase === "end"));
-    // The LAYERFS_ names win over their DSH_ twins.
-    const own = join(dir, "own.jsonl");
-    process.env.LAYERFS_TRACE = own;
-    process.env.LAYERFS_TRACE_STEP = "own step";
+    process.env.DSH_LAYERFS_IMAGE = "dsh-image";
+    const quiet = await LayerFS.open("website");
+    await quiet.project.list_branches();
+    assert.equal(existsSync(file), false, "no trace without LAYERFS_TRACE");
+    assert.equal(quiet.options.deploy.image, "fake-image");
+    process.env.LAYERFS_TRACE = file;
     await (await LayerFS.open("website")).project.list_branches();
-    assert.deepEqual(read(own).map((line) => line.step), ["own step", "own step"]);
-    assert.equal(read(file).length, lines.length);
-    // Deployment settings fall back to their DSH_ twins the same way.
-    const saved = {};
-    for (const name of ["HOME", "DOCKER", "IMAGE", "VOLUME", "DAEMON"]) {
-      saved[name] = process.env[`LAYERFS_${name}`];
-      delete process.env[`LAYERFS_${name}`];
-      process.env[`DSH_LAYERFS_${name}`] = `dsh-${name.toLowerCase()}`;
-    }
-    const twin = await LayerFS.open("website");
-    assert.equal(twin.options.home, "dsh-home");
-    assert.deepEqual(twin.options.deploy, { docker: "dsh-docker", image: "dsh-image", volume: "dsh-volume", daemon: "dsh-daemon" });
-    for (const [name, value] of Object.entries(saved)) { process.env[`LAYERFS_${name}`] = value; delete process.env[`DSH_LAYERFS_${name}`]; }
-    assert.equal((await LayerFS.open("website")).options.deploy.image, "fake-image");
+    assert.ok(read(file).every((line) => !("step" in line)), "DSH_LAYERFS_TRACE_STEP labels nothing");
   } else if (selected === "start") {
     // Start lines precede their end lines and share id, step, method, args, start and scope.
     process.env.LAYERFS_TRACE = file;
-    process.env.DSH_LAYERFS_TRACE_START = "1";
+    process.env.LAYERFS_TRACE_START = "1";
     process.env.LAYERFS_TRACE_STEP = "with starts";
     const results = await script(await LayerFS.open("website"));
     const lines = read(file);
@@ -228,7 +213,7 @@ try {
     }
     // Only "1" turns them on.
     const other = join(dir, "other.jsonl");
-    process.env.DSH_LAYERFS_TRACE_START = "true";
+    process.env.LAYERFS_TRACE_START = "true";
     process.env.LAYERFS_TRACE = other;
     await (await LayerFS.open("website")).project.list_branches();
     assert.ok(read(other).every((line) => line.phase === "end"));
@@ -321,7 +306,7 @@ try {
       }
     }
   } else {
-    console.error("usage: trace.mjs on|off|failure|dsh-env|start|ids|no-content|store|daemon-host");
+    console.error("usage: trace.mjs on|off|failure|layerfs-env|start|ids|no-content|store|daemon-host");
     process.exit(2);
   }
   console.log(`PASS trace ${selected}`);

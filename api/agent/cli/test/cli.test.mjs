@@ -165,10 +165,12 @@ test("a missing project exits 2 before anything opens", () => {
   assert.deepEqual(r.calls, []);
 });
 
-test("--project wins over LAYERFS_PROJECT; DSH_LAYERFS_PROJECT is the fallback", () => {
+test("--project wins over LAYERFS_PROJECT; an integration's prefixed name is not read", () => {
   assert.equal(cli(["fs", "stat", "main", "/a", "--project", "other"]).made[0][1].project, "other");
   assert.equal(cli(["--project=other", "fs", "stat", "main", "/a"]).made[0][1].project, "other");
-  assert.equal(cli(["fs", "stat", "main", "/a"], { env: { LAYERFS_PROJECT: "", DSH_LAYERFS_PROJECT: "dshp" } }).made[0][1].project, "dshp");
+  const none = cli(["fs", "stat", "main", "/a"], { env: { LAYERFS_PROJECT: "", DSH_LAYERFS_PROJECT: "dshp" } });
+  assert.equal(none.code, 2, none.err);
+  assert.match(none.err, /no LayerFS project/);
 });
 
 test("after --, every token is positional, even global option names", () => {

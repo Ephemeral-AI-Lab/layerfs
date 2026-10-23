@@ -16,31 +16,30 @@ description: Use when building, editing, testing or inspecting a project through
 Your project lives in LayerFS, not on your local disk. You read and change it through
 the SDK, from small Node scripts you run with `node`.
 
-## Inside dsh: start here
+## Inside an integration: start here
 
-If `echo $DSH_LAYERFS_PROJECT` prints a name, dsh has set everything up. Skip
-[Import the SDK](#import-the-sdk) and [Connect to a project](#connect-to-a-project):
+An integration is a host that runs you with a LayerFS project already set up. When it
+has, its own instructions name the project, how to import the SDK and how to run the
+`layerfs` command. Use those, and skip [Import the SDK](#import-the-sdk),
+[Connect to a project](#connect-to-a-project) and `LayerFS.init`:
 
-- There's no npm install. Import the SDK with `await import(process.env.DSH_LAYERFS_SDK)`,
-  in a module script. A static `import` of a variable is a syntax error.
-- `const lf = await LayerFS.open(process.env.DSH_LAYERFS_PROJECT)` reads every other
-  setting from the `DSH_LAYERFS_*` variables. The `LAYERFS_*` names in this guide are their twins; in
-  dsh they're unset.
-- Don't look into Docker, the LayerFS Store container, Store files or the dsh host's source.
+- The SDK reads every setting from `LAYERFS_*` variables, which the integration provides.
+  `LayerFS.open(<project>)` needs nothing else.
+- If the SDK's location is given in a variable, import it with `await import(<path>)` in a
+  module script. A static `import` of a variable is a syntax error.
+- Don't look into Docker, Store containers, Store files or the integration host's source.
   Nothing there helps, and the SDK is the only way in.
-- Your current folder is the dsh workspace the user selected. It's for temporary files
-  only: your scripts, notes and scratch output. Files you find there may be an old copy,
-  not the project. Do all
-  work on the project through the SDK: `fs.*` and Workspaces for files and commands, and
-  `project.*` and `branch.*` for versioning, as you would use git.
-- `node "$DSH_LAYERFS_CLI" status` lists the Branches. The same CLI does `log`, `ls`, `cat`,
-  `grep`, `diff`, `fork` and `write` (content from stdin), and `run <branch> "<bash>"`. That
-  runs a command in a new Workspace, Commits what it changed and unmounts it. Use the CLI for single steps and an SDK script for anything
-  more.
+- Your current folder is for temporary files only: your scripts, notes and scratch output.
+  Files you find there may be an old copy, not the project. Do all work on the project
+  through the SDK: `fs.*` and Workspaces for files and commands, and `project.*` and
+  `branch.*` for versioning, as you would use git.
+- The `layerfs` command makes one SDK call per command, for example
+  `layerfs project list_branches` or `layerfs fs read <branch> <path>`. Use it for single
+  steps and an SDK script for anything more.
 - **Always unmount.** Put every `workspace.unmount` in a `finally` block. A forgotten
   Workspace stays mounted, and its Sandbox never closes. To clear idle, clean leftovers,
   see [Clearing idle Workspaces](references/methods/workspace.md#clearing-idle-workspaces).
-  End every script with `await lf.close()`, in a `finally` block too.
+  End every script with `await layerfs.close()`, in a `finally` block too.
 - **`main` is read-only.** It's published, not a Branch: read it and fork from it, but
   don't write, edit, mount or commit to it. Those calls, and `branch.list_commits("main")`,
   are refused with `NoSuchBranch`. Fork a Branch, work there, and publish it. A new

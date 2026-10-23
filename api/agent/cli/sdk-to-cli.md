@@ -13,7 +13,7 @@ closes the client. It adds no capability, check or retry of its own: the SDK
 checks the inputs and makes its one attempt, and the command reports what it
 answered. Settings come from the environment exactly as for the SDK, and the
 same platform rules apply (Store calls run in this process on Linux, through
-the DSH worker on macOS and Windows, and fail `Unsupported` anywhere else).
+the LayerFS home's worker on macOS and Windows, and fail `Unsupported` anywhere else).
 
 ## Install and run
 
@@ -48,7 +48,7 @@ layerfs sandbox close 1
   SDK's names (`branch list_commits`); a dashed name is the same call
   (`branch list-commits`). `LayerFS.init` is `layerfs init`. `LayerFS.open`
   and `close` happen inside every command; the project is `--project <name>`,
-  else `LAYERFS_PROJECT`, else `DSH_LAYERFS_PROJECT`.
+  else `LAYERFS_PROJECT`. The command reads no other prefix.
 - **Positional arguments** are the SDK's, in the SDK's order. An optional one
   that is left out is not sent, so the SDK applies its own default (`fs list
   main` lists `/`, `branch fork cart` forks from main).
@@ -139,8 +139,8 @@ table differs, and when a family's files stop matching the SDK's.
 - **Short forms.** The command has only the SDK calls above. The older `lfs`
   command in `@layerfs/runtime` (`status`, `log`, `ls`, `cat`, `grep`, `diff`,
   `fork`, `write`, `sandbox`, `sandboxes`, `run`) is retired (owner
-  2026-10-23); `layerfs` is the only command, and dsh-layerfs gives it to
-  agents as `DSH_LAYERFS_CLI`.
+  2026-10-23); `layerfs` is the only command. An integration tells its
+  agents how to run it.
 
 ## Cost per command
 

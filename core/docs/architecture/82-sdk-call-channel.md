@@ -277,8 +277,11 @@ and `api/runtime` (`LayerFSRuntime.open`, on a LayerFS home).
 `@layerfs/sdk/operator` and its `inspect.snapshot` are gone; the snapshot is
 the runtime's `project.get_state`. On macOS and Windows the runtime's
 `worker/server.js` makes the Store calls with the Linux addon and
-`@layerfs/agent`'s `transport/worker_client.js` reaches it, for the dsh
-adapter only. New calls: `sandbox.create`, `sandbox.close` and
+`@layerfs/agent`'s `transport/worker_client.js` reaches it. The route was
+first allowed for the dsh adapter only; since 2026-10-24 (owner) it is open to
+any integration that names the endpoint (`LAYERFS_WORKER_ENDPOINT`, or the
+runtime's `useWorker(endpoint)`), and the SDK reads only `LAYERFS_*` names.
+New calls: `sandbox.create`, `sandbox.close` and
 mounting into a chosen Sandbox (agent), and
 `backend.daemon.sandbox.get_log`, which reads a Sandbox's daemon log once
 through the Engine where the binding runs. See the

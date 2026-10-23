@@ -15,10 +15,7 @@ Object.assign(process.env, {
   LAYERFS_IMAGE: "fake-image", LAYERFS_VOLUME: "fake-volume", LAYERFS_DAEMON: "/fake/daemon",
   LAYERFS_STORE_PATH: "/fake/store.sqlite",
 });
-for (const name of ["TRACE", "TRACE_STEP", "TRACE_START"]) {
-  delete process.env[`LAYERFS_${name}`];
-  delete process.env[`DSH_LAYERFS_${name}`];
-}
+for (const name of ["TRACE", "TRACE_STEP", "TRACE_START"]) delete process.env[`LAYERFS_${name}`];
 const fake = createRequire(import.meta.url)(FAKE);
 const { LayerFS } = await import("@layerfs/agent");
 const client = await LayerFS.open("site");

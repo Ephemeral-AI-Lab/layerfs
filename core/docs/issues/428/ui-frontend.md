@@ -28,7 +28,7 @@ yet accepted its details.
    listener for a UI.
 3. **The worker is not a UI API.** It is a transport for SDK calls on macOS
    and Windows: loopback only, behind a secret, framed JSON, not HTTP
-   ([README.md §4.2](README.md#42-worker-current-for-dsh-only-proposed-as-general)).
+   ([README.md §4.2](README.md#42-worker-current-on-macos-and-windows-for-any-integration)).
    It stays.
 4. **LayerFS knowledge becomes SDK calls, not route code.** Where today's
    route code encodes a LayerFS rule (how a Layer compares, how a truncated

@@ -1,10 +1,9 @@
 // The worker route end to end, in Linux (#428): runtime's worker/server.js
 // (container mode, on loopback) with the bundle's real addon, and an agent
 // process whose every call goes through @layerfs/agent's worker client
-// (LAYERFS_WORKER_ENDPOINT, LAYERFS_WORKER_ADAPTER=dsh): Init, writes, a
+// (LAYERFS_WORKER_ENDPOINT alone; no integration is named): Init, writes, a
 // Workspace's exec and Commit, backend reads, then close. Also: the wrong
-// secret and another home are cut off, and the route stays shut without the
-// dsh adapter. Under the E2E launcher (its Store volume, home and deployment):
+// secret and another home are cut off. Under the E2E launcher (its Store volume, home and deployment):
 //   node api/runtime/test/verify/worker_real.mjs inner
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -83,11 +82,7 @@ try {
   assert.equal((await connection(info).call({ fn: "call", op: "project.list_branches", args: { home: "/elsewhere" } })).refused.code, "Unknown");
   const env = { ...process.env, LAYERFS_WORKER_ENDPOINT: file, WORKER_PROJECT: `wk-${Date.now().toString(36)}` };
   delete env.LAYERFS_NATIVE;
-  // without the dsh adapter the route stays shut
-  const shut = await run(env);
-  assert.notEqual(shut.code, 0);
-  assert.match(shut.text, /Unsupported: the worker route/);
-  const agent = await run({ ...env, LAYERFS_WORKER_ADAPTER: "dsh" });
+  const agent = await run(env);
   assert.equal(agent.code, 0, agent.text);
   console.log(agent.text.trim());
   const after = await connection(endpointOf(file)).call({ fn: "ping" }).catch(() => null);

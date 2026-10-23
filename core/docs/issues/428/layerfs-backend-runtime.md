@@ -276,10 +276,13 @@ runs Store calls in-process; there is no worker"). Doing nothing silently would
 hide a misconfigured deployment.
 
 **Choosing the transport.** `@layerfs/agent` picks its own binding, because it
-can't depend on runtime: the real addon on Linux, the worker client elsewhere
-(`transport/worker_client.js`, the other end of runtime's `worker/server.js`).
-The worker client connects to the endpoint that runtime's platform launcher
-writes; the endpoint is a setting of its own. `LAYERFS_NATIVE` only ever names a real
+can't depend on runtime: the worker client (`transport/worker_client.js`, the
+other end of runtime's `worker/server.js`) when a worker endpoint is named,
+else the real addon in the caller's process. The worker client connects to the
+endpoint that runtime's platform launcher writes; the endpoint is a setting of
+its own (`LAYERFS_WORKER_ENDPOINT`, or runtime's `useWorker(endpoint)`). Only
+the macOS and Windows platforms start a worker. Any integration may name the
+endpoint; LayerFS checks no integration name (owner, 2026-10-24). `LAYERFS_NATIVE` only ever names a real
 addon again; today dsh points it at a stand-in binding
 ([port/sdk.js](../../../../dsh/packages/host/src/port/sdk.js),
 [windows/sdk.js](../../../../dsh/packages/host/src/windows/sdk.js)) in every
@@ -303,10 +306,13 @@ Removed, because `transport/index.js` picks the binding: `port/sdk.js` (8),
 | `LAYERFS_NATIVE` pointed at a stand-in | `LAYERFS_NATIVE` names the real addon only; the worker endpoint is its own setting |
 | macOS build record in `<home>/.layerfs-store.json`; Windows `manifest.json` hashes | one rule: the worker refuses a bundle whose `manifest.json` hashes don't match |
 
-Renaming the container breaks running installs once. The Host already removes
-older-named `dsh-layerfs-box-<hash>` containers when it starts; the same
-cleanup replaces `layerfs-store` with `<prefix>worker`, and only while no run is
-live.
+Renaming the container broke running installs once. For a while, a
+confirmed `worker.start` or `worker.restart` stopped and removed the older
+`<prefix>store` container before starting `<prefix>worker`. That upgrade path is
+retired (owner, 2026-10-24): `worker.start()` takes no options and stops or
+removes no other container, `worker.restart({ confirm: "restart" })` only
+restarts the worker, and `status()` no longer reports an older Store
+container.
 
 **What stays the same:** loopback only, a random secret, versioned frames, a
 `ProtocolError` on a codec mismatch, one attempt per call, a lost reply
@@ -316,7 +322,8 @@ with no calls in flight. The Windows failure record
 until Init failures have one shared record.
 
 **Open for the owner** ([section 8](#8-open-questions)): whether Linux may
-opt in to the worker, and whether this route serves every integration.
+opt in to the worker. The route serves every integration on macOS and Windows
+(owner, 2026-10-24).
 
 ## 5. Protocol names
 
@@ -372,7 +379,7 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
 | `lfs.js` | 119 | retired; the `layerfs` command in `api/agent/cli/` replaces it (owner 2026-10-23) |
 | `layerfs-client.js` | 76 | `runtime/src/clients.js` (per-project clients), using agent's public API only |
 
-The dsh-specific files stay in the dsh adapter: `index.js`, `binding.js`,
+The dsh-specific files stay in dsh-layerfs: `index.js`, `binding.js`,
 `collector.js`, `env.js`, `records.js`, `route.js` (112), and the UI reads
 above.
 `migrate.js` (44) is #373's one-time upgrade and is dropped when the code moves.
@@ -404,12 +411,11 @@ agents this checkout's skills.
    (dsh README, step 4). `platform/linux` could also offer the macOS launcher
    as an opt-in (`worker: "docker"`), so the host process needs no root. That
    widens `AGENTS.md`'s "Linux: in-process only" rule.
-5. **The worker route for every integration:** the platform folders make the
-   worker available to any integration that uses `@layerfs/runtime`. Today
-   `AGENTS.md` allows it for dsh only (macOS 2026-10-20, Windows 2026-10-22);
-   #382 and #425 ask for it ([README.md, Open decisions](README.md#open-decisions)).
-   Until that's decided, the worker can ship with a check that only the dsh
-   adapter turns it on.
+5. **Closed: the worker route for every integration** (owner, 2026-10-24).
+   The route is open to any integration on macOS and Windows. A named endpoint
+   alone opens it; there is no adapter setting or check. It was first allowed
+   for dsh only (macOS 2026-10-20, Windows 2026-10-22); #382 and #425 asked
+   for it ([README.md, Open decisions](README.md#open-decisions)).
 6. **`daemon` as a name:** background processes run through the Sandbox's
    launcher, not the daemon. If that reads as wrong, `backend.sandbox.*` would
    describe all seven calls; it would sit beside the agent's

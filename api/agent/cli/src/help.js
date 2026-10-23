@@ -24,14 +24,14 @@ usage:  layerfs <family> <call> [args] [options]
         layerfs --version
 
 GLOBAL OPTIONS
-  --project <name>      the project (default $LAYERFS_PROJECT, else $DSH_LAYERFS_PROJECT)
+  --project <name>      the project (default $LAYERFS_PROJECT)
   --text                readable output instead of JSON
   -h, --help            help for the command
 
 SETTINGS come from the environment, as for the SDK: LAYERFS_HOME, LAYERFS_STORE_PATH,
   LAYERFS_DOCKER, LAYERFS_IMAGE, LAYERFS_VOLUME, LAYERFS_DAEMON, LAYERFS_CONTAINER_PREFIX,
   LAYERFS_DAEMON_HOST, LAYERFS_STORE_POLICY, LAYERFS_TRACE, LAYERFS_TRACE_STEP,
-  LAYERFS_TRACE_START; each is also read as DSH_LAYERFS_<NAME>.
+  LAYERFS_TRACE_START.
 
 ARGUMENTS
   <ref>                 main, a Branch, a Commit id or a Layer id

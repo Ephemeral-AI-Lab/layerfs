@@ -1,5 +1,4 @@
-// One real trace check on a Disposable Store: with only the DSH_ names set,
-// a fork, mount, exec, background process, Commit and merge write start and
+// One real trace check on a Disposable Store: with LAYERFS_TRACE set, a fork, mount, exec, background process, Commit and merge write start and
 // end lines that carry their result ids and no file content. Under the E2E
 // launcher (its Store volume, home and deployment):
 //   node api/agent/sdk/test/verify/trace_real.mjs inner
@@ -11,8 +10,7 @@ import { join } from "node:path";
 if (process.argv[2] !== "inner") throw new Error("usage: trace_real.mjs inner (under tools/worktree.py run)");
 const work = mkdtempSync(join(tmpdir(), "layerfs-trace-"));
 const file = join(work, "trace.jsonl");
-for (const name of ["LAYERFS_TRACE", "LAYERFS_TRACE_STEP", "LAYERFS_TRACE_START"]) delete process.env[name];
-Object.assign(process.env, { DSH_LAYERFS_TRACE: file, DSH_LAYERFS_TRACE_START: "1", DSH_LAYERFS_TRACE_STEP: "call_real" });
+Object.assign(process.env, { LAYERFS_TRACE: file, LAYERFS_TRACE_START: "1", LAYERFS_TRACE_STEP: "call_real" });
 const { LayerFS } = await import("@layerfs/agent");
 const { LayerFSBackend } = await import("@layerfs/backend");
 const name = `trace-${Date.now().toString(36)}`;

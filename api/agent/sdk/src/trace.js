@@ -1,7 +1,6 @@
 // Opt-in per-call trace: one JSON line per SDK or backend call, appended to
-// the client's `trace` file (LAYERFS_TRACE, else DSH_LAYERFS_TRACE). Off when
-// no file is named. With LAYERFS_TRACE_START (or DSH_LAYERFS_TRACE_START) set
-// to 1, a start line precedes each call. A line never holds file contents, and
+// the client's `trace` file (LAYERFS_TRACE). Off when no file is named. With
+// LAYERFS_TRACE_START set to 1, a start line precedes each call. A line never holds file contents, and
 // a failed trace write is dropped: it never changes the call's value or refusal.
 import { appendFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -88,11 +87,10 @@ function daemon(telemetry) {
   return { timing: roots, ...(timing?.omitted ? { omitted: timing.omitted } : {}), ...rest };
 }
 
-/** The step label for a call: LAYERFS_TRACE_STEP, else
- * DSH_LAYERFS_TRACE_STEP, as they are at the call; empty means none. */
+/** The step label for a call: LAYERFS_TRACE_STEP as it is at the call;
+ * empty means none. */
 function step() {
-  const env = process.env;
-  const label = env.LAYERFS_TRACE_STEP || env.DSH_LAYERFS_TRACE_STEP;
+  const label = process.env.LAYERFS_TRACE_STEP;
   return typeof label === "string" && label ? { step: short(label) } : {};
 }
 
@@ -113,8 +111,7 @@ export async function traced(options, method, args, send) {
   } catch {
     line = { layerfs_trace: 1, id, method, args: null, start: start.toISOString(), scope };
   }
-  const env = process.env;
-  if ((env.LAYERFS_TRACE_START || env.DSH_LAYERFS_TRACE_START) === "1") write(file, { ...line, phase: "start" });
+  if (process.env.LAYERFS_TRACE_START === "1") write(file, { ...line, phase: "start" });
   line.phase = "end";
   let answer;
   try {

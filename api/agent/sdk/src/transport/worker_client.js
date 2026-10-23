@@ -102,7 +102,7 @@ export function connection(info) {
  */
 function initRun(init, request) {
   const path = request.args.path;
-  const env = Object.keys(process.env).filter((k) => /^(DSH_)?LAYERFS_/.test(k) && !/_(NATIVE|WORKER_ENDPOINT|WORKER_ADAPTER)$/.test(k)).flatMap((k) => ["-e", k]);
+  const env = Object.keys(process.env).filter((k) => /^LAYERFS_/.test(k) && !/_(NATIVE|WORKER_ENDPOINT)$/.test(k)).flatMap((k) => ["-e", k]);
   const argv = [...init.argv, "-v", `${path}:${path}:ro`, ...env, init.image, init.script];
   return new Promise((resolve) => {
     const child = spawn("docker", argv, { stdio: ["pipe", "pipe", "inherit"] });

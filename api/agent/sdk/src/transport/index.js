@@ -6,41 +6,30 @@
 // `@layerfs/agent` chooses its own transport because it cannot depend on
 // `@layerfs/runtime`, whose platform launcher writes the endpoint.
 //
-// The worker route carries Store calls only under the AGENTS.md exceptions:
-// the dsh adapter on macOS (2026-10-20) and on Windows (2026-10-22). Until
-// the owner widens them, the route opens only when the adapter names itself
-// (LAYERFS_WORKER_ADAPTER=dsh); this is a convention check, not a security
-// boundary.
+// The worker route is open to any integration that names an endpoint
+// (AGENTS.md, owner 2026-10-24): @layerfs/runtime starts the worker on macOS
+// and Windows, where a process cannot open the Store itself. LayerFS names no
+// integration here.
 import { LayerFSError } from "../errors.js";
 import { inprocess } from "./inprocess.js";
 import { workerClient } from "./worker_client.js";
 
-/** Adapters the worker route is allowed for. */
-const ALLOWED = new Set(["dsh"]);
-
-/** The worker `useWorker` handed over: { endpoint, adapter }, else null. */
+/** The worker `useWorker` handed over: { endpoint }, else null. */
 let handed = null;
 let local = null;
 /** Worker clients by endpoint file. */
 const workers = new Map();
 
-/** A setting from the environment: LAYERFS_<name>, else DSH_LAYERFS_<name>. */
-export const setting = (name) => process.env[`LAYERFS_${name}`] || process.env[`DSH_LAYERFS_${name}`] || undefined;
-
-const gate = (adapter) => {
-  if (!ALLOWED.has(adapter)) {
-    throw new LayerFSError("Unsupported", `the worker route (LAYERFS_WORKER_ENDPOINT) is allowed only for the dsh adapter (AGENTS.md); LAYERFS_WORKER_ADAPTER is ${adapter ?? "unset"}`, null);
-  }
-};
+/** A setting from the environment: LAYERFS_<name>. */
+export const setting = (name) => process.env[`LAYERFS_${name}`] || undefined;
 
 /** Internal, for @layerfs/runtime: clients made from now on in this process
  * use the worker at `endpoint` (an endpoint file). Takes precedence over the
  * environment. One worker per process: another endpoint is refused. */
-export function useWorker(endpoint, adapter) {
-  gate(adapter);
+export function useWorker(endpoint) {
   if (typeof endpoint !== "string" || !endpoint) throw new LayerFSError("InvalidInput", "a worker endpoint file is required", null);
   if (handed && handed.endpoint !== endpoint) throw new LayerFSError("InvalidInput", `this process already uses the worker at ${handed.endpoint}`, null);
-  handed = { endpoint, adapter };
+  handed = { endpoint };
 }
 
 /** The binding a client made now uses: the handed-over worker, else
@@ -48,7 +37,6 @@ export function useWorker(endpoint, adapter) {
 export function binding() {
   const endpoint = handed?.endpoint ?? setting("WORKER_ENDPOINT");
   if (!endpoint) return (local ??= inprocess());
-  gate(handed?.adapter ?? setting("WORKER_ADAPTER"));
   let client = workers.get(endpoint);
   if (!client) workers.set(endpoint, (client = workerClient(endpoint)));
   return client;

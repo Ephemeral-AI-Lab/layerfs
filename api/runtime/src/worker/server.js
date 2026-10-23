@@ -1,6 +1,6 @@
 // The worker (#428): one program for both platforms whose Store calls cannot
-// run in the caller's process (AGENTS.md exceptions, dsh only: macOS
-// 2026-10-20, Windows 2026-10-22). Merged from the dsh Host's
+// run in the caller's process (macOS and Windows; AGENTS.md, open to any
+// integration since 2026-10-24). Merged from the dsh Host's
 // port/worker.mjs and windows/worker.js. It makes every call with the real
 // Linux addon of a sealed bundle, whose manifest.json hashes it checks
 // first, and keeps each project's Store open while calls use it, closing it

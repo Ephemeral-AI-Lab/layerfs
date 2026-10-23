@@ -95,8 +95,8 @@ try {
 
 1. Checks the name and options: the same project-name pattern and the same
    options as today's constructor (`trace`, `traceStep`, `storePath`,
-   `daemonHost`, `storePolicy`, and the `LAYERFS_*` settings with their
-   `DSH_LAYERFS_*` fallbacks).
+   `daemonHost`, `storePolicy`, and the `LAYERFS_*` settings; since
+   2026-10-24 (owner) no other prefix is read).
 2. Opens the project's Store: in this process on Linux, through the worker on
    macOS and Windows.
 3. Confirms the project exists.
@@ -334,10 +334,9 @@ what an agent may call.
 
 ## 6. Skill changes
 
-These edits land with the implementation, not before. dsh hands live agents
-this checkout's skill (`DSH_LAYERFS_SKILL`, from
-[env.js](../../../../dsh/packages/host/src/env.js)), so an edit that names a
-method before it exists breaks running agents.
+These edits land with the implementation, not before. An integration may hand
+live agents this checkout's skill (dsh does), so an edit that names a method
+before it exists breaks running agents.
 
 | File | Change |
 |---|---|

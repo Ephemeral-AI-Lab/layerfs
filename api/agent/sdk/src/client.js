@@ -59,10 +59,10 @@ export function sandboxArg(sandbox) {
 }
 
 /** Deployment settings from the client options, else the environment
- * (LAYERFS_<NAME>, else DSH_LAYERFS_<NAME>). A Workspace's Sandbox needs
+ * (LAYERFS_<NAME>). A Workspace's Sandbox needs
  * every one but the container prefix and daemon host. */
 export function deployment(options = {}) {
-  const env = (name) => process.env[`LAYERFS_${name}`] || process.env[`DSH_LAYERFS_${name}`] || undefined;
+  const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
   const deploy = {
     docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
     image: options.image ?? env("IMAGE"),

@@ -1,7 +1,8 @@
 // Frames between the worker client (worker_client.js) and a LayerFS home's
-// worker (`@layerfs/runtime`'s worker/server.js), from the dsh Host's
-// port/frames.mjs with the wire format unchanged: a 4-byte big-endian length,
-// then a versioned JSON value, independent of the Node/V8 build. Every
+// worker (`@layerfs/runtime`'s worker/server.js): a 4-byte big-endian length,
+// then a JSON value tagged "layerfs-worker" with its wire version,
+// independent of the Node/V8 build. Both ends run the same SDK (the worker
+// checks it), so the tag changes with the code. Every
 // compound value is tagged so user objects cannot collide with binary markers.
 const invalid = (message) => Object.assign(new Error(`LayerFS worker protocol: ${message}; restart the worker and its clients together`), { code: "ProtocolError" });
 function pack(value) {
@@ -37,11 +38,12 @@ function unpack(value) {
   }
   throw invalid("invalid value tag");
 }
-export const encode = (value) => Buffer.from(JSON.stringify(["dsh-layerfs", 1, pack(value)]));
+const TAG = "layerfs-worker";
+export const encode = (value) => Buffer.from(JSON.stringify([TAG, 1, pack(value)]));
 export function decode(bytes) {
   let value;
   try { value = JSON.parse(bytes.toString("utf8")); } catch { throw invalid("invalid JSON or legacy V8 frame"); }
-  if (!Array.isArray(value) || value.length !== 3 || value[0] !== "dsh-layerfs" || value[1] !== 1) throw invalid("unsupported wire version");
+  if (!Array.isArray(value) || value.length !== 3 || value[0] !== TAG || value[1] !== 1) throw invalid("unsupported wire version");
   return unpack(value[2]);
 }
 

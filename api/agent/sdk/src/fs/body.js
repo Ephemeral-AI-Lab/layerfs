@@ -1,6 +1,6 @@
 // A write's binary body. Any typed array, DataView or ArrayBuffer becomes a
 // Buffer over the same memory, without a copy, so every route takes it: the
-// binding reads any view as bytes, but the dsh port's encoding carries only
+// binding reads any view as bytes, but the worker's encoding carries only
 // Buffer, Uint8Array and ArrayBuffer. The binding copies the bytes when the
 // call starts, after this client's Store is open, so the caller must not
 // change them until the call settles. Memory another thread can change

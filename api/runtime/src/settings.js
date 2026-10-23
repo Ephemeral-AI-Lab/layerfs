@@ -19,7 +19,6 @@ const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
  * @param {string} [given.traceDir] per-agent trace files events.subscribe reads (default <home>/traces)
  * @param {string} [given.containerPrefix] this home's container names (default `layerfs-`)
  * @param {string} [given.stateDir] the runtime's project records (default <home>/.runtime)
- * @param {string} [given.adapter] the integration; the worker route opens only for "dsh" (AGENTS.md)
  * @param {object} [given.wsl] Windows: { distribution, user, node, home }
  * @param {string} [given.platform] linux | macos | windows (default this process's)
  * @param {boolean} [given.sweep] sweep this home's stopped Sandboxes once at open (default true)
@@ -41,7 +40,6 @@ export function resolveSettings(given = {}) {
     traceDir: given.traceDir || join(given.home, "traces"),
     containerPrefix: given.containerPrefix || "layerfs-",
     stateDir: given.stateDir || join(given.home, ".runtime"),
-    adapter: given.adapter ?? null,
     pollMs: given.pollMs ?? 400,
     sweep: given.sweep !== false,
   };
@@ -59,10 +57,9 @@ export function resolveSettings(given = {}) {
   return settings;
 }
 
-/** Settings Init and Workspaces need that are not given. macOS and Windows need a bundle and the dsh adapter too. */
+/** Settings Init and Workspaces need that are not given. macOS and Windows need a bundle too. */
 export const missing = (settings) => [
   ...["image", "daemon", ...(settings.platform === "linux" ? [] : ["bundle"])].filter((name) => !settings[name]),
-  ...(settings.platform !== "linux" && settings.adapter !== "dsh" ? ["adapter"] : []),
 ];
 
 /** The LayerFS home as LayerFS calls see it (Windows: the WSL one). */

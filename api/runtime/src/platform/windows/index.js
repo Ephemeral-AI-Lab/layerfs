@@ -1,6 +1,6 @@
 // Windows: the worker is one Node process per LayerFS home in a selected WSL2
 // distribution, running worker/server.js of a sealed Linux bundle with
-// `--stdin` (AGENTS.md exception, dsh only, 2026-10-22). Linux owns native
+// `--stdin` (AGENTS.md: open to any integration, 2026-10-24). Linux owns native
 // handles, Store I/O and that distribution's Docker Engine; Windows owns the
 // caller. Copied from the dsh Host's windows/host.js (#428). This process
 // owns the worker through its stdin: closing the runtime ends stdin, and the
@@ -38,7 +38,6 @@ function start(settings) {
 }
 
 async function launch(settings, held) {
-  if (settings.adapter !== "dsh") throw refuse("Unsupported", "the Windows worker is allowed only for the dsh adapter (AGENTS.md); open the runtime with adapter: \"dsh\"");
   if (!settings.bundle || !settings.image) throw refuse("InvalidInput", "the Windows worker needs image and a sealed Linux bundle");
   const directory = join(settings.home, "worker"), file = endpointFile(settings.home);
   mkdirSync(directory, { recursive: true });

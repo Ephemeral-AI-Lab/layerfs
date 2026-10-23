@@ -79,7 +79,7 @@ copy of the package in one process, so the same Store is never opened twice.
 +     index.js                                —   new: picks linux, macos or windows
       inprocess.js                           13   (from src/native.js: load layerfs.node)
 +     worker_client.js                        —   new: one worker client, the other end of runtime's worker/server.js; merged from dsh port/binding.js 123 and windows/binding.js 88
-      frames.js                             n/c   (from dsh port/frames.mjs; wire format unchanged)
+      frames.js                             n/c   (from dsh port/frames.mjs; wire tag now "layerfs-worker")
     project/                                  [9]
       init.js                                 5   (called by LayerFS.init)
       list_branches.js                        4

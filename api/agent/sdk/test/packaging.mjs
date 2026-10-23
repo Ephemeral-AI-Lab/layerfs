@@ -1,7 +1,7 @@
 // @layerfs/agent's surface and client lifecycle (#428). Each case is one
 // command; every case but `dispatch` uses the stand-in binding and creates no
 // Store:
-//   node api/agent/sdk/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-gate|transport-order|dispatch
+//   node api/agent/sdk/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-route|transport-order|dispatch
 // `dispatch` loads the real addon (LAYERFS_NATIVE or api/binding/layerfs.node).
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -18,7 +18,7 @@ if (selected !== "dispatch") {
     LAYERFS_STORE_PATH: "/fake/store.sqlite",
   });
 }
-for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "WORKER_ENDPOINT", "WORKER_ADAPTER"]) {
+for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "WORKER_ENDPOINT"]) {
   delete process.env[`LAYERFS_${name}`];
   delete process.env[`DSH_LAYERFS_${name}`];
 }
@@ -161,11 +161,18 @@ if (selected === "surface") {
   ]);
   assert.equal(page.version, "1");
   await shop.close();
-} else if (selected === "worker-gate") {
-  // the worker route opens only for the dsh adapter (AGENTS.md exceptions)
+} else if (selected === "worker-route") {
+  // LayerFS reads LAYERFS_ names only: a DSH_LAYERFS_ twin leaves the client in-process
+  process.env.DSH_LAYERFS_WORKER_ENDPOINT = "/nonexistent/endpoint.json";
+  const local = native.calls.length;
+  const kept = await LayerFS.open("website");
+  assert.ok(native.calls.length > local, "DSH_LAYERFS_WORKER_ENDPOINT is not a LayerFS setting");
+  await kept.close();
+  // an endpoint alone opens the worker route: no adapter or integration is named
   process.env.LAYERFS_WORKER_ENDPOINT = "/nonexistent/endpoint.json";
-  delete process.env.LAYERFS_NATIVE;
-  await assert.rejects(LayerFS.open("website"), { code: "Unsupported", message: /dsh adapter/ });
+  const calls = native.calls.length;
+  await assert.rejects(LayerFS.open("website"), { message: /nonexistent/ });
+  assert.equal(native.calls.length, calls, "the worker route never reaches the addon");
 } else if (selected === "transport-order") {
   // each client keeps the binding it was made with, whatever the call order
   const { fakeWorker } = await import("./fixture/fake-worker.mjs");
@@ -176,9 +183,8 @@ if (selected === "surface") {
     const before = await LayerFS.open("website");                    // in-process, before any worker
     const file = join(dir, "endpoint.json");
     worker.endpoint(file, "/private/configured-home");
-    await assert.rejects(async () => useWorker(file, "other"), { code: "Unsupported" });
-    useWorker(file, "dsh");
-    assert.throws(() => useWorker(join(dir, "another.json"), "dsh"), { code: "InvalidInput", message: /already uses/ });
+    useWorker(file);
+    assert.throws(() => useWorker(join(dir, "another.json")), { code: "InvalidInput", message: /already uses/ });
     const after = await LayerFS.open("website");                     // through the worker
     assert.deepEqual(worker.calls.map((c) => [c.fn, c.op]), [["call", "project.list_branches"]]);
     const local = native.calls.length;
@@ -227,6 +233,6 @@ if (selected === "surface") {
   assert.equal((await binding.backendCall("project.init", {})).refused.code, "UnknownMethod");
   assert.equal((await binding.backendCall("backend.missing", {})).refused.code, "UnknownMethod");
 } else {
-  throw new Error("select surface, lifecycle, copy, sandbox, worker-gate, transport-order or dispatch");
+  throw new Error("select surface, lifecycle, copy, sandbox, worker-route, transport-order or dispatch");
 }
 console.log(`PASS packaging/${selected}`);

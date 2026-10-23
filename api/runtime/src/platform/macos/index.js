@@ -1,7 +1,7 @@
 // macOS: the worker is one long-lived Linux container per LayerFS home,
 // `<prefix>worker` (label layerfs.role=worker), whose main process is
 // worker/server.js of a sealed Linux bundle, making every Store call with
-// the real Linux addon (AGENTS.md exception, dsh only, 2026-10-20). Copied
+// the real Linux addon (AGENTS.md: open to any integration, 2026-10-24). Copied
 // from the dsh Host's box.js (#428). Its port is published to the Mac's
 // loopback only; port and secret go to `<home>/worker/endpoint.json`, with
 // how Init runs: in a container of its own with the source folder mounted
@@ -10,10 +10,7 @@
 // volume directory (inside Docker's VM), the home (writable) and the bundle
 // (read-only); never a broad host folder (sharing /Users stalled Docker
 // Desktop, 2026-10-20). A container of another build is replaced; one of
-// another home is never touched. The older dsh Store container,
-// `<prefix>store`, is listed by status() while it exists; start and restart
-// refuse while it runs unless given { confirm: "restart" }, and then stop and
-// remove it first (one attempt each), since that cuts off any live run on it.
+// another home is never touched.
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -30,34 +27,7 @@ const INIT = "api/runtime/src/worker/init.js";
 // every Docker call goes through the platform object, so a test can stub it
 const docker = (...args) => platform.docker(...args);
 const name = (settings) => `${settings.containerPrefix}worker`;
-const oldName = (settings) => `${settings.containerPrefix}store`;
 
-/** The older dsh Store container: { name, id, state, message }, or null when there is none. */
-async function oldStore(settings) {
-  const row = await docker(settings, ["ps", "-a", "--filter", `name=^${oldName(settings)}$`, "--format", "{{.ID}}\t{{.State}}"]).catch(() => "");
-  const [id, state] = row.split("\n")[0].split("\t");
-  if (!id) return null;
-  const running = state === "running";
-  return {
-    name: oldName(settings), id, state: running ? "running" : state,
-    message: running
-      ? `the older Store container ${oldName(settings)} still runs and may serve a live run; worker.start({ confirm: "restart" }) or worker.restart({ confirm: "restart" }) stops and removes it, then starts ${name(settings)}`
-      : `the older Store container ${oldName(settings)} is ${state}; it is not used`,
-  };
-}
-
-/** Stops and removes a running old Store container, one attempt each, only when confirmed. */
-async function retireOld(settings, options) {
-  const old = await oldStore(settings);
-  if (old?.state !== "running") return;
-  if (options?.confirm !== "restart") throw refuse("InvalidInput", `${old.message}; nothing was changed`);
-  try { await docker(settings, ["stop", "-t", "5", old.id], { timeout: RESTART_MS }); } catch (error) {
-    throw refuse("Failed", `stopping the older Store container ${old.name} failed (${error.stderr?.trim() || error.message}); it was not removed and the worker was not started`);
-  }
-  try { await docker(settings, ["rm", old.id]); } catch (error) {
-    throw refuse("Failed", `the older Store container ${old.name} stopped but was not removed (${error.stderr?.trim() || error.message}); the worker was not started`);
-  }
-}
 const build = (settings) => JSON.parse(readFileSync(join(settings.bundle, "manifest.json"), "utf8")).build_id;
 // the socket path is the Docker VM's, as Docker Desktop and colima provide it
 const mounts = ({ home, bundle }) => [
@@ -71,7 +41,7 @@ async function status(settings) {
   let row;
   try { row = await docker(settings, ["inspect", "-f", '{{.State.Running}}\t{{index .Config.Labels "layerfs.build"}}\t{{.State.StartedAt}}\t{{index .Config.Labels "layerfs.home"}}', name(settings)]); } catch (error) {
     const missing = /No such object|No such container/i.test(error.stderr ?? "");
-    return { worker: { name: name(settings), state: missing ? "missing" : "unknown", error: missing ? null : (error.stderr?.trim() || error.message) }, oldStore: await oldStore(settings) };
+    return { worker: { name: name(settings), state: missing ? "missing" : "unknown", error: missing ? null : (error.stderr?.trim() || error.message) } };
   }
   const [running, label, startedAt, home] = row.split("\t");
   const worker = { name: name(settings), state: running === "true" ? "running" : "stopped", build: label, expected: settings.bundle ? build(settings) : null, home, startedAt };
@@ -80,20 +50,18 @@ async function status(settings) {
     try { info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8")); } catch { /* not written yet */ }
     worker.answering = !!(info && (await ping(info))?.ready);
   }
-  return { worker, oldStore: await oldStore(settings) };
+  return { worker };
 }
 
 let starting = null;
 /** Starts the worker unless it runs, and writes the endpoint; one start at a time. */
-function start(settings, options) {
-  starting ??= launch(settings, options).finally(() => { starting = null; });
+function start(settings) {
+  starting ??= launch(settings).finally(() => { starting = null; });
   return starting;
 }
 
-async function launch(settings, options) {
-  if (settings.adapter !== "dsh") throw refuse("Unsupported", "the macOS worker is allowed only for the dsh adapter (AGENTS.md); open the runtime with adapter: \"dsh\"");
+async function launch(settings) {
   if (!settings.bundle || !settings.image) throw refuse("InvalidInput", "the macOS worker needs image and bundle");
-  await retireOld(settings, options);
   const expected = build(settings), container = name(settings);
   let row = await docker(settings, ["inspect", "-f", '{{.State.Running}}\t{{index .Config.Labels "layerfs.build"}}\t{{index .Config.Labels "layerfs.home"}}', container]).catch(() => null);
   const [running, label, home] = row?.split("\t") ?? [];
@@ -131,10 +99,8 @@ async function launch(settings, options) {
   return status(settings);
 }
 
-/** One `docker restart`, then its new port and readiness. Every project's Store calls fail meanwhile.
- * With the older Store container running, it is retired and the worker started instead. */
-async function restart(settings, options) {
-  if ((await oldStore(settings))?.state === "running") return start(settings, options);
+/** One `docker restart`, then its new port and readiness. Every project's Store calls fail meanwhile. */
+async function restart(settings) {
   const { worker } = await status(settings);
   if (worker.state !== "running") throw refuse("InvalidInput", `the worker is ${worker.state}; start it instead`);
   rmSync(endpointFile(settings.home), { force: true });

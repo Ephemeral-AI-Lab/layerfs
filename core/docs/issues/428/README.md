@@ -124,7 +124,14 @@ The SDK loads the native addon `layerfs.node` in the caller's process, from
 btrfs) that the daemons share. This is the only general route today
 (`AGENTS.md`, "SDK Store calls … run in the SDK's own process").
 
-### 4.2 Worker (current for dsh only; proposed as general)
+### 4.2 Worker (current on macOS and Windows, for any integration)
+
+> **Updated (owner, 2026-10-24):** the worker route is open to any
+> integration on macOS and Windows. `@layerfs/runtime` starts the worker on
+> those platforms only. Any process that names its endpoint
+> (`LAYERFS_WORKER_ENDPOINT`, or runtime's `useWorker(endpoint)`) sends its
+> binding calls there; LayerFS checks no integration name. On Linux, Store
+> calls still run in the caller's process.
 
 On macOS and Windows, Store calls can't run in the caller's process. The SDK
 runs unchanged in the caller's process, but its binding forwards each call to
@@ -132,29 +139,30 @@ one long-lived Linux worker per LayerFS home. The worker makes the call with
 the real Linux binding and keeps each project's Store and daemon connections
 open while the project is in use, closing them after a quiet minute.
 
-| | macOS (2026-10-20 exception) | Windows (2026-10-22 exception) |
+| | macOS (first allowed 2026-10-20) | Windows (first allowed 2026-10-22) |
 | --- | --- | --- |
-| Worker runs in | the Store container (`<containerPrefix>store`) | a Node process in a chosen WSL2 distribution |
-| Source today | `dsh/packages/host/src/box.js`, `port/` | `dsh/packages/host/src/windows/` |
-| Bundle | `layerfs.node`, `layerfs-daemon`, `api/` | sealed bundle with `manifest.json`; hashes checked |
+| Worker runs in | the container `<containerPrefix>worker` (label `layerfs.role=worker`) | a Node process in a chosen WSL2 distribution |
+| Source today | [api/runtime/src/platform/macos/](../../../../api/runtime/src/platform/macos/), [worker/](../../../../api/runtime/src/worker/) | [api/runtime/src/platform/windows/](../../../../api/runtime/src/platform/windows/), [worker/](../../../../api/runtime/src/worker/) |
+| Bundle | sealed bundle with `manifest.json`; hashes checked | sealed bundle with `manifest.json`; hashes checked |
 
-Wire format (current, [port/frames.mjs](../../../../dsh/packages/host/src/port/frames.mjs)):
+Wire format (current, [frames.js](../../../../api/agent/sdk/src/transport/frames.js)):
 loopback TCP only, a random secret, and frames made of a 4-byte big-endian
-length followed by versioned JSON. Every compound value is tagged
+length followed by JSON tagged `layerfs-worker` with its wire version. Every compound value is tagged
 (`["buffer", base64]`, `["bigint", "…"]`, `["object", …]`), so binary values
 and user objects can't be confused. It doesn't depend on Node or V8 versions.
-A codec mismatch is a `ProtocolError`, and the call is never replayed. Host
-and worker upgrade together, with no calls in flight.
+A codec mismatch is a `ProtocolError`, and the call is never replayed. Both
+ends run the same SDK, which the worker checks, so they upgrade together, with
+no calls in flight.
 
 **HTTP.** The worker does not speak HTTP today. If integrations outside Node
 need it, HTTP (or WebSocket) can frame the same tagged JSON calls, with the
 same secret, loopback-only and no-replay rules. It's another framing of the
 same protocol, not a second API. **Proposed, pending [Open decisions](#open-decisions) 1.**
 
-**Proposed:** move the worker out of `dsh/` into a shared package beside the
-SDK. #382 already does this for macOS as a sibling `port/` package. The
-Windows worker would join it (#425). Today's exceptions name dsh (and, if
-#382 merges, Pi). Extending them to every integration is an owner decision.
+**Done:** the worker moved out of `dsh/` into `@layerfs/runtime`
+(`api/runtime/src/worker/`), one program for macOS and Windows. The route was
+first allowed for dsh only; since 2026-10-24 (owner) it is open to any
+integration ([Open decisions](#open-decisions) 1).
 
 ## 5. SDK groups
 
@@ -211,7 +219,7 @@ Gaps (current):
 | Errors | `LayerFSError`, `isRefusal(error, code)`, `CODES` | listed per method in the method list |
 | Trace | `LAYERFS_TRACE` file, format `layerfs_trace: 1` ([api/README.md, Call trace](../../../../api/README.md#call-trace)) | unchanged; event stream reuses its fields |
 | Actor | `LAYERFS_TRACE_STEP` / `traceStep`: a free-text label | an `actor` option `{ id, name, parent }` on the client, written into every trace line and event |
-| Configuration | `LAYERFS_HOME`, `_DOCKER`, `_IMAGE`, `_VOLUME`, `_DAEMON`, `_STORE_PATH`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`, `_TRACE_STEP`, `_TRACE_START`; each falls back to a `DSH_LAYERFS_` twin | the `DSH_LAYERFS_` twins move into the dsh adapter, which is the only integration that needs them (dsh passes only that prefix into bash) |
+| Configuration | `LAYERFS_HOME`, `_DOCKER`, `_IMAGE`, `_VOLUME`, `_DAEMON`, `_STORE_PATH`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`, `_TRACE_STEP`, `_TRACE_START`, `_PROJECT` (CLI), `_WORKER_ENDPOINT`; read by their `LAYERFS_` names only (owner, 2026-10-24) | unchanged; an integration that can set only its own prefix maps the names in its own wrapper (dsh-layerfs does) |
 
 **Why actor matters.** Every integration that runs several agents wants to
 show who made each Branch and Commit. dsh does it today by labelling trace
@@ -288,7 +296,7 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
 
 About 799 lines are specific to dsh, including its routes and UI reads. The
 rest is kit material. `model` (960), `view` (2,672) and `client` (1,978) are
-dsh's UI and stay in the dsh adapter.
+dsh's UI and stay in dsh-layerfs.
 
 ### 6.3 dsh's routes
 
@@ -366,10 +374,10 @@ as the first integration built on this design. Order:
 
 ## Open decisions
 
-1. **Worker route for every integration.** Today a worker may carry Store
-   calls only for dsh on macOS and Windows. Should it become a supported
-   transport for any integration, with optional HTTP framing (4.2)? If not,
-   other integrations are Linux-only, and LayerFS serves no HTTP at all.
+1. **Worker route for every integration.** **Decided (owner, 2026-10-24):**
+   the worker carries Store calls for any integration on macOS and Windows
+   (4.2). Optional HTTP framing is still open; until it is decided, LayerFS
+   serves no HTTP at all.
 2. **Actor storage.** Trace and events only, or also recorded with each
    Commit (a Store format change)?
 3. **Sandbox placement.** Should an integration be able to choose a

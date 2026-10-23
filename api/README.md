@@ -54,8 +54,8 @@ A client is made by `LayerFS.open(name)` (an existing project) or
 `LayerFS.init(name, folder, timeout?)` (Init, then the same open); both are
 async and return a ready client, and `new LayerFS()` is refused
 `InvalidInput`. **There is no options argument:** every setting comes from the
-environment, read once when the client is made (each `LAYERFS_` name else its
-`DSH_LAYERFS_` twin): `LAYERFS_HOME`, `_STORE_PATH`, `_DOCKER`, `_IMAGE`,
+environment, read once when the client is made, by its `LAYERFS_` name only:
+`LAYERFS_HOME`, `_STORE_PATH`, `_DOCKER`, `_IMAGE`,
 `_VOLUME`, `_DAEMON`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`,
 `_STORE_POLICY` (and `_TRACE_STEP`, read at each call). An object passed where
 the options went (`LayerFS.open(name, {…})`, or an object as `LayerFS.init`'s
@@ -110,10 +110,10 @@ file is `global/store.sqlite` in the project's volume, so the process runs where
 that volume is mounted (`/layerfs-store` in a Sandbox). This is Linux only, with
 the Store on a local filesystem the daemons share (ext4, xfs, btrfs); anywhere
 else opening fails `Unsupported`, and without a `storePath` it fails
-`InvalidInput`. On macOS and Windows the dsh adapter alone may send the calls
-to its LayerFS home's worker instead (`LAYERFS_WORKER_ENDPOINT` with
-`LAYERFS_WORKER_ADAPTER=dsh`, the AGENTS.md exceptions); any other adapter is
-refused `Unsupported`. A client keeps the binding it was made with: the
+`InvalidInput`. On macOS and Windows, any process that names its LayerFS
+home's worker (`LAYERFS_WORKER_ENDPOINT`, or the endpoint `@layerfs/runtime`
+hands over with `useWorker`) sends the calls there instead. The route is open to any integration (owner,
+2026-10-24); LayerFS names none. A client keeps the binding it was made with: the
 in-process addon, or the worker if one was set when it was made, so a client
 made before `@layerfs/runtime` hands over its worker stays in-process and
 every later one uses the worker. Mount does not scan or materialize the complete tree.
@@ -144,14 +144,17 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |
 | `LAYERFS_NATIVE` | Optional path of the real addon; defaults to `api/binding/layerfs.node`. |
-| `LAYERFS_WORKER_ENDPOINT`, `LAYERFS_WORKER_ADAPTER` | macOS and Windows, dsh only: the endpoint file of the LayerFS home's worker, which then makes every binding call; the adapter must be `dsh`. |
+| `LAYERFS_WORKER_ENDPOINT` | macOS and Windows: the endpoint file of the LayerFS home's worker, which then makes every binding call. Any integration may set it. |
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. Linux only, on a local filesystem the daemons share; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [Call trace](#call-trace)); unset means no trace. |
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
 | `LAYERFS_TRACE_START` | `1` adds a start line before each traced call; read at every call. |
-| `DSH_LAYERFS_HOME`, `DSH_LAYERFS_DOCKER`, `DSH_LAYERFS_IMAGE`, `DSH_LAYERFS_VOLUME`, `DSH_LAYERFS_DAEMON`, `DSH_LAYERFS_STORE_PATH`, `DSH_LAYERFS_TRACE`, `DSH_LAYERFS_TRACE_STEP`, `DSH_LAYERFS_TRACE_START` | Each is used when its `LAYERFS_` name is unset or empty. A host that may only set `DSH_*` names in a command's environment (deepseek-harness) configures and traces the SDK through these. |
+
+The SDK and the `layerfs` command read only these `LAYERFS_` names. An
+integration that can set only names with its own prefix maps them to these in
+its own wrapper.
 
 A Sandbox is a container running one daemon on the project's Store. The
 project has numbered Sandboxes, `1`, `2`, …, each on one image and holding up
@@ -421,7 +424,7 @@ counts are reported without inventing exclusive byte attribution.
 import { LayerFSRuntime } from "@layerfs/runtime";
 const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
 try {
-  await runtime.status();                  // { platform, missing, docker, worker, oldStore, disk, sweep }
+  await runtime.status();                  // { platform, missing, docker, worker, disk, sweep }
   const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional: LayerFS.init's 300 s default
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
@@ -445,7 +448,7 @@ first project exists, after one is removed and while the worker is down.
 Agents don't import it. Settings (`settings.js`): `home` (required), `image`,
 `daemon` (default the bundle's), `bundle`, `docker`, `volumes` (Linux),
 `traceDir` (default `<home>/traces`), `containerPrefix`, `stateDir` (default
-`<home>/.runtime`, the runtime's project records), `adapter`, `sweep`
+`<home>/.runtime`, the runtime's project records), `sweep`
 (default true) and on Windows `wsl: { distribution, user, node, home }`. A
 missing setting does not refuse `open`: `status().missing` lists it.
 
@@ -485,26 +488,25 @@ Each platform folder implements one interface (`endpoint`, `status`,
 - **macOS** runs the worker as one container per home, `<prefix>worker`
   (label `layerfs.role=worker`), with the bundle's `worker/server.js`; Init
   runs in a container of its own with the source folder mounted read-only.
-  The older dsh Store container, `<prefix>store`, is listed by
-  `status().oldStore` while it exists. While it runs, `worker.start` and
-  `worker.restart` are refused `InvalidInput` unless given
-  `{ confirm: "restart" }`; then they stop it and remove it (one attempt
-  each; a failed step stops there) and start `<prefix>worker`, which cuts off
-  any live run on the old container. The worker's secret reaches `docker
+  `worker.start()` takes no options and starts or reuses `<prefix>worker`
+  only; it stops or removes no other container. `worker.restart({ confirm:
+  "restart" })` restarts the worker, which cuts off every project's Store
+  calls meanwhile. The worker's secret reaches `docker
   run` through its environment, never its command line.
 - **Windows** runs the worker as a Node process in a WSL2 distribution
   (`server.js --stdin`); Init runs in the worker, which maps the folder with
   `wslpath`. This process owns the worker through its stdin: `close()` drains
   and ends it.
 
-The worker route is open only for the dsh adapter (AGENTS.md exceptions):
-with `adapter: "dsh"` the runtime hands its endpoint to `@layerfs/agent`
-(`useWorker`, without changing the environment), so every client made after
-`open` in its process uses the worker; a client made before keeps its
-in-process binding. One worker per process: a second runtime of another home
-is refused. The dsh adapter gives agents' bash calls `LAYERFS_WORKER_ENDPOINT`
-and `LAYERFS_WORKER_ADAPTER=dsh`. Without it, `worker.start` is refused
-`Unsupported`. The endpoint is `<home>/worker/endpoint.json`, `{ home, port,
+The runtime starts a worker only on macOS and Windows. The worker route is
+open to any integration (owner, 2026-10-24): on those platforms the runtime
+hands its endpoint to `@layerfs/agent` (`useWorker(endpoint)`, without
+changing the environment), so every client made after `open` in its process
+uses the worker; a client made before keeps its in-process binding. One
+worker per process: a second runtime of another home is refused. Another
+process, such as an agent's command, uses the worker when its
+`LAYERFS_WORKER_ENDPOINT` names the endpoint file; the integration that runs
+it sets that. The endpoint is `<home>/worker/endpoint.json`, `{ home, port,
 secret, build, daemonHost?, init? }`, readable by its user only. The worker
 checks every file of the bundle's `manifest.json` before it listens.
 
@@ -531,7 +533,7 @@ example `layerfs sandbox create`, `layerfs workspace mount <sandbox>
 
 ## Call trace
 
-`LAYERFS_TRACE=<file>` (else `DSH_LAYERFS_TRACE`), as set when the client is
+`LAYERFS_TRACE=<file>`, as set when the client is
 made, appends one JSON line to `file` for every agent and backend call that
 reaches the native binding.
 Unset, nothing is written and nothing changes. A failed trace write is dropped;
@@ -592,7 +594,7 @@ step. `LAYERFS_TRACE_STEP` is read at each call, so a long-lived process can
 change it between calls. Unset or empty, lines
 have no `step`. A label alone traces nothing.
 
-With `LAYERFS_TRACE_START=1` (or `DSH_LAYERFS_TRACE_START=1`), each traced
+With `LAYERFS_TRACE_START=1`, each traced
 call first writes a start line: the same `layerfs_trace`, `id`, `step`, `method`,
 `args`, `start` and `scope` as its end line, with `phase: "start"` and no
 outcome fields. A viewer can show a call while it runs; a start line with no
@@ -604,10 +606,11 @@ The trace is diagnostic timing, not a benchmark measurement. Off means no scope,
 no observed exchange, no daemon timing and byte-identical replies.
 
 Checks: `node api/agent/sdk/test/trace.mjs <case>` runs one case (`on`, `off`,
-`failure`, `dsh-env`, `start`, `ids`, `no-content`) over a stand-in binding;
-`node api/agent/sdk/test/verify/trace_real.mjs <file>` traces a fork, mount, exec,
-process, commit and merge on a fresh Disposable Store with only the `DSH_`
-names set.
+`failure`, `layerfs-env`, `start`, `ids`, `no-content`) over a stand-in
+binding; `layerfs-env` checks that an integration's own prefixed names are not
+settings. `node api/agent/sdk/test/verify/trace_real.mjs inner` traces a fork,
+mount, exec, process, commit and merge on a fresh Disposable Store with the
+`LAYERFS_TRACE` names set.
 
 ## Builds and compatibility
 

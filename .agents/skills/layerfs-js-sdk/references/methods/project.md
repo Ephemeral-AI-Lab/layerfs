@@ -10,7 +10,7 @@ Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-pr
 ## `LayerFS.open(name)` and `close()`
 
 A client of an existing project. It takes no options: settings come from the
-environment (`LAYERFS_*`, or the `DSH_LAYERFS_*` dsh sets), and an options object is
+environment (`LAYERFS_*` only), and an options object is
 refused `InvalidInput`. `open` opens the project's Store and looks the project
 up once, so a missing project is refused `NoSuchProject` at once; if it fails, nothing
 stays open. There is no `new LayerFS(…)`: it's refused `InvalidInput`.

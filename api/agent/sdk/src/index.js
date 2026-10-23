@@ -93,12 +93,12 @@ export class LayerFS {
   }
 
   /** Not public: `LayerFS.open` and `LayerFS.init` make clients. Every
-   * setting is read from the environment once, here, into `options`, each
-   * LAYERFS_ name else its DSH_LAYERFS_ twin. LAYERFS_TRACE names a
+   * setting is read from the environment once, here, into `options`, by its
+   * LAYERFS_ name. LAYERFS_TRACE names a
    * per-call trace file; LAYERFS_TRACE_STEP, read at each call, labels its
    * lines. Deployment
-   * settings read LAYERFS_HOME, _DOCKER, _IMAGE, _VOLUME and _DAEMON, each
-   * else its DSH_LAYERFS_ twin; a Sandbox this client starts runs _IMAGE
+   * settings read LAYERFS_HOME, _DOCKER, _IMAGE, _VOLUME and _DAEMON; a
+   * Sandbox this client starts runs _IMAGE
    * on _VOLUME. LAYERFS_CONTAINER_PREFIX (default `layerfs-`) names every
    * container it starts `<prefix><project>-<n>`.
    * LAYERFS_DAEMON_HOST is the host this process
@@ -119,9 +119,7 @@ export class LayerFS {
       throw new LayerFSError("InvalidInput", "a project name is required", null);
     }
     this.projectName = projectName;
-    // Each LAYERFS_ setting falls back to its DSH_LAYERFS_ twin, the only
-    // names deepseek-harness may set in a bash call's environment.
-    const env = (name) => process.env[`LAYERFS_${name}`] || process.env[`DSH_LAYERFS_${name}`] || undefined;
+    const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
     this.options = {
       home: env("HOME"),
       trace: env("TRACE"),

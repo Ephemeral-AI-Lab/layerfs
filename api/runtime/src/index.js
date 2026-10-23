@@ -9,11 +9,10 @@
 //
 // On macOS and Windows, Store calls run in the home's worker (platform/),
 // and this process's @layerfs/agent clients reach it through the endpoint
-// the platform writes. That route is open only for the dsh adapter
-// (AGENTS.md exceptions): with `adapter: "dsh"` the runtime hands the
-// endpoint to @layerfs/agent (useWorker), and every client made after that
-// in this process, the runtime's own or not, uses the worker; a client made
-// before keeps its binding. Any other adapter gets no worker.
+// the platform writes: the runtime hands that endpoint to @layerfs/agent
+// (useWorker), and every client made after that in this process, the
+// runtime's own or not, uses the worker; a client made before keeps its
+// binding. The route is open to any integration (AGENTS.md, 2026-10-24).
 import { LayerFSError } from "@layerfs/agent";
 import { useWorker } from "@layerfs/agent/internal";
 import { Clients } from "./clients.js";
@@ -54,7 +53,7 @@ export class LayerFSRuntime {
     this.platform = PLATFORMS[settings.platform];
     this.closed = false;
     const endpoint = this.platform.endpoint(settings);
-    if (endpoint && settings.adapter === "dsh") useWorker(endpoint, "dsh");
+    if (endpoint) useWorker(endpoint);
     this.clients = new Clients(this);
     const jobs = new InitJobs((prepared, report) => runInit(this, prepared, report));
     const live = (method) => async (...args) => {
@@ -70,8 +69,7 @@ export class LayerFSRuntime {
     };
     this.status = live(async () => ({ ...(await status(this)), sweep: this.swept }));
     this.worker = {
-      // macOS: { confirm: "restart" } also retires a running older Store container
-      start: live((options) => this.platform.start(settings, options)),
+      start: live(() => this.platform.start(settings)),
       restart: live((options) => {
         if (options?.confirm !== "restart") throw new LayerFSError("InvalidInput", "a restart cuts off every project's Store calls; confirm it with { confirm: \"restart\" }", null);
         return this.platform.restart(settings, options);
