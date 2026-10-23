@@ -125,7 +125,7 @@ if (selected === "surface") {
   assert.equal(sent("sandbox.create").deploy.image, "sha256:other");
   await assert.rejects(shop.sandbox.create({ image: 7 }), { code: "InvalidInput" });
   // mount names its Sandbox (no placement): the native call gets { sandbox, branch }, no image
-  assert.deepEqual(await shop.workspace.mount("2", "feature"), { sandbox: "2", path: "/workspaces/w1", image: undefined });
+  assert.deepEqual(await shop.workspace.mount("2", "feature"), { sandbox: "2", path: "/workspaces/w1", image: "fake-image" });
   const mounted = sent("workspace.mount");
   assert.deepEqual([mounted.sandbox, mounted.branch, "image" in mounted], ["2", "feature", false]);
   const asked = native.calls.length;

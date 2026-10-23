@@ -158,8 +158,9 @@ npm --prefix cli install
 node --test cli/test/cli.test.mjs
 ```
 
-The tests run the real `@layerfs/agent` JavaScript over a stand-in native
-binding (`cli/test/fixture/fake-native.cjs`) that records every call, so they
-need no Docker, Store or daemon. They check that every table entry makes its
+The tests run the real `@layerfs/agent` JavaScript over the stand-in native
+binding the SDK's own tests use
+(`sdk/js/packages/agent/test/fixture/fake-native.cjs`), which records every
+call, so they need no Docker, Store or daemon. They check that every table entry makes its
 SDK call with the right arguments, plus parsing, bodies, output and exit codes,
 and that `cli/src` has a command file for every SDK call file.

@@ -1,6 +1,7 @@
 // The layerfs command end to end: each test spawns `node cli/src/layerfs.js`
 // with the real @layerfs/agent JavaScript over a stand-in native binding
-// (fixture/fake-native.cjs), which logs every binding call. No Docker, Store
+// (sdk/js/packages/agent/test/fixture/fake-native.cjs, shared with the SDK
+// tests), which logs every binding call. No Docker, Store
 // or daemon; runs anywhere:
 //   node --test cli/test/cli.test.mjs
 import assert from "node:assert/strict";
@@ -15,7 +16,7 @@ import { usage } from "../src/help.js";
 import { tables, written } from "./doc-tables.mjs";
 
 const CLI = fileURLToPath(new URL("../src/layerfs.js", import.meta.url));
-const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
+const FAKE = fileURLToPath(new URL("../../sdk/js/packages/agent/test/fixture/fake-native.cjs", import.meta.url));
 const work = realpathSync(mkdtempSync(join(tmpdir(), "layerfs-cli-")));
 after(() => rmSync(work, { recursive: true, force: true }));
 
@@ -126,7 +127,7 @@ test("dashed call names are the same calls", () => {
 
 test("init prints Init's result", () => {
   const r = cli(["init", "site", source]);
-  assert.deepEqual(JSON.parse(r.out), { kind: "Initialized", project: "site", head: "lay0" });
+  assert.deepEqual(JSON.parse(r.out), { kind: "Initialized", project: "site", layer: "lay0", root: "r00t", store: "/fake/store.sqlite" });
 });
 
 test("mount prints the Workspace handle", () => {
