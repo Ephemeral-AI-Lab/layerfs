@@ -104,12 +104,28 @@ pub(super) fn host<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
                 if key.equals("Type") {
                     once(&mut seen, 1)?;
                     valid &= j.string_equals("json-file")?;
+                } else if key.equals("Config") {
+                    once(&mut seen, 2)?;
+                    let mut config_seen = 0;
+                    j.object(|j, key| {
+                        if key.equals("max-size") {
+                            once(&mut config_seen, 1)?;
+                            valid &= j.string_equals("10m")?;
+                        } else if key.equals("max-file") {
+                            once(&mut config_seen, 2)?;
+                            valid &= j.string_equals("3")?;
+                        } else {
+                            j.skip(4)?;
+                        }
+                        Ok(())
+                    })?;
+                    valid &= config_seen == 3;
                 } else {
                     j.skip(3)?;
                 }
                 Ok(())
             })?;
-            valid &= seen == 1;
+            valid &= seen == 3;
         } else {
             j.skip(2)?;
         }
