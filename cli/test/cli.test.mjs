@@ -126,7 +126,7 @@ for (const [why, argv, message] of [
   ["unknown option", ["fs", "stat", "main", "/a", "--nope"], "unknown option --nope"],
   ["unknown short option", ["fs", "stat", "main", "/a", "-x"], "unknown option -x"],
   ["duplicate option", ["fs", "mkdir", "cart", "/d", "-m", "a", "--message", "b"], "--message is given twice"],
-  ["bool with a value", ["branch", "diff_branches", "a", "b", "--hunks=yes"], "--hunks takes no value"],
+  ["bool with a value", ["branch", "diff_branches", "a", "b", "--no-hunks=yes"], "--no-hunks takes no value"],
   ["int that is not a whole number", ["project", "list_branches", "--page-size", "x"], "--page-size takes a whole number"],
   ["bad JSON option", ["branch", "merge", "a", "b", "ab", "--units", "{"], "--units is not JSON"],
   ["option with no value", ["fs", "mkdir", "cart", "/d", "-m"], "-m needs a value"],

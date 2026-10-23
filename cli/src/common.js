@@ -5,7 +5,9 @@ import { UsageError } from "./argv.js";
 
 export const PAGE = { "page-size": "int", "page-pos": "int" };
 export const MESSAGE = { message: "text" };
-export const DIFF = { ...PAGE, cursor: "text", hunks: "bool" };
+// --no-hunks sends hunks: false (paths without line changes); left out, hunks is not
+// sent and the SDK lists line changes, its default.
+export const DIFF = { ...PAGE, cursor: "text", "no-hunks": "bool" };
 
 /** The bytes of `--from <file>`, else of stdin. */
 export async function body(o, io) {

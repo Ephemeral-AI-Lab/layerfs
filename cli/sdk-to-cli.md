@@ -53,7 +53,7 @@ layerfs sandbox close 1
   that is left out is not sent, so the SDK applies its own default (`fs list
   main` lists `/`, `branch fork cart` forks from main).
 - **Options** are the SDK's remaining arguments as flags: `--page-size <n>`,
-  `--start-line <n>`, `--hunks`, `--image <digest>`. A value is `--name value`
+  `--start-line <n>`, `--no-hunks` (sends `hunks: false`), `--image <digest>`. A value is `--name value`
   or `--name=value`; `-m <text>` is the Commit message, the only short option.
   A whole number must be digits only, `--units` is JSON, a flag takes no value,
   and an option given twice or not known is refused. `--` ends the options, so
@@ -104,8 +104,8 @@ table differs, and when a family's files stop matching the SDK's.
 | `project.list_sandboxes` | `layerfs project list_sandboxes [--page-size <n>] [--page-pos <n>]` |
 | `branch.fork` | `layerfs branch fork <name> [<from-ref>]` |
 | `branch.list_commits` | `layerfs branch list_commits <branch> [--page-size <n>] [--page-pos <n>]` |
-| `branch.diff_commits` | `layerfs branch diff_commits <from-commit> <to-commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--hunks]` |
-| `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--hunks]` |
+| `branch.diff_commits` | `layerfs branch diff_commits <from-commit> <to-commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
+| `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
 | `branch.merge` | `layerfs branch merge <a> <b> <name> [-m <text>] [--units <json>]` |
 | `branch.publish` | `layerfs branch publish <branch> [<commit>]` |
 | `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>]` |
