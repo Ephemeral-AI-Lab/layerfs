@@ -1,8 +1,8 @@
 // Idle close as the binding sees it (#373): a Sandbox whose daemon ended
-// itself is a stopped container. The next listing reclaims it (deletes the
-// container and its records, starts nothing), and the next sandbox.create
-// reclaims one too and starts Sandbox 1 again (no placement since
-// 2026-10-23: a mount names its Sandbox). The container is stopped here through
+// itself is a stopped container. Listing leaves it out but removes nothing
+// (read-only since 2026-10-23); the next sandbox.create reclaims it (deletes
+// the container and its records) and starts Sandbox 1 again (no placement:
+// a mount names its Sandbox). The container is stopped here through
 // the Engine, which is what the daemon's own exit leaves; that exit is
 // checked by layerfs-daemon's observed_application test. Under the E2E
 // launcher (its Store volume, home and deployment):
@@ -37,7 +37,7 @@ try {
   await layerfs.branch.fork("lane");
   assert.deepEqual((await layerfs.project.list_sandboxes()).items.map((s) => s.sandbox), [], "Import starts no Sandbox");
 
-  // Listing reclaims a stopped Sandbox this process still knows.
+  // Listing leaves out a stopped Sandbox and reclaims nothing.
   const first = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "lane");
   assert.equal(first.sandbox, "1");
   const one = container();
@@ -45,14 +45,15 @@ try {
   await layerfs.workspace.unmount(first, true);
   assert.equal(await engine("POST", `/v1.54/containers/${one}/stop?t=10`), 204);
   assert.deepEqual((await layerfs.project.list_sandboxes()).items, [], "a stopped Sandbox is not listed");
-  assert.equal(existsSync(records), false, "its records are gone");
-  assert.equal(await engine("GET", `/v1.54/containers/${one}/json`), 404, "its container is deleted");
+  assert.equal(existsSync(records), true, "listing keeps its records");
+  assert.equal(await engine("GET", `/v1.54/containers/${one}/json`), 200, "listing keeps its container");
 
-  // sandbox.create reclaims one too, then starts Sandbox 1 again.
+  // sandbox.create reclaims it, then starts Sandbox 1 again.
   const second = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "lane");
   const two = container();
   assert.equal(second.sandbox, "1");
   assert.notEqual(two, one, "a new container");
+  assert.equal(await engine("GET", `/v1.54/containers/${one}/json`), 404, "create deleted the stopped container");
   await layerfs.workspace.unmount(second, true);
   assert.equal(await engine("POST", `/v1.54/containers/${two}/stop?t=10`), 204);
   const third = await layerfs.workspace.mount((await layerfs.sandbox.create()).sandbox, "lane");

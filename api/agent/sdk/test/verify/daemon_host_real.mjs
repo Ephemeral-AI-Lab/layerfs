@@ -6,12 +6,12 @@
 //
 //   node api/agent/sdk/test/verify/daemon_host_real.mjs outer <daemon> <addon> <image>
 //
-// `outer` (on the Docker host) makes a fresh volume and runs `inner` twice in
-// the runtime image, each in its own container with the Docker socket and the
-// volume at /layerfs-store: once with LAYERFS_DAEMON_HOST set (sandbox.create,
+// `outer` (on the Docker host) runs `inner` twice in the runtime image, each
+// in its own container with the Docker socket and a fresh volume of its own at
+// /layerfs-store (Init installs a Store only where none exists): once with LAYERFS_DAEMON_HOST set (sandbox.create,
 // which starts the project's first Sandbox, then mount, exec and unmount must
 // succeed) and once without it (the control: sandbox.create must fail to connect). Then it removes every container its runs
-// named and the volume. One attempt per step; nothing is retried.
+// named and both volumes. One attempt per step; nothing is retried.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -57,7 +57,7 @@ async function inner(mode) {
     await layerfs.workspace.unmount(ws, true);
     console.log(`HOST ok through ${process.env.LAYERFS_DAEMON_HOST}`);
   } finally {
-    await layerfs.close?.().catch(() => {});
+    await layerfs?.close?.().catch(() => {});
     rmSync(work, { recursive: true, force: true });
   }
 }
@@ -65,13 +65,14 @@ async function inner(mode) {
 function outer([daemon, addon, image]) {
   assert.ok(daemon && addon && image, "usage: outer <daemon> <addon> <image digest>");
   const stamp = `f020-host-${Date.now().toString(36)}`;
-  const volume = `layerfs-issue352-${stamp}`;
   const docker = (args, options = {}) => spawnSync("docker", args, { encoding: "utf8", ...options });
-  execFileSync("docker", ["volume", "create", volume], { stdio: "ignore" });
-  const results = [];
+  const results = [], volumes = [];
   try {
     for (const mode of ["host", "loopback"]) {
       const prefix = `${stamp}-${mode}-`;
+      const volume = `layerfs-issue352-${stamp}-${mode}`;
+      execFileSync("docker", ["volume", "create", volume], { stdio: "ignore" });
+      volumes.push(volume);
       const env = { LAYERFS_DOCKER: "/var/run/docker.sock", LAYERFS_IMAGE: image, LAYERFS_VOLUME: volume, LAYERFS_DAEMON: daemon, LAYERFS_NATIVE: addon, LAYERFS_CONTAINER_PREFIX: prefix, LAYERFS_CONSTRUCTION_WORKERS: "1", ...(mode === "host" ? { LAYERFS_DAEMON_HOST: HOST } : {}) };
       const run = docker(["run", "--rm", "--name", `layerfs-issue352-${prefix}client`, "-v", `${REPO}:${REPO}`, "-v", `${dirname(daemon)}:${dirname(daemon)}:ro`, "-v", `${dirname(addon)}:${dirname(addon)}:ro`, "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", `${volume}:/layerfs-store`, ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]), "-w", REPO, "--entrypoint", "node", RUNTIME, fileURLToPath(import.meta.url), "inner", mode], { timeout: 55_000 });
       results.push({ mode, status: run.status, out: (run.stdout + run.stderr).trim().split("\n").slice(-6).join("\n") });
@@ -80,7 +81,7 @@ function outer([daemon, addon, image]) {
       if (left.length) docker(["rm", "-f", ...left]);
     }
   } finally {
-    docker(["volume", "rm", volume]);
+    for (const volume of volumes) docker(["volume", "rm", volume]);
   }
   for (const r of results) console.log(`== ${r.mode} exit ${r.status}\n${r.out}`);
   assert.equal(results[0].status, 0, "the client reaches the daemon through the configured host");

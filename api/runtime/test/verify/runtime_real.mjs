@@ -28,7 +28,8 @@ runtime.platform = {
   ...runtime.platform,
   async docker(settings, args) {
     docker.push(args.slice(0, 2).join(" "));
-    if (args[0] === "volume" && args[1] === "create") { mkdirSync(join(volumes, args[2], "_data"), { recursive: true }); return args[2]; }
+    // Init labels the volume (--label ...), so its name is the last argument
+    if (args[0] === "volume" && args[1] === "create") { mkdirSync(join(volumes, args.at(-1), "_data"), { recursive: true }); return args.at(-1); }
     if (args[0] === "volume" && args[1] === "rm") { rmSync(join(volumes, args[2]), { recursive: true }); return args[2]; }
     if (args[0] === "version") return "stub";
     if (args[0] === "ps") return "";
