@@ -580,3 +580,22 @@ migration. Select a fresh project/Store for the new format.
 Disposable/WAL/synchronous=OFF only. Durable execution is NOT_RUN — disabled by
 owner until explicit reauthorization. One attempted operation; no retry or replay.
 Zombie reaping and the existing replaced-inode FUSE policy remain owner-deferred.
+
+## Tests
+
+The stand-in tests need no Docker, Store or daemon: they load the real
+JavaScript over one stand-in native binding,
+`packages/agent/test/fixture/fake-native.cjs`, which the `layerfs` CLI tests
+use too.
+
+- `node sdk/js/packages/agent/test/calls.mjs` checks every agent call for
+  correctness against the shared case table
+  `packages/agent/test/fixture/cases.mjs`. For each call it checks the binding
+  call made, the arguments sent, and the result returned or the
+  `LayerFSError` thrown. There is a case for every call file under
+  `packages/agent/src/`.
+- `node --test cli/test/cli.test.mjs` runs the same cases through the SDK and
+  through the `layerfs` command and requires them to agree (see
+  `cli/sdk-to-cli.md`).
+- `packaging.mjs`, `trace.mjs`, `exec_output.mjs` and the backend and runtime
+  tests each check one case per command (`node <file> <case>`).
