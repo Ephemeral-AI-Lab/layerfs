@@ -11,7 +11,7 @@ import { execFile, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
-import { callMounts, DAEMON_HOST, storeFile } from "../box.js";
+import { CALL_DOCKER, callMounts, DAEMON_HOST, DEFAULT_DOCKER, storeFile } from "../box.js";
 import { decode, encode, frame, readFrames } from "./frames.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
@@ -40,9 +40,9 @@ export const UNREACHABLE = /the Store container [^\s']+(?:'s worker did not answ
 function inBox(fn, op, args) {
   const box = setting("STORE_CONTAINER"), bundle = setting("BUNDLE");
   if (!box || !bundle) return Promise.resolve(refused("Unsupported", "no Store container is set (DSH_LAYERFS_STORE_CONTAINER, DSH_LAYERFS_BUNDLE): Store calls run only in Linux"));
-  const sent = { ...args, deploy: { ...args.deploy, daemonHost: args.deploy?.daemonHost ?? DAEMON_HOST } };
+  const sent = { ...args, deploy: { ...args.deploy, docker: CALL_DOCKER, daemonHost: args.deploy?.daemonHost ?? DAEMON_HOST } };
   const request = { fn, op, args: sent, open: opened.has(args.storePath) };
-  return op === "project.init" ? initCall(box, bundle, request) : worker(box, args.home ?? setting("HOME")).call(request);
+  return op === "project.init" ? initCall(box, bundle, args.deploy?.docker ?? DEFAULT_DOCKER, request) : worker(box, args.home ?? setting("HOME")).call(request);
 }
 
 export const call = (op, args) => inBox("call", op, args);
@@ -124,12 +124,13 @@ function worker(box, home) {
  * (the project's Sandboxes may run another), with the source folder mounted
  * read-only, so the Store container shares no host folder beyond the ones every call uses.
  */
-async function initCall(box, bundle, request) {
+async function initCall(box, bundle, engine, request) {
   const { args } = request;
+  const docker = ["-H", `unix://${engine}`];
   let image;
-  try { image = await boxImage(box); } catch { return down("Failed", `the Store container ${box} is not there to run project.init`); }
+  try { image = await boxImage(docker, box); } catch { return down("Failed", `the Store container ${box} is not there to run project.init`); }
   const env = Object.keys(process.env).filter((k) => /^(DSH_)?LAYERFS_/.test(k) && !k.endsWith("_NATIVE")).flatMap((k) => ["-e", k]);
-  const where = ["run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home: args.home, bundle }), "-v", `${args.path}:${args.path}:ro`, ...env, "--entrypoint", "node", image, RUN];
+  const where = [...docker, "run", "--rm", "-i", "--init", "--pull", "never", ...callMounts({ home: args.home, bundle }), "-v", `${args.path}:${args.path}:ro`, ...env, "--entrypoint", "node", image, RUN];
   return new Promise((resolve, reject) => {
     const child = spawn("docker", where, { stdio: ["pipe", "pipe", "inherit"] });
     const out = [];
@@ -155,6 +156,6 @@ async function initCall(box, bundle, request) {
 }
 
 /** The image the Store container runs. */
-function boxImage(box) {
-  return new Promise((resolve, reject) => execFile("docker", ["container", "inspect", "-f", "{{.Image}}", box], (error, out) => (error ? reject(error) : resolve(out.trim()))));
+function boxImage(docker, box) {
+  return new Promise((resolve, reject) => execFile("docker", [...docker, "container", "inspect", "-f", "{{.Image}}", box], (error, out) => (error ? reject(error) : resolve(out.trim()))));
 }

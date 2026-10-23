@@ -13,7 +13,8 @@
 // prefix, so dsh's `layerfs-store` is never touched; another home with that
 // prefix is refused it. It, the volume, the
 // containers and the home are removed afterwards.
-// macOS only; under 2 minutes.
+// Docker is reached at LAYERFS_DOCKER (Docker Desktop's /var/run/docker.sock
+// by default; colima's socket, for instance). macOS only; under 2 minutes.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -29,8 +30,8 @@ if (process.platform !== "darwin" || !bundle || !image) {
 const work = mkdtempSync(join(realpathSync(tmpdir()), "lfs-port-"));
 const home = join(work, "home"), source = join(work, "shop"), id = Date.now().toString(36);
 const volume = `lfs-port-test-${id}`, prefix = `lfs-port-test-${id}-`;
-const spec = { docker: "/var/run/docker.sock", home, bundle, image, prefix, box: storeName(prefix) };
-const docker = (...args) => execFileSync("docker", args, { encoding: "utf8" }).trim();
+const spec = { docker: process.env.LAYERFS_DOCKER || "/var/run/docker.sock", home, bundle, image, prefix, box: storeName(prefix) };
+const docker = (...args) => execFileSync("docker", ["-H", `unix://${spec.docker}`, ...args], { encoding: "utf8" }).trim();
 mkdirSync(home, { mode: 0o700 });
 mkdirSync(source);
 writeFileSync(join(source, "README.md"), "# Shop\n");

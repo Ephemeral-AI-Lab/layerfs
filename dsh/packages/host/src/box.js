@@ -32,9 +32,14 @@ export const DAEMON_HOST = "host.docker.internal";
 const WORKER_PORT = 7070;
 const READY_MS = 15_000;
 
+/** The Docker socket of a deployment that names none, as the SDK defaults it. */
+export const DEFAULT_DOCKER = "/var/run/docker.sock";
+/** Where a ported call's process reaches Docker: the engine's own socket, mounted from its VM. */
+export const CALL_DOCKER = "/var/run/docker.sock";
+
 /** `docker run` mounts and settings of a ported call's process: the Store container's worker, or Init's own. */
 export const callMounts = ({ home, bundle }) => [
-  "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", `${VOLUMES}:${VOLUMES}`,
+  "-v", `${CALL_DOCKER}:${CALL_DOCKER}`, "-v", `${VOLUMES}:${VOLUMES}`,
   "-v", `${home}:${home}`, "-v", `${bundle}:${bundle}:ro`, "-v", `${PORT}:${PORT}:ro`,
   "-e", `LAYERFS_NATIVE=${join(bundle, "layerfs.node")}`,
 ];
