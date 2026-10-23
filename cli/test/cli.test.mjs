@@ -9,23 +9,20 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { after, test } from "node:test";
+import { after, before, test } from "node:test";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { CALLS, INIT } from "../src/calls.js";
 import { usage } from "../src/help.js";
 import { tables, written } from "./doc-tables.mjs";
+import { CASES, ENV, contains, made, plain } from "../../sdk/js/packages/agent/test/fixture/cases.mjs";
 
 const CLI = fileURLToPath(new URL("../src/layerfs.js", import.meta.url));
 const FAKE = fileURLToPath(new URL("../../sdk/js/packages/agent/test/fixture/fake-native.cjs", import.meta.url));
 const work = realpathSync(mkdtempSync(join(tmpdir(), "layerfs-cli-")));
 after(() => rmSync(work, { recursive: true, force: true }));
 
-const BASE = {
-  PATH: process.env.PATH, HOME: process.env.HOME,
-  LAYERFS_NATIVE: FAKE, LAYERFS_HOME: "/private/cli-home", LAYERFS_DOCKER: "/fake.sock",
-  LAYERFS_IMAGE: "fake-image", LAYERFS_VOLUME: "fake-volume", LAYERFS_DAEMON: "/fake/daemon",
-  LAYERFS_STORE_PATH: "/fake/store.sqlite", LAYERFS_PROJECT: "site",
-};
+const BASE = { PATH: process.env.PATH, HOME: process.env.HOME, ...ENV, LAYERFS_NATIVE: FAKE };
 let runs = 0;
 
 /** One layerfs run: exit code, stdout, stderr and the binding calls it made. */
@@ -35,76 +32,70 @@ function cli(args, { input = "", env = {}, cwd } = {}) {
   assert.equal(r.error, undefined, `spawn failed: ${r.error}`);
   const calls = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
   // the calls the command made: no Store open/close, no LayerFS.open probe (one Branch)
-  const made = calls.filter(([op, a]) => !op.startsWith("store.") && !(op === "project.list_branches" && a.pageSize === 1));
-  return { code: r.status, out: r.stdout.toString(), err: r.stderr.toString(), calls, made, ops: made.map(([op]) => op) };
+  const own = made(calls);
+  return { code: r.status, out: r.stdout.toString(), err: r.stderr.toString(), calls, made: own, ops: own.map(([op]) => op) };
 }
 
-/** True when every field of `want` is in `have`, recursively. */
-function contains(have, want) {
-  if (want === null || typeof want !== "object") return Object.is(have, want);
-  if (have === null || typeof have !== "object") return false;
-  return Object.entries(want).every(([k, v]) => contains(have[k], v));
-}
 
 const source = join(work, "src-folder");
 mkdirSync(source);
 writeFileSync(join(source, "README.md"), "hi\n");
 const WS = "1:/workspaces/w1";
-const OF_WS = { sandbox: "1", path: "/workspaces/w1" };
 
-// One case per table entry: argv after the command, then the binding op and
-// the args (a subset) the SDK must send. The test below fails when a call in
-// the table has no case here.
-const CASES = {
-  "init": { argv: ["site", "src-folder", "--timeout", "5000"], cwd: work, op: "project.init", args: { name: "site", path: resolve(work, "src-folder"), timeoutMs: 5000 } },
-  "project list_branches": { argv: ["--page-size", "5", "--page-pos", "10"], op: "project.list_branches", args: { pageSize: 5, pagePos: 10 } },
-  "project list_sandboxes": { argv: [], op: "project.list_sandboxes", args: { project: "site" } },
-  "branch fork": { argv: ["cart"], op: "branch.fork", args: { name: "cart", from: "main" } },
-  "branch list_commits": { argv: ["cart"], op: "branch.list_commits", args: { branch: "cart", pageSize: 50, pagePos: 0 } },
-  "branch diff_commits": { argv: ["c1", "c2", "--hunks", "--cursor", "/a"], op: "branch.diff_commits", args: { from: "c1", to: "c2", hunks: true, cursor: "/a" } },
-  "branch diff_branches": { argv: ["a", "b"], op: "branch.diff_branches", args: { from: "a", to: "b", pageSize: 50 } },
-  "branch merge": { argv: ["a", "b", "ab", "-m", "merge it", "--units", '["dist/**"]'], op: "branch.merge", args: { branch: "a", with: "b", name: "ab", message: "merge it", units: ["dist/**"] } },
-  "branch publish": { argv: ["cart", "c0ffee"], op: "branch.publish", args: { branch: "cart", commit: "c0ffee" } },
-  "fs read": { argv: ["main", "/a.txt", "--start-line=3", "--end-line", "9"], op: "fs.read", args: { branch: "main", path: "/a.txt", startLine: 3, endLine: 9 } },
-  "fs list": { argv: ["main"], op: "fs.list", args: { branch: "main", path: "/", pageSize: 50, pagePos: 0 } },
-  "fs stat": { argv: ["main", "/a"], op: "fs.stat", args: { branch: "main", path: "/a" } },
-  "fs grep": { argv: ["main", "TODO", "/src"], op: "fs.grep", args: { branch: "main", pattern: "TODO", path: "/src" } },
-  "fs glob": { argv: ["main", "**/*.js"], op: "fs.glob", args: { branch: "main", pattern: "**/*.js", path: "/" } },
-  "fs diff_files": { argv: ["main", "/a", "cart", "/b"], op: "fs.diff_files", args: { left: { commit: "main", path: "/a" }, right: { commit: "cart", path: "/b" } } },
-  "fs blame": { argv: ["main", "/a", "--from-line", "4"], op: "fs.blame", args: { branch: "main", path: "/a", fromLine: 4 } },
-  "fs write": { argv: ["cart", "/h.bin", "-m", "bytes"], input: Buffer.from([0, 255, 1, 2]), op: "fs.write", args: { branch: "cart", path: "/h.bin", bytes: { base64: "AP8BAg==" }, message: "bytes" } },
-  "fs edit": { argv: ["cart", "/a", "--old", "x", "--new", "y"], op: "fs.edit", args: { branch: "cart", path: "/a", oldText: "x", newText: "y" } },
-  "fs apply": { argv: ["cart", "-m", "two"], input: '[{"op":"write","path":"/a","content":"hi"}]', op: "fs.apply", args: { branch: "cart", changes: [{ op: "write", path: "/a", content: "hi" }], message: "two" } },
-  "fs mkdir": { argv: ["cart", "/d"], op: "fs.mkdir", args: { branch: "cart", path: "/d", recursive: true } },
-  "fs rm": { argv: ["cart", "/d"], op: "fs.rm", args: { branch: "cart", path: "/d" } },
-  "fs cp": { argv: ["cart", "/a", "/b"], op: "fs.cp", args: { branch: "cart", from: "/a", to: "/b" } },
-  "fs mv": { argv: ["cart", "/a", "/b", "-m", "move"], op: "fs.mv", args: { branch: "cart", from: "/a", to: "/b", message: "move" } },
-  "workspace mount": { argv: ["1", "cart"], op: "workspace.mount", args: { sandbox: "1", branch: "cart" } },
-  "workspace exec": { argv: [WS, "npm test", "-m", "step"], op: "workspace.exec", args: { ...OF_WS, command: "npm test", message: "step" } },
-  "workspace commit": { argv: [WS, "--force"], op: "workspace.commit", args: { ...OF_WS, force: true } },
-  "workspace unmount": { argv: [WS, "--discard"], op: "workspace.unmount", args: { ...OF_WS, discard: true } },
-  "sandbox create": { argv: ["--image", "sha256:abc"], op: "sandbox.create", args: { deploy: { image: "sha256:abc" } } },
-  "sandbox list_workspaces": { argv: ["2"], op: "sandbox.list_workspaces", args: { sandbox: "2" } },
-  "sandbox close": { argv: ["2"], op: "sandbox.close", args: { sandbox: "2" } },
-};
-
+// Consistency with the SDK: each shared case (sdk/js/packages/agent/test/
+// fixture/cases.mjs, whose expected results the SDK's own calls.mjs checks)
+// runs through the SDK in this process and through the command, over the
+// same stand-in binding and settings. The command must make the same binding
+// call with the same arguments, print the SDK's result as JSON (mount adds
+// `ws`) and exit 0, or exit 125 with the SDK's refusal on stderr.
 const key = (e) => (e.family ? `${e.family} ${e.call}` : e.call);
 const command = (e) => (e.family ? [e.family, e.call] : [e.call]);
+const native = createRequire(import.meta.url)(FAKE);
+let sdk;
+before(async () => {
+  Object.assign(process.env, ENV, { LAYERFS_NATIVE: FAKE });
+  delete process.env.CLI_FAKE_LOG;
+  const { LayerFS } = await import("@layerfs/agent");
+  sdk = { LayerFS, lf: await LayerFS.open("site") };
+});
+after(() => sdk?.lf.close());
+
+/** One case through the SDK in this process: the binding calls it made, and its result or refusal. */
+async function throughSdk(c) {
+  const first = native.args.length;
+  process.env.CLI_FAKE_REFUSE = (c.refuse ?? []).join(",");
+  try {
+    return { result: plain(await c.sdk(sdk.lf, sdk.LayerFS)) };
+  } catch (error) {
+    return { error };
+  } finally {
+    delete process.env.CLI_FAKE_REFUSE;
+    // as JSON, the way the command's calls are logged: a key whose value is undefined is not sent
+    sdk.calls = JSON.parse(JSON.stringify(made(native.calls.slice(first).map((op, i) => [op, plain(native.args[first + i])]))));
+  }
+}
 
 test("every table entry has a case", () => {
-  assert.deepEqual([INIT, ...CALLS].map(key).sort(), Object.keys(CASES).sort());
+  const covered = new Set(CASES.map((c) => c.argv.slice(0, c.argv[0] === "init" ? 1 : 2).join(" ")));
+  for (const entry of [INIT, ...CALLS]) assert.ok(covered.has(command(entry).join(" ")), key(entry));
 });
 
-for (const entry of [INIT, ...CALLS]) {
-  test(`${key(entry)} makes ${CASES[key(entry)]?.op}`, () => {
-    const c = CASES[key(entry)];
-    const r = cli([...command(entry), ...c.argv], { input: c.input, cwd: c.cwd });
+for (const c of CASES) {
+  test(`${c.name}: the command matches the SDK`, async () => {
+    const want = await throughSdk(c);
+    const r = cli(c.argv, { input: c.input, env: { CLI_FAKE_REFUSE: (c.refuse ?? []).join(",") } });
+    assert.deepEqual(r.made, sdk.calls, "the same binding calls and arguments");
+    if (want.error) {
+      const { code, message, detail } = want.error;
+      assert.deepEqual([r.code, r.out], [125, ""], r.err);
+      assert.deepEqual(JSON.parse(r.err), { code, message: message.replace(`${code}: `, ""), detail: plain(detail ?? null) });
+      return;
+    }
     assert.equal(r.code, 0, r.err);
     assert.equal(r.err, "");
-    assert.deepEqual(r.ops, [c.op]);
-    assert.ok(contains(r.made[0][1], c.args), `${c.op} got ${JSON.stringify(r.made[0][1])}`);
-    JSON.parse(r.out); // one JSON value
     assert.ok(r.out.endsWith("\n") && !r.out.slice(0, -1).includes("\n"), "one line");
+    const printed = c.op === "workspace.mount" ? { ...want.result, ws: `${want.result.sandbox}:${want.result.path}` } : want.result;
+    assert.deepEqual(JSON.parse(r.out), printed);
   });
 }
 
@@ -125,13 +116,8 @@ test("dashed call names are the same calls", () => {
   assert.deepEqual(cli(["branch", "list-commits", "cart"]).ops, ["branch.list_commits"]);
 });
 
-test("init prints Init's result", () => {
-  const r = cli(["init", "site", source]);
-  assert.deepEqual(JSON.parse(r.out), { kind: "Initialized", project: "site", layer: "lay0", root: "r00t", store: "/fake/store.sqlite" });
-});
-
-test("mount prints the Workspace handle", () => {
-  assert.deepEqual(JSON.parse(cli(["workspace", "mount", "1", "cart"]).out), { sandbox: "1", path: "/workspaces/w1", image: "fake-image", ws: WS });
+test("init resolves a relative source folder against the working directory", () => {
+  assert.ok(contains(cli(["init", "site", "src-folder"], { cwd: work }).made[0][1], { path: source }));
 });
 
 for (const [why, argv, message] of [
@@ -204,27 +190,12 @@ test("bodies: --from bytes, --old-from and --new-from text", () => {
   assert.ok(contains(cli(["fs", "edit", "cart", "/a", "--old-from", o, "--new-from", n]).made[0][1], { oldText: "old\nline\n", newText: "new\n" }));
 });
 
-test("a refusal exits 125 with JSON on stderr, or text with --text", () => {
-  const r = cli(["fs", "read", "main", "/missing"]);
-  assert.equal(r.code, 125);
-  assert.equal(r.out, "");
-  assert.deepEqual(JSON.parse(r.err), { code: "NoSuchPath", message: "/missing does not exist", detail: null });
+test("a refusal prints as text with --text", () => {
   const t = cli(["--text", "fs", "read", "main", "/missing"]);
-  assert.deepEqual([t.code, t.err], [125, "NoSuchPath: /missing does not exist\n"]);
-  const d = cli(["branch", "merge", "a", "b", "ab"], { env: { CLI_FAKE_REFUSE: "branch.merge" } });
-  assert.deepEqual(JSON.parse(d.err), { code: "Conflict", message: "branch.merge refused by the fake", detail: { op: "branch.merge" } });
+  assert.deepEqual([t.code, t.out, t.err], [125, "", "NoSuchPath: /missing does not exist\n"]);
 });
 
-test("an SDK input refusal is 125, not a usage error", () => {
-  const r = cli(["workspace", "mount", "0", "cart"]);
-  assert.equal(r.code, 125);
-  assert.equal(JSON.parse(r.err).code, "InvalidInput");
-});
-
-test("exec returns the command's exit code in JSON; --stream passes output and code through", () => {
-  const plain = cli(["workspace", "exec", WS, "exit 7"]);
-  assert.equal(plain.code, 0);
-  assert.ok(contains(JSON.parse(plain.out), { exitCode: 7, stdout: "out:exit 7", stderr: "err" }));
+test("exec --stream passes the command's output and exit code through", () => {
   const stream = cli(["workspace", "exec", WS, "exit 7", "--stream"]);
   assert.deepEqual([stream.code, stream.out, stream.err], [7, "out:exit 7", "err"]);
   assert.equal(stream.made[0][1].spool, true);

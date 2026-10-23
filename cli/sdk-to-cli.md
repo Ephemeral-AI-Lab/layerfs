@@ -159,8 +159,15 @@ node --test cli/test/cli.test.mjs
 ```
 
 The tests run the real `@layerfs/agent` JavaScript over the stand-in native
-binding the SDK's own tests use
-(`sdk/js/packages/agent/test/fixture/fake-native.cjs`), which records every
-call, so they need no Docker, Store or daemon. They check that every table entry makes its
-SDK call with the right arguments, plus parsing, bodies, output and exit codes,
-and that `cli/src` has a command file for every SDK call file.
+binding that the SDK's own tests use
+(`sdk/js/packages/agent/test/fixture/fake-native.cjs`). The binding records
+every call, so the tests need no Docker, Store or daemon. The SDK's
+`calls.mjs` checks the SDK for correctness against the shared case table
+(`sdk/js/packages/agent/test/fixture/cases.mjs`). These tests check that the
+command is consistent with the SDK. Each case runs through the SDK in the
+test's own process and through `layerfs`. The command must make the same
+binding call with the same arguments, then either print the SDK's result as
+JSON (`workspace mount` adds `ws`) and exit 0, or exit 125 with the SDK's
+refusal. The tests also check parsing, bodies, `--text`, `--stream` and exit
+codes, that every call in the table has a case, and that `cli/src` has a
+command file for every SDK call file.
