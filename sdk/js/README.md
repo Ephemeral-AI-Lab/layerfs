@@ -365,7 +365,7 @@ counts are reported without inventing exclusive byte attribution.
 import { LayerFSRuntime } from "@layerfs/runtime";
 const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
 try {
-  await runtime.status();                  // { platform, missing, docker, worker, disk }
+  await runtime.status();                  // { platform, missing, docker, worker, oldStore, disk }
   const job = await runtime.project.start_init("shop", "/src/shop");
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
@@ -399,8 +399,13 @@ Each platform folder implements one interface (`endpoint`, `status`,
 - **macOS** runs the worker as one container per home, `<prefix>worker`
   (label `layerfs.role=worker`), with the bundle's `worker/server.js`; Init
   runs in a container of its own with the source folder mounted read-only.
-  An older `<prefix>store` container that still runs is refused, not
-  replaced, so a live run is never cut off.
+  The older dsh Store container, `<prefix>store`, is listed by
+  `status().oldStore` while it exists. While it runs, `worker.start` and
+  `worker.restart` are refused `InvalidInput` unless given
+  `{ confirm: "restart" }`; then they stop it and remove it (one attempt
+  each; a failed step stops there) and start `<prefix>worker`, which cuts off
+  any live run on the old container. The worker's secret reaches `docker
+  run` through its environment, never its command line.
 - **Windows** runs the worker as a Node process in a WSL2 distribution
   (`server.js --stdin`); Init runs in the worker, which maps the folder with
   `wslpath`. This process owns the worker through its stdin: `close()` drains

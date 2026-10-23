@@ -1,5 +1,6 @@
 // runtime.status(): Docker reachability, the worker's state (null on Linux),
-// free disk and missing settings. From part of the dsh Host's runtime.js
+// the older Store container on macOS (oldStore), free disk and missing
+// settings. From part of the dsh Host's runtime.js
 // (#428). It starts nothing.
 import { statfsSync } from "node:fs";
 import { missing } from "./settings.js";
@@ -10,7 +11,7 @@ export async function status(runtime) {
   try { docker = { level: "ok", version: await platform.docker(settings, ["version", "--format", "{{.Server.Version}}"]) }; } catch (error) {
     docker = { level: "down", error: error.stderr?.trim() || error.message };
   }
-  const { worker } = await platform.status(settings).catch((error) => ({ worker: { state: "unknown", error: error.message } }));
+  const { worker, oldStore = null } = await platform.status(settings).catch((error) => ({ worker: { state: "unknown", error: error.message } }));
   let home = null;
   try { const s = statfsSync(settings.home); home = s.bavail * s.bsize; } catch { /* unreadable */ }
   return {
@@ -18,6 +19,8 @@ export async function status(runtime) {
     missing: missing(settings),
     docker,
     worker,
+    // macOS: the older dsh Store container, while it exists (see worker.start)
+    oldStore,
     disk: { home, volumes: docker.level === "ok" ? await platform.free(settings) : null },
   };
 }

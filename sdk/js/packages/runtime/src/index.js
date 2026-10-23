@@ -64,10 +64,11 @@ export class LayerFSRuntime {
     };
     this.status = live(() => status(this));
     this.worker = {
-      start: live(() => this.platform.start(settings)),
+      // macOS: { confirm: "restart" } also retires a running older Store container
+      start: live((options) => this.platform.start(settings, options)),
       restart: live((options) => {
         if (options?.confirm !== "restart") throw new LayerFSError("InvalidInput", "a restart cuts off every project's Store calls; confirm it with { confirm: \"restart\" }", null);
-        return this.platform.restart(settings);
+        return this.platform.restart(settings, options);
       }),
     };
     this.project = {

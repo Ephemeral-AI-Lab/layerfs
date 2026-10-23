@@ -217,12 +217,14 @@ try {
     mkdirSync(bundle);
     writeFileSync(join(bundle, "manifest.json"), JSON.stringify({ build_id: "build-1" }));
     const calls = [];
-    let started = false;
+    let started = false, old = null, failStop = false;
     const real = macos.docker;
     macos.docker = async (_settings, args, options = {}) => {
       calls.push({ args, env: options.env });
       const [verb] = args;
-      if (verb === "ps") return "";
+      if (verb === "ps") return old ? `old1\t${old}` : "";
+      if (verb === "stop") { if (failStop) throw Object.assign(new Error("stop"), { stderr: "cannot stop" }); old = "exited"; return "old1"; }
+      if (verb === "rm") { old = null; return "old1"; }
       if (verb === "inspect" && !started) throw Object.assign(new Error("inspect"), { stderr: "Error: No such object: layerfs-worker" });
       if (verb === "inspect") return `true\tbuild-1\t2026-10-23T00:00:00Z\t${home}`;
       if (verb === "run") { started = true; return "c0ffee"; }
@@ -243,6 +245,29 @@ try {
       const endpoint = JSON.parse(readFileSync(join(home, "worker", "endpoint.json"), "utf8"));
       assert.deepEqual([endpoint.port, endpoint.secret, endpoint.build, endpoint.daemonHost], [worker.port, secret, "build-1", "host.docker.internal"]);
       assert.ok(!endpoint.init.argv.some((arg) => arg.includes(secret)), "Init's container gets no secret");
+      assert.equal((await runtime.status()).oldStore, null);
+
+      // the older dsh Store container: listed, refused without confirm, retired with it
+      old = "running";
+      started = false;
+      calls.length = 0;
+      const listed = (await runtime.status()).oldStore;
+      assert.deepEqual([listed.name, listed.state], ["layerfs-store", "running"]);
+      assert.match(listed.message, /confirm: "restart"/);
+      await assert.rejects(runtime.worker.start(), { code: "InvalidInput", message: /layerfs-store still runs/ });
+      assert.equal((await runtime.worker.restart({ confirm: "restart" })).worker.state, "running");
+      assert.equal(old, null, "restart with confirm retired it");
+      assert.deepEqual(calls.filter((c) => ["stop", "rm", "run"].includes(c.args[0])).map((c) => c.args.slice(0, 2).join(" ")), ["stop -t", "rm old1", "run -d"]);
+      // a stop that fails is not followed by rm or a start, and is not retried
+      old = "running";
+      failStop = true;
+      calls.length = 0;
+      await assert.rejects(runtime.worker.start({ confirm: "restart" }), { code: "Failed", message: /was not removed/ });
+      assert.deepEqual(calls.filter((c) => ["stop", "rm", "run"].includes(c.args[0])).map((c) => c.args[0]), ["stop"]);
+      assert.equal(old, "running");
+      // a stopped one is only listed
+      old = "exited";
+      assert.equal((await runtime.status()).oldStore.state, "exited");
       await runtime.close();
     } finally {
       macos.docker = real;
