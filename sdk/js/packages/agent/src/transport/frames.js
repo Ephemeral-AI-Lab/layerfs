@@ -52,9 +52,12 @@ export function frame(value) {
   return Buffer.concat([head, payload]);
 }
 
-/** Calls `onValue` with each value `socket` receives, in order; a frame that does not decode calls `onBad`. */
-export function readFrames(socket, onValue, onBad) {
-  let parts = [], have = 0, need = null, failed = false;
+/** Calls `onValue` with each value `socket` receives, in order; a frame that
+ * does not decode calls `onBad`. `firstLimit` caps the first frame's length
+ * (the unauthenticated secret frame on a worker); a longer one calls `onBad`
+ * as soon as its length arrives. Later frames have no cap. */
+export function readFrames(socket, onValue, onBad, { firstLimit = Infinity } = {}) {
+  let parts = [], have = 0, need = null, failed = false, first = true;
   const take = (n) => {
     const all = parts.length === 1 ? parts[0] : Buffer.concat(parts, have);
     parts = all.length > n ? [all.subarray(n)] : [];
@@ -66,8 +69,12 @@ export function readFrames(socket, onValue, onBad) {
     parts.push(chunk);
     have += chunk.length;
     for (;;) {
-      if (need === null && have >= 4) need = take(4).readUInt32BE(0);
+      if (need === null && have >= 4) {
+        need = take(4).readUInt32BE(0);
+        if (first && need > firstLimit) { failed = true; parts = []; have = 0; return onBad(invalid(`a first frame of ${need} bytes is over ${firstLimit}`)); }
+      }
       if (need === null || have < need) return;
+      first = false;
       const bytes = take(need);
       need = null;
       let value;

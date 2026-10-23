@@ -18,7 +18,8 @@
 //                            { port, build, sdk } on stdout, and drains and
 //                            ends when stdin ends.
 //
-// A connection's first frame must carry the secret (answered as id 0); then
+// A connection's first frame must carry the secret (answered as id 0), in at
+// most FIRST_LIMIT bytes and within SECRET_MS, or the socket is destroyed; then
 // each frame { id, fn, op, args, open } is answered by { id, answer }. `ping`
 // answers { ready, active, stores, build } at once. `fn` is call,
 // backendCall or releaseStore, and `args.home` must be the worker's home.
@@ -35,6 +36,8 @@ import { decode, frame, readFrames } from "@layerfs/agent/internal";
 import { made, storeOf } from "./call.js";
 
 const IDLE_MS = 60_000;
+/** The unauthenticated secret frame: its largest length, and how long a connection may wait to send it. */
+const FIRST_LIMIT = 4096, SECRET_MS = 5000;
 const FUNCTIONS = new Set(["call", "backendCall", "releaseStore"]);
 process.env.UV_THREADPOOL_SIZE ??= "64";
 process.env.LAYERFS_CONSTRUCTION_WORKERS ??= "1";
@@ -165,11 +168,14 @@ const server = createServer((socket) => {
   socket.on("error", () => {}); // a caller that went away; its calls still finish here
   socket.on("close", () => sockets.delete(socket));
   let trusted = false;
+  const silent = setTimeout(() => socket.destroy(), SECRET_MS);
+  socket.on("close", () => clearTimeout(silent));
   readFrames(socket, async (request) => {
     if (!trusted) {
       const given = Buffer.from(String(request?.secret ?? ""), "hex");
       if (given.length !== secret.length || !timingSafeEqual(given, secret)) return socket.destroy();
       trusted = true;
+      clearTimeout(silent);
       return socket.write(frame({ id: 0, answer: { value: "hello" } }));
     }
     const { id, fn, args } = request;
@@ -181,7 +187,7 @@ const server = createServer((socket) => {
     try { result = await answer(request); } catch (error) { result = { thrown: String(error?.stack ?? error) }; } finally { active--; }
     if (!socket.destroyed) socket.write(frame({ id, answer: result }));
     if (closing && active === 0) shutdown().catch((error) => console.error(error));
-  }, (error) => { console.error(error.message); socket.destroy(); });
+  }, (error) => { console.error(error.message); socket.destroy(); }, { firstLimit: FIRST_LIMIT });
 });
 
 server.listen(config.port, config.host, () => {

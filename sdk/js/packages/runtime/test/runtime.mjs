@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|transport-order|macos-worker
+//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|transport-order|macos-worker|worker-frames
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -273,8 +273,58 @@ try {
       macos.docker = real;
       worker.close();
     }
+  } else if (selected === "worker-frames") {
+    // the real worker/server.js on a stand-in sealed bundle and binding: the
+    // unauthenticated first frame is capped, a silent connection ends after
+    // 5 s, a wrong secret is cut off, and trusted frames have no cap
+    const { spawn } = await import("node:child_process");
+    const { connect } = await import("node:net");
+    const { randomBytes } = await import("node:crypto");
+    const { frame, readFrames } = await import("@layerfs/agent/internal");
+    const bundle = join(work, "bundle");
+    mkdirSync(bundle);
+    writeFileSync(join(bundle, "manifest.json"), JSON.stringify({ status: "sealed", platform: "linux", build_id: "build-f", files: {} }));
+    const secret = randomBytes(32).toString("hex");
+    const server = spawn(process.execPath, [fileURLToPath(new URL("../src/worker/server.js", import.meta.url))], {
+      env: { ...process.env, LAYERFS_WORKER_SECRET: secret, LAYERFS_HOME: home, LAYERFS_BUNDLE: bundle, LAYERFS_NATIVE: FAKE, LAYERFS_WORKER_LISTEN: "127.0.0.1:0" },
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    try {
+      const port = await new Promise((resolve, reject) => {
+        let text = "";
+        server.stderr.on("data", (chunk) => { text += chunk; const found = /listening on 127\.0\.0\.1:(\d+)/.exec(text); if (found) resolve(Number(found[1])); });
+        server.on("exit", (code) => reject(new Error(`the worker ended (${code}): ${text}`)));
+      });
+      /** Opens a connection, sends `bytes`, and answers when it closes (ms after open) or with the frames it got. */
+      const session = (bytes, after = () => {}) => new Promise((resolve) => {
+        const socket = connect({ host: "127.0.0.1", port }), got = [], opened = Date.now();
+        socket.on("connect", () => bytes && socket.write(bytes));
+        readFrames(socket, (value) => { got.push(value); after(value, socket, got); }, () => {});
+        socket.on("error", () => {});
+        socket.on("close", () => resolve({ ms: Date.now() - opened, got }));
+      });
+      const header = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+      // a first frame over 4 KiB is refused as soon as its length arrives
+      const big = await session(Buffer.concat([header(1 << 20), Buffer.alloc(16)]));
+      assert.ok(big.ms < 2000 && big.got.length === 0, `closed after ${big.ms} ms`);
+      // a wrong secret is cut off
+      assert.deepEqual((await session(frame({ secret: "0".repeat(64) }))).got, []);
+      // a connection that sends nothing ends after 5 s
+      const quiet = await session(null);
+      assert.ok(quiet.ms >= 4500 && quiet.ms < 9000, `closed after ${quiet.ms} ms`);
+      // the secret, then a ping and a 200 KiB call, which no cap refuses
+      const trusted = await session(frame({ secret }), (value, socket, got) => {
+        if (value.id === 0) socket.write(Buffer.concat([frame({ id: 1, fn: "ping" }), frame({ id: 2, fn: "call", op: "fs.write", args: { home, path: "/big", content: "x".repeat(200 * 1024) } })]));
+        if (got.length === 3) socket.end();
+      });
+      assert.deepEqual(trusted.got.map((v) => v.id), [0, 1, 2]);
+      assert.deepEqual([trusted.got[1].answer.value.ready, trusted.got[1].answer.value.build], [true, "build-f"]);
+      assert.ok(trusted.got[2].answer.value, "the large trusted call was made");
+    } finally {
+      server.kill("SIGTERM");
+    }
   } else {
-    throw new Error("select surface, projects, init, state, events, leftovers, transport-order or macos-worker");
+    throw new Error("select surface, projects, init, state, events, leftovers, transport-order, macos-worker or worker-frames");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
