@@ -138,8 +138,9 @@ table differs, and when a family's files stop matching the SDK's.
   possible follow-up; it isn't built.
 - **Short forms.** The command has only the SDK calls above. The older `lfs`
   command in `@layerfs/runtime` (`status`, `log`, `ls`, `cat`, `grep`, `diff`,
-  `fork`, `write`, `sandbox`, `sandboxes`, `run`) is unchanged, and dsh-layerfs
-  still gives it to agents as `DSH_LAYERFS_CLI`.
+  `fork`, `write`, `sandbox`, `sandboxes`, `run`) is retired (owner
+  2026-10-23); `layerfs` is the only command, and dsh-layerfs gives it to
+  agents as `DSH_LAYERFS_CLI`.
 
 ## Cost per command
 

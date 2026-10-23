@@ -38,7 +38,7 @@ semantics.
 
 ```
  integration adapter    dsh-layerfs, Pi, layerfs-wsl, …   sessions ↔ projects, actor, UI placement
- integration kit        runtime · read/ops HTTP handler · view-model · view · lfs CLI · skill
+ integration kit        runtime · read/ops HTTP handler · view-model · view · layerfs CLI · skill
  SDK                    @layerfs/sdk (JS); other languages later   Project · Branch · Files · Workspace
                                                                     Runtime · Observe · shared base
  transport              in-process (Linux)  |  worker (loopback, secret, one per LayerFS home)
@@ -231,7 +231,7 @@ exist inside `dsh/packages/host`, `model` and `view`.
 | read/ops HTTP handler | the project read and runtime routes (6.3), mounted on the integration's own server | the project and runtime half of `route.js`, `trees.js`, `reads.js`, `storage.js` |
 | `@layerfs/view-model` | events in, what the views draw out | `dsh/packages/model` |
 | `@layerfs/view` | framework-free DOM views: History, Files, terminals, Branches, Sandboxes | `dsh/packages/view` |
-| `lfs` CLI | the common agent calls as one shell command each | `lfs.js` |
+| `layerfs` CLI | one `@layerfs/agent` call per command, JSON out (`cli/`, [cli/sdk-to-cli.md](../../../../cli/sdk-to-cli.md)); replaces dsh's `lfs.js`, retired with its short forms (owner 2026-10-23) | `lfs.js` (retired) |
 | SDK skill | what agents read before their first call | `.agents/skills/layerfs-js-sdk/` |
 | simulator backend (optional) | Sim projects without Docker, for demos and tests | `sim/` |
 
@@ -253,7 +253,7 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
     init.js                              139   (kit runtime: Init jobs)
     jobs.js                               28   (kit runtime)
     layerfs-client.js                     76   (kit runtime: per-project clients)
-    lfs.js                               119   (kit: lfs CLI)
+    lfs.js                               119   (retired: the layerfs CLI in cli/ replaces it)
     migrate.js                            44   (#373 one-time upgrade; drop at the move)
     reads.js                              80   (kit read/ops)
     records.js                             8   (dsh)
@@ -318,7 +318,7 @@ An integration has three sides. The kit covers most of each.
 
 | Side | The integration does | The kit gives it |
 | --- | --- | --- |
-| **Agent** | puts the SDK, the `lfs` CLI, the skill path and the project's settings into the agent's environment; sets the actor | SDK, CLI, skill, configuration names |
+| **Agent** | puts the SDK, the `layerfs` CLI, the skill path and the project's settings into the agent's environment; sets the actor | SDK, CLI, skill, configuration names |
 | **Backend** | maps its sessions to projects; records which agent is which; starts and stops the runtime with its own lifecycle; mounts the HTTP handler | `@layerfs/runtime`, HTTP handler, event stream |
 | **UI** | places the views in its own pages or tabs | `@layerfs/view-model`, `@layerfs/view` |
 

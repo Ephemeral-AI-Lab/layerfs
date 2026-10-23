@@ -1,21 +1,19 @@
 // @layerfs/runtime on Linux against a real Store and Docker (#428): status,
 // the refused worker, one Init job into a project volume (no timeout: no
 // limit), one whose 1 ms timeout fails Deadline and leaves no project
-// (#431), the project list, get_state, the lfs command, live events from
+// (#431), the project list, get_state, live events from
 // the trace and remove. The
 // launcher mounts one Store volume, so a "volume" here is a folder under
 // <Store volume>/rt-volumes, and its image has no docker CLI (the runtime
 // calls the CLI, as the dsh Host did): `volume create/rm` make and remove
 // that folder, `version` and `ps` answer an engine with no containers.
-// Store, Init, reads and the lfs command are real.
+// Store, Init and reads are real.
 // Under the E2E launcher (its Store volume, home and deployment):
 //   node sdk/js/packages/runtime/test/verify/runtime_real.mjs inner
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 if (process.argv[2] !== "inner") throw new Error("usage: runtime_real.mjs inner (under tools/worktree.py run)");
 const { LayerFSRuntime } = await import("@layerfs/runtime");
@@ -72,20 +70,6 @@ try {
   const seen = (await events.next()).value;
   assert.equal(seen.project, name);
   events.close();
-
-  // the lfs command, as an agent's bash call runs it
-  const lfs = fileURLToPath(new URL("../../src/cli/lfs.js", import.meta.url));
-  const out = await new Promise((resolve) => {
-    const child = spawn(process.execPath, [lfs, "ls", "main", "/"], {
-      env: { ...process.env, LAYERFS_PROJECT: name, LAYERFS_VOLUME: listed.volume, LAYERFS_STORE_PATH: join(volumes, listed.volume, "_data/global/store.sqlite") },
-      stdio: ["ignore", "pipe", "inherit"],
-    });
-    const parts = [];
-    child.stdout.on("data", (c) => parts.push(c));
-    child.on("close", (code) => resolve({ code, text: Buffer.concat(parts).toString() }));
-  });
-  assert.equal(out.code, 0);
-  assert.match(out.text, /- \/README\.md/);
 
   // #431: a 1 ms timeout on a 2,000-file source fails Deadline, once, and
   // the runtime removes what the Init made: no record, home entry or volume

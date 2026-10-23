@@ -1,16 +1,12 @@
 {
   "name": "@layerfs/runtime",
   "version": "1.0.0",
-  "description": "What an integration host runs on a LayerFS home: status, the worker on macOS and Windows, project Init and removal, Sandbox upkeep, live call events and the lfs command",
+  "description": "What an integration host runs on a LayerFS home: status, the worker on macOS and Windows, project Init and removal, Sandbox upkeep and live call events",
   "private": true,
   "type": "module",
   "main": "src/index.js",
-  "bin": {
-    "lfs": "src/cli/lfs.js"
-  },
   "exports": {
     ".": "./src/index.js",
-    "./cli": "./src/cli/lfs.js",
     "./package.json": "./package.json"
   },
   "dependencies": {

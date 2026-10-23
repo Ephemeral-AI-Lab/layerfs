@@ -187,8 +187,8 @@ moved-in file is its dsh source's count.
       trees.js                               98   (from dsh trees.js)
       reads.js                               80   (from dsh reads.js)
       storage.js                             21   (from dsh storage.js)
-    cli/                                    [119]
-      lfs.js                                119   (from dsh lfs.js)
+-   cli/                                    [119]  (retired 2026-10-23: the `layerfs` command in root cli/ replaces it)
+-     lfs.js                                119   (from dsh lfs.js)
 ```
 
 ## 5. What leaves today's SDK folders

@@ -477,10 +477,12 @@ volume, unless `stopSandboxes`. `events.subscribe` reads the trace folder's
 `*.jsonl` files every `pollMs`: lines from now on, or from `since`, each with
 `actor`, its trace file's name.
 
-The `lfs` command (`@layerfs/runtime/cli`, bin `lfs`) runs one agent call per
-command on `LAYERFS_PROJECT` (else `DSH_LAYERFS_PROJECT`) through
-`@layerfs/agent`: `status`, `log`, `ls`, `cat`, `grep`, `diff`, `fork`,
-`write`, `run`. The runtime calls the `docker` CLI, as the dsh Host did.
+The runtime calls the `docker` CLI, as the dsh Host did. It has no command
+line of its own: the `lfs` command it carried is retired (owner 2026-10-23).
+Agents use the `layerfs` command in the repository's `cli/` folder, one
+`@layerfs/agent` call per command with JSON output and no short forms (for
+example `layerfs sandbox create`, `layerfs workspace mount <sandbox>
+<branch>`); see [cli/sdk-to-cli.md](../../cli/sdk-to-cli.md).
 
 ## Call trace
 

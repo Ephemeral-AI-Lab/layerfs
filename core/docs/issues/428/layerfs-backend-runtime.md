@@ -206,8 +206,10 @@ runtime.http.create_handler({ prefix, auth });             // read/ops routes fo
 | `http.create_handler` | the read/ops HTTP routes ([README.md §6.3](README.md#63-readops-http-routes)) | the project and runtime half of dsh `route.js` |
 
 Modules, not methods: the platform folders and the worker program
-([section 4.4](#44-platforms)), and `@layerfs/runtime/cli` (the `lfs`
-command).
+([section 4.4](#44-platforms)). The `lfs` command that was
+`@layerfs/runtime/cli` is retired (owner 2026-10-23): agents use the
+`layerfs` command in `cli/`, one `@layerfs/agent` call each, with no short
+forms.
 
 ### 4.3 Safety
 
@@ -357,7 +359,7 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
 | `runtime.js` | 207 | `runtime.status`, `runtime.sandbox.clean_leftovers` |
 | `trees.js`, `reads.js`, `storage.js` | 199 | `runtime.project.get_state` and `runtime.http` |
 | `route.js` (project and runtime routes) | part of 112 | `runtime.http.create_handler` |
-| `lfs.js` | 119 | `@layerfs/runtime/cli` |
+| `lfs.js` | 119 | retired; the `layerfs` command in `cli/` replaces it (owner 2026-10-23) |
 | `layerfs-client.js` | 76 | `runtime/src/clients.js` (per-project clients), using agent's public API only |
 
 The dsh-specific files stay in the dsh adapter: `index.js`, `binding.js`,
