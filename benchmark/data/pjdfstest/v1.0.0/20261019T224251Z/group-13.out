@@ -1,1 +1,0 @@
-{"arm":"layerfs","dir":"granular","root":"/workspaces/1","ms":127.297,"exitCode":0,"truncated":false,"tap":"layerfs-granular-1792450026979.tap","stdout_bytes":710,"stderr":"","started":["granular/00.t","granular/01.t","granular/02.t","granular/03.t","granular/04.t","granular/05.t","granular/06.t"],"deferred":[]}

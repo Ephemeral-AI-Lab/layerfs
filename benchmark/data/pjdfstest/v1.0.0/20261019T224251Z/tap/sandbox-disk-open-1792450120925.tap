@@ -1,5 +1,0 @@
-### group dir=open cwd=/tmp/pjd/open fs=overlay uid=501:20
-### begin open/20.t
-1..1
-ok 1
-### end open/20.t exit=0 ms=5 quick_exit=1 residue=0

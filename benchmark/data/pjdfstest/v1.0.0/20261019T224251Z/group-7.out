@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"chown","root":"/tmp","ms":78134.006,"exitCode":0,"truncated":false,"tap":"sandbox-disk-chown-1792449996648.tap","stdout_bytes":106129,"stderr":"","started":["chown/00.t"],"deferred":["chown/01.t","chown/02.t","chown/03.t","chown/04.t","chown/05.t","chown/06.t","chown/07.t","chown/08.t","chown/09.t","chown/10.t"]}

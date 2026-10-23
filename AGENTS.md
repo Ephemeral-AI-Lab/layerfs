@@ -192,7 +192,10 @@ For documentation/release work, read the
 For measurements, read the [agent measurement workflow](docs/general/agent-measurement-policy.md),
 [benchmark rules](docs/general/benchmark_rules.md),
 [report template](docs/general/benchmark_agent_report.md) and owning harness/family contract.
-Core routing is [benchmark/fs-bench-pro/AGENTS.md](benchmark/fs-bench-pro/AGENTS.md).
+Benchmark suites, harnesses and released data live in the
+[layerfs-benchmark](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark) repository, moved out of
+`benchmark/` on 2026-10-23. Core routing is its
+[fs-bench-pro/AGENTS.md](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md).
 **fs-bench-pro is frozen and left broken (owner, 2026-10-18).** Do not edit,
 build, run or repair it, and leave it out of workspace builds and checks. Its
 call sites broken by #352 F-020 (`ProjectApi` fork and commits,
@@ -201,7 +204,10 @@ fix record) stay broken; a product change never adapts it. Only an
 explicit owner instruction reopens it.
 The root `benchmark/` harness that built and measured the retired reference was
 removed from HEAD; read it at tag `reference-v0.1.6-final`. Released
-fs-bench-pro results (v0.1.4–v0.1.6) are in [benchmark/data/fs-bench-pro](benchmark/data/fs-bench-pro/README.md).
+fs-bench-pro results (v0.1.4–v0.1.6) are in layerfs-benchmark's
+[data/fs-bench-pro](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/data/fs-bench-pro/README.md).
+Older documents here still link to `benchmark/` paths; read those files in
+layerfs-benchmark at the same path without the `benchmark/` prefix.
 
 ## 1. A warm cache must never credit a measured phase
 

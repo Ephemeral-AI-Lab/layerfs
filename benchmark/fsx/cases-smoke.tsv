@@ -1,8 +1,0 @@
-# variant	seed	ops	fsx args (besides -N, -S, -P and the file)
-default	1	2000	
-no-mmap	1	2000	-R -W
-aligned	1	2000	-r 4096 -w 4096 -t 4096
-medium	1	2000	-l 4194304
-large	1	500	-l 67108864 -o 1048576
-large-no-mmap	1	500	-l 67108864 -o 1048576 -R -W
-direct	1	2000	-Z -R -W -r 4096 -w 4096

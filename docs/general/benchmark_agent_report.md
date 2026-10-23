@@ -19,7 +19,7 @@ legacy SDK/Server routes. Apply only the layout and limits of the selected froze
 family. New core reports identify their actual public operation, persistence
 profile and runtime/daemon owners; absent legacy Server/SDK scopes are N/A.
 Do not revive retired packages or relabel older receipts to populate a table.
-See [current core routing](../../benchmark/fs-bench-pro/AGENTS.md) and the
+See [current core routing](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md) and the
 [agent measurement workflow](agent-measurement-policy.md).
 
 ## Identity and custody for every run

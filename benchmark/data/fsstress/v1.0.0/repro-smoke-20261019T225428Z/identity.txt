@@ -1,9 +1,0 @@
-suite=fsstress run=smoke-20261019T225428Z-repro started=2026-10-19T22:54:29Z diagnostic repro
-image=sha256:f5aefd23f5fc7308fd47e9600289a45e5f561f3639fb37e6441d6cbe5aaaad75 (bench-fsstress:20261019) base=sha256:66aeb6bbf7fc825686a0e6d8c8486d90c99d03ce81f854008f179a23bdf4097e runtime=layerfs-352-runtime:node24@sha256:d3773b4eac6a7a644887b17e36956cd1553786d47103f0170a3bb2b0ff6988de
-431dc4f523fb6b65b52dc4eae0bf18bb45074b812c84c5023beccf6270c4cb97  /Users/yifanxu/Ephemeral-AI-Lab/layerfs-fs-bench/core/target/fs-bench-bin/layerfs-daemon
-242b43844887e1335cecb60a891cdb8f57e72cd871a5a5866eb63607e8b6034f  /Users/yifanxu/Ephemeral-AI-Lab/layerfs-fs-bench/core/target/fs-bench-bin/layerfs.node
-source=454d912f090bd1c6c400e624159361c626258d7e harness_dirty_files=1
-policy=wholeFileDepth 16, chunkDepth 8, metadataDepth 8; profile Disposable; LAYERFS_CONSTRUCTION_WORKERS=1; trace off
-docker=29.5.2 Docker Desktop 6.12.76-linuxkit cpus=8 mem=8321994752
-upstream=https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git@22348afe338c0f6d540c0d7ef0db749eaa51b218 ltp/fsstress.c (configure; make -C lib; make -C ltp fsstress)
-removed=bench-fsstress-smoke-20261019T225428Z-repro bench-fsstress-smoke-20261019T225428Z-repro-sdk-home at 2026-10-19T22:54:32Z
