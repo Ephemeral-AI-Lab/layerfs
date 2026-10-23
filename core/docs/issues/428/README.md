@@ -166,7 +166,8 @@ Windows worker would join it (#425). Today's exceptions name dsh (and, if
 > [layerfs-agent.md](layerfs-agent.md),
 > [layerfs-backend-runtime.md](layerfs-backend-runtime.md) and the expected
 > folders in [layout.md](layout.md). The tables below show the grouping before
-> those decisions.
+> those decisions. Where LayerFS keeps its files on each platform is in
+> [layerfs-home.md](layerfs-home.md).
 
 The SDK's methods sort into groups by who calls them.
 
