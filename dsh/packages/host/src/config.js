@@ -1,9 +1,9 @@
 // Host plugin configuration and its resolution into absolute settings.
-import { mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { storeName, VOLUMES } from "./box.js";
+import { DEFAULT_DOCKER, storeName, VOLUMES } from "./box.js";
 import { windowsConfig } from "./windows/host.js";
 
 /**
@@ -15,7 +15,8 @@ import { windowsConfig } from "./windows/host.js";
  * @property {string} [containerPrefix] Prefix of this home's container names (default `layerfs-`):
  *   Sandboxes `<prefix><project>-<n>`, the Store container `<prefix>store`. A second home on
  *   the same Docker engine (a test, another checkout) sets its own.
- * @property {string} [docker] Local Docker Engine Unix socket.
+ * @property {string} [docker] Local Docker Engine Unix socket (default `/var/run/docker.sock`; on macOS,
+ *   Docker Desktop's `~/.docker/run/docker.sock` when that one exists and the default does not).
  * @property {string} [volumes] Docker's volumes directory (default `/var/lib/docker/volumes`), for an
  *   engine whose data-root is elsewhere. On Linux, Init installs the Store into a volume's directory
  *   there, so the Host's user must be able to write it.
@@ -59,6 +60,12 @@ import { windowsConfig } from "./windows/host.js";
  * @param {{ dir: string } | undefined} profile the launcher's profile, when present
  * @returns {Spec}
  */
+/** The Docker socket when none is configured: the engine's default path, else Docker Desktop's user socket on macOS. */
+function defaultDocker() {
+  const desktop = join(homedir(), ".docker/run/docker.sock");
+  return !existsSync(DEFAULT_DOCKER) && process.platform === "darwin" && existsSync(desktop) ? desktop : DEFAULT_DOCKER;
+}
+
 export function resolveConfig(config, profile) {
   const temp = join(realpathSync(tmpdir()), "dsh-layerfs");
   const bundle = config.bundle || null, home = config.home || join(temp, "home");
@@ -72,7 +79,7 @@ export function resolveConfig(config, profile) {
     bundle,
     prefix,
     box: ported ? storeName(prefix) : null,
-    docker: config.docker || "/var/run/docker.sock",
+    docker: config.docker || defaultDocker(),
     volumes: config.volumes || VOLUMES,
     home,
     stateDir: config.stateDir || join(profile ? profile.dir : join(homedir(), ".dsh"), "dsh-layerfs"),

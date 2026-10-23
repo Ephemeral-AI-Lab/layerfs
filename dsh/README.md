@@ -182,7 +182,7 @@ The Host reads its deployment settings from `layerfs-host` in the profile's `cor
 | `image` | required | required |
 | `daemon` | required | defaults to `<bundle>/layerfs-daemon` |
 | `bundle` | not used | required |
-| `docker` | `/var/run/docker.sock` by default | the same |
+| `docker` | `/var/run/docker.sock` by default | the same; when it is absent and Docker Desktop's `~/.docker/run/docker.sock` exists, that one |
 | `volumes` | `/var/lib/docker/volumes` by default (Docker's data-root); the Host's user must write it | not used |
 | `home`, `traceDir` | `<OS temp>/dsh-layerfs/{home,traces}` by default | the same |
 | `containerPrefix` | `layerfs-` by default: Sandboxes `<prefix><project>-<n>` | the same, and the Store container `<prefix>store` |
