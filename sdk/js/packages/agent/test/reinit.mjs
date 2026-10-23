@@ -18,15 +18,24 @@ try {
   writeFileSync(join(source, "README.md"), "Hello\n");
   process.env.LAYERFS_HOME = join(work, "home");
   const { LayerFS } = await import("@layerfs/agent");
-  // One Init through LayerFS.init, its client closed after: what Init returned.
-  const initOf = (name, options) => ({ project: { init: async (root) => { const shop = await LayerFS.init(name, root, options); await shop.close(); return shop.created; } } });
+  // One Init through LayerFS.init with its own Store path (LAYERFS_STORE_PATH,
+  // read when the client is made), its client closed after: what Init returned.
+  const initOf = (name, storePath) => ({ project: { init: async (root, timeout) => {
+    const saved = process.env.LAYERFS_STORE_PATH;
+    process.env.LAYERFS_STORE_PATH = storePath;
+    const making = LayerFS.init(name, root, timeout);
+    process.env.LAYERFS_STORE_PATH = saved;
+    const shop = await making;
+    await shop.close();
+    return shop.created;
+  } } });
   // a Store path per Init, on the volume of LAYERFS_STORE_PATH
   const volume = dirname(dirname(process.env.LAYERFS_STORE_PATH));
   let made = 0;
   const client = () => {
     const folder = join(volume, `reinit-${process.pid}-${++made}`);
     mkdirSync(folder);
-    return initOf("website", { storePath: join(folder, "global", "store.sqlite") });
+    return initOf("website", join(folder, "global", "store.sqlite"));
   };
   const layerfs = client();
 

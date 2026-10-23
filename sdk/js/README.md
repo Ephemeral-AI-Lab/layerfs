@@ -25,9 +25,11 @@ exports exactly `STATE`, `invokeBackend`, `invokeClient`,
 
 ```js
 import { LayerFS } from "@layerfs/agent";
-// Store calls open this file; here the project's volume is mounted at /layerfs-store.
-const layerfs = await LayerFS.init("website", "./website", { storePath: "/layerfs-store/global/store.sqlite" });
-// another process opens the project instead: await LayerFS.open("website", { storePath })
+// Settings come from the environment: LAYERFS_STORE_PATH is the Store file Store
+// calls open (here the project's volume is mounted at /layerfs-store).
+process.env.LAYERFS_STORE_PATH ??= "/layerfs-store/global/store.sqlite";
+const layerfs = await LayerFS.init("website", "./website"); // optional 3rd argument: timeout in ms
+// another process opens the project instead: await LayerFS.open("website")
 await layerfs.branch.fork("feature");
 await layerfs.fs.write("feature", "/README.md", "Hello\n", "Update introduction");
 const page = await layerfs.branch.list_commits("feature", 20, 0);
@@ -39,10 +41,16 @@ await layerfs.workspace.unmount(ws);
 await layerfs.close();
 ```
 
-A client is made by `LayerFS.open(name, options)` (an existing project) or
-`LayerFS.init(name, folder, options)` (Init, then the same open); both are
+A client is made by `LayerFS.open(name)` (an existing project) or
+`LayerFS.init(name, folder, timeout?)` (Init, then the same open); both are
 async and return a ready client, and `new LayerFS()` is refused
-`InvalidInput`. `open` opens the project's Store and makes one project lookup
+`InvalidInput`. **There is no options argument:** every setting comes from the
+environment, read once when the client is made (each `LAYERFS_` name else its
+`DSH_LAYERFS_` twin): `LAYERFS_HOME`, `_STORE_PATH`, `_DOCKER`, `_IMAGE`,
+`_VOLUME`, `_DAEMON`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`,
+`_STORE_POLICY` (and `_TRACE_STEP`, read at each call). An object passed where
+the options went (`LayerFS.open(name, {…})`, or an object as `LayerFS.init`'s
+third argument) is refused `InvalidInput`, never ignored. `open` opens the project's Store and makes one project lookup
 on it, so a missing project is `NoSuchProject` at once; if either fails,
 nothing stays open. `close()` releases the Store (the process's last client of
 it closes it), leaves Workspaces mounted, and makes every later call refuse
@@ -52,20 +60,22 @@ LayerFS.open(...)` closes it at the end of the block. One copy of
 load, so one Store is never opened twice. `LayerFS.init`'s client carries
 Init's answer as `created`.
 
-`LayerFS.init(name, folder, options, timeout)` takes an optional `timeout` in
-milliseconds, a positive whole number, sent as `timeoutMs`. **Omitted, Init has
-no time limit** (#431; there was a fixed 60 s one). Given, it bounds the Init
-from when the native code starts it, on every route (in process, the macOS
-Init container, the Windows worker), and an Init that runs longer fails
-`Failed` with a `Deadline` message, once, keeping its entry as any failure that
-is not a source refusal does. Any other value is refused `InvalidInput` before
-anything is made.
+`LayerFS.init(name, folder, timeout?)` takes an optional `timeout` in
+milliseconds, a positive whole number. **Default 300 s (`INIT_TIMEOUT_MS`,
+exported); there is no unlimited option** (#431; the addon's own fixed 60 s is
+gone). The agent always sends it as `timeoutMs`, which the native code requires
+(it has no default of its own) and counts from where Init runs, on every route
+(in process, the macOS Init container, the Windows worker). An Init that runs
+longer fails `Failed` with a `Deadline` message, once, keeping its entry as any
+failure that is not a source refusal does. Any other `timeout` is refused
+`InvalidInput` before anything is made.
 
-The factories capture environment strings. `LayerFS.init(project, folder, { storePolicy })`
-selects the Store policy Init records instead of the default:
-`{ smallFileThreshold, wholeFileDepth, chunkDepth, metadataDepth }`, each
-defaulting to the default policy's value (131072 bytes, depths 16, 8 and 8). An
-invalid policy is refused as `InvalidInput` before the project entry is made.
+`LAYERFS_STORE_POLICY`, a JSON object
+`{ smallFileThreshold, wholeFileDepth, chunkDepth, metadataDepth }`, selects the
+Store policy Init records instead of the default, each field defaulting to the
+default policy's value (131072 bytes, depths 16, 8 and 8). Text that is not
+such an object, or an invalid field, is refused as `InvalidInput` naming
+`LAYERFS_STORE_POLICY`, before the project entry is made.
 A source entry Init cannot store is refused as `InvalidInput` whose `detail`
 names it: `{ reason, path }`, plus `mode` (octal text) for `Mode`. The reasons
 are `NotDirectory` (the source is a symlink or not a directory), `Mode` (a
@@ -385,7 +395,7 @@ import { LayerFSRuntime } from "@layerfs/runtime";
 const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
 try {
   await runtime.status();                  // { platform, missing, docker, worker, oldStore, disk }
-  const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional
+  const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional: LayerFS.init's 300 s default
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
   await runtime.project.get_state("shop", since);
@@ -444,9 +454,10 @@ checks every file of the bundle's `manifest.json` before it listens.
 `start_init(name, folder, { image, timeout })` refuses a bad name, folder,
 image or timeout and a taken name before anything changes; then it counts the
 source, makes the volume and runs one Init. `timeout` (milliseconds, a positive
-whole number) is passed to `LayerFS.init` and bounds the Init itself, not the
-count or volume steps; omitted, Init has no time limit. A Deadline is a failed
-Init like any other. A failed Init removes the volume and the home entry it made; an
+whole number) is passed unchanged to `LayerFS.init(name, folder, timeout)` and
+bounds the Init itself, not the count or volume steps; the runtime has no
+default of its own, so an omitted one gets `LayerFS.init`'s 300 s. A Deadline
+is a failed Init like any other. A failed Init removes the volume and the home entry it made; an
 uncertain one (`Unknown`, or any failure on Windows) keeps everything and is
 recorded in `<stateDir>/init-failures.jsonl`. `remove` needs `confirm` equal
 to the project's name and refuses `Busy` while a running container uses the
@@ -461,8 +472,8 @@ command on `LAYERFS_PROJECT` (else `DSH_LAYERFS_PROJECT`) through
 
 ## Call trace
 
-`LAYERFS_TRACE=<file>` (else `DSH_LAYERFS_TRACE`), or
-`LayerFS.open(project, { trace: file })` (the option wins), appends one JSON line to `file` for every agent and backend call that
+`LAYERFS_TRACE=<file>` (else `DSH_LAYERFS_TRACE`), as set when the client is
+made, appends one JSON line to `file` for every agent and backend call that
 reaches the native binding.
 Unset, nothing is written and nothing changes. A failed trace write is dropped;
 it never changes a value, a refusal or the call count. Argument checks the
@@ -519,8 +530,7 @@ call, not per-call deltas. The container is `cat $LAYERFS_HOME/<project>/sandbox
 
 A step label groups lines by the caller's own unit of work, such as an agent's
 step. `LAYERFS_TRACE_STEP` is read at each call, so a long-lived process can
-change it between calls; `LayerFS.open(project, { trace, traceStep })`, or
-setting `layerfs.options.traceStep` later, overrides it. Unset or empty, lines
+change it between calls. Unset or empty, lines
 have no `step`. A label alone traces nothing.
 
 With `LAYERFS_TRACE_START=1` (or `DSH_LAYERFS_TRACE_START=1`), each traced

@@ -34,7 +34,8 @@ async function inner(mode) {
   process.env.LAYERFS_HOME = join(work, "home");
   let layerfs;
   try {
-    layerfs = await LayerFS.init("site", source, { storePath: STORE });
+    process.env.LAYERFS_STORE_PATH = STORE;
+    layerfs = await LayerFS.init("site", source);
     // main changes only through publish and is never mounted; a fork is.
     await layerfs.branch.fork("work", "main");
     if (mode === "loopback") {

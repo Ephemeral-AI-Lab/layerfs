@@ -5,8 +5,8 @@
 // is not a source refusal still keeps its entry. Init's timeout (#431): the
 // addon refuses a bad `timeoutMs` (InvalidInput naming it) before it makes
 // an entry; a 1 ms timeout on a 2,000-file source fails Deadline (Failed,
-// entry kept, as any non-refusal failure); with no timeout, or a generous
-// one, the same source initializes. Real native binding,
+// entry kept, as any non-refusal failure); with the default (300 s), or a
+// longer one, the same source initializes. Real native binding,
 // Disposable Store, no daemon; Linux as root, with LAYERFS_STORE_PATH on a
 // local volume (the E2E launcher's):
 //   node sdk/js/packages/agent/test/init_refusals.mjs
@@ -23,8 +23,17 @@ const work = mkdtempSync(join(tmpdir(), "layerfs-init-refusals-"));
 const home = join(work, "home");
 process.env.LAYERFS_HOME = home;
 const { LayerFS } = await import("@layerfs/agent");
-// One Init through LayerFS.init, its client closed after: what Init returned.
-const initOf = (name, options) => ({ project: { init: async (root, timeout) => { const shop = await LayerFS.init(name, root, options, timeout); await shop.close(); return shop.created; } } });
+// One Init through LayerFS.init with its own Store path (LAYERFS_STORE_PATH,
+// read when the client is made), its client closed after: what Init returned.
+const initOf = (name, storePath) => ({ project: { init: async (root, timeout) => {
+  const saved = process.env.LAYERFS_STORE_PATH;
+  process.env.LAYERFS_STORE_PATH = storePath;
+  const making = LayerFS.init(name, root, timeout);
+  process.env.LAYERFS_STORE_PATH = saved;
+  const shop = await making;
+  await shop.close();
+  return shop.created;
+} } });
 const volume = dirname(dirname(process.env.LAYERFS_STORE_PATH));
 let made = 0;
 // One client per Init, each with its own Store path on the local volume.
@@ -32,7 +41,7 @@ const client = (name) => {
   const folder = join(volume, `init-refusals-${process.pid}-${++made}`);
   mkdirSync(folder);
   const storePath = join(folder, "global", "store.sqlite");
-  return { layerfs: initOf(name, { storePath }), storePath };
+  return { layerfs: initOf(name, storePath), storePath };
 };
 const source = (name, files = { "README.md": "hello\n" }) => {
   const root = join(work, name);
@@ -117,14 +126,14 @@ try {
   const { inprocess } = await import("../src/transport/inprocess.js");
   const addon = inprocess();
   const plain = source("plain");
-  for (const timeoutMs of [0, -1, "100", true, { ms: 5 }]) {
+  for (const timeoutMs of [undefined, null, 0, -1, "100", true, { ms: 5 }]) {
     const { storePath } = client("badtimeout");
-    const answer = await addon.call("project.init", { name: "badtimeout", path: plain, home, storePath, timeoutMs });
+    const answer = await addon.call("project.init", { name: "badtimeout", path: plain, home, storePath, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
     assert.equal(answer.refused?.code, "InvalidInput", `timeoutMs ${JSON.stringify(timeoutMs)}: ${JSON.stringify(answer)}`);
-    assert.match(answer.refused.message, /timeoutMs must be a positive whole number of milliseconds/);
+    assert.match(answer.refused.message, /timeoutMs is required: a positive whole number of milliseconds/);
     assert.ok(!existsSync(join(home, "badtimeout")), "a refused timeoutMs makes no entry");
   }
-  // a 1 ms timeout fails Deadline; no timeout, or a long one, initializes
+  // a 1 ms timeout fails Deadline; the 300 s default, or a longer one, initializes
   const files = Object.fromEntries(Array.from({ length: 2000 }, (_, i) => [`d${i % 20}/f${i}.txt`, `file ${i}\n`.repeat(20)]));
   const big = source("big", files);
   const late = await client("late").layerfs.project.init(big, 1).then(
@@ -138,7 +147,7 @@ try {
   assert.equal((await client("open").layerfs.project.init(big)).kind, "Initialized");
   const took = Date.now() - started;
   assert.equal((await client("long").layerfs.project.init(big, 600_000)).kind, "Initialized");
-  console.log(`timeout: 1 ms fails Deadline; no timeout and 600 s initialize (${took} ms untimed)`);
+  console.log(`timeout: 1 ms fails Deadline; the default and 600 s initialize (${took} ms with the default)`);
 } finally {
   rmSync(work, { recursive: true, force: true });
 }

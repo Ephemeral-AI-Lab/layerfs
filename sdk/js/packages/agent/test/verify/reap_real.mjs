@@ -25,7 +25,8 @@ async function inner() {
   let layerfs;
   const source = mkdtempSync(join(tmpdir(), "layerfs-reap-"));
   writeFileSync(join(source, "README.md"), "workspace file\n");
-  layerfs = await LayerFS.init("reap", source, { storePath: STORE_PATH });
+  process.env.LAYERFS_STORE_PATH = STORE_PATH;
+  layerfs = await LayerFS.init("reap", source);
   rmSync(source, { recursive: true, force: true });
   await layerfs.branch.fork("feature", "main");
   const ws = await layerfs.workspace.mount("feature");

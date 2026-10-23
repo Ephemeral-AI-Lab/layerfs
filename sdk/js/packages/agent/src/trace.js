@@ -88,12 +88,11 @@ function daemon(telemetry) {
   return { timing: roots, ...(timing?.omitted ? { omitted: timing.omitted } : {}), ...rest };
 }
 
-/** The step label for a call: the client's `traceStep`, else
- * LAYERFS_TRACE_STEP, else DSH_LAYERFS_TRACE_STEP, as they are at the call;
- * empty means none. */
-function step(options) {
+/** The step label for a call: LAYERFS_TRACE_STEP, else
+ * DSH_LAYERFS_TRACE_STEP, as they are at the call; empty means none. */
+function step() {
   const env = process.env;
-  const label = options?.traceStep ?? (env.LAYERFS_TRACE_STEP || env.DSH_LAYERFS_TRACE_STEP);
+  const label = env.LAYERFS_TRACE_STEP || env.DSH_LAYERFS_TRACE_STEP;
   return typeof label === "string" && label ? { step: short(label) } : {};
 }
 
@@ -110,7 +109,7 @@ export async function traced(options, method, args, send) {
   const began = performance.now();
   let line;
   try {
-    line = { layerfs_trace: 1, id, ...step(options), method, ...(typeof args?.project === "string" ? { project: args.project } : {}), args: summary(args), start: start.toISOString(), scope };
+    line = { layerfs_trace: 1, id, ...step(), method, ...(typeof args?.project === "string" ? { project: args.project } : {}), args: summary(args), start: start.toISOString(), scope };
   } catch {
     line = { layerfs_trace: 1, id, method, args: null, start: start.toISOString(), scope };
   }

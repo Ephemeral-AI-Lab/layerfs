@@ -127,7 +127,8 @@ async function inner([phase]) {
   let layerfs;
   const source = mkdtempSync(join(tmpdir(), "layerfs-f056-"));
   writeFileSync(join(source, "README.md"), "workspace file\n");
-  layerfs = await LayerFS.init("site", source, { storePath: STORE_PATH });
+  process.env.LAYERFS_STORE_PATH = STORE_PATH;
+  layerfs = await LayerFS.init("site", source);
   rmSync(source, { recursive: true, force: true });
   await layerfs.branch.fork("work", "main");
   const ws = await layerfs.workspace.mount("work");

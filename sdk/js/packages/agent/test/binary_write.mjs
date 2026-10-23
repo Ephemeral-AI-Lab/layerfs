@@ -18,7 +18,8 @@ try {
   process.env.LAYERFS_HOME = join(work, "home");
   mkdirSync(store);
   const { LayerFS } = await import("@layerfs/agent");
-  const layerfs = await LayerFS.init("website", source, { storePath: join(store, "global", "store.sqlite") });
+  process.env.LAYERFS_STORE_PATH = join(store, "global", "store.sqlite");
+  const layerfs = await LayerFS.init("website", source);
   assert.equal(layerfs.created.kind, "Initialized");
   await layerfs.branch.fork("feat");
 

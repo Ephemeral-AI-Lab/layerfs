@@ -39,8 +39,9 @@ async function inner([phase]) {
   const home = process.env.LAYERFS_HOME;
   const trace = join(home, "exec.trace.jsonl");
   const shared = join(home, "paths.json");
+  Object.assign(process.env, { LAYERFS_STORE_PATH: STORE_PATH, LAYERFS_TRACE: trace });
   if (phase === "child") {
-    const layerfs = await LayerFS.open("site", { storePath: STORE_PATH, trace });
+    const layerfs = await LayerFS.open("site");
     const paths = JSON.parse(readFileSync(shared, "utf8"));
     const fifth = await layerfs.workspace.mount("work");
     await layerfs.workspace.unmount(paths[1], true);
@@ -53,7 +54,7 @@ async function inner([phase]) {
   }
   const source = mkdtempSync(join(tmpdir(), "layerfs-f029-"));
   writeFileSync(join(source, "README.md"), "workspace file\n");
-  const layerfs = await LayerFS.init("site", source, { storePath: STORE_PATH, trace });
+  const layerfs = await LayerFS.init("site", source);
   const { LayerFSBackend } = await import("@layerfs/backend");
   rmSync(source, { recursive: true, force: true });
   await layerfs.branch.fork("work", "main");

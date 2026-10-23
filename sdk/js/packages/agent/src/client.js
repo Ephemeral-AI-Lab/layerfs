@@ -16,7 +16,7 @@ export const STATE = Symbol("layerfs.client");
 export const BACKEND = /^(backend|runtime)\./;
 
 /** Runs one operation once and returns its value or throws its refusal;
- * `options` are the client's, whose `trace`/`traceStep` select its trace line;
+ * `options` are the client's settings, whose `trace` selects its trace file;
  * `transport` is the client's binding (default: the one a new client would use). */
 export async function invoke(op, args, options, transport = binding()) {
   return outcome(await traced(options, op, args, (scope) => {

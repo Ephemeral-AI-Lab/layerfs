@@ -8,8 +8,8 @@
 
 | Setting | Effect |
 | --- | --- |
-| `LAYERFS_TRACE=<file>`, or `LayerFS.open(project, { trace: file })` | Append one JSON line per agent and backend call. The option wins |
-| `LAYERFS_TRACE_STEP=<label>`, or `{ traceStep }`, or `layerfs.options.traceStep` | Put `step` on each line; read at every call; cut to 200 characters |
+| `LAYERFS_TRACE=<file>` | Append one JSON line per agent and backend call; read when the client is made (`LayerFS.open` takes no options) |
+| `LAYERFS_TRACE_STEP=<label>` | Put `step` on each line; read at every call; cut to 200 characters |
 
 Off (unset) means no file, no daemon observation, no recording cost and byte-identical
 replies. A failed trace write is dropped and never changes a result. A step label alone

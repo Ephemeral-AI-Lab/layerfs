@@ -5,8 +5,9 @@
 // volume, then one Init (LayerFS.init) where the Store lives: in this
 // process on Linux, in a container of its own on macOS, in the worker on
 // Windows. Init seals the Store and installs it into the volume, starting no
-// Sandbox. `timeout` (milliseconds) is LayerFS.init's: it bounds the Init
-// itself, and without it Init has no time limit. One attempt. A failed Init removes what it made (the volume, and
+// Sandbox. `timeout` (milliseconds) is LayerFS.init's, passed through
+// unchanged: it bounds the Init itself, and when omitted LayerFS.init's
+// default (INIT_TIMEOUT_MS, 300 s) applies. One attempt. A failed Init removes what it made (the volume, and
 // the home entry unless another project holds the name); an uncertain one
 // (`Unknown`, or any failure on Windows) keeps everything and is recorded in
 // `<stateDir>/init-failures.jsonl`, never cleaned up on a guess.
@@ -85,7 +86,7 @@ export async function runInit(runtime, prepared, report = () => {}) {
   let client;
   try {
     // LayerFS.init reads the environment before its first await
-    const making = withEnv(deploymentEnv(settings, platform, project), () => LayerFS.init(project.name, platform.path(settings, project.source), {}, timeout));
+    const making = withEnv(deploymentEnv(settings, platform, project), () => LayerFS.init(project.name, platform.path(settings, project.source), timeout));
     // macOS: Init runs in its own container, whose counts this process cannot read
     client = await (platform.name === "macos" ? making : watching(runtime, project.name, making, report));
   } catch (error) {

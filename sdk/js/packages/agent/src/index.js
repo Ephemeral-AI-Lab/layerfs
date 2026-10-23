@@ -1,6 +1,7 @@
 // @layerfs/agent (#428): what an agent's script calls. A client is opened by
-// `LayerFS.open(name)` (an existing project) or `LayerFS.init(name, folder)`
-// (a new one) and released by `close()`; there is no public constructor.
+// `LayerFS.open(name)` (an existing project) or `LayerFS.init(name, folder,
+// timeout?)` (a new one) and released by `close()`; there is no public
+// constructor and no options argument: settings come from the environment.
 // Calls name their Branch. `workspace.mount(branch)` returns a Workspace,
 // `{ sandbox, path }`, placed by LayerFS in one of the project's Sandboxes,
 // or in the one `{ sandbox }` names; the other Workspace calls take it.
@@ -12,7 +13,7 @@ import { BACKEND, STATE, invoke, invokeClient, live, projectArgs, storeArgs, sto
 import { binding } from "./transport/index.js";
 import { LayerFSError } from "./errors.js";
 import * as fsMethods from "./fs/index.js";
-import { init } from "./project/init.js";
+import { INIT_TIMEOUT_MS, init } from "./project/init.js";
 import { list_branches } from "./project/list_branches.js";
 import { list_sandboxes } from "./project/list_sandboxes.js";
 import { diff_branches } from "./branch/diff_branches.js";
@@ -30,6 +31,7 @@ import { mount } from "./workspace/mount.js";
 import { unmount } from "./workspace/unmount.js";
 
 export { LayerFSError, isRefusal, CODES } from "./errors.js";
+export { INIT_TIMEOUT_MS };
 export { RENAMED_METHODS, currentMethod } from "./names.js";
 
 // One copy of this package per process: a second copy would keep its own
@@ -49,7 +51,7 @@ const bind = (client, methods) =>
 /** Opens the client's Store and makes one project lookup on it, so a
  * missing project is NoSuchProject at once; nothing stays open on failure. */
 async function opened(client) {
-  if (!client.options.storePath) throw new LayerFSError("InvalidInput", "a LayerFS client needs options.storePath (LAYERFS_STORE_PATH), the project's installed Store", null);
+  if (!client.options.storePath) throw new LayerFSError("InvalidInput", "a LayerFS client needs storePath (LAYERFS_STORE_PATH), the project's installed Store", null);
   await storeOpen(client);
   try {
     await invoke("project.list_branches", { ...projectArgs(client), ...storeArgs(client), pageSize: 1, pagePos: 0 }, client.options, transportOf(client));
@@ -60,71 +62,79 @@ async function opened(client) {
   client[STATE].closed = false;
 }
 
+/** The removed options argument (#431 follow-up) is refused, never ignored. */
+function noOptions(method, given) {
+  if (given) {
+    throw new LayerFSError("InvalidInput", `${method} takes no options: settings come from the environment (LAYERFS_STORE_PATH, LAYERFS_DAEMON_HOST, LAYERFS_TRACE, LAYERFS_TRACE_STEP, LAYERFS_STORE_POLICY)`, null);
+  }
+}
+
 export class LayerFS {
-  /** A ready client of the existing project `projectName`; see the constructor's options. */
-  static async open(projectName, options = {}) {
-    const client = new LayerFS(projectName, options, FACTORY);
+  /** A ready client of the existing project `projectName`; the constructor lists its settings. */
+  static async open(projectName, ...rest) {
+    noOptions("LayerFS.open(name)", rest.some((value) => value !== undefined));
+    const client = new LayerFS(projectName, FACTORY);
     await opened(client);
     return client;
   }
 
   /** Creates the project `projectName` from `folder` (one Init), then opens
    * it. `created` on the client is what Init returned. An uncertain Init
-   * keeps everything it made. `timeout` (milliseconds) bounds Init, which
-   * then fails `Failed` (Deadline) when it runs longer; omitted, Init has
-   * no time limit. */
-  static async init(projectName, folder, options = {}, timeout = undefined) {
-    const client = new LayerFS(projectName, options, FACTORY);
+   * keeps everything it made. `timeout` (milliseconds, a positive whole
+   * number; default INIT_TIMEOUT_MS, 300 s; no unlimited option) bounds
+   * Init, which then fails `Failed` (Deadline) when it runs longer. */
+  static async init(projectName, folder, timeout = undefined, ...rest) {
+    noOptions("LayerFS.init(name, folder, timeout?)", (timeout !== null && typeof timeout === "object") || rest.some((value) => value !== undefined));
+    const client = new LayerFS(projectName, FACTORY);
     const created = await init(client, folder, timeout);
     await opened(client);
     client.created = created;
     return client;
   }
 
-  /** Not public: `LayerFS.open` and `LayerFS.init` make clients.
-   * `options.trace` names a per-call trace file (overrides LAYERFS_TRACE,
-   * then DSH_LAYERFS_TRACE); `options.traceStep` labels its lines
-   * (overrides LAYERFS_TRACE_STEP, then DSH_LAYERFS_TRACE_STEP). Deployment
+  /** Not public: `LayerFS.open` and `LayerFS.init` make clients. Every
+   * setting is read from the environment once, here, into `options`, each
+   * LAYERFS_ name else its DSH_LAYERFS_ twin. LAYERFS_TRACE names a
+   * per-call trace file; LAYERFS_TRACE_STEP, read at each call, labels its
+   * lines. Deployment
    * settings read LAYERFS_HOME, _DOCKER, _IMAGE, _VOLUME and _DAEMON, each
    * else its DSH_LAYERFS_ twin; a Sandbox this client starts runs _IMAGE
    * on _VOLUME. LAYERFS_CONTAINER_PREFIX (default `layerfs-`) names every
    * container it starts `<prefix><project>-<n>`.
-   * `options.daemonHost` (else LAYERFS_DAEMON_HOST) is the host this process
+   * LAYERFS_DAEMON_HOST is the host this process
    * dials for a daemon's port, published on the Docker host's 127.0.0.1 only;
    * set it when the client runs in a container (`host.docker.internal` on
    * Docker Desktop). Unset, the client dials 127.0.0.1.
-   * `options.storePath` (else LAYERFS_STORE_PATH) is the installed Store
+   * LAYERFS_STORE_PATH is the installed Store
    * file this client's Store calls open; it must be on a local Linux
    * filesystem the daemons share, or the calls fail `Unsupported`.
-   * `options.storePolicy` ({ smallFileThreshold, wholeFileDepth,
-   * chunkDepth, metadataDepth }) is the Store policy `LayerFS.init` records
-   * instead of the default. */
-  constructor(projectName, options = {}, token = undefined) {
+   * LAYERFS_STORE_POLICY, a JSON object { smallFileThreshold,
+   * wholeFileDepth, chunkDepth, metadataDepth }, is the Store policy
+   * `LayerFS.init` records instead of the default. */
+  constructor(projectName, token = undefined) {
     if (token !== FACTORY) {
       throw new LayerFSError("InvalidInput", "use `await LayerFS.open(name)` or `await LayerFS.init(name, folder)`; there is no public constructor", null);
     }
     if (typeof projectName !== "string" || !/^[a-z0-9](?:[a-z0-9_.-]{0,61}[a-z0-9])?$/.test(projectName)) {
       throw new LayerFSError("InvalidInput", "a project name is required", null);
     }
-    if (options === null || typeof options !== "object") throw new LayerFSError("InvalidInput", "options must be an object", null);
     this.projectName = projectName;
     // Each LAYERFS_ setting falls back to its DSH_LAYERFS_ twin, the only
     // names deepseek-harness may set in a bash call's environment.
     const env = (name) => process.env[`LAYERFS_${name}`] || process.env[`DSH_LAYERFS_${name}`] || undefined;
     this.options = {
       home: env("HOME"),
-      trace: options.trace ?? env("TRACE"),
-      traceStep: options.traceStep,
+      trace: env("TRACE"),
       deploy: {
         docker: env("DOCKER"),
         image: env("IMAGE"),
         volume: env("VOLUME"),
         daemon: env("DAEMON"),
         ...(env("CONTAINER_PREFIX") ? { containerPrefix: env("CONTAINER_PREFIX") } : {}),
-        ...((options.daemonHost ?? env("DAEMON_HOST")) ? { daemonHost: options.daemonHost ?? env("DAEMON_HOST") } : {}),
+        ...(env("DAEMON_HOST") ? { daemonHost: env("DAEMON_HOST") } : {}),
       },
-      storePolicy: options.storePolicy,
-      storePath: options.storePath ?? env("STORE_PATH"),
+      storePolicy: env("STORE_POLICY"),
+      storePath: env("STORE_PATH"),
     };
     // not open until a factory has opened its Store; the binding is chosen now, once
     this[STATE] = { closed: null, transport: binding() };

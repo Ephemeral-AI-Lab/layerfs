@@ -34,7 +34,8 @@ async function inner([bound]) {
     // the refusal is the Store open's, at LayerFS.open
     let refused = null;
     try {
-      await (await LayerFS.open("site", { storePath: store })).close();
+      process.env.LAYERFS_STORE_PATH = store;
+      await (await LayerFS.open("site")).close();
     } catch (e) {
       refused = e;
     }

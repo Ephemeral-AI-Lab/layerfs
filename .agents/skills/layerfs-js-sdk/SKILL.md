@@ -368,7 +368,7 @@ method, its arguments, result fields, refusals with what to do, limits and examp
 
 | Group | Methods |
 | --- | --- |
-| [project](references/methods/project.md) | `LayerFS.init(name, sourcePath, options?, timeout?)`, `LayerFS.open(name)`, `close()`, `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
+| [project](references/methods/project.md) | `LayerFS.init(name, sourcePath, timeout?)`, `LayerFS.open(name)`, `close()`, `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
 | [fs reads](references/methods/fs-read.md) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | [fs writes](references/methods/fs-write.md) | `write(branch, path, content, message?)`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message?)`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | [branch](references/methods/branch.md) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?)`, `diff_branches(from, to, pageSize?, pagePos?)`, `merge(a, b, name, message?)`, `publish(branch, commit?)` |

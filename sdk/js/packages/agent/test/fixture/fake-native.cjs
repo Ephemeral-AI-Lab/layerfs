@@ -3,12 +3,14 @@
 // Every call resolves like the real binding; a path "/missing" is refused.
 // `sandboxList` is the project's running Sandboxes, `workspaceList` a
 // Sandbox's daemon records; a Store path "/missing" names no project.
-// `initRefusal`, when set, is what project.init refuses.
+// `initRefusal`, when set, is what project.init refuses; a policy depth over
+// 255 is refused as the addon refuses it.
 const commit = { id: "c0ffee", logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
 const answer = (op, args) => {
   if (args.storePath === "/missing") return { refused: { code: "NoSuchProject", message: "no such project", detail: null } };
   if (args.path === "/missing") return { refused: { code: "NoSuchPath", message: "/missing does not exist", detail: null } };
   if (op === "project.init" && exports.initRefusal) return { refused: exports.initRefusal };
+  if (op === "project.init" && args.policy?.chunkDepth > 255) return { refused: { code: "InvalidInput", message: "policy.chunkDepth is out of range", detail: null } };
   if (op === "workspace.mount") return { value: { kind: "Mounted", sandbox: "1", container: "layerfs-website-1", path: "/workspaces/w1", branch: args.branch, base: "b4se", baseLayer: "lay0", root: "r00t" } };
   if (op === "workspace.exec") return { value: { kind: "exit:3", exitCode: 3, stdout: "x".repeat(5000), stderr: "", truncated: false } };
   if (op === "backend.daemon.process.start") return { value: { kind: "running", process: "proc_1_ab", command: args.command } };

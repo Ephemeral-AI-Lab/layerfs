@@ -13,7 +13,7 @@ Object.assign(process.env, {
   LAYERFS_IMAGE: "fake-image", LAYERFS_VOLUME: "fake-volume", LAYERFS_DAEMON: "/fake/daemon",
   LAYERFS_STORE_PATH: "/fake/store.sqlite",
 });
-for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "DAEMON_HOST"]) {
+for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "DAEMON_HOST", "STORE_POLICY"]) {
   delete process.env[`LAYERFS_${name}`];
   delete process.env[`DSH_LAYERFS_${name}`];
 }
@@ -147,23 +147,26 @@ try {
     for (const line of lines) assert.equal("commit" in line, PUBLISHING.includes(line.method) && line.ok, line.method);
     // Unset, no line has a step.
     assert.ok(lines.every((line) => !("step" in line)));
-    // The step label is read at each call, bounded, and the option wins.
+    // The step label is read at each call and bounded.
     const stepped = join(dir, "step.jsonl");
-    const labelled = await LayerFS.open("website", { trace: stepped });
+    process.env.LAYERFS_TRACE = stepped;
+    const labelled = await LayerFS.open("website");
     for (const label of ["install deps", "s".repeat(300), undefined, ""]) {
       if (label === undefined) delete process.env.LAYERFS_TRACE_STEP; else process.env.LAYERFS_TRACE_STEP = label;
       await labelled.project.list_branches();
     }
-    labelled.options.traceStep = "option step";
     process.env.LAYERFS_TRACE_STEP = "environment step";
     await labelled.project.list_branches();
     delete process.env.LAYERFS_TRACE_STEP;
     const steps = readFileSync(stepped, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line)).filter((line) => line.method === "project.list_branches").map((line) => line.step);
     // the first is LayerFS.open's project lookup, before any label was set
-    assert.deepEqual(steps, [undefined, "install deps", `${"s".repeat(200)}…`, undefined, undefined, "option step"]);
-    // The client option overrides the environment.
-    const other = join(dir, "option.jsonl");
-    await (await LayerFS.open("website", { trace: other })).project.list_branches();
+    assert.deepEqual(steps, [undefined, "install deps", `${"s".repeat(200)}…`, undefined, undefined, "environment step"]);
+    // The trace file is the one set when the client was made.
+    const other = join(dir, "later.jsonl");
+    process.env.LAYERFS_TRACE = other;
+    await labelled.project.list_branches();
+    assert.equal(existsSync(other), false);
+    await (await LayerFS.open("website")).project.list_branches();
     assert.equal(readFileSync(other, "utf8").trimEnd().split("\n").length, 2, "LayerFS.open's lookup and the call: a Store call needs no Sandbox");
   } else if (selected === "off") {
     // A step label alone traces nothing.
@@ -175,7 +178,8 @@ try {
   } else if (selected === "failure") {
     // A trace path that cannot be written leaves every result unchanged.
     const reference = await script(await LayerFS.open("website"));
-    const traced = await script(await LayerFS.open("website", { trace: join(dir, "absent/dir/trace.jsonl") }));
+    process.env.LAYERFS_TRACE = join(dir, "absent/dir/trace.jsonl");
+    const traced = await script(await LayerFS.open("website"));
     assert.deepEqual(traced, reference);
   } else if (selected === "dsh-env") {
     // With only the DSH_ names set (as dsh sets them in a bash call), the
@@ -225,7 +229,8 @@ try {
     // Only "1" turns them on.
     const other = join(dir, "other.jsonl");
     process.env.DSH_LAYERFS_TRACE_START = "true";
-    await (await LayerFS.open("website", { trace: other })).project.list_branches();
+    process.env.LAYERFS_TRACE = other;
+    await (await LayerFS.open("website")).project.list_branches();
     assert.ok(read(other).every((line) => line.phase === "end"));
   } else if (selected === "ids") {
     // Lines name what a call made: Branches, heads, Workspaces and their Sandboxes, processes, exit codes.
@@ -274,11 +279,22 @@ try {
     const calls = native.calls.length;
     await assert.rejects(LayerFS.open("website"), { code: "InvalidInput", message: /storePath/ });
     assert.equal(native.calls.length, calls);
-    // A client's Store policy goes with its Init only.
+    // LAYERFS_STORE_POLICY goes with an Init only; JSON that is not an object is refused naming it.
     process.env.LAYERFS_STORE_PATH = "/fake/store.sqlite";
     const inits = () => native.args.filter((_, index) => native.calls[index] === "project.init");
-    await LayerFS.init("website3", "/src/website", { storePolicy: { wholeFileDepth: 8, chunkDepth: 4 } });
+    process.env.LAYERFS_STORE_POLICY = JSON.stringify({ wholeFileDepth: 8, chunkDepth: 4 });
+    await LayerFS.init("website3", "/src/website");
     assert.deepEqual(inits().at(-1).policy, { wholeFileDepth: 8, chunkDepth: 4 });
+    const sent = native.calls.length;
+    for (const text of ["{", "[1]", "8", "null"]) {
+      process.env.LAYERFS_STORE_POLICY = text;
+      await assert.rejects(LayerFS.init("website3", "/src/website"), { code: "InvalidInput", message: /LAYERFS_STORE_POLICY must be a JSON object/ });
+    }
+    assert.equal(native.calls.length, sent, "a refused policy sends nothing");
+    // the native field check's refusal is named after the variable too
+    process.env.LAYERFS_STORE_POLICY = JSON.stringify({ chunkDepth: 300 });
+    await assert.rejects(LayerFS.init("website3", "/src/website"), { code: "InvalidInput", message: "InvalidInput: LAYERFS_STORE_POLICY policy.chunkDepth is out of range" });
+    delete process.env.LAYERFS_STORE_POLICY;
     await LayerFS.init("website3", "/src/website");
     assert.equal("policy" in inits().at(-1), false);
     // History is read from the Store in this process and starts no Sandbox.
@@ -292,7 +308,8 @@ try {
     // reaches a Sandbox, backend calls included: the binding reopens or
     // starts the Sandbox with the call's deploy.
     const native = (await import(FAKE)).default;
-    await script(await LayerFS.open("website", { daemonHost: "host.docker.internal" }));
+    process.env.LAYERFS_DAEMON_HOST = "host.docker.internal";
+    await script(await LayerFS.open("website"));
     const named = native.calls.filter((_, index) => "sandbox" in native.args[index]);
     for (const method of ["workspace.exec", "backend.daemon.workspace.status", "workspace.commit", "workspace.unmount", "backend.daemon.workspace.get_storage", "backend.daemon.workspace.list_changes", "sandbox.list_workspaces", "backend.daemon.process.start"]) {
       assert.ok(named.includes(method), method);

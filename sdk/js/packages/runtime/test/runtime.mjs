@@ -109,7 +109,7 @@ try {
     const init = native.args[native.calls.lastIndexOf("project.init")];
     assert.deepEqual([init.path, init.name, init.storePath, init.deploy.volume], [source, "shop", join(work, "volumes", calls[0][2], "_data/global/store.sqlite"), calls[0][2]]);
     assert.equal((await runtime.project.list()).find((p) => p.name === "shop").volume, calls[0][2]);
-    assert.ok(!Object.hasOwn(init, "timeoutMs"), "no timeout: Init has no limit and gets no field");
+    assert.equal(init.timeoutMs, 300_000, "no timeout: LayerFS.init's 300 s default, none of the runtime's own");
     // a timeout passes through to LayerFS.init as timeoutMs; the record keeps none
     calls.length = 0;
     const timed = await until(await runtime.project.start_init("timed", source, { timeout: 300_000 }));
@@ -198,7 +198,7 @@ try {
     const worker = await fakeWorker((request) => ({ value: request.op === "backend.store.project.get_history" ? { kind: "ok", version: "h1", branches: [], commits: [], more: {}, layers: [] } : { items: [], hasMore: false } }));
     try {
       process.env.LAYERFS_STORE_PATH = "/fake/store.sqlite";
-      const early = await LayerFS.open("website", { storePath: "/fake/store.sqlite" });
+      const early = await LayerFS.open("website");
       delete process.env.LAYERFS_STORE_PATH;
       mkdirSync(join(home, "worker"), { recursive: true });
       worker.endpoint(join(home, "worker", "endpoint.json"), home);
@@ -214,7 +214,9 @@ try {
       const local = native.calls.length;
       await early.fs.read("main", "/README.md");
       assert.equal(native.calls.length, local + 1, "the earlier client stays in-process");
-      const late = await LayerFS.open("website", { storePath: "/fake/store.sqlite" });
+      process.env.LAYERFS_STORE_PATH = "/fake/store.sqlite";
+      const late = await LayerFS.open("website");
+      delete process.env.LAYERFS_STORE_PATH;
       assert.equal(worker.calls.at(-1).op, "project.list_branches", "a client made after the runtime uses the worker");
       await late.close();
       await early.close();

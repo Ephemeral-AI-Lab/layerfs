@@ -46,6 +46,7 @@ if (selected === "surface") {
     await assert.rejects(shop.call(method, {}), { code: "UnknownMethod" });
   }
   await assert.rejects(LayerFS.open("../foreign"), { code: "InvalidInput" });
+  assert.equal(agent.INIT_TIMEOUT_MS, 300_000, "Init's default timeout: 300 s");
   // the internal entry exports exactly what its header and the README list
   assert.deepEqual(Object.keys(await import("@layerfs/agent/internal")).sort(), [
     "STATE", "addonPath", "connection", "decode", "deployment", "encode", "endpointOf", "frame", "invokeBackend", "invokeClient",
@@ -74,20 +75,28 @@ if (selected === "surface") {
   assert.equal(native.stores.length, stores);
   // a missing project leaves nothing open
   const before = native.stores.length;
-  await assert.rejects(LayerFS.open("website", { storePath: "/missing" }), { code: "NoSuchProject" });
+  process.env.LAYERFS_STORE_PATH = "/missing";
+  await assert.rejects(LayerFS.open("website"), { code: "NoSuchProject" });
+  process.env.LAYERFS_STORE_PATH = "/fake/store.sqlite";
   assert.deepEqual(native.stores.slice(before), [["open", "/missing"], ["close", "/missing"]]);
+  // the options argument is gone: an object where it went is refused, never ignored
+  const asked = native.calls.length;
+  for (const call of [() => LayerFS.open("website", {}), () => LayerFS.open("website", { storePath: "/missing" }), () => LayerFS.init("fresh", "/src/fresh", {}), () => LayerFS.init("fresh", "/src/fresh", { storePath: "/x" }, 5000), () => LayerFS.init("fresh", "/src/fresh", 5000, {})]) {
+    await assert.rejects(call(), { code: "InvalidInput", message: /takes no options: settings come from the environment/ });
+  }
+  assert.equal(native.calls.length, asked, "a refused options argument sends nothing");
   // LayerFS.init runs project.init, then the same open
   const made = await LayerFS.init("fresh", "/src/fresh");
   assert.deepEqual(native.calls.slice(-2), ["project.init", "project.list_branches"]);
   const initArgs = () => native.args[native.calls.lastIndexOf("project.init")];
-  assert.ok(!Object.hasOwn(initArgs(), "timeoutMs"), "an omitted timeout sends no field (no limit)");
+  assert.equal(initArgs().timeoutMs, 300_000, "an omitted timeout sends the 300 s default");
   await made.close();
   // Init's timeout, in milliseconds, is sent as timeoutMs
-  await (await LayerFS.init("fresh", "/src/fresh", {}, 90_000)).close();
+  await (await LayerFS.init("fresh", "/src/fresh", 90_000)).close();
   assert.equal(initArgs().timeoutMs, 90_000);
   const sent = native.calls.length;
   for (const timeout of [0, -1, 1.5, "100", null, NaN, Infinity, 2 ** 53]) {
-    await assert.rejects(LayerFS.init("fresh", "/src/fresh", {}, timeout), { code: "InvalidInput", message: /timeout must be a positive whole number of milliseconds/ });
+    await assert.rejects(LayerFS.init("fresh", "/src/fresh", timeout), { code: "InvalidInput", message: /timeout must be a positive whole number of milliseconds/ });
   }
   assert.equal(native.calls.length, sent, "a refused timeout sends nothing");
   // `await using` closes at the end of the block
@@ -177,11 +186,10 @@ if (selected === "surface") {
     assert.equal(native.calls.length, local + 1, "the later client never reaches the addon");
     assert.deepEqual(worker.calls.at(-1).op, "fs.read");
     assert.equal(worker.calls.at(-1).open, true, "the worker opens the later client's Store");
-    // Init's timeout reaches the worker unchanged; an omitted one sends no field
-    await (await LayerFS.init("fresh", "/src/fresh", {}, 2500)).close();
+    // Init's timeout reaches the worker unchanged; an omitted one is the 300 s default
+    await (await LayerFS.init("fresh", "/src/fresh", 2500)).close();
     await (await LayerFS.init("fresh", "/src/fresh")).close();
-    const inits = worker.calls.filter((c) => c.op === "project.init").map((c) => c.args);
-    assert.deepEqual(inits.map((args) => [Object.hasOwn(args, "timeoutMs"), args.timeoutMs]), [[true, 2500], [false, undefined]]);
+    assert.deepEqual(worker.calls.filter((c) => c.op === "project.init").map((c) => c.args.timeoutMs), [2500, 300_000]);
     // macOS: Init runs in its own container (a stub docker here), with the same args
     const bin = join(dir, "bin");
     mkdirSync(bin);
@@ -190,11 +198,11 @@ if (selected === "surface") {
     const path = process.env.PATH;
     process.env.PATH = `${bin}:${path}`;
     try {
-      const timed = await LayerFS.init("fresh", "/src/fresh", {}, 7000);
+      const timed = await LayerFS.init("fresh", "/src/fresh", 7000);
       assert.deepEqual(timed.created, { kind: "Initialized", project: "fresh", timeoutMs: 7000 });
       await timed.close();
       const open = await LayerFS.init("fresh", "/src/fresh");
-      assert.equal(open.created.timeoutMs, null, "no timeout, no field");
+      assert.equal(open.created.timeoutMs, 300_000, "no timeout: the default");
       await open.close();
     } finally {
       process.env.PATH = path;
