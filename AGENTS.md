@@ -25,7 +25,10 @@ simplification.
 | Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
 
 **The LayerFS UI is the dsh LayerFS plugin** (owner, 2026-10-19): the LayerFS tab in
-DeepSeek Harness, served by `dsh/packages`; see [dsh/README.md](dsh/README.md).
+DeepSeek Harness. It lives in its own repository,
+[dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs) (moved out of `dsh/`
+on 2026-10-23, #428), which pins the LayerFS commit it builds on; this repository
+holds no dsh code.
 Do not build or revive standalone HTML or TUI pages. **The `dsh-layerfs-demo`
 bundle (the LayerFS mock model and its demo workspace) is disabled permanently**
 (owner, 2026-10-21): it loads nothing, is not released and no guide installs it.

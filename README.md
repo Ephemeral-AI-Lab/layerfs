@@ -18,7 +18,7 @@
   <a href="https://layerfs.ai/docs/"><b>Docs</b></a> ·
   <a href="https://layerfs.ai/benchmarks/"><b>Benchmarks</b></a> ·
   <a href="https://layerfs.ai/video/layerfs-v1.0.0-release.mp4"><b>Video</b></a> ·
-  <a href="dsh/README.md"><b>LayerFS × DSH</b></a> ·
+  <a href="https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme"><b>LayerFS × DSH</b></a> ·
   <a href="#community"><b>Community</b></a>
 </p>
 
@@ -37,13 +37,13 @@ https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 > crash or power-loss durability: use LayerFS for agent work and its history, not
 > as the only copy of data you cannot rebuild.
 
-Current main also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](dsh/README.md#windows-live). This adapter was added after the v1.0.0 source release.
+Current main also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#windows-live). This adapter was added after the v1.0.0 source release.
 
 <a id="get-started"></a>
 ## Try it with LayerFS × DSH
 
 <p align="center">
-  <a href="dsh/README.md"><img src="docs/assets/readme/layerfs-x-dsh.svg" alt="LayerFS × DSH: the LayerFS logo and the DeepSeek Harness logo" width="220"></a>
+  <a href="https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme"><img src="docs/assets/readme/layerfs-x-dsh.svg" alt="LayerFS × DSH: the LayerFS logo and the DeepSeek Harness logo" width="220"></a>
 </p>
 
 LayerFS runs today through **LayerFS × DSH**, the `dsh-layerfs` plugin for
@@ -52,7 +52,7 @@ session fork Branches, test them in Sandboxes, merge and publish, and the **Work
 **History** tabs show every agent's Branch, live.
 
 <p align="center">
-  <a href="dsh/README.md"><img src="https://img.shields.io/badge/Try%20LayerFS%20%C3%97%20DSH-install%20guide%20%E2%86%92-7C3AED.svg?style=for-the-badge" alt="Try LayerFS × DSH: install guide"></a>
+  <a href="https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme"><img src="https://img.shields.io/badge/Try%20LayerFS%20%C3%97%20DSH-install%20guide%20%E2%86%92-7C3AED.svg?style=for-the-badge" alt="Try LayerFS × DSH: install guide"></a>
 </p>
 
 ## Core ideas
@@ -177,7 +177,7 @@ checkouts on one machine, Btrfs snapshots or Git worktrees may be all you need.
 
 | | |
 | --- | --- |
-| Docs | [LayerFS × DSH guide](dsh/README.md) · [layerfs.ai/docs](https://layerfs.ai/docs/) · [Core ideas](https://layerfs.ai/docs/core-ideas/) · [JavaScript SDK guide](sdk/js/README.md) |
+| Docs | [LayerFS × DSH guide](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme) · [layerfs.ai/docs](https://layerfs.ai/docs/) · [Core ideas](https://layerfs.ai/docs/core-ideas/) · [JavaScript SDK guide](sdk/js/README.md) |
 | Concepts | [Core concepts](docs/general/concepts.md) · [Documentation index](docs/README.md) |
 | Benchmarks | [layerfs.ai/benchmarks](https://layerfs.ai/benchmarks/) |
 | Release | [1.0.0 plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/1.0/README.md) · Previous: [0.1.7 release record](docs/release-notes/0.1.7/README.md) and its [manual](docs/versioned/0.1.7/README.md) |

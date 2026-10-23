@@ -1,5 +1,0 @@
-# LayerFS × DSH demos: DISABLED permanently (owner, 2026-10-21). The bundle
-# loads nothing, even where it is still installed: the mock model
-# (@dsh-layerfs/mock) and its demo workspace stay in this repository as code
-# only, not part of the release, and no install guide adds them.
-[]
