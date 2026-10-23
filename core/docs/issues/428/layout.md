@@ -14,8 +14,9 @@ snapshot of the target, not a scaffolding requirement: existing source and the
 package manifests still decide what is built.
 
 **Out of scope here:** `dsh/`, which stays as it is until its move to
-dsh-layerfs is discussed, and `@layerfs/frontend`, which is built from dsh's
-`model` and `view` packages and is planned with that move. Where runtime code
+dsh-layerfs is discussed. There is no UI package: dsh's routes, UI reads,
+`model`, `view` and `client` stay in dsh-layerfs
+([ui-frontend.md](ui-frontend.md)). Where runtime code
 comes from a dsh Host file, the annotation names the file; the dsh copy is not
 changed by this plan.
 
@@ -122,6 +123,7 @@ One file per method, like the agent. Today these calls are inline in
     index.js                                 29   (from sdk/js/operator/index.js: LayerFSBackend.of; store and daemon groups)
 +   store/                                    —   new
 +     project/                                —   new
++       get_comparable.js                     —   new: from dsh reads.js asCommit
 +       get_history.js                        —   new
 +       get_storage.js                        —   new
 +       list_overwritten.js                   —   new
@@ -143,18 +145,20 @@ One file per method, like the agent. Today these calls are inline in
 +       get_log.js                            —   new
 ```
 
-The six `store` methods and five of the seven `daemon` methods are today's
-operator calls. `daemon/workspace/status.js` is today's public
+Six of the seven `store` methods and five of the seven `daemon` methods are
+today's operator calls. `store/project/get_comparable.js` is new (today's
+`asCommit` in dsh `reads.js`), `daemon/workspace/status.js` is today's public
 `workspace.status`, and `daemon/sandbox/get_log.js` is new.
 
 ## 4. `@layerfs/runtime`
 
 The worker and the platform folders come from the dsh Host's `port/`, `box.js`
 and `windows/`; the rest of runtime from the Host's runtime files. LOC on a
-moved-in file is its dsh source's count.
+moved-in file is its dsh source's count. There is no `http/` folder: dsh's
+routes and UI reads stay in dsh-layerfs ([ui-frontend.md](ui-frontend.md)).
 
 ```diff
-  packages/runtime/src/                    [955]
+  packages/runtime/src/                    [756]
 +   index.js                                  —   new: LayerFSRuntime.open, close
     settings.js                              37   (from dsh config.js)
 +   status.js                                 —   new: from part of dsh runtime.js 207
@@ -182,11 +186,6 @@ moved-in file is its dsh source's count.
 +     leftovers.js                            —   new: from part of dsh runtime.js 207
 +   events/                                   —   new
 +     subscribe.js                            —   new: calls from every process's trace
-    http/                                   [199]
-+     handler.js                              —   new: from the project and runtime half of dsh route.js 112
-      trees.js                               98   (from dsh trees.js)
-      reads.js                               80   (from dsh reads.js)
-      storage.js                             21   (from dsh storage.js)
     cli/                                    [119]
       lfs.js                                119   (from dsh lfs.js)
 ```
@@ -240,7 +239,7 @@ The Rust crates under `core/crates` change only their dispatch names
 | --- | ---: | --- |
 | `@layerfs/agent` | 485 | all of today's `sdk/js/src/`, before new files and before `workspace/status.js` (5) moves to backend |
 | `@layerfs/backend` | 34 | `sdk/js/operator/index.js` (29) and `workspace/status.js` (5) |
-| `@layerfs/runtime` | 955 | moved in: 922 from the dsh Host, 33 from `sdk/js/operator/inspect/snapshot.js` |
+| `@layerfs/runtime` | 756 | moved in: 723 from the dsh Host, 33 from `sdk/js/operator/inspect/snapshot.js` |
 | `layerfs-node` | 2,543 | edited in place |
 
 These are the counts of today's files at their new places. The new files'

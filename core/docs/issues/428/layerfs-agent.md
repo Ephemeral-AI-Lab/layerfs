@@ -10,9 +10,10 @@ Parent design: [README.md](README.md). Baseline: `main` at `1aa56ece78`
 `@layerfs/agent` is the package an agent's script imports to do its work: read
 and change files, run commands, keep history, and manage the Sandboxes it uses.
 Inspection, storage figures and background processes are in `@layerfs/backend`;
-runtime control and views are in `@layerfs/runtime`
-([layerfs-backend-runtime.md](layerfs-backend-runtime.md)). Browser code uses
-`@layerfs/frontend`. This document defines the agent package.
+runtime control is in `@layerfs/runtime`
+([layerfs-backend-runtime.md](layerfs-backend-runtime.md)). LayerFS ships no
+browser code or HTTP; each integration builds its own UI
+([ui-frontend.md](ui-frontend.md)). This document defines the agent package.
 
 The per-method details (every argument, result field and refusal) stay in the
 skill's method references under
@@ -25,7 +26,8 @@ what changes.
 Owner, 2026-10-23, in the #428 discussion:
 
 1. **Packages are named by audience:** `@layerfs/agent`, `@layerfs/backend`,
-   `@layerfs/runtime`, `@layerfs/frontend`. `agent` holds the client and the
+   `@layerfs/runtime`. There is no `@layerfs/frontend`
+   ([ui-frontend.md](ui-frontend.md)). `agent` holds the client and the
    transports; `backend` and `runtime` build on it (section 7). `@layerfs/backend` and
    `@layerfs/runtime` replace the `@layerfs/operator` of earlier drafts.
 2. **Sandbox create and close come back to agents.** This reverses #373's

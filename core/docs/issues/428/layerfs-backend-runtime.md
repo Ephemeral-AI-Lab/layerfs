@@ -5,7 +5,8 @@
 
 Issue: [#428](https://github.com/Ephemeral-AI-Lab/layerfs/issues/428).
 Parent design: [README.md](README.md). Agent package:
-[layerfs-agent.md](layerfs-agent.md). Baseline: `main` at `1aa56ece78`
+[layerfs-agent.md](layerfs-agent.md). UI boundary:
+[ui-frontend.md](ui-frontend.md). Baseline: `main` at `1aa56ece78`
 (2026-10-23).
 
 Today's internal operator (`@layerfs/sdk/operator`, `LayerFSOperator`) is split
@@ -15,8 +16,9 @@ in two, plus the runtime code that lives in the dsh Host:
   LayerFS's back end: the Store (committed history) and the Sandboxes (live
   Workspaces and processes).
 - **`@layerfs/runtime`**: calls about one LayerFS installation (a LayerFS home):
-  the worker, Docker, the list of projects, Init jobs, removal, the UI's view
-  of a project, events and the HTTP routes.
+  the worker, Docker, the list of projects, Init jobs, removal, one project's
+  live picture, events and the `lfs` CLI. It serves no HTTP
+  ([ui-frontend.md](ui-frontend.md)).
 
 The name "operator" is retired.
 
@@ -25,14 +27,16 @@ The name "operator" is retired.
 Owner, 2026-10-23, in the #428 discussion:
 
 1. **Two packages, `@layerfs/backend` and `@layerfs/runtime`**, replace
-   `@layerfs/operator`. With `@layerfs/agent` and `@layerfs/frontend` there are
-   four packages. `agent` holds the client and the transports; `backend` and
-   `runtime` build on it, with no separate shared package.
+   `@layerfs/operator`. With `@layerfs/agent` there are three packages; there
+   is no `@layerfs/frontend`, because UIs and HTTP are outside LayerFS
+   ([ui-frontend.md](ui-frontend.md)). `agent` holds the client and the
+   transports; `backend` and `runtime` build on it, with no separate shared
+   package.
 2. **`backend` has two parts, `store` and `daemon`**, named for where a call is
    answered: `backend.store.*` needs no running Sandbox; `backend.daemon.*`
    needs its Sandbox running.
-3. **Calls that fit neither part move to runtime:** the UI's project view
-   (`get_state`), reclaiming stale Sandbox records and the event stream.
+3. **Calls that fit neither part move to runtime:** one project's live
+   picture (`get_state`), reclaiming stale Sandbox records and the event stream.
 4. **Processes get their own group** (`backend.daemon.process`), instead of
    being spread over the workspace, project and sandbox groups.
 5. **Runtime has its own entry**, not a property of a project client, because
@@ -45,20 +49,19 @@ Owner, 2026-10-23, in the #428 discussion:
 | `@layerfs/agent` | one project | `LayerFS.open`, `LayerFS.init` | agents |
 | `@layerfs/backend` | one project | `LayerFSBackend.of(shop)` | agents (conflicts, background processes, observing), integration hosts |
 | `@layerfs/runtime` | one LayerFS home | `LayerFSRuntime.open({ home, … })` | integration hosts only |
-| `@layerfs/frontend` | over HTTP | client for runtime's routes, view model, views | UIs |
 
 **Terms.** An *integration host* is the server side of an integration, such as
 the dsh Host. *Back end* means LayerFS's own Store and daemons. Integration
 hosts use `runtime`; agents and integration hosts both use `backend`.
 
 ```text
-agent ◄── backend ◄── runtime ◄──HTTP── frontend
+agent ◄── backend ◄── runtime
   │
   └──► layerfs.node (Linux), or the worker (macOS, Windows)
 ```
 
 `backend` takes an opened agent client; `runtime` builds `get_state` from
-agent and backend calls. All four packages ship together at one version, with `layerfs.node` and
+agent and backend calls. All three packages ship together at one version, with `layerfs.node` and
 `layerfs-daemon`.
 
 ## 3. `@layerfs/backend`
@@ -81,6 +84,7 @@ macOS and Windows. Needs no running Sandbox and starts nothing.
 ```js
 await backend.store.project.get_history();                                // ← operator.inspect.history (native only today)
 await backend.store.project.get_storage();                                // ← operator.store.stats
+await backend.store.project.get_comparable(id);                           // + the Commit with a saved id's files
 await backend.store.project.list_overwritten(layer, pageSize, pagePos);   // ← operator.store.overwritten
 await backend.store.branch.list_commit_storage(branch, pageSize, pagePos); // ← operator.store.commits
 await backend.store.fs.get_storage(ref, path);                            // ← operator.files.stats
@@ -91,6 +95,7 @@ await backend.store.fs.list_revisions(ref, path, pageSize, pagePos);      // ←
 | --- | --- |
 | `project.get_history` | Branches, Commits and Layers, with a version token |
 | `project.get_storage` | Store totals: logical, canonical, stored, metadata bytes; dedupe and compression ratios; what Init recorded |
+| `project.get_comparable` | for a saved Commit or Layer id, the Commit with the same files: `{ commit, root, exact }`; refuses `NotComparable` (new; today in dsh `reads.js`, [ui-frontend.md §4](ui-frontend.md#4-rules-that-move-out-of-route-code)) |
 | `project.list_overwritten` | the `main` Layers a publication replaced without containing them, newest first |
 | `branch.list_commit_storage` | each Commit's new canonical, stored and metadata bytes |
 | `fs.get_storage` | a file's size and its stored cost across revisions (bounded count) |
@@ -189,7 +194,6 @@ await runtime.sandbox.reclaim(project);                    // ← the side effec
 await runtime.sandbox.clean_leftovers(names);
 
 runtime.events.subscribe({ project, since });              // + live calls from every process
-runtime.http.create_handler({ prefix, auth });             // read/ops routes for frontend
 ```
 
 | Call | Does | Today |
@@ -198,12 +202,11 @@ runtime.http.create_handler({ prefix, auth });             // read/ops routes fo
 | `worker.start`, `worker.restart` | start a stopped or missing worker; restart a running one | dsh `box.js`, `windows/host.js`, `POST /layerfs/runtime/store[/restart]` |
 | `project.list` | every project in the home | dsh `bindings.projects()` |
 | `project.start_init`, `project.get_init` | run Init as a background job in the runtime's process, and read its step and counts | dsh `init.js`, `jobs.js`; native `operator.project.progress` |
-| `project.get_state` | the UI's view of one project: `backend.store.project.get_history`, the agent's `project.list_sandboxes` and `sandbox.list_workspaces`, and `backend.daemon.workspace.get_storage`, joined under one version token | [sdk/js/operator/inspect/snapshot.js](../../../../sdk/js/operator/inspect/snapshot.js) |
+| `project.get_state` | one project's live picture: `backend.store.project.get_history`, the agent's `project.list_sandboxes` and `sandbox.list_workspaces`, and `backend.daemon.workspace.get_storage`, joined under one version token | [sdk/js/operator/inspect/snapshot.js](../../../../sdk/js/operator/inspect/snapshot.js) |
 | `project.remove` | delete a project's volume and records, optionally stopping its Sandboxes first | dsh `remove.js` |
 | `sandbox.reclaim` | drop records of Sandboxes whose containers are gone or stopped | the reclaim inside today's `operator.sandbox.list` |
 | `sandbox.clean_leftovers` | remove named stopped containers | dsh `runtime.js`, `POST /layerfs/runtime/leftovers` |
 | `events.subscribe` | each call from every process in this home, as trace-line fields plus the actor | dsh reads trace files in `collector.js` |
-| `http.create_handler` | the read/ops HTTP routes ([README.md §6.3](README.md#63-readops-http-routes)) | the project and runtime half of dsh `route.js` |
 
 Modules, not methods: the platform folders and the worker program
 ([section 4.4](#44-platforms)), and `@layerfs/runtime/cli` (the `lfs`
@@ -355,13 +358,13 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
 | `jobs.js` | 28 | `runtime.project.start_init`, `get_init` |
 | `remove.js` | 47 | `runtime.project.remove` |
 | `runtime.js` | 207 | `runtime.status`, `runtime.sandbox.clean_leftovers` |
-| `trees.js`, `reads.js`, `storage.js` | 199 | `runtime.project.get_state` and `runtime.http` |
-| `route.js` (project and runtime routes) | part of 112 | `runtime.http.create_handler` |
+| `trees.js`, `reads.js`, `storage.js` | 199 | stay in dsh ([ui-frontend.md §6](ui-frontend.md#6-dsh-as-the-worked-example)); `asCommit` in `reads.js` becomes `backend.store.project.get_comparable` |
 | `lfs.js` | 119 | `@layerfs/runtime/cli` |
 | `layerfs-client.js` | 76 | `runtime/src/clients.js` (per-project clients), using agent's public API only |
 
 The dsh-specific files stay in the dsh adapter: `index.js`, `binding.js`,
-`collector.js`, `env.js`, `records.js` and the session half of `route.js`.
+`collector.js`, `env.js`, `records.js`, `route.js` (112), and the UI reads
+above.
 `migrate.js` (44) is #373's one-time upgrade and is dropped when the code moves.
 
 ## 7. Skill changes
@@ -384,9 +387,8 @@ agents this checkout's skills.
    returns its own log (works anywhere the daemon answers)?
 2. **`events.subscribe` source:** tail the home's trace files, as dsh's
    collector does, or a stream from the worker on macOS and Windows?
-3. **`runtime.http` authentication:** the integration host passes its own
-   check (`auth`), as dsh does with its session cookie. Is a shared default
-   needed for integrations without one?
+3. **Closed: `runtime.http` authentication.** Runtime serves no HTTP, so each
+   integration authenticates its own routes ([ui-frontend.md](ui-frontend.md)).
 4. **A Linux worker, opt-in:** Linux runs Store calls in-process, so Init
    writes into `/var/lib/docker/volumes` and dsh web must run as root there
    (dsh README, step 4). `platform/linux` could also offer the macOS launcher

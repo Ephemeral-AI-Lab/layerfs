@@ -25,9 +25,10 @@ replace it.
   list of methods. A new integration or language needs no new API.
 - **Same code everywhere.** An integration calls the SDK the same way on
   Linux, macOS and Windows. Only the transport underneath changes.
-- **Thin integrations.** Runtime management, the read side, the views and the
-  agent skill are shared. An integration adds only what is specific to its
-  host: how sessions map to projects, who the agent is, and where the UI sits.
+- **Thin integrations.** Runtime management, the SDK calls and the agent
+  skill are shared. An integration adds only what is specific to its host:
+  how sessions map to projects, who the agent is, and its own routes and UI
+  ([ui-frontend.md](ui-frontend.md)).
 - **No private imports.** Integrations use public SDK entry points only.
 
 Out of scope: a standalone LayerFS server or UI page (`AGENTS.md`: the UI is
@@ -37,8 +38,8 @@ semantics.
 ## 2. Layers
 
 ```
- integration adapter    dsh-layerfs, Pi, layerfs-wsl, …   sessions ↔ projects, actor, UI placement
- integration kit        runtime · read/ops HTTP handler · view-model · view · lfs CLI · skill
+ integration adapter    dsh-layerfs, Pi, layerfs-wsl, …   sessions ↔ projects, actor, routes and UI
+ integration kit        runtime · lfs CLI · skill
  SDK                    @layerfs/sdk (JS); other languages later   Project · Branch · Files · Workspace
                                                                     Runtime · Observe · shared base
  transport              in-process (Linux)  |  worker (loopback, secret, one per LayerFS home)
@@ -48,7 +49,8 @@ semantics.
 
 Each layer depends only on the layers below it. Agents' scripts use the SDK
 directly. An integration's backend uses the SDK and the kit. An integration's
-UI talks to its own backend, never to the Store or a daemon.
+UI talks to its own backend, never to the Store or a daemon. LayerFS ships no
+UI and serves no HTTP; see [ui-frontend.md](ui-frontend.md).
 
 ## 3. Protocol
 
@@ -156,8 +158,8 @@ Windows worker would join it (#425). Today's exceptions name dsh (and, if
 ## 5. SDK groups
 
 > **Superseded in part (owner, 2026-10-23):** the SDK splits into the
-> `@layerfs/agent`, `@layerfs/backend`, `@layerfs/runtime` and
-> `@layerfs/frontend` packages; agents get `sandbox.create`,
+> `@layerfs/agent`, `@layerfs/backend` and `@layerfs/runtime` packages, with no
+> UI package ([ui-frontend.md](ui-frontend.md)); agents get `sandbox.create`,
 > `sandbox.list_workspaces` and `sandbox.close` back; `workspace` keeps only
 > `mount`, `exec`, `commit` and `unmount`; and the operator is replaced by
 > `backend` (Store and daemon calls) and `runtime` (the LayerFS home). See
@@ -220,7 +222,9 @@ with each Commit (a Store format change) is
 ## 6. The integration kit
 
 An integration needs the same pieces regardless of its host. Most already
-exist inside `dsh/packages/host`, `model` and `view`.
+exist inside `dsh/packages/host`. The kit has no UI or HTTP: dsh's routes,
+reads, view model and views stay in dsh-layerfs
+([ui-frontend.md](ui-frontend.md)).
 
 ### 6.1 What the kit provides
 
@@ -228,9 +232,6 @@ exist inside `dsh/packages/host`, `model` and `view`.
 | --- | --- | --- |
 | `@layerfs/sdk` | the SDK (section 5) | `sdk/js` |
 | `@layerfs/runtime` | deployment settings and their check, the worker transports, Init jobs with progress, project removal, the runtime overview and actions | `box.js`, `port/`, `windows/`, `config.js`, `init.js`, `jobs.js`, `remove.js`, `runtime.js`, `layerfs-client.js` |
-| read/ops HTTP handler | the project read and runtime routes (6.3), mounted on the integration's own server | the project and runtime half of `route.js`, `trees.js`, `reads.js`, `storage.js` |
-| `@layerfs/view-model` | events in, what the views draw out | `dsh/packages/model` |
-| `@layerfs/view` | framework-free DOM views: History, Files, terminals, Branches, Sandboxes | `dsh/packages/view` |
 | `lfs` CLI | the common agent calls as one shell command each | `lfs.js` |
 | SDK skill | what agents read before their first call | `.agents/skills/layerfs-js-sdk/` |
 | simulator backend (optional) | Sim projects without Docker, for demos and tests | `sim/` |
@@ -255,13 +256,13 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
     layerfs-client.js                     76   (kit runtime: per-project clients)
     lfs.js                               119   (kit: lfs CLI)
     migrate.js                            44   (#373 one-time upgrade; drop at the move)
-    reads.js                              80   (kit read/ops)
+    reads.js                              80   (dsh: UI reads)
     records.js                             8   (dsh)
     remove.js                             47   (kit runtime: project removal)
-    route.js                             112   (split: project and runtime routes kit, session routes dsh)
+    route.js                             112   (dsh: its routes)
     runtime.js                           207   (kit runtime: overview and actions)
-    storage.js                            21   (kit read/ops)
-    trees.js                              98   (kit read/ops)
+    storage.js                            21   (dsh: UI reads)
+    trees.js                              98   (dsh: UI reads)
     port/                              [133]   (kit transport: macOS worker; #382 moves it)
       binding.js                         123
       operator.js                          2
@@ -283,34 +284,18 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
       worker.js                          108
 ```
 
-About 488 lines plus the session half of `route.js` are specific to dsh. The
-rest, plus `model` (960) and `view` (2,672), is kit material. `client`
-(1,978) is dsh's UI glue and stays in the dsh adapter.
+About 799 lines are specific to dsh, including its routes and UI reads. The
+rest is kit material. `model` (960), `view` (2,672) and `client` (1,978) are
+dsh's UI and stay in the dsh adapter.
 
-### 6.3 Read/ops HTTP routes
+### 6.3 dsh's routes
 
-Today's routes are listed in [route.js](../../../../dsh/packages/host/src/route.js).
-They are used only between an integration's backend and its own UI; LayerFS
-core never serves them.
-
-Kit routes (generic):
-
-| Route | Answer |
-| --- | --- |
-| `GET status` | settings, what is missing, SDK location |
-| `POST init`, `GET init/<job>` | start an Init; its step and counts |
-| `GET projects` | every project |
-| `GET project/<name>/state`, `history` | the project as LayerFS reports it; History alone from the Store |
-| `GET project/<name>/{list,read,blame,changes,diff}` | Files reads |
-| `GET project/<name>/storage` | Store totals and recent Commits' costs |
-| `GET`/`POST project/<name>/runtime` | the project's Sandboxes, Workspaces and processes; unmount, discard, stop |
-| `POST project/<name>/remove` | remove a project (confirmed by name) |
-| `GET runtime`, `POST runtime/store`, `runtime/store/restart`, `runtime/leftovers` | Docker, the worker, disk; start, restart, clean up |
-
-dsh-specific routes stay in the adapter: `session/<id>/…` and the
-workspace-folder defaults (`GET`/`POST workspace`). Each integration mounts the
-kit handler under its own prefix and its own authentication; dsh's prefix is
-`/layerfs`.
+dsh's `/layerfs` routes ([route.js](../../../../dsh/packages/host/src/route.js))
+stay in dsh-layerfs. They are not part of the kit, and LayerFS serves no route
+of its own. Each route and the SDK calls behind it are mapped in
+[ui-frontend.md §6](ui-frontend.md#6-dsh-as-the-worked-example). Another
+integration writes its own routes, under its own prefix and authentication,
+on the same calls.
 
 ## 7. Building an integration
 
@@ -319,17 +304,18 @@ An integration has three sides. The kit covers most of each.
 | Side | The integration does | The kit gives it |
 | --- | --- | --- |
 | **Agent** | puts the SDK, the `lfs` CLI, the skill path and the project's settings into the agent's environment; sets the actor | SDK, CLI, skill, configuration names |
-| **Backend** | maps its sessions to projects; records which agent is which; starts and stops the runtime with its own lifecycle; mounts the HTTP handler | `@layerfs/runtime`, HTTP handler, event stream |
-| **UI** | places the views in its own pages or tabs | `@layerfs/view-model`, `@layerfs/view` |
+| **Backend** | maps its sessions to projects; records which agent is which; starts and stops the runtime with its own lifecycle; serves its own routes | `@layerfs/runtime`, `@layerfs/backend`, the event stream |
+| **UI** | draws its own views from its own routes | nothing: LayerFS ships no UI ([ui-frontend.md](ui-frontend.md)) |
 
 A new integration:
 
-1. Depends on `@layerfs/sdk` and the kit packages, at one pinned LayerFS
-   version (section 8).
+1. Depends on `@layerfs/agent`, `@layerfs/backend` and `@layerfs/runtime`, at
+   one pinned LayerFS version (section 8).
 2. Chooses a transport by platform: in-process on Linux, the worker elsewhere
    (if [Open decisions](#open-decisions) 1 allows it).
 3. Gives each agent the SDK, the skill and an actor.
-4. Mounts the HTTP handler and the views if it has a UI.
+4. Builds its own routes and views if it has a UI
+   ([ui-frontend.md](ui-frontend.md)).
 5. Follows the repository rules that apply to callers: one attempt per call,
    Disposable Store profile only, tests under 2 minutes.
 
@@ -381,8 +367,7 @@ as the first integration built on this design. Order:
 1. **Worker route for every integration.** Today a worker may carry Store
    calls only for dsh on macOS and Windows. Should it become a supported
    transport for any integration, with optional HTTP framing (4.2)? If not,
-   other integrations are Linux-only and HTTP stays limited to the read/ops
-   handler.
+   other integrations are Linux-only, and LayerFS serves no HTTP at all.
 2. **Actor storage.** Trace and events only, or also recorded with each
    Commit (a Store format change)?
 3. **Sandbox placement.** Should an integration be able to choose a
