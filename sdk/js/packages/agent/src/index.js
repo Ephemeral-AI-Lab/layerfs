@@ -8,7 +8,8 @@
 // stops it. Store calls (fs, branch, project) run against the project's
 // Store, opened in this process on Linux (#352 F-020) or in the LayerFS
 // home's worker on macOS and Windows (transport/).
-import { BACKEND, STATE, invoke, invokeClient, live, projectArgs, storeArgs, storeClose, storeOpen } from "./client.js";
+import { BACKEND, STATE, invoke, invokeClient, live, projectArgs, storeArgs, storeClose, storeOpen, transportOf } from "./client.js";
+import { binding } from "./transport/index.js";
 import { LayerFSError } from "./errors.js";
 import * as fsMethods from "./fs/index.js";
 import { init } from "./project/init.js";
@@ -51,12 +52,12 @@ async function opened(client) {
   if (!client.options.storePath) throw new LayerFSError("InvalidInput", "a LayerFS client needs options.storePath (LAYERFS_STORE_PATH), the project's installed Store", null);
   await storeOpen(client);
   try {
-    await invoke("project.list_branches", { ...projectArgs(client), ...storeArgs(client), pageSize: 1, pagePos: 0 }, client.options);
+    await invoke("project.list_branches", { ...projectArgs(client), ...storeArgs(client), pageSize: 1, pagePos: 0 }, client.options, transportOf(client));
   } catch (error) {
     await storeClose(client).catch(() => {});
     throw error;
   }
-  client[STATE] = { closed: false };
+  client[STATE].closed = false;
 }
 
 export class LayerFS {
@@ -123,8 +124,8 @@ export class LayerFS {
       storePolicy: options.storePolicy,
       storePath: options.storePath ?? env("STORE_PATH"),
     };
-    // not open until a factory has opened its Store
-    this[STATE] = { closed: null };
+    // not open until a factory has opened its Store; the binding is chosen now, once
+    this[STATE] = { closed: null, transport: binding() };
     this.fs = bind(this, fsMethods);
     this.project = bind(this, { list_branches, list_sandboxes });
     this.branch = bind(this, { list_commits, diff_commits, diff_branches, fork, merge, publish });

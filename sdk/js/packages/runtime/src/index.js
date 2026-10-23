@@ -10,9 +10,12 @@
 // On macOS and Windows, Store calls run in the home's worker (platform/),
 // and this process's @layerfs/agent clients reach it through the endpoint
 // the platform writes. That route is open only for the dsh adapter
-// (AGENTS.md exceptions): `adapter: "dsh"` sets LAYERFS_WORKER_ENDPOINT and
-// LAYERFS_WORKER_ADAPTER for this process; any other adapter gets no worker.
+// (AGENTS.md exceptions): with `adapter: "dsh"` the runtime hands the
+// endpoint to @layerfs/agent (useWorker), and every client made after that
+// in this process, the runtime's own or not, uses the worker; a client made
+// before keeps its binding. Any other adapter gets no worker.
 import { LayerFSError } from "@layerfs/agent";
+import { useWorker } from "@layerfs/agent/internal";
 import { Clients } from "./clients.js";
 import { resolveSettings } from "./settings.js";
 import { status } from "./status.js";
@@ -45,10 +48,7 @@ export class LayerFSRuntime {
     this.platform = PLATFORMS[settings.platform];
     this.closed = false;
     const endpoint = this.platform.endpoint(settings);
-    if (endpoint && settings.adapter === "dsh") {
-      process.env.LAYERFS_WORKER_ENDPOINT = endpoint;
-      process.env.LAYERFS_WORKER_ADAPTER = "dsh";
-    }
+    if (endpoint && settings.adapter === "dsh") useWorker(endpoint, "dsh");
     this.clients = new Clients(this);
     const jobs = new InitJobs((prepared, report) => runInit(this, prepared, report));
     const live = (method) => async (...args) => {

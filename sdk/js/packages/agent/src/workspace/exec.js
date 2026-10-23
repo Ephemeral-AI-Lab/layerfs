@@ -14,8 +14,7 @@
 // are not ended, and the result's field for each is null. The result then
 // also carries `stdoutBytes` and `stderrBytes`. Page reads are not traced:
 // the call's trace line covers the command's run.
-import { invoke, invokeClient, outcome, workspaceArgs, checkedMessage } from "../client.js";
-import { binding } from "../transport/index.js";
+import { invoke, invokeClient, outcome, transportOf, workspaceArgs, checkedMessage } from "../client.js";
 import { LayerFSError } from "../errors.js";
 
 const PAGE = 1 << 20;
@@ -42,7 +41,7 @@ export async function exec(client, ws, command, message, sinks) {
       let text = "";
       for (let offset = 0, end = false; !end; ) {
         const page = window.subarray(0, Math.min(PAGE, Math.max(1, total - offset)));
-        const read = outcome(await binding().execOutput({ output, stream: name, offset }, page));
+        const read = outcome(await transportOf(client).execOutput({ output, stream: name, offset }, page));
         if (!read.end && read.length === 0) throw new LayerFSError("Failed", `${name} page at ${offset} was empty`, null);
         offset += read.length;
         end = read.end;
@@ -52,7 +51,7 @@ export async function exec(client, ws, command, message, sinks) {
       if (!sink) result[name] = text;
     }
   } finally {
-    if (output !== undefined) await invoke("workspace.exec_release", { output }, {});
+    if (output !== undefined) await invoke("workspace.exec_release", { output }, {}, transportOf(client));
   }
   return result;
 }

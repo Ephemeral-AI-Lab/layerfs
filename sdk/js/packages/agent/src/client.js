@@ -3,27 +3,31 @@
 // `{ value }` or `{ refused }` (plus `telemetry` when traced); a refusal
 // becomes a LayerFSError. Nothing is retried.
 import { binding } from "./transport/index.js";
+
+/** The binding a client was made with (see transport/index.js). */
+export const transportOf = (client) => client[STATE].transport;
 import { LayerFSError } from "./errors.js";
 import { traced } from "./trace.js";
 
-/** A client's private state: `{ opened, closed }`. */
+/** A client's private state: `{ closed, transport }`. */
 export const STATE = Symbol("layerfs.client");
 
 /** Names on the binding's backend table (#428), refused by the public one. */
 export const BACKEND = /^(backend|runtime)\./;
 
 /** Runs one operation once and returns its value or throws its refusal;
- * `options` are the client's, whose `trace`/`traceStep` select its trace line. */
-export async function invoke(op, args, options) {
+ * `options` are the client's, whose `trace`/`traceStep` select its trace line;
+ * `transport` is the client's binding (default: the one a new client would use). */
+export async function invoke(op, args, options, transport = binding()) {
   return outcome(await traced(options, op, args, (scope) => {
     if (BACKEND.test(op)) throw new LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's", null);
-    return binding().call(op, observed(args, scope));
+    return transport.call(op, observed(args, scope));
   }));
 }
 
 /** One call on the binding's backend table (`backend.*`, `runtime.*`). */
-export async function invokeBackend(op, args, options) {
-  return outcome(await traced(options, op, args, (scope) => binding().backendCall(op, observed(args, scope))));
+export async function invokeBackend(op, args, options, transport = binding()) {
+  return outcome(await traced(options, op, args, (scope) => transport.backendCall(op, observed(args, scope))));
 }
 
 /** A traced call carries its scope; the binding removes it before dispatch. */
@@ -87,13 +91,13 @@ export function live(client) {
  * home and the Store this process opened. */
 export function invokeClient(client, op, args) {
   live(client);
-  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options);
+  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client));
 }
 
 /** One backend-table call of an open client, with the same fields. */
 export function invokeClientBackend(client, op, args) {
   live(client);
-  return invokeBackend(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options);
+  return invokeBackend(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client));
 }
 
 /** A call's project fields: the project, discovery home and the client's
@@ -107,12 +111,12 @@ export const storeArgs = (client) => (client.options.storePath ? { storePath: cl
 
 /** Opens the client's Store in this process (one more client of it). */
 export async function storeOpen(client) {
-  return outcome(await binding().storeOpen({ project: client.projectName, home: client.options.home, ...storeArgs(client) }));
+  return outcome(await transportOf(client).storeOpen({ project: client.projectName, home: client.options.home, ...storeArgs(client) }));
 }
 
 /** Releases the client's Store; the last client of the process closes it. */
 export async function storeClose(client) {
-  return outcome(await binding().storeClose({ project: client.projectName, home: client.options.home, ...storeArgs(client) }));
+  return outcome(await transportOf(client).storeClose({ project: client.projectName, home: client.options.home, ...storeArgs(client) }));
 }
 
 export function page(pageSize = 50, pagePos = 0) {

@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers
+//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|transport-order
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,11 +53,6 @@ try {
     assert.equal(process.env.LAYERFS_WORKER_ENDPOINT, undefined);
     assert.deepEqual(missing(mac.settings), ["adapter"]);
     await assert.rejects(mac.worker.start(), { code: "Unsupported", message: /dsh adapter/ });
-    // with it, the endpoint is this process's worker route
-    await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle: "/b", adapter: "dsh" });
-    assert.deepEqual([process.env.LAYERFS_WORKER_ENDPOINT, process.env.LAYERFS_WORKER_ADAPTER], [join(home, "worker", "endpoint.json"), "dsh"]);
-    delete process.env.LAYERFS_WORKER_ENDPOINT;
-    delete process.env.LAYERFS_WORKER_ADAPTER;
     // closed: every call refused; a second close does nothing
     await runtime.close();
     await runtime.close();
@@ -181,8 +176,40 @@ try {
     assert.deepEqual(calls.filter((c) => c[0] === "rm"), [["rm", "layerfs-shop-2"]]);
     await assert.rejects(runtime.sandbox.clean_leftovers([]), { code: "InvalidInput" });
     await runtime.close();
+  } else if (selected === "transport-order") {
+    // an agent client made before the runtime opens keeps its in-process
+    // binding; the runtime's clients, and any made after it, use the worker
+    const { LayerFS } = await import("@layerfs/agent");
+    const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
+    const worker = await fakeWorker((request) => ({ value: request.op === "backend.store.project.get_history" ? { kind: "ok", version: "h1", branches: [], commits: [], more: {}, layers: [] } : { items: [], hasMore: false } }));
+    try {
+      process.env.LAYERFS_STORE_PATH = "/fake/store.sqlite";
+      const early = await LayerFS.open("website", { storePath: "/fake/store.sqlite" });
+      delete process.env.LAYERFS_STORE_PATH;
+      mkdirSync(join(home, "worker"), { recursive: true });
+      worker.endpoint(join(home, "worker", "endpoint.json"), home);
+      const runtime = await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle: "/b", adapter: "dsh" });
+      assert.equal(process.env.LAYERFS_WORKER_ENDPOINT, undefined, "the runtime does not change the environment");
+      project("shop");
+      mkdirSync(join(home, ".runtime", "projects"), { recursive: true });
+      writeFileSync(join(home, ".runtime", "projects", "shop.json"), JSON.stringify({ name: "shop", volume: "vol-shop" }));
+      const state = await runtime.project.get_state("shop");
+      assert.equal(state.kind, "ok");
+      assert.deepEqual(worker.calls.map((c) => c.op), ["project.list_branches", "backend.store.project.get_history", "project.list_sandboxes"]);
+      assert.equal(worker.calls[0].args.storePath, "/var/lib/docker/volumes/vol-shop/_data/global/store.sqlite");
+      const local = native.calls.length;
+      await early.fs.read("main", "/README.md");
+      assert.equal(native.calls.length, local + 1, "the earlier client stays in-process");
+      const late = await LayerFS.open("website", { storePath: "/fake/store.sqlite" });
+      assert.equal(worker.calls.at(-1).op, "project.list_branches", "a client made after the runtime uses the worker");
+      await late.close();
+      await early.close();
+      await runtime.close();
+    } finally {
+      worker.close();
+    }
   } else {
-    throw new Error("select surface, projects, init, state, events or leftovers");
+    throw new Error("select surface, projects, init, state, events, leftovers or transport-order");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

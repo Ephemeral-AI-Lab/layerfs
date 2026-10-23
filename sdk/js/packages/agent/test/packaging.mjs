@@ -1,7 +1,7 @@
 // @layerfs/agent's surface and client lifecycle (#428). Each case is one
 // command; every case but `dispatch` uses the stand-in binding and creates no
 // Store:
-//   node sdk/js/packages/agent/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-gate|dispatch
+//   node sdk/js/packages/agent/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-gate|transport-order|dispatch
 // `dispatch` loads the real addon (LAYERFS_NATIVE or native/layerfs.node).
 import assert from "node:assert/strict";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
@@ -135,6 +135,34 @@ if (selected === "surface") {
   process.env.LAYERFS_WORKER_ENDPOINT = "/nonexistent/endpoint.json";
   delete process.env.LAYERFS_NATIVE;
   await assert.rejects(LayerFS.open("website"), { code: "Unsupported", message: /dsh adapter/ });
+} else if (selected === "transport-order") {
+  // each client keeps the binding it was made with, whatever the call order
+  const { fakeWorker } = await import("./fixture/fake-worker.mjs");
+  const { useWorker } = await import("@layerfs/agent/internal");
+  const worker = await fakeWorker();
+  const dir = mkdtempSync(join(tmpdir(), "layerfs-order-"));
+  try {
+    const before = await LayerFS.open("website");                    // in-process, before any worker
+    const file = join(dir, "endpoint.json");
+    worker.endpoint(file, "/private/configured-home");
+    await assert.rejects(async () => useWorker(file, "other"), { code: "Unsupported" });
+    useWorker(file, "dsh");
+    assert.throws(() => useWorker(join(dir, "another.json"), "dsh"), { code: "InvalidInput", message: /already uses/ });
+    const after = await LayerFS.open("website");                     // through the worker
+    assert.deepEqual(worker.calls.map((c) => [c.fn, c.op]), [["call", "project.list_branches"]]);
+    const local = native.calls.length;
+    await before.fs.read("main", "/README.md");
+    assert.equal(native.calls.length, local + 1, "the earlier client stays in-process");
+    await after.fs.read("main", "/README.md");
+    assert.equal(native.calls.length, local + 1, "the later client never reaches the addon");
+    assert.deepEqual(worker.calls.at(-1).op, "fs.read");
+    assert.equal(worker.calls.at(-1).open, true, "the worker opens the later client's Store");
+    await before.close();
+    await after.close();
+  } finally {
+    worker.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 } else if (selected === "dispatch") {
   const { inprocess } = await import("../src/transport/inprocess.js");
   const binding = inprocess();
@@ -146,6 +174,6 @@ if (selected === "surface") {
   assert.equal((await binding.backendCall("project.init", {})).refused.code, "UnknownMethod");
   assert.equal((await binding.backendCall("backend.missing", {})).refused.code, "UnknownMethod");
 } else {
-  throw new Error("select surface, lifecycle, copy, sandbox, worker-gate or dispatch");
+  throw new Error("select surface, lifecycle, copy, sandbox, worker-gate, transport-order or dispatch");
 }
 console.log(`PASS packaging/${selected}`);

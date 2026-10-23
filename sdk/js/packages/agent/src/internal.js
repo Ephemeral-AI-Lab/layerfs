@@ -6,3 +6,4 @@ export { STATE, invokeBackend, invokeClient, invokeClientBackend, live, outcome,
 export { decode, encode, frame, readFrames } from "./transport/frames.js";
 export { connection, endpointOf } from "./transport/worker_client.js";
 export { addonPath } from "./transport/inprocess.js";
+export { useWorker } from "./transport/index.js";

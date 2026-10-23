@@ -69,7 +69,10 @@ else opening fails `Unsupported`, and without a `storePath` it fails
 `InvalidInput`. On macOS and Windows the dsh adapter alone may send the calls
 to its LayerFS home's worker instead (`LAYERFS_WORKER_ENDPOINT` with
 `LAYERFS_WORKER_ADAPTER=dsh`, the AGENTS.md exceptions); any other adapter is
-refused `Unsupported`. Mount does not scan or materialize the complete tree.
+refused `Unsupported`. A client keeps the binding it was made with: the
+in-process addon, or the worker if one was set when it was made, so a client
+made before `@layerfs/runtime` hands over its worker stays in-process and
+every later one uses the worker. Mount does not scan or materialize the complete tree.
 A project is its home entry, `LAYERFS_HOME/<name>/`; the binding keeps no other
 record of which names it initialized. Init refuses a name whose entry exists
 (`Exists`). Once that entry is deleted, after the project's Sandboxes are
@@ -404,9 +407,12 @@ Each platform folder implements one interface (`endpoint`, `status`,
   and ends it.
 
 The worker route is open only for the dsh adapter (AGENTS.md exceptions):
-with `adapter: "dsh"` the runtime sets `LAYERFS_WORKER_ENDPOINT` and
-`LAYERFS_WORKER_ADAPTER` for its process, and the dsh adapter gives agents'
-bash calls the same two settings. Without it, `worker.start` is refused
+with `adapter: "dsh"` the runtime hands its endpoint to `@layerfs/agent`
+(`useWorker`, without changing the environment), so every client made after
+`open` in its process uses the worker; a client made before keeps its
+in-process binding. One worker per process: a second runtime of another home
+is refused. The dsh adapter gives agents' bash calls `LAYERFS_WORKER_ENDPOINT`
+and `LAYERFS_WORKER_ADAPTER=dsh`. Without it, `worker.start` is refused
 `Unsupported`. The endpoint is `<home>/worker/endpoint.json`, `{ home, port,
 secret, build, daemonHost?, init? }`, readable by its user only. The worker
 checks every file of the bundle's `manifest.json` before it listens.
