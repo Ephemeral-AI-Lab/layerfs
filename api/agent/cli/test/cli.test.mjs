@@ -239,7 +239,7 @@ test("there are no short forms: a family with no call, or an old lfs name, exits
   assert.deepEqual(cli(["sandbox", "list-workspaces", "2"]).ops, ["sandbox.list_workspaces"]);
 });
 
-test("sdk-to-cli.md holds the tables the call table writes", () => {
+test("how-to-use/agent.md holds the tables the call table writes", () => {
   assert.deepEqual(written(), tables());
 });
 

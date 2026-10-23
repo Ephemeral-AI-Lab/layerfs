@@ -6,7 +6,7 @@
 
 The JavaScript SDK has 27 positional methods in four groups (29 before #373
 replaced the `sandbox` group with `workspace`; see the #373 update below). The
-[SDK guide](../../../api/README.md) lists signatures, environment configuration,
+[SDK guide](../../../api/how-to-use/agent.md) lists signatures, environment configuration,
 read/page limits and compatibility. [SPEC](../issues/327/SPEC.md) describes the
 UI/server integration; [VERIFICATION](../issues/327/VERIFICATION.md) owns acceptance.
 No harness, agent/call metadata, remove alias or public inspect is retained.
@@ -255,7 +255,7 @@ a process id names its Sandbox. The native ops are `workspace.*`,
 control records and its timing names (`sandbox.mount.bind`,
 `sandbox.mount.attach`) are unchanged. Design and owner decisions:
 [#373](../issues/373/README.md); placement and idle close are described in the
-[SDK guide](../../../api/README.md).
+[SDK guide](../../../api/how-to-use/agent.md#sandboxes-and-workspaces).
 
 
 ## Issue #428 source update (2026-10-23): backend names and packages
@@ -285,4 +285,4 @@ New calls: `sandbox.create`, `sandbox.close` and
 mounting into a chosen Sandbox (agent), and
 `backend.daemon.sandbox.get_log`, which reads a Sandbox's daemon log once
 through the Engine where the binding runs. See the
-[SDK guide](../../../api/README.md).
+[backend guide](../../../api/how-to-use/backend.md#a-sandboxs-log).

@@ -217,7 +217,7 @@ Gaps (current):
 | Part | Current | Proposed |
 | --- | --- | --- |
 | Errors | `LayerFSError`, `isRefusal(error, code)`, `CODES` | listed per method in the method list |
-| Trace | `LAYERFS_TRACE` file, format `layerfs_trace: 1` ([api/README.md, Call trace](../../../../api/README.md#call-trace)) | unchanged; event stream reuses its fields |
+| Trace | `LAYERFS_TRACE` file, format `layerfs_trace: 1` ([api/how-to-use/backend.md, The call trace](../../../../api/how-to-use/backend.md#the-call-trace)) | unchanged; event stream reuses its fields |
 | Actor | `LAYERFS_TRACE_STEP` / `traceStep`: a free-text label | an `actor` option `{ id, name, parent }` on the client, written into every trace line and event |
 | Configuration | `LAYERFS_HOME`, `_DOCKER`, `_IMAGE`, `_VOLUME`, `_DAEMON`, `_STORE_PATH`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`, `_TRACE_STEP`, `_TRACE_START`, `_PROJECT` (CLI), `_WORKER_ENDPOINT`; read by their `LAYERFS_` names only (owner, 2026-10-24) | unchanged; an integration that can set only its own prefix maps the names in its own wrapper (dsh-layerfs does) |
 
@@ -242,7 +242,7 @@ reads, view model and views stay in dsh-layerfs
 | --- | --- | --- |
 | `@layerfs/sdk` | the SDK (section 5) | `api/agent/sdk` |
 | `@layerfs/runtime` | deployment settings and their check, the worker transports, Init jobs with progress, project removal, the runtime overview and actions | `box.js`, `port/`, `windows/`, `config.js`, `init.js`, `jobs.js`, `remove.js`, `runtime.js`, `layerfs-client.js` |
-| `layerfs` CLI | one `@layerfs/agent` call per command, JSON out (`api/agent/cli/`, [api/agent/cli/sdk-to-cli.md](../../../../api/agent/cli/sdk-to-cli.md)); replaces dsh's `lfs.js`, retired with its short forms (owner 2026-10-23) | `lfs.js` (retired) |
+| `layerfs` CLI | one `@layerfs/agent` call per command, JSON out (`api/agent/cli/`, [api/how-to-use/agent.md](../../../../api/how-to-use/agent.md#the-layerfs-command)); replaces dsh's `lfs.js`, retired with its short forms (owner 2026-10-23) | `lfs.js` (retired) |
 | SDK skill | what agents read before their first call | `.agents/skills/layerfs-js-sdk/` |
 | simulator backend (optional) | Sim projects without Docker, for demos and tests | `sim/` |
 

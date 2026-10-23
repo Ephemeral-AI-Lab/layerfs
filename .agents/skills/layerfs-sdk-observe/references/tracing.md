@@ -1,8 +1,8 @@
 # Call trace
 
 > **Status:** Current general guide. Part of the `layerfs-sdk-observe` skill. Describes the
-> #333 trace, merged to `main` in `62b225766`. Its source of truth is the "Call trace"
-> section of [`api/README.md`](../../../../api/README.md).
+> #333 trace, merged to `main` in `62b225766`. Its source of truth is the call trace
+> section of [`api/how-to-use/backend.md`](../../../../api/how-to-use/backend.md#the-call-trace).
 
 ## Turning it on
 

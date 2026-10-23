@@ -1,7 +1,7 @@
 // The layerfs call table (#428 CLI), assembled from one file per command:
 // api/agent/cli/src/<family>/<call>.js mirrors api/agent/sdk/src/<family>/<call>.js,
 // and runs as `layerfs <family> <call>`. Parsing (argv.js), help (help.js)
-// and dispatch (main.js) read the table; sdk-to-cli.md is its reference.
+// and dispatch (main.js) read the table; api/how-to-use/agent.md is its reference.
 // LayerFS.open and close happen inside every command, so they have none.
 //
 // Each command file exports { args, options, summary, run, prepare? }.

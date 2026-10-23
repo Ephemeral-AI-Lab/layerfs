@@ -1,4 +1,4 @@
-// The table of api/agent/cli/sdk-to-cli.md, written from the call table so the
+// The command table of api/how-to-use/agent.md, written from the call table so the
 // doc cannot drift: every SDK call with its command.
 // cli.test.mjs checks the doc holds exactly these; after changing the table,
 // rewrite it with:
@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { CALLS, INIT } from "../src/calls.js";
 import { usage } from "../src/help.js";
 
-export const DOC = fileURLToPath(new URL("../sdk-to-cli.md", import.meta.url));
+export const DOC = fileURLToPath(new URL("../../../how-to-use/agent.md", import.meta.url));
 
 const row = (cells) => `| ${cells.join(" | ")} |`;
 
