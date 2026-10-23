@@ -1,14 +1,12 @@
 {
-  "name": "@layerfs/sdk",
+  "name": "layerfs-js",
   "version": "1.0.0",
-  "description": "LayerFS JavaScript SDK: Branch files, Sandboxes and Workspaces over the native layerfs-api binding",
+  "description": "The LayerFS JavaScript packages (#428): @layerfs/agent, @layerfs/backend and @layerfs/runtime, beside the native addon crate. `npm install` here links them; it downloads nothing.",
   "private": true,
   "type": "module",
-  "main": "src/index.js",
-  "exports": {
-    ".": "./src/index.js",
-    "./operator": "./operator/index.js"
-  },
+  "workspaces": [
+    "packages/agent"
+  ],
   "engines": {
     "node": ">=20"
   },

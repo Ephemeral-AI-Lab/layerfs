@@ -31,6 +31,14 @@ class CounterTests(unittest.TestCase):
                           for path in files], ["core/src/lib.rs", "sdk/src/client.rs"])
         self.assertEqual(production_loc.scan(self.root)["scopes"]["core"]["lines"], 2)
 
+    def test_sdk_packages_count_per_package_beside_the_older_layout(self):
+        for name in ("native/src/lib.rs", "src/index.js", "operator/index.js",
+                     "packages/agent/src/index.js", "packages/backend/src/store/get.js",
+                     "packages/agent/test/trace.mjs", "packages/agent/test/fake.js"):
+            write(self.root, f"sdk/js/{name}", "export const value = 1;\n" if name.endswith(".js") else "pub fn value() {}\n")
+        crates = production_loc.scan(self.root)["scopes"]["sdk"]["crates"]
+        self.assertEqual(crates, {"@layerfs/agent": 1, "@layerfs/backend": 1, "@layerfs/sdk": 2, "layerfs-node": 1})
+
     def test_blank_and_comment_lines_do_not_count(self):
         path = write(
             self.root,

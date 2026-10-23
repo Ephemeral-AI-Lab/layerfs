@@ -26,11 +26,12 @@ class WorktreeTests(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.repo = self.root / "checkout"
         self.repo.mkdir()
-        for folder in ("core/crates/example/src", "core/vendor", ".cargo", "sdk/js/src", "sdk/js/operator", "sdk/js/test", "sdk/js/native/src"):
+        for folder in ("core/crates/example/src", "core/vendor", ".cargo", "sdk/js/packages/agent/src", "sdk/js/packages/agent/test", "sdk/js/native/src"):
             (self.repo / folder).mkdir(parents=True)
         for name in ("core/Cargo.toml", "core/Cargo.lock", ".cargo/config.toml", "sdk/js/package.json"):
             (self.repo / name).write_text("{}\n")
-        (self.repo / "sdk/js/src/index.js").write_text("export const value = 1;\n")
+        (self.repo / "sdk/js/packages/agent/src/index.js").write_text("export const value = 1;\n")
+        (self.repo / "sdk/js/packages/agent/package.json").write_text('{"name": "@layerfs/agent", "exports": {".": "./src/index.js", "./package.json": "./package.json"}}\n')
         git(self.repo, "init", "-q")
         git(self.repo, "config", "user.name", "Fixture")
         git(self.repo, "config", "user.email", "fixture@example.invalid")
@@ -114,7 +115,7 @@ class WorktreeTests(unittest.TestCase):
         args = SimpleNamespace(resources=str(self.path), platform="macos", profile="debug", jobs=2)
         def execute(*a, **kw):
             if mutate:
-                (self.repo / "sdk/js/src/index.js").write_text("changed\n")
+                (self.repo / "sdk/js/packages/agent/src/index.js").write_text("changed\n")
         with patch.object(builds, "execute", side_effect=execute), patch.object(builds, "environment", return_value={}):
             with contextlib.redirect_stdout(io.StringIO()):
                 builds.build(args)
@@ -123,9 +124,12 @@ class WorktreeTests(unittest.TestCase):
     def test_bundle_pins_sdk_and_binary_and_detects_mutation(self):
         bundle = self.build_bundle()
         manifest = builds.verify_bundle(bundle)
-        self.assertIn("sdk/js/src/index.js", manifest["files"])
-        (self.repo / "sdk/js/src/index.js").write_text("later edit\n")
-        self.assertEqual((bundle / "sdk/js/src/index.js").read_text(), "export const value = 1;\n")
+        self.assertIn("sdk/js/packages/agent/src/index.js", manifest["files"])
+        # each package resolves by name through a shim, not a symlink
+        self.assertEqual((bundle / "sdk/js/node_modules/@layerfs/agent/index.js").read_text(), 'export * from "../../../packages/agent/src/index.js";\n')
+        self.assertEqual(json.loads((bundle / "sdk/js/node_modules/@layerfs/agent/package.json").read_text())["exports"], {".": "./index.js"})
+        (self.repo / "sdk/js/packages/agent/src/index.js").write_text("later edit\n")
+        self.assertEqual((bundle / "sdk/js/packages/agent/src/index.js").read_text(), "export const value = 1;\n")
         file = bundle / "layerfs.node"
         file.chmod(0o600)
         file.write_bytes(b"corrupt")

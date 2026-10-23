@@ -10,8 +10,11 @@ inline #[cfg(test)] items are removed before counting, because the reference tre
 keeps tests inside src/.
 
 The JavaScript SDK is its own scope, `sdk`: the Node binding's Rust under
-sdk/js/native/src and the package's JavaScript under sdk/js/src and
-sdk/js/operator. JavaScript comments are blanked by a scanner that knows line
+sdk/js/native/src and the JavaScript of each package under
+sdk/js/packages/<name>/src, one crate per package (@layerfs/agent,
+@layerfs/backend, @layerfs/runtime; #428). The layout before #428 (one
+package, @layerfs/sdk, under sdk/js/src and sdk/js/operator) is still
+counted, so trees on either side of the move compare. JavaScript comments are blanked by a scanner that knows line
 and block comments and single, double and template strings. Current regex
 literals contain no comment delimiters or string quotes.
 
@@ -367,6 +370,9 @@ def sdk_files(base: Path) -> list:
         files += sorted((base / "src").rglob("*.js"))
     if (base / "operator").is_dir():
         files += sorted((base / "operator").rglob("*.js"))
+    if (base / "packages").is_dir():
+        for package in sorted(p for p in (base / "packages").iterdir() if (p / "src").is_dir()):
+            files += sorted((package / "src").rglob("*.js"))
     return [path for path in files if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)]
 
 
@@ -395,7 +401,10 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
 
 
 def sdk_crate(base: Path, path: Path) -> str:
-    return "layerfs-node" if path.relative_to(base).parts[0] == "native" else "@layerfs/sdk"
+    parts = path.relative_to(base).parts
+    if parts[0] == "native":
+        return "layerfs-node"
+    return f"@layerfs/{parts[1]}" if parts[0] == "packages" else "@layerfs/sdk"
 
 
 def scope_files(root: Path, scope: str) -> list:

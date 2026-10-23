@@ -1,15 +1,21 @@
-# @layerfs/sdk
+# LayerFS JavaScript packages
 
-> **Status:** Current implementation guide for issue #327; not a release receipt.
-> The public contract is the [29-method #328 standard](https://github.com/Ephemeral-AI-Lab/layerfs/blob/5321d6de320dcbd41402db9cb41aa36bceabdf4c/core/docs/issues/327/SDK-STANDARD.md).
-> Historical results retain their source identities in the Phase 2–4 records.
+> **Status:** Current implementation guide for issues #327 and #428; not a
+> release receipt. The #428 package split is a Proposal
+> ([core/docs/issues/428](../../core/docs/issues/428/README.md)) implemented on
+> its branch. Historical results retain their source identities in the
+> Phase 2–4 records.
+
+`sdk/js/` holds the native addon crate (`native/`) and the packages under
+`packages/`: `@layerfs/agent` (what agents call: the client, its transports
+and the agent methods). `npm install` in `sdk/js` links the packages to each
+other; it downloads nothing.
 
 ```js
-import { LayerFS } from "@layerfs/sdk";
-// Lazy: no filesystem/addon/network I/O. Store calls open this file in this
-// process; here the project's volume is mounted at /layerfs-store.
-const layerfs = new LayerFS("website", { storePath: "/layerfs-store/global/store.sqlite" });
-await layerfs.project.init("./website");
+import { LayerFS } from "@layerfs/agent";
+// Store calls open this file; here the project's volume is mounted at /layerfs-store.
+const layerfs = await LayerFS.init("website", "./website", { storePath: "/layerfs-store/global/store.sqlite" });
+// another process opens the project instead: await LayerFS.open("website", { storePath })
 await layerfs.branch.fork("feature");
 await layerfs.fs.write("feature", "/README.md", "Hello\n", "Update introduction");
 const page = await layerfs.branch.list_commits("feature", 20, 0);
@@ -18,10 +24,24 @@ const ws = await layerfs.workspace.mount("feature"); // { sandbox: "1", path: "/
 await layerfs.workspace.exec(ws, "npm test", "Run tests");
 await layerfs.workspace.commit(ws, "Save changes");
 await layerfs.workspace.unmount(ws);
+await layerfs.close();
 ```
 
-Construction captures environment strings. `new LayerFS(project, { storePolicy })`
-selects the Store policy `project.init` records instead of the default:
+A client is made by `LayerFS.open(name, options)` (an existing project) or
+`LayerFS.init(name, folder, options)` (Init, then the same open); both are
+async and return a ready client, and `new LayerFS()` is refused
+`InvalidInput`. `open` opens the project's Store and makes one project lookup
+on it, so a missing project is `NoSuchProject` at once; if either fails,
+nothing stays open. `close()` releases the Store (the process's last client of
+it closes it), leaves Workspaces mounted, and makes every later call refuse
+`InvalidInput`; a second `close()` does nothing. `await using layerfs = await
+LayerFS.open(...)` closes it at the end of the block. One copy of
+`@layerfs/agent` loads per process: a second copy at another path refuses to
+load, so one Store is never opened twice. `LayerFS.init`'s client carries
+Init's answer as `created`.
+
+The factories capture environment strings. `LayerFS.init(project, folder, { storePolicy })`
+selects the Store policy Init records instead of the default:
 `{ smallFileThreshold, wholeFileDepth, chunkDepth, metadataDepth }`, each
 defaulting to the default policy's value (131072 bytes, depths 16, 8 and 8). An
 invalid policy is refused as `InvalidInput` before the project entry is made.
@@ -37,24 +57,28 @@ letters, digits, `_`, `-`, `.` and start/end alphanumeric. Init is explicit;
 subsequent clients discover the existing project without reacquiring its source
 or reinstalling over live state.
 
-Store calls (`fs`, `branch`, `project.list_branches`) run in this process: the
-first one opens the installed Store file at `storePath` (else
-`LAYERFS_STORE_PATH`) and `close()` releases it; no Sandbox is involved. That
+Store calls (`fs`, `branch`, `project.list_branches`) run in this process
+against the installed Store file at `storePath` (else `LAYERFS_STORE_PATH`),
+which the factory opened; no Sandbox is involved. That
 file is `global/store.sqlite` in the project's volume, so the process runs where
 that volume is mounted (`/layerfs-store` in a Sandbox). This is Linux only, with
 the Store on a local filesystem the daemons share (ext4, xfs, btrfs); anywhere
-else Store calls fail `Unsupported`, and without a `storePath` they fail
-`InvalidInput`. Mount does not scan or materialize the complete tree.
+else opening fails `Unsupported`, and without a `storePath` it fails
+`InvalidInput`. On macOS and Windows the dsh adapter alone may send the calls
+to its LayerFS home's worker instead (`LAYERFS_WORKER_ENDPOINT` with
+`LAYERFS_WORKER_ADAPTER=dsh`, the AGENTS.md exceptions); any other adapter is
+refused `Unsupported`. Mount does not scan or materialize the complete tree.
 A project is its home entry, `LAYERFS_HOME/<name>/`; the binding keeps no other
 record of which names it initialized. Init refuses a name whose entry exists
 (`Exists`). Once that entry is deleted, after the project's Sandboxes are
 removed, any process, including the one that made it, can initialize the name again.
 The SDK has no remove method; a host that removes a project deletes the entry
-and the project's volume itself. `node sdk/js/test/reinit.mjs` checks this with
+and the project's volume itself. `node sdk/js/packages/agent/test/reinit.mjs` checks this with
 the real binding: Init, `Exists`, delete the entry, Init again in one process.
 
 Parallel agents each mount their own Workspaces; LayerFS places them in the
-project's Sandboxes (see below), so no agent names, creates or closes one.
+project's Sandboxes (see below). Placement is the default; an agent that
+wants a Sandbox of its own creates one and closes it when done.
 Mounts of one project take its placement lock one at a time, each for its
 own placement and mount; Exec, status, Commit and unmount do not take it.
 Concurrent calls to one Sandbox from one process use separate control
@@ -71,7 +95,8 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_IMAGE` | Exact immutable runtime `sha256:...` digest a new Sandbox runs. A running Sandbox keeps the image it started with. |
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |
-| `LAYERFS_NATIVE` | Optional addon path; defaults to `native/layerfs.node`. |
+| `LAYERFS_NATIVE` | Optional path of the real addon; defaults to `native/layerfs.node`. |
+| `LAYERFS_WORKER_ENDPOINT`, `LAYERFS_WORKER_ADAPTER` | macOS and Windows, dsh only: the endpoint file of the LayerFS home's worker, which then makes every binding call; the adapter must be `dsh`. |
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process; the client option `storePath` wins. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. Linux only, on a local filesystem the daemons share; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional; the client option `daemonHost` wins. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
@@ -86,7 +111,20 @@ project has numbered Sandboxes, `1`, `2`, …, each on one image:
 Sandbox of that image (default `LAYERFS_IMAGE`) with fewer than 16 Workspaces
 and starts the next number, on that image, when every such one is full. One
 project's Sandboxes may run different images; the mount result and
-`operator.sandbox.list()` give each one's `image`. A Workspace is
+`project.list_sandboxes()` give each one's `image`.
+`workspace.mount(branch, { sandbox })` mounts in that Sandbox only: refused
+`NoSuchSandbox` when it is not running, `Capacity` when it holds 16
+Workspaces and `InvalidInput` when a given `image` differs from its image.
+`sandbox.create({ image }?)` starts the project's lowest free number like
+placement does and returns `{ sandbox, image }`; `sandbox.close(sandbox)`
+stops it now (stop, then delete, each once), refused `MountsActive` while a
+Workspace is mounted in it and `NoSuchSandbox` when it is not running. It
+closes Sandboxes made by `create` and by placement alike.
+`project.list_sandboxes(pageSize, pagePos)` lists the running ones, each
+`{ sandbox, name, image, workspaces }`, reading records and starting and
+changing nothing; `sandbox.list_workspaces(sandbox, pageSize, pagePos)` asks
+that Sandbox's daemon for its Workspaces, each `{ sandbox, path, branch,
+base, activity, changed }` (`activity` Idle or Busy) plus the daemon's record. A Workspace is
 `{ sandbox, path }`, its Sandbox's number and its path in that Sandbox
 (`/workspaces/1`, `/workspaces/2`, … numbered per Sandbox); `exec`, `status`,
 `commit` and `unmount` take it. Every Workspace of a project sees the same
@@ -100,7 +138,8 @@ keeps it for its life.
 
 A Sandbox closes when idle: its daemon ends itself after 2 minutes with no
 Workspace and no call, and its container stops. Open connections do not keep
-it. The next mount or `operator.sandbox.list()` that meets a stopped or
+it. `project.list_sandboxes()` skips a stopped Sandbox and keeps its
+records; the next mount or `runtime.sandbox.reclaim` that meets a stopped or
 removed container reclaims the Sandbox: it deletes a stopped container
 (unforced, once) and removes the Sandbox's records, so the number is used
 again. A Workspace call to a Sandbox whose container no longer runs is
@@ -204,7 +243,7 @@ detached `ArrayBuffer` are refused as InvalidInput, and so is anything else,
 such as an array of numbers. The bytes are copied once the call starts, after
 the client's Store is open, so do not change them until the call settles.
 Reads are text only: `fs.read` refuses a file that is not UTF-8 text as
-`Binary`, and `fs.stat` reports its size. `node sdk/js/test/binary_write.mjs`
+`Binary`, and `fs.stat` reports its size. `node sdk/js/packages/agent/test/binary_write.mjs`
 checks these forms and refusals on Linux.
 
 Pages have `items` and `hasMore`; advance by `pagePos + items.length`.
@@ -372,9 +411,9 @@ Concurrent calls append whole lines; order follows completion, so join by `id`.
 The trace is diagnostic timing, not a benchmark measurement. Off means no scope,
 no observed exchange, no daemon timing and byte-identical replies.
 
-Checks: `node sdk/js/test/trace.mjs <case>` runs one case (`on`, `off`,
+Checks: `node sdk/js/packages/agent/test/trace.mjs <case>` runs one case (`on`, `off`,
 `failure`, `dsh-env`, `start`, `ids`, `no-content`) over a stand-in binding;
-`node sdk/js/test/verify/trace_real.mjs <file>` traces a fork, mount, exec,
+`node sdk/js/packages/agent/test/verify/trace_real.mjs <file>` traces a fork, mount, exec,
 process, commit and merge on a fresh Disposable Store with only the `DSH_`
 names set.
 

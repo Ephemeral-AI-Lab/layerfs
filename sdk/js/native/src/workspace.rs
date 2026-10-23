@@ -61,13 +61,51 @@ fn place(args: &SdkValue, project: &Path) -> Result<Arc<SandboxState>, SdkRefusa
     crate::sandbox::start(args, project)
 }
 
-/// `workspace.mount(branch)`: a new Workspace of `branch`, placed in one of
-/// the project's Sandboxes; its `sandbox` and `path`.
+/// The Sandbox an agent chose for a new Workspace (#428): running, of the
+/// call's `image` when one is given, with a free slot. LayerFS moves the
+/// Workspace nowhere else: a full one is refused `Capacity`.
+fn chosen(args: &SdkValue, id: &str) -> Result<Arc<SandboxState>, SdkRefusal> {
+    let directory = crate::discovery::sandbox_dir(args, id)?;
+    let record = directory.join("sandbox.record");
+    if !record.exists() {
+        return Err(crate::job::refused(
+            "NoSuchSandbox",
+            format!("the project has no Sandbox {id}"),
+        ));
+    }
+    let state = sandbox_live(&naming(args, id))?;
+    if let Some(image) = args.get_text("image") {
+        let running = crate::discovery::load(&record)?;
+        if running.get_text("image") != Some(image) {
+            return Err(crate::job::refused(
+                "InvalidInput",
+                format!(
+                    "Sandbox {id} runs {}, not {image}",
+                    running.get_text("image").unwrap_or("another image")
+                ),
+            ));
+        }
+    }
+    if recorded(&directory)? >= WORKSPACES as usize {
+        return Err(crate::job::refused(
+            "Capacity",
+            format!("Sandbox {id} already holds {WORKSPACES} Workspaces"),
+        ));
+    }
+    Ok(state)
+}
+
+/// `workspace.mount(branch, { sandbox? })`: a new Workspace of `branch`,
+/// placed in one of the project's Sandboxes, or in the one `sandbox` names;
+/// its `sandbox` and `path`.
 pub(crate) fn mount(args: &SdkValue) -> Outcome {
     let branch = text(args, "branch")?;
     let project = crate::discovery::project_dir(args)?;
     let _placing = crate::discovery::guard(&project)?;
-    let state = place(args, &project)?;
+    let state = match args.get_text("sandbox") {
+        Some(id) => chosen(args, id)?,
+        None => place(args, &project)?,
+    };
     let _guard = crate::discovery::guard(&state.directory)?;
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     // The Branch is found by name in this process; the daemon binds its id.

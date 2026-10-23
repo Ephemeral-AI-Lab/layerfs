@@ -1,8 +1,9 @@
 //! Project Sandboxes (#373): numbered containers `<prefix><project>-<n>`,
 //! each running a daemon on the Store that Import installed into the project
 //! volume. A Sandbox starts when a Workspace needs one ([`start`], called by
-//! placement in `workspace.rs`) and its records go when it is found gone
-//! ([`reclaim`]); callers never create, choose or close one.
+//! placement in `workspace.rs`) or when an agent asks for one ([`create`],
+//! #428); both start the same kind of Sandbox. Its records go when it is
+//! found gone ([`reclaim`]) or when an agent closes it ([`close`]).
 //!
 //! A start that failed before anything reached the Store volume removes the
 //! container it made (stop, then delete, each once) and its creation intent,
@@ -338,6 +339,77 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkR
         ]),
     }
 }
+
+/// `sandbox.create({ image })`: starts the project's lowest free number on
+/// the call's image (`deploy.image`) under the project's guard, the one
+/// placement takes, and waits for its daemon: `{ sandbox, name, image }`.
+/// Failures are a placing start's: `Failed` or `Unknown`, never retried.
+pub(crate) fn create(args: &SdkValue) -> Outcome {
+    let project = crate::discovery::project_dir(args)?;
+    let _placing = crate::discovery::guard(&project)?;
+    let state = start(args, &project)?;
+    Ok(SdkValue::map([
+        ("sandbox", SdkValue::text(&state.id)),
+        ("name", SdkValue::text(&state.name)),
+        (
+            "image",
+            SdkValue::text(state.runtime.request().image.as_str()),
+        ),
+    ]))
+}
+
+/// `sandbox.close(sandbox)`: stops Sandbox `sandbox` now, under the
+/// project's guard and its own. Refused `NoSuchSandbox` when it is not
+/// running and `MountsActive` while a Workspace is mounted in it (a
+/// background process runs in one). Stop, then delete, each attempted once:
+/// a failed stop is not followed by a delete and keeps its cause; the
+/// records go after the delete.
+pub(crate) fn close(args: &SdkValue) -> Outcome {
+    let id = text(args, "sandbox")?.to_owned();
+    let project = crate::discovery::project_dir(args)?;
+    let _placing = crate::discovery::guard(&project)?;
+    let directory = crate::discovery::sandbox_dir(args, &id)?;
+    let record = directory.join("sandbox.record");
+    if !record.exists() {
+        return Err(refused(
+            "NoSuchSandbox",
+            format!("the project has no Sandbox {id}"),
+        ));
+    }
+    let state = crate::registry::sandbox_live(args)?;
+    let _guard = crate::discovery::guard(&state.directory)?;
+    crate::discovery::refresh(&state)?;
+    let mounted = lock(&state.mounts)?.keys().cloned().collect::<Vec<_>>();
+    if !mounted.is_empty() {
+        return Err(SdkRefusal {
+            code: "MountsActive".to_owned(),
+            message: format!(
+                "Sandbox {id} still holds {} Workspace(s); commit or unmount them first",
+                mounted.len()
+            ),
+            detail: SdkValue::map([(
+                "workspaces",
+                SdkValue::List(mounted.into_iter().map(SdkValue::Text).collect()),
+            )]),
+        });
+    }
+    let value = crate::discovery::load(&record)?;
+    let (docker, selector, request) = crate::discovery::runtime(&value)?;
+    let mut owner = layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request)
+        .map_err(failed)?;
+    owner.stop(STOP_S).map_err(failed)?;
+    owner.delete().map_err(failed)?;
+    lock(&SANDBOXES)?.remove(&directory);
+    std::fs::remove_file(record).map_err(failed)?;
+    std::fs::remove_dir_all(&directory).map_err(failed)?;
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("Closed")),
+        ("sandbox", SdkValue::text(&id)),
+    ]))
+}
+
+/// Seconds a closing Sandbox's daemon has to exit before the Engine kills it.
+const STOP_S: u16 = 5;
 
 /// Reclaims Sandbox `id`, whose container a reopen found gone or stopped
 /// (`container`, `stopped`): one unforced Delete of a stopped container, then

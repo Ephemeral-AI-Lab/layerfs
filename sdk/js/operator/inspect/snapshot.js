@@ -3,11 +3,11 @@
 // from its records (#373). A read starts no Sandbox: with none running
 // `sandboxes` is empty, and a recorded Sandbox whose container is gone or
 // stopped is listed in `gone` with its refusal's detail.
-import { invokeBackend, invokeClient, projectArgs } from "../../src/client.js";
+import { invokeClient, invokeClientBackend } from "../../packages/agent/src/client.js";
 
 /** One Sandbox's Workspaces with their overlays, or its `gone` detail when it is not running. */
 async function live(client, sandbox) {
-  const args = { ...projectArgs(client), sandbox };
+  const args = { sandbox };
   let answer;
   try {
     answer = await invokeClient(client, "sandbox.list_workspaces", { sandbox });
@@ -16,14 +16,13 @@ async function live(client, sandbox) {
     throw error;
   }
   await Promise.all(answer.workspaces.filter((w) => w.mounted && w.directory).map(async (workspace) => {
-    workspace.overlay = await invokeBackend("backend.daemon.workspace.get_storage", { ...args, path: workspace.directory }, client.options);
+    workspace.overlay = await invokeClientBackend(client, "backend.daemon.workspace.get_storage", { ...args, path: workspace.directory });
   }));
   return { answer };
 }
 
 export async function snapshot(client, since) {
-  await client.store();
-  const history = await invokeBackend("backend.store.project.get_history", { project: client.projectName, home: client.options.home, storePath: client.options.storePath }, client.options);
+  const history = await invokeClientBackend(client, "backend.store.project.get_history", {});
   const listed = (await invokeClient(client, "project.list_sandboxes", {})).items.map(({ sandbox, ...rest }) => ({ id: sandbox, ...rest }));
   const reads = await Promise.all(listed.map(({ id }) => live(client, id)));
   const version = [history.version, ...reads.map((read, index) => read.answer?.version ?? `gone-${listed[index].id}`)].join(".");

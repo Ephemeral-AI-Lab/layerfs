@@ -32,6 +32,8 @@ fn dispatch(op: &str, args: SdkValue) -> Outcome {
         "project.init" => project::init(&args),
         "project.list_sandboxes" => workspace::sandboxes(&args),
         "sandbox.list_workspaces" => listed(daemon_backend(op, args)?),
+        "sandbox.create" => crate::sandbox::create(&args),
+        "sandbox.close" => crate::sandbox::close(&args),
         "workspace.mount" => workspace::mount(&args),
         "workspace.commit" => workspace::commit(&args),
         "workspace.unmount" => workspace::unmount(&args),
