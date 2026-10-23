@@ -8,7 +8,8 @@
 #
 # It runs no checks. The zero exit status below is NOT a pass and must never be
 # reported as one. Do not restore this gate, and do not reintroduce an equivalent
-# aggregate gate, wrapper or workflow; see AGENTS.md §4.
+# pre-push gate or wrapper; see AGENTS.md §4. Since 2026-10-23 GitHub Actions
+# runs again (.github/workflows/), as a report after the push, never a gate.
 #
 # Verify the tree you actually changed, per workspace:
 #
