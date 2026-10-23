@@ -122,11 +122,16 @@ if (selected === "surface") {
     { workspace: "w1", branch: "feature", base: "c1", activity: "idle", mounted: true, directory: "/workspaces/w1", dirty: { inodes: 0, entries: 0 }, headMovedSinceMount: false, pendingMerge: false },
     { workspace: "w2", branch: "feature", base: "c1", activity: "committing", mounted: true, directory: "/workspaces/w2", dirty: { inodes: 2, entries: 1 }, headMovedSinceMount: true, pendingMerge: false },
     { workspace: "w3", branch: null, base: null, activity: "attaching", mounted: false, directory: null, dirty: null, headMovedSinceMount: null, pendingMerge: false },
+    ...["attaching", "closing", "uncertain", "failed", "draining"].map((activity, n) => ({ workspace: `s${n}`, branch: "feature", base: "c1", activity, mounted: true, directory: `/workspaces/s${n}`, dirty: null, headMovedSinceMount: false, pendingMerge: false })),
   ];
   const page = await shop.sandbox.list_workspaces("1");
-  assert.deepEqual(page.items.map(({ sandbox, path, branch, base, activity, changed }) => ({ sandbox, path, branch, base, activity, changed })), [
+  assert.deepEqual(page.items.slice(0, 2).map(({ sandbox, path, branch, base, activity, changed }) => ({ sandbox, path, branch, base, activity, changed })), [
     { sandbox: "1", path: "/workspaces/w1", branch: "feature", base: "c1", activity: "Idle", changed: false },
     { sandbox: "1", path: "/workspaces/w2", branch: "feature", base: "c1", activity: "Busy", changed: true },
+  ]);
+  // only the daemon's busy states read Busy; the others keep their own name
+  assert.deepEqual(page.items.slice(2).map((w) => [w.state, w.activity, w.changed]), [
+    ["attaching", "Busy", null], ["closing", "Closing", null], ["uncertain", "Uncertain", null], ["failed", "Failed", null], ["draining", "draining", null],
   ]);
   assert.equal(page.version, "1");
   await shop.close();

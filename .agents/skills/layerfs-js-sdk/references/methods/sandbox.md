@@ -58,7 +58,7 @@ The mounted Workspaces of one running Sandbox, from its daemon.
 | --- | --- |
 | `sandbox`, `path` | The Workspace, as `mount` returned it |
 | `branch`, `base` | Its Branch and the Commit it's based on |
-| `activity` | `Idle`, or `Busy` while a call runs in it |
+| `activity` | `Idle`; `Busy` while a Commit or mount runs in it; `Closing`, `Uncertain` or `Failed` (unmount it only after a look); any other daemon state as the daemon names it |
 | `changed` | Whether it holds uncommitted changes (`null` when unknown) |
 | `headMovedSinceMount`, `pendingMerge` | As in the backend's `workspace.status` |
 
