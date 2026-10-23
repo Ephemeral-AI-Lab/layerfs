@@ -38,12 +38,14 @@ jobs:
         with:
           workspaces: core -> target
       - name: Build test binaries
-        run: cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --lib --bins --tests --no-run
+        run: |
+          cargo +1.85.1 test --manifest-path core/Cargo.toml --locked \
+            --workspace --exclude layerfs-node --lib --bins --tests --no-run
       - name: Run slow tests (whole run capped at 120 s)
         run: |
           filter="$(python3 -B core/tools/ci_tests.py filter slow)"
           timeout 120 cargo +1.85.1 nextest run --manifest-path core/Cargo.toml --locked \
-            --lib --bins --tests --profile ci -E "$filter"
+            --workspace --exclude layerfs-node --lib --bins --tests --profile ci -E "$filter"
 
   mount:
     runs-on: ubuntu-24.04
@@ -80,6 +82,7 @@ jobs:
             # A fresh /tmp on the runner's ext4 disk, not the container overlay.
             scratch="$RUNNER_TEMP/tmp-$name"
             mkdir -p "$scratch"
+            chmod 1777 "$scratch"  # like /tmp: the tests' non-root scripts write here
             if ! docker run --rm --device /dev/fuse --cap-add SYS_ADMIN \
                 --security-opt apparmor=unconfined \
                 -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v "$scratch:/tmp" -w "$dir" \

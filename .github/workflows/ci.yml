@@ -1,6 +1,8 @@
 # Fast lane: runs after a push and reports. It is never a required check and
 # never blocks a push or merge; agents do not wait for it (AGENTS.md §4).
 # Slow and FUSE mount tests run in nightly.yml. Selection: core/tools/ci_tests.py.
+# The JavaScript SDK (sdk/js, package layerfs-node) is left out of CI (owner,
+# 2026-10-23): no path trigger, excluded from Clippy and tests, skipped by the guard.
 name: ci
 
 on:
@@ -8,7 +10,6 @@ on:
     branches: [main]
     paths:
       - "core/**"
-      - "sdk/js/native/**"
       - ".cargo/**"
       - ".github/workflows/ci.yml"
       - "!**/*.md"
@@ -16,7 +17,6 @@ on:
   pull_request:
     paths:
       - "core/**"
-      - "sdk/js/native/**"
       - ".cargo/**"
       - ".github/workflows/ci.yml"
       - "!**/*.md"
@@ -45,9 +45,13 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt
       - run: cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
-      - run: python3 -B core/tools/check_product_boundary.py
-      - run: python3 -B core/tools/check_fuser_integrity.py
-      - run: python3 -B -m unittest discover -s core/tools -p 'test_*.py'
+      # Each check reports even when an earlier one failed.
+      - if: ${{ !cancelled() }}
+        run: python3 -B core/tools/check_product_boundary.py --skip-sdk
+      - if: ${{ !cancelled() }}
+        run: python3 -B core/tools/check_fuser_integrity.py
+      - if: ${{ !cancelled() }}
+        run: python3 -B -m unittest discover -s core/tools -p 'test_*.py'
 
   clippy:
     runs-on: ubuntu-24.04
@@ -59,7 +63,7 @@ jobs:
         with:
           workspaces: core -> target
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings
+      - run: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --workspace --exclude layerfs-node --all-targets -- -D warnings
 
   test:
     runs-on: ubuntu-24.04
@@ -77,9 +81,11 @@ jobs:
       # Build first so compile time is never counted against the test ceiling.
       # Examples are left out: Clippy already checks that they compile.
       - name: Build test binaries
-        run: cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --lib --bins --tests --no-run
+        run: |
+          cargo +1.85.1 test --manifest-path core/Cargo.toml --locked \
+            --workspace --exclude layerfs-node --lib --bins --tests --no-run
       - name: Run fast tests (whole run capped at 120 s)
         run: |
           filter="$(python3 -B core/tools/ci_tests.py filter fast)"
           timeout 120 cargo +1.85.1 nextest run --manifest-path core/Cargo.toml --locked \
-            --lib --bins --tests --profile ci -E "$filter"
+            --workspace --exclude layerfs-node --lib --bins --tests --profile ci -E "$filter"

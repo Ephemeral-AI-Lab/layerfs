@@ -294,6 +294,20 @@ class ProductBoundaryTests(unittest.TestCase):
                               for p in production_files(core)],
                              ["src/fs/read.rs", "src/lib.rs"])
 
+    def test_skip_sdk_leaves_only_the_sdk_out(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = root / "core"
+            for path in (core / "crates/store/src/lib.rs", root / "sdk/js/native/src/lib.rs",
+                         root / "sdk/js/src/index.js"):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("")
+            everything = [str(p.relative_to(root)) for p in production_files(core)]
+            self.assertIn("sdk/js/native/src/lib.rs", everything)
+            self.assertEqual([str(p.relative_to(root))
+                              for p in production_files(core, include_sdk=False)],
+                             ["core/crates/store/src/lib.rs"])
+
 
 if __name__ == "__main__":
     unittest.main()
