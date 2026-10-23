@@ -17,7 +17,8 @@ What exists today is marked **current**. Changes this proposal asks for are
 marked **proposed**, and owner decisions are listed in
 [Open decisions](#open-decisions). The current SDK reference is
 [sdk/js/README.md](../../../../sdk/js/README.md); this document does not
-replace it.
+replace it. What #428 has changed so far, with its commits and where each
+piece stands, is listed in [CHANGES.md](CHANGES.md).
 
 ## 1. Goals
 
