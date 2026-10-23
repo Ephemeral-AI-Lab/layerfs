@@ -2,25 +2,44 @@
 
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Examples were
 > captured live in issue #334 Phase A at `b30e4fb8f`. Opaque IDs are shortened;
-> the full replies and trace are in `core/target/issue334/phase-a/`.
+> the full replies and trace are in `core/target/issue334/phase-a/`. The client
+> factories and `list_sandboxes` are #428's; result shapes are unchanged.
 
 Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).
 
-## `project.init(sourcePath)`
+## `LayerFS.open(name, options?)` and `close()`
 
-Creates the project: copies a host folder into a new Store, once. Afterwards the files
-live only in LayerFS.
+A client of an existing project. `open` opens the project's Store and looks the project
+up once, so a missing project is refused `NoSuchProject` at once; if it fails, nothing
+stays open. There is no `new LayerFS(…)`: it's refused `InvalidInput`.
+
+```js
+import { LayerFS } from "@layerfs/agent";
+
+const layerfs = await LayerFS.open("shop");
+try {
+  // … calls …
+} finally {
+  await layerfs.close();
+}
+```
+
+`close()` releases the Store and leaves Workspaces mounted. Every later call on that
+client is refused `InvalidInput`; a second `close()` does nothing. `await using layerfs =
+await LayerFS.open("shop")` closes it at the end of the block.
+
+## `LayerFS.init(name, sourcePath, options?)`
+
+Creates the project, then opens it: copies a host folder into a new Store, once.
+Afterwards the files live only in LayerFS.
 
 | Arg | Type | Required | Meaning |
 | --- | --- | --- | --- |
+| `name` | string | yes | 1–63 characters from `a-z`, `0-9`, `_`, `-`, `.`, starting and ending with a letter or digit |
 | `sourcePath` | string | yes | Host folder to copy. Everything in it is imported, including `.git` and ignored files |
 
-The project name comes from `new LayerFS(name)`: 1–63 characters from `a-z`, `0-9`,
-`_`, `-`, `.`, starting and ending with a letter or digit. A bad name throws
-`InvalidInput` from the constructor.
-
-**Returns:** `{ kind: "Initialized", project, layer, … }`, where `layer` is `main`'s
-first Layer.
+**Returns:** an open client; what Init returned is on its `created`:
+`{ kind: "Initialized", project, layer, … }`, where `layer` is `main`'s first Layer.
 
 **Refusals**
 
@@ -40,8 +59,8 @@ printf '# Shop\n' > /work/shop-skeleton/README.md
 ```
 
 ```js
-const r = await layerfs.project.init("/work/shop-skeleton");
-console.log(JSON.stringify(r, null, 2));
+const layerfs = await LayerFS.init("shop-a-methods", "/work/shop-skeleton");
+console.log(JSON.stringify(layerfs.created, null, 2));
 ```
 ```json
 {
@@ -53,8 +72,8 @@ console.log(JSON.stringify(r, null, 2));
 }
 ```
 
-**Notes:** run it once per project. Later processes with the same `LAYERFS_HOME` find
-the project without it; `fs.*` and `branch.*` calls work right away.
+**Notes:** run it once per project. Later processes with the same `LAYERFS_HOME` use
+`LayerFS.open(name)`; `fs.*` and `branch.*` calls work right away.
 
 ## `project.list_branches(pageSize?, pagePos?)`
 
@@ -106,4 +125,24 @@ console.log(JSON.stringify(page, null, 2));
   "hasMore": false,
   "nextPagePos": null
 }
+```
+
+## `project.list_sandboxes(pageSize?, pagePos?)`
+
+The project's running Sandboxes, lowest number first, from their records. It
+inspects each recorded container once, dials no daemon and starts nothing; a Sandbox
+that closed itself or whose container is gone is left out (the runtime reclaims it).
+
+| Arg | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `pageSize` | number | no | 1–1000, default 50 |
+| `pagePos` | number | no | Offset, default 0 |
+
+**Returns:** a page `{ items, hasMore, nextPagePos }`. Each item is
+`{ sandbox, name, image, workspaces }`: its number, its container name, the image digest
+it runs (one project's Sandboxes may differ) and how many Workspaces it holds.
+
+```js
+const { items } = await layerfs.project.list_sandboxes();
+for (const s of items) console.log(s.sandbox, s.name, s.workspaces);
 ```

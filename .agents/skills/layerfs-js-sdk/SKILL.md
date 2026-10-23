@@ -1,6 +1,6 @@
 ---
 name: layerfs-js-sdk
-description: Use when building, editing, testing or inspecting a project through LayerFS with the JavaScript SDK (`@layerfs/sdk`) from the command line. Activates on LayerFS projects, Branches, Commits, Workspaces or Sandboxes; `layerfs.project.*`, `layerfs.fs.*`, `layerfs.branch.*` or `layerfs.workspace.*` calls; running npm install, build or tests inside a mounted Workspace; or resolving LayerFS Conflict, Dirty or Busy refusals.
+description: Use when building, editing, testing or inspecting a project through LayerFS with the JavaScript SDK (`@layerfs/agent`) from the command line. Activates on LayerFS projects, Branches, Commits, Workspaces or Sandboxes; `LayerFS.open`, `LayerFS.init`, `layerfs.project.*`, `layerfs.fs.*`, `layerfs.branch.*`, `layerfs.sandbox.*` or `layerfs.workspace.*` calls; running npm install, build or tests inside a mounted Workspace; or resolving LayerFS Conflict, Dirty or Busy refusals.
 ---
 
 # LayerFS JavaScript SDK
@@ -8,7 +8,9 @@ description: Use when building, editing, testing or inspecting a project through
 > **Status:** Current general guide for the current SDK source. Base example
 > outputs were captured live in issue #334 Phase A at `b30e4fb8f`; the
 > Workspace API, placement and idle close are #373's (section 8 of
-> [its design](../../../core/docs/issues/373/README.md)).
+> [its design](../../../core/docs/issues/373/README.md)). The `@layerfs/agent`
+> package, its client factories and the `sandbox` methods are #428's
+> ([its design](../../../core/docs/issues/428/layerfs-agent.md)).
 
 Your project lives in LayerFS, not on your local disk. You read and change it through
 the SDK, from small Node scripts you run with `node`.
@@ -20,8 +22,8 @@ If `echo $DSH_LAYERFS_PROJECT` prints a name, dsh has set everything up. Skip
 
 - There's no npm install. Import the SDK with `await import(process.env.DSH_LAYERFS_SDK)`,
   in a module script. A static `import` of a variable is a syntax error.
-- `new LayerFS(process.env.DSH_LAYERFS_PROJECT)` reads every other setting from the
-  `DSH_LAYERFS_*` variables. The `LAYERFS_*` names in this guide are their twins; in
+- `const lf = await LayerFS.open(process.env.DSH_LAYERFS_PROJECT)` reads every other
+  setting from the `DSH_LAYERFS_*` variables. The `LAYERFS_*` names in this guide are their twins; in
   dsh they're unset.
 - Don't look into Docker, the LayerFS Store container, Store files or the dsh host's source.
   Nothing there helps, and the SDK is the only way in.
@@ -37,7 +39,7 @@ If `echo $DSH_LAYERFS_PROJECT` prints a name, dsh has set everything up. Skip
 - **Always unmount.** Put every `workspace.unmount` in a `finally` block. A forgotten
   Workspace stays mounted, and its Sandbox never closes. To clear idle, clean leftovers,
   see [Clearing idle Workspaces](references/methods/workspace.md#clearing-idle-workspaces).
-  End every script with `await lf.close()`.
+  End every script with `await lf.close()`, in a `finally` block too.
 - **`main` is read-only.** It's published, not a Branch: read it and fork from it, but
   don't write, edit, mount or commit to it. Those calls, and `branch.list_commits("main")`,
   are refused with `NoSuchBranch`. Fork a Branch, work there, and publish it. A new
@@ -96,15 +98,18 @@ Commit, so for one small read or edit prefer `fs.*`.
   exactly what that call did.
 - **Each mount is a new Workspace.** `workspace.mount(branch)` returns a fresh
   Workspace, `{ sandbox, path }` (such as `{ sandbox: "1", path: "/workspaces/3" }`);
-  pass it to `exec`, `status`, `commit` and `unmount`. Two mounts of one Branch are two
+  pass it to `exec`, `commit` and `unmount`. Two mounts of one Branch are two
   separate Workspaces, and a Workspace is never valid after its unmount.
 - **LayerFS places Workspaces.** A project's Sandboxes are numbered `1`, `2`, …, each a
   container holding up to 16 Workspaces on one image (`LAYERFS_IMAGE`, or a mount's
   `{ image }`; one project's Sandboxes may differ). A mount takes the lowest-numbered
   running Sandbox of its image with room and starts the next one when every such one
   is full. A Sandbox closes
-  itself two minutes after its last Workspace is unmounted. You never create, pick or
-  close a Sandbox.
+  itself two minutes after its last Workspace is unmounted. Placement is the default:
+  you don't need to manage Sandboxes. For a Sandbox of your own (a dev server, a long
+  build), `sandbox.create()` starts one, `workspace.mount(branch, { sandbox })` mounts
+  there, and `sandbox.close(sandbox)` stops it when you're done
+  ([sandbox](references/methods/sandbox.md)).
 - **Inside a command, use relative paths.** `exec` starts in the Workspace root, so
   write `npm test` or `cat src/cart.js`, never the mount path. The path changes with
   every mount, and a mount path written into a file would be committed with it.
@@ -145,25 +150,26 @@ overwrite it.
 
 | Piece | What it is | SDK group |
 | --- | --- | --- |
-| Project | One Store holding all files and their whole history. `project.init` copies a folder into it, once | `project` |
+| Project | One Store holding all files and their whole history. `LayerFS.init` copies a folder into it, once; `LayerFS.open` connects to it | `project` |
 | Branch | A named line of Commits. `main` changes only through `branch.publish`; work on your own Branch | `branch` |
 | Files | Read and change files on a Branch directly. Every write is one immutable Commit; `fs.apply` makes many changes as one | `fs` |
 | Workspace | A complete, writable view of a Branch where ordinary commands run, `{ sandbox, path }`. `workspace.commit` saves **everything** in it: `node_modules`, `.git`, build output, caches | `workspace` |
-| Sandbox | A numbered container running one LayerFS daemon, holding up to 16 Workspaces. LayerFS starts one when a mount needs it; it closes itself when idle | `operator.sandbox.list` |
+| Sandbox | A numbered container running one LayerFS daemon, holding up to 16 Workspaces. LayerFS starts one when a mount needs it, or you `create` one; it closes itself when idle | `sandbox`, `project.list_sandboxes` |
 
 ## Import the SDK
 
-The SDK is the `sdk/js` folder of the LayerFS checkout. Link it into your folder once:
+The SDK is the `sdk/js/packages/agent` folder of the LayerFS checkout. Link it into
+your folder once:
 
 ```bash
 npm init -y >/dev/null && npm pkg set type=module
-npm install --no-audit --no-fund "file:$LAYERFS_REPO/sdk/js"   # LAYERFS_REPO: the LayerFS checkout
+npm install --no-audit --no-fund "file:$LAYERFS_REPO/sdk/js/packages/agent"   # LAYERFS_REPO: the LayerFS checkout
 ```
 
 Then, in any `.mjs` file:
 
 ```js
-import { LayerFS, isRefusal } from "@layerfs/sdk";
+import { LayerFS, isRefusal } from "@layerfs/agent";
 ```
 
 ## Connect to a project
@@ -181,15 +187,22 @@ process of one run must see the same values.
 | `LAYERFS_STORE_PATH` | The project's Store file, which `fs.*`, Branch and project calls open in your process (Linux only) |
 
 ```js
-const layerfs = new LayerFS("shop");   // a project name; no I/O happens yet
+const layerfs = await LayerFS.open("shop");   // opens the project's Store; NoSuchProject if it doesn't exist
+try {
+  // … calls …
+} finally {
+  await layerfs.close();
+}
 ```
 
-A new project needs `project.init(folder)` once; it starts no Sandbox. After that,
-`new LayerFS("shop")` in any later process connects to the same project. Store calls
+A new project needs `LayerFS.init("shop", folder)` once, which returns an open client;
+it starts no Sandbox. After that, `LayerFS.open("shop")` in any later process connects
+to the same project. There is no `new LayerFS(…)`: it's refused `InvalidInput`. Store calls
 (`fs.*`, Branch calls and branch listing) run in your process. Workspace calls go to
 the Sandbox that holds the Workspace. Several agents each mount their own Workspaces;
 LayerFS places them, so agents share nothing but the project. Finish each client with
-`await layerfs.close()`.
+`await layerfs.close()` in a `finally` block; a closed client refuses every call
+`InvalidInput`, and its Workspaces stay mounted.
 
 ## One script for each group
 
@@ -207,14 +220,16 @@ printf '%%include .gitignore\n' > /work/shop/.lww
 
 ```js
 // project.mjs
-import { LayerFS } from "@layerfs/sdk";
+import { LayerFS } from "@layerfs/agent";
 
-const layerfs = new LayerFS("shop");
-const created = await layerfs.project.init("/work/shop");   // once per project
-console.log(created.kind);
-
-const branches = await layerfs.project.list_branches();
-console.log(branches.items.map((b) => b.name));
+const layerfs = await LayerFS.init("shop", "/work/shop");   // once per project
+try {
+  console.log(layerfs.created.kind);
+  const branches = await layerfs.project.list_branches();
+  console.log(branches.items.map((b) => b.name));
+} finally {
+  await layerfs.close();
+}
 ```
 
 ```
@@ -226,14 +241,17 @@ Initialized
 
 ```js
 // branch.mjs
-import { LayerFS } from "@layerfs/sdk";
+import { LayerFS } from "@layerfs/agent";
 
-const layerfs = new LayerFS("shop");
-const forked = await layerfs.branch.fork("work");   // from main
-console.log(forked.kind, forked.branch, forked.head); // head: null until the first Commit
-
-const branches = await layerfs.project.list_branches();
-console.log(branches.items.map((b) => b.name));
+const layerfs = await LayerFS.open("shop");
+try {
+  const forked = await layerfs.branch.fork("work");   // from main
+  console.log(forked.kind, forked.branch, forked.head); // head: null until the first Commit
+  const branches = await layerfs.project.list_branches();
+  console.log(branches.items.map((b) => b.name));
+} finally {
+  await layerfs.close();
+}
 ```
 
 ```
@@ -245,17 +263,19 @@ Forked work null
 
 ```js
 // fs.mjs
-import { LayerFS } from "@layerfs/sdk";
+import { LayerFS } from "@layerfs/agent";
 
-const layerfs = new LayerFS("shop");
-await layerfs.fs.write("work", "/hello.js", "console.log('hello');\n", "add hello.js");
-await layerfs.fs.edit("work", "/hello.js", "'hello'", "'hello, shop'", "greet the shop");
-
-const file = await layerfs.fs.read("work", "/hello.js");
-console.log(file.text);
-
-const listing = await layerfs.fs.list("work", "/");
-console.log(listing.items.map((e) => `${e.type} ${e.name}`));
+const layerfs = await LayerFS.open("shop");
+try {
+  await layerfs.fs.write("work", "/hello.js", "console.log('hello');\n", "add hello.js");
+  await layerfs.fs.edit("work", "/hello.js", "'hello'", "'hello, shop'", "greet the shop");
+  const file = await layerfs.fs.read("work", "/hello.js");
+  console.log(file.text);
+  const listing = await layerfs.fs.list("work", "/");
+  console.log(listing.items.map((e) => `${e.type} ${e.name}`));
+} finally {
+  await layerfs.close();
+}
 ```
 
 ```
@@ -268,23 +288,24 @@ console.log('hello, shop');
 
 ```js
 // workspace.mjs
-import { LayerFS } from "@layerfs/sdk";
+import { LayerFS } from "@layerfs/agent";
 
-const layerfs = new LayerFS("shop");
-const ws = await layerfs.workspace.mount("work");   // { sandbox: "1", path: "/workspaces/1" }: never hard-code it
+const layerfs = await LayerFS.open("shop");
 try {
-  const run = await layerfs.workspace.exec(ws, "node hello.js | tee hello.txt", "run hello");
-  console.log(run.exitCode, run.stdout);
-
-  const saved = await layerfs.workspace.commit(ws, "save hello.txt");
-  console.log(saved.kind);
+  const ws = await layerfs.workspace.mount("work");   // { sandbox: "1", path: "/workspaces/1" }: never hard-code it
+  try {
+    const run = await layerfs.workspace.exec(ws, "node hello.js | tee hello.txt", "run hello");
+    console.log(run.exitCode, run.stdout);
+    const saved = await layerfs.workspace.commit(ws, "save hello.txt");
+    console.log(saved.kind);
+  } finally {
+    await layerfs.workspace.unmount(ws);
+  }
+  const published = await layerfs.branch.publish("work");
+  console.log(published.kind);
 } finally {
-  await layerfs.workspace.unmount(ws);
+  await layerfs.close();
 }
-
-const published = await layerfs.branch.publish("work");
-console.log(published.kind);
-await layerfs.close();
 ```
 
 ```
@@ -315,8 +336,9 @@ Added
    later process with the same `LAYERFS_HOME`, so a long task can be split into small
    scripts. Keep each Workspace's operations sequential.
 7. **Clean up:** commit or discard, then unmount every Workspace. Its Sandbox closes
-   itself two minutes after its last Workspace is gone. With `LAYERFS_TRACE` set, save
-   a Sandbox's daemon log while it runs, as described in
+   itself two minutes after its last Workspace is gone; `sandbox.close` a Sandbox you
+   created. With `LAYERFS_TRACE` set, save a Sandbox's daemon log while it runs with
+   `backend.daemon.sandbox.get_log`, as described in
    [daemon logs](references/methods/workspace.md#daemon-logs); its closing deletes it.
 
 ## Which method for which job
@@ -331,7 +353,8 @@ Added
 | Look at files | `fs.read` (line ranges), `fs.list`, `fs.stat`, `fs.grep`, `fs.glob` |
 | Compare | `fs.diff_files`, `branch.diff_commits`, `branch.diff_branches` |
 | History | `branch.list_commits`, `fs.blame` |
-| Check a Workspace | `workspace.status` (base, whether the head moved, overlay counts) |
+| Check a Workspace | `backend.daemon.workspace.status` from `@layerfs/backend` (base, whether the head moved, overlay counts; see [resolving conflicts](references/rules/conflicts.md), Scenario 5) |
+| A Sandbox of your own | `sandbox.create`, `workspace.mount(branch, { sandbox })`, `sandbox.close` |
 | Combine Branches | `branch.merge(a, b, name)`, then `branch.publish(name)` |
 | Resolve a `Conflict` | [resolving conflicts](references/rules/conflicts.md) |
 
@@ -345,11 +368,12 @@ method, its arguments, result fields, refusals with what to do, limits and examp
 
 | Group | Methods |
 | --- | --- |
-| [project](references/methods/project.md) | `init(sourcePath)`, `list_branches(pageSize?, pagePos?)` |
+| [project](references/methods/project.md) | `LayerFS.init(name, sourcePath)`, `LayerFS.open(name)`, `close()`, `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
 | [fs reads](references/methods/fs-read.md) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | [fs writes](references/methods/fs-write.md) | `write(branch, path, content, message?)`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message?)`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | [branch](references/methods/branch.md) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?)`, `diff_branches(from, to, pageSize?, pagePos?)`, `merge(a, b, name, message?)`, `publish(branch, commit?)` |
-| [workspace](references/methods/workspace.md) | `mount(branch)` → `{ sandbox, path }`, `exec(ws, command, message?)`, `status(ws)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
+| [sandbox](references/methods/sandbox.md) | `create(options?)`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
+| [workspace](references/methods/workspace.md) | `mount(branch, { sandbox?, image? })` → `{ sandbox, path }`, `exec(ws, command, message?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
 
 A `ref` is `main`, a Branch name, a Commit id or a Layer id. Paths are absolute in the
 view (`/src/index.js`). Pages are `{ items, hasMore }`; advance with
