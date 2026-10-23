@@ -81,7 +81,8 @@ export async function runInit(runtime, prepared, report = () => {}) {
   const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
   report({ step: "volume", totals });
   await platform.init(settings);
-  await platform.docker(settings, ["volume", "create", project.volume], { timeout: 30_000 });
+  // its owner, for runtime.volume.list: Docker sets a volume's labels only when it creates it
+  await platform.docker(settings, ["volume", "create", "--label", "layerfs.role=store", "--label", `layerfs.home=${settings.home}`, "--label", `layerfs.project=${project.name}`, project.volume], { timeout: 30_000 });
   report({ step: "import" });
   let client;
   try {

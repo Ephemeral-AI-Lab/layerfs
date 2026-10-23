@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|transport-order|macos-worker|worker-frames
+//   node sdk/js/packages/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,7 +21,7 @@ const home = join(work, "home");
 const IMAGE = `sha256:${"a".repeat(64)}`;
 /** A runtime on Linux whose Docker CLI calls go to `docker(args)`; `calls` lists them. */
 async function opened(docker = () => "", settings = {}) {
-  const runtime = await LayerFSRuntime.open({ home, image: IMAGE, daemon: "/bin/daemon", volumes: join(work, "volumes"), platform: "linux", ...settings });
+  const runtime = await LayerFSRuntime.open({ home, image: IMAGE, daemon: "/bin/daemon", volumes: join(work, "volumes"), platform: "linux", sweep: false, ...settings });
   const calls = [];
   runtime.platform = { ...runtime.platform, docker: async (_settings, args) => { calls.push(args); return docker(args); } };
   return { runtime, calls };
@@ -36,7 +36,8 @@ try {
     const { runtime } = await opened((args) => (args[0] === "version" ? "27.0.1" : ""));
     const methods = (group) => Object.keys(group).sort();
     assert.deepEqual(methods(runtime.project), ["get_init", "get_state", "list", "remove", "start_init"]);
-    assert.deepEqual(methods(runtime.sandbox), ["clean_leftovers", "list_leftovers", "reclaim"]);
+    assert.deepEqual(methods(runtime.sandbox), ["clean_leftovers", "list", "list_leftovers", "reclaim", "sweep"]);
+    assert.deepEqual(methods(runtime.volume), ["list", "remove"]);
     assert.deepEqual(methods(runtime.worker), ["restart", "start"]);
     assert.deepEqual(methods(runtime.events), ["subscribe"]);
     const state = await runtime.status();
@@ -47,9 +48,9 @@ try {
     await assert.rejects(runtime.worker.restart({ confirm: "restart" }), { code: "InvalidInput", message: /in-process/ });
     // missing settings are listed, not refused
     const { missing } = await import("../src/settings.js");
-    assert.deepEqual(missing((await LayerFSRuntime.open({ home, platform: "linux" })).settings), ["image", "daemon"]);
+    assert.deepEqual(missing((await LayerFSRuntime.open({ home, platform: "linux", sweep: false })).settings), ["image", "daemon"]);
     // macOS without the dsh adapter: no worker route for this process
-    const mac = await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle: "/b" });
+    const mac = await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle: "/b", sweep: false });
     assert.equal(process.env.LAYERFS_WORKER_ENDPOINT, undefined);
     assert.deepEqual(missing(mac.settings), ["adapter"]);
     await assert.rejects(mac.worker.start(), { code: "Unsupported", message: /dsh adapter/ });
@@ -105,10 +106,11 @@ try {
     const done = await until(await runtime.project.start_init("shop", source));
     assert.equal(done.step, "done", JSON.stringify(done.error));
     assert.deepEqual(done.totals, { entries: 4, files: 2, bytes: 8 });
-    assert.match(calls[0].join(" "), /^volume create layerfs-shop-store-[0-9a-z]+$/);
+    assert.equal(calls[0].join(" "), `volume create --label layerfs.role=store --label layerfs.home=${home} --label layerfs.project=shop ${calls[0].at(-1)}`);
+    assert.match(calls[0].at(-1), /^layerfs-shop-store-[0-9a-z]+$/);
     const init = native.args[native.calls.lastIndexOf("project.init")];
-    assert.deepEqual([init.path, init.name, init.storePath, init.deploy.volume], [source, "shop", join(work, "volumes", calls[0][2], "_data/global/store.sqlite"), calls[0][2]]);
-    assert.equal((await runtime.project.list()).find((p) => p.name === "shop").volume, calls[0][2]);
+    assert.deepEqual([init.path, init.name, init.storePath, init.deploy.volume], [source, "shop", join(work, "volumes", calls[0].at(-1), "_data/global/store.sqlite"), calls[0].at(-1)]);
+    assert.equal((await runtime.project.list()).find((p) => p.name === "shop").volume, calls[0].at(-1));
     assert.equal(init.timeoutMs, 300_000, "no timeout: LayerFS.init's 300 s default, none of the runtime's own");
     // a timeout passes through to LayerFS.init as timeoutMs; the record keeps none
     calls.length = 0;
@@ -189,6 +191,82 @@ try {
     assert.deepEqual(results.map((r) => [r.name, r.ok]), [["layerfs-shop-2", true], ["layerfs-shop-1", false], ["other-x-1", false]]);
     assert.deepEqual(calls.filter((c) => c[0] === "rm"), [["rm", "layerfs-shop-2"]]);
     await assert.rejects(runtime.sandbox.clean_leftovers([]), { code: "InvalidInput" });
+    await runtime.close();
+  } else if (selected === "sandboxes") {
+    // runtime.sandbox.list: this home's containers with their scratch bytes; sweep reclaims stopped ones per project
+    project("shop");
+    mkdirSync(join(home, ".runtime", "projects"), { recursive: true });
+    writeFileSync(join(home, ".runtime", "projects", "shop.json"), JSON.stringify({ name: "shop", volume: "vol-shop" }));
+    const inspected = (name, project, status, size, ports = {}) => ({ Name: `/${name}`, State: { Status: status, Running: status === "running", StartedAt: "2026-10-24T01:00:00Z", FinishedAt: status === "running" ? "0001-01-01T00:00:00Z" : "2026-10-24T02:00:00Z" }, Config: { Image: IMAGE, Labels: { "layerfs.role": "sandbox", "layerfs.project": project, "layerfs.sandbox": name.at(-1) } }, NetworkSettings: { Ports: ports }, SizeRw: size });
+    const ps = ["layerfs-shop-1\trunning\tUp\tshop\t1\timg", "layerfs-shop-2\texited\tExited (0)\tshop\t2\timg", "layerfs-shop-3\tcreated\tCreated\tshop\t3\timg", "layerfs-gone-1\texited\tExited\tgone\t1\timg", "layerfs-issue9-shop-1\texited\tExited\tshop\t1\timg"].join("\n");
+    const { runtime, calls } = await opened((args) => {
+      if (args[0] === "ps") return args.includes("-q") ? "id1\nid2\nid3" : ps;
+      if (args[0] === "inspect") {
+        const error = new Error("Error: No such object: id3");
+        error.stdout = JSON.stringify([inspected("layerfs-shop-1", "shop", "running", 4096, { "30421/tcp": [{ HostIp: "127.0.0.1", HostPort: "54321" }] }), inspected("layerfs-gone-1", "gone", "exited", 1_000_000), inspected("other-x-1", "x", "exited", 1)]);
+        throw error; // id3 went away between ps and inspect: the others are still listed
+      }
+      return "";
+    });
+    const listed = await runtime.sandbox.list();
+    assert.deepEqual(listed.map((c) => [c.name, c.state, c.scratch, c.owned]), [["layerfs-gone-1", "exited", 1_000_000, false], ["layerfs-shop-1", "running", 4096, true]]);
+    assert.deepEqual([listed[1].ports, listed[1].finishedAt, listed[0].finishedAt], [[{ container: "30421/tcp", host: "127.0.0.1", port: 54321 }], null, "2026-10-24T02:00:00Z"]);
+    assert.deepEqual(calls.find((c) => c[0] === "inspect"), ["inspect", "--size", "id1", "id2", "id3"]);
+    // sweep: only shop has an ended container of this home's own naming; created ones and other projects are left alone
+    native.reclaimed = ["2"];
+    const before = native.calls.length;
+    assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: { shop: ["2"] }, failed: [] });
+    assert.deepEqual(native.calls.slice(before).filter((c) => c.startsWith("runtime.")), ["runtime.sandbox.reclaim"]);
+    assert.equal(calls.filter((c) => c[0] === "rm").length, 0, "the sweep deletes through the project's records, never by name");
+    delete native.reclaimed;
+    await runtime.close();
+    // open sweeps once in the background; status reports it and close waits for it
+    const swept = await LayerFSRuntime.open({ home, image: IMAGE, daemon: "/bin/daemon", volumes: join(work, "volumes"), platform: "linux" });
+    swept.platform = { ...swept.platform, docker: async (_s, args) => (args[0] === "version" ? "27.0.1" : args[0] === "ps" ? ps : "") };
+    assert.equal((await swept.status()).sweep.state, "running");
+    await swept.close();
+    assert.equal(swept.swept.state, "done");
+    assert.deepEqual(swept.swept.failed, []);
+    const off = await LayerFSRuntime.open({ home, platform: "linux", sweep: false });
+    assert.equal(off.swept, null);
+    await off.close();
+  } else if (selected === "volumes") {
+    // owner from the Init labels or the project record; only this home's orphans are removable
+    project("shop");
+    project("unsure"); // an uncertain Init: home entry, no record
+    mkdirSync(join(home, ".runtime", "projects"), { recursive: true });
+    writeFileSync(join(home, ".runtime", "projects", "shop.json"), JSON.stringify({ name: "shop", volume: "layerfs-shop-store-2" }));
+    const vol = (Name, Size, Links = "0", Labels = "") => ({ Name, Size, Links, Labels });
+    const df = { Volumes: [
+      vol("layerfs-shop-store-2", "84.05MB", "1"), // recorded, unlabelled (made before labels)
+      vol("layerfs-shop-store-1", "1.5GB", "0", "x"), // labelled shop of this home, no longer its volume
+      vol("layerfs-old-store-1", "2kB", "1", "x"), // orphan still used by a container
+      vol("layerfs-unsure-store-1", "10MB", "0", "x"), // the uncertain Init's
+      vol("mocktest-mock-shop-store-1", "3GB", "0", "x"), // another home's
+      vol("layerfs-issue352-p3", "N/A"), // no label, no record
+    ] };
+    const labels = (name, h = home) => ({ "layerfs.role": "store", "layerfs.home": h, "layerfs.project": name });
+    const inspect = { "layerfs-shop-store-1": labels("shop"), "layerfs-old-store-1": labels("old"), "layerfs-unsure-store-1": labels("unsure"), "mocktest-mock-shop-store-1": labels("shop", "/elsewhere") };
+    const { runtime, calls } = await opened((args) => {
+      if (args[0] === "system") return JSON.stringify(df);
+      if (args[0] === "volume" && args[1] === "inspect") return JSON.stringify(args.slice(2).map((Name) => ({ Name, Labels: inspect[Name] })));
+      return "";
+    });
+    const listed = await runtime.volume.list();
+    assert.deepEqual(listed.map((v) => [v.name, v.owner, v.project, v.live, v.removable, v.size, v.containers]), [
+      ["layerfs-issue352-p3", "unknown", null, false, false, null, 0],
+      ["layerfs-old-store-1", "this", "old", false, false, 2000, 1],
+      ["layerfs-shop-store-1", "this", "shop", false, true, 1_500_000_000, 0],
+      ["layerfs-shop-store-2", "this", "shop", true, false, 84_050_000, 1],
+      ["layerfs-unsure-store-1", "this", "unsure", true, false, 10_000_000, 0],
+      ["mocktest-mock-shop-store-1", "other", "shop", false, false, 3_000_000_000, 0],
+    ]);
+    const { results } = await runtime.volume.remove(["layerfs-shop-store-1", "layerfs-shop-store-2", "layerfs-old-store-1", "layerfs-unsure-store-1", "mocktest-mock-shop-store-1", "layerfs-issue352-p3", "nope"]);
+    assert.deepEqual(results.map((r) => [r.name, r.ok]), [["layerfs-shop-store-1", true], ["layerfs-shop-store-2", false], ["layerfs-old-store-1", false], ["layerfs-unsure-store-1", false], ["mocktest-mock-shop-store-1", false], ["layerfs-issue352-p3", false], ["nope", false]]);
+    assert.match(results[1].message, /remove the project/);
+    assert.match(results[4].message, /another LayerFS home/);
+    assert.deepEqual(calls.filter((c) => c[1] === "rm"), [["volume", "rm", "layerfs-shop-store-1"]]);
+    await assert.rejects(runtime.volume.remove([]), { code: "InvalidInput" });
     await runtime.close();
   } else if (selected === "transport-order") {
     // an agent client made before the runtime opens keeps its in-process
@@ -340,7 +418,7 @@ try {
       server.kill("SIGTERM");
     }
   } else {
-    throw new Error("select surface, projects, init, state, events, leftovers, transport-order, macos-worker or worker-frames");
+    throw new Error("select surface, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker or worker-frames");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

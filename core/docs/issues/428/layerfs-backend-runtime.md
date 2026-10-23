@@ -187,6 +187,10 @@ await runtime.project.remove(name, { confirm: name, stopSandboxes });
 
 await runtime.sandbox.reclaim(project);                    // ← the side effect of operator.sandbox.list
 await runtime.sandbox.clean_leftovers(names);
+await runtime.sandbox.list();                              // this home's Sandbox containers with scratch bytes (#423)
+await runtime.sandbox.sweep();                             // reclaim every project's stopped Sandboxes; also once at open
+await runtime.volume.list();                               // every volume with size, owner and use
+await runtime.volume.remove(names);                        // this home's orphan volumes only
 
 runtime.events.subscribe({ project, since });              // + live calls from every process
 runtime.http.create_handler({ prefix, auth });             // read/ops routes for frontend
@@ -202,6 +206,9 @@ runtime.http.create_handler({ prefix, auth });             // read/ops routes fo
 | `project.remove` | delete a project's volume and records, optionally stopping its Sandboxes first | dsh `remove.js` |
 | `sandbox.reclaim` | drop records of Sandboxes whose containers are gone or stopped | the reclaim inside today's `operator.sandbox.list` |
 | `sandbox.clean_leftovers` | remove named stopped containers | dsh `runtime.js`, `POST /layerfs/runtime/leftovers` |
+| `sandbox.list` | this home's Sandbox containers: state, ports, image and `scratch` (writable-layer bytes) | dsh `runtime.js` `containersOf` and `nameImages` (#423) |
+| `sandbox.sweep` | `sandbox.reclaim` for every project with an exited or dead Sandbox; run once at `open` unless `sweep: false` | none: a stopped Sandbox waited for its project's next mount (#423) |
+| `volume.list`, `volume.remove` | every volume with size, owner (`this`, `other`, `unknown`) and use; remove this home's orphans | none (#423) |
 | `events.subscribe` | each call from every process in this home, as trace-line fields plus the actor | dsh reads trace files in `collector.js` |
 | `http.create_handler` | the read/ops HTTP routes ([README.md §6.3](README.md#63-readops-http-routes)) | the project and runtime half of dsh `route.js` |
 

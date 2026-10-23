@@ -8,7 +8,7 @@ export async function containers(runtime) {
   const out = await platform.docker(settings, ["ps", "-a", "--no-trunc", "--filter", "label=layerfs.role=sandbox", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Label \"layerfs.project\"}}\t{{.Label \"layerfs.sandbox\"}}\t{{.Image}}"]);
   return out.split("\n").filter(Boolean).map((row) => {
     const [name, state, status, project, sandbox, image] = row.split("\t");
-    return { name, running: state === "running", status, project, sandbox, image };
+    return { name, state, running: state === "running", status, project, sandbox, image };
   }).filter((c) => c.name.startsWith(settings.containerPrefix));
 }
 

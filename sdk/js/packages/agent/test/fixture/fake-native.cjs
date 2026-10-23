@@ -67,6 +67,7 @@ function answer(op, args) {
     case "sandbox.create": return { value: { sandbox: "2", name: "layerfs-website-2", image: args.deploy?.image } };
     case "sandbox.list_workspaces": return { value: { kind: "ok", version: "1", workspaces: exports.workspaceList } };
     case "sandbox.close": return { value: { kind: "Closed", sandbox: args.sandbox } };
+    case "runtime.sandbox.reclaim": return { value: { kind: "ok", reclaimed: exports.reclaimed ?? [] } };
     default:
       if (/^fs\.(write|edit|apply|mkdir|cp|mv)$/.test(op)) return { value: committed };
       return { value: { items: [], hasMore: false, nextPagePos: null } };

@@ -29,6 +29,9 @@ import { get_state } from "./project/state.js";
 import { remove } from "./project/remove.js";
 import { reclaim } from "./sandbox/reclaim.js";
 import { clean_leftovers, leftovers } from "./sandbox/leftovers.js";
+import { list as listSandboxes } from "./sandbox/list.js";
+import { sweep } from "./sandbox/sweep.js";
+import { list as listVolumes, remove as removeVolumes } from "./volume.js";
 import { subscribe } from "./events/subscribe.js";
 
 const PLATFORMS = { linux, macos, windows };
@@ -36,9 +39,12 @@ const PLATFORMS = { linux, macos, windows };
 const FACTORY = Symbol("LayerFSRuntime.open");
 
 export class LayerFSRuntime {
-  /** A runtime on the LayerFS home `settings.home` (settings.js lists the rest). Opens nothing else. */
+  /** A runtime on the LayerFS home `settings.home` (settings.js lists the rest). Opens nothing else; with
+   * `sweep` (the default) it then runs one runtime.sandbox.sweep in the background, reported by status().sweep. */
   static async open(settings = {}) {
-    return new LayerFSRuntime(resolveSettings(settings), FACTORY);
+    const runtime = new LayerFSRuntime(resolveSettings(settings), FACTORY);
+    if (runtime.settings.sweep) runtime.#startSweep();
+    return runtime;
   }
 
   /** Not public: `LayerFSRuntime.open(settings)` makes one. */
@@ -62,7 +68,7 @@ export class LayerFSRuntime {
       if (!found.volume) throw new LayerFSError("InvalidInput", `the runtime has no record of ${name}'s volume (made outside this runtime)`, null);
       return found;
     };
-    this.status = live(() => status(this));
+    this.status = live(async () => ({ ...(await status(this)), sweep: this.swept }));
     this.worker = {
       // macOS: { confirm: "restart" } also retires a running older Store container
       start: live((options) => this.platform.start(settings, options)),
@@ -82,14 +88,35 @@ export class LayerFSRuntime {
       reclaim: live(async (name) => reclaim(this, await known(name))),
       list_leftovers: live(() => leftovers(this)),
       clean_leftovers: live((names) => clean_leftovers(this, names)),
+      list: live(() => listSandboxes(this)),
+      sweep: live(() => sweep(this)),
     };
+    this.volume = {
+      list: live(() => listVolumes(this)),
+      remove: live((names) => removeVolumes(this, names)),
+    };
+    /** The open-time sweep: null when off, else { state: running | done | failed, … }. */
+    this.swept = null;
+    this.sweeping = null;
     this.events = { subscribe: (options) => { if (this.closed) throw new LayerFSError("InvalidInput", "this LayerFS runtime is closed", null); return subscribe(this, options); } };
   }
 
   /** Closes the runtime's project clients (Workspaces stay mounted) and, on
    * Windows, the worker it started (it drains first). A second close does nothing. */
+  /** The sweep `open` starts, after the caller's synchronous setup, so nothing it reads is half made. */
+  #startSweep() {
+    this.swept = { state: "running" };
+    this.sweeping = new Promise((next) => setTimeout(next, 0))
+      .then(() => (this.closed ? null : this.sandbox.sweep()))
+      .then(
+        (result) => { this.swept = result ? { state: "done", at: new Date().toISOString(), ...result } : null; },
+        (error) => { this.swept = { state: "failed", at: new Date().toISOString(), code: error?.code ?? "Unknown", message: error?.message ?? String(error) }; },
+      );
+  }
+
   async close() {
     if (this.closed) return;
+    await this.sweeping;
     this.closed = true;
     await this.clients.closeAll();
     await this.platform.close?.(this.settings);

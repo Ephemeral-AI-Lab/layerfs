@@ -22,6 +22,7 @@ const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
  * @param {string} [given.adapter] the integration; the worker route opens only for "dsh" (AGENTS.md)
  * @param {object} [given.wsl] Windows: { distribution, user, node, home }
  * @param {string} [given.platform] linux | macos | windows (default this process's)
+ * @param {boolean} [given.sweep] sweep this home's stopped Sandboxes once at open (default true)
  */
 export function resolveSettings(given = {}) {
   if (given === null || typeof given !== "object") throw new LayerFSError("InvalidInput", "settings must be an object", null);
@@ -42,6 +43,7 @@ export function resolveSettings(given = {}) {
     stateDir: given.stateDir || join(given.home, ".runtime"),
     adapter: given.adapter ?? null,
     pollMs: given.pollMs ?? 400,
+    sweep: given.sweep !== false,
   };
   if (platform === "windows") {
     const hash = createHash("sha256").update(given.home).digest("hex").slice(0, 16);

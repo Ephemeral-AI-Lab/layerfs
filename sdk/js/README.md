@@ -188,7 +188,14 @@ it. `project.list_sandboxes()` skips a stopped Sandbox and keeps its
 records; the next mount or `runtime.sandbox.reclaim` that meets a stopped or
 removed container reclaims the Sandbox: it deletes a stopped container
 (unforced, once) and removes the Sandbox's records, so the number is used
-again. A Workspace call to a Sandbox whose container no longer runs is
+again. `runtime.sandbox.sweep`, which the runtime runs once when it opens,
+does that for every project of the home, so a stopped Sandbox's scratch does
+not wait for its project's next mount.
+
+What commands write outside a Workspace (`/tmp`, which is also `HOME`, and
+the npm, node and cargo caches there) stays in the container's own writable
+layer until the container is deleted; `runtime.sandbox.list` reports it as
+`scratch` bytes (#423). The daemon's log is capped at two 10 MB files. A Workspace call to a Sandbox whose container no longer runs is
 refused as `NoSuchSandbox` with `detail.containerGone`: Docker no longer has
 the container (removed outside LayerFS), or has it stopped
 (`detail.containerStopped`, after Docker restarted, for instance), which lost
@@ -406,7 +413,7 @@ counts are reported without inventing exclusive byte attribution.
 import { LayerFSRuntime } from "@layerfs/runtime";
 const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
 try {
-  await runtime.status();                  // { platform, missing, docker, worker, oldStore, disk }
+  await runtime.status();                  // { platform, missing, docker, worker, oldStore, disk, sweep }
   const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional: LayerFS.init's 300 s default
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
@@ -414,6 +421,10 @@ try {
   await runtime.sandbox.reclaim("shop");   // { reclaimed: [ids] }
   await runtime.sandbox.list_leftovers();
   await runtime.sandbox.clean_leftovers(["layerfs-old-1"]);
+  await runtime.sandbox.list();            // [{ name, project, sandbox, state, running, startedAt, finishedAt, image, ports, scratch, owned }]
+  await runtime.sandbox.sweep();           // { reclaimed: { project: [ids] }, failed: [{ project, code, message }] }
+  await runtime.volume.list();             // [{ name, size, containers, owner, project, live, removable }]
+  await runtime.volume.remove(["layerfs-shop-store-k2"]); // { results: [{ name, ok, message? }] }
   for await (const event of runtime.events.subscribe({ project: "shop" })) { /* a trace line + actor */ }
   await runtime.project.remove("shop", { confirm: "shop", stopSandboxes: false });
 } finally {
@@ -426,9 +437,35 @@ first project exists, after one is removed and while the worker is down.
 Agents don't import it. Settings (`settings.js`): `home` (required), `image`,
 `daemon` (default the bundle's), `bundle`, `docker`, `volumes` (Linux),
 `traceDir` (default `<home>/traces`), `containerPrefix`, `stateDir` (default
-`<home>/.runtime`, the runtime's project records), `adapter`, and on Windows
-`wsl: { distribution, user, node, home }`. A missing setting does not refuse
-`open`: `status().missing` lists it.
+`<home>/.runtime`, the runtime's project records), `adapter`, `sweep`
+(default true) and on Windows `wsl: { distribution, user, node, home }`. A
+missing setting does not refuse `open`: `status().missing` lists it.
+
+Disk the home holds in Docker (#423):
+
+- `sandbox.list` lists this home's Sandbox containers, running or not, with
+  `scratch`, the bytes of the container's writable layer (what commands wrote
+  outside every Workspace), its ports and whether a project of this home owns
+  it. One `docker ps` and one `docker inspect --size`; it changes nothing.
+- `sandbox.sweep` runs `sandbox.reclaim` for every project of the home that
+  has an exited or dead Sandbox container. The project's records and lock
+  decide what goes, so a container of another home, or one starting now, is
+  never touched; containers no project records stay for `list_leftovers`.
+  `open` runs it once in the background unless `sweep: false`;
+  `status().sweep` is `null`, `{ state: "running" }` or
+  `{ state: "done" | "failed", at, … }`, and `close` waits for it.
+- Init labels a project's volume `layerfs.role=store`, `layerfs.home=<home>`
+  and `layerfs.project=<name>` (Docker sets labels only at create).
+  `volume.list` lists every volume on the engine with Docker's size, the
+  containers that use it and its `owner`: `"this"` (labelled with this home
+  or named by a project record), `"other"` (another home's label) or
+  `"unknown"` (no label and no record: made before labels or by another
+  tool). `live` is true while this home has the owning project; an uncertain
+  Init, which keeps a home entry and no record, counts as live. Docker's own
+  "reclaimable" figure counts every idle project's Store and is not used.
+- `volume.remove(names)` removes only volumes that `volume.list` marks
+  `removable`: this home's, no longer a project's, and used by no container.
+  Anything else is refused by name; one `docker volume rm` each, no retry.
 
 Each platform folder implements one interface (`endpoint`, `status`,
 `start`, `restart`, `init`, `path` and the Docker, home and disk helpers):
