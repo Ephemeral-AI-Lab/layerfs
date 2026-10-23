@@ -5,7 +5,11 @@
 //!
 //! The Store is Disposable and sealed under `home/<name>/`, then installed in
 //! this process at `storePath`, the project volume's Store file that every
-//! Sandbox opens (#373: no Sandbox is started to install it). Init's first
+//! Sandbox opens (#373: no Sandbox is started to install it). Once the
+//! install is recorded, the sealed copy is deleted (owner 2026-10-23):
+//! nothing reads it again. A failed or uncertain install keeps it for
+//! diagnosis; a delete that fails is reported in the answer's `leftover`
+//! and leaves the project usable. Init's first
 //! Branch is named `main` and the SDK never shows it: `main` is the line of
 //! Layers.
 use crate::job::{failed, refused, Outcome};
@@ -94,22 +98,8 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
     });
     drop(running);
     let sealed = sealed.map_err(|failure| init_failure(*failure, &directory))?;
-    let answer = SdkValue::map([
-        ("kind", SdkValue::text("Initialized")),
-        ("project", SdkValue::text(name)),
-        (
-            "layer",
-            SdkValue::text(hex(sealed.branch.branch.base_layer.as_slice())),
-        ),
-        (
-            "root",
-            SdkValue::text(hex(sealed.branch.effective_root.as_bytes())),
-        ),
-        (
-            "store",
-            SdkValue::text(directory.join("sealed.sqlite").display().to_string()),
-        ),
-    ]);
+    let layer = SdkValue::text(hex(sealed.branch.branch.base_layer.as_slice()));
+    let root = SdkValue::text(hex(sealed.branch.effective_root.as_bytes()));
     let mut project = Project {
         store: sealed.store,
         manifest: sealed.manifest,
@@ -124,7 +114,51 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
     .map_err(|failure| refused("Failed", failure.to_string()))?;
     project.installed = Some(installed);
     crate::discovery::save_project(&directory, &project)?;
-    Ok(answer)
+    let mut answer = vec![
+        ("kind", SdkValue::text("Initialized")),
+        ("project", SdkValue::text(name)),
+        ("layer", layer),
+        ("root", root),
+        ("store", SdkValue::text(store_path.display().to_string())),
+    ];
+    if let Some(leftover) = remove_sealed(&project.store.path) {
+        answer.push(("leftover", leftover));
+    }
+    Ok(SdkValue::Map(
+        answer
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
+    ))
+}
+
+/// Deletes the sealed Store after its install is recorded, once: the file
+/// and any SQLite side file. A delete that fails is `{ path, message }` for
+/// the answer; the project stays usable.
+fn remove_sealed(sealed: &Path) -> Option<SdkValue> {
+    let mut failures = Vec::new();
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let mut path = sealed.as_os_str().to_owned();
+        path.push(suffix);
+        let path = PathBuf::from(path);
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && !suffix.is_empty() => {}
+            Err(error) => failures.push(format!("{}: {error}", path.display())),
+        }
+    }
+    (!failures.is_empty()).then(|| {
+        SdkValue::map([
+            ("path", SdkValue::text(sealed.display().to_string())),
+            (
+                "message",
+                SdkValue::text(format!(
+                    "the project is installed, but its sealed copy was not deleted: {}",
+                    failures.join("; ")
+                )),
+            ),
+        ])
+    })
 }
 
 /// Init's failure. A refused source entry is `InvalidInput` whose `detail`

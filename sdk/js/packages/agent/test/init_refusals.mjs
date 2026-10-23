@@ -6,14 +6,16 @@
 // addon refuses a bad `timeoutMs` (InvalidInput naming it) before it makes
 // an entry; a 1 ms timeout on a 2,000-file source fails Deadline (Failed,
 // entry kept, as any non-refusal failure); with the default (300 s), or a
-// longer one, the same source initializes. Real native binding,
+// longer one, the same source initializes. A recorded install deletes the
+// project's sealed copy and answers the installed Store; a failed install
+// keeps it (owner 2026-10-23). Real native binding,
 // Disposable Store, no daemon; Linux as root, with LAYERFS_STORE_PATH on a
 // local volume (the E2E launcher's):
 //   node sdk/js/packages/agent/test/init_refusals.mjs
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
-  chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statfsSync, symlinkSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statfsSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -147,6 +149,25 @@ try {
   assert.equal((await client("open").layerfs.project.init(big)).kind, "Initialized");
   const took = Date.now() - started;
   assert.equal((await client("long").layerfs.project.init(big, 600_000)).kind, "Initialized");
+  // owner 2026-10-23: a recorded install deletes home/<name>/sealed.sqlite;
+  // the answer names the installed Store
+  const sealedOf = (name) => readdirSync(join(home, name)).filter((file) => file.startsWith("sealed.sqlite"));
+  const gone = client("sealedgone");
+  const done = await gone.layerfs.project.init(plain);
+  assert.deepEqual([done.kind, done.store, done.leftover], ["Initialized", gone.storePath, undefined]);
+  assert.deepEqual(sealedOf("sealedgone"), [], "no sealed copy is left");
+  assert.ok(existsSync(gone.storePath), "the installed Store stays");
+  // a failed install (its Store path is taken) keeps the sealed copy for diagnosis
+  const taken = client("sealedkept");
+  mkdirSync(dirname(taken.storePath));
+  writeFileSync(taken.storePath, "taken\n");
+  const failed = await taken.layerfs.project.init(plain).then(
+    (answer) => assert.fail(`sealedkept: expected a failed install, got ${JSON.stringify(answer)}`),
+    (error) => error,
+  );
+  assert.equal(failed.code, "Failed", failed.message);
+  assert.deepEqual(sealedOf("sealedkept"), ["sealed.sqlite"], "a failed install keeps the sealed copy");
+  console.log("sealed: deleted after a recorded install, kept after a failed one");
   console.log(`timeout: 1 ms fails Deadline; the default and 600 s initialize (${took} ms with the default)`);
 } finally {
   rmSync(work, { recursive: true, force: true });

@@ -72,9 +72,13 @@ console.log(JSON.stringify(layerfs.created, null, 2));
   "project": "shop-a-methods",
   "layer": "324afe090aa7…",
   "root": "e34e2dc43565…",
-  "store": "/Users/yifanxu/.codex/worktrees/issue334-shop-run/layerfs/core/target/issue334/phase-a/home/shop-a-methods/sealed.sqlite"
+  "store": "/layerfs-store/global/store.sqlite"
 }
 ```
+
+`store` is the installed Store file (`LAYERFS_STORE_PATH`). A `leftover: { path, message }`
+field appears only if Init could not delete its temporary sealed copy; the project is
+still ready, so report it and go on.
 
 **Notes:** run it once per project. Later processes with the same `LAYERFS_HOME` use
 `LayerFS.open(name)`; `fs.*` and `branch.*` calls work right away.

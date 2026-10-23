@@ -58,7 +58,13 @@ it closes it), leaves Workspaces mounted, and makes every later call refuse
 LayerFS.open(...)` closes it at the end of the block. One copy of
 `@layerfs/agent` loads per process: a second copy at another path refuses to
 load, so one Store is never opened twice. `LayerFS.init`'s client carries
-Init's answer as `created`.
+Init's answer as `created`: `{ kind: "Initialized", project, layer, root, store }`,
+where `store` is the installed Store file (`LAYERFS_STORE_PATH`). Init seals
+the Store as `<LAYERFS_HOME>/<project>/sealed.sqlite`, installs it at the Store
+path and records that, then deletes the sealed copy (owner 2026-10-23: nothing
+reads it again). A failed or uncertain install keeps it for diagnosis. If the
+delete itself fails, the project is still usable and the answer carries
+`leftover: { path, message }`; it is not retried.
 
 `LayerFS.init(name, folder, timeout?)` takes an optional `timeout` in
 milliseconds, a positive whole number. **Default 300 s (`INIT_TIMEOUT_MS`,
@@ -124,7 +130,7 @@ Keep each agent's operations on a Workspace sequential.
 
 | Environment | Meaning |
 | --- | --- |
-| `LAYERFS_HOME` | Absolute private directory for sealed provisioning and discovery. Created as 0700; existing directories must be owned by the current effective user with no group/other access. Records are 0600, not symlinks. |
+| `LAYERFS_HOME` | Absolute private directory for discovery records (projects, Sandboxes) and Init's temporary sealed Store, deleted once its install is recorded. Created as 0700; existing directories must be owned by the current effective user with no group/other access. Records are 0600, not symlinks. |
 | `LAYERFS_DOCKER` | Local Engine Unix socket; `/var/run/docker.sock` is the default. |
 | `LAYERFS_IMAGE` | Exact immutable runtime `sha256:...` digest a new Sandbox runs. A running Sandbox keeps the image it started with. |
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
