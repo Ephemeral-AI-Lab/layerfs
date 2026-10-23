@@ -153,6 +153,26 @@ agent tool call
 - **Conflict.** Two Commits that change the same file are refused with
   `Conflict`, unless a `.lww` rule says the newest edit wins.
 
+## Prior art
+
+LayerFS builds on well-known ideas: layered and union filesystems, copy-on-write
+snapshots, content-addressed storage and throwaway execution environments. What
+it adds is putting them together for agents: every tool call gets a full
+writable tree, and every result becomes a Commit on a Branch in one shared Store.
+
+| Prior work | What it shares with LayerFS | Where LayerFS differs |
+| --- | --- | --- |
+| **overlayfs, UnionFS, container image layers** | A read-only lower tree with a writable upper layer, which is also where the "layer" name comes from | The upper layer is not just thrown away or kept as a directory: Commit turns it into an immutable snapshot on a Branch, with history, merge and `Conflict`. overlayfs is in the kernel and more complete; LayerFS's FUSE view deliberately omits FIFOs, sockets, device nodes, set-id bits and separate atime/ctime ([pjdfstest](benchmark/data/pjdfstest/README.md)) |
+| **Btrfs and ZFS snapshots, reflinks** | Cheap copy-on-write snapshots that share unchanged data | Sharing is by content, not by extent, so a file that is rewritten in full still stores only its new chunks. On a small-file history of 157 snapshots that gives [19.9× less space than Btrfs + zstd](benchmark/data/dsh-dedup/README.md). Btrfs and ZFS also stay cheap for in-place edits of large files, and they are durable, mature kernel filesystems; LayerFS is not ([why Btrfs used more space here](docs/research/layerfs-vs-btrfs-157/REPORT.md#3-why-btrfs-used-more-storage-in-this-workload)) |
+| **Git worktrees** | One repository, many working copies and branches | A Workspace holds the whole tree, including `.git`, ignored files, dependencies and build output, so a new mount needs no reinstall. Commits happen per tool call, not when someone runs `git commit` |
+| **[try](https://github.com/binpash/try)** | Run a command against an overlay of your system, then inspect, apply or discard what it changed | `try` works on one machine with one overlay at a time. LayerFS keeps every result as a Commit, and lets many agents branch from any of them and share one Store |
+| **Apiary and virtual layered file systems** (Potter and Nieh, [USENIX ATC 2010](https://www.usenix.org/conference/usenix-atc-10/apiary-easy-use-desktop-application-fault-containment-commodity-operating), [LISA 2011](https://www.usenix.org/legacy/event/lisa11/tech/full_papers/Potter.pdf)) | Ephemeral containers that start instantly over shared layered filesystems | Apiary isolates desktop applications. LayerFS's target is agent tool calls whose results are kept, branched and merged as history |
+
+**Use something else** if you need crash or power-loss durability (the Store runs
+in its Disposable profile only), full POSIX node types, or top sequential I/O
+bandwidth ([fio](https://layerfs.ai/benchmarks/fio/)). For a few long-lived
+checkouts on one machine, Btrfs snapshots or Git worktrees may be all you need.
+
 ## Learn more
 
 | | |
