@@ -142,7 +142,7 @@ Every listing has all four.
 | `repository` | yes | `https://github.com/<owner>/<repo>`, public |
 | `tags` | yes | 1 to 6 lowercase tags: a–z, 0–9 and dashes |
 | `platforms` | yes | any of `linux`, `macos`, `windows-wsl2` |
-| `uses` | yes | what it builds on: any of `sdk-js`, `operator`, `daemon` |
+| `uses` | yes | what it builds on: any of `agent` (`@layerfs/agent` and the `layerfs` command), `backend` (`@layerfs/backend`), `runtime` (`@layerfs/runtime`), `daemon` (`layerfs-daemon` run directly) |
 | `status` | yes | `preview` (works, partly checked) or `available` (used and checked) |
 | `versions` | yes | at least one, **newest first** (below) |
 | `host` | no | the tool it plugs into: `{ "name": "…", "url": "…" }` |

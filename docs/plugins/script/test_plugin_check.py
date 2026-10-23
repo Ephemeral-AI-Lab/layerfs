@@ -23,7 +23,7 @@ def listing(**changes):
         "summary": "Every agent Branch as a timeline in your editor.",
         "authors": [{"name": "Ada", "github": "ada"}], "license": "MIT",
         "repository": "https://github.com/ada/branch-lens", "tags": ["editor", "history"],
-        "platforms": ["linux"], "uses": ["sdk-js"], "status": "preview",
+        "platforms": ["linux"], "uses": ["agent"], "status": "preview",
         "versions": [{"version": "0.1.0", "commit": SHA, "date": "2026-10-23",
                       "layerfs": {"version": "v1.0.0", "commit": LAYERFS_SHA}}],
     }

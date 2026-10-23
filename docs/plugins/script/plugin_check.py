@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[3]
 LAYERFS_REPO = "Ephemeral-AI-Lab/layerfs"
 
 PLATFORMS = {"linux", "macos", "windows-wsl2"}
-USES = {"sdk-js", "operator", "daemon"}
+USES = {"agent", "backend", "runtime", "daemon"}  # the api/ packages, and layerfs-daemon run directly
 STATUS = {"preview", "available"}
 LAYERFS_VERSIONS = {"v1.0.0", "v0.1.7"}
 PLACEHOLDERS = {"{{version}}", "{{commit}}", "{{layerfs.version}}", "{{layerfs.commit}}", "{{repository}}"}

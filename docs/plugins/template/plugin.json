@@ -8,7 +8,7 @@
   "repository": "https://github.com/<owner>/<repo>",
   "tags": ["<tag>", "<another-tag>"],
   "platforms": ["linux"],
-  "uses": ["sdk-js"],
+  "uses": ["agent"],
   "host": { "name": "<The tool it plugs into; delete this line if none>", "url": "https://<…>" },
   "status": "preview",
   "versions": [
