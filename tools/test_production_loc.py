@@ -39,6 +39,17 @@ class CounterTests(unittest.TestCase):
         crates = production_loc.scan(self.root)["scopes"]["sdk"]["crates"]
         self.assertEqual(crates, {"@layerfs/agent": 1, "@layerfs/backend": 1, "@layerfs/sdk": 2, "layerfs-node": 1})
 
+    def test_cli_counts_only_its_src_javascript(self):
+        write(self.root, "cli/src/main.js", "export const value = 1;\n// a comment\n")
+        write(self.root, "cli/src/sub/argv.js", "export const other = 2;\n")
+        write(self.root, "cli/test/cli.test.mjs", "export const test = 1;\n")
+        write(self.root, "cli/test/fixture/fake.js", "export const fake = 1;\n")
+        write(self.root, "cli/node_modules/x/src/index.js", "export const dep = 1;\n")
+        files = production_loc.scope_files(self.root, "cli")
+        self.assertEqual([str(path.relative_to(self.root / "cli")) for path in files], ["src/main.js", "src/sub/argv.js"])
+        scope = production_loc.scan(self.root)["scopes"]["cli"]
+        self.assertEqual((scope["lines"], scope["crates"]), (2, {"@layerfs/cli": 2}))
+
     def test_blank_and_comment_lines_do_not_count(self):
         path = write(
             self.root,

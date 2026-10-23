@@ -18,6 +18,10 @@ counted, so trees on either side of the move compare. JavaScript comments are bl
 and block comments and single, double and template strings. Current regex
 literals contain no comment delimiters or string quotes.
 
+The layerfs command is its own scope, `cli`: the JavaScript under cli/src,
+one crate, @layerfs/cli (#428). Its tests under cli/test and its
+node_modules are excluded.
+
 The deepseek-harness plugin is its own scope, `dsh`: the JavaScript and
 TypeScript under dsh/packages/<package>/src, one crate per package
 (@dsh-layerfs/<package>, and the dsh-layerfs bundle). Its tests, build output
@@ -348,7 +352,7 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "reference", "sdk", "dsh")
+SCOPES = ("core", "reference", "sdk", "cli", "dsh")
 
 
 def scope_base(root: Path, scope: str) -> Path:
@@ -356,6 +360,8 @@ def scope_base(root: Path, scope: str) -> Path:
         return root / "core" / "crates"
     if scope == "sdk":
         return root / "sdk" / "js"
+    if scope == "cli":
+        return root / "cli"
     if scope == "dsh":
         return root / "dsh" / "packages"
     return root / "crates"
@@ -373,6 +379,14 @@ def sdk_files(base: Path) -> list:
     if (base / "packages").is_dir():
         for package in sorted(p for p in (base / "packages").iterdir() if (p / "src").is_dir()):
             files += sorted((package / "src").rglob("*.js"))
+    return [path for path in files if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)]
+
+
+def cli_files(base: Path) -> list:
+    """The layerfs command's src/ JavaScript."""
+    if not (base / "src").is_dir():
+        return []
+    files = sorted((base / "src").rglob("*.js"))
     return [path for path in files if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)]
 
 
@@ -394,6 +408,8 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
     base = scope_base(root, scope)
     if scope == "sdk":
         return sdk_crate(base, path)
+    if scope == "cli":
+        return "@layerfs/cli"
     if scope == "dsh":
         return dsh_crate(base, path)
     parts = path.relative_to(root).parts
@@ -413,6 +429,8 @@ def scope_files(root: Path, scope: str) -> list:
         return []
     if scope == "sdk":
         return sdk_files(base)
+    if scope == "cli":
+        return cli_files(base)
     if scope == "dsh":
         return dsh_files(base)
     files = []
