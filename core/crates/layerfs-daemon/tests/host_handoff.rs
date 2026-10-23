@@ -8,6 +8,7 @@ mod support;
 
 #[cfg(target_os = "macos")]
 #[test]
+#[ignore = "needs Docker and the build-listed Linux binary in LAYERFS_INSTALL_DAEMON_BINARY"]
 fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
     use layerfs_bridge::duplex;
     use std::{fs, net::TcpStream, time::Duration};

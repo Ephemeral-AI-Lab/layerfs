@@ -286,10 +286,17 @@ remain binding; moving them out of this file does not weaken them.
 - One attempted operation; no automatic retry/busy handler, refresh/reprepare
   or failed-operation replay. Readiness waits are not retries. Preserve exact
   failure/uncertainty and custody; no guessed resend, deletion or success.
-- There is no CI or aggregate pre-push gate. `tools/preflight.sh` is permanently
-  retired; do not restore it or an equivalent wrapper. Verify the changed scope
-  with [core checks](core/AGENTS.md#checks-and-completion), report checks/gaps,
-  and never claim CI green or that an empty guard scan proves implementation.
+- **CI reports; it never gates (owner, 2026-10-23).** GitHub Actions runs a
+  fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
+  guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
+  FUSE mount tests). [core/tools/ci_tests.py](core/tools/ci_tests.py) decides
+  which tests go in which lane. Neither is a required check, and nothing runs
+  before a push. Do not wait for CI, and do not treat a green run as
+  verification of your change: verify the changed scope yourself with
+  [core checks](core/AGENTS.md#checks-and-completion) and report checks/gaps.
+  There is still no pre-push gate: `tools/preflight.sh` stays retired; do not
+  restore it or an equivalent wrapper. An empty guard scan proves no
+  implementation.
 - **Migrations and refactors delete tests rather than nurse them (owner,
   2026-10-18).** When code is moved, replaced or refactored, a test that is
   tricky to adapt (it drives a removed route, internal type or retired model,

@@ -490,9 +490,14 @@ or runtime proof. Review ordinary macros, helpers, dependency/target declaration
 and generated inputs; extend scanners for new shipped formats. An excluded
 FUSE/daemon package is not exercised by passing active-workspace tests.
 
-There is no CI or aggregate pre-push gate; `tools/preflight.sh` is retired.
-Do not disable discovery or recreate an equivalent wrapper. Report exact checks,
-failures and gaps. A scan or proposal alone does not establish implementation.
+CI reports after a push and never gates it (see the
+[root rule](../AGENTS.md#4-code-build-and-docs)); test lane selection is
+[tools/ci_tests.py](tools/ci_tests.py). When a test target is renamed, moved or
+measured at 5 s or more, update its `SLOW` list; Linux-only daemon targets go to
+the nightly mount lane automatically. There is no pre-push gate;
+`tools/preflight.sh` is retired. Do not disable discovery or recreate an
+equivalent wrapper. Report exact checks, failures and gaps. A scan or proposal
+alone does not establish implementation.
 
 ### Build flags are part of the check
 
