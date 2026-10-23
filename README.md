@@ -24,20 +24,22 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
-  <a href="https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/version-1.0.0-2f6fde.svg" alt="1.0.0"></a>
+  <a href="https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.1.0"><img src="https://img.shields.io/badge/version-1.1.0-2f6fde.svg" alt="1.1.0"></a>
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20via%20DSH%20%7C%20Windows%20via%20WSL2-555.svg" alt="Linux, macOS through DSH, and Windows through WSL2 on current main">
   <a href="https://discord.gg/8mmAMCDc2"><img src="https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 
-> **Status:** [LayerFS 1.0.0](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.0.0),
-> the first official release after the 0.1.x Developer Previews, released as source.
-> The results below ran on `main` at `e5c7aaae05`. The Store runs in its Disposable profile only, with no
+> **Status:** [LayerFS 1.1.0](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.1.0),
+> released as source: the JavaScript API split into `@layerfs/agent`, `@layerfs/backend`
+> and `@layerfs/runtime` under [`api/`](api/README.md), plus the `layerfs` command. It breaks
+> code written for 1.0.0; see the [release record](docs/release-notes/1.1.0/README.md).
+> The results below are 1.0.0's, measured on `main` at `e5c7aaae05`. The Store runs in its Disposable profile only, with no
 > crash or power-loss durability: use LayerFS for agent work and its history, not
 > as the only copy of data you cannot rebuild.
 
-Current main also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#windows-live). This adapter was added after the v1.0.0 source release.
+Since 1.1.0, LayerFS also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#windows-live).
 
 <a id="get-started"></a>
 ## Try it with LayerFS × DSH
@@ -180,7 +182,7 @@ checkouts on one machine, Btrfs snapshots or Git worktrees may be all you need.
 | Docs | [LayerFS × DSH guide](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#readme) · [layerfs.ai/docs](https://layerfs.ai/docs/) · [Core ideas](https://layerfs.ai/docs/core-ideas/) · [JavaScript SDK guide](api/README.md) |
 | Concepts | [Core concepts](docs/general/concepts.md) · [Documentation index](docs/README.md) |
 | Benchmarks | [layerfs.ai/benchmarks](https://layerfs.ai/benchmarks/) |
-| Release | [1.0.0 plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/1.0/README.md) · Previous: [0.1.7 release record](docs/release-notes/0.1.7/README.md) and its [manual](docs/versioned/0.1.7/README.md) |
+| Release | [1.1.0 release record](docs/release-notes/1.1.0/README.md) · Previous: [1.0.0 release](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.0.0) and its [plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/1.0/README.md); [0.1.7 release record](docs/release-notes/0.1.7/README.md) and its [manual](docs/versioned/0.1.7/README.md) |
 
 ## Community
 

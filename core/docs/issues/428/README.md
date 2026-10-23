@@ -19,6 +19,8 @@ marked **proposed**, and owner decisions are listed in
 [api/README.md](../../../../api/README.md); this document does not
 replace it. What #428 has changed so far, with its commits and where each
 piece stands, is listed in [CHANGES.md](CHANGES.md).
+The install-and-test prompt for macOS, Linux and Windows, with the runs so
+far, is [live-verification-prompt.md](live-verification-prompt.md).
 
 ## 1. Goals
 

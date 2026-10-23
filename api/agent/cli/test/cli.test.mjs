@@ -219,7 +219,7 @@ test("help, --help and --version", () => {
   assert.equal(cli(["fs", "--help"]).out, fs.out);
   const one = cli(["fs", "read", "--help"]);
   assert.equal(one.out, `usage: ${usage(CALLS.find((c) => c.call === "read"))}\n  ${CALLS.find((c) => c.call === "read").summary}\n`);
-  assert.deepEqual([cli(["--version"]).out, cli(["--version"]).code], ["1.0.0\n", 0]);
+  assert.deepEqual([cli(["--version"]).out, cli(["--version"]).code], ["1.1.0\n", 0]);
   const bare = cli([]);
   assert.deepEqual([bare.code, bare.out], [2, ""]);
   assert.equal(bare.err, all.out);

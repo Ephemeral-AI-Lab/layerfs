@@ -1,6 +1,6 @@
 {
   "name": "@layerfs/agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "LayerFS agent SDK: Projects, Branches, files, Sandboxes and Workspaces, over the native addon or a LayerFS home's worker",
   "private": true,
   "type": "module",

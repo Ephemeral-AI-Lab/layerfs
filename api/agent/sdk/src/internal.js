@@ -1,6 +1,6 @@
 // @layerfs/agent/internal: NOT a public API. It exists only for
 // @layerfs/backend and @layerfs/runtime at the same exact version as this
-// package (1.0.0); it may change in any release without notice. Integrations
+// package (1.1.0); it may change in any release without notice. Integrations
 // and agent scripts use the public entry points (@layerfs/agent,
 // @layerfs/backend, @layerfs/runtime). Don't add new uses.
 // It exports exactly:
