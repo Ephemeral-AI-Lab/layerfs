@@ -263,7 +263,8 @@ runs Store calls in-process; there is no worker"). Doing nothing silently would
 hide a misconfigured deployment.
 
 **Choosing the transport.** `@layerfs/agent` picks its own binding, because it
-can't depend on runtime: the real addon on Linux, the worker client elsewhere.
+can't depend on runtime: the real addon on Linux, the worker client elsewhere
+(`transport/worker_client.js`, the other end of runtime's `worker/server.js`).
 The worker client connects to the endpoint that runtime's platform launcher
 writes; the endpoint is a setting of its own. `LAYERFS_NATIVE` only ever names a real
 addon again; today dsh points it at a stand-in binding
@@ -285,7 +286,7 @@ Removed, because `transport/index.js` picks the binding: `port/sdk.js` (8),
 | `port/` (macOS), `windows/` | `platform/macos/`, `platform/windows/`, and a new `platform/linux/` |
 | "box", "Store container", container `layerfs-store` | the worker: container `<prefix>worker`, label `layerfs.role=worker` |
 | two worker programs | `worker/server.js` |
-| two stand-in bindings | `transport/worker.js` |
+| two stand-in bindings | `transport/worker_client.js` |
 | `LAYERFS_NATIVE` pointed at a stand-in | `LAYERFS_NATIVE` names the real addon only; the worker endpoint is its own setting |
 | macOS build record in `<home>/.layerfs-store.json`; Windows `manifest.json` hashes | one rule: the worker refuses a bundle whose `manifest.json` hashes don't match |
 
@@ -347,8 +348,8 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
 | Today's file | prod LOC | Goes to |
 | --- | ---: | --- |
 | `box.js` | 83 | `platform/macos/index.js` |
-| `port/` (`binding.js`, `operator.js`, `sdk.js`) | 133 | `binding.js` merges into agent's `transport/worker.js`; `sdk.js` and `operator.js` are removed (#382 moves `port/` first) |
-| `windows/` (six files) | 403 | `host.js` and `paths.js` to `platform/windows/`; `worker.js` merges into `worker/server.js`; `binding.js` into agent's `transport/worker.js`; `sdk.js` and `operator.js` removed (#425) |
+| `port/` (`binding.js`, `operator.js`, `sdk.js`) | 133 | `binding.js` merges into agent's `transport/worker_client.js`; `sdk.js` and `operator.js` are removed (#382 moves `port/` first) |
+| `windows/` (six files) | 403 | `host.js` and `paths.js` to `platform/windows/`; `worker.js` merges into `worker/server.js`; `binding.js` into agent's `transport/worker_client.js`; `sdk.js` and `operator.js` removed (#425) |
 | `config.js` | 37 | `LayerFSRuntime.open` settings |
 | `init.js` | 139 | `runtime.project.start_init` |
 | `jobs.js` | 28 | `runtime.project.start_init`, `get_init` |
