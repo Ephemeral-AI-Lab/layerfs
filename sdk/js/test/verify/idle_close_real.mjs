@@ -36,16 +36,16 @@ writeFileSync(join(source, "README.md"), "idle\n");
 try {
   await layerfs.project.init(source);
   await layerfs.branch.fork("lane");
-  assert.deepEqual((await operator.sandbox.list()).map((s) => s.id), [], "Import starts no Sandbox");
+  assert.deepEqual((await operator.sandbox.list()).map((s) => s.sandbox), [], "Import starts no Sandbox");
 
   // Listing reclaims a stopped Sandbox this process still knows.
   const first = await layerfs.workspace.mount("lane");
   assert.equal(first.sandbox, "1");
   const one = container();
-  assert.deepEqual((await operator.sandbox.list()).map((s) => s.id), ["1"]);
+  assert.deepEqual((await operator.sandbox.list()).map((s) => s.sandbox), ["1"]);
   await layerfs.workspace.unmount(first, true);
   assert.equal(await engine("POST", `/v1.54/containers/${one}/stop?t=10`), 204);
-  assert.deepEqual(await operator.sandbox.list(), [], "a stopped Sandbox is reclaimed, not listed");
+  assert.deepEqual(await operator.sandbox.list(), [], "a stopped Sandbox is not listed");
   assert.equal(existsSync(records), false, "its records are gone");
   assert.equal(await engine("GET", `/v1.54/containers/${one}/json`), 404, "its container is deleted");
 

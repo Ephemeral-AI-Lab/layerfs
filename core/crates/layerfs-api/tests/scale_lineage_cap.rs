@@ -343,7 +343,7 @@ fn b_layers_between_two_sides() {
         published.get("overwroteHasMore"),
         Some(&SdkValue::Bool(true))
     );
-    // The full list is the operator's (owner 2026-10-19); the public table
+    // The full list is the backend's (owner 2026-10-19); the public table
     // refuses the old name.
     let fields = vec![
         ("layer", text(&id)),
@@ -355,7 +355,7 @@ fn b_layers_between_two_sides() {
         .unwrap_err();
     assert_eq!(refusal.code, "UnknownMethod");
     let call = SdkCall {
-        method: "operator.store.overwritten".into(),
+        method: "backend.store.project.list_overwritten".into(),
         args: SdkValue::Map(
             fields
                 .into_iter()

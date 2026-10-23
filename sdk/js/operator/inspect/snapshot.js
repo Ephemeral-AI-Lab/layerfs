@@ -3,28 +3,28 @@
 // from its records (#373). A read starts no Sandbox: with none running
 // `sandboxes` is empty, and a recorded Sandbox whose container is gone or
 // stopped is listed in `gone` with its refusal's detail.
-import { invokeOperator, projectArgs } from "../../src/client.js";
+import { invokeBackend, invokeClient, projectArgs } from "../../src/client.js";
 
 /** One Sandbox's Workspaces with their overlays, or its `gone` detail when it is not running. */
 async function live(client, sandbox) {
   const args = { ...projectArgs(client), sandbox };
   let answer;
   try {
-    answer = await invokeOperator("operator.inspect.snapshot", args, client.options);
+    answer = await invokeClient(client, "sandbox.list_workspaces", { sandbox });
   } catch (error) {
     if (error?.code === "NoSuchSandbox") return { gone: error.detail ?? null };
     throw error;
   }
   await Promise.all(answer.workspaces.filter((w) => w.mounted && w.directory).map(async (workspace) => {
-    workspace.overlay = await invokeOperator("operator.workspace.overlay", { ...args, path: workspace.directory }, client.options);
+    workspace.overlay = await invokeBackend("backend.daemon.workspace.get_storage", { ...args, path: workspace.directory }, client.options);
   }));
   return { answer };
 }
 
 export async function snapshot(client, since) {
   await client.store();
-  const history = await invokeOperator("operator.inspect.history", { project: client.projectName, home: client.options.home, storePath: client.options.storePath }, client.options);
-  const listed = (await invokeOperator("operator.sandbox.list", projectArgs(client), client.options)).items;
+  const history = await invokeBackend("backend.store.project.get_history", { project: client.projectName, home: client.options.home, storePath: client.options.storePath }, client.options);
+  const listed = (await invokeClient(client, "project.list_sandboxes", {})).items.map(({ sandbox, ...rest }) => ({ id: sandbox, ...rest }));
   const reads = await Promise.all(listed.map(({ id }) => live(client, id)));
   const version = [history.version, ...reads.map((read, index) => read.answer?.version ?? `gone-${listed[index].id}`)].join(".");
   if (since === version) return { kind: "unchanged", version };

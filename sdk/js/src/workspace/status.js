@@ -1,7 +1,8 @@
 // workspace.status: the Workspace's state; the Branch head is read in this
 // process's Store.
-import { invokeClient, workspaceArgs } from "../client.js";
+import { invokeBackend, projectArgs, workspaceArgs } from "../client.js";
 export async function status(client, ws) {
   await client.store();
-  return invokeClient(client, "workspace.status", workspaceArgs(ws));
+  const args = { ...projectArgs(client), storePath: client.options.storePath, ...workspaceArgs(ws) };
+  return invokeBackend("backend.daemon.workspace.status", args, client.options);
 }

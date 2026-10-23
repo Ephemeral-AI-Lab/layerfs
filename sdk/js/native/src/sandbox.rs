@@ -41,7 +41,7 @@ pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
 
 /// A Sandbox's daemon ends itself after this many seconds with no Workspace
 /// and no call (#373 idle close; owner answer, 2026-10-21: 2 minutes). Its
-/// container then stops, and the next mount or listing reclaims it.
+/// container then stops, and the next mount or `runtime.sandbox.reclaim` reclaims it.
 const IDLE_EXIT_S: u32 = 120;
 
 /// Workspaces one Sandbox holds at once; placement starts another when every

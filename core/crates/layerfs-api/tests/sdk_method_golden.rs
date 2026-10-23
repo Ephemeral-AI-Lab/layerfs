@@ -513,7 +513,7 @@ fn public_methods_answer_as_recorded() {
 
     // table
     s.call("fs.nope", vec![]);
-    s.call("operator.store.stats", vec![]);
+    s.call("backend.store.project.get_storage", vec![]);
     s.call("project.list_overwritten", vec![]);
 
     let transcript = s.lines.join("\n") + "\n";

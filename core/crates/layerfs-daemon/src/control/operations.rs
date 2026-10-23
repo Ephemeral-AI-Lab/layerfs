@@ -74,7 +74,7 @@ impl Service {
                 "observed control requires application diagnostic owner",
             )),
             Request::EndSession => Ok(Success::reply(Reply::SessionEnded)),
-            Request::Sdk(call) if call.method.starts_with("operator.") => {
+            Request::Sdk(call) if crate::operator::admits(&call.method) => {
                 Ok(Success::reply(crate::operator::dispatch(self, call)))
             }
             // Store calls run in the SDK's process (#352 F-020): one route.

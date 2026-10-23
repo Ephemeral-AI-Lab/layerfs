@@ -1,4 +1,4 @@
-//! `operator.inspect.history`: the read model's history half, read from the
+//! `backend.store.project.get_history`: the read model's history half, read from the
 //! Store with no daemon, so the dsh project page starts no Sandbox to show a
 //! project. It lists the Branches, their Commits and the Layers, holds no
 //! Workspaces, and `since` its version answers `unchanged` until history
@@ -19,7 +19,7 @@ fn history(fixture: &Fixture, since: Option<&str>) -> SdkValue {
     let mut args = vec![("project".to_owned(), SdkValue::text("installed"))];
     args.extend(since.map(|v| ("since".to_owned(), SdkValue::text(v))));
     let call = SdkCall {
-        method: "operator.inspect.history".into(),
+        method: "backend.store.project.get_history".into(),
         args: SdkValue::Map(args),
     };
     operator::dispatch(&fixture.service, &call).unwrap()

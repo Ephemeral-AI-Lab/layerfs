@@ -7,7 +7,7 @@
 //! `{ sandbox, path }`; status, Commit and unmount go to its Sandbox's
 //! daemon. Nothing is retried: a refused or failed step is the call's answer.
 //! A Sandbox whose daemon ended itself when idle is found stopped by the
-//! next mount or listing, which reclaims it.
+//! next mount or `runtime.sandbox.reclaim`, which reclaims it.
 use crate::job::{failed, Outcome};
 use crate::registry::{
     lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount, SandboxState,
@@ -95,22 +95,57 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     Ok(value)
 }
 
-/// `operator.sandbox.list()`: the project's running Sandboxes, lowest
-/// number first: `{ id, name, image }`. Each recorded container is inspected once
-/// (no daemon is dialed); one found gone or stopped, an idle-closed
-/// Sandbox's, is reclaimed under the project's guard and left out. It starts
-/// nothing.
-pub(crate) fn list(args: &SdkValue) -> Outcome {
-    let mut items = Vec::new();
+/// One recorded Sandbox of the project: running (`Ok(true)`), or found
+/// gone or stopped (`Ok(false)`, with its container and whether it stopped).
+/// Its container is inspected once; no daemon is dialed.
+fn observed(record: &SdkValue, directory: &Path) -> Result<Option<(String, bool)>, SdkRefusal> {
+    let cached = lock(&crate::registry::SANDBOXES)?.get(directory).cloned();
+    let observed = match cached {
+        Some(state) => state.runtime.endpoint().map(drop),
+        None => {
+            let (docker, selector, request) = crate::discovery::runtime(record)?;
+            layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request).map(drop)
+        }
+    };
+    match observed {
+        Ok(()) => Ok(None),
+        Err(failure) if failure.container_gone() || failure.container_stopped() => Ok(Some((
+            text(record, "container")?.to_owned(),
+            failure.container_stopped(),
+        ))),
+        Err(failure) => Err(failed(failure)),
+    }
+}
+
+/// The project's recorded Sandboxes, lowest number first, with each record.
+fn records(args: &SdkValue) -> Result<Vec<(String, std::path::PathBuf, SdkValue)>, SdkRefusal> {
+    let mut found = Vec::new();
     for id in crate::discovery::sandbox_ids(args)? {
         let directory = crate::discovery::sandbox_dir(args, &id)?;
         let record = directory.join("sandbox.record");
-        if !record.exists() {
+        // a number claimed by a start that has not finished is not a Sandbox yet
+        if record.exists() {
+            let value = crate::discovery::load(&record)?;
+            found.push((id, directory, value));
+        }
+    }
+    Ok(found)
+}
+
+/// `project.list_sandboxes()`: the project's running Sandboxes, lowest
+/// number first: `{ sandbox, name, image, workspaces }`, where `workspaces`
+/// counts its Workspace records. It reads records and inspects each
+/// container once; it starts nothing and changes nothing. A Sandbox found
+/// gone or stopped (an idle-closed one) is left out and its records kept:
+/// placement and `runtime.sandbox.reclaim` remove them.
+pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
+    let mut items = Vec::new();
+    for (id, directory, value) in records(args)? {
+        if observed(&value, &directory)?.is_some() {
             continue;
         }
-        let value = crate::discovery::load(&record)?;
-        let item = SdkValue::map([
-            ("id", SdkValue::text(&id)),
+        items.push(SdkValue::map([
+            ("sandbox", SdkValue::text(&id)),
             (
                 "name",
                 SdkValue::text(value.get_text("name").unwrap_or_default()),
@@ -119,30 +154,8 @@ pub(crate) fn list(args: &SdkValue) -> Outcome {
                 "image",
                 SdkValue::text(value.get_text("image").unwrap_or_default()),
             ),
-        ]);
-        let cached = lock(&crate::registry::SANDBOXES)?.get(&directory).cloned();
-        let observed = match cached {
-            Some(state) => state.runtime.endpoint().map(drop),
-            None => {
-                let (docker, selector, request) = crate::discovery::runtime(&value)?;
-                layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request)
-                    .map(drop)
-            }
-        };
-        match observed {
-            Ok(()) => items.push(item),
-            Err(failure) if failure.container_gone() || failure.container_stopped() => {
-                let _placing = crate::discovery::guard(&crate::discovery::project_dir(args)?)?;
-                let container = text(&value, "container")?;
-                match crate::sandbox::reclaim(args, &id, container, failure.container_stopped()) {
-                    Ok(_) => {}
-                    // started again under the number meanwhile
-                    Err(refusal) if refusal.code == "Busy" => items.push(item),
-                    Err(refusal) => return Err(refusal),
-                }
-            }
-            Err(failure) => return Err(failed(failure)),
-        }
+            ("workspaces", SdkValue::Int(recorded(&directory)? as i64)),
+        ]));
     }
     Ok(SdkValue::map([
         ("kind", SdkValue::text("ok")),
@@ -150,7 +163,32 @@ pub(crate) fn list(args: &SdkValue) -> Outcome {
     ]))
 }
 
-/// `workspace.status(ws)`: the daemon's Status, which reads no
+/// `runtime.sandbox.reclaim()`: removes the records of the project's
+/// Sandboxes whose containers are gone or stopped (and a stopped one's
+/// container), each under the project's guard, so their numbers are free
+/// again: `{ kind, reclaimed }`. One started again under its number
+/// meanwhile is left alone. Each step is attempted once.
+pub(crate) fn reclaim(args: &SdkValue) -> Outcome {
+    let mut reclaimed = Vec::new();
+    for (id, directory, value) in records(args)? {
+        let Some((container, stopped)) = observed(&value, &directory)? else {
+            continue;
+        };
+        let _placing = crate::discovery::guard(&crate::discovery::project_dir(args)?)?;
+        match crate::sandbox::reclaim(args, &id, &container, stopped) {
+            Ok(_) => reclaimed.push(SdkValue::text(&id)),
+            // started again under the number meanwhile, or already reclaimed
+            Err(refusal) if matches!(refusal.code.as_str(), "Busy" | "NoSuchSandbox") => {}
+            Err(refusal) => return Err(refusal),
+        }
+    }
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("ok")),
+        ("reclaimed", SdkValue::List(reclaimed)),
+    ]))
+}
+
+/// `backend.daemon.workspace.status(ws)`: the daemon's Status, which reads no
 /// Store, and the Branch head from one newest-first History read in this
 /// process.
 pub(crate) fn status(args: &SdkValue) -> Outcome {

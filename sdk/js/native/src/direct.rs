@@ -1,5 +1,5 @@
 //! Store calls in this process (#352 F-020): the only route for fs, branch,
-//! project and operator Store calls.
+//! project and backend Store calls.
 //!
 //! One `StoreService` per Store path per process, opened by the first client
 //! that names the path and closed when the last one releases it. It is a live
@@ -127,8 +127,8 @@ fn service(args: &SdkValue) -> Result<Arc<StoreService>, SdkRefusal> {
         .ok_or_else(|| refused("InvalidInput", "the client has not opened its Store"))
 }
 
-/// Runs one Store call (`operator` for the operator table) in this process.
-pub(crate) fn call(method: &str, args: SdkValue, operator: bool) -> Outcome {
+/// Runs one Store call (`backend` for the backend table) in this process.
+pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
     let service = service(&args)?;
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
@@ -146,7 +146,7 @@ pub(crate) fn call(method: &str, args: SdkValue, operator: bool) -> Outcome {
         args,
     };
     let run = || {
-        if operator {
+        if backend {
             layerfs_store_service::operator::dispatch(&service, &call)
         } else {
             layerfs_api::call(&service, &call)

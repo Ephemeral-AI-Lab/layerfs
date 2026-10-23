@@ -72,14 +72,14 @@ try {
   assert.deepEqual([c.sandbox, c.image], ["1", A]);
   const d = await layerfs.workspace.mount("lane", { image: B });
   assert.deepEqual([d.sandbox, d.image], ["2", B]);
-  assert.deepEqual((await operator.sandbox.list()).map(({ id, image }) => [id, image]), [["1", A], ["2", B]]);
+  assert.deepEqual((await operator.sandbox.list()).map(({ sandbox, image }) => [sandbox, image]), [["1", A], ["2", B]]);
   const engineImage = JSON.parse((await engine("GET", `/v1.54/containers/${container("2")}/json`)).body).Image;
   assert.equal(engineImage, B, "Sandbox 2's container runs image B");
   assert.equal((await layerfs.workspace.exec(d, "cat README.md")).stdout, "images\n");
   await Promise.all([a, b, c, d].map((ws) => layerfs.workspace.unmount(ws, true)));
   // Sandbox 2 stopped (as its idle close leaves it): the listing reclaims it, then image B can go
   assert.equal((await engine("POST", `/v1.54/containers/${container("2")}/stop?t=10`)).status, 204);
-  assert.deepEqual((await operator.sandbox.list()).map(({ id, image }) => [id, image]), [["1", A]]);
+  assert.deepEqual((await operator.sandbox.list()).map(({ sandbox, image }) => [sandbox, image]), [["1", A]]);
   console.log("image placement: ok");
 } finally {
   await layerfs.close();

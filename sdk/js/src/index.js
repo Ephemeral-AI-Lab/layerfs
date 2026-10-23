@@ -5,7 +5,7 @@
 // Workspace (fs, branch, project) run in this process against the installed
 // Store at `storePath` (Linux only, #352 F-020); there is no other route.
 // `close()` releases the Store.
-import { invokeClient, storeClose, storeOpen } from "./client.js";
+import { BACKEND, invokeClient, storeClose, storeOpen } from "./client.js";
 import { LayerFSError } from "./errors.js";
 import * as fsMethods from "./fs/index.js";
 import { init } from "./project/init.js";
@@ -23,6 +23,7 @@ import { status } from "./workspace/status.js";
 import { unmount } from "./workspace/unmount.js";
 
 export { LayerFSError, isRefusal, CODES } from "./errors.js";
+export { RENAMED_METHODS, currentMethod } from "./names.js";
 
 const bind = (client, methods) =>
   Object.fromEntries(Object.entries(methods).map(([name, method]) => [name, async (...args) => method(client, ...args)]));
@@ -86,7 +87,7 @@ export class LayerFS {
 
   /** One Store call in this process. */
   async call(method, args) {
-    if (method.startsWith("operator.")) throw new LayerFSError("UnknownMethod", "use @layerfs/sdk/operator", null);
+    if (BACKEND.test(method)) throw new LayerFSError("UnknownMethod", "use @layerfs/sdk/operator", null);
     await this.store();
     return invokeClient(this, method, args);
   }

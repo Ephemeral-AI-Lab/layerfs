@@ -102,8 +102,8 @@ try {
     }
     assert.deepEqual(lines.map((line) => line.scope), native.observed.slice(before), "the binding got each line's scope");
     assert.equal(new Set(lines.map((line) => line.id)).size, lines.length);
-    const groups = new Set(lines.map((line) => line.method.replace(/^operator\./, "operator:").split(".")[0]));
-    for (const group of ["project", "fs", "branch", "workspace", "operator:sandbox", "operator:store", "operator:files", "operator:workspace", "operator:inspect", "operator:process"]) assert.ok(groups.has(group), group);
+    const groups = new Set(lines.map((line) => line.method.split(".").slice(0, line.method.startsWith("backend.") ? 3 : 1).join(".")));
+    for (const group of ["project", "fs", "branch", "workspace", "sandbox", "backend.store.project", "backend.store.branch", "backend.store.fs", "backend.daemon.workspace", "backend.daemon.process"]) assert.ok(groups.has(group), group);
     const write = lines.find((line) => line.method === "fs.write");
     assert.deepEqual(write.args, { branch: "feature", path: "/big.txt", contentBytes: 10000, message: "Write big" });
     assert.equal(write.commit, "c0ffee");
@@ -125,9 +125,9 @@ try {
     // SQL work passes through on every exchange; opcode counts on status and unmount.
     assert.deepEqual(commit.daemon[0].sql, { writer: { statements: 3, fullscan_steps: 0 }, readers: { statements: 2, vm_steps: 40 } });
     for (const line of lines.filter((line) => line.daemon)) {
-      assert.equal("fuse" in line.daemon[0], ["workspace.status", "workspace.unmount"].includes(line.method), line.method);
+      assert.equal("fuse" in line.daemon[0], ["backend.daemon.workspace.status", "workspace.unmount"].includes(line.method), line.method);
     }
-    assert.equal(lines.find((line) => line.method === "workspace.status").daemon[0].fuse.getattr, 7);
+    assert.equal(lines.find((line) => line.method === "backend.daemon.workspace.status").daemon[0].fuse.getattr, 7);
     const refused = lines.find((line) => line.args.path === "/missing");
     assert.equal(refused.ok, false);
     assert.equal(refused.code, "NoSuchPath");
@@ -232,11 +232,11 @@ try {
     assert.deepEqual(pick(of("branch.merge"), ["branch", "head", "commit"]), { branch: "merged", head: "m3rge", commit: "m3rge" });
     assert.deepEqual(pick(of("workspace.mount"), ["sandbox", "path", "branch", "base", "baseLayer"]), { sandbox: "1", path: "/workspaces/w1", branch: "feature", base: "b4se", baseLayer: "lay0" });
     assert.equal(of("workspace.exec").exitCode, 3);
-    assert.equal(of("operator.process.start").process, "proc_1_ab");
-    assert.equal(of("operator.process.cancel").process, undefined, "a cancel names its process in args only");
+    assert.equal(of("backend.daemon.process.start").process, "proc_1_ab");
+    assert.equal(of("backend.daemon.process.cancel").process, undefined, "a cancel names its process in args only");
     // Calls that make nothing carry no result ids.
     const IDS = ["branch", "base", "head", "sandbox", "path", "baseLayer", "process", "exitCode"];
-    for (const method of ["fs.read", "fs.list", "workspace.status", "workspace.unmount", "operator.store.stats"]) {
+    for (const method of ["fs.read", "fs.list", "backend.daemon.workspace.status", "workspace.unmount", "backend.store.project.get_storage"]) {
       assert.deepEqual(pick(of(method), IDS), {}, method);
     }
   } else if (selected === "no-content") {
@@ -279,7 +279,7 @@ try {
     const reader = new LayerFS("website");
     const before = native.calls.length;
     const snap = await new LayerFSOperator(reader).inspect.snapshot();
-    assert.deepEqual(native.calls.slice(before), ["operator.inspect.history", "operator.sandbox.list"]);
+    assert.deepEqual(native.calls.slice(before), ["backend.store.project.get_history", "project.list_sandboxes"]);
     assert.equal(native.args[before].storePath, "/fake/store.sqlite");
     assert.deepEqual([snap.kind, snap.sandboxes, snap.gone], ["ok", [], []]);
   } else if (selected === "daemon-host") {
@@ -289,12 +289,12 @@ try {
     const native = (await import(FAKE)).default;
     await script(new LayerFS("website", { daemonHost: "host.docker.internal" }));
     const named = native.calls.filter((_, index) => "sandbox" in native.args[index]);
-    for (const method of ["workspace.exec", "workspace.status", "workspace.commit", "workspace.unmount", "operator.workspace.overlay", "operator.workspace.changes", "operator.inspect.snapshot", "operator.process.start"]) {
+    for (const method of ["workspace.exec", "backend.daemon.workspace.status", "workspace.commit", "workspace.unmount", "backend.daemon.workspace.get_storage", "backend.daemon.workspace.list_changes", "sandbox.list_workspaces", "backend.daemon.process.start"]) {
       assert.ok(named.includes(method), method);
     }
     for (const [index, args] of native.args.entries()) {
       const method = native.calls[index];
-      if ("sandbox" in args || method.startsWith("workspace.") || /^operator\.(process|sandbox)\./.test(method)) {
+      if ("sandbox" in args || method.startsWith("workspace.") || method.startsWith("backend.daemon.") || method === "project.list_sandboxes") {
         assert.equal(args.deploy?.daemonHost, "host.docker.internal", method);
       }
     }

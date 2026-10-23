@@ -70,7 +70,7 @@ async function inner([phase]) {
   await layerfs.workspace.status(paths[0]);
   const lines = readFileSync(trace, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((l) => l.phase === "end");
   const exec = lines.find((l) => l.method === "workspace.exec");
-  const status = lines.find((l) => l.method === "workspace.status");
+  const status = lines.find((l) => l.method === "backend.daemon.workspace.status");
   // the status call shows what one daemon exchange looks like in the trace
   assert.ok((status.daemon ?? []).length >= 1, `status carries its exchange: ${JSON.stringify(status).slice(0, 300)}`);
   assert.equal((exec.daemon ?? []).length, 0, `exec asks the daemon nothing: ${JSON.stringify(exec.daemon)?.slice(0, 300)}`);

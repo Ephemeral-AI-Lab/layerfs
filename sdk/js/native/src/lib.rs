@@ -1,4 +1,4 @@
-//! Node entry points for the public SDK and internal operator.
+//! Node entry points for the public SDK and its backend table (#428).
 mod convert;
 mod direct;
 mod discovery;
@@ -44,8 +44,8 @@ pub fn store_close(args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
     dispatch::store(args, direct::release)
 }
 
-/// Runs one internal operator operation on its separate method table.
+/// Runs one backend or runtime operation on its separate method table.
 #[napi]
-pub fn operator_call(op: String, args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
-    dispatch::operator_call(op, args)
+pub fn backend_call(op: String, args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
+    dispatch::backend_call(op, args)
 }

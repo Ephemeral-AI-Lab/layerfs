@@ -76,6 +76,6 @@ branch.publish -> refused NoCommit "empty has no saved Commit to publish" null
 project.list_branches -> ok {items: [{name: "at-commit", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "both", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "empty", id: "<hex>", base: "<hex>", head: null, forkedFrom: "<hex>"}, {name: "feat", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "left", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "main", id: null, base: "<hex>", head: null}, {name: "other", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "right", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}], hasMore: false, nextPagePos: null}
 fs.read -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/a.txt", text: "one\nTWO\nthree\n", startLine: 1, endLine: 3, lineTruncated: false, truncated: false, nextLine: null, size: 14}
 fs.nope -> refused UnknownMethod "no Store method fs.nope" null
-operator.store.stats -> refused UnknownMethod "no Store method operator.store.stats" null
+backend.store.project.get_storage -> refused UnknownMethod "no Store method backend.store.project.get_storage" null
 project.list_overwritten -> refused UnknownMethod "no Store method project.list_overwritten" null
 fs.read(project ghost, no path) -> refused NoSuchProject "project ghost does not exist"

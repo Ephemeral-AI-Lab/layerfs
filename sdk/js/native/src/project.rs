@@ -204,7 +204,7 @@ impl Drop for Running<'_> {
     }
 }
 
-/// `operator.project.progress`: how far the project's running Init has come
+/// `runtime.project.get_init`: how far the project's running Init has come
 /// (`step`, `entries`, `files`, `bytes`), or null when none runs.
 pub(crate) fn progress(args: &SdkValue) -> Outcome {
     let name = text(args, "project")?;

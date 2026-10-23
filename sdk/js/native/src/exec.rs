@@ -48,7 +48,7 @@ fn run(
 }
 
 /// `workspace.exec(ws, command, { background?, spool? })`; with
-/// `background`, `operator.process.start(ws, command)`.
+/// `background`, `backend.daemon.process.start(ws, command)`.
 ///
 /// A foreground result is `kind`, `exitCode`, `stdout`, `stderr`, `message`
 /// and `truncated` (always false: no output is cut). A stream over the
@@ -187,7 +187,7 @@ pub(crate) fn running_in(state: &SandboxState, path: &str) -> Result<Vec<String>
     Ok(running)
 }
 
-/// `operator.process.list()`: the background processes started in the
+/// `backend.daemon.process.list()`: the background processes started in the
 /// project's Sandboxes that still run (a gone Sandbox's went with it), each
 /// with its `sandbox`.
 pub(crate) fn processes(args: &SdkValue) -> Outcome {
@@ -253,7 +253,7 @@ fn listed(state: &SandboxState) -> Result<Vec<SdkValue>, SdkRefusal> {
     Ok(items)
 }
 
-/// `operator.process.cancel(process)`: TERM to the process group, then a
+/// `backend.daemon.process.cancel(process)`: TERM to the process group, then a
 /// bounded wait until it is gone. The process id names its Sandbox.
 pub(crate) fn cancel(args: &SdkValue) -> Outcome {
     let id = text(args, "process")?;

@@ -1,23 +1,23 @@
-//! The operator Store call router.
+//! The backend Store call router (#428: `backend.store.*`).
 use super::{files, snapshot, store};
 use crate::StoreService;
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 
-/// Runs one operator Store call once. The read model's history half
-/// (`operator.inspect.history`) is the snapshot with no Workspaces, read from
-/// the Store alone; `operator.inspect.snapshot` adds a daemon's Workspaces and
-/// is the daemon's call.
+/// Runs one backend Store call once. The read model's history half
+/// (`backend.store.project.get_history`) is the snapshot with no Workspaces,
+/// read from the Store alone; `sandbox.list_workspaces` adds a daemon's
+/// Workspaces and is the daemon's call.
 pub fn dispatch(service: &StoreService, call: &SdkCall) -> Result<SdkValue, SdkRefusal> {
     match call.method.as_str() {
-        "operator.inspect.history" => snapshot(&service.store, &call.args, &[]),
-        "operator.store.stats" => store::stats(&service.store),
-        "operator.store.commits" => store::commits(&service.store, &call.args),
-        "operator.store.overwritten" => store::overwritten(&service.store, &call.args),
-        "operator.files.stats" => files::stats(&service.store, &call.args),
-        "operator.files.history" => files::history(&service.store, &call.args),
+        "backend.store.project.get_history" => snapshot(&service.store, &call.args, &[]),
+        "backend.store.project.get_storage" => store::stats(&service.store),
+        "backend.store.branch.list_commit_storage" => store::commits(&service.store, &call.args),
+        "backend.store.project.list_overwritten" => store::overwritten(&service.store, &call.args),
+        "backend.store.fs.get_storage" => files::stats(&service.store, &call.args),
+        "backend.store.fs.list_revisions" => files::history(&service.store, &call.args),
         method => Err(SdkRefusal {
             code: "UnknownMethod".into(),
-            message: format!("no operator Store method {method}"),
+            message: format!("no backend Store method {method}"),
             detail: SdkValue::Null,
         }),
     }

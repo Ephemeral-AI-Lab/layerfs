@@ -1,4 +1,4 @@
-// Opt-in per-call trace: one JSON line per SDK or operator call, appended to
+// Opt-in per-call trace: one JSON line per SDK or backend call, appended to
 // the client's `trace` file (LAYERFS_TRACE, else DSH_LAYERFS_TRACE). Off when
 // no file is named. With LAYERFS_TRACE_START (or DSH_LAYERFS_TRACE_START) set
 // to 1, a start line precedes each call. A line never holds file contents, and

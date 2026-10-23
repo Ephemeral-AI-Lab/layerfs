@@ -31,17 +31,17 @@ if (selected === "lazy") {
   assert.equal(typeof operator.store.overwritten, "function");
   assert.equal(typeof operator.inspect.snapshot, "function");
   assert.equal(typeof operator.process.cancel, "function");
-  await assert.rejects(client.call("operator.inspect.snapshot", {}), { code: "UnknownMethod" });
+  await assert.rejects(client.call("backend.store.project.get_history", {}), { code: "UnknownMethod" });
   assert.throws(() => new LayerFS("../foreign"), { code: "InvalidInput" });
 } else if (selected === "dispatch") {
   const binding = native();
   assert.equal(typeof binding.call, "function");
-  assert.equal(typeof binding.operatorCall, "function");
-  for (const method of ["operator.inspect.snapshot", "operator.process.list", "operator.process.cancel"]) {
+  assert.equal(typeof binding.backendCall, "function");
+  for (const method of ["backend.store.project.get_history", "backend.daemon.process.list", "runtime.sandbox.reclaim"]) {
     assert.equal((await binding.call(method, {})).refused.code, "UnknownMethod");
   }
-  assert.equal((await binding.operatorCall("project.init", {})).refused.code, "UnknownMethod");
-  assert.equal((await binding.operatorCall("operator.missing", {})).refused.code, "UnknownMethod");
+  assert.equal((await binding.backendCall("project.init", {})).refused.code, "UnknownMethod");
+  assert.equal((await binding.backendCall("backend.missing", {})).refused.code, "UnknownMethod");
 } else {
   throw new Error("select lazy or dispatch");
 }

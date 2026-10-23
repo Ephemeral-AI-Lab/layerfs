@@ -9,13 +9,17 @@ import { traced } from "./trace.js";
  * `options` are the client's, whose `trace`/`traceStep` select its trace line. */
 export async function invoke(op, args, options) {
   return outcome(await traced(options, op, args, (scope) => {
-    if (op.startsWith("operator.")) throw new LayerFSError("UnknownMethod", "operator methods require the operator entry point", null);
+    if (BACKEND.test(op)) throw new LayerFSError("UnknownMethod", "backend and runtime methods require the backend entry point", null);
     return native().call(op, observed(args, scope));
   }));
 }
 
-export async function invokeOperator(op, args, options) {
-  return outcome(await traced(options, op, args, (scope) => native().operatorCall(op, observed(args, scope))));
+/** Names on the binding's backend table (#428), refused by the public one. */
+export const BACKEND = /^(backend|runtime)\./;
+
+/** One call on the binding's backend table (`backend.*`, `runtime.*`). */
+export async function invokeBackend(op, args, options) {
+  return outcome(await traced(options, op, args, (scope) => native().backendCall(op, observed(args, scope))));
 }
 
 /** A traced call carries its scope; the binding removes it before dispatch. */
