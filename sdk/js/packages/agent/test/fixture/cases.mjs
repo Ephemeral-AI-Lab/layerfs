@@ -63,6 +63,8 @@ export const CASES = [
     op: "branch.merge", sent: { branch: "a", with: "b", name: "ab", message: "merge it", units: ["dist/**"] }, result: { kind: "Merged", branch: "ab", head: "m3rge", root: "r00t" } },
   { name: "branch publish", argv: ["branch", "publish", "cart", "c0ffee"], sdk: (lf) => lf.branch.publish("cart", "c0ffee"),
     op: "branch.publish", sent: { branch: "cart", commit: "c0ffee" }, result: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } },
+  { name: "branch publish head", argv: ["branch", "publish", "cart"], sdk: (lf) => lf.branch.publish("cart"),
+    op: "branch.publish", sent: { branch: "cart" }, result: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } },
   { name: "fs read", argv: ["fs", "read", "main", "/a.txt", "--start-line=3", "--end-line", "9"], sdk: (lf) => lf.fs.read("main", "/a.txt", 3, 9),
     op: "fs.read", sent: { branch: "main", path: "/a.txt", startLine: 3, endLine: 9 }, result: { text: "b\n", nextLine: null } },
   { name: "fs list", argv: ["fs", "list", "main"], sdk: (lf) => lf.fs.list("main"),

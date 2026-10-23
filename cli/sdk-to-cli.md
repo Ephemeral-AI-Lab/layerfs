@@ -107,7 +107,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `branch.diff_commits` | `layerfs branch diff_commits <from-commit> <to-commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--hunks]` |
 | `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--hunks]` |
 | `branch.merge` | `layerfs branch merge <a> <b> <name> [-m <text>] [--units <json>]` |
-| `branch.publish` | `layerfs branch publish <branch> <commit>` |
+| `branch.publish` | `layerfs branch publish <branch> [<commit>]` |
 | `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>]` |
 | `fs.list` | `layerfs fs list <ref> [<path>] [--page-size <n>] [--page-pos <n>]` |
 | `fs.stat` | `layerfs fs stat <ref> <path>` |
