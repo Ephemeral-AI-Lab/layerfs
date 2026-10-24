@@ -82,6 +82,18 @@ pub fn selector<'a>(args: &'a SdkValue, name: &str, branch: &'a str) -> Arg<Sele
     })
 }
 
+/// A change's optional `mode`: permission bits, an integer up to 0o7777.
+/// Whether the entry can hold them is checked where the entry's kind is known.
+fn mode(change: &SdkValue) -> Result<Option<u32>, SdkRefusal> {
+    match change.get("mode") {
+        None | Some(SdkValue::Null) => Ok(None),
+        Some(SdkValue::Int(n)) if (0..=0o7777).contains(n) => Ok(Some(*n as u32)),
+        Some(_) => Err(invalid(
+            "mode must be an integer permission mode from 0 to 0o7777",
+        )),
+    }
+}
+
 /// One change of a file call, from its `op` and that op's fields. A write
 /// whose bytes were to follow the call (`streamed`) is refused: no bytes
 /// follow a call on the in-process route.
@@ -97,10 +109,12 @@ pub fn change(change: &SdkValue) -> Arg<Change<'_>> {
             (Some(SdkValue::Text(s)), None, None) => Change::Write {
                 path: p("path")?,
                 bytes: s.as_bytes(),
+                mode: mode(change)?,
             },
             (None, Some(SdkValue::Bytes(b)), None) => Change::Write {
                 path: p("path")?,
                 bytes: b,
+                mode: mode(change)?,
             },
             (None, None, Some(SdkValue::Int(n))) if *n > 0 => {
                 p("path")?;
@@ -113,7 +127,14 @@ pub fn change(change: &SdkValue) -> Arg<Change<'_>> {
             old: text(change, "oldText")?,
             new: text(change, "newText")?,
         },
-        "mkdir" => Change::Mkdir { path: p("path")? },
+        "mkdir" => Change::Mkdir {
+            path: p("path")?,
+            mode: mode(change)?,
+        },
+        "chmod" => Change::Chmod {
+            path: p("path")?,
+            mode: mode(change)?.ok_or_else(|| invalid("chmod needs a mode"))?,
+        },
         "rm" => Change::Rm { path: p("path")? },
         "cp" => Change::Cp {
             from: p("from")?,

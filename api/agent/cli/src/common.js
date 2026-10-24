@@ -5,6 +5,8 @@ import { UsageError } from "./argv.js";
 
 export const PAGE = { "page-size": "int", "page-pos": "int" };
 export const MESSAGE = { message: "text" };
+// A write's message and permission bits (`--mode 755`).
+export const WRITE = { ...MESSAGE, mode: "octal" };
 // --no-hunks sends hunks: false (paths without line changes); left out, hunks is not
 // sent and the SDK lists line changes, its default.
 export const DIFF = { ...PAGE, cursor: "text", "no-hunks": "bool" };

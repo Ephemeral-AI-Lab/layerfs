@@ -27,16 +27,25 @@ pub fn path(value: &str) -> Result<String, SdkRefusal> {
 
 /// One change of a file call, with checked absolute paths.
 pub enum Change<'a> {
-    /// Replace the file's bytes, creating it.
-    Write { path: String, bytes: &'a [u8] },
+    /// Replace the file's bytes, creating it with `mode` (default 0o644).
+    /// An existing file keeps its mode unless `mode` is given.
+    Write {
+        path: String,
+        bytes: &'a [u8],
+        mode: Option<u32>,
+    },
     /// Replace the one occurrence of `old` with `new`.
     Edit {
         path: String,
         old: &'a str,
         new: &'a str,
     },
-    /// Create the directory and its missing parents.
-    Mkdir { path: String },
+    /// Create the directory and its missing parents. A created `path` gets
+    /// `mode` (default 0o755); missing parents get 0o755, and an existing
+    /// directory keeps its mode, as `mkdir -p -m` does.
+    Mkdir { path: String, mode: Option<u32> },
+    /// Set the entry's permission bits.
+    Chmod { path: String, mode: u32 },
     /// Remove the entry, recursively.
     Rm { path: String },
     /// Copy the entry, recursively.
@@ -179,9 +188,10 @@ fn change(
     let mut result = Ok(());
     for (index, change) in changes.iter().enumerate() {
         result = (|| match change.as_ref().map_err(Clone::clone)? {
-            Change::Write { path, bytes } => mutation.write(path, bytes),
+            Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
             Change::Edit { path, old, new } => mutation.edit(path, old, new),
-            Change::Mkdir { path } => mutation.mkdir(path),
+            Change::Mkdir { path, mode } => mutation.mkdir(path, *mode),
+            Change::Chmod { path, mode } => mutation.chmod(path, *mode),
             Change::Rm { path } => mutation.remove(path),
             Change::Cp { from, to } => mutation.copy(from, to, index as u64),
             Change::Mv { from, to } => mutation.rename(from, to),

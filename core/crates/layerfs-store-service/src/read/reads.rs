@@ -12,6 +12,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
     filesystem::{
+        attributes::{read_portable, AttributeReadWork},
         directory::read::{list_after, DirectoryReadWork},
         sorted::DirectoryRoot,
     },
@@ -75,15 +76,24 @@ pub fn read(
     answer(fields)
 }
 
-/// The type, inode and size of the entry at `path`.
+/// The type, inode, size and permission mode of the entry at `path`. An
+/// inline mode costs no object read.
 pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
     let cached = Cached::new(reader)?;
     let entry = existing(&Memo::new(&cached), snap, path)?;
+    let metadata = read_portable(
+        &cached,
+        entry.value.metadata_root,
+        entry.value.kind,
+        &mut AttributeReadWork::default(),
+    )
+    .map_err(args::content)?;
     let mut fields = header(snap, path);
     fields.extend([
         ("type", SdkValue::text(kind_name(entry.value.kind))),
         ("inode", SdkValue::Int(entry.serial as i64)),
         ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+        ("mode", SdkValue::Int(i64::from(metadata.mode))),
     ]);
     answer(fields)
 }
