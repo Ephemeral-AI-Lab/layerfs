@@ -22,5 +22,5 @@ nix = { version = "=0.31.3", default-features = false, features = ["fs"] }
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "pthread", "signal"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 rusqlite = { version = "=0.40.2", features = ["bundled"] }

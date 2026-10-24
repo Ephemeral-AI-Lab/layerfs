@@ -18,12 +18,14 @@ UNSAFE = re.compile(r"\bunsafe\b")
 
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
 # FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
-# seal file-control module. Their siblings stay unsafe-free. The
+# seal file-control module; Sandbox reads macOS process facts through
+# proc_pidinfo in backend/local/darwin.rs. Their siblings stay unsafe-free. The
 # comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
     "layerfs-persistence": "src/backend/sqlite/file_control.rs",
+    "layerfs-sandbox": "src/backend/local/darwin.rs",
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
@@ -33,10 +35,10 @@ UNSAFE_FREE_CRATES = (
     "layerfs-workspace",
     "layerfs-store-service",
     "layerfs-fuse",
+    "layerfs-nfs",
     "layerfs-daemon",
     "layerfs-api",
     "layerfs-bridge",
-    "layerfs-sandbox",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -48,10 +50,11 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",
+    "layerfs-nfs": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
-    "layerfs-sandbox": "#![forbid(unsafe_code)]",
+    "layerfs-sandbox": "#![deny(unsafe_code)]",
 }
 
 
@@ -67,6 +70,8 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
     "layerfs-fuse": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
+    # The NFS export reuses the kernel ports and operations; never daemon.
+    "layerfs-nfs": {"layerfs-content", "layerfs-overlay", "layerfs-workspace", "layerfs-fuse"},
     # The Store engine (#352 F-020): the SDK's Store calls in-process and the
     # Store/overlay ports daemon Workspace Commits use; it opens the Store.
     "layerfs-store-service": {
@@ -86,6 +91,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-workspace",
         "layerfs-store-service",
         "layerfs-fuse",
+        "layerfs-nfs",
         "layerfs-bridge",
         "layerfs-content",
         "layerfs-storage",
@@ -116,6 +122,7 @@ ENGINES_AND_CLUSTER2 = {
     "layerfs-workspace",
     "layerfs-store-service",
     "layerfs-fuse",
+    "layerfs-nfs",
     "layerfs-daemon",
     "layerfs-bridge",
     "layerfs-sandbox",

@@ -29,7 +29,12 @@ pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Box<Attache
                 "terminal unmount already admitted",
             ))
         }
-        Kernel::Unattached | Kernel::Attaching | Kernel::Retained(_) => {
+        Kernel::Unattached
+        | Kernel::Attaching
+        | Kernel::Retained(_)
+        | Kernel::Exported(_)
+        | Kernel::ExportLeaving(_)
+        | Kernel::ExportKept(_) => {
             unreachable!("handled by terminal admission")
         }
     }
@@ -133,16 +138,6 @@ impl Service {
                     leaving.phase = phase;
                 }
             }
-        }
-    }
-    /// Poison recovery stores this exact owner only; a poisoned registry never
-    /// authorizes another product operation.
-    pub(super) fn settle(&self, token: WorkspaceToken, kernel: Kernel, activity: Activity) {
-        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
-        if let Ok(binding) = bound_mut(&mut entries, token) {
-            binding.kernel = kernel;
-            binding.activity = activity;
-            binding.epoch = binding.epoch.saturating_add(1);
         }
     }
     /// Stops a terminal operation after effects, keeping its owner in the entry.

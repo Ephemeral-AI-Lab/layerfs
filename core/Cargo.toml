@@ -23,6 +23,8 @@ members = [
     "crates/layerfs-bridge",
     "crates/layerfs-sandbox",
     "crates/layerfs-fuse",
+    # Loopback NFSv3 export over the same kernel request ports (native macOS route).
+    "crates/layerfs-nfs",
     # Node binding of the JavaScript SDK (owner-approved napi-rs, 2026-10-15).
     "../api/binding",
 ]

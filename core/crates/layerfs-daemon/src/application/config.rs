@@ -29,7 +29,10 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
         return Err(invalid("private config record size"));
     }
     let config = DaemonSetup::decode(&bytes).map_err(|_| invalid("private config fields"))?;
-    if config.command_uid == uid {
+    // The NFS route opens no FUSE device and the native route runs its
+    // commands as the daemon's own user, unconfined (no isolation); every
+    // other route keeps the two identities apart.
+    if config.command_uid == uid && !super::filesystem::nfs_route() {
         return Err(invalid("command and daemon identities must differ"));
     }
     // One early reservation restores any value below the refill window; a
@@ -108,11 +111,21 @@ fn secure_process() -> io::Result<()> {
     }
     Ok(())
 }
-#[cfg(not(target_os = "linux"))]
+/// macOS (the native NFS route): files the daemon creates are its own
+/// alone, and it never writes a core file holding its keys or Store pages.
+/// There is no dumpable flag; a debugger of the same user is not refused.
+#[cfg(target_os = "macos")]
+fn secure_process() -> io::Result<()> {
+    use nix::sys::resource::{setrlimit, Resource};
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
+    setrlimit(Resource::RLIMIT_CORE, 0, 0).map_err(io::Error::from)?;
+    Ok(())
+}
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn secure_process() -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
-        "production daemon requires Linux process protection",
+        "production daemon requires Linux or macOS process protection",
     ))
 }
 fn invalid(message: &'static str) -> io::Error {

@@ -588,6 +588,7 @@ dependencies = [
  "layerfs-content",
  "layerfs-fuse",
  "layerfs-history",
+ "layerfs-nfs",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
@@ -616,6 +617,23 @@ version = "1.1.0"
 dependencies = [
  "blake3",
  "layerfs-content",
+]
+
+[[package]]
+name = "layerfs-nfs"
+version = "1.1.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-fuse",
+ "layerfs-history",
+ "layerfs-overlay",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-storage",
+ "layerfs-telemetry",
+ "layerfs-workspace",
 ]
 
 [[package]]

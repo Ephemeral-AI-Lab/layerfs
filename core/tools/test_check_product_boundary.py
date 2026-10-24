@@ -121,7 +121,15 @@ class ProductBoundaryTests(unittest.TestCase):
     def test_sandbox_active_edges_and_unsafe_boundary(self):
         path = Path("core/crates/layerfs-sandbox/src/backend/docker/http.rs")
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
-        self.assertFalse(unsafe_violations(Path("core/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
+        self.assertFalse(unsafe_violations(Path("core/crates/layerfs-sandbox/src/lib.rs"), "#![deny(unsafe_code)]"))
+        self.assertTrue(unsafe_violations(Path("core/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
+        darwin = Path("core/crates/layerfs-sandbox/src/backend/local/darwin.rs")
+        self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
+        self.assertTrue(
+            unsafe_violations(
+                Path("core/crates/layerfs-sandbox/src/backend/local/process.rs"), "fn f() { unsafe { call(); } }"
+            )
+        )
         prefix = '[package]\nname="layerfs-sandbox"\n[dependencies]\n'
         for dependency in (
             "layerfs-api-core",

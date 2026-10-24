@@ -5,10 +5,13 @@ mod discovery;
 mod dispatch;
 mod exec;
 mod job;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod local;
 mod output;
 mod pool;
 mod project;
 mod registry;
+mod runtime;
 mod sandbox;
 mod trace;
 mod workspace;

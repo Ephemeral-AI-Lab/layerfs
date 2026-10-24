@@ -1,4 +1,5 @@
 //! Private, permission-authorized project and Sandbox discovery. No mutation replay.
+use crate::runtime::Runtime;
 use crate::{
     job::{failed, refused},
     registry::{self, Mount, Process, Project, SandboxState},
@@ -9,9 +10,11 @@ use layerfs_bridge::{
     provision::StoreManifest,
 };
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use layerfs_sandbox::backend::local::{self, LocalProcess};
 use layerfs_sandbox::{
     backend::docker::{Docker, Sandbox, SandboxRequest},
-    CommandIdentity, ContainerId,
+    CommandIdentity, ContainerId, WireFailure,
 };
 use std::{
     fs::{self, File, OpenOptions},
@@ -26,6 +29,7 @@ use std::{
 };
 extern "C" {
     fn geteuid() -> u32;
+    fn getegid() -> u32;
     fn flock(fd: i32, operation: i32) -> i32;
 }
 const LOCK_EX: i32 = 2;
@@ -67,6 +71,17 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
         Err(e) => return Err(failed(e)),
     }
     private(path, true)
+}
+/// Whether this process runs as root, which the local runtime needs: its
+/// daemon mounts FUSE and its commands run as another uid/gid.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn root() -> bool {
+    unsafe { geteuid() == 0 }
+}
+/// This process's effective uid and gid: a native Sandbox's command
+/// identity (its commands run as this user).
+pub(crate) fn user() -> (u32, u32) {
+    unsafe { (geteuid(), getegid()) }
 }
 /// Where a project's Sandboxes live: `LAYERFS_HOME/<project>/sandboxes/<n>/`
 /// (#373), numbered from 1 within the project.
@@ -339,39 +354,78 @@ pub(crate) fn save_sandbox(
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "deploy"))?;
+    let labels = |labels: &[(String, String)]| {
+        SdkValue::List(
+            (labels.iter())
+                .map(|(key, value)| {
+                    SdkValue::map([
+                        ("key", SdkValue::text(key)),
+                        ("value", SdkValue::text(value)),
+                    ])
+                })
+                .collect(),
+        )
+    };
+    let mut fields = vec![
+        ("id", SdkValue::text(&state.id)),
+        ("project", SdkValue::text(&state.project)),
+        ("name", SdkValue::text(&state.name)),
+        (
+            "container",
+            SdkValue::text(state.runtime.identity().to_string()),
+        ),
+    ];
+    match &state.runtime {
+        Runtime::Docker(runtime) => fields.extend([
+            ("docker", SdkValue::text(registry::text(deploy, "docker")?)),
+            ("image", SdkValue::text(&runtime.request().image)),
+            ("volume", SdkValue::text(&runtime.request().store_volume)),
+            ("labels", labels(&runtime.request().labels)),
+        ]),
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        Runtime::Local(runtime) => {
+            let process = runtime
+                .process()
+                .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
+            let boot = process
+                .boot
+                .ok_or_else(|| refused("Failed", "local Sandbox daemon has no boot id"))?;
+            fields.extend([
+                (
+                    "runtime",
+                    SdkValue::text(if crate::runtime::native(deploy) {
+                        crate::runtime::NATIVE
+                    } else {
+                        crate::runtime::LOCAL
+                    }),
+                ),
+                ("uid", SdkValue::Int(i64::from(state.identity.uid))),
+                ("gid", SdkValue::Int(i64::from(state.identity.gid))),
+                (
+                    "directory",
+                    SdkValue::text(runtime.directory().display().to_string()),
+                ),
+                ("pid", SdkValue::Int(i64::from(process.pid))),
+                ("start", SdkValue::text(process.start.to_string())),
+                ("boot", SdkValue::text(format!("{boot:032x}"))),
+                ("port", SdkValue::Int(i64::from(runtime.port()))),
+                ("image", SdkValue::text(crate::runtime::LOCAL)),
+                ("labels", labels(runtime.labels())),
+            ]);
+        }
+    }
+    fields.extend([
+        ("secret", SdkValue::Bytes(secret.to_vec())),
+        ("peer", SdkValue::Bytes(peer.to_vec())),
+        ("instance", SdkValue::Bytes(instance.to_vec())),
+    ]);
     save(
         &directory.join("sandbox.record"),
-        SdkValue::map([
-            ("id", SdkValue::text(&state.id)),
-            ("project", SdkValue::text(&state.project)),
-            ("name", SdkValue::text(&state.name)),
-            (
-                "container",
-                SdkValue::text(state.runtime.identity().to_string()),
-            ),
-            ("docker", SdkValue::text(registry::text(deploy, "docker")?)),
-            ("image", SdkValue::text(&state.runtime.request().image)),
-            (
-                "volume",
-                SdkValue::text(&state.runtime.request().store_volume),
-            ),
-            (
-                "labels",
-                SdkValue::List(
-                    (state.runtime.request().labels.iter())
-                        .map(|(key, value)| {
-                            SdkValue::map([
-                                ("key", SdkValue::text(key)),
-                                ("value", SdkValue::text(value)),
-                            ])
-                        })
-                        .collect(),
-                ),
-            ),
-            ("secret", SdkValue::Bytes(secret.to_vec())),
-            ("peer", SdkValue::Bytes(peer.to_vec())),
-            ("instance", SdkValue::Bytes(instance.to_vec())),
-        ]),
+        SdkValue::Map(
+            (fields.into_iter())
+                .map(|(name, value)| (name.to_owned(), value))
+                .collect(),
+        ),
     )
 }
 /// A Sandbox whose container no longer runs it: the Engine no longer has the
@@ -406,30 +460,172 @@ pub(crate) fn gone_container(refusal: &SdkRefusal) -> Option<(&str, bool)> {
         _ => None,
     }
 }
-/// The Engine, container and deployment a Sandbox record names.
-pub(crate) fn runtime(value: &SdkValue) -> Result<(Docker, ContainerId, SandboxRequest)> {
+/// The labels a Sandbox record keeps; a record written before #373 has none.
+fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
+    match value.get("labels") {
+        Some(SdkValue::List(items)) => items
+            .iter()
+            .map(|item| {
+                Ok((
+                    registry::text(item, "key")?.to_owned(),
+                    registry::text(item, "value")?.to_owned(),
+                ))
+            })
+            .collect(),
+        _ => Ok(Vec::new()),
+    }
+}
+/// The Engine, container and deployment a Docker Sandbox record names.
+fn runtime(value: &SdkValue) -> Result<(Docker, ContainerId, SandboxRequest)> {
     let docker =
         Docker::new(registry::text(value, "docker")?, Duration::from_secs(30)).map_err(failed)?;
     let request = SandboxRequest {
         image: registry::text(value, "image")?.to_owned(),
         store_volume: registry::text(value, "volume")?.to_owned(),
         port: 30421,
-        // a record written before #373 has no labels, nor has its container
-        labels: match value.get("labels") {
-            Some(SdkValue::List(items)) => items
-                .iter()
-                .map(|item| {
-                    Ok((
-                        registry::text(item, "key")?.to_owned(),
-                        registry::text(item, "value")?.to_owned(),
-                    ))
-                })
-                .collect::<Result<_>>()?,
-            _ => Vec::new(),
-        },
+        labels: labels(value)?,
     };
     let container = ContainerId::parse(registry::text(value, "container")?).map_err(failed)?;
     Ok((docker, container, request))
+}
+/// What a Sandbox record names: a Docker container, or (`runtime` `local`)
+/// a local daemon process, its directory and port.
+pub(crate) enum Recorded {
+    Docker(Docker, ContainerId, SandboxRequest),
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    Local {
+        directory: PathBuf,
+        id: ContainerId,
+        process: LocalProcess,
+        port: u16,
+        labels: Vec<(String, String)>,
+    },
+}
+/// Reads Sandbox `id`'s record's runtime.
+pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
+    if !matches!(
+        value.get_text("runtime"),
+        Some(crate::runtime::LOCAL | crate::runtime::NATIVE)
+    ) {
+        let (docker, container, request) = runtime(value)?;
+        return Ok(Recorded::Docker(docker, container, request));
+    }
+    local_record(args, id, value)
+}
+/// A local record is used only where this deployment puts that Sandbox:
+/// its directory must be exactly `<LAYERFS_LOCAL_DIR>/<prefix><project>-<id>`
+/// and named so, so a damaged, edited or stale record (another
+/// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere. A record
+/// without `boot` was written before boot ids were kept: its daemon is
+/// matched by id and start time as then, and never signalled.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
+    let directory = PathBuf::from(registry::text(value, "directory")?);
+    let expected = crate::local::directory(args, id)?;
+    if directory != expected
+        || expected.file_name().and_then(|n| n.to_str()) != Some(registry::text(value, "name")?)
+    {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "Sandbox {id}'s local record names {} (as {}), but this deployment puts it at \
+                 {}: the record is damaged or from another LAYERFS_LOCAL_DIR or prefix, so it is \
+                 neither used nor deleted. Remove what it left by hand, then delete \
+                 LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
+                directory.display(),
+                value.get_text("name").unwrap_or_default(),
+                expected.display(),
+                registry::text(args, "project")?
+            ),
+        ));
+    }
+    // with no placement (#428), a mount names its Sandbox: local and native
+    // Sandboxes are still never mixed, so a record is used only by a
+    // deployment of its own runtime
+    let wanted = match args.get("deploy").map(crate::runtime::native) {
+        Some(true) => crate::runtime::NATIVE,
+        _ => crate::runtime::LOCAL,
+    };
+    if value.get_text("runtime") != Some(wanted) {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "Sandbox {id} is a {} Sandbox, but this deployment is {wanted}                  (LAYERFS_SANDBOX): local and native Sandboxes are never mixed",
+                value.get_text("runtime").unwrap_or_default()
+            ),
+        ));
+    }
+    let number = |key: &str| {
+        value
+            .get_int(key)
+            .ok_or_else(|| refused("InvalidInput", format!("local Sandbox record {key}")))
+    };
+    let boot = match value.get_text("boot") {
+        None => None,
+        Some(hex) => Some(
+            (hex.len() == 32)
+                .then(|| u128::from_str_radix(hex, 16).ok())
+                .flatten()
+                .ok_or_else(|| refused("InvalidInput", "local Sandbox record boot"))?,
+        ),
+    };
+    let process = LocalProcess {
+        pid: u32::try_from(number("pid")?).map_err(failed)?,
+        start: registry::text(value, "start")?
+            .parse::<u64>()
+            .map_err(failed)?,
+        boot,
+    };
+    Ok(Recorded::Local {
+        directory,
+        id: ContainerId::parse(registry::text(value, "container")?).map_err(failed)?,
+        process,
+        port: u16::try_from(number("port")?).map_err(failed)?,
+        labels: labels(value)?,
+    })
+}
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn local_record(_: &SdkValue, id: &str, _: &SdkValue) -> Result<Recorded> {
+    Err(refused(
+        "Unsupported",
+        format!("Sandbox {id} is a local Sandbox (LAYERFS_SANDBOX=local), which needs Linux"),
+    ))
+}
+impl Recorded {
+    /// The runtime, observed running once (it starts nothing).
+    pub(crate) fn reopen(self) -> std::result::Result<Runtime, Box<WireFailure>> {
+        match self {
+            Self::Docker(docker, id, request) => {
+                Sandbox::reopen(docker, id, request).map(Runtime::Docker)
+            }
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Self::Local {
+                directory,
+                id,
+                process,
+                port,
+                labels,
+            } => local::Sandbox::reopen(directory, id, process, port, labels).map(Runtime::Local),
+        }
+    }
+    /// The runtime found stopped: only its one Delete is admitted.
+    pub(crate) fn stopped(self) -> Runtime {
+        match self {
+            Self::Docker(docker, id, request) => {
+                Runtime::Docker(Sandbox::stopped(docker, id, request))
+            }
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Self::Local {
+                directory,
+                id,
+                process,
+                port,
+                labels,
+            } => Runtime::Local(local::Sandbox::stopped(
+                directory, id, process, port, labels,
+            )),
+        }
+    }
 }
 pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let id = registry::text(args, "sandbox")?;
@@ -447,8 +643,14 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     }
     let project = registry::text(&value, "project")?;
     let container = registry::text(&value, "container")?;
-    let (docker, selector, request) = runtime(&value)?;
-    let runtime = Sandbox::reopen(docker, selector, request).map_err(|failure| {
+    let recorded = recorded(args, id, &value)?;
+    // a local daemon listens on this kernel's loopback; no other host reaches it
+    let host = match recorded {
+        Recorded::Docker(..) => crate::pool::daemon_host(args),
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        Recorded::Local { .. } => None,
+    };
+    let runtime = recorded.reopen().map_err(|failure| {
         if failure.container_gone() || failure.container_stopped() {
             gone(id, container, failure.container_stopped())
         } else {
@@ -457,7 +659,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     })?;
     let dial = crate::pool::Dial {
         endpoint: runtime.endpoint().map_err(failed)?,
-        host: crate::pool::daemon_host(args),
+        host,
         secret: bytes(&value, "secret")?,
         peer: bytes(&value, "peer")?,
         instance: bytes(&value, "instance")?,
@@ -470,13 +672,22 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         name: value.get_text("name").unwrap_or_default().to_owned(),
         directory,
         runtime,
-        identity: CommandIdentity { uid: 501, gid: 20 },
+        identity: recorded_identity(&value),
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
     });
     refresh(&state)?;
     Ok(state)
+}
+/// The command identity a Sandbox record names: a native Sandbox's is the
+/// user who started it (`uid`, `gid`); every other runs as 501:20.
+fn recorded_identity(value: &SdkValue) -> CommandIdentity {
+    let id = |key: &str| value.get_int(key).and_then(|n| u32::try_from(n).ok());
+    match (id("uid"), id("gid")) {
+        (Some(uid), Some(gid)) => CommandIdentity { uid, gid },
+        _ => CommandIdentity { uid: 501, gid: 20 },
+    }
 }
 /// Refresh shared executor/mount metadata without repeating an operation.
 pub(crate) fn refresh(state: &SandboxState) -> Result<()> {
