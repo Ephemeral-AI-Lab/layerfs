@@ -302,12 +302,13 @@ class ProductBoundaryTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             core = root / "core"
-            for path in (core / "crates/store/src/lib.rs", root / "sdk/js/native/src/lib.rs",
-                         root / "sdk/js/src/index.js"):
+            for path in (core / "crates/store/src/lib.rs", root / "api/binding/src/lib.rs",
+                         root / "api/agent/sdk/src/index.js"):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("")
             everything = [str(p.relative_to(root)) for p in production_files(core)]
-            self.assertIn("sdk/js/native/src/lib.rs", everything)
+            self.assertIn("api/binding/src/lib.rs", everything)
+            self.assertIn("api/agent/sdk/src/index.js", everything)
             self.assertEqual([str(p.relative_to(root))
                               for p in production_files(core, include_sdk=False)],
                              ["core/crates/store/src/lib.rs"])

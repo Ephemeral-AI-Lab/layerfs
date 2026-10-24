@@ -1,1 +1,0 @@
-{"arm":"layerfs","dir":"mknod","root":"/workspaces/1","ms":2116.052,"exitCode":0,"truncated":false,"tap":"layerfs-mknod-1792450086784.tap","stdout_bytes":1967,"stderr":"","started":["mknod/11.t"],"deferred":[]}

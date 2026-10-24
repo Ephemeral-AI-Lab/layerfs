@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"mkdir","root":"/tmp","ms":1982.035,"exitCode":0,"truncated":false,"tap":"sandbox-disk-mkdir-1792450067109.tap","stdout_bytes":6074,"stderr":"","started":["mkdir/00.t","mkdir/01.t","mkdir/02.t","mkdir/03.t","mkdir/04.t","mkdir/05.t","mkdir/06.t","mkdir/07.t","mkdir/08.t","mkdir/09.t","mkdir/10.t","mkdir/11.t","mkdir/12.t"],"deferred":[]}

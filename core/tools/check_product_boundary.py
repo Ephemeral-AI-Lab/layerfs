@@ -243,15 +243,15 @@ def production_files(core, include_sdk=True):
         files.update(path for path in (package / "sql").rglob("*.sql") if path.is_file())
     if not include_sdk:
         return sorted(files)
-    sdk = core.parent / "sdk" / "js"
-    files.update((sdk / "native" / "src").rglob("*.rs"))
-    for directory in (sdk / "src", sdk / "operator"):
+    api = core.parent / "api"
+    files.update((api / "binding" / "src").rglob("*.rs"))
+    for directory in (api / "agent" / "sdk" / "src", api / "agent" / "cli" / "src", api / "backend" / "src", api / "runtime" / "src"):
         files.update(directory.rglob("*.js"))
     return sorted(files)
 
 
 def main():
-    # --skip-sdk leaves sdk/js out of the scan; CI uses it (owner, 2026-10-23).
+    # --skip-sdk leaves api/ (binding and JS packages) out of the scan; CI uses it (owner, 2026-10-23).
     core = Path(__file__).resolve().parents[1]
     files = production_files(core, include_sdk="--skip-sdk" not in sys.argv[1:])
     failures = 0

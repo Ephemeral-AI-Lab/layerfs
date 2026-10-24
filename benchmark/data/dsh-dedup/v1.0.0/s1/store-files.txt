@@ -1,1 +1,0 @@
-./global/store.sqlite 100081664 195480 512

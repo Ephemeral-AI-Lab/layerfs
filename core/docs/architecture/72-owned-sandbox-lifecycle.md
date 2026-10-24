@@ -50,7 +50,8 @@ this path; the lock adds normal socket-feature transitives memoffset0.9.1 and
 autocfg1.5.1, with no new direct third-party crate or third-party modification.
 
 The listener waits for the actual complete stdout line from this fresh exact
-container with RestartPolicy=no and non-TTY json-file logging. Stdout line state
+container with RestartPolicy=no and non-TTY json-file logging (capped at two
+10 MB files since #423). Stdout line state
 spans frames/windows, stderr cannot satisfy the marker, and giant unrelated lines
 are discarded without collection. A marker inside an unfinished frame remains
 an observed marker fact, while truncated-frame/timeout failure prevents readiness

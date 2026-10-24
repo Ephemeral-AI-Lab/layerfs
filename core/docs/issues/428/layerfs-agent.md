@@ -95,8 +95,8 @@ try {
 
 1. Checks the name and options: the same project-name pattern and the same
    options as today's constructor (`trace`, `traceStep`, `storePath`,
-   `daemonHost`, `storePolicy`, and the `LAYERFS_*` settings with their
-   `DSH_LAYERFS_*` fallbacks).
+   `daemonHost`, `storePolicy`, and the `LAYERFS_*` settings; since
+   2026-10-24 (owner) no other prefix is read).
 2. Opens the project's Store: in this process on Linux, through the worker on
    macOS and Windows.
 3. Confirms the project exists.
@@ -334,10 +334,9 @@ what an agent may call.
 
 ## 6. Skill changes
 
-These edits land with the implementation, not before. dsh hands live agents
-this checkout's skill (`DSH_LAYERFS_SKILL`, from
-[env.js](../../../../dsh/packages/host/src/env.js)), so an edit that names a
-method before it exists breaks running agents.
+These edits land with the implementation, not before. An integration may hand
+live agents this checkout's skill (dsh does), so an edit that names a method
+before it exists breaks running agents.
 
 | File | Change |
 |---|---|
@@ -375,7 +374,7 @@ The rest of the conflict flow uses only agent methods (`fs.diff_files`,
   the transports and the agent methods; `@layerfs/backend` and
   `@layerfs/runtime` build on it. Each method is one file, written once; today's
   files already take the client as their first argument (`fork(client, name,
-  fromRef)` in [sdk/js/src/branch/fork.js](../../../../sdk/js/src/branch/fork.js)).
+  fromRef)` in [api/agent/sdk/src/branch/fork.js](../../../../api/agent/sdk/src/branch/fork.js)).
   The expected folders are in [layout.md](layout.md).
 - **Same version for all packages**, released together with `layerfs.node` and
   `layerfs-daemon`. `backend` and `runtime` depend on an exact `agent` version.
@@ -383,7 +382,7 @@ The rest of the conflict flow uses only agent methods (`fs.diff_files`,
   key when it loads and refuses to load a second time, so the same Store is
   never opened twice.
 - **Client lifecycle** (JavaScript only, in today's
-  [sdk/js/src/index.js](../../../../sdk/js/src/index.js)):
+  [api/agent/sdk/src/index.js](../../../../api/agent/sdk/src/index.js)):
   - `LayerFS.open` runs today's constructor checks, opens the Store with the
     existing `storeOpen`, then makes one project lookup on it, the same check
     every Store call makes today, so a missing project is `NoSuchProject` at
@@ -397,7 +396,7 @@ The rest of the conflict flow uses only agent methods (`fs.diff_files`,
   - `[Symbol.asyncDispose]` is installed when `Symbol.asyncDispose` exists.
 - **Native work:**
   - `create` exposes the existing Sandbox start in
-    [sdk/js/native/src/sandbox.rs](../../../../sdk/js/native/src/sandbox.rs)
+    [api/binding/src/sandbox.rs](../../../../api/binding/src/sandbox.rs)
     under the project's `ownership.lock`.
   - `close` adds a stop refused while Workspaces are mounted, reusing the
     reclaim path's stop and delete.

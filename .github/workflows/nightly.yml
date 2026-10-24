@@ -1,6 +1,8 @@
 # Nightly lane: the tests the fast lane leaves out. Report only; never a
 # required check. Selection: core/tools/ci_tests.py.
-#  - slow:  binaries measured at 5 s or more, run on the runner
+#  - slow:  binaries that take 5 s or more to run, plus the "heavy" ones that
+#           take 5 s or more of build CPU (left out of the push job), on the
+#           runner
 #  - mount: Linux-only layerfs-daemon targets that mount FUSE. Each binary runs
 #           in its own fresh container with /dev/fuse and SYS_ADMIN, as the
 #           existing native proofs do: forced_unavailable needs fusectl absent,
@@ -39,13 +41,17 @@ jobs:
           workspaces: core -> target
       - name: Build test binaries
         run: |
+          targets="$(python3 -B core/tools/ci_tests.py targets nightly)"
+          # shellcheck disable=SC2086 # one --test flag per word
           cargo +1.85.1 test --manifest-path core/Cargo.toml --locked \
-            --workspace --exclude layerfs-node --lib --bins --tests --no-run
-      - name: Run slow tests (whole run capped at 120 s)
+            --workspace --exclude layerfs-node $targets --no-run
+      - name: Run slow and heavy tests (whole run capped at 120 s)
         run: |
-          filter="$(python3 -B core/tools/ci_tests.py filter slow)"
+          targets="$(python3 -B core/tools/ci_tests.py targets nightly)"
+          filter="$(python3 -B core/tools/ci_tests.py filter nightly)"
+          # shellcheck disable=SC2086 # one --test flag per word
           timeout 120 cargo +1.85.1 nextest run --manifest-path core/Cargo.toml --locked \
-            --workspace --exclude layerfs-node --lib --bins --tests --profile ci -E "$filter"
+            --workspace --exclude layerfs-node $targets --profile ci -E "$filter"
 
   mount:
     runs-on: ubuntu-24.04

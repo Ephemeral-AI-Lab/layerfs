@@ -266,7 +266,7 @@ unacceptable read contention, a topology change needs explicit contracts and
 proof; it is not selected by this document. Measurements follow the
 [measurement workflow](agent-measurement-policy.md),
 [benchmark rules](benchmark_rules.md) and
-[core harness instructions](../../core/benchmark/fs-bench-pro/AGENTS.md), with
+[core harness instructions](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md), with
 frozen cases/cache states, pinned builds and retained actual outcomes.
 
 Related explanations: [sandbox cache design](sandbox-cache-design.md) /

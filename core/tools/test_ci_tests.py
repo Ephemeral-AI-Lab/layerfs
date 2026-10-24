@@ -12,8 +12,20 @@ class SelectionAgainstTheTree(unittest.TestCase):
     def setUpClass(cls):
         cls.meta = ci_tests.metadata()
 
-    def test_every_slow_target_exists(self):
-        self.assertEqual(ci_tests.missing_slow(self.meta), [])
+    def test_every_listed_target_exists_and_groups_do_not_overlap(self):
+        self.assertEqual(ci_tests.missing_listed(self.meta), [])
+        mount = set(ci_tests.mount_targets(self.meta))
+        self.assertFalse(set(ci_tests.SLOW) & set(ci_tests.HEAVY))
+        self.assertFalse(ci_tests.NIGHTLY & mount)
+
+    def test_fast_targets_leave_out_every_nightly_and_mount_target(self):
+        fast = set(ci_tests.fast_targets(self.meta))
+        self.assertFalse(fast & (ci_tests.NIGHTLY | set(ci_tests.mount_targets(self.meta))))
+        self.assertIn(("layerfs-overlay", "captured_namespace"), fast)
+        self.assertNotIn(("layerfs-workspace", "captured_namespace"), fast)
+        flags = ci_tests.test_flags(ci_tests.lane_targets("fast", self.meta)).split()
+        self.assertEqual(flags.count("--test"), len({name for _, name in fast}))
+        self.assertNotIn("mount_control", flags)
 
     def test_mount_group_is_the_linux_only_daemon_targets(self):
         mount = ci_tests.mount_targets(self.meta)
@@ -23,14 +35,15 @@ class SelectionAgainstTheTree(unittest.TestCase):
         self.assertNotIn("lane_merge", names)
         self.assertTrue(all(package == "layerfs-daemon" for package, _ in mount))
 
-    def test_fast_excludes_both_nightly_groups_and_slow_selects_only_slow(self):
+    def test_fast_filter_excludes_the_nightly_groups_and_nightly_selects_them(self):
         fast = ci_tests.filter_for("fast", self.meta)
-        slow = ci_tests.filter_for("slow", self.meta)
+        nightly = ci_tests.filter_for("nightly", self.meta)
         self.assertTrue(fast.startswith("not ("))
         self.assertIn("binary_id(layerfs-api::scale_lineage_cap)", fast)
+        self.assertIn("binary_id(layerfs-daemon::mount_control)", fast)
         self.assertIn("binary_id(layerfs-daemon::forced_unavailable)", fast)
-        self.assertNotIn("forced_unavailable", slow)
-        self.assertEqual(slow.count("binary_id("), len(ci_tests.SLOW))
+        self.assertNotIn("forced_unavailable", nightly)
+        self.assertEqual(nightly.count("binary_id("), len(ci_tests.NIGHTLY))
 
 
 class ExecutablesFromCargoJson(unittest.TestCase):

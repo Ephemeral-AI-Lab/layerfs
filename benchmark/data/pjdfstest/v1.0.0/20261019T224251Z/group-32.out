@@ -1,1 +1,0 @@
-{"arm":"layerfs","dir":"rename","root":"/workspaces/1","ms":68.008,"exitCode":0,"truncated":false,"tap":"layerfs-rename-1792450142434.tap","stdout_bytes":181,"stderr":"","started":["rename/22.t"],"deferred":["rename/23.t"]}

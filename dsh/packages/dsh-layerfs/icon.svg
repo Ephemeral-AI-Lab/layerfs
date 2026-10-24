@@ -1,8 +1,0 @@
-<svg width="36" height="36" viewBox="6 6 188 188" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <title>LayerFS</title>
-  <path d="M88.5 22 L111.5 22 L170 135 L148.5 135 L100 49.5 L51.5 135 L30 135 Z" fill="#93B1E0" stroke="#93B1E0" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M27 161 L57 161 L100 117 L143 161 L173 161" fill="none" stroke="#2F5BB5" stroke-width="10.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="100" cy="117" r="15.5" fill="#2F5BB5"/>
-  <circle cx="27" cy="161" r="15.5" fill="#2F5BB5"/>
-  <circle cx="173" cy="161" r="15.5" fill="#2F5BB5"/>
-</svg>

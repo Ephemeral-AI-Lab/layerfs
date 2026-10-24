@@ -17,8 +17,9 @@ in two, plus the runtime code that lives in the dsh Host:
   Workspaces and processes).
 - **`@layerfs/runtime`**: calls about one LayerFS installation (a LayerFS home):
   the worker, Docker, the list of projects, Init jobs, removal, one project's
-  live picture, events and the `lfs` CLI. It serves no HTTP
-  ([ui-frontend.md](ui-frontend.md)).
+  live picture and events. It serves no HTTP
+  ([ui-frontend.md](ui-frontend.md)) and has no CLI: the `layerfs` command
+  in `api/agent/cli/` is the agents' CLI (owner 2026-10-23).
 
 The name "operator" is retired.
 
@@ -145,7 +146,7 @@ container id from `$LAYERFS_HOME/<project>/sandboxes/<n>/container` and run
 so it also works on macOS and Windows, where the agent's process may have no
 Docker access.
 
-Today's handlers: [sdk/js/native/src/dispatch.rs](../../../../sdk/js/native/src/dispatch.rs)
+Today's handlers: [api/binding/src/dispatch.rs](../../../../api/binding/src/dispatch.rs)
 (process calls) and [layerfs-daemon/src/operator/dispatch.rs](../../../crates/layerfs-daemon/src/operator/dispatch.rs)
 (Workspace calls).
 
@@ -192,6 +193,10 @@ await runtime.project.remove(name, { confirm: name, stopSandboxes });
 
 await runtime.sandbox.reclaim(project);                    // ← the side effect of operator.sandbox.list
 await runtime.sandbox.clean_leftovers(names);
+await runtime.sandbox.list();                              // this home's Sandbox containers with scratch bytes (#423)
+await runtime.sandbox.sweep();                             // reclaim every project's stopped Sandboxes; also once at open
+await runtime.volume.list();                               // every volume with size, owner and use
+await runtime.volume.remove(names);                        // this home's orphan volumes only
 
 runtime.events.subscribe({ project, since });              // + live calls from every process
 ```
@@ -202,15 +207,20 @@ runtime.events.subscribe({ project, since });              // + live calls from 
 | `worker.start`, `worker.restart` | start a stopped or missing worker; restart a running one | dsh `box.js`, `windows/host.js`, `POST /layerfs/runtime/store[/restart]` |
 | `project.list` | every project in the home | dsh `bindings.projects()` |
 | `project.start_init`, `project.get_init` | run Init as a background job in the runtime's process, and read its step and counts | dsh `init.js`, `jobs.js`; native `operator.project.progress` |
-| `project.get_state` | one project's live picture: `backend.store.project.get_history`, the agent's `project.list_sandboxes` and `sandbox.list_workspaces`, and `backend.daemon.workspace.get_storage`, joined under one version token | [sdk/js/operator/inspect/snapshot.js](../../../../sdk/js/operator/inspect/snapshot.js) |
+| `project.get_state` | one project's live picture: `backend.store.project.get_history`, the agent's `project.list_sandboxes` and `sandbox.list_workspaces`, and `backend.daemon.workspace.get_storage`, joined under one version token | [api/runtime/src/project/state.js](../../../../api/runtime/src/project/state.js) |
 | `project.remove` | delete a project's volume and records, optionally stopping its Sandboxes first | dsh `remove.js` |
 | `sandbox.reclaim` | drop records of Sandboxes whose containers are gone or stopped | the reclaim inside today's `operator.sandbox.list` |
 | `sandbox.clean_leftovers` | remove named stopped containers | dsh `runtime.js`, `POST /layerfs/runtime/leftovers` |
+| `sandbox.list` | this home's Sandbox containers: state, ports, image and `scratch` (writable-layer bytes) | dsh `runtime.js` `containersOf` and `nameImages` (#423) |
+| `sandbox.sweep` | `sandbox.reclaim` for every project with an exited or dead Sandbox; run once at `open` unless `sweep: false` | none: a stopped Sandbox waited for its project's next mount (#423) |
+| `volume.list`, `volume.remove` | every volume with size, owner (`this`, `other`, `unknown`) and use; remove this home's orphans | none (#423) |
 | `events.subscribe` | each call from every process in this home, as trace-line fields plus the actor | dsh reads trace files in `collector.js` |
 
 Modules, not methods: the platform folders and the worker program
-([section 4.4](#44-platforms)), and `@layerfs/runtime/cli` (the `lfs`
-command).
+([section 4.4](#44-platforms)). The `lfs` command that was
+`@layerfs/runtime/cli` is retired (owner 2026-10-23): agents use the
+`layerfs` command in `api/agent/cli/`, one `@layerfs/agent` call each, with no short
+forms.
 
 ### 4.3 Safety
 
@@ -244,7 +254,7 @@ wire format.
 | Docker engine for Sandboxes | `/var/run/docker.sock` | Docker Desktop or colima | the distribution's own Docker Engine |
 | Path mapping | none | the host path, bind-mounted into the container | `wslpath` |
 | Where Init runs | in-process, into the project's volume | its own container with the source folder mounted | in the worker, reading the folder through WSL |
-| Native build | `LAYERFS_NATIVE`, else `sdk/js/native/layerfs.node` | bundle folder | sealed bundle, checked against `manifest.json` |
+| Native build | `LAYERFS_NATIVE`, else `api/binding/layerfs.node` | bundle folder | sealed bundle, checked against `manifest.json` |
 
 **The interface.** Every platform folder exports the same object:
 
@@ -266,10 +276,13 @@ runs Store calls in-process; there is no worker"). Doing nothing silently would
 hide a misconfigured deployment.
 
 **Choosing the transport.** `@layerfs/agent` picks its own binding, because it
-can't depend on runtime: the real addon on Linux, the worker client elsewhere
-(`transport/worker_client.js`, the other end of runtime's `worker/server.js`).
-The worker client connects to the endpoint that runtime's platform launcher
-writes; the endpoint is a setting of its own. `LAYERFS_NATIVE` only ever names a real
+can't depend on runtime: the worker client (`transport/worker_client.js`, the
+other end of runtime's `worker/server.js`) when a worker endpoint is named,
+else the real addon in the caller's process. The worker client connects to the
+endpoint that runtime's platform launcher writes; the endpoint is a setting of
+its own (`LAYERFS_WORKER_ENDPOINT`, or runtime's `useWorker(endpoint)`). Only
+the macOS and Windows platforms start a worker. Any integration may name the
+endpoint; LayerFS checks no integration name (owner, 2026-10-24). `LAYERFS_NATIVE` only ever names a real
 addon again; today dsh points it at a stand-in binding
 ([port/sdk.js](../../../../dsh/packages/host/src/port/sdk.js),
 [windows/sdk.js](../../../../dsh/packages/host/src/windows/sdk.js)) in every
@@ -293,10 +306,13 @@ Removed, because `transport/index.js` picks the binding: `port/sdk.js` (8),
 | `LAYERFS_NATIVE` pointed at a stand-in | `LAYERFS_NATIVE` names the real addon only; the worker endpoint is its own setting |
 | macOS build record in `<home>/.layerfs-store.json`; Windows `manifest.json` hashes | one rule: the worker refuses a bundle whose `manifest.json` hashes don't match |
 
-Renaming the container breaks running installs once. The Host already removes
-older-named `dsh-layerfs-box-<hash>` containers when it starts; the same
-cleanup replaces `layerfs-store` with `<prefix>worker`, and only while no run is
-live.
+Renaming the container broke running installs once. For a while, a
+confirmed `worker.start` or `worker.restart` stopped and removed the older
+`<prefix>store` container before starting `<prefix>worker`. That upgrade path is
+retired (owner, 2026-10-24): `worker.start()` takes no options and stops or
+removes no other container, `worker.restart({ confirm: "restart" })` only
+restarts the worker, and `status()` no longer reports an older Store
+container.
 
 **What stays the same:** loopback only, a random secret, versioned frames, a
 `ProtocolError` on a codec mismatch, one attempt per call, a lost reply
@@ -306,7 +322,8 @@ with no calls in flight. The Windows failure record
 until Init failures have one shared record.
 
 **Open for the owner** ([section 8](#8-open-questions)): whether Linux may
-opt in to the worker, and whether this route serves every integration.
+opt in to the worker. The route serves every integration on macOS and Windows
+(owner, 2026-10-24).
 
 ## 5. Protocol names
 
@@ -335,7 +352,7 @@ read the same:
   names instead.
 - Old trace files keep the old names. A viewer that replays them needs this
   table as an old-to-new map.
-- The dispatch tables that change: [sdk/js/native/src/dispatch.rs](../../../../sdk/js/native/src/dispatch.rs),
+- The dispatch tables that change: [api/binding/src/dispatch.rs](../../../../api/binding/src/dispatch.rs),
   [layerfs-store-service/src/operator/dispatch.rs](../../../crates/layerfs-store-service/src/operator/dispatch.rs),
   [layerfs-daemon/src/operator/dispatch.rs](../../../crates/layerfs-daemon/src/operator/dispatch.rs),
   and the workers, which forward names unchanged.
@@ -359,10 +376,10 @@ count `.mjs` files, so `port/call.mjs`, `frames.mjs`, `run.mjs` and
 | `remove.js` | 47 | `runtime.project.remove` |
 | `runtime.js` | 207 | `runtime.status`, `runtime.sandbox.clean_leftovers` |
 | `trees.js`, `reads.js`, `storage.js` | 199 | stay in dsh ([ui-frontend.md §6](ui-frontend.md#6-dsh-as-the-worked-example)); `asCommit` in `reads.js` becomes `backend.store.project.get_comparable` |
-| `lfs.js` | 119 | `@layerfs/runtime/cli` |
+| `lfs.js` | 119 | retired; the `layerfs` command in `api/agent/cli/` replaces it (owner 2026-10-23) |
 | `layerfs-client.js` | 76 | `runtime/src/clients.js` (per-project clients), using agent's public API only |
 
-The dsh-specific files stay in the dsh adapter: `index.js`, `binding.js`,
+The dsh-specific files stay in dsh-layerfs: `index.js`, `binding.js`,
 `collector.js`, `env.js`, `records.js`, `route.js` (112), and the UI reads
 above.
 `migrate.js` (44) is #373's one-time upgrade and is dropped when the code moves.
@@ -394,12 +411,11 @@ agents this checkout's skills.
    (dsh README, step 4). `platform/linux` could also offer the macOS launcher
    as an opt-in (`worker: "docker"`), so the host process needs no root. That
    widens `AGENTS.md`'s "Linux: in-process only" rule.
-5. **The worker route for every integration:** the platform folders make the
-   worker available to any integration that uses `@layerfs/runtime`. Today
-   `AGENTS.md` allows it for dsh only (macOS 2026-10-20, Windows 2026-10-22);
-   #382 and #425 ask for it ([README.md, Open decisions](README.md#open-decisions)).
-   Until that's decided, the worker can ship with a check that only the dsh
-   adapter turns it on.
+5. **Closed: the worker route for every integration** (owner, 2026-10-24).
+   The route is open to any integration on macOS and Windows. A named endpoint
+   alone opens it; there is no adapter setting or check. It was first allowed
+   for dsh only (macOS 2026-10-20, Windows 2026-10-22); #382 and #425 asked
+   for it ([README.md, Open decisions](README.md#open-decisions)).
 6. **`daemon` as a name:** background processes run through the Sandbox's
    launcher, not the daemon. If that reads as wrong, `backend.sandbox.*` would
    describe all seven calls; it would sit beside the agent's

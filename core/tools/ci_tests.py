@@ -2,20 +2,29 @@
 """Test selection for the non-blocking GitHub CI (.github/workflows/).
 
 One place decides which core test binaries run on every push and which wait for
-the nightly run. Nothing here blocks a push or merge.
+the nightly run. Nothing here blocks a push or merge. The push job builds only
+the targets it runs: building, not running, is what its time goes to.
 
-  fast   every default (non-ignored) test except the two nightly groups
-  slow   binaries measured at 5 s or more (macOS host, 2026-10-23, one sample)
-  mount  layerfs-daemon targets that are Linux-only (`#![cfg(target_os =
-         "linux")]`): they mount FUSE and need /dev/fuse, SYS_ADMIN and a
-         fresh container each (forced_unavailable needs fusectl unmounted)
+  fast     every default (non-ignored) test except the three nightly groups
+  slow     binaries that take 5 s or more to run (macOS host, 2026-10-23)
+  heavy    binaries that take 5 s or more of build CPU (moved by the owner,
+           2026-10-23)
+  mount    layerfs-daemon targets that are Linux-only (`#![cfg(target_os =
+           "linux")]`): they mount FUSE and need /dev/fuse, SYS_ADMIN and a
+           fresh container each (forced_unavailable needs fusectl unmounted)
+  nightly  slow and heavy, run together on the nightly runner
 
 Usage (from the repository root):
-  ci_tests.py filter fast|slow    nextest filterset expression
-  ci_tests.py mount-targets       `--test NAME` arguments for cargo
-  ci_tests.py executables         read `cargo test --no-run --message-format
-                                  json` on stdin, print `<dir>\\t<exe>` for each
-                                  mount test binary
+  ci_tests.py filter fast|nightly    nextest filterset expression
+  ci_tests.py targets fast|nightly   `--test NAME` arguments for cargo
+  ci_tests.py mount-targets          `--test NAME` arguments for cargo
+  ci_tests.py executables            read `cargo test --no-run --message-format
+                                     json` on stdin, print `<dir>\\t<exe>` for
+                                     each mount test binary
+
+`--test NAME` selects every package's target of that name. captured_namespace
+exists in layerfs-overlay (fast) and layerfs-workspace (heavy), so the push job
+also builds the heavy one; the filter keeps it from running.
 """
 import json
 import subprocess
@@ -27,7 +36,7 @@ MANIFEST = ROOT / "core" / "Cargo.toml"
 LINUX_ONLY = '#![cfg(target_os = "linux")]'
 MOUNT_PACKAGE = "layerfs-daemon"
 
-# (package, test target): seconds on the macOS host, 2026-10-23.
+# (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
     ("layerfs-api", "scale_lineage_cap"): 24.3,
     ("layerfs-api", "sdk_merge_scale"): 23.8,
@@ -38,6 +47,30 @@ SLOW = {
     ("layerfs-api", "history_diff_oracle"): 6.0,
     ("layerfs-api", "sdk_text_scan"): 5.9,
 }
+
+# (package, test target): build CPU seconds in the cold mold build of CI run
+# 39924955411 (4-CPU runner, test profile without debuginfo).
+HEAVY = {
+    ("layerfs-daemon", "mount_control"): 20.6,
+    ("layerfs-daemon", "store_commit"): 19.1,
+    ("layerfs-workspace", "captured_namespace_cursor"): 9.3,
+    ("layerfs-workspace", "captured_namespace_holds"): 9.0,
+    ("layerfs-workspace", "captured_namespace_perturbed"): 9.0,
+    ("layerfs-workspace", "captured_namespace_custody"): 9.0,
+    ("layerfs-workspace", "captured_namespace_states"): 8.4,
+    ("layerfs-workspace", "captured_namespace_rebound"): 8.3,
+    ("layerfs-workspace", "captured_namespace_order"): 7.2,
+    ("layerfs-workspace", "captured_namespace_fragments"): 6.5,
+    ("layerfs-workspace", "captured_namespace"): 6.4,
+    ("layerfs-workspace", "directory_links_install"): 6.0,
+    ("layerfs-workspace", "captured_namespace_metadata"): 6.0,
+    ("layerfs-workspace", "captured_namespace_inline"): 5.7,
+    ("layerfs-project", "backed_acquisition"): 5.5,
+    ("layerfs-project", "complete_root"): 5.1,
+    ("layerfs-content", "filesystem_sorted_localized"): 5.0,
+}
+
+NIGHTLY = set(SLOW) | set(HEAVY)
 
 
 def metadata():
@@ -67,21 +100,38 @@ def mount_targets(meta):
     return sorted(found)
 
 
-def missing_slow(meta):
+def fast_targets(meta):
+    left_out = NIGHTLY | set(mount_targets(meta))
+    return sorted({(package, name) for package, name, _ in test_targets(meta)} - left_out)
+
+
+def missing_listed(meta):
     known = {(package, name) for package, name, _ in test_targets(meta)}
-    return sorted(set(SLOW) - known)
+    return sorted(NIGHTLY - known)
 
 
 def ids(pairs):
     return " | ".join(f"binary_id({package}::{name})" for package, name in sorted(pairs))
 
 
-def filter_for(lane, meta):
-    if lane == "slow":
-        return ids(SLOW)
+def lane_targets(lane, meta):
     if lane == "fast":
-        return f"not ({ids(set(SLOW) | set(mount_targets(meta)))})"
-    raise SystemExit(f"unknown lane {lane!r}: use fast or slow")
+        return fast_targets(meta)
+    if lane == "nightly":
+        return sorted(NIGHTLY)
+    raise SystemExit(f"unknown lane {lane!r}: use fast or nightly")
+
+
+def filter_for(lane, meta):
+    if lane == "nightly":
+        return ids(NIGHTLY)
+    if lane == "fast":
+        return f"not ({ids(NIGHTLY | set(mount_targets(meta)))})"
+    raise SystemExit(f"unknown lane {lane!r}: use fast or nightly")
+
+
+def test_flags(pairs):
+    return " ".join(f"--test {name}" for name in sorted({name for _, name in pairs}))
 
 
 def executables(lines, mount, meta):
@@ -106,13 +156,15 @@ def main(argv):
     if not argv:
         raise SystemExit(__doc__)
     meta = metadata()
-    gone = missing_slow(meta)
+    gone = missing_listed(meta)
     if gone:
-        raise SystemExit(f"SLOW names targets that no longer exist: {gone}")
+        raise SystemExit(f"SLOW or HEAVY names targets that no longer exist: {gone}")
     if argv[0] == "filter" and len(argv) == 2:
         print(filter_for(argv[1], meta))
+    elif argv[0] == "targets" and len(argv) == 2:
+        print(test_flags(lane_targets(argv[1], meta)))
     elif argv[0] == "mount-targets":
-        print(" ".join(f"--test {name}" for _, name in mount_targets(meta)))
+        print(test_flags(mount_targets(meta)))
     elif argv[0] == "executables":
         for directory, exe in executables(sys.stdin, mount_targets(meta), meta):
             print(f"{directory}\t{exe}")

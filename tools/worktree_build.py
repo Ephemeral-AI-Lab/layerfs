@@ -96,12 +96,45 @@ def cargo(args):
 
 
 def copy_sdk(root, bundle):
-    destination = bundle / "sdk/js"
+    """The JavaScript packages and the `layerfs` command, in the repository's
+    own layout (#428): api/package.json, api/agent/sdk (@layerfs/agent),
+    api/backend, api/runtime and api/agent/cli. A bundle holds no symlink, so
+    each package resolves by name through a re-export shim under
+    api/node_modules/@layerfs/<name> that imports its one real copy."""
+    destination = bundle / "api"
     destination.mkdir(parents=True)
-    for child in ("src", "operator", "test"):
-        shutil.copytree(root / "sdk/js" / child, destination / child,
-                        ignore=shutil.ignore_patterns("node_modules", "__pycache__", "target"))
-    shutil.copy2(root / "sdk/js/package.json", destination / "package.json")
+    ignore = shutil.ignore_patterns("node_modules", "__pycache__", "target")
+    packages = [destination / folder for folder in ("agent/sdk", "backend", "runtime")]
+    for package in packages:
+        shutil.copytree(root / "api" / package.relative_to(destination), package, ignore=ignore)
+    shutil.copy2(root / "api/package.json", destination / "package.json")
+    for package in sorted(packages):
+        shim(destination / "node_modules", package)
+    if (root / "api/agent/cli/package.json").is_file():
+        cli = destination / "agent/cli"
+        cli.mkdir()
+        for folder in ("src", "test"):
+            if (root / "api/agent/cli" / folder).is_dir():
+                shutil.copytree(root / "api/agent/cli" / folder, cli / folder, ignore=ignore)
+        shutil.copy2(root / "api/agent/cli/package.json", cli / "package.json")
+        shim(cli / "node_modules", destination / "agent/sdk")
+
+
+def shim(node_modules, package):
+    """node_modules/<name>: re-exports each of `package`'s JavaScript exports."""
+    manifest = json.loads((package / "package.json").read_text())
+    name = manifest["name"]
+    shim = node_modules / name
+    shim.mkdir(parents=True)
+    exports = {}
+    for subpath, target in manifest.get("exports", {}).items():
+        if not target.endswith(".js"):
+            continue
+        file = "index.js" if subpath == "." else subpath.removeprefix("./") + ".js"
+        real = os.path.relpath(package / target, shim)
+        (shim / file).write_text(f'export * from "{real}";\n')
+        exports[subpath] = f"./{file}"
+    (shim / "package.json").write_text(json.dumps({"name": name, "type": "module", "exports": exports}, indent=2) + "\n")
 
 
 def verify_bundle(path):

@@ -1,0 +1,18 @@
+{
+  "name": "@layerfs/backend",
+  "version": "1.1.0",
+  "description": "LayerFS backend calls about one opened project: its Store (committed history and storage) and its Sandboxes' daemons (live Workspaces and processes)",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@layerfs/agent": "1.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

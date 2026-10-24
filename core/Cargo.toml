@@ -1,4 +1,4 @@
-# Independent replacement-product workspace (LayerFS v1.0.0).
+# Independent replacement-product workspace (LayerFS v1.1.0).
 #
 # The reference workspace at the repository root keeps its own members, lockfile
 # and target directory; `core/` is excluded there. The candidate components under
@@ -26,7 +26,7 @@ members = [
     # Loopback NFSv3 export over the same kernel request ports (native macOS route).
     "crates/layerfs-nfs",
     # Node binding of the JavaScript SDK (owner-approved napi-rs, 2026-10-15).
-    "../sdk/js/native",
+    "../api/binding",
 ]
 exclude = [
     "vendor/fuser-0.18.0",
@@ -34,7 +34,7 @@ exclude = [
 
 [workspace.package]
 edition = "2021"
-version = "1.0.0"
+version = "1.1.0"
 rust-version = "1.85"
 license = "MIT"
 

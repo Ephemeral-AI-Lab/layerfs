@@ -1,8 +1,0 @@
-setup	2026-10-19T22:42:59Z	2026-10-19T22:43:00Z	exit=0	load=15.31
-case-c1-sandbox-disk	2026-10-19T22:51:58Z	2026-10-19T22:52:02Z	exit=0	load=5.94
-case-c1-layerfs	2026-10-19T22:52:02Z	2026-10-19T22:52:06Z	exit=0	load=5.94
-case-c2-sandbox-disk	2026-10-19T22:52:12Z	2026-10-19T22:52:17Z	exit=0	load=6.24
-case-c2-layerfs	2026-10-19T22:52:17Z	2026-10-19T22:52:27Z	exit=0	load=6.22
-capture-commit	2026-10-19T22:52:32Z	2026-10-19T22:52:48Z	exit=0	load=6.43
-capture-verify	2026-10-19T22:52:48Z	2026-10-19T22:53:01Z	exit=0	load=6.68
-teardown	2026-10-19T22:53:07Z	2026-10-19T22:53:08Z	exit=0	load=6.92

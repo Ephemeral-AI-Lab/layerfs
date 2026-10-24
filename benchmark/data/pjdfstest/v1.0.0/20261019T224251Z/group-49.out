@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"utimensat","root":"/tmp","ms":334.938,"exitCode":0,"truncated":false,"tap":"sandbox-disk-utimensat-1792450275232.tap","stdout_bytes":4672,"stderr":"","started":["utimensat/00.t","utimensat/02.t","utimensat/03.t","utimensat/04.t","utimensat/05.t","utimensat/06.t","utimensat/07.t","utimensat/08.t","utimensat/09.t"],"deferred":["utimensat/01.t"]}

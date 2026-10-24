@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-api"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "blake3",
  "layerfs-bridge",
@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-bridge"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "layerfs-content",
  "layerfs-history",
@@ -572,7 +572,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-content"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "blake3",
  "layerfs-telemetry",
@@ -580,7 +580,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-daemon"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "blake3",
  "layerfs-api",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-fuse"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "fuser",
  "layerfs-content",
@@ -613,7 +613,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-history"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "blake3",
  "layerfs-content",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-nfs"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "layerfs-bridge",
  "layerfs-content",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-node"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "layerfs-api",
  "layerfs-bridge",
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-overlay"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "blake3",
  "nix",
@@ -664,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-persistence"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "blake3",
  "layerfs-content",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-project"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "layerfs-content",
  "layerfs-history",
@@ -689,14 +689,14 @@ dependencies = [
 
 [[package]]
 name = "layerfs-sandbox"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "nix",
 ]
 
 [[package]]
 name = "layerfs-storage"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "blake3",
  "layerfs-content",
@@ -707,7 +707,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-store-service"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "layerfs-bridge",
  "layerfs-content",
@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-telemetry"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "libproc",
  "nix",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-workspace"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "layerfs-content",
  "layerfs-daemon",
