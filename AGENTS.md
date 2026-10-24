@@ -308,9 +308,10 @@ remain binding; moving them out of this file does not weaken them.
 - **CI reports; it never gates (owner, 2026-10-23).** GitHub Actions runs a
   fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
   guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
-  FUSE mount tests). [core/tools/ci_tests.py](core/tools/ci_tests.py) decides
-  which tests go in which lane. Neither is a required check, and nothing runs
-  before a push. Do not wait for CI, and do not treat a green run as
+  FUSE mount tests); `format.yml` checks the Ruff formatting below.
+  [core/tools/ci_tests.py](core/tools/ci_tests.py) decides which tests go in
+  which lane. None is a required check, and nothing runs before a push. Do
+  not wait for CI, and do not treat a green run as
   verification of your change: verify the changed scope yourself with
   [core checks](core/AGENTS.md#checks-and-completion) and report checks/gaps.
   There is still no pre-push gate: `tools/preflight.sh` stays retired; do not
@@ -347,6 +348,9 @@ remain binding; moving them out of this file does not weaken them.
 - New core/application production files obey the 999-line ceiling and 200-line
   declaration/delegation ceiling for `lib.rs`/`mod.rs`. Product-only source,
   external tests and guard coverage are detailed in the core guide.
+- Format changed Python tools with Ruff; `ruff.toml` names the pinned version,
+  scope and command. `format.yml` reports formatting drift after a push;
+  nothing runs before one.
 - Update affected source architecture/API documentation with implementation
   changes. Keep proposal, research, implemented and measured claims distinct.
 
