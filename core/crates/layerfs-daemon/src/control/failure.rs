@@ -164,6 +164,8 @@ fn storage(error: &StorageError) -> ControlCode {
         ControlCode::Unknown
     } else if matches!(error, StorageError::Busy) {
         ControlCode::Busy
+    } else if error.is_capacity_refusal() {
+        ControlCode::Capacity
     } else {
         ControlCode::Failed
     }

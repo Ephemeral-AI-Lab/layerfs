@@ -8,6 +8,8 @@ pub(crate) use store::config;
 pub(crate) use store::handles;
 mod history;
 pub use backend::sqlite::connection::{ConnectionProfile, SqlWork};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use backend::sqlite::headroom::STORE_HEADROOM_BYTES;
 pub use backend::sqlite::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
 pub use backend::sqlite::thread_work::thread_work;
