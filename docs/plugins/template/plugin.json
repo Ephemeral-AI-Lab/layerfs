@@ -16,7 +16,7 @@
       "version": "0.1.0",
       "commit": "<40-character commit SHA of this version in your repository>",
       "date": "<YYYY-MM-DD>",
-      "layerfs": { "version": "v1.0.0", "commit": "<40-character LayerFS commit SHA you tested with>" },
+      "layerfs": { "version": "v1.1.0", "commit": "<40-character LayerFS commit SHA you tested with>" },
       "notes": "<One line: what this version adds.>"
     }
   ]

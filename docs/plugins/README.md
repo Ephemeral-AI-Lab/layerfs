@@ -154,7 +154,7 @@ Each entry in `versions`:
 | `version` | yes | the plugin's version, `x.y.z` |
 | `commit` | yes | the full 40-character commit SHA of that version in your repository |
 | `date` | yes | `YYYY-MM-DD` |
-| `layerfs.version` | yes | the LayerFS release at or before the commit below, such as `v1.0.0` |
+| `layerfs.version` | yes | the LayerFS release at or before the commit below, such as `v1.1.0` |
 | `layerfs.commit` | yes | the full 40-character LayerFS commit SHA you tested it with: `commit` in your repository's `layerfs.json`, which the build prompt writes |
 | `notes` | no | one line: what changed |
 
