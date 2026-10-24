@@ -156,7 +156,9 @@ const page = await layerfs.fs.list("work", "/src");
 
 Describes one path.
 
-**Returns:** `{ kind: "ok", snapshot, root, path, type, inode, size }`.
+**Returns:** `{ kind: "ok", snapshot, root, path, type, inode, size }`. `size` is
+a file's length in bytes, a symlink's target length (as `lstat` reports it in a
+mounted Workspace) and 0 for a folder.
 
 ```js
 const exists = await layerfs.fs.stat("work", "/package.json").then(() => true, (e) => { if (isRefusal(e, "NoSuchPath")) return false; throw e; });
