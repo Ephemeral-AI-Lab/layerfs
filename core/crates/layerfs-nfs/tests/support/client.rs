@@ -66,6 +66,9 @@ fn attr(reader: &mut Reader<'_>) -> Attr {
 fn post_op(reader: &mut Reader<'_>) -> Option<Attr> {
     reader.bool().unwrap().then(|| attr(reader))
 }
+/// A LOOKUP answer: its status, the object's handle and attributes when
+/// found, and the directory's attributes.
+pub type Lookup = (u32, Option<(Vec<u8>, Attr)>, Option<Attr>);
 /// One READDIR/READDIRPLUS entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entry {
@@ -174,6 +177,23 @@ impl Client {
         let handle = reader.opaque(64).unwrap().to_vec();
         let attributes = post_op(&mut reader).expect("LOOKUP returns object attributes");
         Ok((handle, attributes))
+    }
+    /// LOOKUP with both halves of its answer: the status, the object's
+    /// handle and attributes when found, and the directory's attributes.
+    pub fn lookup_with_directory(&mut self, directory: &[u8], name: &[u8]) -> Lookup {
+        let mut arguments = Writer::new();
+        arguments.opaque(directory).opaque(name);
+        let (status, rest) = self.nfs(3, &arguments);
+        let mut reader = Reader::new(&rest);
+        let object = (status == OK).then(|| {
+            let handle = reader.opaque(64).unwrap().to_vec();
+            (
+                handle,
+                post_op(&mut reader).expect("LOOKUP returns object attributes"),
+            )
+        });
+        let parent = post_op(&mut reader);
+        (status, object, parent)
     }
     pub fn access(&mut self, handle: &[u8], requested: u32) -> Result<u32, u32> {
         let mut arguments = Writer::new();

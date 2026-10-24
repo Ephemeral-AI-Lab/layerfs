@@ -4,7 +4,7 @@
 //! [`crate::changing`]. A read-only export answers every changing procedure
 //! `NFS3ERR_ROFS` with its empty weak cache consistency data.
 use crate::{
-    attributes::{access, Status},
+    attributes::{access, post_op_maybe, Status},
     change::Tickets,
     changing,
     directory::{list, Listing},
@@ -91,15 +91,23 @@ pub fn call(
         3 => {
             let parent = handle(kernel, arguments).map_err(garbage)?;
             let name = arguments.opaque(NAME_LIMIT).map_err(garbage)?;
+            // Both answers carry the directory's attributes (RFC 1813
+            // LOOKUP3resok and LOOKUP3resfail), so the client keeps its
+            // cached view of the directory without a GETATTR of its own.
+            let directory = parent
+                .as_ref()
+                .ok()
+                .and_then(|parent| kernel.getattr(*parent).ok());
             match parent.and_then(|parent| kernel.lookup(parent, name)) {
                 Ok(stat) => {
                     out.u32(Status::Ok.code());
                     out.opaque(&kernel.encode(stat.serial));
                     kernel.identity().post_op(out, &stat);
-                    out.bool(false);
+                    post_op_maybe(kernel.identity(), out, directory.as_ref());
                 }
                 Err(status) => {
-                    out.u32(status.code()).bool(false);
+                    out.u32(status.code());
+                    post_op_maybe(kernel.identity(), out, directory.as_ref());
                 }
             }
             Ok(())

@@ -307,7 +307,7 @@ at once.
 
 `LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE` and `_FLUSH` replace the daemon's
 helper commands (`{port}` and `{dir}` are filled in). The default mount is
-`/sbin/mount_nfs -o vers=3,tcp,port={port},mountport={port},locallocks,nfc,actimeo=60,rsize=131072,wsize=131072,soft,intr,timeo=20,retrans=6,nobrowse 127.0.0.1:/ {dir}`.
+`/sbin/mount_nfs -o vers=3,tcp,port={port},mountport={port},locallocks,nfc,actimeo=60,rsize=131072,wsize=131072,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse 127.0.0.1:/ {dir}`.
 `LAYERFS_NFS_REFRESH=0` turns the refresh after an install off (the client
 then revalidates within `actimeo`, 60 s). Only these `LAYERFS_` names are
 read; an integration that can set only its own prefixed names maps them

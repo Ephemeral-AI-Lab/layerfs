@@ -131,6 +131,17 @@ fn cookies_refusals_and_stale_handles() {
     );
     // Missing names, a foreign handle and every changing procedure.
     assert_eq!(client.lookup(&root, b"absent").map(|_| ()), Err(NOENT));
+    // Both LOOKUP answers carry the directory's attributes.
+    let root_attr = client.getattr(&root).unwrap();
+    let (status, found, directory) = client.lookup_with_directory(&root, b"many");
+    assert_eq!(
+        (status, found.map(|(handle, _)| handle)),
+        (0, Some(many.clone()))
+    );
+    assert_eq!(directory, Some(root_attr.clone()));
+    let (status, found, directory) = client.lookup_with_directory(&root, b"absent");
+    assert_eq!((status, found), (NOENT, None));
+    assert_eq!(directory, Some(root_attr));
     // Not a handle this export issues: wrong version or length. A version-1
     // handle of another engine mount is stale (its key is gone); a forged
     // tag under this mount is refused (see protocol.rs).
