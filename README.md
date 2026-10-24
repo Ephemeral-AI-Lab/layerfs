@@ -6,6 +6,14 @@
 
 <p align="center"><strong>Ephemeral Workspaces. Durable Shared History.</strong></p>
 
+<!-- gitreels:start -->
+<p align="center">
+  <a href="https://gitreels.com/Ephemeral-AI-Lab/layerfs"><img src="https://gitreels.com/Ephemeral-AI-Lab/layerfs.webp" alt="Ephemeral-AI-Lab/layerfs in 15 seconds" width="100%"></a>
+  <br>
+  <a href="https://gitreels.com"><img src="https://gitreels.com/badge.svg" alt="Made with GitReels" height="24"></a>
+</p>
+<!-- gitreels:end -->
+
 <p align="center">
   LayerFS is the substrate under your agents. Each one mounts a complete, writable
   Workspace over shared committed history, does its work, commits what it changed,
