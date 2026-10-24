@@ -42,8 +42,7 @@ class TelemetryReportTest(unittest.TestCase):
                 host.append(event)
                 if daemon_name:
                     daemon.append(self.event(2, 1, daemon_name, 10))
-                    for offset, lookup_key, label in ((10, 2001, "owner.docker_port"),
-                                                      (40, 2002, "owner.hello")):
+                    for offset, lookup_key, label in ((10, 2001, "owner.docker_port"), (40, 2002, "owner.hello")):
                         step = self.event(1, lookup_key, label, 20)
                         step["opened_ns"] = event["opened_ns"] + offset
                         host.append(step)
@@ -65,10 +64,19 @@ class TelemetryReportTest(unittest.TestCase):
 
     @staticmethod
     def event(role, key, name, elapsed):
-        return {"kind": "operation", "run": f"{1:032x}", "role": role, "key": key,
-                "success": True, "resource_status": "sampled", "samples": 2, "gaps": 0,
-                "cpu_shared_ns": [10, 5], "sampled_max_rss": 1024,
-                "timing": {"name": name, "elapsed_ns": elapsed}}
+        return {
+            "kind": "operation",
+            "run": f"{1:032x}",
+            "role": role,
+            "key": key,
+            "success": True,
+            "resource_status": "sampled",
+            "samples": 2,
+            "gaps": 0,
+            "cpu_shared_ns": [10, 5],
+            "sampled_max_rss": 1024,
+            "timing": {"name": name, "elapsed_ns": elapsed},
+        }
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ archived file. The owner-authorized timestamp, receive-loop lifecycle and
 receive-buffer patches have separate pinned identities; all other fuser
 overrides remain rejected.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,9 +38,7 @@ PATCH_LOCKS = {"core/Cargo.lock", "core/vendor/fuser-0.18.0/Cargo.lock"}
 
 
 def is_fuser(name, value):
-    return name.split(":", 1)[0] == "fuser" or (
-        isinstance(value, dict) and value.get("package") == "fuser"
-    )
+    return name.split(":", 1)[0] == "fuser" or (isinstance(value, dict) and value.get("package") == "fuser")
 
 
 def manifest_errors(document, approved=APPROVED_REVISIONS, patch_path=None):
@@ -51,9 +50,13 @@ def manifest_errors(document, approved=APPROVED_REVISIONS, patch_path=None):
             if isinstance(group, dict):
                 for name, value in group.items():
                     if is_fuser(name, value):
-                        permitted = (section == "patch" and registry == "crates-io"
-                                     and name == "fuser" and patch_path is not None
-                                     and value == {"version": "=0.18.0", "path": patch_path})
+                        permitted = (
+                            section == "patch"
+                            and registry == "crates-io"
+                            and name == "fuser"
+                            and patch_path is not None
+                            and value == {"version": "=0.18.0", "path": patch_path}
+                        )
                         if not permitted:
                             errors.append(f"{section} override of fuser is not the authorized timestamp patch")
 
@@ -86,7 +89,8 @@ def manifest_errors(document, approved=APPROVED_REVISIONS, patch_path=None):
 
     visit(document)
     if patch_path is not None and document.get("patch", {}).get("crates-io", {}).get("fuser") != {
-        "version": "=0.18.0", "path": patch_path
+        "version": "=0.18.0",
+        "path": patch_path,
     }:
         errors.append("owning manifest is missing its exact fuser timestamp patch")
     return errors
@@ -105,7 +109,8 @@ def lock_errors(document, approved=APPROVED_REVISIONS, patched=False):
                 errors.append("registry fuser requires its locked checksum")
         elif source.startswith("git+"):
             valid = any(
-                source in (
+                source
+                in (
                     f"git+{OFFICIAL_GIT}?rev={revision}#{revision}",
                     f"git+{OFFICIAL_GIT.removesuffix('.git')}?rev={revision}#{revision}",
                 )
@@ -113,8 +118,7 @@ def lock_errors(document, approved=APPROVED_REVISIONS, patched=False):
             )
             if not valid:
                 errors.append("locked fuser Git source/revision is not approved")
-        elif (patched and not source and package.get("version") == "0.18.0"
-              and "checksum" not in package):
+        elif patched and not source and package.get("version") == "0.18.0" and "checksum" not in package:
             pass  # Local patched bytes have a separate checked provenance record.
         else:
             errors.append("locked fuser has a local/replacement source")
@@ -134,9 +138,10 @@ def patched_package_errors(root: Path):
             return ["patched fuser package directory is redirected"]
         if metadata["archive_sha256"] != BASE_CHECKSUM:
             return ["patched fuser has the wrong published archive identity"]
-        if metadata["patch_sha256"] != PATCH_CHECKSUM or hashlib.sha256(
-            (record / "signed-timestamps.patch").read_bytes()
-        ).hexdigest() != PATCH_CHECKSUM:
+        if (
+            metadata["patch_sha256"] != PATCH_CHECKSUM
+            or hashlib.sha256((record / "signed-timestamps.patch").read_bytes()).hexdigest() != PATCH_CHECKSUM
+        ):
             return ["fuser timestamp diff changed"]
         if metadata["modified_files"] != {"src/time.rs": TIME_CHECKSUM}:
             return ["fuser patch changes files beyond the authorized timestamp correction"]
@@ -147,13 +152,16 @@ def patched_package_errors(root: Path):
         if hashlib.sha256(lifecycle_raw).hexdigest() != LIFECYCLE_PROVENANCE_CHECKSUM:
             return ["fuser lifecycle provenance changed"]
         lifecycle = json.loads(lifecycle_raw)
-        if (lifecycle["timestamp_provenance_sha256"] != PROVENANCE_CHECKSUM
-                or lifecycle["archive_sha256"] != BASE_CHECKSUM
-                or set(lifecycle["files"]) != LIFECYCLE_FILES):
+        if (
+            lifecycle["timestamp_provenance_sha256"] != PROVENANCE_CHECKSUM
+            or lifecycle["archive_sha256"] != BASE_CHECKSUM
+            or set(lifecycle["files"]) != LIFECYCLE_FILES
+        ):
             return ["fuser lifecycle delta has an unauthorized base or file scope"]
-        if (lifecycle["patch_sha256"] != LIFECYCLE_PATCH_CHECKSUM
-                or hashlib.sha256((record / "session-lifecycle.patch").read_bytes()).hexdigest()
-                != LIFECYCLE_PATCH_CHECKSUM):
+        if (
+            lifecycle["patch_sha256"] != LIFECYCLE_PATCH_CHECKSUM
+            or hashlib.sha256((record / "session-lifecycle.patch").read_bytes()).hexdigest() != LIFECYCLE_PATCH_CHECKSUM
+        ):
             return ["fuser lifecycle diff changed"]
         expected |= lifecycle["files"]
         if len(expected) != 86:
@@ -162,14 +170,17 @@ def patched_package_errors(root: Path):
         if hashlib.sha256(buffer_raw).hexdigest() != BUFFER_PROVENANCE_CHECKSUM:
             return ["fuser receive-buffer provenance changed"]
         buffer = json.loads(buffer_raw)
-        if (buffer["timestamp_provenance_sha256"] != PROVENANCE_CHECKSUM
-                or buffer["lifecycle_provenance_sha256"] != LIFECYCLE_PROVENANCE_CHECKSUM
-                or buffer["archive_sha256"] != BASE_CHECKSUM
-                or set(buffer["files"]) != BUFFER_FILES):
+        if (
+            buffer["timestamp_provenance_sha256"] != PROVENANCE_CHECKSUM
+            or buffer["lifecycle_provenance_sha256"] != LIFECYCLE_PROVENANCE_CHECKSUM
+            or buffer["archive_sha256"] != BASE_CHECKSUM
+            or set(buffer["files"]) != BUFFER_FILES
+        ):
             return ["fuser receive-buffer delta has an unauthorized base or file scope"]
-        if (buffer["patch_sha256"] != BUFFER_PATCH_CHECKSUM
-                or hashlib.sha256((record / "receive-buffer.patch").read_bytes()).hexdigest()
-                != BUFFER_PATCH_CHECKSUM):
+        if (
+            buffer["patch_sha256"] != BUFFER_PATCH_CHECKSUM
+            or hashlib.sha256((record / "receive-buffer.patch").read_bytes()).hexdigest() != BUFFER_PATCH_CHECKSUM
+        ):
             return ["fuser receive-buffer diff changed"]
         expected |= buffer["files"]
         if len(expected) != 86:
@@ -194,8 +205,7 @@ def config_errors(document):
     errors = []
     if document.get("paths"):
         errors.append("Cargo path overrides can replace fuser and are forbidden")
-    if any(isinstance(source, dict) and "directory" in source
-           for source in document.get("source", {}).values()):
+    if any(isinstance(source, dict) and "directory" in source for source in document.get("source", {}).values()):
         errors.append("Cargo directory source replacement can vendor fuser")
     return errors
 
@@ -213,7 +223,7 @@ def package_errors(archive: Path, source: Path, checksum: str):
             if not entry.isfile() or not entry.name.startswith(prefix):
                 errors.append(f"unexpected archive entry: {entry.name}")
                 continue
-            relative = Path(entry.name[len(prefix):])
+            relative = Path(entry.name[len(prefix) :])
             if relative.is_absolute() or ".." in relative.parts:
                 errors.append("invalid archive path")
                 continue
@@ -234,11 +244,29 @@ def package_errors(archive: Path, source: Path, checksum: str):
 
 
 def repository_errors(root: Path):
-    paths = subprocess.check_output(
-        ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others",
-         "--exclude-standard", "--", "Cargo.toml", "Cargo.lock", "**/Cargo.toml",
-         "**/Cargo.lock", ".cargo/config.toml", ".cargo/config"]
-    ).decode().split("\0")
+    paths = (
+        subprocess.check_output(
+            [
+                "git",
+                "-C",
+                str(root),
+                "ls-files",
+                "-z",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "--",
+                "Cargo.toml",
+                "Cargo.lock",
+                "**/Cargo.toml",
+                "**/Cargo.lock",
+                ".cargo/config.toml",
+                ".cargo/config",
+            ]
+        )
+        .decode()
+        .split("\0")
+    )
     errors = []
     checked = 0
     for name in sorted(set(paths) - {""}):
@@ -248,9 +276,13 @@ def repository_errors(root: Path):
         checked += 1
         try:
             document = tomllib.loads(path.read_text())
-            findings = (manifest_errors(document, patch_path=PATCH_MANIFESTS.get(name)) if path.name == "Cargo.toml"
-                        else lock_errors(document, patched=name in PATCH_LOCKS) if path.name == "Cargo.lock"
-                        else config_errors(document))
+            findings = (
+                manifest_errors(document, patch_path=PATCH_MANIFESTS.get(name))
+                if path.name == "Cargo.toml"
+                else lock_errors(document, patched=name in PATCH_LOCKS)
+                if path.name == "Cargo.lock"
+                else config_errors(document)
+            )
             errors.extend(f"{name}: {error}" for error in findings)
         except (OSError, ValueError) as error:
             errors.append(f"{name}: cannot verify: {error}")
@@ -270,9 +302,17 @@ def main():
     checked, errors = repository_errors(args.root)
     if all(supplied):
         errors.extend(package_errors(*supplied))
-    print(json.dumps({"checked_manifests_locks_configs": checked, "errors": errors,
-                      "authorized_patch_verified": not errors,
-                      "registry_package_verified": bool(all(supplied)) and not errors}, indent=2))
+    print(
+        json.dumps(
+            {
+                "checked_manifests_locks_configs": checked,
+                "errors": errors,
+                "authorized_patch_verified": not errors,
+                "registry_package_verified": bool(all(supplied)) and not errors,
+            },
+            indent=2,
+        )
+    )
     return 1 if errors else 0
 
 

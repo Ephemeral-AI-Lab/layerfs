@@ -12,8 +12,7 @@ def repository_container(container, repo, registered):
         return True
     roots = [repo, *(Path(p) for p in registered)]
     for mount in container["mounts"]:
-        if mount.get("Type") == "bind" and any(
-                overlaps(host_bind_path(mount["Source"]), root) for root in roots):
+        if mount.get("Type") == "bind" and any(overlaps(host_bind_path(mount["Source"]), root) for root in roots):
             return True
         if mount.get("Destination") == "/layerfs-store":
             return True
@@ -27,8 +26,11 @@ def cargo_profiles(worktree):
             continue
         for base, dirs, files in os.walk(root):
             target = Path(base)
-            dirs[:] = [d for d in dirs if d not in {"debug", "release", "registry", "git", "node_modules"}
-                       and not (target / d).is_symlink()]
+            dirs[:] = [
+                d
+                for d in dirs
+                if d not in {"debug", "release", "registry", "git", "node_modules"} and not (target / d).is_symlink()
+            ]
             if len(target.relative_to(root).parts) >= 3:
                 dirs[:] = []
             if ".rustc_info.json" in files:
@@ -37,7 +39,17 @@ def cargo_profiles(worktree):
                         yield target, target / profile
 
 
-def discover(repo, scope, registered, containers, opened, authorization, caches_only=False, retire_idle_sessions=False, cache_worktrees=None):
+def discover(
+    repo,
+    scope,
+    registered,
+    containers,
+    opened,
+    authorization,
+    caches_only=False,
+    retire_idle_sessions=False,
+    cache_worktrees=None,
+):
     """User authorization replaces a separate release file, never an activity guard."""
     if not authorization.strip():
         raise Refused("Discovery needs --authorization recording the user's cleanup instruction")
@@ -48,12 +60,19 @@ def discover(repo, scope, registered, containers, opened, authorization, caches_
     skipped = []
     selected = {a.get("path") or a.get("name") for a in scope["actions"]}
     retiring = {a.get("name") for a in scope["actions"] if a["kind"] == "docker-container"}
-    path_containers = [c for c in containers if c["running"] and c["id"] not in retiring
-                       or not repository_container(c, repo, registered)
-                       or c["id"] in protected_containers
-                       or c["name"].lstrip("/") in protected_containers
-                       or any(m.get("Type") == "bind" and any(overlaps(
-                           host_bind_path(m["Source"]), p) for p in protected) for m in c["mounts"])]
+    path_containers = [
+        c
+        for c in containers
+        if c["running"]
+        and c["id"] not in retiring
+        or not repository_container(c, repo, registered)
+        or c["id"] in protected_containers
+        or c["name"].lstrip("/") in protected_containers
+        or any(
+            m.get("Type") == "bind" and any(overlaps(host_bind_path(m["Source"]), p) for p in protected)
+            for m in c["mounts"]
+        )
+    ]
     for raw, record in registered.items():
         path = Path(raw)
         explicit_cache = caches_only and cache_worktrees and raw in cache_worktrees
@@ -68,19 +87,32 @@ def discover(repo, scope, registered, containers, opened, authorization, caches_
                 except Refused as error:
                     skipped.append({"kind": "cargo-cache", "path": str(profile), "reason": str(error)})
                     continue
-                scope["actions"].append({"kind": "cargo-cache", "path": str(profile),
-                                         "target_root": str(target), "released": True,
-                                         "owner": "user-authorized cleanup", "reason": authorization})
+                scope["actions"].append(
+                    {
+                        "kind": "cargo-cache",
+                        "path": str(profile),
+                        "target_root": str(target),
+                        "released": True,
+                        "owner": "user-authorized cleanup",
+                        "reason": authorization,
+                    }
+                )
             continue
         try:
-            ensure_idle([path], protected, path_containers,
-                        retirement_open_files(path, opened, retire_idle_sessions))
+            ensure_idle([path], protected, path_containers, retirement_open_files(path, opened, retire_idle_sessions))
         except Refused as error:
             skipped.append({"kind": "worktree", "path": raw, "reason": str(error)})
             continue
-        scope["actions"].append({"kind": "worktree", "path": raw, "released": True,
-                                 "retire_idle_sessions": retire_idle_sessions,
-                                 "owner": "user-authorized cleanup", "reason": authorization})
+        scope["actions"].append(
+            {
+                "kind": "worktree",
+                "path": raw,
+                "released": True,
+                "retire_idle_sessions": retire_idle_sessions,
+                "owner": "user-authorized cleanup",
+                "reason": authorization,
+            }
+        )
     for container in containers:
         if caches_only:
             break
@@ -90,13 +122,21 @@ def discover(repo, scope, registered, containers, opened, authorization, caches_
             continue
         if container["id"] in protected_containers or container["name"].lstrip("/") in protected_containers:
             continue
-        if any(m.get("Type") == "bind" and any(overlaps(host_bind_path(m["Source"]), p)
-               for p in protected) for m in container["mounts"]):
+        if any(
+            m.get("Type") == "bind" and any(overlaps(host_bind_path(m["Source"]), p) for p in protected)
+            for m in container["mounts"]
+        ):
             continue
         if container["id"] not in selected:
-            scope["actions"].append({"kind": "docker-container", "name": container["id"],
-                                     "released": True, "owner": "user-authorized cleanup",
-                                     "reason": authorization})
+            scope["actions"].append(
+                {
+                    "kind": "docker-container",
+                    "name": container["id"],
+                    "released": True,
+                    "owner": "user-authorized cleanup",
+                    "reason": authorization,
+                }
+            )
     # Containers first: removing stopped containers releases their bind mounts.
     scope["actions"].sort(key=lambda action: action["kind"] != "docker-container")
     return scope, skipped

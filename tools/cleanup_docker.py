@@ -17,7 +17,8 @@ def inspect(name):
 
 def identity(info):
     return {key: info[key] for key in ("Id", "Created", "Image", "Config", "Mounts")} | {
-        "state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")}}
+        "state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")}
+    }
 
 
 def guard(info, action, scope):
@@ -27,8 +28,9 @@ def guard(info, action, scope):
     for mount in info.get("Mounts", []):
         if mount.get("Name") in scope.get("protected_volumes", []):
             raise Refused("Container uses a protected volume: " + info["Name"])
-        if mount.get("Type") == "bind" and any(overlaps(
-                host_bind_path(mount["Source"]), Path(p).resolve()) for p in scope.get("protected_paths", [])):
+        if mount.get("Type") == "bind" and any(
+            overlaps(host_bind_path(mount["Source"]), Path(p).resolve()) for p in scope.get("protected_paths", [])
+        ):
             raise Refused("Container binds a protected path: " + info["Name"])
     if info["State"]["Running"]:
         if action.get("retire_running") is not True:
@@ -36,8 +38,7 @@ def guard(info, action, scope):
         # Explicit retirement supports abandoned filesystem daemons only. Ordinary
         # commands, Exec descendants and other services remain protected.
         top = run(["docker", "top", info["Id"], "-eo", "pid,args"]).stdout.decode().splitlines()[1:]
-        if (len(top) != 1 or len(top[0].split()) < 2
-                or Path(top[0].split()[1]).name != "layerfs-daemon"):
+        if len(top) != 1 or len(top[0].split()) < 2 or Path(top[0].split()[1]).name != "layerfs-daemon":
             raise Refused("Container has active commands or is not a lone LayerFS daemon")
     elif info["State"]["Status"] not in {"exited", "created"}:
         raise Refused("Container is not quiescent")
@@ -71,19 +72,25 @@ def retire(action, scope, output, pass_id, record_event, repo=None):
         rootfs = archive(repo, selected, dest, pass_id)
         rootfs["paths"] = action.get("preserve_paths", [])
         shutil.rmtree(selected)
-        rootfs["limits"] = "Other ephemeral rootfs data explicitly discarded; original image and all mounted data retained"
+        rootfs["limits"] = (
+            "Other ephemeral rootfs data explicitly discarded; original image and all mounted data retained"
+        )
     else:
         tag = "layerfs-cleanup-recovery:" + pass_id.lower() + "-" + info["Id"][:12]
-        image = run(["docker", "commit", "--message", "Cleanup recovery; retain mounted volumes",
-                     info["Id"], tag]).stdout.decode().strip()
+        image = (
+            run(["docker", "commit", "--message", "Cleanup recovery; retain mounted volumes", info["Id"], tag])
+            .stdout.decode()
+            .strip()
+        )
         saved = json.loads(run(["docker", "image", "inspect", image]).stdout)[0]
         if saved["Id"] != image or saved.get("Parent") != info["Image"]:
             raise Refused("Recovery image identity/parent mismatch")
         rootfs = {"image": image, "image_tag": tag}
     log = dest / "logs.txt"
     with log.open("xb") as stream:
-        run_logs = subprocess.run(["docker", "logs", "--timestamps", info["Id"]],
-                                  stdout=stream, stderr=subprocess.STDOUT, timeout=115)
+        run_logs = subprocess.run(
+            ["docker", "logs", "--timestamps", info["Id"]], stdout=stream, stderr=subprocess.STDOUT, timeout=115
+        )
     if run_logs.returncode:
         raise Refused("Container log capture failed; container and recovery image retained")
     original_hash = hashlib.sha256()
@@ -98,9 +105,13 @@ def retire(action, scope, output, pass_id, record_event, repo=None):
     if verified.digest() != original_hash.digest():
         raise Refused("Archived log verification failed")
     log.unlink()
-    recovery = {"directory": str(dest), "rootfs": rootfs,
-                "logs_sha256": original_hash.hexdigest(), "volumes": "retained",
-                "limits": "See rootfs recovery limits; mounted data remains at its original mounts"}
+    recovery = {
+        "directory": str(dest),
+        "rootfs": rootfs,
+        "logs_sha256": original_hash.hexdigest(),
+        "volumes": "retained",
+        "limits": "See rootfs recovery limits; mounted data remains at its original mounts",
+    }
     (dest / "recovery.json").write_text(json.dumps(recovery, indent=2) + "\n")
     record_event(output, state="archived", action=action, recovery=recovery)
     current = inspect(info["Id"])

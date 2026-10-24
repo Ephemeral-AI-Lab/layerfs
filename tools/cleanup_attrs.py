@@ -15,16 +15,24 @@ def darwin_library():
     library = ctypes.CDLL(None, use_errno=True)
     library.listxattr.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
     library.listxattr.restype = ctypes.c_ssize_t
-    library.getxattr.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p,
-                                ctypes.c_size_t, ctypes.c_uint32, ctypes.c_int]
+    library.getxattr.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
     library.getxattr.restype = ctypes.c_ssize_t
     return library
 
 
 def attributes(path):
     if hasattr(os, "listxattr"):
-        return {key: base64.b64encode(os.getxattr(path, key, follow_symlinks=False)).decode()
-                for key in os.listxattr(path, follow_symlinks=False)}
+        return {
+            key: base64.b64encode(os.getxattr(path, key, follow_symlinks=False)).decode()
+            for key in os.listxattr(path, follow_symlinks=False)
+        }
     if sys.platform != "darwin":
         raise Refused("Extended attribute inspection is unsupported on this platform")
     library = darwin_library()
