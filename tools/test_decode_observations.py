@@ -13,10 +13,20 @@ SCOPE_HEX = "".join(f"{word:016x}" for word in SCOPE)
 
 
 def row(call, section, index, values, available=True, scope=SCOPE):
-    return json.dumps({"layerfs_observation": 1, "call": call, "slot": 0, "scope": scope,
-                       "daemon": DAEMON, "section": section, "index": index,
-                       "available": available, "values": values if available else []},
-                      separators=(",", ":"))
+    return json.dumps(
+        {
+            "layerfs_observation": 1,
+            "call": call,
+            "slot": 0,
+            "scope": scope,
+            "daemon": DAEMON,
+            "section": section,
+            "index": index,
+            "available": available,
+            "values": values if available else [],
+        },
+        separators=(",", ":"),
+    )
 
 
 def group(call, scope=SCOPE):
@@ -52,11 +62,14 @@ class DecoderTests(unittest.TestCase):
         lines = [*group(1), *group(2), *group(1, scope=other)[:-1]]
         with tempfile.TemporaryDirectory() as directory:
             trace = Path(directory) / "trace.jsonl"
-            trace.write_text(json.dumps({"layerfs_trace": 1, "id": "ab12cd34-7", "scope": SCOPE_HEX}) + "\n"
-                             + "not json\n", encoding="utf-8")
+            trace.write_text(
+                json.dumps({"layerfs_trace": 1, "id": "ab12cd34-7", "scope": SCOPE_HEX}) + "\n" + "not json\n",
+                encoding="utf-8",
+            )
             decoded = list(decode_observations.decode(lines, decode_observations.trace_scopes(trace)))
-        self.assertEqual([(g["call"], g.get("trace")) for g in decoded],
-                         [(1, "ab12cd34-7"), (2, "ab12cd34-7"), (1, None)])
+        self.assertEqual(
+            [(g["call"], g.get("trace")) for g in decoded], [(1, "ab12cd34-7"), (2, "ab12cd34-7"), (1, None)]
+        )
         self.assertFalse(decoded[2]["complete"], "no footer means incomplete")
 
     def test_every_named_section_matches_its_source_width(self):
@@ -70,8 +83,7 @@ class DecoderTests(unittest.TestCase):
         old = list(range(45))
         new = list(range(47))
         lines = [*group(5), row(5, 26, 0, old), *group(6), row(6, 26, 0, new)]
-        decoded = {g["call"]: g["sections"]["kernel_opcodes"] for g in
-                   decode_observations.decode(lines, {})}
+        decoded = {g["call"]: g["sections"]["kernel_opcodes"] for g in decode_observations.decode(lines, {})}
         self.assertEqual(decoded[5]["store_units"], 44)
         self.assertNotIn("lookup_missing", decoded[5])
         self.assertNotIn("served_ns", decoded[5])
@@ -85,10 +97,8 @@ class DecoderTests(unittest.TestCase):
         old = list(range(31))
         new = list(range(35))
         split = list(range(47))
-        lines = [*group(7), row(7, 15, 0, old), *group(8), row(8, 15, 0, new),
-                 *group(9), row(9, 15, 0, split)]
-        decoded = {g["call"]: g["sections"]["commit_namespace"] for g in
-                   decode_observations.decode(lines, {})}
+        lines = [*group(7), row(7, 15, 0, old), *group(8), row(8, 15, 0, new), *group(9), row(9, 15, 0, split)]
+        decoded = {g["call"]: g["sections"]["commit_namespace"] for g in decode_observations.decode(lines, {})}
         self.assertEqual(decoded[7]["fresh_points"], 30)
         for name in ["window_jobs", "normalize_ns", "values_ns", "update_ns"]:
             self.assertNotIn(name, decoded[7])

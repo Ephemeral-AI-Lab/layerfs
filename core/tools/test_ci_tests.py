@@ -48,16 +48,17 @@ class SelectionAgainstTheTree(unittest.TestCase):
 
 class ExecutablesFromCargoJson(unittest.TestCase):
     def test_keeps_only_mount_test_binaries(self):
-        meta = {"packages": [{"name": "layerfs-daemon",
-                              "manifest_path": "/w/core/crates/layerfs-daemon/Cargo.toml"}]}
+        meta = {"packages": [{"name": "layerfs-daemon", "manifest_path": "/w/core/crates/layerfs-daemon/Cargo.toml"}]}
 
         def artifact(name, kind, exe):
-            return json.dumps({
-                "reason": "compiler-artifact",
-                "manifest_path": "/w/core/crates/layerfs-daemon/Cargo.toml",
-                "target": {"name": name, "kind": [kind]},
-                "executable": exe,
-            })
+            return json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "manifest_path": "/w/core/crates/layerfs-daemon/Cargo.toml",
+                    "target": {"name": name, "kind": [kind]},
+                    "executable": exe,
+                }
+            )
 
         lines = [
             "not json",
@@ -65,8 +66,7 @@ class ExecutablesFromCargoJson(unittest.TestCase):
             artifact("lane_merge", "test", "/t/lane_merge-1"),
             artifact("layerfs-daemon", "bin", "/t/layerfs-daemon"),
         ]
-        found = list(ci_tests.executables(
-            lines, [("layerfs-daemon", "mounted_commit")], meta))
+        found = list(ci_tests.executables(lines, [("layerfs-daemon", "mounted_commit")], meta))
         self.assertEqual(found, [(Path("/w/core/crates/layerfs-daemon"), "/t/mounted_commit-1")])
 
 
