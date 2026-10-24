@@ -5,8 +5,8 @@
 [tools/worktree.py](../../tools/worktree.py) assigns reusable build resources to
 one checkout and writable Docker E2E state to one run. It does not schedule other
 agents, alter product locking, run frozen benchmarks, or provide an aggregate
-pre-push gate. Follow [repository instructions](../../AGENTS.md) and the
-[cleanup policy](cleanup.md), including regular disk checks and the 100 GB trigger.
+pre-push gate. Follow [repository instructions](../../AGENTS.md); the
+[cleanup policy](cleanup.md) covers releasing its caches.
 
 ## Register a worktree
 
@@ -189,5 +189,5 @@ registration state, all pinned bundles/records and retained failed-run volumes.
 Generated macOS compiler children and the owned Linux cache volumes are selected
 only with the explicit handoff release. The cleanup script independently rechecks
 active processes and all container consumers before any deletion. Ordinary cleanup
-can omit the 300 GB target when no low-space episode is active. The launcher does
+can omit `--reclaim-gb` when no low-space episode is active. The launcher does
 not remove checkouts or frozen evidence, and never runs a global Docker prune.

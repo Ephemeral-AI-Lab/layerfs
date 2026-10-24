@@ -272,28 +272,12 @@ remain binding; moving them out of this file does not weaken them.
 
 ## 4. Code, build and docs
 
-- For parallel worktree build caches, E2E resource retention, disk headroom and
-  cleanup, follow [the cleanup policy](docs/general/cleanup.md#9-parallel-worktree-build-and-e2e-retention).
-  Keep each active worktree's target private and warm; release completed caches
-  and disposable test resources without turning cleanup into a global build gate.
-- Use [the parallel worktree launcher](docs/general/parallel-worktrees.md) for
-  registered private Cargo homes/targets and pinned SDK E2E bundles. Build and
-  test within the selected worktree's resources; independent E2E runs own their
-  writable Stores, SDK homes, containers, and traces. Preserve a test's intentional
-  multi-daemon shared Store. Export exact cache releases to the cleanup script at
-  handoff; no cross-worktree build lock or lead-issued go window is introduced.
-- Check host free space at assignment start, at least every 30 minutes during
-  sustained work, before large builds, target copies or fixture creation, after
-  build/E2E batches, and at handoff. Run
-  `python3 tools/cleanup.py check` (GB here means 1,000,000,000 bytes). When free
-  space is **below 100 GB**, run the cleanup script's plan/apply procedure with
-  `--reclaim-gb 300` and reclaim **at least 300 GB of net host free space** across
-  that cleanup episode. Existing cleanup authorization applies; do not ask again
-  for routine removal of confirmed disposable resources. Use exact owner-released
-  selections and protect active work, warm targets, pinned binaries, and evidence.
-  Verify actual free-byte recovery; do not substitute candidate allocation totals.
-  If confirmed disposable data cannot meet 300 GB, report the shortfall and the
-  remaining protected/uncertain allocation without deleting it or claiming success.
+- [The parallel worktree launcher](docs/general/parallel-worktrees.md) and
+  [the cleanup script](docs/general/cleanup.md) are optional local tools. Disk
+  thresholds, check cadence and standing cleanup authorization depend on the
+  machine; they belong in the user's own agent instructions, not in this file.
+- Independent E2E runs own their writable Stores, SDK homes, containers and
+  traces. Preserve a test's intentional multi-daemon shared Store.
 - Preserve unrelated work. Build the current core implementation, not legacy
   aliases, source includes or error-driven substitutes. Keep platform cfgs.
 - No new dependency if an existing crate supplies the capability. Never patch,
@@ -335,9 +319,6 @@ remain binding; moving them out of this file does not weaken them.
   bounded waits, and a spawned thread's exit must not depend on another thread
   finishing without panicking. This is a ceiling, not a target; the scoped
   measurement and proof budgets in §3 stay stricter.
-- QUIET means the replay owns timing-sensitive Docker work: other sessions
-  may run Docker with -j 2 (one heavy batch at a time) and must not wait for
-  it to clear.
 - Preserve [repository ARM64 build inputs](.cargo/config.toml); explicit
   RUSTFLAGS must repeat the profile. Details are in the core guide.
 - Persistence profiles are scoped to the store. Claim only their guarantees;
