@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "pi-layerfs",
+  "name": "LayerFS for Pi",
+  "summary": "Pi on persistent LayerFS projects: worker agents on their own Branches, plus a dashboard.",
+  "authors": [{ "name": "cydia2001", "github": "anyin233" }],
+  "license": "MIT",
+  "repository": "https://github.com/anyin233/pi-layerfs",
+  "tags": ["pi", "agents", "multi-agent", "workspaces", "history", "dashboard"],
+  "platforms": ["linux"],
+  "uses": ["agent", "daemon"],
+  "host": { "name": "Pi", "url": "https://github.com/earendil-works/pi" },
+  "status": "preview",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "commit": "f30a513711f8cbda886a7b264da4e66ad1ff66c4",
+      "date": "2026-10-23",
+      "layerfs": { "version": "v1.0.0", "commit": "1aa56ece78e2ecd71b46cf07076100345df47239" },
+      "notes": "First release: self-contained Linux x86_64 archive with Pi 1.4.0, the LayerFS SDK, daemon and runtime image."
+    }
+  ]
+}
