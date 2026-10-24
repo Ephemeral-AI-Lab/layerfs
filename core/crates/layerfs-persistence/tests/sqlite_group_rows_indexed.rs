@@ -133,7 +133,10 @@ fn declared_layouts_reopen_without_mutating_or_promoting_their_schema() {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(index, i64::from(layout == SqlitePackLayout::GroupRowsIndexed));
+        assert_eq!(
+            index,
+            i64::from(layout == SqlitePackLayout::GroupRowsIndexed)
+        );
     }
 }
 #[test]

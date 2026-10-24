@@ -39,7 +39,7 @@ A release candidate is eligible only when:
   owner decision** — there is no compaction API or binary in this release, and
   previously compacted Stores remain readable through the retained
   authenticated LFCNT1 read path. Canonical identity is preserved. The
-  [v0.1.5 specification](../roadmap/0.1/0.1.5/spec.md) and the
+  [v0.1.5 specification](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.5/spec.md) and the
   [v0.1.5 release contract](../release-notes/0.1.5/release-contract.md)
   define this boundary. Benchmark evidence below is single-sample campaign
   evidence, not a universal speed or storage guarantee.
@@ -55,6 +55,9 @@ A release candidate is eligible only when:
   storage contract and must document its compatibility boundary explicitly.
 - A 1.0-or-later major release follows ordinary stable semantic-versioning
   expectations for incompatible public changes.
+- LayerFS 1.1.0 is an owner-waived exception (2026-10-24): it breaks 1.0.0
+  JavaScript SDK code without a new major version. The waiver covers 1.1.0
+  only; see the [1.1.0 release record](../release-notes/1.1.0/README.md#owner-waiver-of-the-100-major-version-promise).
 
 Pre-1.0 releases may evolve quickly. Any compatibility promise must still be
 stated explicitly in that release's manual; silence is not a promise.

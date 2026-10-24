@@ -1,1 +1,0 @@
-trace_id,time,agent,lane,method,args,path,kind,blocks,hunks_omitted,conflicts_truncated,resolution,resolver,resolved_at,resolution_ms,resolution_commits,source,resolution_source

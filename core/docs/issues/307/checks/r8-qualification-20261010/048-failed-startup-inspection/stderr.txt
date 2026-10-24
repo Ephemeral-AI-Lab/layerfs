@@ -1,2 +1,0 @@
-daemon I/O: protected file ownership/mode/type
-R4_WALL seconds<=1 limit=15s lock_wait=0s

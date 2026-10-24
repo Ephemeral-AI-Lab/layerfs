@@ -1,1 +1,0 @@
-PASS: scanned 762 production Rust/SQL files; semantic review still required

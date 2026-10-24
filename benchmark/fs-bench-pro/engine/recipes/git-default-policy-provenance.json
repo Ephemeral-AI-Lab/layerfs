@@ -1,7 +1,0 @@
-{
-  "policy_sha256": "cef5f89a3bd96643dd2d46b4aa12f18cb529f0b8d6a65974ea36858445f385b0",
-  "source": "/tmp/layerfs-r7-C12-packaged-code-20261009-3ae26648f-r437/code/git-default-policy.json",
-  "closed_C12_package_receipt_sha256": "62beb1cf57cb813129698753916debf08fbcd75ef4a5302cd7bf529d03d8b46f",
-  "review_receipt_sha256": "1692bf12cccce2ca502853c68ab80f67e984fe5a4dc8b53c1eed09a97eec974f",
-  "scope": "Reuse the unchanged version-pinned Git policy evidence; actual image binary/config/version are checked anew by the retained Git query collector. No sample or comparison reused."
-}

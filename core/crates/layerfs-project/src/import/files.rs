@@ -6,7 +6,7 @@
 //! in bounded write windows. Neither queue grows with the acquired root.
 use crate::backing::{Backing, Stamp, WINDOW_ROWS};
 use crate::error::ProjectError as Failure;
-use crate::error::{content, storage};
+use crate::error::{content, malformed, storage, SourceRefusal};
 use crate::{
     batch::{BatchProducer, Event, ImportBatch, QUEUE_SLOTS},
     import::observe::InitStep,
@@ -169,7 +169,7 @@ fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result
         let Some(canonical) = entry.canonical.filter(|first| *first != entry.position) else {
             continue;
         };
-        let parent = entry.key.parent.ok_or(Failure::InvalidInput)?;
+        let parent = entry.key.parent.ok_or_else(malformed)?;
         if directory.as_ref().is_none_or(|(held, _)| *held != parent) {
             let path = OsString::from_vec(backing.directory_path(parent)?);
             directory = Some((parent, PathBuf::from(path)));
@@ -179,11 +179,11 @@ fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result
             first = Some((canonical, Stamp::from_identity(&job.host)));
         }
         let (Some((_, directory)), Some((_, stamp))) = (&directory, &first) else {
-            return Err(Failure::InvalidInput);
+            return Err(malformed());
         };
         let path = directory.join(OsStr::from_bytes(&entry.key.name));
         if !stamp.matches_file(&fs::symlink_metadata(&path)?) {
-            return Err(Failure::InvalidInput);
+            return Err(Failure::refused(SourceRefusal::Changed, path));
         }
     }
     Ok(())
@@ -201,7 +201,7 @@ fn construct_file(
     }
     let mut file = File::open(&job.path)?;
     if !job.stamp.matches_file(&file.metadata()?) {
-        return Err(Failure::InvalidInput);
+        return Err(Failure::refused(SourceRefusal::Changed, &job.path));
     }
     let (result, _) = Timing::disabled("history.import_file", |scope| {
         construct_stream(
@@ -217,7 +217,7 @@ fn construct_file(
         || !job.stamp.matches_file(&file.metadata()?)
         || !job.stamp.matches_file(&fs::symlink_metadata(&job.path)?)
     {
-        return Err(Failure::InvalidInput);
+        return Err(Failure::refused(SourceRefusal::Changed, &job.path));
     }
     if Instant::now() >= deadline {
         return Err(Failure::Deadline);

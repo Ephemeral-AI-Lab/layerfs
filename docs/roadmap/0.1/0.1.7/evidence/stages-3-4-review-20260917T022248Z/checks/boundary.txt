@@ -1,3 +1,0 @@
-# boundary guard
-PASS: scanned 75 production Rust/SQL files; semantic review still required
-exit=0

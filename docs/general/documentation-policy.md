@@ -7,12 +7,14 @@
 - `docs/README.md` is the documentation entry point.
 - `docs/versioned/<release>/` is the immutable user and operator manual for a
   release.
-- `docs/roadmap/` contains the current roadmap, release checklists, proposals,
-  development guidance, benchmark contracts, and dated planning checkpoints.
-  A patch checklist lives at
-  `docs/roadmap/<minor>/<release>/README.md`; sibling `*-YYYY-MM-DD.md` files
-  are append-only checkpoints.
+- `docs/roadmap/` was removed from `main` by #398 (2026-10-22); its plans,
+  checklists, proposals and dated checkpoints are archived at commit
+  `792715f00a` (see [the docs entry point](../README.md#removed-roadmap-and-raw-evidence)).
+  Do not commit raw run output (`.json`, `.jsonl`, logs, databases) as
+  documentation; keep the `.md` record and link to retained evidence.
 - `docs/general/` contains maintained project practices and concepts.
+- `docs/plugins/` contains the plugin listing guide, its template and checker;
+  the listings themselves are `plugins/<plugin-id>/` at the repository root.
 - `docs/research/` contains informative studies and historical design material.
 - `docs/release-notes/<release>/` contains release evidence and announcements.
 - benchmark and research directories contain supporting evidence or design

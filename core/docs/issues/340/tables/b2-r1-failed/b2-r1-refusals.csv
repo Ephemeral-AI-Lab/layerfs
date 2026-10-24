@@ -1,3 +1,0 @@
-trace_id,agent,role,lane,step,method,code,message,detail,handling
-cfb2c2bf-5,P1,P1,people,P1-021 P-M1: /packages/web/src/components/common.jsx fs.read,fs.read,NoSuchPath,NoSuchPath: /packages/cli/test/auth.test.js does not exist at people.1@87d5186ea95e,"{""path"":""/packages/cli/test/auth.test.js""}",unavailable
-ea8c6466-3,P1,P1,people,P1-024 P-M1: /packages/cli/test fs.list,fs.list,NoSuchPath,NoSuchPath: /packages/server/src/modules/people does not exist at people.1@87d5186ea95e,"{""path"":""/packages/server/src/modules/people""}",unavailable

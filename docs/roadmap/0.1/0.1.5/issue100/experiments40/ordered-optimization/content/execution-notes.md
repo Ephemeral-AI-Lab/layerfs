@@ -1,5 +1,0 @@
-# Execution clarifications
-
-The protocol's inherited `poolcache4MiB` refers to the metadata reader's decoded-body accounting. That reader also retains copied value-record byte strings, so pool payload can approach another4MiB (about8MiB combined). This experiment preserves that inherited behavior. Together with4MiBcanonical and8MiBpack caches, the retained payload limits are approximately20MiB, before file-graph records, decoder workspaces, Python/container/locator overhead, and temporary outputs. They are not an RSS claim. File graph canonical/encoded closure limits separately permit64MiB each; a native slice can force reconstruction of its entire owner's graph before returning at most32KiB.
-
-The first attempt failed during module import because a newly named generic `codec` module collided with the inherited metadata codec. No encoding or candidateStore construction occurred. `failed-import/` preserves the attempted scripts and traceback. The helper was renamed `content_codec`, then the unchanged frozen representation/selection policy ran under `run-2.log`. Executed protocol, writer, codec, and reader remain unchanged during that run.

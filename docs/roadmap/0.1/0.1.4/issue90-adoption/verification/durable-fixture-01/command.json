@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "test", "-p", "layerfs-layerstack-store", "--lib", "--all-features", "--locked", "durable_batches_hash_unique_rows_once_and_move_on_last_use", "--", "--nocapture"]

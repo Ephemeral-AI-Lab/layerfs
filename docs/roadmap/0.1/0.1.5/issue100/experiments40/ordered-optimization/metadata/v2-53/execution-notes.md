@@ -1,3 +1,0 @@
-# Executed reader cache accounting clarification
-
-The frozen protocol describes a4MiB decoded-pool-group cache. The actual reader budgets decoded body bytes at4MiB and retains extracted record byte copies as well; those copies add up toanother4MiB bytepayload. Report the poolcacheas up toapproximately8MiB payload, before Pythoncontaineroverhead. Canonical4MiB andencodedpack8MiB payloadbudgets are separate. Noexecutedreaderfiles werechanged whileverification ran. This clarification affects memoryaccounting, not physicalstoragebytes or canonicalcorrectness. Theper-chain192KiBlogicalvalue bound doesnotbound cold groupamplification.

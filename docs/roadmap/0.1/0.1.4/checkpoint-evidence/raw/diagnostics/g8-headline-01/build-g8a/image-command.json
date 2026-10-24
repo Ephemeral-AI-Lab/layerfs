@@ -1,9 +1,0 @@
-{
-  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue91-runs/source-g8a",
-  "source": "548c3663cb9394be73ecbcc74129edc8cb80d063",
-  "command": [
-    "python3",
-    "benchmark/fs-bench-pro/shared/runner.py",
-    "--build-image"
-  ]
-}

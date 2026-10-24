@@ -1,7 +1,0 @@
-group,count,median_ms,p95_ms,max_ms
-public_sdk,231,174.64,11298.321,35779.826
-internal_service,19,17.943,333.541,333.541
-operator,8,2.7969999999999997,4.086,4.086
-fs_subset_of_public_sdk,11,17.308,22.155,22.155
-sandbox.commit Committed,65,96.961,1519.385,5089.991
-sandbox.commit UpToDate,17,7.412,9.61,9.61

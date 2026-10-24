@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"rename","root":"/tmp","ms":65.927,"exitCode":0,"truncated":false,"tap":"sandbox-disk-rename-1792450172898.tap","stdout_bytes":175,"stderr":"","started":["rename/22.t"],"deferred":["rename/23.t"]}

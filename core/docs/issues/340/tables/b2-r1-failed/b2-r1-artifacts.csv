@@ -1,7 +1,0 @@
-artifact,path,bytes,sha256
-raw_store_archive,/Users/yifanxu/.codex/issue340-evidence/b2-r1/store-volume.tar,10711040,99ec0951ac58da8be3f91f1ff6bdcc84a49feddb26f2c265344575879b78a7a5
-portable_store,/Users/yifanxu/.codex/issue340-evidence/b2-r1/portable/store.sqlite,6950912,ad1b62ec619681c66fe1ad2bc6c1ef36daf04caa97aec8b853904a3da81efb9d
-raw_main,/Users/yifanxu/.codex/issue340-evidence/b2-r1/raw/global/store.sqlite,6475776,5d52ad02485bb93533a37c3cff7b45aaef55e72372e66ce27ad98f1902c4dcb7
-raw_wal,/Users/yifanxu/.codex/issue340-evidence/b2-r1/raw/global/store.sqlite-wal,4194304,d82b649065bbc9e1f4bf793680a00bf75e58685f274f74e7534be555907d1993
-raw_shm,/Users/yifanxu/.codex/issue340-evidence/b2-r1/raw/global/store.sqlite-shm,32768,cf4ce35f06f22ae0e38d6afd467df091eeffdebd88e9feab8270bc4c5a25463e
-observer_json_gzip,/Users/yifanxu/.codex/issue340-independent/b2-r1/observer-final-jsonlog/docker-json.log.gz,25341,b7c051d8861261108ff9c8da1b4dfcba67e6df3f8e03b7c08766cf16993c16f7

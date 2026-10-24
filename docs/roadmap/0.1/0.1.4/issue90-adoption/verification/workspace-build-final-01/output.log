@@ -1,9 +1,0 @@
-   Compiling layerfs-fuse v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/crates/layerfs-fuse)
-   Compiling layerfs-daemon v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/crates/layerfs-daemon)
-   Compiling layerfs-workspace v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/crates/layerfs-workspace)
-   Compiling layerfs-monitor v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/crates/layerfs-monitor)
-   Compiling layerfs-sdk v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/crates/layerfs-sdk)
-   Compiling layerfs-cli v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/crates/layerfs-cli)
-   Compiling fs-benchmark-pro v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/benchmark/fs-bench-pro)
-   Compiling layerfs-eval v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/tools/layerfs-eval)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.52s

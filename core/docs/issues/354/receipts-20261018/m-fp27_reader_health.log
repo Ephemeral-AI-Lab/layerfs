@@ -1,6 +1,0 @@
-
-running 1 test
-test fp27_a_quarantined_workspace_reader_is_never_reopened_or_borrowed_by_its_sibling ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
-

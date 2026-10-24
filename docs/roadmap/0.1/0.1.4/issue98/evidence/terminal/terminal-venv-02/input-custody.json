@@ -1,7 +1,0 @@
-{
-  "status": "PASS",
-  "archive_sha256": "fdc1d8f63eba66c44af192929544c72d7d56126f155107e29de1c8c0de0e3314",
-  "entries_including_root": 17682,
-  "regular_file_bytes": 581658413,
-  "coverage": "every source entry, full file bytes, modes, nsmtime and symlink targets against frozen archive"
-}

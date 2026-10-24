@@ -10,10 +10,10 @@ use layerfs_daemon::{
 use layerfs_history::{BranchId, WorkspaceId};
 use nix::unistd::{Gid, Uid};
 use std::{
+    cell::Cell,
     fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    cell::Cell,
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},
 };

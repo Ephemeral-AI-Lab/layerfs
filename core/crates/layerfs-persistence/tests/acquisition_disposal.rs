@@ -44,7 +44,11 @@ fn root() -> NewEntry {
         },
         position: Some(0),
         kind: InodeKind::Directory,
-        metadata: layerfs_content::filesystem::attributes::PortableMetadata { mode: 0o644, mtime_seconds: 0, mtime_nanoseconds: 0 },
+        metadata: layerfs_content::filesystem::attributes::PortableMetadata {
+            mode: 0o644,
+            mtime_seconds: 0,
+            mtime_nanoseconds: 0,
+        },
         target_root: None,
         host_path: Some(b"/source".to_vec()),
         host: None,
@@ -59,7 +63,11 @@ fn file(position: u64) -> NewEntry {
         },
         position: Some(position),
         kind: InodeKind::RegularFile,
-        metadata: layerfs_content::filesystem::attributes::PortableMetadata { mode: 0o644, mtime_seconds: 0, mtime_nanoseconds: 0 },
+        metadata: layerfs_content::filesystem::attributes::PortableMetadata {
+            mode: 0o644,
+            mtime_seconds: 0,
+            mtime_nanoseconds: 0,
+        },
         target_root: None,
         host_path: Some(format!("/source/f{position}").into_bytes()),
         host: Some(HostIdentity {

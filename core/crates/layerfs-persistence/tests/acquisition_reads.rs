@@ -154,7 +154,11 @@ fn entry(parent: Option<u64>, name: Vec<u8>, position: u64, kind: InodeKind) -> 
         // The portable grammar (checked at write since #360 item 2): a
         // symlink's mode is 0o777.
         metadata: layerfs_content::filesystem::attributes::PortableMetadata {
-            mode: if kind == InodeKind::Symlink { 0o777 } else { 0o644 },
+            mode: if kind == InodeKind::Symlink {
+                0o777
+            } else {
+                0o644
+            },
             mtime_seconds: position as i64,
             mtime_nanoseconds: 0,
         },

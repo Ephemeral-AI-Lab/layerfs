@@ -1,9 +1,0 @@
-ERROR: failed to connect to the docker API at unix:///Users/yifanxu/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/yifanxu/.docker/run/docker.sock: connect: no such file or directory
-Traceback (most recent call last):
-  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-runs/build-runtime.py", line 15, in <module>
-    subprocess.run(cmd,check=True,timeout=900)
-    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 577, in run
-    raise CalledProcessError(retcode, process.args,
-                             output=stdout, stderr=stderr)
-subprocess.CalledProcessError: Command '['docker', 'build', '--progress=plain', '--file', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption/benchmark/fs-bench-pro/Dockerfile.layerfs', '--tag', 'layerfs-issue90:55c0f273b8ffb561-check', '--build-arg', 'CARGO_BUILD_JOBS=2', '--target', 'runtime-check', '--build-arg', 'LAYERFS_PRODUCT_SEAL=e279fce6024490e04833038dd834b21e2f5f31077730c9e255477eb648d2804c', '--build-arg', 'LAYERFS_SOURCE_COMMIT=593f4ad018bf34b3f180baf66e1ae5cf40c36647', '--build-arg', 'LAYERFS_SOURCE_DIRTY=false', '--build-arg', 'LAYERFS_SOURCE_SEAL=55c0f273b8ffb5612a0c907f4c4692084ef006e740c917bf34d82b07a3c315d7', '--build-arg', 'LAYERFS_SOURCE_TREE=755ad78b2fa090d5afda6c27a1086dd628b3ec91', '--build-arg', 'WORKLOAD_SOURCE_SHA256=86a12224417d3972c29c62c134e019a0ce8e80cf5360df5394f3537e15901127', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue90-storage-adoption']' returned non-zero exit status 1.

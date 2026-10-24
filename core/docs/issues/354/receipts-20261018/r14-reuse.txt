@@ -1,2 +1,0 @@
-test reuse ... reuse arm=fresh files=1263 chunked=2 bytes=10304509 time=546.42075ms statements=36420 selections=6335 locate=5805 pack_bytes=6562139 pack_hits=26756
-test reuse ... reuse arm=shared files=1263 chunked=2 bytes=10304509 time=683.443ms statements=34470 selections=5685 locate=5805 pack_bytes=5611215 pack_hits=27406

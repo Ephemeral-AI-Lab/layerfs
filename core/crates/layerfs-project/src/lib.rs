@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 mod import;
-pub use error::{ProjectError, ProjectResult, RetainedAcquisition};
+pub use error::{ProjectError, ProjectResult, RetainedAcquisition, SourceRefusal};
 #[cfg(unix)]
 pub(crate) use import::backing;
 #[cfg(unix)]

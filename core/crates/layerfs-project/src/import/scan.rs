@@ -9,6 +9,7 @@
 use crate::backing::{placed_bytes, window_full, Backing, Bound, Pending, Stamp, WINDOW_ROWS};
 use crate::error::content;
 use crate::error::ProjectError as Failure;
+use crate::error::SourceRefusal;
 
 use crate::namespace::ImportProgress;
 use layerfs_content::filesystem::attributes::PortableMetadata;
@@ -37,7 +38,7 @@ pub(crate) struct Scanned {
 pub(crate) fn check_root(source: &Path) -> Result<Metadata, Failure> {
     let metadata = fs::symlink_metadata(source)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
-        return Err(Failure::InvalidInput);
+        return Err(Failure::refused(SourceRefusal::NotDirectory, source));
     }
     Ok(metadata)
 }
@@ -51,14 +52,17 @@ struct Child {
 }
 impl Child {
     /// Portable mode: the symlink grammar fixes 0777; other kinds stay exact.
-    fn portable_mode(&self) -> Result<u32, Failure> {
+    fn portable_mode(&self) -> Result<u32, SourceRefusal> {
         let (mode, mask) = match self.kind {
             InodeKind::Symlink => (0o777, 0o777),
             InodeKind::Directory => (self.stamp.mode & 0o7777, 0o1777),
             InodeKind::RegularFile => (self.stamp.mode & 0o7777, 0o777),
         };
-        if mode & !mask != 0 || !(0..1_000_000_000).contains(&self.stamp.mtime_nsec) {
-            return Err(Failure::InvalidInput);
+        if mode & !mask != 0 {
+            return Err(SourceRefusal::Mode(mode));
+        }
+        if !(0..1_000_000_000).contains(&self.stamp.mtime_nsec) {
+            return Err(SourceRefusal::Mtime);
         }
         Ok(mode)
     }
@@ -78,13 +82,15 @@ impl Roots<'_, '_> {
         position: Option<u64>,
         directory: &Path,
     ) -> Result<NewEntry, Failure> {
+        let path = || match parent {
+            Some(_) => child_path(directory, &child.name),
+            None => directory.as_os_str().as_bytes().to_vec(),
+        };
+        let mode = child.portable_mode().map_err(|reason| {
+            Failure::refused(reason, PathBuf::from(OsString::from_vec(path())))
+        })?;
         let nanos = child.stamp.mtime_nsec as u32;
-        let key = (
-            child.kind.code(),
-            child.portable_mode()?,
-            child.stamp.mtime,
-            nanos,
-        );
+        let key = (child.kind.code(), mode, child.stamp.mtime, nanos);
         let metadata = PortableMetadata {
             mode: key.1,
             mtime_seconds: key.2,
@@ -97,10 +103,6 @@ impl Roots<'_, '_> {
                 Some(emit_symlink(self.objects, target).map_err(content)?)
             }
             None => None,
-        };
-        let path = || match parent {
-            Some(_) => child_path(directory, &child.name),
-            None => directory.as_os_str().as_bytes().to_vec(),
         };
         let (host_path, host) = match child.kind {
             InodeKind::Directory => (Some(path()), None),

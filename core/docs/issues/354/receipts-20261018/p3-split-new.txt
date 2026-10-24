@@ -1,5 +1,0 @@
-test split ... split files=40408 bytes=427061438 distinct_ids=35214 distinct_bytes=411760183 binary=80
-walk=1.638711724s read=9.018331716s (of which open=4.676629675s, chunked files=373) scan=706.143704ms (probe passes)
-reads: statements=508038 store object ids=97949 canonical demands=84164 ids=97949 bytes=843085176 for file bytes=427061438
-grep call=6.177576333s skipped=Some(Int(80)) items=0
-ok

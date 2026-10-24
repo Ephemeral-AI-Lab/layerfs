@@ -1,7 +1,0 @@
-agent,stream,path,bytes,sha256,collectionEnd,closeStart,source
-lead,stdout,/Users/yifanxu/.codex/issue340-independent/b2-r1/agents/lead/daemon/stdout.log,36,ed15a93fefde77b97678c71fd9b18f2daee328432e4601361bd73de88737cab2,2026-10-16T05:49:19.895034+00:00,2026-10-16T05:49:24.304Z,unavailable
-lead,stderr,/Users/yifanxu/.codex/issue340-independent/b2-r1/agents/lead/daemon/stderr.log,1686578,352cf8cc03bd5ffcec38d1766aa5db0c3c00fd8718a9d6a84176640861b5faf7,2026-10-16T05:49:19.895034+00:00,2026-10-16T05:49:24.304Z,unavailable
-P1,stdout,/Users/yifanxu/.codex/issue340-independent/b2-r1/agents/P1/daemon/stdout.log,36,ed15a93fefde77b97678c71fd9b18f2daee328432e4601361bd73de88737cab2,2026-10-16T05:48:39.306Z,2026-10-16T05:49:11.860Z,unavailable
-P1,stderr,/Users/yifanxu/.codex/issue340-independent/b2-r1/agents/P1/daemon/stderr.log,1886957,65d7b68a0fc8023f329f0df8352ec09d2a23489a0ea02ab9d3cdb401a75ea0d6,2026-10-16T05:48:39.306Z,2026-10-16T05:49:11.860Z,unavailable
-main,stdout,/Users/yifanxu/.codex/issue340-independent/b2-r1/observer-final-jsonlog/stdout.log,36,ed15a93fefde77b97678c71fd9b18f2daee328432e4601361bd73de88737cab2,unavailable,unavailable,complete retained Docker json-file; per-stream exact decode
-main,stderr,/Users/yifanxu/.codex/issue340-independent/b2-r1/observer-final-jsonlog/stderr.log,436368,e2befead86596efdf7327b7305a299335b14a49dd46a85526b6dee16e672c0ce,unavailable,unavailable,complete retained Docker json-file; per-stream exact decode

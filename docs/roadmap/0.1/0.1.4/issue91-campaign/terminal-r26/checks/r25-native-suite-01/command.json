@@ -1,1 +1,0 @@
-["env", "RUSTUP_TOOLCHAIN=1.85.1", "tools/test-fast.sh"]

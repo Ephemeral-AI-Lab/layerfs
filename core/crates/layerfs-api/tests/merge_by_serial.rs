@@ -13,7 +13,7 @@ mod view;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::fs;
-use support::{operation, write, Fixture};
+use support::{operation, write, Change, Fixture};
 
 fn text(value: &str) -> SdkValue {
     SdkValue::text(value)
@@ -307,6 +307,125 @@ fn an_edit_through_one_link_meets_the_removal_of_the_other() {
     assert!(!one.contains(" link="), "{one}");
     assert_eq!(read(&fixture, "/h/one").as_deref(), Some("edited\n"));
     fixture.cleanup();
+}
+
+/// A file new on one side with a second link (as cargo links each crate's
+/// `.rmeta` into its new incremental session directory) loses its first name
+/// to the other side's newer file by a `.lww` rule: the link the merge keeps
+/// still binds it, with its value.
+#[test]
+fn a_new_link_outlives_its_other_name_lost_to_lww() {
+    let fixture = Fixture::new("serial-link-lost", |source| {
+        fs::write(source.join(".lww"), b"/t\n").unwrap();
+        fs::create_dir(source.join("t")).unwrap();
+        2
+    });
+    fixture.fork("l");
+    fixture.fork("r");
+    fixture.workspace_commit(
+        "l",
+        &[
+            Change::Create("/t/x", b"ours\n"),
+            Change::Mkdir("/t/s"),
+            Change::Link("/t/x", "/t/s/x"),
+        ],
+        1,
+        || {},
+    );
+    fixture.workspace_commit(
+        "r",
+        &[
+            Change::Create("/t/x", b"theirs\n"),
+            Change::Mtime("/t/x", 456),
+        ],
+        2,
+        || {},
+    );
+    let merged = fixture.try_call(
+        "branch.merge",
+        vec![
+            ("branch", text("l")),
+            ("with", text("r")),
+            ("name", text("m")),
+        ],
+    );
+    let merged_view = merged_view(&fixture, merged);
+    let kept = line(&merged_view, "/t/s/x").expect("the other link stays");
+    assert!(!kept.contains(" link="), "{kept}");
+    assert_eq!(read(&fixture, "/t/x").as_deref(), Some("theirs\n"));
+    assert_eq!(read(&fixture, "/t/s/x").as_deref(), Some("ours\n"));
+    fixture.cleanup();
+}
+
+/// The same new file loses both its names: one to the other side's newer
+/// file, the other with the new directory holding it, which the other
+/// side's newer file replaces. With no link left the merge leaves it
+/// unbound and no name binds it, whichever name it loses last: the file's
+/// own (`/t/x`, after `/t/s`) or the one below the directory (`/t/a`
+/// before it).
+#[test]
+fn a_new_file_is_dropped_once_every_link_is_lost() {
+    for (label, file) in [
+        ("serial-links-lost-name", "/t/x"),
+        ("serial-links-lost-below", "/t/a"),
+    ] {
+        let fixture = Fixture::new(label, |source| {
+            fs::write(source.join(".lww"), b"/t\n").unwrap();
+            fs::create_dir(source.join("t")).unwrap();
+            2
+        });
+        fixture.fork("l");
+        fixture.fork("r");
+        fixture.workspace_commit(
+            "l",
+            &[
+                Change::Create(file, b"ours\n"),
+                Change::Mkdir("/t/s"),
+                Change::Link(file, "/t/s/x"),
+            ],
+            1,
+            || {},
+        );
+        fixture.workspace_commit(
+            "r",
+            &[
+                Change::Create(file, b"theirs\n"),
+                Change::Mtime(file, 456),
+                Change::Create("/t/s", b"theirs s\n"),
+                Change::Mtime("/t/s", 456),
+            ],
+            2,
+            || {},
+        );
+        let merged = fixture.try_call(
+            "branch.merge",
+            vec![
+                ("branch", text("l")),
+                ("with", text("r")),
+                ("name", text("m")),
+            ],
+        );
+        let merged_view = merged_view(&fixture, merged);
+        assert_eq!(line(&merged_view, "/t/s/x"), None, "{merged_view:?}");
+        assert_eq!(read(&fixture, file).as_deref(), Some("theirs\n"));
+        assert_eq!(read(&fixture, "/t/s").as_deref(), Some("theirs s\n"));
+        let below: Vec<_> = merged_view
+            .iter()
+            .filter_map(|line| line.split(' ').next())
+            .filter(|path| path.starts_with("/t/"))
+            .collect();
+        let mut names = [file, "/t/s"];
+        names.sort();
+        assert_eq!(below, names, "{merged_view:?}");
+        for path in below {
+            let found = line(&merged_view, path).unwrap();
+            assert!(found.starts_with(&format!("{path} file ")), "{found}");
+            assert!(!found.contains(" link="), "{found}");
+            let bytes = read(&fixture, path).unwrap_or_else(|| panic!("{path} reads"));
+            assert_ne!(bytes, "ours\n", "{path}");
+        }
+        fixture.cleanup();
+    }
 }
 
 #[test]

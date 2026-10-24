@@ -1,9 +1,0 @@
-The owner requested a measured fix for slow full Torch .venv Workspace Commit after accepting v0.1.4 preparation.
-
-Current qualified source 1e3dce93547c4186484d75e1f9439a5491e0074a takes about 7.1–7.5 seconds for Commit. A diagnostic reported 2.923 s in content construction/admission, 3.582 s in remaining object admission, 0.220 s checkpoint, 164,150 inserted objects and 1,324 admission transactions. The original failed-workflow 3.240 s observation is not an eligible successful baseline.
-
-First bounded experiment: reuse existing SQL transaction coalescing in Workspace admission, retaining physical batches, strict <8192-object/<4-MiB SQL limits, exact collision/dependency checks, rollback, staging handoff and final-root atomicity. Keep Workspace comparison caching disabled to isolate this change. Preserve 4-KiB SQLite pages, encoding, dependencies, resource limits, fixtures and assertions.
-
-Measure adjacent current-control/candidate full frozen .venv workloads under the shared measurement lock with the same daemon/FUSE image (runtime sources unchanged), fresh macOS-owned Stores and full independent readback. Record CPU/RSS, transaction diagnostics and allocated storage. Reuse the original archive/source identity and 2-CPU/2-GiB/no-swap/256-PID/480-second outer/180-second verification contract. No formal historical speedup claim: these are focused same-contract optimization observations.
-
-Retain only measurable improvements with correctness/storage validation; profile remaining admission work before another change. Preserve rejected attempts. Freeze the final candidate before affected Store/Workspace/native checks, Clippy/formatting and terminal qualification. This follow-up does not reopen accepted #71/#93/#95 or change historical results. Release stack currently ends at #97; no merge/tag/release is authorized here.

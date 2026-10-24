@@ -8,7 +8,7 @@ Environment-independent parent/child timing trees for LayerFS.
 > `native` feature adds hosted observation/output for #192; qualification gaps are
 > recorded in the architecture and acceptance evidence.
 
-Specification: [`docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md).
+Specification: [`docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md).
 Implementation: [#161](https://github.com/Ephemeral-AI-Lab/layerfs/issues/161).
 Design workstream: [#160](https://github.com/Ephemeral-AI-Lab/layerfs/issues/160).
 

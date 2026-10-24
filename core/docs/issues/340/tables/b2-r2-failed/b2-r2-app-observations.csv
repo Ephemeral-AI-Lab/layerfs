@@ -1,5 +1,0 @@
-observation,status,tests,productionLOC,integratedAcceptance,source
-L0 skeleton unique package tests,EARLY_SKELETON_ONLY,4,unavailable,False,/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/NOTES.md
-P1 eight application reads; no implementation,READ_ONLY,0,unavailable,False,/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/P1/NOTES.md
-Unpublished lead-acceptance scaffold,UNVERIFIED,unavailable,unavailable,False,/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/NOTES.md
-Final integrated acceptance,NOT_RUN,unavailable,unavailable,False,/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/NOTES.md

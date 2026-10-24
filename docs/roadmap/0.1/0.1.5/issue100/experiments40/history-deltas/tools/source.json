@@ -1,6 +1,0 @@
-{
-  "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue100-40mb/crates/layerfs-layerstack-store/src/objects/pack.rs",
-  "source_sha256": "a01f05a4ba3e2055d2114ec6ed32249b934580bc1f6efaadb0c82b3122ddbb4a",
-  "extracted_function_sha256": "9ffb462a26c85b2d317ed61006b5bb28ec0fd6638583bad29228cb58e6d5a562",
-  "method": "Exact function text copied without body changes; helper wraps Result/unit errors, ObjectId/as_bytes and four telemetry counters only"
-}

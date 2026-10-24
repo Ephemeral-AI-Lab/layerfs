@@ -1,5 +1,0 @@
-method,phase_path,sample_count,duration_count,median_ms,p95_ms,max_ms,aggregation
-fs.read,/sdk.lines,1080,1080,0.107,0.133,0.717,same phase path samples only; no span sums
-fs.read,/sdk.lines/content.read,1080,1080,0.106,0.132,0.717,same phase path samples only; no span sums
-fs.read,/sdk.lines/content.read/content.acquire,1080,1080,0.104,0.13,0.714,same phase path samples only; no span sums
-fs.read,/sdk.lines/content.read/content.emit,1080,1080,0.0,0.004,0.035,same phase path samples only; no span sums

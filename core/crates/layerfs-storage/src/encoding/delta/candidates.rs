@@ -8,7 +8,8 @@
 //! candidate that *was* acquired stays a hard error.
 //!
 //! Two properties are declared here, and both are measured in the W2 evidence
-//! (`docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188d-20260920T000000Z/`):
+//! (`docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188d-20260920T000000Z/`,
+//! archived at commit `792715f00a`; removed from `main` by #398):
 //!
 //! * **Bound.** A fixed power-of-two slot array, a fixed power-of-two reference
 //!   table and an eight-entry signature per object. It never grows with the

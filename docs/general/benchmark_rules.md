@@ -3,7 +3,7 @@
 > **Status:** Current general guide.
 
 > **Scoped owner-directed exception, 2026-09-15:**
-> [`v016-local-snapshot-experiment-v1`](../roadmap/0.1/0.1.6/sandbox-local-snapshot-spec-and-plan.md)
+> [`v016-local-snapshot-experiment-v1`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.6/sandbox-local-snapshot-spec-and-plan.md)
 > permits sandbox-owned mutable metadata and temporary snapshot/payload backing,
 > while keeping the Store, coordinator and canonical construction/publication on
 > the host. It requires one Commit compute worker and one performance sample per
@@ -56,8 +56,8 @@ support a product or release claim.
 
 Release-specific documents define exact families, cases, fixtures, and gates.
 They may strengthen this policy but may not weaken it. See the
-[release policy](release-policy.md), [0.1.x benchmark contract](../roadmap/0.1/benchmarking.md),
-and [`fs-bench-pro` family format](../roadmap/0.1/0.1.2/fs-bench-pro-format.md).
+[release policy](release-policy.md), [0.1.x benchmark contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/benchmarking.md),
+and [`fs-bench-pro` family format](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.2/fs-bench-pro-format.md).
 
 The controlling principle is:
 

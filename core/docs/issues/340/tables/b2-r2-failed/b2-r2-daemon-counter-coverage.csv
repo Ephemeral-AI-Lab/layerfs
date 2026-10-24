@@ -1,9 +1,0 @@
-source,operation,counterRows,uniqueGroups,completeGroups,contract
-/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/P1/daemon/stderr.log,Sdk,6408,9,9,Counts only; cumulative scope counter values are not added into per-call deltas
-/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/daemon/stderr.log,Attach,2811,3,3,Counts only; cumulative scope counter values are not added into per-call deltas
-/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/daemon/stderr.log,Commit,3195,3,3,Counts only; cumulative scope counter values are not added into per-call deltas
-/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/daemon/stderr.log,Mount,2637,3,3,Counts only; cumulative scope counter values are not added into per-call deltas
-/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/daemon/stderr.log,Sdk,10680,15,15,Counts only; cumulative scope counter values are not added into per-call deltas
-/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/daemon/stderr.log,Status,8433,9,9,Counts only; cumulative scope counter values are not added into per-call deltas
-/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/daemon/stderr.log,Unmount,2310,3,3,Counts only; cumulative scope counter values are not added into per-call deltas
-/Users/yifanxu/.codex/issue340-independent/b2-r2/observer-final-jsonlog/stderr.log,Sdk,14952,21,21,Counts only; cumulative scope counter values are not added into per-call deltas

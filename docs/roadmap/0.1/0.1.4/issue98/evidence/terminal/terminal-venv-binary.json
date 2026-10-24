@@ -1,8 +1,0 @@
-{
-  "source": "9cfb4be477116646258ea0621280ed13b1824c6d",
-  "built_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-admission/docs/roadmap/0.1/0.1.4/issue71-venv-acceptance/probe/target/release/layerfs-directory-proof",
-  "archived_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-admission-runs/final-venv-proof",
-  "binary_sha256": "af0d04044ea552b7b9120e70369800a083f448d1afdfae05e43120e438ae998b",
-  "build_command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-admission-runs/terminal-venv-build-command.json",
-  "product_changes": []
-}

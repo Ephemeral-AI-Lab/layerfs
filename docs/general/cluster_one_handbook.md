@@ -707,7 +707,7 @@ Store, including Project Init and the offline history construction driver.
 It does not run on the live Linux daemon's shared Store. Per-pack preallocation,
 the old allocation owner and public checkpoint remain retired. See the
 [source boundary](../../core/docs/architecture/60-shared-store-foundation.md) and
-[stride1-only plan](../roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md).
+[stride1-only plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md).
 
 Owner supersession2026-10-07 selects WAL throughout Init and Commit. The
 briefly implemented private MEMORY import and conversion-at-seal path is
@@ -775,7 +775,7 @@ path/kind/directory metadata and deterministic selected full file metadata/conte
 it is not an exhaustive reread of every payload byte. Roots match references.
 
 Evidence: [full Init report](../../core/docs/issues/302/SQLITE-SHARED-ALLOCATION-20261005.md),
-[compact receipts](../../core/docs/issues/302/checks/shared-allocation1/).
+[compact receipts](https://github.com/Ephemeral-AI-Lab/layerfs/tree/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/shared-allocation1).
 
 ### 9.2 History stride 10 → 3 → 1
 
@@ -803,12 +803,12 @@ and separate-proof caps 24/24/60; Disposable's earlier caps are 60/170/300 and
 12/12/30. These explicit owner-approved family limits must not be copied as
 general benchmark defaults. The relative speed ceiling remains 1.10x.
 
-Exact compact evidence: [Durable stride10](../../core/docs/issues/302/checks/owner-closure1/durable-history10-stats.json),
-[stride3](../../core/docs/issues/302/checks/owner-closure1/durable-history3-stats.json),
-[stride1](../../core/docs/issues/302/checks/owner-closure1/durable-history1-stats.json);
-[Disposable stride10](../../core/docs/issues/302/checks/locator-clock-final10/comparison.json),
-[stride3](../../core/docs/issues/302/checks/locator-clock-final3/comparison.json),
-[stride1](../../core/docs/issues/302/checks/locator-clock-final1/comparison.json).
+Exact compact evidence: [Durable stride10](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/owner-closure1/durable-history10-stats.json),
+[stride3](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/owner-closure1/durable-history3-stats.json),
+[stride1](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/owner-closure1/durable-history1-stats.json);
+[Disposable stride10](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/locator-clock-final10/comparison.json),
+[stride3](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/locator-clock-final3/comparison.json),
+[stride1](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/locator-clock-final1/comparison.json).
 
 Storage gates used approved ceilings, not the stricter original storage targets:
 

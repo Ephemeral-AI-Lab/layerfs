@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "test", "--locked", "-j2", "-p", "layerfs-layerstack-store", "--lib", "--all-features", "admission_watermark_preserves_preexisting_counts_and_dependency_authentication", "--", "--test-threads=1"]

@@ -1,2 +1,0 @@
-FROM layerfs-307-fuser-patch-base:exact
-RUN rustup component add clippy

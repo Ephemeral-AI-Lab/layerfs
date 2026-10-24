@@ -1,1 +1,0 @@
-The first verifier invocation supplied a malformed expected-SHA argument. The wrapper rejected it before creating output or reading candidate content. Retry uses the sealed result.json hash programmatically; no encoder or database changed.

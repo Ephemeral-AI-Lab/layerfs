@@ -1,9 +1,0 @@
-# Conditional experiment: one previous-file similarity candidate
-
-Authorized conditional follow-up to the fixed twelve overlap targets, unchanged sample IDs and retained Store graph. No family extension, new parameter search, product edits or Store mutation.
-
-For each distinct preceding original lockfile version, build one bounded signature index of its distinct CDC chunks, capped128entries and1MiB total predecessor raw bytes. Use the exact existing SmallContent sixteen-byte rolling window and eight smallest distinct mixed64bit hashes, with sentinel exclusion. Decode+authenticate each indexed current physical chunk sequentially and charge its entire existing dependency closure. Record index construction raw/encoded/decoded bytes, groups, lookup count and time separately; these are extra foreground costs, not free metadata.
-
-For each unchanged target, compute its signature and select at most one predecessor-file chunk with at least two shared fingerprints, largest overlap, tie lexicographically smallest full object ID. No size ranking, codec trial ranking, candidate exclusion based on depth, alternate fallback or parameter sweep. Self candidates are excluded. If winning candidate is already among prior overlap hints, retain that outcome. Apply existing selected-graph chronology, depth4,1MiB raw closure, per-chain work and fresh one-candidate read envelope before encoding; a depth-ineligible winner yields no trial and no second choice.
-
-Use exact already validated Zstd1.5.7 native parameters and complete record costs; decode/authenticate target/base and roundtrip every alternate. Preserve existing FULL/PREFIX representations and count base ownership once. Report potential target-record savings only; adding a new candidate does not reclaim an old representation, and selected-family propagation remains unmeasured. No249-record expansion without significant fixed-sample benefit and parent instruction.

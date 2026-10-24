@@ -8,7 +8,8 @@
 //! the target passes and that the sentence was stale.
 //!
 //! The fixtures under
-//! `docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-<UTC>/` were produced by the
+//! `tests/fixtures/edit-reference/stages-3-4-oracle-<UTC>/` (moved from the removed
+//! `docs/roadmap/0.1/0.1.7/evidence/` by #398) were produced by the
 //! sealed v0.1.6 reference (`44cf748486863ab7c21ca47e731bd88e2b9a7b4a`) in a
 //! separate process: the reference builds the base, applies the same localized
 //! edit through `FileMutationBatch`, and prints the resulting root and the decoded
@@ -34,11 +35,11 @@ use support::{disabled_scope, edits::Edits, edits::Parts, MemoryStore};
 /// This is the corrected generation: both sides execute the same current-result
 /// edit tuples and every fixture records those tuples, so the operations are
 /// compared before any tree is. The earlier generation
-/// (`stages-3-4-oracle-20260916T214846Z`) is retained unchanged, but its
+/// (`stages-3-4-oracle-20260916T214846Z`, at tag `docs-raw-sqlite-final`) is unchanged, but its
 /// comparison claim is superseded: the candidate side translated coordinates
 /// wrongly there, which made four of its mismatches look like algorithm gaps.
 const ORACLE_DIR: &str =
-    "../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected";
+    "tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected";
 
 /// Directory of one case's fixture. `repartition-80-100` was produced later, into
 /// its own generation directory: the earlier receipts are append-only and were not
@@ -46,7 +47,7 @@ const ORACLE_DIR: &str =
 /// the two generations for every case they share.
 fn oracle_path(case: &str) -> PathBuf {
     let generation = if case == "repartition-80-100" {
-        "../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260917T034500Z"
+        "tests/fixtures/edit-reference/stages-3-4-oracle-20260917T034500Z"
     } else {
         ORACLE_DIR
     };

@@ -4,14 +4,20 @@ use layerfs_history::HistoryError;
 use layerfs_storage::port::acquisition::{AcquisitionError, AcquisitionWork, Owner};
 use layerfs_storage::port::PersistenceError;
 use layerfs_storage::StorageError;
-use std::{fmt, io};
+use std::{fmt, io, path::PathBuf};
 /// Result of a namespace initialization operation.
 pub type ProjectResult<T> = Result<T, ProjectError>;
 /// A refused or failed initialization. Previously registered objects remain valid.
 #[derive(Debug)]
 pub enum ProjectError {
-    /// The source or frozen file metadata is invalid.
-    InvalidInput,
+    /// A source entry was refused: `reason` names the check it failed and
+    /// `path` the host entry.
+    InvalidInput {
+        /// The check the entry failed.
+        reason: SourceRefusal,
+        /// Host path of the refused entry.
+        path: PathBuf,
+    },
     /// The source contains a kind the host importer cannot construct.
     Unsupported,
     /// The acquisition backing's files are the source or lie inside it;
@@ -51,6 +57,43 @@ pub enum ProjectError {
         /// The operation whose record and working rows were left in place.
         retained: RetainedAcquisition,
     },
+}
+/// Why Init refused a source entry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceRefusal {
+    /// The source is a symbolic link or not a directory.
+    NotDirectory,
+    /// Permission bits portable metadata cannot hold (set-user-ID or
+    /// set-group-ID on any entry, the sticky bit on a regular file); the
+    /// entry's `0o7777` bits.
+    Mode(u32),
+    /// Modification-time nanoseconds outside `0..1_000_000_000`.
+    Mtime,
+    /// The entry changed while Init read it, or a later path of one file
+    /// no longer matches the first.
+    Changed,
+}
+impl fmt::Display for SourceRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotDirectory => f.write_str("the source is not a directory"),
+            Self::Mode(mode) => write!(
+                f,
+                "mode {mode:04o} has bits LayerFS cannot store (set-user-ID, set-group-ID, or sticky on a file)"
+            ),
+            Self::Mtime => f.write_str("the modification time is out of range"),
+            Self::Changed => f.write_str("the entry changed while Init read it"),
+        }
+    }
+}
+impl ProjectError {
+    /// A refusal of the source entry at `path`.
+    pub(crate) fn refused(reason: SourceRefusal, path: impl Into<PathBuf>) -> Self {
+        Self::InvalidInput {
+            reason,
+            path: path.into(),
+        }
+    }
 }
 /// Acquisition working state one Init still owns after it returned.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

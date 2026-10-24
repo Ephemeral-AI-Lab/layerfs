@@ -20,11 +20,9 @@ fn chain(policy: StoragePolicy, len: usize, versions: usize) -> Vec<WriteOutcome
     for version in 0..versions {
         let mut raw = support::noise(len);
         raw[version * 7] ^= 0x5a;
-        let mut object = FinalizedObject::new(
-            ObjectRole::WholeFile,
-            support::assembled_small_object(&raw),
-        )
-        .unwrap();
+        let mut object =
+            FinalizedObject::new(ObjectRole::WholeFile, support::assembled_small_object(&raw))
+                .unwrap();
         if let Some(base) = previous {
             object = object.with_predecessors(AdvisoryPredecessors::explicit(base).unwrap());
         }
@@ -43,12 +41,20 @@ fn a_chain_stops_at_the_depth_cap_and_reports_it() {
         .iter()
         .map(|o| {
             assert_eq!(o.delta.whole_file_depths.iter().sum::<u64>(), 1, "{o:?}");
-            o.delta.whole_file_depths.iter().position(|n| *n == 1).unwrap()
+            o.delta
+                .whole_file_depths
+                .iter()
+                .position(|n| *n == 1)
+                .unwrap()
         })
         .collect();
     assert_eq!(&depths[..3], &[0, 1, 2]);
     // The fourth version's declared base is at the cap.
-    assert!(outcomes[3].delta.depth_capped >= 1, "{:?}", outcomes[3].delta);
+    assert!(
+        outcomes[3].delta.depth_capped >= 1,
+        "{:?}",
+        outcomes[3].delta
+    );
     assert!(depths[3] < 3);
     assert!(outcomes.iter().all(|o| o.delta.work_exceeded == 0));
     assert!(outcomes.iter().all(|o| o.delta.chunk_depths == [0; 32]));

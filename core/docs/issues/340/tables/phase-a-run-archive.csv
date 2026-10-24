@@ -1,2 +1,0 @@
-status,source_entries,regular_files,symlinks,source_file_bytes,archive_bytes,archive_sha256,all_archive_payloads_verified,source_unchanged,archive_path
-PASS,1200,1200,0,66753397,24473937,c7e719e02cc0d6f57885a7a7283886b5be34376c338340c34bf360a0b5872362,True,True,/Users/yifanxu/.codex/issue340-evidence/run-archives/phase-a/run.tar.gz

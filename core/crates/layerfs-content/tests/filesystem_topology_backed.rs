@@ -226,7 +226,10 @@ fn a_directory_value_keeps_its_supplied_root_without_a_header_and_is_rebuilt_wit
     let value = inode(&store, result.root, base.h).expect("h");
     assert_eq!(
         (value.content_root, value.metadata_root),
-        (supplied.content_root, layerfs_content::object::inode_leaf::InodeMetadata::Root(metadata)),
+        (
+            supplied.content_root,
+            layerfs_content::object::inode_leaf::InodeMetadata::Root(metadata)
+        ),
         "without a header the supplied value is the whole statement"
     );
     assert_eq!(value.namespace_ref_count, 1);

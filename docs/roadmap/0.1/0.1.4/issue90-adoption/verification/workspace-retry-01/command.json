@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "test", "-p", "layerfs-workspace", "--all-features", "--locked", "--test", "file_edit", "group_5_candidate_admission_and_publication_failures_retry_once", "--", "--nocapture"]

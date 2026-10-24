@@ -1,3 +1,0 @@
-test paging ... paging fs.grep: page 1 Some((1, 408)), last page Some((100, 720)) of 100
-paging fs.glob: page 1 Some((1, 336)), last page Some((100, 3558)) of 100
-paging fs.list: page 1 Some((1, 69)), last page Some((7, 84)) of 7

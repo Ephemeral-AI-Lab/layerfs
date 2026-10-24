@@ -1,2 +1,0 @@
-# fmt --check
-fmt exit=0

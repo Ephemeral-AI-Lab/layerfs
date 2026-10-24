@@ -1,4 +1,0 @@
-trace_id,agent,lane,classification,head_moved_since_mount,commit,merged,displaced_head,lww,lww_truncated,outcome,source
-90388181-3,lead,L0/integration,plain,False,126734f764e86f735e2390bc3cf2a9153abadff1e1c481ecdc95864cf502df0d8d,unavailable,unavailable,[],False,Committed,/Users/yifanxu/.codex/issue340-independent/b2-r2/normalized-receipts/calls.jsonl:17
-2eb57abb-3,lead,L0/integration,plain,False,12dbc64c00eefd7f667652db71f96d3404b9289ee444c0a5cd96d5ce3dc9a1cd39,unavailable,unavailable,[],False,Committed,/Users/yifanxu/.codex/issue340-independent/b2-r2/normalized-receipts/calls.jsonl:22
-47849ff2-3,lead,L0/integration,plain,False,12d4531cdc22fd3414d5f5639dc468b869663af73c52269694e9ede8aec7b0a3dc,unavailable,unavailable,[],False,Committed,/Users/yifanxu/.codex/issue340-independent/b2-r2/normalized-receipts/calls.jsonl:28

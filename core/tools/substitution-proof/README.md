@@ -1,7 +1,7 @@
 # The unchanged-consumer substitution proof
 
 > **Status:** Proof harness, not product source and not a released contract.
-> Evidence: [`docs/roadmap/0.1/0.1.7/evidence/stage-7-substitution-20260920T000000Z/`](../../../docs/roadmap/0.1/0.1.7/evidence/stage-7-substitution-20260920T000000Z/README.md).
+> Evidence: [`docs/roadmap/0.1/0.1.7/evidence/stage-7-substitution-20260920T000000Z/`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.7/evidence/stage-7-substitution-20260920T000000Z/README.md).
 
 This answers the Stage 7 acceptance scenario: can integration develop against one
 qualified C1/C2 revision, then adopt an independently optimized C1/C2 revision by

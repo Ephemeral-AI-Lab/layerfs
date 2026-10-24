@@ -20,7 +20,9 @@ fn literal_delta_cannot_hide_a_wrong_canonical_base() {
                 kind: InodeKind::RegularFile,
                 namespace_ref_count: 1,
                 content_root: ObjectId::for_bytes(&[n]),
-                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(ObjectId::for_bytes(b"metadata")),
+                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+                    ObjectId::for_bytes(b"metadata"),
+                ),
             })
         })
         .collect();

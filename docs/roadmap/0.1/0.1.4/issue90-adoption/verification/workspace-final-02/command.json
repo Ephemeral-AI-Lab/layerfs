@@ -1,1 +1,0 @@
-["env", "RUSTUP_TOOLCHAIN=1.85.1", "LAYERFS_TEST_JOBS=4", "bash", "tools/test-fast.sh"]

@@ -5,8 +5,8 @@
 A step-by-step guide for instrumenting a new LayerFS module. It assumes nothing
 about the crate beyond what is written here; the API reference, limits and
 semantics are in the [crate README](README.md), and the normative specification is
-[`docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md).
-The [C1/C2 measurement contract](../../../docs/roadmap/0.1/0.1.7/component-decoupling/content-io.md#7-measurement-and-completion)
+[`docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md).
+The [C1/C2 measurement contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.7/component-decoupling/content-io.md#7-measurement-and-completion)
 requires construction-only, storage-only and integrated timing in the real component
 implementations. This guide's small domain functions illustrate scope wiring;
 they do not implement canonical hashing, CAS or SQLite and are not benchmarks.
@@ -300,4 +300,4 @@ fn save_json_once(report: &TimingReport, path: &std::path::Path) -> std::io::Res
 - [`examples/timer_nested.rs`](examples/timer_nested.rs) — injected parent/child scopes, an error branch and a disabled pass.
 - [`examples/timer_composition.rs`](examples/timer_composition.rs) — independent recordings composed at several levels, then saved outside the measured operation.
 - [`tests/`](tests) — executable contracts, including the external compile-fail checks for the lifetime and thread restrictions.
-- [Specification](../../../docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md) — worked cases A–E and the future adapter contract.
+- [Specification](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md) — worked cases A–E and the future adapter contract.

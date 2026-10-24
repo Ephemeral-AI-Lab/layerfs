@@ -1,8 +1,0 @@
-{
-  "command": [
-    "python3",
-    "core/tools/check_product_boundary.py"
-  ],
-  "exit_code": 0,
-  "wall_ns": 85314083
-}

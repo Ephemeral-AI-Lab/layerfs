@@ -1,5 +1,0 @@
-agent,lane,classification,head_moved_since_mount,count
-P1,people,plain,False,1
-P1,people,up-to-date,False,6
-lead,L0,plain,False,5
-lead,L0,up-to-date,False,3

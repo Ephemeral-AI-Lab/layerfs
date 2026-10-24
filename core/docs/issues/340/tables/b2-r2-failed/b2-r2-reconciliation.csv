@@ -1,5 +1,0 @@
-counter,initial,acknowledged_new,sqlite_overhead_delta,commit_record_sum,layer_record_sum,predicted_final,observed_final,gap,status,contract,gap_candidates
-canonical,2645,14492241,unavailable,unavailable,unavailable,14494886,14494886,0,available,initial + unique post-baseline Commit Save counters; metadata adds file-free-stored overhead delta,"unrecorded/failed Saves, missing history or retained accounting gap; no attribution"
-stored,2307,5939701,unavailable,unavailable,unavailable,5942008,5942008,0,available,initial + unique post-baseline Commit Save counters; metadata adds file-free-stored overhead delta,"unrecorded/failed Saves, missing history or retained accounting gap; no attribution"
-metadata,155059,252450,744971,unavailable,unavailable,1152480,1152480,0,available,initial + unique post-baseline Commit Save counters; metadata adds file-free-stored overhead delta,"unrecorded/failed Saves, missing history or retained accounting gap; no attribution"
-logical,88,unavailable,unavailable,95429963,23845692,119275655,119275655,0,available,"sum every unique Commit.logical AND every publication Layer.logical, including Init",unavailable

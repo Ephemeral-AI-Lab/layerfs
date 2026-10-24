@@ -21,7 +21,13 @@ use std::{
 const VERIFY_WORKERS: usize = 4;
 const SAMPLE_TARGET: usize = 64;
 const SAMPLE_POLICY: &str = "stride64-size-log2-endpoints-v1";
-type MetadataMemo = Option<((layerfs_content::object::inode_leaf::InodeMetadata, InodeKind), PortableMetadata)>;
+type MetadataMemo = Option<(
+    (
+        layerfs_content::object::inode_leaf::InodeMetadata,
+        InodeKind,
+    ),
+    PortableMetadata,
+)>;
 
 #[derive(Clone)]
 struct Expected {

@@ -1,7 +1,0 @@
-[package]
-name = "issue87-correspondence-probe"
-version = "0.0.0"
-edition = "2024"
-[workspace]
-[dependencies]
-layerfs-content = { path = "../../../../../../crates/layerfs-content" }

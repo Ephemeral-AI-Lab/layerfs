@@ -10,7 +10,6 @@ use super::lookup::{
     self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
     root, short, Answer,
 };
-pub use super::MAIN;
 use crate::store::{CommitError, Store};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
@@ -24,6 +23,9 @@ use layerfs_history::{
 };
 use layerfs_workspace::InodeSerials;
 use std::sync::Arc;
+
+/// The name of the project's line of Layers.
+pub const MAIN: &str = "main";
 
 /// Serials one merge reservation takes.
 const MERGE_SERIALS: u64 = 64;

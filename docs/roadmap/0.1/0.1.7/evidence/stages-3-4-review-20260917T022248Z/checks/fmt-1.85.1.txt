@@ -1,2 +1,0 @@
-# fmt --check with +1.85.1 (handoff command)
-exit=0

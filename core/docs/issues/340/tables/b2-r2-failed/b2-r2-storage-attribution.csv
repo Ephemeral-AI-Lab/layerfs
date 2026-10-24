@@ -1,2 +1,0 @@
-agent,lane,commit_count,logical_tree_bytes_sum,new_canonical,new_stored,new_metadata_subset,contract
-lead,L0/integration,5,95429963,14492241,5939701,252450,unique post-baseline Commit Saves only; unknown owners remain unavailable; Layer logical bytes separate

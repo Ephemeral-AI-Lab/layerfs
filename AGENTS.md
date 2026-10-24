@@ -25,7 +25,10 @@ simplification.
 | Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
 
 **The LayerFS UI is the dsh LayerFS plugin** (owner, 2026-10-19): the LayerFS tab in
-DeepSeek Harness, served by `dsh/packages`; see [dsh/README.md](dsh/README.md).
+DeepSeek Harness. It lives in its own repository,
+[dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs) (moved out of `dsh/`
+on 2026-10-23, #428), which pins the LayerFS commit it builds on; this repository
+holds no dsh code.
 Do not build or revive standalone HTML or TUI pages. **The `dsh-layerfs-demo`
 bundle (the LayerFS mock model and its demo workspace) is disabled permanently**
 (owner, 2026-10-21): it loads nothing, is not released and no guide installs it.
@@ -140,8 +143,27 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   Linux container running the real SDK, which opens each project's Store
   directly and keeps it and its daemon connections open while the project is
   in use (closed after a quiet minute). The worker listens on loopback only,
-  behind a secret. The product SDK and daemon do not change. Nothing else may
-  route Store calls this way.
+  behind a secret. The product SDK and daemon do not change. (Widened to any
+  integration on 2026-10-24; see below.)
+- **Additional exception (owner, 2026-10-22): dsh Live on Windows.** The
+  Windows dsh-layerfs adapter may forward its SDK binding calls to one
+  authenticated loopback worker per LayerFS home in a selected WSL2 Linux
+  distribution. The worker opens the shared Store directly on that
+  distribution's local ext4/xfs/btrfs filesystem and uses its Docker Engine
+  for Sandbox daemons. Windows owns the UI, bindings and traces; Linux owns
+  native handles and project discovery. This is independent of the macOS
+  adapter and changes neither the product SDK nor the daemon. A lost reply
+  is never replayed, and an uncertain Init retains its Linux home and volume.
+- **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh
+  and every other plugin. The macOS and Windows worker routes above are open
+  to any integration: `@layerfs/runtime` starts the worker on those platforms
+  and any process given its endpoint (`useWorker(endpoint)` or
+  `LAYERFS_WORKER_ENDPOINT`) sends its Store calls there. There is no adapter
+  name, no integration check and no code that names a plugin. LayerFS reads
+  `LAYERFS_*` settings only. An integration that can set only its own
+  prefixed names, such as dsh's `DSH_*`, maps them itself. Linux still makes
+  Store calls in the caller's process, and the worker's rules above (loopback,
+  secret, one attempt, no replay) are unchanged.
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a
@@ -183,7 +205,10 @@ For documentation/release work, read the
 For measurements, read the [agent measurement workflow](docs/general/agent-measurement-policy.md),
 [benchmark rules](docs/general/benchmark_rules.md),
 [report template](docs/general/benchmark_agent_report.md) and owning harness/family contract.
-Core routing is [benchmark/fs-bench-pro/AGENTS.md](benchmark/fs-bench-pro/AGENTS.md).
+Benchmark suites, harnesses and released data live in the
+[layerfs-benchmark](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark) repository, moved out of
+`benchmark/` on 2026-10-23. Core routing is its
+[fs-bench-pro/AGENTS.md](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md).
 **fs-bench-pro is frozen and left broken (owner, 2026-10-18).** Do not edit,
 build, run or repair it, and leave it out of workspace builds and checks. Its
 call sites broken by #352 F-020 (`ProjectApi` fork and commits,
@@ -192,7 +217,10 @@ fix record) stay broken; a product change never adapts it. Only an
 explicit owner instruction reopens it.
 The root `benchmark/` harness that built and measured the retired reference was
 removed from HEAD; read it at tag `reference-v0.1.6-final`. Released
-fs-bench-pro results (v0.1.4–v0.1.6) are in [benchmark/data/fs-bench-pro](benchmark/data/fs-bench-pro/README.md).
+fs-bench-pro results (v0.1.4–v0.1.6) are in layerfs-benchmark's
+[data/fs-bench-pro](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/data/fs-bench-pro/README.md).
+Older documents here still link to `benchmark/` paths; read those files in
+layerfs-benchmark at the same path without the `benchmark/` prefix.
 
 ## 1. A warm cache must never credit a measured phase
 
@@ -277,10 +305,17 @@ remain binding; moving them out of this file does not weaken them.
 - One attempted operation; no automatic retry/busy handler, refresh/reprepare
   or failed-operation replay. Readiness waits are not retries. Preserve exact
   failure/uncertainty and custody; no guessed resend, deletion or success.
-- There is no CI or aggregate pre-push gate. `tools/preflight.sh` is permanently
-  retired; do not restore it or an equivalent wrapper. Verify the changed scope
-  with [core checks](core/AGENTS.md#checks-and-completion), report checks/gaps,
-  and never claim CI green or that an empty guard scan proves implementation.
+- **CI reports; it never gates (owner, 2026-10-23).** GitHub Actions runs a
+  fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
+  guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
+  FUSE mount tests). [core/tools/ci_tests.py](core/tools/ci_tests.py) decides
+  which tests go in which lane. Neither is a required check, and nothing runs
+  before a push. Do not wait for CI, and do not treat a green run as
+  verification of your change: verify the changed scope yourself with
+  [core checks](core/AGENTS.md#checks-and-completion) and report checks/gaps.
+  There is still no pre-push gate: `tools/preflight.sh` stays retired; do not
+  restore it or an equivalent wrapper. An empty guard scan proves no
+  implementation.
 - **Migrations and refactors delete tests rather than nurse them (owner,
   2026-10-18).** When code is moved, replaced or refactored, a test that is
   tricky to adapt (it drives a removed route, internal type or retired model,
@@ -362,20 +397,27 @@ the number. Complete the comparison before committing; do not invent estimates.
 ### File and folder layout listings
 
 When a plan, handoff, review or reply shows a source layout, current or
-planned, use one vertical listing per crate in a fenced block:
+planned, use one vertical listing per crate in a fenced `diff` block, so the
+renderer highlights what changes:
 
-```
-construction/                       [753]
-  mod.rs                               4
-  records.rs                         247
-  driver.rs                            —   new
-  captured/                         [502]  (existing constructor, reused)
-    owner.rs                         256
-    scan.rs                          246
-  scratch/                             —   cond.
-    records.rs                         —
+```diff
+  construction/                       [793]
+    mod.rs                               4
+    records.rs                         247
++   driver.rs                            —   new
+    captured/                         [502]  (existing constructor, reused)
+      owner.rs                         256
+      scan.rs                          246
+-   legacy.rs                           40   (removed: driver.rs replaces it)
++   scratch/                             —   cond.
++     records.rs                         —
 ```
 
+- **Column 1 is the change marker, then one space, then the path.** `+` marks
+  a file or directory that does not exist yet (green); `-` marks one this
+  change removes (red); a space marks one that stays, whether unchanged,
+  edited in place or moved in (say where from in its annotation). A listing of
+  the current tree alone has a space on every line.
 - **One path per line.** Indent two spaces per directory level. Directories end
   in `/`; list a directory's own files before its subdirectories. Do not join
   siblings on one line or use brace groups such as `{mod,cursor}.rs`.
@@ -383,8 +425,9 @@ construction/                       [753]
   column, from the pinned `tools/production_loc.py --files` at a stated commit.
   This is the `prod` column, never physical lines or Git statistics.
 - **Every directory carries its subtotal in brackets**, summing all listed
-  production files beneath it. If only part of a directory is shown, say so in
-  its annotation; the bracketed number then covers only the files shown.
+  production files beneath it as they are at the stated commit, removed files
+  included. If only part of a directory is shown, say so in its annotation;
+  the bracketed number then covers only the files shown.
 - **A file that does not exist yet shows `—`**, followed by `new` (planned) or
   `cond.` (added only if existing code cannot cover the need). Never print an
   estimated LOC for it.

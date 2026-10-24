@@ -95,9 +95,15 @@ fn only_units_both_sides_changed_are_decided_and_ours_wins_a_tie() {
     let theirs = [UnitChange::default(), change(4, 6), change(1, 7)];
     let reports = decide_units(&units, &ours, &theirs);
     assert_eq!(reports.len(), 2);
-    assert_eq!((reports[0].name.as_str(), reports[0].kept), ("b", Side::Theirs));
+    assert_eq!(
+        (reports[0].name.as_str(), reports[0].kept),
+        ("b", Side::Theirs)
+    );
     assert_eq!((reports[0].kept_time, reports[0].dropped), ((6, 0), 1));
-    assert_eq!((reports[1].name.as_str(), reports[1].kept), ("c", Side::Ours));
+    assert_eq!(
+        (reports[1].name.as_str(), reports[1].kept),
+        ("c", Side::Ours)
+    );
     assert_eq!((reports[1].changed_ours, reports[1].changed_theirs), (3, 1));
     assert_eq!(reports[1].dropped, 1);
 }

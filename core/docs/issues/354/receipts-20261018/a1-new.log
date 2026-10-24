@@ -1,8 +1,0 @@
-
-running 1 test
-test ls_l_of_ten_thousand_committed_entries ... LS_L pass=cold entries=10000 digest=92d46b5a51de2378 statements=11114 statements_per_entry=1.11 object_batches=890 object_ids=1050 length_batches=10000 pack_selections=25 pack_bytes=19481 pack_bytes_per_entry=2 vm_rss_kib=33892->42696 vm_hwm_kib=33892->42696
-LS_L pass=steady entries=10000 digest=92d46b5a51de2378 statements=0 statements_per_entry=0.00 object_batches=0 object_ids=0 length_batches=0 pack_selections=0 pack_bytes=0 pack_bytes_per_entry=0 vm_rss_kib=42696->42700 vm_hwm_kib=42696->42700
-ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.55s
-

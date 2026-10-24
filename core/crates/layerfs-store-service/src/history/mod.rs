@@ -4,5 +4,4 @@ pub mod branch;
 pub mod lookup;
 mod units;
 
-/// The name of the project's line of Layers.
-pub const MAIN: &str = "main";
+pub use branch::MAIN;

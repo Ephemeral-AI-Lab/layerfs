@@ -1,3 +1,0 @@
-ref_type,tree_count_observed,logical_bytes_observed,all_history_tree_count,all_history_logical_bytes,coverage,physical_bytes_attributed_to_dependencies,contract
-commit,unavailable,unavailable,unavailable,unavailable,partial/unavailable for all-history total,unavailable,logical regular-file bytes per path including hardlink paths; symlink target bytes excluded; physical per-path attribution unavailable
-workspace,unavailable,unavailable,unavailable,unavailable,partial/unavailable for all-history total,unavailable,logical regular-file bytes per path including hardlink paths; symlink target bytes excluded; physical per-path attribution unavailable

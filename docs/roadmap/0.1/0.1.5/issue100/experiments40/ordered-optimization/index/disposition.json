@@ -1,6 +1,0 @@
-{
-  "default_page_size": 4096,
-  "decision": "KEEP4096_FOR_BOTH_HISTORIES",
-  "reason": "53statesregresses4096allocatedbytes;157savesonly73728allocatedbytes(0.112%)whileaddingoneBtreelevelandroughlyquadruplingoverflowpagecounts.Noadditionalpagetuning.",
-  "full157_1024_measured_reference_retained": true
-}

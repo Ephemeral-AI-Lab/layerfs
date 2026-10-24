@@ -1,9 +1,0 @@
-test_duplicate_full_trace_and_receipt_keys_quarantined (test_supplement_adapter.ExactSupplementIdentity.test_duplicate_full_trace_and_receipt_keys_quarantined) ... ok
-test_equal_step_different_full_ref_joins_uniquely_and_aliases_match (test_supplement_adapter.ExactSupplementIdentity.test_equal_step_different_full_ref_joins_uniquely_and_aliases_match) ... ok
-test_missing_truncated_and_wrong_type_discriminators_rejected (test_supplement_adapter.ExactSupplementIdentity.test_missing_truncated_and_wrong_type_discriminators_rejected) ... ok
-test_optional_line_pattern_and_alias_mismatches_do_not_join (test_supplement_adapter.ExactSupplementIdentity.test_optional_line_pattern_and_alias_mismatches_do_not_join) ... ok
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.001s
-
-OK

@@ -1,8 +1,0 @@
-{
-  "status": "PASS",
-  "errors": [],
-  "unique_cohort": {
-    "objects_count": 86412,
-    "canonical_bytes": 705162813
-  }
-}

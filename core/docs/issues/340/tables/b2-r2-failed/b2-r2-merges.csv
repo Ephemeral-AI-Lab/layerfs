@@ -1,1 +1,0 @@
-trace_id,time,agent,lane,step,args,outcome,ms,result,error,fast_forward,sources,merge_base,head,lww,lww_truncated,conflicts_truncated,source

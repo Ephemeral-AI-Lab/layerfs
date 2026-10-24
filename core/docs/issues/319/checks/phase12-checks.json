@@ -1,9 +1,0 @@
-{
-  "scope": "Documentation and unchanged-receipt CSV publication only; no product/runtime code changed",
-  "fmt": "PASS",
-  "boundary": "PASS:686 production files",
-  "staged_whitespace": "PASS",
-  "Rust_build_test_Clippy": "NOT_RUN: no touched crates; phase10 product package checks remain applicable",
-  "publication_checks": "16 CSV row/field equality apart from location substitutions; original and published hashes retained; 27 receipt source/attempt/cleanup checks",
-  "lock_refusals": "Two parallel check commands refused execution by own measurement lock; serialized checks then PASS; no benchmark repeated"
-}

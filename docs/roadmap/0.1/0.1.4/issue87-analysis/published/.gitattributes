@@ -1,4 +1,0 @@
-# Preserve signed artifact bytes, including CSV CRLF and source EOF whitespace.
-* -text
-*.md whitespace=-blank-at-eof
-*.csv whitespace=cr-at-eol

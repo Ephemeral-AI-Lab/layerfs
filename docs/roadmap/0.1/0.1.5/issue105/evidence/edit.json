@@ -1,5 +1,0 @@
-{
-  "file": "benchmark/fs-bench-pro/src/main.rs",
-  "old": "container cgroup snapshot failed",
-  "new": "container cgroup snapshot failed (issue105 edit)"
-}

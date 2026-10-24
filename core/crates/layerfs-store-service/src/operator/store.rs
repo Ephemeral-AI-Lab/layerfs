@@ -88,7 +88,7 @@ pub fn commits(store: &Arc<Store>, args: &SdkValue) -> Answer {
     ]))
 }
 
-/// `operator.store.overwritten({ layer, pageSize?, pagePos? })`: the Layers a
+/// `backend.store.project.list_overwritten({ layer, pageSize?, pagePos? })`: the Layers a
 /// publication overwrote, newest first, one page.
 pub fn overwritten(store: &Arc<Store>, args: &SdkValue) -> Answer {
     project(store, args)?;

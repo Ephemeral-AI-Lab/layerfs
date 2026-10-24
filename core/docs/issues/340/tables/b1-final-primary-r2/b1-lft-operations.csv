@@ -1,1 +1,0 @@
-run,role,scope,name,elapsed_ns,success,resource_status,cpu_shared_ns,sampled_max_rss_bytes,samples,gaps,largest_gap_ns,first_sample_ns,last_sample_ns,opened_ns,closed_ns,concurrency,source,clock_contract

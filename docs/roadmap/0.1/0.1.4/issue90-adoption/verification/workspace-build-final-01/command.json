@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "build", "--workspace", "--locked"]

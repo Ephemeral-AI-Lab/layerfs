@@ -143,5 +143,6 @@ use layerfs_content::filesystem::{
 Reference parity for the tree grammars is sealed in
 `tests/fixtures/filesystem/` and checked by `tests/filesystem_reference.rs`,
 `tests/filesystem_codec.rs` and `tests/filesystem_attributes.rs`; see
-`docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-report.md` for the exact
+`docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-report.md` (archived at
+commit `792715f00a`, removed from `main` by #398) for the exact
 scope, limits and open criteria.

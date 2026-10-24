@@ -4,7 +4,7 @@
 //! acquisition port. This module holds the resident side only: one read window
 //! per stream, one write window, and the counters that describe them. Each
 //! port call is one attempt; nothing here repeats a unit that failed.
-use crate::error::{acquisition, malformed, ProjectError as Failure};
+use crate::error::{acquisition, malformed, ProjectError as Failure, SourceRefusal};
 use crate::{NamespaceWork, RetainedAcquisition};
 use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::{
@@ -13,7 +13,10 @@ use layerfs_storage::port::acquisition::{
     WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 use layerfs_storage::port::PersistenceError;
-use std::{cell::Cell, collections::VecDeque, fs::Metadata, os::unix::fs::MetadataExt};
+use std::{
+    cell::Cell, collections::VecDeque, ffi::OsString, fs::Metadata, os::unix::ffi::OsStringExt,
+    os::unix::fs::MetadataExt, path::PathBuf,
+};
 
 /// Rows the job queue or one resident child buffer may hold.
 pub(crate) const WINDOW_ROWS: usize = 512;
@@ -227,7 +230,12 @@ impl<'a> Backing<'a> {
         let canonical = self
             .port
             .place_children(self.owner, parent, placed)
-            .map_err(changed_source)?;
+            .map_err(|error| {
+                changed_source(error, |position| {
+                    let child = placed.iter().find(|child| child.position == position)?;
+                    child.host.as_ref().map(|(_, path)| path.clone())
+                })
+            })?;
         let regular = placed.iter().filter(|child| child.host.is_some());
         bound.count(regular.map(|child| child.position), &canonical)?;
         placed.clear();
@@ -363,12 +371,17 @@ pub(crate) fn window_full(rows: usize, held: usize, bytes: usize) -> bool {
     rows == WRITE_WINDOW_ROWS || (rows > 0 && held + bytes > WRITE_WINDOW_BYTES)
 }
 
-/// A later path of one identity carried different evidence: the source changed.
-fn changed_source(error: AcquisitionError) -> Failure {
-    match error {
-        AcquisitionError::Changed { .. } => Failure::InvalidInput,
-        error => acquisition(error),
+/// A later path of one identity carried different evidence: the source
+/// changed. The refusal names the window's row at that position; a position
+/// outside the window keeps the backing's own answer.
+fn changed_source(error: AcquisitionError, path: impl Fn(u64) -> Option<Vec<u8>>) -> Failure {
+    if let AcquisitionError::Changed { position } = error {
+        if let Some(path) = path(position) {
+            let path = PathBuf::from(OsString::from_vec(path));
+            return Failure::refused(SourceRefusal::Changed, path);
+        }
     }
+    acquisition(error)
 }
 
 /// The one resident write window of observed entries.
@@ -406,7 +419,15 @@ impl Pending {
         let canonical = backing
             .port
             .put_entries(backing.owner, &self.entries)
-            .map_err(changed_source)?;
+            .map_err(|error| {
+                changed_source(error, |position| {
+                    let entry = self
+                        .entries
+                        .iter()
+                        .find(|entry| entry.position == Some(position))?;
+                    entry.host_path.clone()
+                })
+            })?;
         let regular = self.entries.iter().filter(|entry| entry.host.is_some());
         bound.count(regular.filter_map(|entry| entry.position), &canonical)?;
         self.entries.clear();

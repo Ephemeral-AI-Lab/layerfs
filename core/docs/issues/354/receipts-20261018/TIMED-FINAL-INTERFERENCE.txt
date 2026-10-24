@@ -1,6 +1,0 @@
-Final-identity timed samples, 2026-10-18 (host macOS 26 / Darwin 25.4.0 arm64), one sample per arm, not quiet: diagnostic.
-State: new process, fresh Store copy for the arm, warmed by reading the copy once with cat (same state as the 17:26 arms).
-Declared interference (top CPU, sampled before and after each arm):
-  fseventsd ~99-102%, #353 worktree test sdk_merge_scale ~97-100%, mds_stores ~79-90%, WindowServer ~41-44%.
-final-grep (probe-final2, mode time): load 7.13 10.10 10.38 -> 3.263 s, 32,353 statements, peak RSS 36,028,416 B
-final-read (probe-final2, calls read x4000): load 7.28 10.08 10.37 -> 7.459 s, 115,818 statements, peak RSS 25,100,288 B

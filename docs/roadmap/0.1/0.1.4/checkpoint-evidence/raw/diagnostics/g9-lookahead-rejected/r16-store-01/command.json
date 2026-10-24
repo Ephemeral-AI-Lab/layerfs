@@ -1,1 +1,0 @@
-["cargo", "test", "-p", "layerfs-layerstack-store", "-p", "layerfs-workspace"]

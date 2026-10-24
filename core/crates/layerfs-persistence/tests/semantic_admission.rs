@@ -108,7 +108,9 @@ fn admitted_complete_root_closes_and_reconstructs_through_the_real_store() {
                     kind: InodeKind::Directory,
                     namespace_ref_count: 0,
                     content_root: directory,
-                    metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(metadata),
+                    metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+                        metadata,
+                    ),
                 },
             ),
             (
@@ -117,7 +119,9 @@ fn admitted_complete_root_closes_and_reconstructs_through_the_real_store() {
                     kind: InodeKind::RegularFile,
                     namespace_ref_count: 1,
                     content_root: file,
-                    metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(metadata),
+                    metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+                        metadata,
+                    ),
                 },
             ),
             (
@@ -126,7 +130,9 @@ fn admitted_complete_root_closes_and_reconstructs_through_the_real_store() {
                     kind: InodeKind::Symlink,
                     namespace_ref_count: 1,
                     content_root: link,
-                    metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(metadata),
+                    metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(
+                        metadata,
+                    ),
                 },
             ),
         ],

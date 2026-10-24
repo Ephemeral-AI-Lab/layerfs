@@ -1,8 +1,0 @@
-check,status,count
-Exact trace/full-result join,PASS,61
-Successful Sandbox close,PASS,3
-Balanced terminal mount/unmount,PASS,3
-No SDK after owner close,PASS,unavailable
-Both actor log captures before close,PASS,2
-Full observer Docker json-file decode,PASS,1306
-Mutable MAIN ledger source pins,EXCLUDED,0

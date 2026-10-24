@@ -140,7 +140,9 @@ fn crafted_value(store: &mut TreeStore, inode: &Crafted<'_>) -> InodeValue {
         kind,
         namespace_ref_count: declared,
         content_root,
-        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic("qualify/metadata")),
+        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+            "qualify/metadata",
+        )),
     }
 }
 fn crafted_root(store: &mut TreeStore, table: ObjectId, root_serial: u64) -> ObjectId {

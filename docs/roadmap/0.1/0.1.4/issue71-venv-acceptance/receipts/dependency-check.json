@@ -1,5 +1,0 @@
-{
-  "status": "PASS",
-  "imported_package_records_match_release_lock_after_dependency_reference_resolution": true,
-  "first_check": "Raw text equality rejected Cargo removal of redundant windows-sys version qualifiers; resolved dependency identities are unchanged."
-}

@@ -1,2 +1,0 @@
-population,agent,method,code,start,end,raw_receipt,contract
-caller-local pretrace validation; excluded from traced SDK and daemon counts,lead,fs.list,InvalidInput,2026-10-16T11:29:28.210Z,2026-10-16T11:29:28.213Z,"{""bytes"":1340,""path"":""/Users/yifanxu/.codex/issue340-independent/b2-r3/agents/lead/out/calls/lead-0400.json"",""sha256"":""1921075175844e87ff105e572f9cb44f278e6c03c4e7d0b5296488a7899c938f""}","One local argument refusal before invoke; no invented trace ID, network call or daemon duration"

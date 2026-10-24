@@ -1,9 +1,0 @@
-{
-  "status": "EXACT_RELOCATION",
-  "old_model_sha256": "497f8c28b72856c817a4d136f3150a6faf08d9e98ffbbda87cfcbcf66b334176",
-  "fixture_function_sha256": "8ef6e0feda50ea70e20183e16f696fbe71aa9e4b59356bd946b758836769d1e4",
-  "sdk_definitions_sha256": "a8647ff06645ac1f1aba2a356f1d1faadb8008c2d7b06d9cd30a683d5f5237b6",
-  "new_module_contains_exact_fixture_function": true,
-  "new_module_contains_exact_sdk_definitions": true,
-  "scope": "Harness only; complete existing SDK definitions and fixture hash function relocated verbatim; consumers changed module path; semantic verification role helpers gain sibling visibility; frozen reference unchanged"
-}

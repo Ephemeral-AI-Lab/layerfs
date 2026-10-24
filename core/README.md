@@ -4,7 +4,7 @@
 > pinned to `664d02864e`. Implementation rules live in [AGENTS.md](AGENTS.md).
 
 `core/` is the LayerFS product: one Rust Cargo workspace with fourteen crates,
-plus the JavaScript SDK's Node binding at [`../sdk/js/native`](../sdk/js/native).
+plus the JavaScript SDK's Node binding at [`../api/binding`](../api/binding).
 It is the only product at HEAD. The v0.1.6 reference implementation that lived
 under root `crates/` was retired on 2026-10-10 (R9c) and can be read at local tag
 `reference-v0.1.6-final`; nothing in `core/` depends on it.
@@ -16,7 +16,7 @@ under root `crates/` was retired on 2026-10-10 (R9c) and can be read at local ta
   (WAL, `synchronous=OFF`). Project Init builds and seals it; it is then
   installed on a volume the daemons share.
 - **Store calls run in the SDK's process.** The JavaScript SDK
-  ([`sdk/js`](../sdk/js/README.md)) calls `layerfs-api` through the Node
+  ([`api`](../api/README.md)) calls `layerfs-api` through the Node
   binding. Its fs, branch, project and operator methods run on
   `layerfs-store-service` against the Store the SDK process opened directly.
   This is the only route, and it is Linux only; elsewhere these calls fail

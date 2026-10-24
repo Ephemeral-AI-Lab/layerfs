@@ -1,8 +1,0 @@
-{
-  "cases": [
-    "deepseek-full"
-  ],
-  "preparation_ns": 74893891625,
-  "status": "PASS",
-  "wall_ns": 527151979209
-}

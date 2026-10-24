@@ -1,4 +1,0 @@
-traceId,agent,step,exitCode,stdoutBytes,stderrBytes,source,contract
-90388181-2,lead,lead-0006 L0 dependency install and executable mode exec,0,295,208,/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/out/calls/lead-0006.json,"Retained original result, no app execution repeated"
-2eb57abb-2,lead,lead-0011 L0 fresh-fork build syntax and package tests exec,0,2169,0,/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/out/calls/lead-0011.json,"Retained original result, no app execution repeated"
-47849ff2-2,lead,lead-0017 L0 main fresh-fork proof exec,0,1869,0,/Users/yifanxu/.codex/issue340-independent/b2-r2/agents/lead/out/calls/lead-0017.json,"Retained original result, no app execution repeated"

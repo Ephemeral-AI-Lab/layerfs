@@ -111,17 +111,15 @@ pub fn same_inode(
     if left.kind != right.kind || left.content_root != right.content_root {
         return Ok(false);
     }
-    Ok(crate::filesystem::attributes::read_portable(
-        reader,
-        left.metadata_root,
-        left.kind,
-        work,
-    )? == crate::filesystem::attributes::read_portable(
-        reader,
-        right.metadata_root,
-        right.kind,
-        work,
-    )?)
+    Ok(
+        crate::filesystem::attributes::read_portable(reader, left.metadata_root, left.kind, work)?
+            == crate::filesystem::attributes::read_portable(
+                reader,
+                right.metadata_root,
+                right.kind,
+                work,
+            )?,
+    )
 }
 
 /// Whether two metadata fields decode to the same portable value, with the
@@ -137,8 +135,10 @@ pub fn same_metadata(
     if left == right {
         return Ok(true);
     }
-    Ok(crate::filesystem::attributes::read_portable(reader, left, kind, work)?
-        == crate::filesystem::attributes::read_portable(reader, right, kind, work)?)
+    Ok(
+        crate::filesystem::attributes::read_portable(reader, left, kind, work)?
+            == crate::filesystem::attributes::read_portable(reader, right, kind, work)?,
+    )
 }
 
 /// Every inode whose value differs between two roots, in serial order.
@@ -510,8 +510,7 @@ pub fn root_changes(
     for entry in entries.into_values() {
         let keep = match (entry.left, entry.right) {
             (Some(a), Some(b)) => {
-                a.serial != b.serial
-                    || !same_inode(reader, &a.value, &b.value, &mut metadata)?
+                a.serial != b.serial || !same_inode(reader, &a.value, &b.value, &mut metadata)?
             }
             _ => true,
         };

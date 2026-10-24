@@ -20,7 +20,7 @@ pub mod sandbox;
 pub use base::dispatch::call;
 pub use base::failure::{OperationCause, OperationFailure};
 pub use base::sdk::{SdkError, SdkResult};
-pub use layerfs_project::{InitCounters, InitCounts, InitStep};
+pub use layerfs_project::{InitCounters, InitCounts, InitStep, ProjectError, SourceRefusal};
 pub use project::{
     InitError, InitFailure, InitRequest, InstallError, InstallFailure, InstallWork, Installed,
     ProjectApi, SealedProject,

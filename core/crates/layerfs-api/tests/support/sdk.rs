@@ -28,6 +28,12 @@ pub enum Change<'a> {
     /// Save as git and editors do: the bytes go to a new sibling
     /// `<name>.save` in 64 KiB writes, which is then renamed over the path.
     SaveOver(&'a str, &'a [u8]),
+    /// Create a regular file with the bytes.
+    Create(&'a str, &'a [u8]),
+    /// Create a directory.
+    Mkdir(&'a str),
+    /// Hard-link the existing path (first) at the new path (second).
+    Link(&'a str, &'a str),
 }
 
 pub struct Fixture {
@@ -210,6 +216,10 @@ impl Fixture {
             };
             operation.overlay().reply_attempted(publication).unwrap();
         };
+        let split = |path: &str| {
+            let (parent, name) = path.rsplit_once('/').unwrap();
+            (lookup(parent), PathName::new(name).unwrap())
+        };
         for change in changes {
             if let Change::SaveOver(path, bytes) = change {
                 let (parent, name) = path.rsplit_once('/').unwrap();
@@ -238,11 +248,46 @@ impl Fixture {
                 });
                 continue;
             }
+            if let Change::Create(path, bytes) = change {
+                let (parent, name) = split(path);
+                apply(Operation::Create {
+                    parent,
+                    name,
+                    mode: 0o644,
+                });
+                apply(Operation::Write {
+                    serial: lookup(path),
+                    position: Position::At(0),
+                    data: bytes.to_vec().into(),
+                });
+                continue;
+            }
+            if let Change::Mkdir(path) = change {
+                let (parent, name) = split(path);
+                apply(Operation::Mkdir {
+                    parent,
+                    name,
+                    mode: 0o755,
+                });
+                continue;
+            }
+            if let Change::Link(existing, path) = change {
+                let (parent, name) = split(path);
+                apply(Operation::Link {
+                    serial: lookup(existing),
+                    parent,
+                    name,
+                });
+                continue;
+            }
             let path = match change {
                 Change::Mode(path, _)
                 | Change::Mtime(path, _)
                 | Change::Write(path, _)
-                | Change::SaveOver(path, _) => path,
+                | Change::SaveOver(path, _)
+                | Change::Create(path, _)
+                | Change::Mkdir(path)
+                | Change::Link(_, path) => path,
             };
             let serial = lookup(path);
             apply(match change {
@@ -266,7 +311,12 @@ impl Fixture {
                     position: Position::At(0),
                     data: bytes.to_vec().into(),
                 },
-                Change::SaveOver(..) => unreachable!(),
+                Change::SaveOver(..)
+                | Change::Create(..)
+                | Change::Mkdir(..)
+                | Change::Link(..) => {
+                    unreachable!()
+                }
             });
         }
         drop(view);

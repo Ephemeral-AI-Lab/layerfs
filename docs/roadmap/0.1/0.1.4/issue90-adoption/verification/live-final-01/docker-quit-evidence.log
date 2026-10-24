@@ -1,2 +1,0 @@
-[2026-09-08T17:28:02.805772000Z][com.docker.backend.ipc] (0d1e6235) 2f336997-BackendAPI S<-C Docker-Desktop/4.76.0 (Mac; arm64; GUI) POST /app/quit
-[2026-09-08T17:28:04.256354000Z][com.docker.backend.ipc] (0d1e6235) 2f336997-BackendAPI S->C Docker-Desktop/4.76.0 (Mac; arm64; GUI) POST /app/quit (1.450578833s): OK

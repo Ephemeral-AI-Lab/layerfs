@@ -59,6 +59,8 @@ pub(super) const NAMED: u32 = 0x4D47_0014;
 pub(super) const DONE: u32 = 0x4D47_0015;
 /// A serial new on `from` that the merge leaves unbound.
 pub(super) const DROP: u32 = 0x4D47_0016;
+/// A file new on `from` with several links: how many the merge lost.
+pub(super) const LOST: u32 = 0x4D47_0017;
 
 /// Bytes of one chunk record.
 pub(super) const CHUNK_BYTES: usize = 60 * 1024;

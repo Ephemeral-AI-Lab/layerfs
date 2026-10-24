@@ -212,6 +212,10 @@ constructs first.
 `PortableMetadata` is deliberately narrow: `0o777` for files and symlinks (a
 symlink's mode is exactly `0o777`), `0o1777` for directories, nanoseconds below
 one billion. **There is no uid, gid or atime** — nowhere to put them.
+Host Init refuses an entry outside this grammar, a symlinked or non-directory
+source, and an entry that changes while it is read, as
+`ProjectError::InvalidInput { reason, path }`; `SourceRefusal` names the check
+(`NotDirectory`, `Mode`, `Mtime`, `Changed`) and `path` the host entry (#410).
 
 **Root reuse is the single biggest lever in the whole import.** An attribute root
 is just an `ObjectId`; nothing requires building a fresh one per inode. Group

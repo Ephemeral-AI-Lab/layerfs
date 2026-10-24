@@ -1,4 +1,0 @@
-# Preserve original evidence bytes.
-*.log -text -whitespace
-*.patch -text -whitespace
-*.diff -text -whitespace

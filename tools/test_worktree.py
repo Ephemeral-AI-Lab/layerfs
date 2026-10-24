@@ -26,11 +26,18 @@ class WorktreeTests(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.repo = self.root / "checkout"
         self.repo.mkdir()
-        for folder in ("core/crates/example/src", "core/vendor", ".cargo", "sdk/js/src", "sdk/js/operator", "sdk/js/test", "sdk/js/native/src"):
+        for folder in ("core/crates/example/src", "core/vendor", ".cargo", "api/agent/sdk/src", "api/agent/sdk/test", "api/backend/src", "api/runtime/src", "api/binding/src"):
             (self.repo / folder).mkdir(parents=True)
-        for name in ("core/Cargo.toml", "core/Cargo.lock", ".cargo/config.toml", "sdk/js/package.json"):
+        for name in ("core/Cargo.toml", "core/Cargo.lock", ".cargo/config.toml", "api/package.json"):
             (self.repo / name).write_text("{}\n")
-        (self.repo / "sdk/js/src/index.js").write_text("export const value = 1;\n")
+        (self.repo / "api/agent/sdk/src/index.js").write_text("export const value = 1;\n")
+        (self.repo / "api/agent/sdk/package.json").write_text('{"name": "@layerfs/agent", "exports": {".": "./src/index.js", "./package.json": "./package.json"}}\n')
+        for name in ("backend", "runtime"):
+            (self.repo / f"api/{name}/src/index.js").write_text('export * from "@layerfs/agent";\n')
+            (self.repo / f"api/{name}/package.json").write_text(f'{{"name": "@layerfs/{name}", "exports": {{".": "./src/index.js"}}}}\n')
+        (self.repo / "api/agent/cli/src").mkdir(parents=True)
+        (self.repo / "api/agent/cli/src/layerfs.js").write_text('import "@layerfs/agent";\n')
+        (self.repo / "api/agent/cli/package.json").write_text('{"name": "@layerfs/cli"}\n')
         git(self.repo, "init", "-q")
         git(self.repo, "config", "user.name", "Fixture")
         git(self.repo, "config", "user.email", "fixture@example.invalid")
@@ -101,7 +108,7 @@ class WorktreeTests(unittest.TestCase):
         self.assertNotEqual(before["sha256"], resources.inputs(self.record)["sha256"])
 
     def test_source_directory_symlink_refused(self):
-        (self.repo / "core/crates/link").symlink_to(self.repo / "sdk/js", target_is_directory=True)
+        (self.repo / "core/crates/link").symlink_to(self.repo / "api", target_is_directory=True)
         with self.assertRaises(Refused):
             resources.inputs(self.record)
 
@@ -114,7 +121,7 @@ class WorktreeTests(unittest.TestCase):
         args = SimpleNamespace(resources=str(self.path), platform="macos", profile="debug", jobs=2)
         def execute(*a, **kw):
             if mutate:
-                (self.repo / "sdk/js/src/index.js").write_text("changed\n")
+                (self.repo / "api/agent/sdk/src/index.js").write_text("changed\n")
         with patch.object(builds, "execute", side_effect=execute), patch.object(builds, "environment", return_value={}):
             with contextlib.redirect_stdout(io.StringIO()):
                 builds.build(args)
@@ -123,9 +130,19 @@ class WorktreeTests(unittest.TestCase):
     def test_bundle_pins_sdk_and_binary_and_detects_mutation(self):
         bundle = self.build_bundle()
         manifest = builds.verify_bundle(bundle)
-        self.assertIn("sdk/js/src/index.js", manifest["files"])
-        (self.repo / "sdk/js/src/index.js").write_text("later edit\n")
-        self.assertEqual((bundle / "sdk/js/src/index.js").read_text(), "export const value = 1;\n")
+        # the bundle mirrors the repository layout under api/
+        for name in ("api/package.json", "api/agent/sdk/src/index.js", "api/backend/src/index.js", "api/runtime/src/index.js"):
+            self.assertIn(name, manifest["files"])
+        self.assertFalse(any(name.startswith("api/binding/") for name in manifest["files"]))
+        # each package resolves by name through a shim, not a symlink
+        self.assertEqual((bundle / "api/node_modules/@layerfs/agent/index.js").read_text(), 'export * from "../../../agent/sdk/src/index.js";\n')
+        self.assertEqual(json.loads((bundle / "api/node_modules/@layerfs/agent/package.json").read_text())["exports"], {".": "./index.js"})
+        self.assertEqual((bundle / "api/node_modules/@layerfs/backend/index.js").read_text(), 'export * from "../../../backend/src/index.js";\n')
+        # the layerfs command, which reaches the agent through its own shim
+        self.assertIn("api/agent/cli/src/layerfs.js", manifest["files"])
+        self.assertEqual((bundle / "api/agent/cli/node_modules/@layerfs/agent/index.js").read_text(), 'export * from "../../../../sdk/src/index.js";\n')
+        (self.repo / "api/agent/sdk/src/index.js").write_text("later edit\n")
+        self.assertEqual((bundle / "api/agent/sdk/src/index.js").read_text(), "export const value = 1;\n")
         file = bundle / "layerfs.node"
         file.chmod(0o600)
         file.write_bytes(b"corrupt")

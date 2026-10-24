@@ -1,5 +1,0 @@
-{
-  "attempt_1": "Valid identity preparation but carried an Issue95 human-readable scope label from reused tooling; never executed. Preserved under terminal-preparation.",
-  "retained_preparation": "terminal-preparation-02; corrected human-readable campaign labels, unchanged schedule contract and execution logic; freeze after current benchmark releases lock.",
-  "venv_attempt_1": "Proof build succeeded into the standalone manifest target directory, but wrapper expected repository target. Pre-launch FileNotFoundError after input custody; no Workspace or container started. Preserve terminal-venv and terminal-venv.log. Retry uses an archived byte-identical built binary and fresh terminal-venv-02 output."
-}

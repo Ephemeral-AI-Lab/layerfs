@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "test", "--locked", "-p", "layerfs-workspace", "--all-features", "parallel_predecessor_plan_keeps_correspondence_and_native_prefixes", "--", "--test-threads=1"]

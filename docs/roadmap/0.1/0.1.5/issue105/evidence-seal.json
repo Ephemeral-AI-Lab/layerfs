@@ -1,7 +1,0 @@
-{
-  "evidence_root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue105-evidence/build-loop-20260910T154259Z",
-  "manifest_sha256": "79577ea562a8d1c787adcbf01607806311787d605a0ecb73020df0515a6be16a",
-  "entries": 111,
-  "scope": "Retained commands, logs, scripts, declarations, input and output identities, immutable binary/image archives and diagnostic Cargo timing HTML; mutable native target caches and source worktree not sealed. Candidate source reconstructed from initial commit plus candidate.patch and test_build_reuse.py, and checked by candidate-inputs.json.",
-  "sealed104_manifest_sha256": "c23e4c2f999e7fca874ea1797dbc2a0d5c5cb4b33458dfa32da42f300992468b"
-}

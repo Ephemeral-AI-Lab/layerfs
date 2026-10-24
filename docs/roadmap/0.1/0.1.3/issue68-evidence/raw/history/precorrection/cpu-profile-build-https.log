@@ -1,153 +1,0 @@
-Traceback (most recent call last):
-  File "/tmp/layerfs-issue68-profile.py", line 57, in <module>
-    command(['docker','build','--build-arg','BASE='+local_base,'-t',a.tag,str(a.output)], timeout=600)
-    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/tmp/layerfs-issue68-profile.py", line 31, in command
-    raise RuntimeError(f'{argv}: {result.stderr.decode(errors="replace")}')
-RuntimeError: ['docker', 'build', '--build-arg', 'BASE=layerfs-profile-base:7779794b3bca5a4d38a8a2c0713ccafd257aa9425811e1da7a1c716cc3086196', '-t', 'layerfs-perf:issue68', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue68-optimization/benchmark-results/host-store/campaigns/issue68-implementation-20260907/cpu-profile-build-https']: #0 building with "desktop-linux" instance using docker driver
-
-#1 [internal] load build definition from Dockerfile
-#1 transferring dockerfile: 1.04kB done
-#1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${BASE} results in empty or invalid base image name (line 2)
-#1 DONE 0.0s
-
-#2 [internal] load metadata for docker.io/library/layerfs-profile-base:7779794b3bca5a4d38a8a2c0713ccafd257aa9425811e1da7a1c716cc3086196
-#2 DONE 0.0s
-
-#3 [internal] load .dockerignore
-#3 transferring context: 2B done
-#3 DONE 0.0s
-
-#4 [1/2] FROM docker.io/library/layerfs-profile-base:7779794b3bca5a4d38a8a2c0713ccafd257aa9425811e1da7a1c716cc3086196@sha256:7779794b3bca5a4d38a8a2c0713ccafd257aa9425811e1da7a1c716cc3086196
-#4 resolve docker.io/library/layerfs-profile-base:7779794b3bca5a4d38a8a2c0713ccafd257aa9425811e1da7a1c716cc3086196@sha256:7779794b3bca5a4d38a8a2c0713ccafd257aa9425811e1da7a1c716cc3086196 0.0s done
-#4 CACHED
-
-#5 [2/2] RUN dpkg-query -W -f='${Package} ${Version}\n' > /tmp/packages-before  && sha256sum /usr/local/bin/layerfs-daemon /usr/local/bin/layerfs-fuse /usr/local/bin/fs-benchmark-workload /usr/bin/git > /tmp/product-before  && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources  && apt-get update -o Acquire::Retries=0 -o Acquire::https::Timeout=30  && apt-get install -y --no-install-recommends --no-upgrade linux-perf  && dpkg-query -W -f='${Package} ${Version}\n' > /tmp/packages-after  && python3 -c "b=dict(x.split() for x in open('/tmp/packages-before')); a=dict(x.split() for x in open('/tmp/packages-after')); assert all(a.get(k)==v for k,v in b.items()), 'installed package upgraded'"  && sha256sum -c /tmp/product-before  && mkdir /profiling  && cp /tmp/packages-before /tmp/packages-after /tmp/product-before /profiling/  && rm -rf /var/lib/apt/lists/*
-#5 1.284 Get:1 https://deb.debian.org/debian bookworm InRelease [151 kB]
-#5 2.199 Get:2 https://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
-#5 3.044 Get:3 https://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
-#5 3.271 Get:4 https://deb.debian.org/debian bookworm/main arm64 Packages [8689 kB]
-#5 9.180 Get:5 https://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
-#5 9.878 Get:6 https://deb.debian.org/debian-security bookworm-security/main arm64 Packages [334 kB]
-#5 10.02 Fetched 9272 kB in 10s (940 kB/s)
-#5 10.02 Reading package lists...
-#5 10.40 Reading package lists...
-#5 10.77 Building dependency tree...
-#5 10.88 Reading state information...
-#5 10.99 The following additional packages will be installed:
-#5 10.99   libbabeltrace1 libdw1 libopencsd1 libpython3.11 libpython3.11-minimal
-#5 10.99   libpython3.11-stdlib libslang2 libunwind8 linux-libc-dev python3.11
-#5 10.99   python3.11-minimal
-#5 10.99 Suggested packages:
-#5 10.99   linux-doc-6.1 python3.11-venv python3.11-doc binfmt-support
-#5 11.08 The following NEW packages will be installed:
-#5 11.08   libbabeltrace1 libdw1 libopencsd1 libpython3.11 libslang2 libunwind8
-#5 11.08   linux-perf
-#5 11.08 The following packages will be upgraded:
-#5 11.08   libpython3.11-minimal libpython3.11-stdlib linux-libc-dev python3.11
-#5 11.08   python3.11-minimal
-#5 12.18 5 upgraded, 7 newly installed, 0 to remove and 153 not upgraded.
-#5 12.18 Need to get 13.1 MB of archives.
-#5 12.18 After this operation, 21.5 MB of additional disk space will be used.
-#5 12.18 Get:1 https://deb.debian.org/debian bookworm/main arm64 python3.11 arm64 3.11.2-6+deb12u8 [574 kB]
-#5 14.18 Get:2 https://deb.debian.org/debian bookworm/main arm64 libpython3.11-stdlib arm64 3.11.2-6+deb12u8 [1750 kB]
-#5 17.64 Get:3 https://deb.debian.org/debian bookworm/main arm64 python3.11-minimal arm64 3.11.2-6+deb12u8 [1861 kB]
-#5 20.59 Get:4 https://deb.debian.org/debian bookworm/main arm64 libpython3.11-minimal arm64 3.11.2-6+deb12u8 [811 kB]
-#5 21.75 Get:5 https://deb.debian.org/debian bookworm/main arm64 libdw1 arm64 0.188-2.1 [219 kB]
-#5 21.83 Get:6 https://deb.debian.org/debian bookworm/main arm64 libbabeltrace1 arm64 1.5.11-1+b2 [158 kB]
-#5 22.16 Get:7 https://deb.debian.org/debian bookworm/main arm64 libopencsd1 arm64 1.3.3-1 [169 kB]
-#5 22.16 Get:8 https://deb.debian.org/debian bookworm/main arm64 libpython3.11 arm64 3.11.2-6+deb12u8 [1841 kB]
-#5 23.95 Get:9 https://deb.debian.org/debian bookworm/main arm64 libslang2 arm64 2.3.3-3 [502 kB]
-#5 24.63 Get:10 https://deb.debian.org/debian bookworm/main arm64 libunwind8 arm64 1.6.2-3 [47.4 kB]
-#5 24.63 Get:11 https://deb.debian.org/debian-security bookworm-security/main arm64 linux-libc-dev arm64 6.1.180-1 [2307 kB]
-#5 26.78 Get:12 https://deb.debian.org/debian-security bookworm-security/main arm64 linux-perf arm64 6.1.180-1 [2840 kB]
-#5 30.75 debconf: delaying package configuration, since apt-utils is not installed
-#5 30.77 Fetched 13.1 MB in 20s (670 kB/s)
-#5 30.79 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 23273 files and directories currently installed.)
-#5 30.84 Preparing to unpack .../00-python3.11_3.11.2-6+deb12u8_arm64.deb ...
-#5 30.91 Unpacking python3.11 (3.11.2-6+deb12u8) over (3.11.2-6+deb12u5) ...
-#5 30.96 Preparing to unpack .../01-libpython3.11-stdlib_3.11.2-6+deb12u8_arm64.deb ...
-#5 30.99 Unpacking libpython3.11-stdlib:arm64 (3.11.2-6+deb12u8) over (3.11.2-6+deb12u5) ...
-#5 31.40 Preparing to unpack .../02-python3.11-minimal_3.11.2-6+deb12u8_arm64.deb ...
-#5 31.41 Unpacking python3.11-minimal (3.11.2-6+deb12u8) over (3.11.2-6+deb12u5) ...
-#5 31.58 Preparing to unpack .../03-libpython3.11-minimal_3.11.2-6+deb12u8_arm64.deb ...
-#5 31.62 Unpacking libpython3.11-minimal:arm64 (3.11.2-6+deb12u8) over (3.11.2-6+deb12u5) ...
-#5 31.95 Selecting previously unselected package libdw1:arm64.
-#5 31.95 Preparing to unpack .../04-libdw1_0.188-2.1_arm64.deb ...
-#5 31.95 Unpacking libdw1:arm64 (0.188-2.1) ...
-#5 31.98 Selecting previously unselected package libbabeltrace1:arm64.
-#5 31.98 Preparing to unpack .../05-libbabeltrace1_1.5.11-1+b2_arm64.deb ...
-#5 31.99 Unpacking libbabeltrace1:arm64 (1.5.11-1+b2) ...
-#5 32.01 Selecting previously unselected package libopencsd1:arm64.
-#5 32.01 Preparing to unpack .../06-libopencsd1_1.3.3-1_arm64.deb ...
-#5 32.01 Unpacking libopencsd1:arm64 (1.3.3-1) ...
-#5 32.04 Selecting previously unselected package libpython3.11:arm64.
-#5 32.04 Preparing to unpack .../07-libpython3.11_3.11.2-6+deb12u8_arm64.deb ...
-#5 32.04 Unpacking libpython3.11:arm64 (3.11.2-6+deb12u8) ...
-#5 32.18 Selecting previously unselected package libslang2:arm64.
-#5 32.18 Preparing to unpack .../08-libslang2_2.3.3-3_arm64.deb ...
-#5 32.18 Unpacking libslang2:arm64 (2.3.3-3) ...
-#5 32.22 Selecting previously unselected package libunwind8:arm64.
-#5 32.23 Preparing to unpack .../09-libunwind8_1.6.2-3_arm64.deb ...
-#5 32.23 Unpacking libunwind8:arm64 (1.6.2-3) ...
-#5 32.25 Preparing to unpack .../10-linux-libc-dev_6.1.180-1_arm64.deb ...
-#5 32.25 Unpacking linux-libc-dev:arm64 (6.1.180-1) over (6.1.129-1) ...
-#5 33.19 Selecting previously unselected package linux-perf.
-#5 33.19 Preparing to unpack .../11-linux-perf_6.1.180-1_arm64.deb ...
-#5 33.20 Adding 'diversion of /usr/bin/perf to /usr/bin/perf.wrapper by linux-perf'
-#5 33.20 Adding 'diversion of /usr/share/bash-completion/completions/perf to /usr/share/bash-completion/completions/perf.wrapper by linux-perf'
-#5 33.21 Adding 'diversion of /usr/share/man/man1/perf.1.gz to /usr/share/man/man1/perf.wrapper.1.gz by linux-perf'
-#5 33.21 Unpacking linux-perf (6.1.180-1) ...
-#5 33.35 Setting up libdw1:arm64 (0.188-2.1) ...
-#5 33.35 Setting up linux-libc-dev:arm64 (6.1.180-1) ...
-#5 33.35 Setting up libunwind8:arm64 (1.6.2-3) ...
-#5 33.36 Setting up libslang2:arm64 (2.3.3-3) ...
-#5 33.36 Setting up libopencsd1:arm64 (1.3.3-1) ...
-#5 33.37 Setting up libbabeltrace1:arm64 (1.5.11-1+b2) ...
-#5 33.37 Setting up libpython3.11-minimal:arm64 (3.11.2-6+deb12u8) ...
-#5 33.38 Setting up python3.11-minimal (3.11.2-6+deb12u8) ...
-#5 33.79 Setting up libpython3.11-stdlib:arm64 (3.11.2-6+deb12u8) ...
-#5 33.79 Setting up python3.11 (3.11.2-6+deb12u8) ...
-#5 34.21 Setting up libpython3.11:arm64 (3.11.2-6+deb12u8) ...
-#5 34.22 Setting up linux-perf (6.1.180-1) ...
-#5 34.29 Processing triggers for libc-bin (2.36-9+deb12u10) ...
-#5 34.41 Traceback (most recent call last):
-#5 34.41   File "<string>", line 1, in <module>
-#5 34.41 AssertionError: installed package upgraded
-#5 ERROR: process "/bin/sh -c dpkg-query -W -f='${Package} ${Version}\\n' > /tmp/packages-before  && sha256sum /usr/local/bin/layerfs-daemon /usr/local/bin/layerfs-fuse /usr/local/bin/fs-benchmark-workload /usr/bin/git > /tmp/product-before  && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources  && apt-get update -o Acquire::Retries=0 -o Acquire::https::Timeout=30  && apt-get install -y --no-install-recommends --no-upgrade linux-perf  && dpkg-query -W -f='${Package} ${Version}\\n' > /tmp/packages-after  && python3 -c \"b=dict(x.split() for x in open('/tmp/packages-before')); a=dict(x.split() for x in open('/tmp/packages-after')); assert all(a.get(k)==v for k,v in b.items()), 'installed package upgraded'\"  && sha256sum -c /tmp/product-before  && mkdir /profiling  && cp /tmp/packages-before /tmp/packages-after /tmp/product-before /profiling/  && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 1
-------
- > [2/2] RUN dpkg-query -W -f='${Package} ${Version}\n' > /tmp/packages-before  && sha256sum /usr/local/bin/layerfs-daemon /usr/local/bin/layerfs-fuse /usr/local/bin/fs-benchmark-workload /usr/bin/git > /tmp/product-before  && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources  && apt-get update -o Acquire::Retries=0 -o Acquire::https::Timeout=30  && apt-get install -y --no-install-recommends --no-upgrade linux-perf  && dpkg-query -W -f='${Package} ${Version}\n' > /tmp/packages-after  && python3 -c "b=dict(x.split() for x in open('/tmp/packages-before')); a=dict(x.split() for x in open('/tmp/packages-after')); assert all(a.get(k)==v for k,v in b.items()), 'installed package upgraded'"  && sha256sum -c /tmp/product-before  && mkdir /profiling  && cp /tmp/packages-before /tmp/packages-after /tmp/product-before /profiling/  && rm -rf /var/lib/apt/lists/*:
-33.37 Setting up libpython3.11-minimal:arm64 (3.11.2-6+deb12u8) ...
-33.38 Setting up python3.11-minimal (3.11.2-6+deb12u8) ...
-33.79 Setting up libpython3.11-stdlib:arm64 (3.11.2-6+deb12u8) ...
-33.79 Setting up python3.11 (3.11.2-6+deb12u8) ...
-34.21 Setting up libpython3.11:arm64 (3.11.2-6+deb12u8) ...
-34.22 Setting up linux-perf (6.1.180-1) ...
-34.29 Processing triggers for libc-bin (2.36-9+deb12u10) ...
-34.41 Traceback (most recent call last):
-34.41   File "<string>", line 1, in <module>
-34.41 AssertionError: installed package upgraded
-------
-
- [33m1 warning found (use docker --debug to expand):
-[0m - InvalidDefaultArgInFrom: Default value for ARG ${BASE} results in empty or invalid base image name (line 2)
-Dockerfile:4
---------------------
-   3 |     LABEL dev.layerfs.diagnostic="perf-cpu-profile-not-acceptance"
-   4 | >>> RUN dpkg-query -W -f='${Package} ${Version}\n' > /tmp/packages-before \
-   5 | >>>  && sha256sum /usr/local/bin/layerfs-daemon /usr/local/bin/layerfs-fuse /usr/local/bin/fs-benchmark-workload /usr/bin/git > /tmp/product-before \
-   6 | >>>  && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
-   7 | >>>  && apt-get update -o Acquire::Retries=0 -o Acquire::https::Timeout=30 \
-   8 | >>>  && apt-get install -y --no-install-recommends --no-upgrade linux-perf \
-   9 | >>>  && dpkg-query -W -f='${Package} ${Version}\n' > /tmp/packages-after \
-  10 | >>>  && python3 -c "b=dict(x.split() for x in open('/tmp/packages-before')); a=dict(x.split() for x in open('/tmp/packages-after')); assert all(a.get(k)==v for k,v in b.items()), 'installed package upgraded'" \
-  11 | >>>  && sha256sum -c /tmp/product-before \
-  12 | >>>  && mkdir /profiling \
-  13 | >>>  && cp /tmp/packages-before /tmp/packages-after /tmp/product-before /profiling/ \
-  14 | >>>  && rm -rf /var/lib/apt/lists/*
-  15 |     
---------------------
-ERROR: failed to build: failed to solve: process "/bin/sh -c dpkg-query -W -f='${Package} ${Version}\\n' > /tmp/packages-before  && sha256sum /usr/local/bin/layerfs-daemon /usr/local/bin/layerfs-fuse /usr/local/bin/fs-benchmark-workload /usr/bin/git > /tmp/product-before  && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources  && apt-get update -o Acquire::Retries=0 -o Acquire::https::Timeout=30  && apt-get install -y --no-install-recommends --no-upgrade linux-perf  && dpkg-query -W -f='${Package} ${Version}\\n' > /tmp/packages-after  && python3 -c \"b=dict(x.split() for x in open('/tmp/packages-before')); a=dict(x.split() for x in open('/tmp/packages-after')); assert all(a.get(k)==v for k,v in b.items()), 'installed package upgraded'\"  && sha256sum -c /tmp/product-before  && mkdir /profiling  && cp /tmp/packages-before /tmp/packages-after /tmp/product-before /profiling/  && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 1
-
-View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vff5h4tb3124dmhary15wq8ja
-

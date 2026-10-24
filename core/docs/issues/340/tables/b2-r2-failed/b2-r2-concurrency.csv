@@ -1,5 +1,0 @@
-metric,label,max,average,window_seconds,active_seconds,status,reason,interval_count_observed,boundary_contract
-sandbox,known-open Sandbox SDK custody,3,1.8384761528749358,855.3578939437866,848.6057541370392,observed-complete,unavailable,3,half-open UTC SDK intervals; lifecycle starts at successful reply; no kernel/process exact-time claim
-workspace,known-mounted Workspace SDK custody,1,0.12053203539072072,855.3578939437866,103.09802794456482,observed-complete,unavailable,3,half-open UTC SDK intervals; lifecycle starts at successful reply; no kernel/process exact-time claim
-exec,overlapping sandbox.exec API calls,1,0.11958354013971687,855.3578939437866,102.28672504425049,observed-complete,unavailable,3,half-open UTC SDK intervals; lifecycle starts at successful reply; no kernel/process exact-time claim
-five-worker-roles,all W1/W2/I1/I2/P1 roles active by retained agent lifecycle,unavailable,unavailable,855.3578939437866,unavailable,unavailable,complete roster and start/end boundaries for all five roles required,unavailable,retained agent started/ended UTC; successors unioned per logical role

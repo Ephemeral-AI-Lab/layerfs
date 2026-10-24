@@ -1,4 +1,0 @@
-{
-  "scope": "Closed schema7 immutable prepared inputs only; no writable Store reuse",
-  "reason": "Original fixture/workload/oracle and schema unchanged. R2 changes transaction packing, R3 demanded extraction preserves decoding/canonical authentication. Runtime validates masters, creates fresh sample ownership. Native Init output is never cached. Symlink is below ignored benchmark-results directory; source remains clean."
-}

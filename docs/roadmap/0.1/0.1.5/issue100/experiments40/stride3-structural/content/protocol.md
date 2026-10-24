@@ -1,5 +1,0 @@
-# Frozen stride3 SmallContent rerun
-
-Reuse the selected full157 `git-small` policy unchanged on the authenticated 53-state source. No candidate sweep. Join every source kind3 SmallContent identity to the SHA1 of its decoded raw bytes; require membership in matched Git53 pack inventory. Select its Git53 base only when inside this exact population and already encoded in dependency-first order; otherwise FULL. Compare pinned zstd1.5.7 level3 prefix frame plus32-byte base reference to FULL. Limits remain50 edges,64MiB canonical and64MiB encoded closure. Include every source object and every selected base exactly once. Database export is a record graph, not complete Store storage. Authenticate original source records, verify pinned codec against every100th physical source record, then independently reconstruct and authenticate every exported identity. Parent assembles actualkind103packs and verifies original53state oracles.
-
-Source Store SHA256: `5c6ee04eee133539f043ee64d242c26769c77d30b434af2523666e326a8d999e`. Input/code/protocol seals are recorded before candidate encoding.

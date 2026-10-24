@@ -1,5 +1,5 @@
 //! Host source observations; symbolic links are stored without traversal.
-use crate::ProjectError;
+use crate::{ProjectError, SourceRefusal};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use std::{
     fs::{self, Metadata},
@@ -22,7 +22,7 @@ pub(super) fn read_link(path: &Path, scanned: &Metadata) -> Result<Vec<u8>, Proj
         || after.ctime() != scanned.ctime()
         || after.ctime_nsec() != scanned.ctime_nsec()
     {
-        return Err(ProjectError::InvalidInput);
+        return Err(ProjectError::refused(SourceRefusal::Changed, path));
     }
     // Keep the canonical target bound/grammar: no normalization or UTF-8 cast.
     let target = SymlinkTarget::new(target.as_os_str().as_bytes().to_vec())

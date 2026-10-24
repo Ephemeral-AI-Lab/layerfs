@@ -1,6 +1,0 @@
-{
-  "status": "REJECTED_NOT_SELECTED",
-  "reason": "Generator printed PASS but closed population counts were incomplete. Root rejected it before report selection; P1e lacked numeric sequence key and error envelopes were dropped.",
-  "replacement": "b2-r3-development-failed-execs-r7.csv",
-  "originalsRetained": true
-}

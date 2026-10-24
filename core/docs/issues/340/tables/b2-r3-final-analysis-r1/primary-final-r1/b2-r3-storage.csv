@@ -1,3 +1,0 @@
-observation,logical,canonical,stored,metadata,file,free,logical_over_canonical,canonical_over_stored,sqlite_overhead_file_minus_free_minus_stored,physical_contract
-initial,88,2645,2307,155059,155648,0,0.0332703213610586,1.1465106198526225,153341,stored includes metadata packs; never add stored+metadata
-final,9700518336,45664787,12739924,10214294,20037632,0,212.4288532430908,3.584384569327101,7297708,stored includes metadata packs; never add stored+metadata

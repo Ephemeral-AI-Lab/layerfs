@@ -1,7 +1,0 @@
-    Checking layerfs-workspace v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue91/crates/layerfs-workspace)
-    Checking layerfs-monitor v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue91/crates/layerfs-monitor)
-    Checking layerfs-sdk v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue91/crates/layerfs-sdk)
-    Checking layerfs-cli v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue91/crates/layerfs-cli)
-    Checking fs-benchmark-pro v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue91/benchmark/fs-bench-pro)
-    Checking layerfs-eval v0.1.3 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue91/tools/layerfs-eval)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.06s

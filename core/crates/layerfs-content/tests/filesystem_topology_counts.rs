@@ -287,7 +287,9 @@ fn one_file_value_update_costs_no_validation_work() {
         Rowset::new().value(
             base.file,
             InodeValue {
-                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic("counts/changed-metadata")),
+                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+                    "counts/changed-metadata",
+                )),
                 ..base.tree.stored(base.file)
             },
         )
@@ -556,7 +558,9 @@ fn larger_bases_bound_the_sorted_merge_inode_reads_by_the_branch_fan_out() {
         Rowset::new().value(
             base.file,
             InodeValue {
-                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic("counts/changed-metadata")),
+                metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+                    "counts/changed-metadata",
+                )),
                 ..base.tree.stored(base.file)
             },
         )

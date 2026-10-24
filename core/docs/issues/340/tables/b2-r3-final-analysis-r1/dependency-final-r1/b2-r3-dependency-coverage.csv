@@ -1,3 +1,0 @@
-scope,identities,empty_snapshots,tree_buckets,regular_file_paths,logical_bytes,completeness,physical_bytes,contract
-All stopped SQL Commit dependency snapshots,362,2,720,256680,8541354960,Complete362/362 SQL identities; nearest nested node_modules ancestor buckets,,"Summed immutable snapshots, not unique content or exclusive physical allocation"
-Observed post-install Workspace root censuses,19,0,19,13547,450793734,Observed19 lead-only recursive roots; all Workspace and all-agent install history unavailable,,Nested roots partitioned only in corresponding Commit census; Workspace root rows are partial observations

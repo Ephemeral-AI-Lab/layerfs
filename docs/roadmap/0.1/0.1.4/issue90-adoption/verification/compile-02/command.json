@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "test", "-p", "layerfs-layerstack-store", "-p", "layerfs-content", "--lib", "--all-features", "--locked", "--no-run"]

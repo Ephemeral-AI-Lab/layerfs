@@ -34,7 +34,10 @@ use std::{
 
 fn pipe() -> (OwnedFd, OwnedFd) {
     let mut ends = [0 as RawFd; 2];
-    assert_eq!(unsafe { libc::pipe2(ends.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
+    assert_eq!(
+        unsafe { libc::pipe2(ends.as_mut_ptr(), libc::O_CLOEXEC) },
+        0
+    );
     unsafe { (OwnedFd::from_raw_fd(ends[0]), OwnedFd::from_raw_fd(ends[1])) }
 }
 /// One bounded read of the forked child's pid; the child writes it from
@@ -45,7 +48,11 @@ fn forked_pid(from: &OwnedFd) -> libc::pid_t {
         events: libc::POLLIN,
         revents: 0,
     };
-    assert_eq!(unsafe { libc::poll(&mut poll, 1, 10_000) }, 1, "fork signal");
+    assert_eq!(
+        unsafe { libc::poll(&mut poll, 1, 10_000) },
+        1,
+        "fork signal"
+    );
     let mut pid = [0u8; 4];
     let read = unsafe { libc::read(from.as_raw_fd(), pid.as_mut_ptr().cast(), 4) };
     assert_eq!(read, 4);

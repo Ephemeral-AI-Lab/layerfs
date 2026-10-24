@@ -1,5 +1,0 @@
-RUN ['cargo', '+1.96.0', 'fmt', '--all', '--check']
-RUN ['cargo', '+1.96.0', 'clippy', '--workspace', '--locked', '--', '-D', 'warnings']
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
-RUN ['git', 'diff', '--check']
-PASS exact-candidate formatting, warning-denying Clippy, diff check

@@ -2,8 +2,8 @@
 
 > **Status:** Research; informative and not a released product contract.
 
-This directory contains the AI-native filesystem vision paper, rendered HTML,
-PDF, and illustration assets. It explains long-term ideas rather than the
+This directory contains the AI-native filesystem vision paper as a PDF and
+illustration assets. It explains long-term ideas rather than the
 exact LayerFS 0.1.0 SDK, CLI, Store, or runtime contract.
 
 Use [`docs/README.md`](../../README.md) for current documentation and

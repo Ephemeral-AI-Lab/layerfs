@@ -131,8 +131,9 @@ impl InodeMetadata {
     }
 
     /// The attribute keys an inline value logically carries.
-    pub fn inline_keys(&self) -> ContentResult<Vec<crate::filesystem::attributes::keys::AttributeKey>>
-    {
+    pub fn inline_keys(
+        &self,
+    ) -> ContentResult<Vec<crate::filesystem::attributes::keys::AttributeKey>> {
         use crate::filesystem::attributes::keys::AttributeKey;
         match self {
             Self::Root(_) => Ok(Vec::new()),

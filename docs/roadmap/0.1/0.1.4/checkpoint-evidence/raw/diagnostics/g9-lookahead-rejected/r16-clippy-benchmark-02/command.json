@@ -1,1 +1,0 @@
-["cargo", "+1.96.0", "clippy", "--locked", "-j2", "-p", "fs-benchmark-pro", "--bin", "fs-benchmark-pro", "--all-features", "--", "-D", "warnings"]

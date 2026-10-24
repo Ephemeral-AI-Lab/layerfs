@@ -1,7 +1,0 @@
-artifact,bytes,sha256,exists,source,verification,contract
-raw-store-shm,32768,2c3f1674927d6224cb1e4fa0e2875636cb80db0564fbf1761432efd5872db220,True,raw-files.json,root stopped export PASS,Derived from retained root JSON verification; analyst did not read/open Store binary
-raw-store-wal,4194304,d55a9d71258cf389f834a53afba9f900eaa6e906f869e158f56c0bb92cab694f,True,raw-files.json,root stopped export PASS,Derived from retained root JSON verification; analyst did not read/open Store binary
-raw-storemain,27222016,bfbe09317e6e2511bbb02533ae551f0b002bdfd9da6ebd2d10829b9016fc037f,True,raw-files.json,root stopped export PASS,Derived from retained root JSON verification; analyst did not read/open Store binary
-portable-export,27234304,c7d9cfa1cf4ac39f4e7e89f10de3b6227791bcac19a74fa61573e9ea990ee6b6,True,verification.json,root stopped export PASS,Derived from retained root JSON verification; analyst did not read/open Store binary
-raw-volume-archive,31457280,66ee8d920ecf79293e0432177e2e6b67fedcc39025e32442224fc73d9868e71e,True,verification.json,root stopped export PASS,Derived from retained root JSON verification; analyst did not read/open Store binary
-checksum-manifest,45292,4c4842366568a418783421252c60798e266bf974875bf88c82a24fa2ad04e507,True,verification.json,root stopped export PASS,Derived from retained root JSON verification; analyst did not read/open Store binary

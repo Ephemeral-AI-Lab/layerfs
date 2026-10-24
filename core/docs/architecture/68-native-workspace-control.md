@@ -264,8 +264,9 @@ authenticated control record channel; the daemon routes the operator prefix to
 its separate table, while public SDK dispatch has no operator or inspect arm.
 The control registry still supplies the Workspace observations in a snapshot.
 
-The JS package exposes this through `@layerfs/sdk/operator`, independently of
-its main entry point. Process list/cancel route only to the native executor;
+The JS package exposed this through `@layerfs/sdk/operator`, independently of
+its main entry point (since #428: `@layerfs/backend` and the `backend.*` names;
+see [the SDK call channel](82-sdk-call-channel.md)). Process list/cancel route only to the native executor;
 they do not enter the filesystem daemon. The demo server uses both entry points,
 with HTTP confined to that server. This split does not implement persistent
 Sandbox discovery, new statistics or cross-process command ownership; those

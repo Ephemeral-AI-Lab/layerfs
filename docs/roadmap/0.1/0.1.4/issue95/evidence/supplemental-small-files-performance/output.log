@@ -1,4 +1,0 @@
-small-files performance step=1 PASS
-small-files performance step=2 PASS
-small-files performance step=3 PASS
-{"output": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue95-runs/terminal-small-files", "mode": "performance", "status": "PASS"}

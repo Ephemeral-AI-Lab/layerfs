@@ -1,5 +1,0 @@
-population,files,bytes,productionLOC,maximumPhysicalLines,relation
-production,197,663586,10037,230,disjoint classification
-packages_nonproduction,117,557101,,313,disjoint classification
-scripts_nonproduction,56,379892,,289,disjoint classification
-all_maintained,370,1600579,,313,sum of three disjoint classification rows

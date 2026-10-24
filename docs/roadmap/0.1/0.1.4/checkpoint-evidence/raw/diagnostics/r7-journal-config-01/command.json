@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "test", "--locked", "-j2", "-p", "layerfs-layerstack-store", "--lib", "--all-features", "private_scratch_off_configuration_restores_defensive_mode", "--", "--test-threads=1"]

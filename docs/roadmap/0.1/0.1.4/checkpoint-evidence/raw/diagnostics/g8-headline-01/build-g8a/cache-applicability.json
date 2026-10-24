@@ -1,6 +1,0 @@
-{
-  "source": "source-g7",
-  "destination": "source-g8a",
-  "method": "APFS copy-on-write clone of ignored benchmark-results",
-  "applicability": "R15 changes new-file Commit delivery only; registered fixture and pristine preparation contracts unchanged. Existing runner independently validates cache acquisitions and fresh writable ownership. No performance result reused."
-}

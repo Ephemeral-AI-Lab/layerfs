@@ -1,3 +1,0 @@
-probe-final: product b83871223 (HEAD 9167ac384), probe-oldc: product 2943275c8 + current probe minus fixed()
-probe-final2 / probe-oldc2: the same products with the LFS354_PAGES selector added to the probe (test code only).
-Old arm built in a detached worktree at 2943275c8 with its own target (CARGO_TARGET_DIR in the session scratchpad), toolchain +1.85.1, repository .cargo/config.toml.

@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"posix_fallocate","root":"/tmp","ms":66.447,"exitCode":0,"truncated":false,"tap":"sandbox-disk-posix_fallocate-1792450121855.tap","stdout_bytes":186,"stderr":"","started":["posix_fallocate/00.t"],"deferred":[]}

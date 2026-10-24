@@ -48,7 +48,9 @@ fn value(kind: InodeKind, count: u64, content: &str, metadata: &str) -> InodeVal
         kind,
         namespace_ref_count: count,
         content_root: synthetic(content),
-        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(metadata)),
+        metadata_root: layerfs_content::object::inode_leaf::InodeMetadata::Root(synthetic(
+            metadata,
+        )),
     }
 }
 

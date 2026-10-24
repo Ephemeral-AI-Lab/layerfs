@@ -1,6 +1,0 @@
-[
-  "env",
-  "RUSTUP_TOOLCHAIN=1.85.1",
-  "CARGO_BUILD_JOBS=2",
-  "tools/test-fast.sh"
-]

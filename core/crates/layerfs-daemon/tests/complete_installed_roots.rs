@@ -65,6 +65,7 @@ fn all_supported_kernel_paths_survive_install_with_full_oracles() {
     proof(fixture::Shape::Mixed)
 }
 #[test]
+#[ignore = "needs the explicit closed preparation in LAYERFS_Q1_PREPARED"]
 fn huge_kernel_namespace_is_complete_after_install() {
     let prepared = std::env::var_os("LAYERFS_Q1_PREPARED")
         .expect("explicit closed preparation for clone setup");

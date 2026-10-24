@@ -1,8 +1,0 @@
-{
-  "status": "PASS",
-  "states": 157,
-  "original_identity_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue100-45mb-evidence/retained-full157-1/identity.json",
-  "original_identity_sha256": "1021fc899d097d48dad864bc1b8e4cd804d3b38dfeca3a69b36587646f830b24",
-  "executed_verification_sha256": "eb60d7a4607892822cc042770f1073c3621870709078420698e44d943164eb15",
-  "scope": "Every oracle SHA used by the completed comparison equals its original saved fixture identity and current bytes; no candidate replay"
-}

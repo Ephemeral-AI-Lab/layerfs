@@ -1,1 +1,0 @@
-["cargo", "+1.85.1", "test", "--locked", "-j2", "-p", "layerfs-layerstack-store", "--lib", "--all-features", "locator_publication_is_sorted_without_changing_native_pack_bytes", "--", "--test-threads=1"]

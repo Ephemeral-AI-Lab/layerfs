@@ -18,8 +18,8 @@ use super::decide::{split, BASE};
 use super::names::{Listing, Mode, PathSlot};
 use super::serial::{built, is_directory, listing, Ctx};
 use super::spill::{
-    single, Spill, SpillStack, CANCEL_MOVE, CANCEL_REMOVE, DONE, EXTRA, MOVED, REVIVE, REVIVE_ALL,
-    SURVIVE, TARGET,
+    single, Spill, SpillStack, CANCEL_MOVE, CANCEL_REMOVE, DONE, DROP, EXTRA, LOST, MOVED, REVIVE,
+    REVIVE_ALL, SURVIVE, TARGET,
 };
 use super::{Conflict, ConflictKind};
 use crate::compare::tree::{join, list_directory, locate};
@@ -211,14 +211,21 @@ impl Ctx<'_, '_> {
         Ok(())
     }
 
-    /// Leaves a serial new on `from` unbound, with every new serial below it.
+    /// Leaves a serial new on `from` unbound where the merge lost a binding
+    /// of it, with every new serial below it. A file `from` hard-linked at
+    /// other names is left unbound only once every one of its links is lost:
+    /// until then a name the merge keeps still binds it, with its value.
     pub(super) fn drop_new(&mut self, serial: u64) -> ContentResult<()> {
         let spill = self.spill;
-        if spill.get(super::spill::DROP, single(serial))?.is_some() {
+        if spill.get(DROP, single(serial))?.is_some() {
             return Ok(());
         }
-        spill.insert(super::spill::DROP, single(serial), Vec::new())?;
-        let Some(root) = listing(self.value(self.from, serial)?) else {
+        let value = self.value(self.from, serial)?;
+        if !self.unlinked(serial, value)? {
+            return Ok(());
+        }
+        spill.insert(DROP, single(serial), Vec::new())?;
+        let Some(root) = listing(value) else {
             return Ok(());
         };
         let mut stack = SpillStack::new(spill);
@@ -234,10 +241,14 @@ impl Ctx<'_, '_> {
                 let into = self.values(self.into, batch)?;
                 let from = self.values(self.from, batch)?;
                 for (((child, b), i), f) in batch.iter().zip(base).zip(into).zip(from) {
-                    if b.is_some() || i.is_some() {
+                    if b.is_some()
+                        || i.is_some()
+                        || spill.get(DROP, single(*child))?.is_some()
+                        || !self.unlinked(*child, f)?
+                    {
                         continue;
                     }
-                    spill.insert(super::spill::DROP, single(*child), Vec::new())?;
+                    spill.insert(DROP, single(*child), Vec::new())?;
                     if let Some(listing) = listing(f) {
                         stack.push(spill, listing.as_bytes().to_vec())?;
                     }
@@ -245,6 +256,36 @@ impl Ctx<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// Counts one lost binding of a serial new on `from`; true when it was
+    /// the last of the links `from` gave it. Only a regular file has more
+    /// than one.
+    fn unlinked(&self, serial: u64, from: Option<InodeValue>) -> ContentResult<bool> {
+        let links = from.map_or(1, |value| value.namespace_ref_count);
+        if links <= 1 {
+            return Ok(true);
+        }
+        let key = single(serial);
+        let old = self.spill.get(LOST, key)?;
+        let lost = match &old {
+            Some(bytes) => u64::from_be_bytes(
+                bytes
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| ContentError::InvalidRecord("merge lost links"))?,
+            ),
+            None => 0,
+        } + 1;
+        if lost >= links {
+            return Ok(true);
+        }
+        let count = lost.to_be_bytes().to_vec();
+        match old {
+            None => self.spill.insert(LOST, key, count)?,
+            Some(old) => self.spill.replace(LOST, key, old, count)?,
+        }
+        Ok(false)
     }
 
     /// Checks each directory `from` moved within what `into` holds.

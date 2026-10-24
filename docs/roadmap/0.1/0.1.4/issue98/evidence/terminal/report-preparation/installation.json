@@ -1,9 +1,0 @@
-{
-  "schema": "issue95-prospective-binding-installation-v1",
-  "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-admission-runs/report-preparation/declaration.json",
-  "destination": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-admission-runs/terminal-benchmark/declaration.json",
-  "sha256": "cead18d4b6b5780778b26735af49da2b20446f8fabeffcee03cdb15422cf9bdf",
-  "performance_rows": 198,
-  "verification_rows": 227,
-  "scope": "Installed explicitly post-collection derived declaration byte-identically; all existing raw files and ledgers unchanged; no derived projection needed."
-}
