@@ -2,11 +2,11 @@ Cursor coding agents work on LayerFS Branches and Workspaces instead of git work
 
 Plugin id: `cursor-agents`. Package: `layerfs-cursor-agents` `0.1.0`. This repository is for Cursor only. It does not install Claude Code skills, hooks, or configuration, and it does not ship a history dashboard.
 
-The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/467702d7fbb1e62348e47129a4987e62280eead5/layerfs.json): `9f97a7ec95b662e9cb288704afa165feff132cfa` (LayerFS v1.1.0).
+The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/layerfs.json): `9f97a7ec95b662e9cb288704afa165feff132cfa` (LayerFS v1.1.0).
 
 ## What it adds
 
-- A Cursor skill at [`.cursor/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/467702d7fbb1e62348e47129a4987e62280eead5/.cursor/skills/layerfs-agent/SKILL.md). The same skill is at [`.agents/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/467702d7fbb1e62348e47129a4987e62280eead5/.agents/skills/layerfs-agent/SKILL.md) for agents that look there.
+- A Cursor skill at [`.cursor/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/.cursor/skills/layerfs-agent/SKILL.md). The same skill is at [`.agents/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/.agents/skills/layerfs-agent/SKILL.md) for agents that look there.
 - `layerfs-cursor-setup`, which checks out that LayerFS commit, links the official `layerfs` command onto `PATH`, and writes `LAYERFS_*` settings.
 - On Linux, Store calls stay in the agent process. On macOS and Windows the setup starts the home worker with `@layerfs/runtime` and sets `LAYERFS_WORKER_ENDPOINT`.
 
@@ -18,7 +18,7 @@ The skill is the procedure. Short form:
 2. `branch.fork` one Branch for the task. Do not add a git worktree.
 3. Edit with `fs.write`, `fs.edit`, `fs.apply`, and the other `fs.*` calls.
 4. Run bash as `sandbox.create` (when you need a Sandbox), then `workspace.mount`, `workspace.exec`, `workspace.commit`, and `workspace.unmount`. Unmount in `finally`. On `Conflict`, stay in that Workspace until you resolve it or discard it.
-5. On `Conflict`, `Busy`, or `NoSuchSandbox`, follow [`refusals.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/467702d7fbb1e62348e47129a4987e62280eead5/.cursor/skills/layerfs-agent/references/refusals.md) once. Do not replay the refused call.
+5. On `Conflict`, `Busy`, or `NoSuchSandbox`, follow [`refusals.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/.cursor/skills/layerfs-agent/references/refusals.md) once. Do not replay the refused call.
 
 `examples/task-branch.mjs` forks a Branch (or keeps it if the name is taken) and writes one file. It imports the public SDK from `LAYERFS_REPO`.
 
@@ -30,7 +30,7 @@ On Linux it does not start a worker. On macOS and Windows it opens `@layerfs/run
 
 - Node.js 20 or newer, `git`, and `npm`.
 - A LayerFS checkout at the pinned commit. The setup script clones it if you do not already have one.
-- Linux, for real Store calls: Cargo 1.85.1 or newer, so the native addon can be built, and `LAYERFS_STORE_PATH` pointing at the project's installed Store (`global/store.sqlite` on a local filesystem the daemons share).
+- Linux, for real Store calls: the Rust 1.85.1 toolchain (`rustup toolchain install 1.85.1`), so the native addon can be built, and `LAYERFS_STORE_PATH` pointing at the project's installed Store (`global/store.sqlite` on a local filesystem the daemons share).
 - Sandboxes (any OS): Docker, `LAYERFS_IMAGE` (an image digest), `LAYERFS_VOLUME`, and `LAYERFS_DAEMON`.
 - macOS worker: Docker, `LAYERFS_IMAGE`, and a sealed Linux bundle.
 - Windows worker: WSL2, Docker inside it, `LAYERFS_IMAGE`, and a sealed Linux bundle. The setup process must stay running; it owns the worker.
@@ -61,4 +61,4 @@ When `LAYERFS_REPO` points at the pinned checkout, the same command also imports
 
 ## License
 
-MIT. See [LICENSE](https://github.com/earsonlau/layerfs-cursor-agents/blob/467702d7fbb1e62348e47129a4987e62280eead5/LICENSE).
+MIT. See [LICENSE](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/LICENSE).

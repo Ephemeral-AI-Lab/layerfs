@@ -7,8 +7,11 @@ Do these steps in order. If anything fails, stop and give me the exact error, an
 3. Check the tools, once each. Stop if either is missing or Node is older than 20.
    `node -v`
    `git --version`
-4. From the plugin repository root, run setup once, with `--layerfs` set to the checkout from step 1:
+4. From the plugin repository root, run setup once, with `--layerfs` set to the checkout from step 1.
+   On Linux, pass `--build-native` so the in-process Store addon is built:
    `node bin/layerfs-cursor-setup.js --build-native --layerfs "$LAYERFS_REPO"`
+   On macOS and Windows, do not pass `--build-native`. Those routes use the worker. The native build throws on Windows, and macOS does not need a Rust toolchain for Store calls. Setup ignores the flag there:
+   `node bin/layerfs-cursor-setup.js --layerfs "$LAYERFS_REPO"`
    Add a flag only when you already know the value: `--home`, `--prefix`, `--settings-file`, `--project`, `--store-path`, `--image`, `--daemon`, `--volume`, `--docker`, `--bundle`, `--container-prefix`, `--cursor-project`.
    Use `--settings-file` for the env file. Node reserves `--env-file`, so that name never reaches this script.
    On macOS and Windows, `--image` and `--bundle` are required or the worker start fails. Stop with that error.
