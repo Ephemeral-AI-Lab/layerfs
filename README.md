@@ -41,6 +41,31 @@ https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 
 Since 1.1.0, LayerFS also supports native Windows dsh Live through WSL2 and its own Linux Docker Engine; see the [Windows setup](https://github.com/Ephemeral-AI-Lab/dsh-layerfs#windows-live).
 
+## Local development
+
+The root `Makefile` is a thin dispatcher, with command groups under
+[`tools/make/`](tools/make/). It keeps the repository's pinned Rust toolchain,
+locked Cargo graph, Node addon build, Python guards and isolated Docker E2E
+launcher in one discoverable interface:
+
+```sh
+make help
+make doctor
+make setup
+make build
+make test-package PACKAGE=layerfs-storage
+make test-js-standin
+make ci
+```
+
+Rust commands use `--offline` by default after dependencies are available. Run
+`make deps-rust` once when the locked dependency cache is missing, or use
+`CARGO_OFFLINE=0` for a local build that may use the network to fetch missing
+dependencies. Test runs are capped at 120 s and need `timeout` (on macOS,
+`gtimeout` from `brew install coreutils`). The real SDK/Docker scenario remains intentionally explicit: register
+resources, build a sealed bundle, then run it with `make worktree-run
+RESOURCES=... BUNDLE=...`.
+
 <a id="get-started"></a>
 ## Try it with LayerFS × DSH
 
