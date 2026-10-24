@@ -60,9 +60,18 @@ export function sandboxArg(sandbox) {
 
 /** Deployment settings from the client options, else the environment
  * (LAYERFS_<NAME>). A Workspace's Sandbox needs
- * every one but the container prefix and daemon host. */
+ * every one but the container prefix and daemon host. With `sandbox`
+ * (LAYERFS_SANDBOX) `local`, a Sandbox is a daemon process on this machine
+ * instead of a container: it needs the daemon and `localDir`
+ * (LAYERFS_LOCAL_DIR) and no Docker setting. Unset or `docker` is Docker;
+ * any other value is refused. */
 export function deployment(options = {}) {
   const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
+  const sandbox = options.sandbox ?? env("SANDBOX");
+  if (sandbox === "local") return localDeployment(options, env);
+  if (sandbox !== undefined && sandbox !== "docker") {
+    throw new LayerFSError("InvalidInput", `deploy.sandbox (LAYERFS_SANDBOX) is docker or local, not ${sandbox}`, null);
+  }
   const deploy = {
     docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
     image: options.image ?? env("IMAGE"),
@@ -77,6 +86,22 @@ export function deployment(options = {}) {
   }
   if (!deploy.containerPrefix) delete deploy.containerPrefix;
   if (!deploy.daemonHost) delete deploy.daemonHost;
+  return deploy;
+}
+
+/** A local Sandbox's settings: the daemon, the directory its Sandboxes
+ * live in, and the optional name prefix. */
+function localDeployment(options, env) {
+  const deploy = {
+    sandbox: "local",
+    daemon: options.daemon ?? env("DAEMON"),
+    localDir: options.localDir ?? env("LOCAL_DIR"),
+    containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),
+  };
+  for (const [name, setting] of [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]]) {
+    if (!deploy[name]) throw new LayerFSError("InvalidInput", `deploy.${name} is not configured (LAYERFS_${setting})`, null);
+  }
+  if (!deploy.containerPrefix) delete deploy.containerPrefix;
   return deploy;
 }
 

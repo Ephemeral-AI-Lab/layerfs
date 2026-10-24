@@ -96,8 +96,7 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
-        let image = state.runtime.request().image.as_str();
-        fields.push(("image".to_owned(), SdkValue::text(image)));
+        fields.push(("image".to_owned(), SdkValue::text(state.runtime.image())));
     }
     crate::discovery::save_workspace(&state, &mounted, branch)?;
     lock(&state.mounts)?.insert(
@@ -112,15 +111,21 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
 
 /// One recorded Sandbox of the project: running (`Ok(true)`), or found
 /// gone or stopped (`Ok(false)`, with its container and whether it stopped).
-/// Its container is inspected once; no daemon is dialed.
-fn observed(record: &SdkValue, directory: &Path) -> Result<Option<(String, bool)>, SdkRefusal> {
+/// Its container (or local daemon process) is inspected once; no daemon
+/// is dialed.
+fn observed(
+    args: &SdkValue,
+    id: &str,
+    record: &SdkValue,
+    directory: &Path,
+) -> Result<Option<(String, bool)>, SdkRefusal> {
     let cached = lock(&crate::registry::SANDBOXES)?.get(directory).cloned();
     let observed = match cached {
         Some(state) => state.runtime.endpoint().map(drop),
-        None => {
-            let (docker, selector, request) = crate::discovery::runtime(record)?;
-            layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request).map(drop)
-        }
+        // a container, or with the local runtime a daemon process
+        None => crate::discovery::recorded(args, id, record)?
+            .reopen()
+            .map(drop),
     };
     match observed {
         Ok(()) => Ok(None),
@@ -152,7 +157,7 @@ fn records(args: &SdkValue) -> Result<Vec<(String, std::path::PathBuf, SdkValue)
 /// under the project's guard before it starts one.
 pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<(), SdkRefusal> {
     for (id, directory, value) in records(args)? {
-        if let Some((container, stopped)) = observed(&value, &directory)? {
+        if let Some((container, stopped)) = observed(args, &id, &value, &directory)? {
             crate::sandbox::reclaim(args, &id, &container, stopped)?;
         }
     }
@@ -168,7 +173,7 @@ pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<(), SdkRefusal> {
 pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
     let mut items = Vec::new();
     for (id, directory, value) in records(args)? {
-        if observed(&value, &directory)?.is_some() {
+        if observed(args, &id, &value, &directory)?.is_some() {
             continue;
         }
         items.push(SdkValue::map([
@@ -198,7 +203,7 @@ pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
 pub(crate) fn reclaim(args: &SdkValue) -> Outcome {
     let mut reclaimed = Vec::new();
     for (id, directory, value) in records(args)? {
-        let Some((container, stopped)) = observed(&value, &directory)? else {
+        let Some((container, stopped)) = observed(args, &id, &value, &directory)? else {
             continue;
         };
         let _placing = crate::discovery::guard(&crate::discovery::project_dir(args)?)?;

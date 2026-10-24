@@ -30,12 +30,12 @@ use std::time::Duration;
 /// Port the daemon listens on inside its container.
 const PORT: u16 = 30421;
 /// Wait for the daemon's listener after Start.
-const STARTUP: Duration = Duration::from_secs(30);
+pub(crate) const STARTUP: Duration = Duration::from_secs(30);
 /// Wait for one Engine control response.
 const ENGINE: Duration = Duration::from_secs(30);
 /// A failed create's report keeps its daemon's last log lines, up to this many bytes.
-const LOG_LINES: u16 = 20;
-const LOG_BYTES: usize = 2048;
+pub(crate) const LOG_LINES: u16 = 20;
+pub(crate) const LOG_BYTES: usize = 2048;
 
 pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
     values::refusal(&failure).unwrap_or_else(|| failed(failure))
@@ -54,7 +54,7 @@ pub(crate) const WORKSPACES: u32 = 16;
 /// for this process and the rest for others (#352 F-017).
 pub(crate) const DAEMON_CONNECTIONS: u16 = 8;
 
-fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
+pub(crate) fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
     DaemonSetup {
         listen: format!("0.0.0.0:{PORT}"),
         private_key: private,
@@ -84,7 +84,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
 }
 
 /// A container name prefix when the deployment sets none.
-const PREFIX: &str = "layerfs-";
+pub(crate) const PREFIX: &str = "layerfs-";
 
 /// The container labels of Sandbox `id` of `project`: what it is, whose,
 /// and which. Saved in its record, so a reopen expects the same.
@@ -115,6 +115,16 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
             format!("project {name} has no installed Store: its Import did not finish, so import it again"),
         ));
     };
+    if crate::runtime::local(deploy)? {
+        #[cfg(target_os = "linux")]
+        return crate::local::start(args, directory, (&project, installed));
+        #[cfg(not(target_os = "linux"))]
+        return Err(refused(
+            "Unsupported",
+            "LAYERFS_SANDBOX=local runs its daemon as a process of this kernel, which needs \
+             Linux; run it inside a Linux VM or CI box, or use Docker",
+        ));
+    }
     let docker = text(deploy, "docker")?;
     let image = deploy
         .get_text("image")
@@ -140,23 +150,10 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
     }
     let store_volume = text(deploy, "volume")?.to_owned();
     let executable = PathBuf::from(text(deploy, "daemon")?);
-    // A creation whose outcome is unknown is never silently attempted again.
-    let intent = directory.join("create.intent");
-    if intent.exists() {
-        let state = match crate::discovery::load(&intent) {
-            Ok(SdkValue::Text(state)) => state,
-            _ => "its record is unreadable".to_owned(),
-        };
-        return Err(refused(
-            "Unknown",
-            format!(
-                "a prior Sandbox creation has an unresolved discovery intent: {state}. Its outcome \
-                 is unknown, so it is neither retried nor taken as done. Remove any container it \
-                 left (docker ps -a --filter volume={store_volume}), then delete {}",
-                intent.display()
-            ),
-        ));
-    }
+    unresolved(
+        directory,
+        &format!("docker ps -a --filter volume={store_volume}"),
+    )?;
     // The number is claimed before anything is made; a failed start gives it
     // back (its directory holds no record yet), so the number is used again.
     let (id, saved_directory) = crate::discovery::claim_next(args)?;
@@ -172,6 +169,29 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
         let _ = std::fs::remove_dir(&saved_directory);
     }
     made
+}
+
+/// A creation whose outcome is unknown is never silently attempted again:
+/// while the project's creation intent stays, starts are refused. `left`
+/// says where to look for what that creation may have left.
+pub(crate) fn unresolved(directory: &Path, left: &str) -> Result<(), SdkRefusal> {
+    let intent = directory.join("create.intent");
+    if intent.exists() {
+        let state = match crate::discovery::load(&intent) {
+            Ok(SdkValue::Text(state)) => state,
+            _ => "its record is unreadable".to_owned(),
+        };
+        return Err(refused(
+            "Unknown",
+            format!(
+                "a prior Sandbox creation has an unresolved discovery intent: {state}. Its outcome \
+                 is unknown, so it is neither retried nor taken as done. Remove any container it \
+                 left ({left}), then delete {}",
+                intent.display()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// Starts the claimed Sandbox `id`: container, daemon on the installed
@@ -243,7 +263,7 @@ fn start_claimed(
         project: name.to_owned(),
         name: container_name,
         directory: saved_directory.to_owned(),
-        runtime,
+        runtime: crate::runtime::Runtime::Docker(runtime),
         identity,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
@@ -344,7 +364,8 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkR
 /// `sandbox.create({ image })`: under the project's guard, reclaims the
 /// project's idle-closed Sandboxes, then starts the lowest free number on
 /// the call's image (`deploy.image`) and waits for its daemon:
-/// `{ sandbox, name, image }`. The only call that starts a Sandbox. Failures
+/// `{ sandbox, name, image }`. With `deploy.sandbox` `local` it starts a
+/// daemon process instead of a container; its `image` is `local`. The only call that starts a Sandbox. Failures
 /// are `Failed` or `Unknown`, never retried.
 pub(crate) fn create(args: &SdkValue) -> Outcome {
     let project = crate::discovery::project_dir(args)?;
@@ -354,10 +375,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     Ok(SdkValue::map([
         ("sandbox", SdkValue::text(&state.id)),
         ("name", SdkValue::text(&state.name)),
-        (
-            "image",
-            SdkValue::text(state.runtime.request().image.as_str()),
-        ),
+        ("image", SdkValue::text(state.runtime.image())),
     ]))
 }
 
@@ -397,8 +415,8 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
         });
     }
     let value = crate::discovery::load(&record)?;
-    let (docker, selector, request) = crate::discovery::runtime(&value)?;
-    let mut owner = layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request)
+    let mut owner = crate::discovery::recorded(args, &id, &value)?
+        .reopen()
         .map_err(failed)?;
     owner.stop(STOP_S).map_err(failed)?;
     owner.delete().map_err(failed)?;
@@ -413,7 +431,8 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
 
 /// `backend.daemon.sandbox.get_log({ sandbox, lines })`: the last `lines`
 /// lines (1..=2000) of Sandbox `sandbox`'s daemon log, at most
-/// [`GET_LOG_BYTES`], read once through the Engine: `{ sandbox, container,
+/// [`GET_LOG_BYTES`], read once through the Engine (a local Sandbox's from
+/// its log file): `{ sandbox, container,
 /// text, bytes }`. A stopped container's log is readable until its records
 /// are reclaimed. Refused `NoSuchSandbox` with no record or no container.
 /// Read-only: it starts, stops and reclaims nothing.
@@ -437,8 +456,7 @@ pub(crate) fn get_log(args: &SdkValue) -> Outcome {
         crate::discovery::load(&record)?
     };
     let container = text(&value, "container")?.to_owned();
-    let (docker, selector, request) = crate::discovery::runtime(&value)?;
-    let sandbox = layerfs_sandbox::backend::docker::Sandbox::stopped(docker, selector, request);
+    let sandbox = crate::discovery::recorded(args, &id, &value)?.stopped();
     let bytes = match sandbox.log_tail(lines, GET_LOG_BYTES) {
         Ok(bytes) => bytes,
         Err(failure) if failure.container_gone() => {
@@ -460,7 +478,7 @@ const GET_LOG_BYTES: usize = 64 * 1024;
 /// Seconds a closing Sandbox's daemon has to exit before the Engine kills it.
 const STOP_S: u16 = 5;
 
-/// Reclaims Sandbox `id`, whose container a reopen found gone or stopped
+/// Reclaims Sandbox `id`, whose container (or local daemon) a reopen found gone or stopped
 /// (`container`, `stopped`): one unforced Delete of a stopped container, then
 /// its records, so its number is free again. Called under the project's
 /// guard; the Sandbox's own guard is taken too. The record is read again
@@ -485,8 +503,9 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
         ));
     }
     if stopped {
-        let (docker, selector, request) = crate::discovery::runtime(&value)?;
-        match layerfs_sandbox::backend::docker::Sandbox::stopped(docker, selector, request).delete()
+        match crate::discovery::recorded(args, id, &value)?
+            .stopped()
+            .delete()
         {
             Err(failure) if !failure.container_gone() => return Err(failed(failure)),
             _ => {}
