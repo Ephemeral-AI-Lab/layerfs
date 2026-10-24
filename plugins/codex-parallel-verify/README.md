@@ -29,7 +29,7 @@ One Codex session, one Branch. The next hypothesis is another Branch, not anothe
 
 ## How it works
 
-`verify-all` runs mount, then exec, then commit, then unmount on each Branch. A non-zero verify command is still committed once, with the exit code in the message. Default concurrency is 4. `--sequenced` is one Branch at a time. `--parallel` is all of them. Sandboxes hold 16 Workspaces; the CLI creates as many as it needs and closes each once.
+`verify-all` runs mount, then exec, then commit, then unmount on each Branch. A non-zero verify command is still committed once, with the exit code in the message. Default concurrency is 4. `--sequenced` is one Branch at a time. `--parallel` is all of them. Sandboxes hold 16 Workspaces; One is created when a Branch is about to mount and every Sandbox already started for this run is full, then each is closed once after the run.
 
 If two commits change the same path on one Branch, `workspace.commit` throws `Conflict`. `detail.conflicts` lists the paths and `detail.head` is the head that won the race. Do not send the commit again and do not pass `force`. `verify-all` records the refusal, unmounts that Workspace once with discard set, and moves on. To keep the edit, read the conflicting paths once, resolve them on a new fork, and commit there once.
 
@@ -49,6 +49,7 @@ Forked candidates stay in the baseline after `discard`, because a worktree workf
 
 ## You need
 
+- The Sandbox runtime image needs `node` and `npm` (`init --install`, `verify-all --command "npm test"`, and the size probe).
 - Node 20 or newer (`node -v` starts with `v20` or a newer major)
 - This repository at the listed commit, and a LayerFS checkout at the commit recorded in its `layerfs.json`
 - `npm --prefix "$LAYERFS_REPO/api" install` in that checkout, which links `@layerfs/agent` and `@layerfs/runtime` from the checkout rather than the registry
