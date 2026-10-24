@@ -137,6 +137,8 @@ for (const [why, argv, message] of [
   ["both --old and --old-from", ["fs", "edit", "cart", "/a", "--old", "x", "--old-from", "/x", "--new", "y"], "give exactly one of --old and --old-from"],
   ["neither --new nor --new-from", ["fs", "edit", "cart", "/a", "--old", "x"], "give exactly one of --new and --new-from"],
   ["unreadable --from", ["fs", "write", "cart", "/a", "--from", "/no/such/file"], "cannot read /no/such/file"],
+  ["--mode that is not octal", ["fs", "mkdir", "cart", "/d", "--mode", "rwx"], '--mode takes octal permission bits such as 755, not "rwx"'],
+  ["--mode with a digit past 7", ["fs", "write", "cart", "/a", "--mode", "0789"], '--mode takes octal permission bits such as 755, not "0789"'],
 ]) {
   test(`usage error, nothing called: ${why}`, () => {
     const r = cli(argv);

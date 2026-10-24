@@ -3,6 +3,7 @@ use crate::history::lookup as args;
 use crate::store::{BoundWorkspace, StoreOperation};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::PathName;
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_workspace::{
     Operation, Outcome, OverlayJobs, SourceView, Time, ViewStat, WorkspaceError,
 };
@@ -18,6 +19,37 @@ pub struct Mutation<'a> {
 /// more than 255 bytes) is invalid input, as on the read route.
 fn checked(path: &str, name: &str) -> Result<PathName> {
     PathName::new(name).map_err(|_| args::invalid(format!("`{path}` is not valid")))
+}
+/// A caller's `mode` for the entry of `kind` at `path`: the permission bits
+/// LayerFS stores, as `project.init` accepts them. Set-user-ID, set-group-ID
+/// and the sticky bit on a file are refused as `InvalidInput` with reason
+/// `Mode`; a symbolic link has no mode of its own.
+fn permitted(path: &str, kind: InodeKind, mode: u32) -> Result<u32> {
+    let mask = match kind {
+        InodeKind::Directory => 0o1777,
+        InodeKind::RegularFile => 0o777,
+        InodeKind::Symlink => {
+            return Err(args::refuse(
+                "NotFile",
+                format!("`{path}` is a symbolic link, which has no mode of its own"),
+                SdkValue::Null,
+            ))
+        }
+    };
+    if mode & !mask != 0 {
+        return Err(args::refuse(
+            "InvalidInput",
+            format!(
+                "mode {mode:04o} has bits LayerFS cannot store (set-user-ID, set-group-ID, or sticky on a file)"
+            ),
+            SdkValue::map([
+                ("reason", SdkValue::text("Mode")),
+                ("path", SdkValue::text(path)),
+                ("mode", SdkValue::text(format!("{mode:04o}"))),
+            ]),
+        ));
+    }
+    Ok(mode)
 }
 pub fn failure(e: WorkspaceError) -> SdkRefusal {
     let code = match &e {
@@ -148,8 +180,8 @@ impl<'a> Mutation<'a> {
         })?;
         Ok(())
     }
-    pub fn write(&mut self, path: &str, bytes: &[u8]) -> Result<()> {
-        let (serial, same) = self.target(path, bytes.len() as u64)?;
+    pub fn write(&mut self, path: &str, bytes: &[u8], mode: Option<u32>) -> Result<()> {
+        let (serial, same) = self.target(path, bytes.len() as u64, mode)?;
         let mut changed = !same;
         let mut offset = 0;
         for piece in bytes.chunks(layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES) {
@@ -171,6 +203,21 @@ impl<'a> Mutation<'a> {
         self.write_at(serial, offset, piece)?;
         Ok(true)
     }
+    fn set_mode(&mut self, serial: u64, mode: u32) -> Result<()> {
+        self.apply(Operation::SetAttributes {
+            serial,
+            mode: Some(mode),
+            mtime: None,
+            size: None,
+        })?;
+        Ok(())
+    }
+    /// Sets the permission bits of the entry at `path`.
+    pub fn chmod(&mut self, path: &str, mode: u32) -> Result<()> {
+        let stat = self.resolve(path)?;
+        let mode = permitted(path, stat.kind, mode)?;
+        self.set_mode(stat.serial, mode)
+    }
     fn truncate(&mut self, serial: u64, size: u64) -> Result<()> {
         self.apply(Operation::SetAttributes {
             serial,
@@ -180,14 +227,15 @@ impl<'a> Mutation<'a> {
         })?;
         Ok(())
     }
-    /// The regular file a write of `length` bytes goes to, created when absent,
-    /// and whether it already has that length.
-    fn target(&mut self, path: &str, length: u64) -> Result<(u64, bool)> {
+    /// The regular file a write of `length` bytes goes to, created when absent
+    /// with `mode` (default 0o644), and whether it already has that length. An
+    /// existing file takes `mode` only when one is given.
+    fn target(&mut self, path: &str, length: u64, mode: Option<u32>) -> Result<(u64, bool)> {
         Ok(match self.optional(path)? {
             Some(stat) => {
-                if stat.kind != layerfs_content::object::inode_leaf::InodeKind::RegularFile {
+                if stat.kind != InodeKind::RegularFile {
                     return Err(args::refuse(
-                        if stat.kind == layerfs_content::object::inode_leaf::InodeKind::Directory {
+                        if stat.kind == InodeKind::Directory {
                             "IsDirectory"
                         } else {
                             "NotFile"
@@ -196,37 +244,39 @@ impl<'a> Mutation<'a> {
                         SdkValue::Null,
                     ));
                 }
+                if let Some(mode) = mode {
+                    let mode = permitted(path, InodeKind::RegularFile, mode)?;
+                    self.set_mode(stat.serial, mode)?;
+                }
                 (stat.serial, stat.logical_len == length)
             }
             None => {
+                let mode = permitted(path, InodeKind::RegularFile, mode.unwrap_or(0o644))?;
                 let (parent, name) = self.parent(path)?;
                 let serial = self
-                    .apply(Operation::Create {
-                        parent,
-                        name,
-                        mode: 0o644,
-                    })?
+                    .apply(Operation::Create { parent, name, mode })?
                     .ok_or_else(|| args::failed("created inode"))?
                     .serial;
                 (serial, false)
             }
         })
     }
-    pub fn mkdir(&mut self, path: &str) -> Result<()> {
+    /// Creates the directory `path` with `mode` (default 0o755) and its
+    /// missing parents with 0o755; an existing directory keeps its mode.
+    pub fn mkdir(&mut self, path: &str, mode: Option<u32>) -> Result<()> {
+        let mode = permitted(path, InodeKind::Directory, mode.unwrap_or(0o755))?;
         let mut at = String::new();
-        for name in path.split('/').filter(|s| !s.is_empty()) {
+        let mut names = path.split('/').filter(|s| !s.is_empty()).peekable();
+        while let Some(name) = names.next() {
             at.push('/');
             at.push_str(name);
             match self.optional(&at)? {
-                Some(s) if s.kind == layerfs_content::object::inode_leaf::InodeKind::Directory => {}
+                Some(s) if s.kind == InodeKind::Directory => {}
                 Some(_) => return Err(args::refuse("NotDirectory", at, SdkValue::Null)),
                 None => {
                     let (parent, name) = self.parent(&at)?;
-                    self.apply(Operation::Mkdir {
-                        parent,
-                        name,
-                        mode: 0o755,
-                    })?;
+                    let mode = if names.peek().is_none() { mode } else { 0o755 };
+                    self.apply(Operation::Mkdir { parent, name, mode })?;
                 }
             }
         }

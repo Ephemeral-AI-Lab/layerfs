@@ -44,6 +44,10 @@ function value(kind, name, text, entry) {
     if (!/^\d+$/.test(text)) throw new UsageError(`--${name} takes a whole number, not ${JSON.stringify(text)}`, entry);
     return Number(text);
   }
+  if (kind === "octal") {
+    if (!/^(0o)?[0-7]+$/.test(text)) throw new UsageError(`--${name} takes octal permission bits such as 755, not ${JSON.stringify(text)}`, entry);
+    return parseInt(text.replace(/^0o/, ""), 8);
+  }
   if (kind === "json") {
     try {
       return JSON.parse(text);

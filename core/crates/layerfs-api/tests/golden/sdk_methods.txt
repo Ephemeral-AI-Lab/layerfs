@@ -37,8 +37,8 @@ fs.read -> refused Binary "text contains NUL or invalid UTF-8" null
 fs.list -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/", items: [{name: "a.txt", path: "/a.txt", type: "file", inode: 2}, {name: "applied-dir", path: "/applied-dir", type: "dir", inode: 201}, {name: "applied.txt", path: "/applied.txt", type: "file", inode: 200}, {name: "blob.bin", path: "/blob.bin", type: "file", inode: 3}, {name: "dir", path: "/dir", type: "dir", inode: 4}, {name: "made", path: "/made", type: "dir", inode: 72}, {name: "moved.txt", path: "/moved.txt", type: "file", inode: 137}, {name: "new.txt", path: "/new.txt", type: "file", inode: 8}], hasMore: false, nextPagePos: null}
 fs.list -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/dir", items: [{name: "b.txt", path: "/dir/b.txt", type: "file", inode: 5}], hasMore: true, nextPagePos: 1}
 fs.list -> refused NotDirectory "expected a directory" null
-fs.stat -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/a.txt", type: "file", inode: 2, size: 14}
-fs.stat -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/dir", type: "dir", inode: 4, size: 0}
+fs.stat -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/a.txt", type: "file", inode: 2, size: 14, mode: 420}
+fs.stat -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/dir", type: "dir", inode: 4, size: 0, mode: 493}
 fs.grep -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/", items: [], skipped: 1, hasMore: false, nextPagePos: null}
 fs.grep -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/dir", items: [{path: "/dir/b.txt", line: 1, text: "bee\n", lineTruncated: false}], skipped: 0, hasMore: false, nextPagePos: null}
 fs.grep -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/", items: [{path: "/dir/sub/c.rs", line: 1, text: "fn main() {}\n", lineTruncated: false}], skipped: 1, hasMore: false, nextPagePos: null}

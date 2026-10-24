@@ -2,7 +2,7 @@
 // with the fixed sections (settings, shared arguments, output) around them.
 import { CALLS, FAMILIES, INIT } from "./calls.js";
 
-const KIND = { text: "<text>", int: "<n>", json: "<json>", file: "<file>" };
+const KIND = { text: "<text>", int: "<n>", json: "<json>", file: "<file>", octal: "<octal>" };
 
 /** One command's usage line. */
 export function usage(entry) {

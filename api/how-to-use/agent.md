@@ -259,7 +259,7 @@ trace line covers the command's run.
 | `LayerFS` (2) | `LayerFS.open(name)`, `LayerFS.init(name, folder, timeout?)`: static, each returns a ready client |
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
 | fs reads (7) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
-| fs writes (7) | `write(branch, path, content, message?)`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message?)`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
+| fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | branch (6) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
 | workspace (4) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
@@ -267,8 +267,8 @@ trace line covers the command's run.
 A Workspace's status is not an agent call: it is `backend.daemon.workspace.status(ws)`
 in [`@layerfs/backend`](backend.md).
 
-Every grouped method returns a Promise and takes positional arguments only; no
-method takes an options object. A ref is `main`, a Branch name, a Commit
+Every grouped method returns a Promise and takes positional arguments; only
+the trailing `{ ... }?` arguments shown above are options objects. A ref is `main`, a Branch name, a Commit
 id or a Layer id. Filesystem paths are absolute in that view. Main changes only
 through publish. There is no `remove` alias, harness export, agent/call attribution,
 public inspect or public process-control method.
@@ -284,8 +284,8 @@ no history. Unchanged state creates no Commit solely for a message.
 
 ### Writes
 
-`apply` takes ordered `{op, ...}` changes (`write`, `edit`, `mkdir`, `rm`, `cp`,
-`mv`) and publishes once. A refusal identifies its zero-based `detail.index`.
+`apply` takes ordered `{op, ...}` changes (`write`, `edit`, `mkdir`, `chmod`,
+`rm`, `cp`, `mv`) and publishes once. A refusal identifies its zero-based `detail.index`.
 Each call uses a private indexed Workspace, the ordinary Workspace semantic ports
 and the shared captured Content constructor. Failed validation closes only that
 private overlay. Uncertain construction/publication keeps original custody.
@@ -295,6 +295,18 @@ modes, copied-set hardlinks and opaque symlinks; timestamps are new. Moves retai
 identity/timestamps. Destinations are exact and must not exist. Same-path/subtree
 moves or copies are InvalidInput. Mkdir creates parents and an existing directory
 is a no-op. Edit requires exactly one match and streams large files.
+
+A file's or folder's permission bits are an integer `mode` such as `0o755`. A
+`write` (in `fs.write`'s options or an `fs.apply` change) or `mkdir` may carry
+one: a new file gets `mode`, else 0o644; an existing file keeps its mode unless
+`mode` is given; a new folder gets `mode`, else 0o755, while parents it creates
+get 0o755 and an existing folder keeps its mode, as `mkdir -p -m` does.
+`{ op: "chmod", path, mode }` sets the mode of an existing file or folder.
+`fs.stat` reports `mode`. A mode that is not an integer from 0 to 0o7777 is
+`InvalidInput`; one LayerFS cannot store (set-user-ID or set-group-ID on any
+entry, the sticky bit on a file) is `InvalidInput` with `detail`
+`{ reason: "Mode", path, mode }` (octal text), as in `project.init`. A symbolic
+link has no mode of its own: `chmod` of one is `NotFile`.
 
 Branch writes, like `workspace.commit`, read the Branch head, merge with it and
 publish inside the Store's short publication lane, so concurrent writers never
@@ -482,10 +494,10 @@ table differs, and when a family's files stop matching the SDK's.
 | `fs.glob` | `layerfs fs glob <ref> <pattern> [<path>] [--page-size <n>] [--page-pos <n>]` |
 | `fs.diff_files` | `layerfs fs diff_files <left-ref> <left-path> <right-ref> <right-path>` |
 | `fs.blame` | `layerfs fs blame <ref> <path> [--from-line <n>]` |
-| `fs.write` | `layerfs fs write <branch> <path> [-m <text>] [--from <file>]` |
+| `fs.write` | `layerfs fs write <branch> <path> [-m <text>] [--mode <octal>] [--from <file>]` |
 | `fs.edit` | `layerfs fs edit <branch> <path> [-m <text>] [--old <text>] [--old-from <file>] [--new <text>] [--new-from <file>]` |
 | `fs.apply` | `layerfs fs apply <branch> [-m <text>] [--from <file>]` |
-| `fs.mkdir` | `layerfs fs mkdir <branch> <path> [-m <text>]` |
+| `fs.mkdir` | `layerfs fs mkdir <branch> <path> [-m <text>] [--mode <octal>]` |
 | `fs.rm` | `layerfs fs rm <branch> <path> [-m <text>]` |
 | `fs.cp` | `layerfs fs cp <branch> <from-path> <to-path> [-m <text>]` |
 | `fs.mv` | `layerfs fs mv <branch> <from-path> <to-path> [-m <text>]` |
