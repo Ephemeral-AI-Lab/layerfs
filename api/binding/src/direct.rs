@@ -9,7 +9,10 @@
 //! `Unsupported` with its reason. There is no other route.
 //!
 //! The private overlays file-changing calls construct through live in this
-//! process's temporary directory and are removed with the service. Each call
+//! process's temporary directory, under a random name so a directory left by
+//! a crashed process with the same pid, or by another copy of the addon in
+//! this process, never blocks the open (#436). They are removed with the
+//! service; a process that ends without closing leaves its own. Each call
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
 use crate::job::{failed, refused, Outcome};
@@ -18,7 +21,6 @@ use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 
 /// One opened Store and the clients that hold it.
@@ -30,7 +32,6 @@ struct Opened {
 }
 
 static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
-static DIRECTORIES: AtomicU64 = AtomicU64::new(0);
 
 /// The Store path a call names.
 fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
@@ -49,7 +50,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
-        DIRECTORIES.fetch_add(1, Ordering::Relaxed)
+        layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
     ));
     std::fs::create_dir(&directory).map_err(failed)?;
     let opened = StoreService::open_direct(
