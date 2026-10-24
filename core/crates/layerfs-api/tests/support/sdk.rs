@@ -17,6 +17,7 @@ use layerfs_workspace::{Operation, Outcome, Position, Time};
 use std::path::Path;
 
 /// One change [`Fixture::workspace_commit`] applies at a path.
+#[derive(Clone, Copy)]
 #[allow(dead_code)] // each test crate uses some of the variants
 pub enum Change<'a> {
     /// chmod to the mode.
@@ -34,6 +35,10 @@ pub enum Change<'a> {
     Mkdir(&'a str),
     /// Hard-link the existing path (first) at the new path (second).
     Link(&'a str, &'a str),
+    /// Remove a file's name.
+    Unlink(&'a str),
+    /// Remove an empty directory.
+    Rmdir(&'a str),
 }
 
 pub struct Fixture {
@@ -220,104 +225,90 @@ impl Fixture {
             let (parent, name) = path.rsplit_once('/').unwrap();
             (lookup(parent), PathName::new(name).unwrap())
         };
+        let attributes = |path: &str, mode: Option<u32>, mtime: Option<i64>| {
+            apply(Operation::SetAttributes {
+                serial: lookup(path),
+                mode,
+                mtime: mtime.map(|seconds| Time {
+                    seconds,
+                    nanoseconds: 0,
+                }),
+                size: None,
+            })
+        };
         for change in changes {
-            if let Change::SaveOver(path, bytes) = change {
-                let (parent, name) = path.rsplit_once('/').unwrap();
-                let (parent, save) = (lookup(parent), format!("{name}.save"));
-                apply(Operation::Create {
-                    parent,
-                    name: PathName::new(&save).unwrap(),
-                    mode: 0o644,
-                });
-                let serial = lookup(&format!("{path}.save"));
-                // in 64 KiB writes, as the kernel sends them
-                for (index, piece) in bytes.chunks(64 * 1024).enumerate() {
-                    apply(Operation::Write {
-                        serial,
-                        position: Position::At(index as u64 * 64 * 1024),
-                        data: piece.to_vec().into(),
-                    });
-                }
-                apply(Operation::Rename {
-                    parent,
-                    name: PathName::new(&save).unwrap(),
-                    new_parent: parent,
-                    new_name: PathName::new(name).unwrap(),
-                    replace: true,
-                    destination_path: None,
-                });
-                continue;
-            }
-            if let Change::Create(path, bytes) = change {
-                let (parent, name) = split(path);
-                apply(Operation::Create {
-                    parent,
-                    name,
-                    mode: 0o644,
-                });
-                apply(Operation::Write {
+            match change {
+                Change::Mode(path, mode) => attributes(path, Some(*mode), None),
+                Change::Mtime(path, seconds) => attributes(path, None, Some(*seconds)),
+                Change::Write(path, bytes) => apply(Operation::Write {
                     serial: lookup(path),
                     position: Position::At(0),
                     data: bytes.to_vec().into(),
-                });
-                continue;
-            }
-            if let Change::Mkdir(path) = change {
-                let (parent, name) = split(path);
-                apply(Operation::Mkdir {
-                    parent,
-                    name,
-                    mode: 0o755,
-                });
-                continue;
-            }
-            if let Change::Link(existing, path) = change {
-                let (parent, name) = split(path);
-                apply(Operation::Link {
-                    serial: lookup(existing),
-                    parent,
-                    name,
-                });
-                continue;
-            }
-            let path = match change {
-                Change::Mode(path, _)
-                | Change::Mtime(path, _)
-                | Change::Write(path, _)
-                | Change::SaveOver(path, _)
-                | Change::Create(path, _)
-                | Change::Mkdir(path)
-                | Change::Link(_, path) => path,
-            };
-            let serial = lookup(path);
-            apply(match change {
-                Change::Mode(_, mode) => Operation::SetAttributes {
-                    serial,
-                    mode: Some(*mode),
-                    mtime: None,
-                    size: None,
-                },
-                Change::Mtime(_, seconds) => Operation::SetAttributes {
-                    serial,
-                    mode: None,
-                    mtime: Some(Time {
-                        seconds: *seconds,
-                        nanoseconds: 0,
-                    }),
-                    size: None,
-                },
-                Change::Write(_, bytes) => Operation::Write {
-                    serial,
-                    position: Position::At(0),
-                    data: bytes.to_vec().into(),
-                },
-                Change::SaveOver(..)
-                | Change::Create(..)
-                | Change::Mkdir(..)
-                | Change::Link(..) => {
-                    unreachable!()
+                }),
+                Change::SaveOver(path, bytes) => {
+                    let (parent, name) = split(path);
+                    let save = PathName::new(&format!("{}.save", name.as_str())).unwrap();
+                    apply(Operation::Create {
+                        parent,
+                        name: save.clone(),
+                        mode: 0o644,
+                    });
+                    let serial = lookup(&format!("{path}.save"));
+                    // in 64 KiB writes, as the kernel sends them
+                    for (index, piece) in bytes.chunks(64 * 1024).enumerate() {
+                        apply(Operation::Write {
+                            serial,
+                            position: Position::At(index as u64 * 64 * 1024),
+                            data: piece.to_vec().into(),
+                        });
+                    }
+                    apply(Operation::Rename {
+                        parent,
+                        name: save,
+                        new_parent: parent,
+                        new_name: name,
+                        replace: true,
+                        destination_path: None,
+                    });
                 }
-            });
+                Change::Create(path, bytes) => {
+                    let (parent, name) = split(path);
+                    apply(Operation::Create {
+                        parent,
+                        name,
+                        mode: 0o644,
+                    });
+                    apply(Operation::Write {
+                        serial: lookup(path),
+                        position: Position::At(0),
+                        data: bytes.to_vec().into(),
+                    });
+                }
+                Change::Mkdir(path) => {
+                    let (parent, name) = split(path);
+                    apply(Operation::Mkdir {
+                        parent,
+                        name,
+                        mode: 0o755,
+                    });
+                }
+                Change::Link(existing, path) => {
+                    let (parent, name) = split(path);
+                    apply(Operation::Link {
+                        serial: lookup(existing),
+                        parent,
+                        name,
+                    });
+                }
+                Change::Unlink(path) => {
+                    let (parent, name) = split(path);
+                    apply(Operation::Unlink { parent, name });
+                }
+                Change::Rmdir(path) => {
+                    let (parent, name) = split(path);
+                    apply(Operation::Rmdir { parent, name });
+                }
+            }
         }
         drop(view);
         operation

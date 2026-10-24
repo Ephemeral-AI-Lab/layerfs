@@ -428,6 +428,419 @@ fn a_new_file_is_dropped_once_every_link_is_lost() {
     }
 }
 
+/// Both orders of one merge: `l` into `r`, then `r` into `l`.
+const ORDERS: [[&str; 2]; 2] = [["l", "r"], ["r", "l"]];
+
+/// `/t`, with `/.lww` = `/t` when `rules`, and `/t/d/old` when `old`.
+fn link_tree(label: &str, rules: bool, old: bool) -> Fixture {
+    Fixture::new(label, |source| {
+        let mut count = 1;
+        if rules {
+            fs::write(source.join(".lww"), b"/t\n").unwrap();
+            count += 1;
+        }
+        fs::create_dir(source.join("t")).unwrap();
+        if old {
+            fs::create_dir(source.join("t/d")).unwrap();
+            fs::write(source.join("t/d/old"), b"old\n").unwrap();
+            count += 2;
+        }
+        count
+    })
+}
+
+/// Commits `left` on `l`, then `right` on `r` (so `r`'s files are newer at
+/// equal mtimes) and merges `branch` with `with` into `m`.
+fn merge_changes(
+    fixture: &Fixture,
+    left: &[Change],
+    right: &[Change],
+    [branch, with]: [&str; 2],
+) -> Result<SdkValue, SdkRefusal> {
+    fixture.fork("l");
+    fixture.fork("r");
+    fixture.workspace_commit("l", left, 1, || {});
+    fixture.workspace_commit("r", right, 2, || {});
+    fixture.try_call(
+        "branch.merge",
+        vec![
+            ("branch", text(branch)),
+            ("with", text(with)),
+            ("name", text("m")),
+        ],
+    )
+}
+
+/// Runs one link case in both orders: `check` gets the merged view.
+fn both_orders(
+    label: &str,
+    rules: bool,
+    old: bool,
+    left: &[Change],
+    right: &[Change],
+    check: impl Fn(&Fixture, &[String], [&'static str; 2]),
+) {
+    each_order(
+        label,
+        rules,
+        old,
+        left,
+        right,
+        |fixture, _, merged_view, order| check(fixture, merged_view, order),
+    );
+}
+
+/// Runs one case in both orders: `check` gets the merge's reply and view.
+fn each_order(
+    label: &str,
+    rules: bool,
+    old: bool,
+    left: &[Change],
+    right: &[Change],
+    check: impl Fn(&Fixture, &SdkValue, &[String], [&'static str; 2]),
+) {
+    let mut failed = Vec::new();
+    for order in ORDERS {
+        let fixture = link_tree(&format!("{label}-{}", order[0]), rules, old);
+        let merged = merge_changes(&fixture, left, right, order);
+        let checked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let merged = merged.unwrap_or_else(|refusal| panic!("merge refused: {refusal:?}"));
+            let merged_view = view(&fixture, merged.get_text("root").unwrap());
+            check(&fixture, &merged, &merged_view, order);
+        }));
+        if checked.is_err() {
+            failed.push(order);
+        }
+        fixture.cleanup();
+    }
+    assert!(failed.is_empty(), "{label}: failed in {failed:?}");
+}
+
+/// Every path below `/t/` in the view, in view order.
+fn below_t(merged_view: &[String]) -> Vec<&str> {
+    merged_view
+        .iter()
+        .filter_map(|line| line.split(' ').next())
+        .filter(|path| path.starts_with("/t/"))
+        .collect()
+}
+
+/// A file view line without a link group.
+fn single(merged_view: &[String], path: &str) {
+    let found = line(merged_view, path).unwrap_or_else(|| panic!("{path}: {merged_view:?}"));
+    assert!(found.starts_with(&format!("{path} file ")), "{found}");
+    assert!(!found.contains(" link="), "{found}");
+}
+
+const NEWER: i64 = 456;
+
+/// The new two-link file of the `.lww` case, merged in each direction: the
+/// file `l` hard-linked keeps the name the merge keeps, whichever side the
+/// merge reads changes from.
+#[test]
+fn a_new_link_outlives_its_lost_name_in_either_direction() {
+    both_orders(
+        "serial-link-lost-both",
+        true,
+        false,
+        &[
+            Change::Create("/t/x", b"ours\n"),
+            Change::Mkdir("/t/s"),
+            Change::Link("/t/x", "/t/s/x"),
+        ],
+        &[
+            Change::Create("/t/x", b"theirs\n"),
+            Change::Mtime("/t/x", NEWER),
+        ],
+        |fixture, merged_view, _| {
+            single(merged_view, "/t/s/x");
+            assert_eq!(read(fixture, "/t/x").as_deref(), Some("theirs\n"));
+            assert_eq!(read(fixture, "/t/s/x").as_deref(), Some("ours\n"));
+        },
+    );
+}
+
+/// A new file with three links loses two names to newer files: the third
+/// keeps it (the stored lost count is read back once). Losing the third
+/// with its new directory as well drops it.
+#[test]
+fn a_three_link_file_is_dropped_only_with_its_last_name() {
+    let left = [
+        Change::Create("/t/x", b"ours\n"),
+        Change::Link("/t/x", "/t/y"),
+        Change::Mkdir("/t/s"),
+        Change::Link("/t/x", "/t/s/z"),
+    ];
+    let lost_two = [
+        Change::Create("/t/x", b"theirs x\n"),
+        Change::Mtime("/t/x", NEWER),
+        Change::Create("/t/y", b"theirs y\n"),
+        Change::Mtime("/t/y", NEWER),
+    ];
+    both_orders(
+        "serial-three-links-kept",
+        true,
+        false,
+        &left,
+        &lost_two,
+        |fixture, merged_view, _| {
+            single(merged_view, "/t/s/z");
+            assert_eq!(read(fixture, "/t/x").as_deref(), Some("theirs x\n"));
+            assert_eq!(read(fixture, "/t/y").as_deref(), Some("theirs y\n"));
+            assert_eq!(read(fixture, "/t/s/z").as_deref(), Some("ours\n"));
+        },
+    );
+    let mut lost_three = lost_two.to_vec();
+    lost_three.extend([
+        Change::Create("/t/s", b"theirs s\n"),
+        Change::Mtime("/t/s", NEWER),
+    ]);
+    both_orders(
+        "serial-three-links-lost",
+        true,
+        false,
+        &left,
+        &lost_three,
+        |fixture, merged_view, _| {
+            assert_eq!(below_t(merged_view), ["/t/s", "/t/x", "/t/y"]);
+            for path in ["/t/x", "/t/y", "/t/s"] {
+                single(merged_view, path);
+            }
+            assert_eq!(read(fixture, "/t/s").as_deref(), Some("theirs s\n"));
+        },
+    );
+}
+
+/// Without a `.lww` rule the new linked file meets the other side's new
+/// file in a conflict, which the merge reports at that name.
+#[test]
+fn a_new_linked_file_in_a_conflict_is_reported() {
+    for order in ORDERS {
+        let fixture = link_tree(&format!("serial-link-conflict-{}", order[0]), false, false);
+        let merged = merge_changes(
+            &fixture,
+            &[
+                Change::Create("/t/x", b"ours\n"),
+                Change::Mkdir("/t/s"),
+                Change::Link("/t/x", "/t/s/x"),
+            ],
+            &[Change::Create("/t/x", b"theirs\n")],
+            order,
+        );
+        let refusal = conflicted(merged);
+        assert!(refusal.contains("/t/x"), "{order:?}: {refusal}");
+        fixture.cleanup();
+    }
+}
+
+/// What one plain new file `l` creates at `path` gives in each order, read
+/// at `at`: the outcome a second link of that file must not change.
+fn plain_outcome(
+    label: &str,
+    path: &str,
+    right: &[Change],
+    at: &'static str,
+) -> Vec<([&'static str; 2], Option<String>)> {
+    let seen = std::cell::RefCell::new(Vec::new());
+    both_orders(
+        label,
+        true,
+        true,
+        &[Change::Create(path, b"ours\n")],
+        right,
+        |fixture, _, order| seen.borrow_mut().push((order, read(fixture, at))),
+    );
+    seen.into_inner()
+}
+
+fn outcome(seen: &[([&str; 2], Option<String>)], order: [&str; 2]) -> Option<String> {
+    seen.iter()
+        .find(|(known, _)| *known == order)
+        .and_then(|(_, read)| read.clone())
+}
+
+/// `r` replaces the directory `/t/d` with a new one at the same name, so
+/// one side's copy is merged into the other's by name; `l`'s new file
+/// there meets `r`'s newer file. Its second link, outside the directory or
+/// inside it, changes nothing at `/t/d/x` and keeps `l`'s file, though the
+/// directory's names are read twice.
+#[test]
+fn a_new_link_in_a_merged_directory_is_lost_once() {
+    let right = [
+        Change::Unlink("/t/d/old"),
+        Change::Rmdir("/t/d"),
+        Change::Mkdir("/t/d"),
+        Change::Create("/t/d/x", b"theirs\n"),
+        Change::Mtime("/t/d/x", NEWER),
+    ];
+    let plain = plain_outcome("serial-absorbed-plain", "/t/d/x", &right, "/t/d/x");
+    for other in ["/t/k", "/t/d/y"] {
+        both_orders(
+            &format!("serial-absorbed-link{}", other.replace('/', "-")),
+            true,
+            true,
+            &[
+                Change::Create("/t/d/x", b"ours\n"),
+                Change::Link("/t/d/x", other),
+            ],
+            &right,
+            |fixture, merged_view, order| {
+                let at_x = read(fixture, "/t/d/x");
+                assert_eq!(at_x, outcome(&plain, order));
+                assert_eq!(read(fixture, other).as_deref(), Some("ours\n"));
+                if at_x.as_deref() == Some("theirs\n") {
+                    single(merged_view, other);
+                }
+            },
+        );
+    }
+}
+
+/// `r` replaces the existing directory `/t/d` with a newer file. Where that
+/// file wins, `l`'s new file below the directory loses that name with it,
+/// which `drop_new` does not see. Its other link keeps it when that name is
+/// kept, and nothing holds it when that name is lost to a newer file too.
+#[test]
+fn a_new_link_below_a_replaced_directory() {
+    let replace = [
+        Change::Unlink("/t/d/old"),
+        Change::Rmdir("/t/d"),
+        Change::Create("/t/d", b"theirs d\n"),
+        Change::Mtime("/t/d", NEWER),
+    ];
+    let plain = plain_outcome("serial-replaced-plain", "/t/d/y", &replace, "/t/d/y");
+    // Whether `l`'s directory survives at `/t/d` in each order.
+    let survives = |order: [&'static str; 2]| outcome(&plain, order).is_some();
+    both_orders(
+        "serial-replaced-dir-kept",
+        true,
+        true,
+        &[
+            Change::Create("/t/d/y", b"ours\n"),
+            Change::Link("/t/d/y", "/t/k"),
+        ],
+        &replace,
+        |fixture, merged_view, order| {
+            assert_eq!(read(fixture, "/t/k").as_deref(), Some("ours\n"));
+            if survives(order) {
+                assert_eq!(read(fixture, "/t/d/y").as_deref(), Some("ours\n"));
+            } else {
+                assert_eq!(read(fixture, "/t/d").as_deref(), Some("theirs d\n"));
+                single(merged_view, "/t/k");
+            }
+        },
+    );
+    let mut both_lost = replace.to_vec();
+    both_lost.extend([
+        Change::Create("/t/w", b"theirs w\n"),
+        Change::Mtime("/t/w", NEWER),
+    ]);
+    both_orders(
+        "serial-replaced-dir-lost",
+        true,
+        true,
+        &[
+            Change::Create("/t/d/y", b"ours\n"),
+            Change::Link("/t/d/y", "/t/w"),
+        ],
+        &both_lost,
+        |fixture, merged_view, order| {
+            assert_eq!(read(fixture, "/t/w").as_deref(), Some("theirs w\n"));
+            single(merged_view, "/t/w");
+            if survives(order) {
+                assert_eq!(read(fixture, "/t/d/y").as_deref(), Some("ours\n"));
+                single(merged_view, "/t/d/y");
+                assert_eq!(below_t(merged_view), ["/t/d", "/t/d/y", "/t/w"]);
+            } else {
+                assert_eq!(read(fixture, "/t/d").as_deref(), Some("theirs d\n"));
+                single(merged_view, "/t/d");
+                assert_eq!(below_t(merged_view), ["/t/d", "/t/w"]);
+            }
+        },
+    );
+}
+
+/// The paths of a merge reply's `/.lww` decisions.
+fn lww_paths(reply: &SdkValue) -> Vec<&str> {
+    match reply.get("lww") {
+        Some(SdkValue::List(lww)) => lww
+            .iter()
+            .map(|decision| decision.get_text("path").unwrap())
+            .collect(),
+        other => panic!("lww: {other:?}"),
+    }
+}
+
+/// `r` replaces the directory `/t/d` with a file.
+const REPLACED_BY_FILE: [Change<'static>; 4] = [
+    Change::Unlink("/t/d/old"),
+    Change::Rmdir("/t/d"),
+    Change::Create("/t/d", b"theirs d\n"),
+    Change::Mtime("/t/d", NEWER),
+];
+
+/// `l` added to `/t/d`, which `r` replaced with a file. Two directories are
+/// the same entry, so `l` did not change the entry at `/t/d`: `r`'s file
+/// wins in either order, with no `/.lww` decision and no conflict, and
+/// `l`'s new file goes with the directory. That holds with `l`'s directory
+/// newer and without a `/.lww` rule.
+#[test]
+fn a_directory_added_to_loses_to_the_file_that_replaced_it() {
+    let added = [Change::Create("/t/d/y", b"ours\n")];
+    let newer = [
+        Change::Create("/t/d/y", b"ours\n"),
+        Change::Mtime("/t/d", NEWER + 1),
+    ];
+    for (label, rules, left) in [
+        ("serial-dir-file", true, &added[..]),
+        ("serial-dir-file-newer-dir", true, &newer[..]),
+        ("serial-dir-file-no-rule", false, &added[..]),
+    ] {
+        each_order(
+            label,
+            rules,
+            true,
+            left,
+            &REPLACED_BY_FILE,
+            |fixture, reply, merged_view, _| {
+                assert_eq!(below_t(merged_view), ["/t/d"]);
+                assert_eq!(read(fixture, "/t/d").as_deref(), Some("theirs d\n"));
+                assert!(lww_paths(reply).is_empty(), "{reply:?}");
+            },
+        );
+    }
+}
+
+/// `r` replaces `/t/d` with a new directory holding a newer `x`; `l` adds
+/// an older `x` and a `y` to the old one. In either order the two
+/// directories are merged by name: `/.lww` keeps `r`'s `x`, `l`'s `y`
+/// stays and `r`'s removal of `old` holds.
+#[test]
+fn a_directory_added_to_against_a_new_directory_merges_by_name() {
+    each_order(
+        "serial-dir-dir-lww",
+        true,
+        true,
+        &[
+            Change::Create("/t/d/x", b"ours\n"),
+            Change::Create("/t/d/y", b"ours y\n"),
+        ],
+        &[
+            Change::Unlink("/t/d/old"),
+            Change::Rmdir("/t/d"),
+            Change::Mkdir("/t/d"),
+            Change::Create("/t/d/x", b"theirs\n"),
+            Change::Mtime("/t/d/x", NEWER),
+        ],
+        |fixture, reply, merged_view, _| {
+            assert_eq!(below_t(merged_view), ["/t/d", "/t/d/x", "/t/d/y"]);
+            assert_eq!(read(fixture, "/t/d/x").as_deref(), Some("theirs\n"));
+            assert_eq!(read(fixture, "/t/d/y").as_deref(), Some("ours y\n"));
+            assert_eq!(lww_paths(reply), ["/t/d/x"]);
+        },
+    );
+}
+
 #[test]
 fn a_one_sided_mode_change_is_kept() {
     let fixture = seeded("serial-chmod");

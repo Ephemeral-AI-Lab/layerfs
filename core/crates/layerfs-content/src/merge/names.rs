@@ -6,13 +6,15 @@
 //! `into` binding what the base bound takes `from`'s binding: a name `from`
 //! added, a serial `from` moved away, a serial `from` deleted (kept only when
 //! a correction says it survives), or a replacement. A replacement of a file
-//! `into` changed in place, and every name both sides rebound, is decided by
+//! `into` changed in place or of a directory whose names `into` changed, and
+//! every name both sides rebound, is decided by
 //! the entries the name binds; two new directories at one name are merged by
 //! name into `into`'s (`from`'s is *absorbed*). The deciding pass records
 //! each decision under its name; the writing pass reads them back.
 
 use std::collections::HashMap;
 
+use super::decide::split;
 use super::rows::ChangeWriter;
 use super::serial::{is_directory, listing, same, Ctx};
 use super::spill::{
@@ -313,26 +315,9 @@ impl Ctx<'_, '_> {
                 && Values::get(&values.f, Some(ie.serial)).is_none()
                 && self.spill.get(TARGET, single(ie.serial))?.is_none();
             if absorb {
-                // Two directories at one name: `from`'s names go into `into`'s.
-                let base_directory = base.filter(|entry| is_directory(Some(entry.value)));
-                let mut target = fe.serial.to_be_bytes().to_vec();
-                if let Some(entry) = base_directory {
-                    target.extend_from_slice(&entry.serial.to_be_bytes());
-                }
-                self.spill
-                    .insert(ABSORB, single(fe.serial), ie.serial.to_be_bytes().to_vec())?;
-                self.spill.insert(TARGET, single(ie.serial), target)?;
                 self.spill
                     .insert(NAMED, key, put_binding(Some(ie.serial)))?;
-                let mut inner = Listing {
-                    target: ie.serial,
-                    base: base_directory.map(|entry| entry.value.content_root),
-                    from: Some(fe.value.content_root),
-                    into: Some(ie.value.content_root),
-                    path: PathSlot::Known(path),
-                };
-                self.names(&mut inner, Mode::Decide)?;
-                return Ok(());
+                return self.absorb(base, fe, ie, path);
             }
         }
         let result = self.decide(&path, [base, ours, theirs])?;
@@ -352,6 +337,70 @@ impl Ctx<'_, '_> {
             }
         }
         self.spill.insert(NAMED, key, put_binding(carrier))
+    }
+
+    /// Two directories at one name: `from`'s `fe`'s names go into `into`'s
+    /// `ie`, against the base's directory there.
+    fn absorb(
+        &mut self,
+        base: Option<EntryFacts>,
+        fe: EntryFacts,
+        ie: EntryFacts,
+        path: String,
+    ) -> ContentResult<()> {
+        let base_directory = base.filter(|entry| is_directory(Some(entry.value)));
+        let mut target = fe.serial.to_be_bytes().to_vec();
+        if let Some(entry) = base_directory {
+            target.extend_from_slice(&entry.serial.to_be_bytes());
+        }
+        self.spill
+            .insert(ABSORB, single(fe.serial), ie.serial.to_be_bytes().to_vec())?;
+        self.spill.insert(TARGET, single(ie.serial), target)?;
+        let mut inner = Listing {
+            target: ie.serial,
+            base: base_directory.map(|entry| entry.value.content_root),
+            from: Some(fe.value.content_root),
+            into: Some(ie.value.content_root),
+            path: PathSlot::Known(path),
+        };
+        self.names(&mut inner, Mode::Decide)?;
+        Ok(())
+    }
+
+    /// `from` changed the names of the directory `f`, which `into` replaced
+    /// with `there` at its unchanged `path`: decided at the path, as the
+    /// other direction decides it at the name. A new directory there takes
+    /// `f`'s names; a kept `f` is resurrected with its subtree; a lost one
+    /// leaves the serials new below it unbound.
+    pub(super) fn replaced_directory(
+        &mut self,
+        path: &str,
+        b: EntryFacts,
+        f: EntryFacts,
+        there: EntryFacts,
+    ) -> ContentResult<()> {
+        if is_directory(Some(there.value))
+            && self.value(self.from, there.serial)?.is_none()
+            && self.spill.get(TARGET, single(there.serial))?.is_none()
+        {
+            return self.absorb(Some(b), f, there, path.to_owned());
+        }
+        let result = self.decide(path, [Some(b), Some(f), Some(there)])?;
+        let carrier = self.carrier(result, Some(there))?;
+        if carrier == Some(f.serial) {
+            self.resurrect(f.serial, Some(f.value))?;
+        } else {
+            self.drop_below(f.value.content_root)?;
+        }
+        if carrier != Some(there.serial) {
+            let (parent, name) = split(path);
+            let parent = self
+                .resolver
+                .entry(self.into, parent)?
+                .ok_or(ContentError::InvalidRecord("merge replaced parent"))?;
+            self.extra(parent.serial, name, carrier)?;
+        }
+        Ok(())
     }
 
     /// `from` bound `serial` at `name`: a serial new to the base needs
