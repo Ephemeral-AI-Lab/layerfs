@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="LayerFS for Codex parallel verify">
+  <rect width="128" height="128" rx="28" fill="#14241C"/>
+  <ellipse cx="50" cy="78" rx="28" ry="10" fill="#1B4D34"/>
+  <ellipse cx="50" cy="68" rx="28" ry="10" fill="#1F7A4D"/>
+  <ellipse cx="50" cy="58" rx="28" ry="10" fill="#2E9A62"/>
+  <ellipse cx="50" cy="48" rx="28" ry="10" fill="#8FD0A8"/>
+  <path d="M78 42l8 8 16-18" fill="none" stroke="#F3C96A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M78 62l8 8 16-18" fill="none" stroke="#F3C96A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M78 82l8 8 16-18" fill="none" stroke="#F3C96A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
