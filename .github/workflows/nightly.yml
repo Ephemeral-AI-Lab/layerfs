@@ -25,6 +25,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_OFFLINE: "0"
 
 jobs:
   slow:
@@ -40,18 +41,9 @@ jobs:
         with:
           workspaces: core -> target
       - name: Build test binaries
-        run: |
-          targets="$(python3 -B core/tools/ci_tests.py targets nightly)"
-          # shellcheck disable=SC2086 # one --test flag per word
-          cargo +1.85.1 test --manifest-path core/Cargo.toml --locked \
-            --workspace --exclude layerfs-node $targets --no-run
+        run: make build-test-nightly
       - name: Run slow and heavy tests (whole run capped at 120 s)
-        run: |
-          targets="$(python3 -B core/tools/ci_tests.py targets nightly)"
-          filter="$(python3 -B core/tools/ci_tests.py filter nightly)"
-          # shellcheck disable=SC2086 # one --test flag per word
-          timeout 120 cargo +1.85.1 nextest run --manifest-path core/Cargo.toml --locked \
-            --workspace --exclude layerfs-node $targets --profile ci -E "$filter"
+        run: make run-test-nightly
 
   mount:
     runs-on: ubuntu-24.04
@@ -63,14 +55,7 @@ jobs:
         with:
           workspaces: core -> target
       - name: Build mount test binaries
-        run: |
-          targets="$(python3 -B core/tools/ci_tests.py mount-targets)"
-          # shellcheck disable=SC2086 # one --test flag per word
-          cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-daemon \
-            $targets --no-run --message-format json > "$RUNNER_TEMP/build.json"
-          python3 -B core/tools/ci_tests.py executables < "$RUNNER_TEMP/build.json" > "$RUNNER_TEMP/mount.tsv"
-          test -s "$RUNNER_TEMP/mount.tsv"
-          wc -l < "$RUNNER_TEMP/mount.tsv"
+        run: make build-mount-tests MOUNT_BUILD_JSON="$RUNNER_TEMP/build.json" MOUNT_EXECUTABLES="$RUNNER_TEMP/mount.tsv"
       - name: Prepare FUSE and the test image
         run: |
           sudo modprobe fuse
