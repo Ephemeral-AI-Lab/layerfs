@@ -143,8 +143,8 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   Linux container running the real SDK, which opens each project's Store
   directly and keeps it and its daemon connections open while the project is
   in use (closed after a quiet minute). The worker listens on loopback only,
-  behind a secret. The product SDK and daemon do not change. Nothing else may
-  route Store calls this way.
+  behind a secret. The product SDK and daemon do not change. (Widened to any
+  integration on 2026-10-24; see below.)
 - **Additional exception (owner, 2026-10-22): dsh Live on Windows.** The
   Windows dsh-layerfs adapter may forward its SDK binding calls to one
   authenticated loopback worker per LayerFS home in a selected WSL2 Linux
@@ -154,6 +154,16 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   native handles and project discovery. This is independent of the macOS
   adapter and changes neither the product SDK nor the daemon. A lost reply
   is never replayed, and an uncertain Init retains its Linux home and volume.
+- **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh
+  and every other plugin. The macOS and Windows worker routes above are open
+  to any integration: `@layerfs/runtime` starts the worker on those platforms
+  and any process given its endpoint (`useWorker(endpoint)` or
+  `LAYERFS_WORKER_ENDPOINT`) sends its Store calls there. There is no adapter
+  name, no integration check and no code that names a plugin. LayerFS reads
+  `LAYERFS_*` settings only. An integration that can set only its own
+  prefixed names, such as dsh's `DSH_*`, maps them itself. Linux still makes
+  Store calls in the caller's process, and the worker's rules above (loopback,
+  secret, one attempt, no replay) are unchanged.
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

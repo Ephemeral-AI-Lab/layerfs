@@ -1,7 +1,7 @@
 # Fast lane: runs after a push and reports. It is never a required check and
 # never blocks a push or merge; agents do not wait for it (AGENTS.md §4).
 # Slow and FUSE mount tests run in nightly.yml. Selection: core/tools/ci_tests.py.
-# The JavaScript SDK (sdk/js, package layerfs-node) is left out of CI (owner,
+# The JavaScript API (api/, binding crate layerfs-node) is left out of CI (owner,
 # 2026-10-23): no path trigger, excluded from Clippy and tests, skipped by the guard.
 name: ci
 

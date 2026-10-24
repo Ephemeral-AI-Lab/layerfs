@@ -28,7 +28,7 @@ yet accepted its details.
    listener for a UI.
 3. **The worker is not a UI API.** It is a transport for SDK calls on macOS
    and Windows: loopback only, behind a secret, framed JSON, not HTTP
-   ([README.md §4.2](README.md#42-worker-current-for-dsh-only-proposed-as-general)).
+   ([README.md §4.2](README.md#42-worker-current-on-macos-and-windows-for-any-integration)).
    It stays.
 4. **LayerFS knowledge becomes SDK calls, not route code.** Where today's
    route code encodes a LayerFS rule (how a Layer compares, how a truncated
@@ -144,7 +144,7 @@ chooses what to do with them.
   connections open; dsh releases it after a quiet minute. Open connections do
   not keep an idle Sandbox from closing.
 - **Trace lines hold ids, never file content.** Their format is in
-  [sdk/js/README.md, "Call trace"](../../../../sdk/js/README.md#call-trace);
+  [api/how-to-use/backend.md, "The call trace"](../../../../api/how-to-use/backend.md#the-call-trace);
   dsh's `model` replays them into its view.
 
 ## 6. dsh as the worked example

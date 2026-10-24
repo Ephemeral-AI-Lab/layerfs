@@ -104,6 +104,13 @@ fn labels_are_sent_at_create_and_found_in_any_order_beside_the_image_s() {
     );
     assert!(create.contains(r#""Labels":{"layerfs.role":"sandbox","layerfs.project":"shop","layerfs.sandbox":"2"},"User":"0:0""#), "{create}");
     assert!(create.contains(r#""Mounts":[{"Type":"volume","Source":"lfs-test-borrowed","Target":"/layerfs-store","ReadOnly":false,"VolumeOptions":{"NoCopy":true}}],"#), "{create}");
+    // #423: the daemon's log is capped at two 10 MB files
+    assert!(
+        create.contains(
+            r#""LogConfig":{"Type":"json-file","Config":{"max-size":"10m","max-file":"2"}}"#
+        ),
+        "{create}"
+    );
     // a request without labels sends none and accepts whatever the image has
     let (accepted, requests) = inspect(&[], "null", &[STORE], "none");
     assert!(accepted);

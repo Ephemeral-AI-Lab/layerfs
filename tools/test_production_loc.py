@@ -31,6 +31,43 @@ class CounterTests(unittest.TestCase):
                           for path in files], ["core/src/lib.rs", "sdk/src/client.rs"])
         self.assertEqual(production_loc.scan(self.root)["scopes"]["core"]["lines"], 2)
 
+    def test_api_counts_the_binding_and_each_package_by_its_name(self):
+        write(self.root, "api/package.json", '{"name": "layerfs-js"}\n')
+        for folder, name in (("agent/sdk", "@layerfs/agent"), ("agent/cli", "@layerfs/cli"),
+                             ("backend", "@layerfs/backend"), ("runtime", "@layerfs/runtime")):
+            write(self.root, f"api/{folder}/package.json", f'{{"name": "{name}"}}\n')
+            write(self.root, f"api/{folder}/src/index.js", "export const value = 1;\n// a comment\n")
+            write(self.root, f"api/{folder}/test/index.test.mjs", "export const test = 1;\n")
+            write(self.root, f"api/{folder}/test/fixture/fake.js", "export const fake = 1;\n")
+        write(self.root, "api/backend/src/store/get.js", "export const get = 1;\n")
+        write(self.root, "api/agent/cli/node_modules/x/package.json", '{"name": "x"}\n')
+        write(self.root, "api/agent/cli/node_modules/x/src/index.js", "export const dep = 1;\n")
+        write(self.root, "api/binding/src/lib.rs", "pub fn value() {}\n")
+        write(self.root, "api/binding/tests/unit/admission.rs", "pub fn test() {}\n")
+        write(self.root, "api/binding/examples/restore_record.rs", "pub fn example() {}\n")
+        files = production_loc.scope_files(self.root, "api")
+        self.assertEqual(sorted(str(path.relative_to(self.root / "api")) for path in files),
+                         ["agent/cli/src/index.js", "agent/sdk/src/index.js", "backend/src/index.js",
+                          "backend/src/store/get.js", "binding/src/lib.rs", "runtime/src/index.js"])
+        scope = production_loc.scan(self.root)["scopes"]["api"]
+        self.assertEqual((scope["lines"], scope["crates"]), (6, {
+            "@layerfs/agent": 1, "@layerfs/backend": 2, "@layerfs/cli": 1,
+            "@layerfs/runtime": 1, "layerfs-node": 1}))
+
+    def test_api_still_counts_the_layouts_before_the_move(self):
+        """sdk/js and cli/ (the former `sdk` and `cli` scopes) count as `api`."""
+        for name in ("native/src/lib.rs", "src/index.js", "operator/index.js",
+                     "packages/agent/src/index.js", "packages/backend/src/store/get.js",
+                     "packages/agent/test/trace.mjs", "packages/agent/test/fake.js"):
+            write(self.root, f"sdk/js/{name}", "export const value = 1;\n" if name.endswith(".js") else "pub fn value() {}\n")
+        write(self.root, "cli/src/main.js", "export const value = 1;\n// a comment\n")
+        write(self.root, "cli/src/sub/argv.js", "export const other = 2;\n")
+        write(self.root, "cli/test/cli.test.mjs", "export const test = 1;\n")
+        write(self.root, "cli/node_modules/x/src/index.js", "export const dep = 1;\n")
+        crates = production_loc.scan(self.root)["scopes"]["api"]["crates"]
+        self.assertEqual(crates, {"@layerfs/agent": 1, "@layerfs/backend": 1, "@layerfs/cli": 2,
+                                  "@layerfs/sdk": 2, "layerfs-node": 1})
+
     def test_blank_and_comment_lines_do_not_count(self):
         path = write(
             self.root,

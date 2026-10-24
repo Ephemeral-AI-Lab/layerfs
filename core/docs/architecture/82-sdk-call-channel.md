@@ -6,7 +6,7 @@
 
 The JavaScript SDK has 27 positional methods in four groups (29 before #373
 replaced the `sandbox` group with `workspace`; see the #373 update below). The
-[SDK guide](../../../sdk/js/README.md) lists signatures, environment configuration,
+[SDK guide](../../../api/how-to-use/agent.md) lists signatures, environment configuration,
 read/page limits and compatibility. [SPEC](../issues/327/SPEC.md) describes the
 UI/server integration; [VERIFICATION](../issues/327/VERIFICATION.md) owns acceptance.
 No harness, agent/call metadata, remove alias or public inspect is retained.
@@ -255,5 +255,34 @@ a process id names its Sandbox. The native ops are `workspace.*`,
 control records and its timing names (`sandbox.mount.bind`,
 `sandbox.mount.attach`) are unchanged. Design and owner decisions:
 [#373](../issues/373/README.md); placement and idle close are described in the
-[SDK guide](../../../sdk/js/README.md).
+[SDK guide](../../../api/how-to-use/agent.md#sandboxes-and-workspaces).
 
+
+## Issue #428 source update (2026-10-23): backend names and packages
+
+The `operator.*` names are now `backend.store.*` (answered by the Store in
+the calling process) and `backend.daemon.*` (the Sandbox must be running).
+The native addon's second entry point is `backendCall`; the daemon admits
+`backend.*` and `sandbox.list_workspaces` (was `operator.inspect.snapshot`)
+through `operator::admits`, and public dispatch still refuses them
+`UnknownMethod`. Runtime-only native calls are `runtime.project.get_init`
+(was `operator.project.progress`) and `runtime.sandbox.reclaim`, which took
+over the reclaim `operator.sandbox.list` did; `project.list_sandboxes` now
+only lists. `@layerfs/agent` exports `RENAMED_METHODS` for reading older
+traces. The Rust module paths (`operator/`) keep their names.
+
+The JavaScript is split into `api/agent/sdk` (`LayerFS`),
+`api/backend` (`LayerFSBackend.of(shop)`, one file per method)
+and `api/runtime` (`LayerFSRuntime.open`, on a LayerFS home).
+`@layerfs/sdk/operator` and its `inspect.snapshot` are gone; the snapshot is
+the runtime's `project.get_state`. On macOS and Windows the runtime's
+`worker/server.js` makes the Store calls with the Linux addon and
+`@layerfs/agent`'s `transport/worker_client.js` reaches it. The route was
+first allowed for the dsh adapter only; since 2026-10-24 (owner) it is open to
+any integration that names the endpoint (`LAYERFS_WORKER_ENDPOINT`, or the
+runtime's `useWorker(endpoint)`), and the SDK reads only `LAYERFS_*` names.
+New calls: `sandbox.create`, `sandbox.close` and
+mounting into a chosen Sandbox (agent), and
+`backend.daemon.sandbox.get_log`, which reads a Sandbox's daemon log once
+through the Engine where the binding runs. See the
+[backend guide](../../../api/how-to-use/backend.md#a-sandboxs-log).

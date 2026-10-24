@@ -13,6 +13,13 @@ have once [layerfs-agent.md](layerfs-agent.md) and
 snapshot of the target, not a scaffolding requirement: existing source and the
 package manifests still decide what is built.
 
+**Later relocation.** The listings below keep the paths planned at commit
+`1aa56ece78`. The folders have since moved: `sdk/js/packages/agent` to
+`api/agent/sdk`, `sdk/js/packages/backend` to `api/backend`,
+`sdk/js/packages/runtime` to `api/runtime`, the addon crate `sdk/js/native` to
+`api/binding`, and the `layerfs` command from `cli/` to `api/agent/cli`. See
+[api/README.md](../../../../api/README.md).
+
 **Out of scope here:** `dsh/`, which stays as it is until its move to
 dsh-layerfs is discussed. There is no UI package: dsh's routes, UI reads,
 `model`, `view` and `client` stay in dsh-layerfs
@@ -72,7 +79,7 @@ copy of the package in one process, so the same Store is never opened twice.
 +     index.js                                —   new: picks linux, macos or windows
       inprocess.js                           13   (from src/native.js: load layerfs.node)
 +     worker_client.js                        —   new: one worker client, the other end of runtime's worker/server.js; merged from dsh port/binding.js 123 and windows/binding.js 88
-      frames.js                             n/c   (from dsh port/frames.mjs; wire format unchanged)
+      frames.js                             n/c   (from dsh port/frames.mjs; wire tag now "layerfs-worker")
     project/                                  [9]
       init.js                                 5   (called by LayerFS.init)
       list_branches.js                        4
@@ -186,8 +193,8 @@ routes and UI reads stay in dsh-layerfs ([ui-frontend.md](ui-frontend.md)).
 +     leftovers.js                            —   new: from part of dsh runtime.js 207
 +   events/                                   —   new
 +     subscribe.js                            —   new: calls from every process's trace
-    cli/                                    [119]
-      lfs.js                                119   (from dsh lfs.js)
+-   cli/                                    [119]  (retired 2026-10-23: the `layerfs` command in api/agent/cli/ replaces it)
+-     lfs.js                                119   (from dsh lfs.js)
 ```
 
 ## 5. What leaves today's SDK folders
