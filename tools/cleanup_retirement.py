@@ -34,8 +34,7 @@ def retirement_open_files(path, opened, enabled):
     ignored = set()
     root = str(path)
     docker_disks = Path.home() / "Library/Containers/com.docker.docker/Data/vms"
-    docker_vms = {pid for pid, name in opened if Path(name).name == "Docker.raw"
-                  and docker_disks in Path(name).parents}
+    docker_vms = {pid for pid, name in opened if Path(name).name == "Docker.raw" and docker_disks in Path(name).parents}
     relevant = {}
     for pid, name in opened:
         if name == root or name.startswith(root + os.sep):
@@ -50,8 +49,7 @@ def retirement_open_files(path, opened, enabled):
         # A shell with no children, or an idle agent, may retain only the root
         # directory. Open files below it remain protected. This never kills an
         # agent and is re-evaluated before unlinking the backed-up checkout.
-        if all(name == root for name in names) and (
-                pid in idle or executable == "zsh" and not children.get(pid)):
+        if all(name == root for name in names) and (pid in idle or executable == "zsh" and not children.get(pid)):
             ignored.add(pid)
         # Docker Desktop may retain cached host file descriptors after a bind
         # is gone. The caller independently checks every current container bind.

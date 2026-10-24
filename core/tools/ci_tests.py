@@ -26,6 +26,7 @@ Usage (from the repository root):
 exists in layerfs-overlay (fast) and layerfs-workspace (heavy), so the push job
 also builds the heavy one; the filter keeps it from running.
 """
+
 import json
 import subprocess
 import sys
@@ -75,9 +76,10 @@ NIGHTLY = set(SLOW) | set(HEAVY)
 
 def metadata():
     out = subprocess.run(
-        ["cargo", "+1.85.1", "metadata", "--manifest-path", str(MANIFEST),
-         "--no-deps", "--format-version", "1"],
-        check=True, capture_output=True, text=True,
+        ["cargo", "+1.85.1", "metadata", "--manifest-path", str(MANIFEST), "--no-deps", "--format-version", "1"],
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
     return json.loads(out)
 

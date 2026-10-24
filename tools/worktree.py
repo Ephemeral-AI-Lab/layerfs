@@ -29,7 +29,9 @@ def parser():
         if name in {"seed", "build"}:
             command.add_argument("--profile", choices=("debug", "release"), default="debug")
         if name == "prepare":
-            command.add_argument("--dependency-seed", help="Closed Cargo home; copies registry/git only, never credentials")
+            command.add_argument(
+                "--dependency-seed", help="Closed Cargo home; copies registry/git only, never credentials"
+            )
         if name == "seed":
             command.add_argument("--source-resources", required=True)
         if name == "build":

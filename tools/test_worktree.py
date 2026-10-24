@@ -26,15 +26,28 @@ class WorktreeTests(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.repo = self.root / "checkout"
         self.repo.mkdir()
-        for folder in ("core/crates/example/src", "core/vendor", ".cargo", "api/agent/sdk/src", "api/agent/sdk/test", "api/backend/src", "api/runtime/src", "api/binding/src"):
+        for folder in (
+            "core/crates/example/src",
+            "core/vendor",
+            ".cargo",
+            "api/agent/sdk/src",
+            "api/agent/sdk/test",
+            "api/backend/src",
+            "api/runtime/src",
+            "api/binding/src",
+        ):
             (self.repo / folder).mkdir(parents=True)
         for name in ("core/Cargo.toml", "core/Cargo.lock", ".cargo/config.toml", "api/package.json"):
             (self.repo / name).write_text("{}\n")
         (self.repo / "api/agent/sdk/src/index.js").write_text("export const value = 1;\n")
-        (self.repo / "api/agent/sdk/package.json").write_text('{"name": "@layerfs/agent", "exports": {".": "./src/index.js", "./package.json": "./package.json"}}\n')
+        (self.repo / "api/agent/sdk/package.json").write_text(
+            '{"name": "@layerfs/agent", "exports": {".": "./src/index.js", "./package.json": "./package.json"}}\n'
+        )
         for name in ("backend", "runtime"):
             (self.repo / f"api/{name}/src/index.js").write_text('export * from "@layerfs/agent";\n')
-            (self.repo / f"api/{name}/package.json").write_text(f'{{"name": "@layerfs/{name}", "exports": {{".": "./src/index.js"}}}}\n')
+            (self.repo / f"api/{name}/package.json").write_text(
+                f'{{"name": "@layerfs/{name}", "exports": {{".": "./src/index.js"}}}}\n'
+            )
         (self.repo / "api/agent/cli/src").mkdir(parents=True)
         (self.repo / "api/agent/cli/src/layerfs.js").write_text('import "@layerfs/agent";\n')
         (self.repo / "api/agent/cli/package.json").write_text('{"name": "@layerfs/cli"}\n')
@@ -43,8 +56,14 @@ class WorktreeTests(unittest.TestCase):
         git(self.repo, "config", "user.email", "fixture@example.invalid")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-qm", "fixture")
-        args = SimpleNamespace(worktree=str(self.repo), root=str(self.root / "state"), owner="fixture",
-                               build_image="build", runtime_image="runtime", sandbox_image="sandbox")
+        args = SimpleNamespace(
+            worktree=str(self.repo),
+            root=str(self.root / "state"),
+            owner="fixture",
+            build_image="build",
+            runtime_image="runtime",
+            sandbox_image="sandbox",
+        )
         with patch.object(resources, "image_id", side_effect=lambda image: "sha256:" + image):
             with contextlib.redirect_stdout(io.StringIO()):
                 resources.register(args)
@@ -69,7 +88,9 @@ class WorktreeTests(unittest.TestCase):
         self.assertIn("type=bind,src=" + str(self.repo) + ",dst=/work,readonly", command)
         self.assertIn("CARGO_TARGET_DIR=/work/core/target", command)
         self.assertIn("CARGO_HOME=/cargo-home", command)
-        self.assertIn("type=volume,src=" + self.record["linux_target_volume"] + ",dst=/work/core/target,volume-nocopy", command)
+        self.assertIn(
+            "type=volume,src=" + self.record["linux_target_volume"] + ",dst=/work/core/target,volume-nocopy", command
+        )
         self.assertIn("sha256:build", command)
 
     def test_explicit_flags_cannot_drop_repository_profile(self):
@@ -79,22 +100,32 @@ class WorktreeTests(unittest.TestCase):
 
     def test_container_failure_cannot_be_hidden_by_attach_exit_zero(self):
         calls = []
+
         def run(cmd, *args, **kwargs):
             calls.append(cmd)
-            content = b"id\n" if cmd[1] == "create" else json.dumps([{"State": {"Running": False, "ExitCode": 7}}]).encode()
+            content = (
+                b"id\n" if cmd[1] == "create" else json.dumps([{"State": {"Running": False, "ExitCode": 7}}]).encode()
+            )
             return SimpleNamespace(stdout=content)
+
         with patch.object(resources, "run", side_effect=run), patch.object(resources.subprocess, "Popen") as popen:
             popen.return_value.wait.return_value = 0
             with self.assertRaises(Refused):
-                resources.execute(["docker", "run", "--rm", "image", "false"], self.root, log=self.root / "container.log")
+                resources.execute(
+                    ["docker", "run", "--rm", "image", "false"], self.root, log=self.root / "container.log"
+                )
         self.assertFalse(any(cmd[1] == "rm" for cmd in calls))
 
     def test_cargo_scope_and_frozen_harness_guards(self):
         command = builds.cargo_arguments(["--", "test", "-p", "layerfs-storage", "--no-run"])
         self.assertIn("--offline", command)
         self.assertIn("--locked", command)
-        for args in (["build", "--workspace"], ["build", "-p", "fs-bench-pro"],
-                     ["build", "-p", "layerfs-node", "--target-dir=/shared"], ["test"]):
+        for args in (
+            ["build", "--workspace"],
+            ["build", "-p", "fs-bench-pro"],
+            ["build", "-p", "layerfs-node", "--target-dir=/shared"],
+            ["test"],
+        ):
             with self.assertRaises(Refused):
                 builds.cargo_arguments(args)
 
@@ -119,9 +150,11 @@ class WorktreeTests(unittest.TestCase):
         (target / "layerfs-daemon").chmod(0o755)
         (target / "liblayerfs_node.dylib").write_bytes(b"addon")
         args = SimpleNamespace(resources=str(self.path), platform="macos", profile="debug", jobs=2)
+
         def execute(*a, **kw):
             if mutate:
                 (self.repo / "api/agent/sdk/src/index.js").write_text("changed\n")
+
         with patch.object(builds, "execute", side_effect=execute), patch.object(builds, "environment", return_value={}):
             with contextlib.redirect_stdout(io.StringIO()):
                 builds.build(args)
@@ -131,16 +164,33 @@ class WorktreeTests(unittest.TestCase):
         bundle = self.build_bundle()
         manifest = builds.verify_bundle(bundle)
         # the bundle mirrors the repository layout under api/
-        for name in ("api/package.json", "api/agent/sdk/src/index.js", "api/backend/src/index.js", "api/runtime/src/index.js"):
+        for name in (
+            "api/package.json",
+            "api/agent/sdk/src/index.js",
+            "api/backend/src/index.js",
+            "api/runtime/src/index.js",
+        ):
             self.assertIn(name, manifest["files"])
         self.assertFalse(any(name.startswith("api/binding/") for name in manifest["files"]))
         # each package resolves by name through a shim, not a symlink
-        self.assertEqual((bundle / "api/node_modules/@layerfs/agent/index.js").read_text(), 'export * from "../../../agent/sdk/src/index.js";\n')
-        self.assertEqual(json.loads((bundle / "api/node_modules/@layerfs/agent/package.json").read_text())["exports"], {".": "./index.js"})
-        self.assertEqual((bundle / "api/node_modules/@layerfs/backend/index.js").read_text(), 'export * from "../../../backend/src/index.js";\n')
+        self.assertEqual(
+            (bundle / "api/node_modules/@layerfs/agent/index.js").read_text(),
+            'export * from "../../../agent/sdk/src/index.js";\n',
+        )
+        self.assertEqual(
+            json.loads((bundle / "api/node_modules/@layerfs/agent/package.json").read_text())["exports"],
+            {".": "./index.js"},
+        )
+        self.assertEqual(
+            (bundle / "api/node_modules/@layerfs/backend/index.js").read_text(),
+            'export * from "../../../backend/src/index.js";\n',
+        )
         # the layerfs command, which reaches the agent through its own shim
         self.assertIn("api/agent/cli/src/layerfs.js", manifest["files"])
-        self.assertEqual((bundle / "api/agent/cli/node_modules/@layerfs/agent/index.js").read_text(), 'export * from "../../../../sdk/src/index.js";\n')
+        self.assertEqual(
+            (bundle / "api/agent/cli/node_modules/@layerfs/agent/index.js").read_text(),
+            'export * from "../../../../sdk/src/index.js";\n',
+        )
         (self.repo / "api/agent/sdk/src/index.js").write_text("later edit\n")
         self.assertEqual((bundle / "api/agent/sdk/src/index.js").read_text(), "export const value = 1;\n")
         file = bundle / "layerfs.node"
@@ -157,9 +207,11 @@ class WorktreeTests(unittest.TestCase):
     def test_teardown_never_removes_other_names(self):
         record = {"prefix": "owned-unique-", "client_id": "id", "store_volume": "owned-volume"}
         commands = []
+
         def bounded(command, *args, **kwargs):
             commands.append(command)
-            return b'id\n' if command[1] == "ps" else json.dumps([{"Id": "id", "Name": "/other-owner"}]).encode()
+            return b"id\n" if command[1] == "ps" else json.dumps([{"Id": "id", "Name": "/other-owner"}]).encode()
+
         with patch.object(runs, "bounded", side_effect=bounded):
             with self.assertRaises(Refused):
                 runs.finish(record, True, time.monotonic() + 20)
@@ -167,11 +219,13 @@ class WorktreeTests(unittest.TestCase):
 
     def test_docker_short_and_full_ids_do_not_duplicate_teardown(self):
         full = "a" * 64
+
         def bounded(cmd, *args):
             if cmd[1] == "ps":
                 return ((full if "--no-trunc" in cmd else full[:12]) + "\n").encode()
             records = [{"Id": full, "Name": "/mine-client"} for _ in cmd[2:]]
             return json.dumps(records).encode()
+
         with patch.object(runs, "bounded", side_effect=bounded):
             result = runs.inspect_owned("mine-", full, time.monotonic() + 20)
         self.assertEqual(len(result), 1)
@@ -180,7 +234,10 @@ class WorktreeTests(unittest.TestCase):
         record = {"prefix": "mine-", "client_id": "id", "store_volume": "mine-store"}
         calls = []
         containers = [{"Id": "id", "Name": "/mine-client", "State": {"Running": True}}]
-        with patch.object(runs, "inspect_owned", return_value=containers), patch.object(runs, "bounded", side_effect=lambda cmd, *a: calls.append(cmd)):
+        with (
+            patch.object(runs, "inspect_owned", return_value=containers),
+            patch.object(runs, "bounded", side_effect=lambda cmd, *a: calls.append(cmd)),
+        ):
             runs.finish(record, False, time.monotonic() + 20)
         self.assertEqual(calls, [["docker", "kill", "id"]])
         self.assertFalse(record["released"])
@@ -189,27 +246,45 @@ class WorktreeTests(unittest.TestCase):
         record = {"prefix": "mine-", "client_id": "id", "store_volume": "mine-store"}
         calls = []
         containers = [{"Id": "id", "Name": "/mine-client", "State": {"Running": False}}]
+
         def bounded(cmd, *a):
             calls.append(cmd)
             return b""
-        with patch.object(runs, "inspect_owned", return_value=containers), patch.object(runs, "bounded", side_effect=bounded), patch.object(runs, "check_store"):
+
+        with (
+            patch.object(runs, "inspect_owned", return_value=containers),
+            patch.object(runs, "bounded", side_effect=bounded),
+            patch.object(runs, "check_store"),
+        ):
             runs.finish(record, True, time.monotonic() + 20)
         self.assertEqual(calls[0], ["docker", "rm", "id"])
         self.assertEqual(calls[-1], ["docker", "volume", "rm", "mine-store"])
         self.assertTrue(record["released"])
 
     def test_recreated_or_foreign_store_is_preserved(self):
-        state = {"prefix": "mine-token-", "run_id": "token", "worktree_id": "worktree",
-                 "store_volume": "store", "volume_created_at": "old"}
-        for info in [{"Labels": {}}, {"Labels": {resources.LABEL: "worktree", "layerfs.dev.run": "token"}, "CreatedAt": "new"}]:
+        state = {
+            "prefix": "mine-token-",
+            "run_id": "token",
+            "worktree_id": "worktree",
+            "store_volume": "store",
+            "volume_created_at": "old",
+        }
+        for info in [
+            {"Labels": {}},
+            {"Labels": {resources.LABEL: "worktree", "layerfs.dev.run": "token"}, "CreatedAt": "new"},
+        ]:
             with patch.object(runs, "bounded", return_value=json.dumps([info]).encode()):
                 with self.assertRaises(Refused):
                     runs.check_store(state, time.monotonic() + 20)
 
     def test_host_timeout_cancels_owned_process_group(self):
         pidfile = self.root / "child.pid"
-        script = ('import subprocess,time,pathlib; p=subprocess.Popen(["' + sys.executable + '","-c","import time; time.sleep(60)"]); '
-                  'pathlib.Path(' + repr(str(pidfile)) + ').write_text(str(p.pid)); time.sleep(60)')
+        script = (
+            'import subprocess,time,pathlib; p=subprocess.Popen(["'
+            + sys.executable
+            + '","-c","import time; time.sleep(60)"]); '
+            "pathlib.Path(" + repr(str(pidfile)) + ").write_text(str(p.pid)); time.sleep(60)"
+        )
         with self.assertRaises(subprocess.TimeoutExpired):
             resources.execute([sys.executable, "-c", script], self.root, timeout=0.5, log=self.root / "timeout.log")
         child = int(pidfile.read_text())

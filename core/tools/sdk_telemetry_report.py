@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Summarize one #236 route from retained LayerFS LFT1 telemetry records."""
+
 import argparse
 import hashlib
 import json
@@ -22,9 +23,14 @@ def records(path):
 
 
 def one(events, key=None, name=None):
-    matches = [event for event in events if event.get("kind") == "operation"
-               and (key is None or event.get("key") == key)
-               and event.get("timing") and event["timing"].get("name") == name]
+    matches = [
+        event
+        for event in events
+        if event.get("kind") == "operation"
+        and (key is None or event.get("key") == key)
+        and event.get("timing")
+        and event["timing"].get("name") == name
+    ]
     if len(matches) != 1:
         raise ValueError(f"expected one {name} telemetry event, got {len(matches)}")
     return matches[0]
@@ -53,11 +59,13 @@ def metrics(event):
 def summarize(root):
     identity = json.loads((root / "identities.json").read_text())
     run = f"{identity['telemetry_run']:032x}"
-    host = [event for event in records(root / "raw-host.log")
-            if event.get("run") == run and event.get("role") == 1]
+    host = [event for event in records(root / "raw-host.log") if event.get("run") == run and event.get("role") == 1]
     sandbox = (root / "primary-sandbox-id.txt").read_text().strip()
-    daemon = [event for event in records(root / f"layerfs-{sandbox}.stderr")
-              if event.get("run") == run and event.get("role") == 2]
+    daemon = [
+        event
+        for event in records(root / f"layerfs-{sandbox}.stderr")
+        if event.get("run") == run and event.get("role") == 2
+    ]
     route = metrics(one(host, 1000, "sdk.route"))
     lookup_recorded = any(event.get("key") in (2001, 2002) for event in host)
     phases = []
@@ -66,20 +74,24 @@ def summarize(root):
         phase = {"name": name, "sdk_host_process": metrics(sdk)}
         if lookup_recorded and name != "create":
             start = sdk["opened_ns"]
-            within = [event for event in host
-                      if start <= event.get("opened_ns", -1) < start + sdk["timing"]["elapsed_ns"]]
+            within = [
+                event for event in host if start <= event.get("opened_ns", -1) < start + sdk["timing"]["elapsed_ns"]
+            ]
             # A retained control session reuses one checked Hello across rapid
             # calls, so a window may legitimately carry no Hello of its own.
             # Report the observed count rather than assuming one per call.
-            hellos = [event for event in within
-                      if event.get("kind") == "operation" and event.get("key") == 2002
-                      and event.get("timing", {}).get("name") == "owner.hello"]
+            hellos = [
+                event
+                for event in within
+                if event.get("kind") == "operation"
+                and event.get("key") == 2002
+                and event.get("timing", {}).get("name") == "owner.hello"
+            ]
             phase["owner_lookup"] = {
                 "hello_count": len(hellos),
                 "hello": metrics(hellos[0]) if len(hellos) == 1 else None,
             }
-            ports = [event for event in within
-                     if event.get("kind") == "operation" and event.get("key") == 2001]
+            ports = [event for event in within if event.get("kind") == "operation" and event.get("key") == 2001]
             if ports:
                 phase["owner_lookup"]["docker_port"] = metrics(ports[0])
         if daemon_name:
@@ -87,9 +99,11 @@ def summarize(root):
             # not comparable with the host's. The route runs more than one call
             # for some names (the test issues several Execs), and the measured
             # one is the first: it is the call the SDK phase window covers.
-            matches = [event for event in daemon
-                       if event.get("kind") == "operation"
-                       and event.get("timing", {}).get("name") == daemon_name]
+            matches = [
+                event
+                for event in daemon
+                if event.get("kind") == "operation" and event.get("timing", {}).get("name") == daemon_name
+            ]
             if not matches:
                 raise ValueError(f"no {daemon_name} daemon event")
             phase["daemon_process"] = metrics(matches[0])
@@ -97,9 +111,10 @@ def summarize(root):
         else:
             phase["daemon_process"] = None
         phases.append(phase)
-    if not route["success"] or not all(p["sdk_host_process"]["success"]
-                                        and (p["daemon_process"] is None or p["daemon_process"]["success"])
-                                        for p in phases):
+    if not route["success"] or not all(
+        p["sdk_host_process"]["success"] and (p["daemon_process"] is None or p["daemon_process"]["success"])
+        for p in phases
+    ):
         raise ValueError("one operation failed")
     call_sum = sum(p["sdk_host_process"]["elapsed_ns"] for p in phases)
     if route["elapsed_ns"] < call_sum:
@@ -125,12 +140,22 @@ def main():
     root = args.output
     report = summarize(root)
     (root / "report.json").open("x").write(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    manifest = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-                for path in sorted(root.iterdir()) if path.is_file() and path.name != "manifest.json"}
+    manifest = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.iterdir())
+        if path.is_file() and path.name != "manifest.json"
+    }
     (root / "manifest.json").open("x").write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"status": report["functional_status"], "admission": report["performance_admission"],
-                      "route_elapsed_ns": report["route_host_process"]["elapsed_ns"],
-                      "files": len(manifest)}))
+    print(
+        json.dumps(
+            {
+                "status": report["functional_status"],
+                "admission": report["performance_admission"],
+                "route_elapsed_ns": report["route_host_process"]["elapsed_ns"],
+                "files": len(manifest),
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

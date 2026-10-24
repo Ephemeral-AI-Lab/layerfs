@@ -17,14 +17,41 @@ from concurrent.futures import ThreadPoolExecutor
 from cleanup_archive import archive
 from cleanup_discover import discover
 from cleanup_volume_cache import prepare as prepare_volume_cache, clear as clear_volume_cache
-from cleanup_docker import guard as guard_container, identity as container_identity, inspect as inspect_container, retire
+from cleanup_docker import (
+    guard as guard_container,
+    identity as container_identity,
+    inspect as inspect_container,
+    retire,
+)
 from cleanup_retirement import retirement_open_files
-from cleanup_state import (Refused, absolute, allocated, docker_state, ensure_idle,
-                           ensure_volume_idle, git, inventory, open_files, overlaps,
-                           run, same_volume, volume_identity, worktrees)
+from cleanup_state import (
+    Refused,
+    absolute,
+    allocated,
+    docker_state,
+    ensure_idle,
+    ensure_volume_idle,
+    git,
+    inventory,
+    open_files,
+    overlaps,
+    run,
+    same_volume,
+    volume_identity,
+    worktrees,
+)
 
 CACHE_DIRS = ("incremental", "deps", "build", ".fingerprint", "examples")
-KINDS = {"cargo-cache", "archive-tree", "archive-file", "worktree", "docker-volume", "docker-container", "discard-tree", "docker-cargo-cache"}
+KINDS = {
+    "cargo-cache",
+    "archive-tree",
+    "archive-file",
+    "worktree",
+    "docker-volume",
+    "docker-container",
+    "discard-tree",
+    "docker-cargo-cache",
+}
 EVENT_LOCK = threading.Lock()
 
 
@@ -47,8 +74,13 @@ def event(output, **record):
 
 def free_space(repo):
     value = shutil.disk_usage(repo)
-    return {"at_utc": now(), "filesystem_path": str(repo), "free_bytes": value.free,
-            "free_GB": value.free / 1e9, "free_GiB": value.free / 1024**3}
+    return {
+        "at_utc": now(),
+        "filesystem_path": str(repo),
+        "free_bytes": value.free,
+        "free_GB": value.free / 1e9,
+        "free_GiB": value.free / 1024**3,
+    }
 
 
 def byte_target(gb):
@@ -59,12 +91,17 @@ def byte_target(gb):
 
 def check_space(args):
     state = free_space(Path(args.repo).resolve())
-    state.update(min_free_bytes=byte_target(args.min_free_gb),
-                 reclaim_target_bytes=byte_target(args.reclaim_gb),
-                 units="GB = 1,000,000,000 bytes; GiB = 1,073,741,824 bytes")
+    state.update(
+        min_free_bytes=byte_target(args.min_free_gb),
+        reclaim_target_bytes=byte_target(args.reclaim_gb),
+        units="GB = 1,000,000,000 bytes; GiB = 1,073,741,824 bytes",
+    )
     state["cleanup_required"] = state["free_bytes"] < state["min_free_bytes"]
-    state["action"] = ("Plan with --discover --authorization or an exact scope, then apply. Preserve active work and pins."
-                       if state["cleanup_required"] else "Headroom threshold satisfied")
+    state["action"] = (
+        "Plan with --discover --authorization or an exact scope, then apply. Preserve active work and pins."
+        if state["cleanup_required"]
+        else "Headroom threshold satisfied"
+    )
     print(json.dumps(state, indent=2))
     return 2 if state["cleanup_required"] else 0
 
@@ -132,13 +169,18 @@ def observations(repo, roots, sizes=False):
                 try:
                     info = path.lstat()
                     if info.st_size >= 5 * 1024**2:
-                        large.append({"path": str(path), "bytes": info.st_size,
-                                      "allocated_bytes": info.st_blocks * 512})
+                        large.append(
+                            {"path": str(path), "bytes": info.st_size, "allocated_bytes": info.st_blocks * 512}
+                        )
                 except OSError as error:
                     errors.append(str(error))
     large.sort(key=lambda row: row["allocated_bytes"], reverse=True)
-    return {"worktrees": result, "large_files": large, "scan_errors": errors,
-            "note": "Allocation estimates may overlap or share APFS blocks. Age/size is not release authorization."}
+    return {
+        "worktrees": result,
+        "large_files": large,
+        "scan_errors": errors,
+        "note": "Allocation estimates may overlap or share APFS blocks. Age/size is not release authorization.",
+    }
 
 
 def make_plan(args):
@@ -150,13 +192,22 @@ def make_plan(args):
     scope = json.loads(Path(args.scope).read_text()) if args.scope else {"version": 1, "actions": []}
     if scope.get("version") != 1:
         raise Refused("Unsupported scope version")
-    scope["protected_paths"] = list(dict.fromkeys([
-        *scope.get("protected_paths", []), *getattr(args, "protect_path", [])]))
-    scope["protected_containers"] = list(dict.fromkeys([
-        *scope.get("protected_containers", []), *getattr(args, "protect_container", [])]))
-    plan = {"version": 1, "created_utc": now(), "repository": str(repo),
-            "pass_directory": str(output), "scope": scope, "actions": [], "blocked": [],
-            "free_space": free_space(repo)}
+    scope["protected_paths"] = list(
+        dict.fromkeys([*scope.get("protected_paths", []), *getattr(args, "protect_path", [])])
+    )
+    scope["protected_containers"] = list(
+        dict.fromkeys([*scope.get("protected_containers", []), *getattr(args, "protect_container", [])])
+    )
+    plan = {
+        "version": 1,
+        "created_utc": now(),
+        "repository": str(repo),
+        "pass_directory": str(output),
+        "scope": scope,
+        "actions": [],
+        "blocked": [],
+        "free_space": free_space(repo),
+    }
     plan["reclaim_target_bytes"] = byte_target(args.reclaim_gb)
     registered = {r["worktree"]: r for r in worktrees(repo)}
     try:
@@ -166,17 +217,24 @@ def make_plan(args):
         containers, opened = None, None
         plan["runtime_error"] = str(error)
     cache_worktrees = [str(absolute(p)) for p in getattr(args, "cache_worktree", [])]
-    if cache_worktrees and (not getattr(args, "discover_caches", False)
-                           or any(p not in registered for p in cache_worktrees)):
+    if cache_worktrees and (
+        not getattr(args, "discover_caches", False) or any(p not in registered for p in cache_worktrees)
+    ):
         raise Refused("--cache-worktree requires --discover-caches and registered checkout paths")
     if getattr(args, "discover", False) or getattr(args, "discover_caches", False):
         if containers is None:
             raise Refused(plan["runtime_error"])
         scope, plan["discovery_skipped"] = discover(
-            repo, scope, registered, containers, opened, args.authorization or "",
+            repo,
+            scope,
+            registered,
+            containers,
+            opened,
+            args.authorization or "",
             caches_only=getattr(args, "discover_caches", False),
             retire_idle_sessions=getattr(args, "retire_idle_sessions", False),
-            cache_worktrees=[str(absolute(p)) for p in getattr(args, "cache_worktree", [])])
+            cache_worktrees=[str(absolute(p)) for p in getattr(args, "cache_worktree", [])],
+        )
         plan["scope"] = scope
     write(output / "scope.json", scope)
     # A planned container removal may release its bind mount before a later
@@ -210,9 +268,14 @@ def make_plan(args):
             if action["kind"] == "cargo-cache":
                 # Select only generated children. Direct executables/helpers remain in place.
                 target = absolute(action["target_root"])
-                if (not target.is_dir() or target.is_symlink() or path.parent != target
-                        or not path.is_dir() or path.name not in {"debug", "release"}
-                        or not (target / ".rustc_info.json").is_file()):
+                if (
+                    not target.is_dir()
+                    or target.is_symlink()
+                    or path.parent != target
+                    or not path.is_dir()
+                    or path.name not in {"debug", "release"}
+                    or not (target / ".rustc_info.json").is_file()
+                ):
                     raise Refused("cargo-cache needs a direct debug/release profile under a real Cargo target_root")
                 paths = [path / child for child in CACHE_DIRS if (path / child).exists()]
             if containers is None:
@@ -229,8 +292,14 @@ def make_plan(args):
                 # Cargo hard-links object files between incremental and deps.
                 # Check all siblings before removing any: unlinking one changes
                 # another's ctime even though no external writer touched it.
-                chosen.append({**action, "path": str(path), "guard_path": str(path),
-                               "cache_snapshots": {str(item): inventory(item)[1] for item in paths}})
+                chosen.append(
+                    {
+                        **action,
+                        "path": str(path),
+                        "guard_path": str(path),
+                        "cache_snapshots": {str(item): inventory(item)[1] for item in paths},
+                    }
+                )
                 continue
             for item in paths:
                 if action["kind"] == "worktree":
@@ -238,19 +307,20 @@ def make_plan(args):
                     snapshot = {"device": info.st_dev, "inode": info.st_ino}
                 else:
                     snapshot = inventory(item)[1]
-                selection = {**action, "path": str(item), "snapshot": snapshot,
-                             "guard_path": str(path)}
+                selection = {**action, "path": str(item), "snapshot": snapshot, "guard_path": str(path)}
                 if action["kind"] == "worktree":
                     selection["git_head"] = git(item, "rev-parse", "HEAD").decode().strip()
-                    selection["staged_sha256"] = hashlib.sha256(git(
-                        item, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--no-textconv")).hexdigest()
+                    selection["staged_sha256"] = hashlib.sha256(
+                        git(item, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--no-textconv")
+                    ).hexdigest()
                 chosen.append(selection)
         except (Refused, OSError, KeyError, TimeoutError) as error:
             plan["blocked"].append({"selection": action, "reason": str(error)})
     # Refuse overlapping selections rather than changing ordering semantics.
     for i, item in enumerate(chosen):
-        if "path" in item and any(overlaps(item["path"], other["path"])
-                                  for other in chosen[i + 1:] if "path" in other):
+        if "path" in item and any(
+            overlaps(item["path"], other["path"]) for other in chosen[i + 1 :] if "path" in other
+        ):
             raise Refused("Overlapping path selections; use one action per resource")
     names = [x["name"] for x in chosen if x["kind"] in {"docker-volume", "docker-cargo-cache"}]
     if len(names) != len(set(names)):
@@ -259,10 +329,20 @@ def make_plan(args):
     plan["protected_presence"] = {str(p): p.exists() for p in pins(scope)}
     write(output / "inventory.json", observations(repo, scope.get("scan_roots", []), getattr(args, "sizes", False)))
     write(output / "plan.json", plan)
-    print(json.dumps({"plan": str(output / "plan.json"), "selected": len(chosen),
-                      "blocked": plan["blocked"], "mode": "inventory only; nothing deleted",
-                      "next": "Review plan.json, then apply --plan " + str(output / "plan.json") if chosen
-                              else "No removals selected. Use --discover --authorization for authorized cleanup."}, indent=2))
+    print(
+        json.dumps(
+            {
+                "plan": str(output / "plan.json"),
+                "selected": len(chosen),
+                "blocked": plan["blocked"],
+                "mode": "inventory only; nothing deleted",
+                "next": "Review plan.json, then apply --plan " + str(output / "plan.json")
+                if chosen
+                else "No removals selected. Use --discover --authorization for authorized cleanup.",
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -290,8 +370,12 @@ def apply_action(repo, output, plan, action):
         raise Refused("Discard tree must be a directory")
     registered = {r["worktree"]: r for r in worktrees(repo)}
     validate_path(path, action["kind"], repo, output, registered)
-    ensure_idle([path], pins(scope), containers,
-                retirement_open_files(path, open_files(), action.get("retire_idle_sessions", False)))
+    ensure_idle(
+        [path],
+        pins(scope),
+        containers,
+        retirement_open_files(path, open_files(), action.get("retire_idle_sessions", False)),
+    )
     if action["kind"] == "cargo-cache":
         guard = absolute(action["guard_path"])
         if "cache_snapshots" in action:
@@ -308,8 +392,12 @@ def apply_action(repo, output, plan, action):
                     raise Refused("Cache changed since plan; preserve the whole profile")
             # One final activity inspection covers the whole profile. Its
             # generated siblings are one planned job, not a replay or refresh.
-            ensure_idle([guard], pins(scope), docker_state(), retirement_open_files(
-                guard, open_files(), action.get("retire_idle_sessions", False)))
+            ensure_idle(
+                [guard],
+                pins(scope),
+                docker_state(),
+                retirement_open_files(guard, open_files(), action.get("retire_idle_sessions", False)),
+            )
             event(output, state="removing", action=action)
             for child in children:
                 shutil.rmtree(child)
@@ -321,8 +409,12 @@ def apply_action(repo, output, plan, action):
         target = absolute(action["target_root"])
         if guard.parent != target or guard.name not in {"debug", "release"}:
             raise Refused("Invalid Cargo target profile")
-        ensure_idle([guard], [], containers, retirement_open_files(
-            guard, open_files(), action.get("retire_idle_sessions", False)))
+        ensure_idle(
+            [guard],
+            [],
+            containers,
+            retirement_open_files(guard, open_files(), action.get("retire_idle_sessions", False)),
+        )
     checkout = action["kind"] == "worktree"
     if checkout and "device" in action["snapshot"]:
         info = path.stat()
@@ -364,8 +456,12 @@ def apply_action(repo, output, plan, action):
             git(repo, "update-ref", recovery["head_ref"], head)
         event(output, state="archived", action=action, recovery=recovery)
         # Archival may take time. Refresh every ownership guard before unlinking.
-        ensure_idle([path], pins(scope), docker_state(),
-                    retirement_open_files(path, open_files(), action.get("retire_idle_sessions", False)))
+        ensure_idle(
+            [path],
+            pins(scope),
+            docker_state(),
+            retirement_open_files(path, open_files(), action.get("retire_idle_sessions", False)),
+        )
         if inventory(path, checkout)[1] != recovery["snapshot"]:
             raise Refused("Path changed after archival; preserve it")
         if checkout:
@@ -398,14 +494,21 @@ def apply_plan(args):
     jobs = getattr(args, "jobs", 1)
     if not 1 <= jobs <= 4:
         raise Refused("Cleanup jobs must be between 1 and 4")
-    if jobs > 1 and any(a["kind"] not in {"worktree", "docker-container", "archive-tree", "archive-file"} for a in plan["actions"]):
+    if jobs > 1 and any(
+        a["kind"] not in {"worktree", "docker-container", "archive-tree", "archive-file"} for a in plan["actions"]
+    ):
         raise Refused("Parallel cleanup supports disjoint archives, worktrees or containers only")
     # A pass can be attempted exactly once, including failed or interrupted passes.
     with (output / "apply.started").open("x") as stream:
         stream.write(now() + "\n")
-    plan["pass_id"] = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + hashlib.sha256(str(output).encode()).hexdigest()[:12]
+    plan["pass_id"] = (
+        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        + "-"
+        + hashlib.sha256(str(output).encode()).hexdigest()[:12]
+    )
     before = free_space(repo)
     results = []
+
     def attempt(action):
         event(output, state="started", action=action)
         try:
@@ -420,7 +523,7 @@ def apply_plan(args):
     try:
         with ThreadPoolExecutor(max_workers=jobs) as pool:
             for offset in range(0, len(plan["actions"]), jobs):
-                batch = plan["actions"][offset:offset + jobs]
+                batch = plan["actions"][offset : offset + jobs]
                 completed = list(pool.map(attempt, batch))
                 results.extend(completed)
                 # Settle already-running independent jobs before reporting a
@@ -440,32 +543,55 @@ def apply_plan(args):
                 touched.add(key)
                 if row["state"] in {"removed", "failed_or_preserved"}:
                     terminal[key] = row
-        results = [terminal[json.dumps(a, sort_keys=True)] for a in plan["actions"]
-                   if json.dumps(a, sort_keys=True) in terminal]
+        results = [
+            terminal[json.dumps(a, sort_keys=True)]
+            for a in plan["actions"]
+            if json.dumps(a, sort_keys=True) in terminal
+        ]
         unattempted = [a for a in plan["actions"] if json.dumps(a, sort_keys=True) not in touched]
-        uncertain = [a for a in plan["actions"] if json.dumps(a, sort_keys=True) in touched
-                     and json.dumps(a, sort_keys=True) not in terminal]
+        uncertain = [
+            a
+            for a in plan["actions"]
+            if json.dumps(a, sort_keys=True) in touched and json.dumps(a, sort_keys=True) not in terminal
+        ]
         after = free_space(repo)
         present = {raw: Path(raw).exists() for raw in plan["protected_presence"]}
         lost_pins = [raw for raw, existed in plan["protected_presence"].items() if existed and not present[raw]]
-        report = {"finished_utc": now(), "before": before, "after": after,
-                  "outcome": "no_actions_selected" if not plan["actions"] else "attempted",
-                  "net_free_bytes_change": after["free_bytes"] - before["free_bytes"],
-                  "results": results, "protected_presence": present, "lost_pins": lost_pins,
-                  "not_attempted": unattempted, "uncertain_actions": uncertain,
-                  "interrupted": isinstance(sys.exc_info()[1], KeyboardInterrupt),
-                  "blocked_at_plan": plan["blocked"],
-                  "note": "Net change includes concurrent I/O; allocation estimates are not physical recovery. "
-                          "Keep recovery refs/objects and manifests. No product build, test, Store call, "
-                          "global prune or measurement scheduling is performed. Only explicitly selected "
-                          "retired daemons may be stopped; container actions retain their mounted data."}
+        report = {
+            "finished_utc": now(),
+            "before": before,
+            "after": after,
+            "outcome": "no_actions_selected" if not plan["actions"] else "attempted",
+            "net_free_bytes_change": after["free_bytes"] - before["free_bytes"],
+            "results": results,
+            "protected_presence": present,
+            "lost_pins": lost_pins,
+            "not_attempted": unattempted,
+            "uncertain_actions": uncertain,
+            "interrupted": isinstance(sys.exc_info()[1], KeyboardInterrupt),
+            "blocked_at_plan": plan["blocked"],
+            "note": "Net change includes concurrent I/O; allocation estimates are not physical recovery. "
+            "Keep recovery refs/objects and manifests. No product build, test, Store call, "
+            "global prune or measurement scheduling is performed. Only explicitly selected "
+            "retired daemons may be stopped; container actions retain their mounted data.",
+        }
         report["reclaim_target_bytes"] = plan.get("reclaim_target_bytes", 0)
-        report["reclaim_target_met"] = (report["reclaim_target_bytes"] == 0
-                                        or report["net_free_bytes_change"] >= report["reclaim_target_bytes"])
+        report["reclaim_target_met"] = (
+            report["reclaim_target_bytes"] == 0 or report["net_free_bytes_change"] >= report["reclaim_target_bytes"]
+        )
         write(output / "report.json", report)
-    print(json.dumps({"report": str(output / "report.json"), "removed": sum(r["state"] == "removed" for r in results),
-                      "net_free_bytes_change": report["net_free_bytes_change"], "lost_pins": lost_pins,
-                      "reclaim_target_met": report["reclaim_target_met"]}, indent=2))
+    print(
+        json.dumps(
+            {
+                "report": str(output / "report.json"),
+                "removed": sum(r["state"] == "removed" for r in results),
+                "net_free_bytes_change": report["net_free_bytes_change"],
+                "lost_pins": lost_pins,
+                "reclaim_target_met": report["reclaim_target_met"],
+            },
+            indent=2,
+        )
+    )
     if lost_pins or any(r["state"] != "removed" for r in results):
         return 1
     return 0 if report["reclaim_target_met"] else 2
@@ -481,19 +607,38 @@ def main():
     plan = commands.add_parser("plan", help="Inventory only; no deletion or recovery-ref writes")
     plan.add_argument("--repo", default=str(Path(__file__).resolve().parents[1]))
     plan.add_argument("--scope", help="Explicit release selections and protected resources (JSON)")
-    plan.add_argument("--discover", action="store_true", help="Select idle linked worktrees and stopped LayerFS containers")
-    plan.add_argument("--discover-caches", action="store_true", help="Select idle generated Cargo caches in linked worktrees, retaining binaries and helpers")
-    plan.add_argument("--cache-worktree", action="append", default=[], help="Restrict --discover-caches to this registered checkout; repeat as needed; explicitly allows the primary checkout")
-    plan.add_argument("--retire-idle-sessions", action="store_true", help="Allow retired checkouts held only by idle agent/shell cwd handles; active files/commands stay protected")
+    plan.add_argument(
+        "--discover", action="store_true", help="Select idle linked worktrees and stopped LayerFS containers"
+    )
+    plan.add_argument(
+        "--discover-caches",
+        action="store_true",
+        help="Select idle generated Cargo caches in linked worktrees, retaining binaries and helpers",
+    )
+    plan.add_argument(
+        "--cache-worktree",
+        action="append",
+        default=[],
+        help="Restrict --discover-caches to this registered checkout; repeat as needed; explicitly allows the primary checkout",
+    )
+    plan.add_argument(
+        "--retire-idle-sessions",
+        action="store_true",
+        help="Allow retired checkouts held only by idle agent/shell cwd handles; active files/commands stay protected",
+    )
     plan.add_argument("--authorization", help="User instruction authorizing discovery; no separate release file needed")
-    plan.add_argument("--protect-path", action="append", default=[], help="Preserve this path and overlapping resources")
+    plan.add_argument(
+        "--protect-path", action="append", default=[], help="Preserve this path and overlapping resources"
+    )
     plan.add_argument("--protect-container", action="append", default=[], help="Preserve exact container ID or name")
     plan.add_argument("--sizes", action="store_true", help="Also run potentially expensive du scans of all worktrees")
     plan.add_argument("--out", required=True, help="New pass directory outside the repository")
     plan.add_argument("--reclaim-gb", type=float, default=0, help="Net host-space recovery target, decimal GB")
     apply = commands.add_parser("apply", help="Attempt a saved plan once; archive selected data before removal")
     apply.add_argument("--plan", required=True)
-    apply.add_argument("--jobs", type=int, default=1, help="Up to 4 independent archive/worktree/container jobs; default 1")
+    apply.add_argument(
+        "--jobs", type=int, default=1, help="Up to 4 independent archive/worktree/container jobs; default 1"
+    )
     args = parser.parse_args()
     try:
         if args.command == "check":

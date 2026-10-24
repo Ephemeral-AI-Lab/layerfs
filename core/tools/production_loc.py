@@ -13,6 +13,7 @@ Scope:
 
 Usage: python3 core/tools/production_loc.py [--json] [--root DIR]
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -46,7 +47,7 @@ def strip_rust(text):
                 else:
                     index += 1
             continue
-        if text.startswith('#[cfg(test)]', index) or text.startswith('#[cfg(any(test', index):
+        if text.startswith("#[cfg(test)]", index) or text.startswith("#[cfg(any(test", index):
             pending_test_attribute = True
             index = text.find("\n", index)
             index = length if index < 0 else index + 1
@@ -144,8 +145,7 @@ def main():
     if arguments.json:
         print(json.dumps(totals, sort_keys=True))
     else:
-        print(f"core {totals['core']} legacy {totals['legacy']} combined {totals['combined']} "
-              f"files {totals['files']}")
+        print(f"core {totals['core']} legacy {totals['legacy']} combined {totals['combined']} files {totals['files']}")
 
 
 if __name__ == "__main__":
