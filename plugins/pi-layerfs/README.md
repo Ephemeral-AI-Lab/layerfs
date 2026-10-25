@@ -10,7 +10,7 @@ A [Pi](https://github.com/earendil-works/pi) extension that runs Pi on persisten
 - `layerfs_project` and `pi-layerfs --manage-projects`: create, import, select and remove projects, each in its own Docker volume.
 - `/layerfs ui`: a dashboard on `127.0.0.1` with a random token. **Work** shows per-actor command and SDK-call records and live Sandbox/Workspace snapshots; **History** shows Branches, Commits, merge parents and published Layers with playback of recorded calls; **Files** shows saved state, blame, revisions and comparisons; **Storage** shows logical, stored and metadata metrics per Commit.
 
-![History dashboard](https://raw.githubusercontent.com/anyin233/pi-layerfs/d4bde4fe0238bd3b0b872cfaa54254da857ea56f/docs/assets/dashboard-history.png)
+![History dashboard](https://raw.githubusercontent.com/anyin233/pi-layerfs/b6bdc7f4d03a55ae91d4c8379da5d0b430ce4fb3/docs/assets/dashboard-history.png)
 
 ## How it works
 
@@ -27,7 +27,8 @@ The built archive contains the plugin, the LayerFS packages, native binding and 
 
 ## Limits
 
-- Verified on Linux x86_64 only; macOS is a candidate outside this release.
+- The install prompt covers Linux x86_64. The `linux/arm64` archive built from the same commit also passed the plugin's real-host acceptance on an Apple Silicon Mac with OrbStack ([macOS notes](https://github.com/anyin233/pi-layerfs/blob/main/docs/macos.md)); no macOS archive is released.
+- LayerFS 1.1.0 can refuse to unmount a Workspace and keep it wedged ([#426](https://github.com/Ephemeral-AI-Lab/layerfs/issues/426)). The plugin avoids the deterministic trigger by waiting until a new Sandbox is 1.5 s old before mounting. The rarer variant can still occur after a timed-out command; start a new session if it does.
 - LayerFS here uses a Disposable Store (WAL, `synchronous=OFF`): history persists across normal sessions but has no crash or power-loss durability. Keep another copy of irreplaceable source data.
 - `edit` takes `{path, oldText, newText}`, not Pi's `edits[]`; `read` is bounded UTF-8 text. Binary files go through base64 in `layerfs_fs`.
 - Foreground commands cannot be aborted mid-run; cancellation waits for the command (or its timeout) to finish, then discards. A Workspace is not a security sandbox, and other extensions or direct host APIs can bypass the integration.

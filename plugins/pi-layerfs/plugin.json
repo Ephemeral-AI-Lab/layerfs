@@ -14,7 +14,7 @@
   "versions": [
     {
       "version": "0.1.0",
-      "commit": "d4bde4fe0238bd3b0b872cfaa54254da857ea56f",
+      "commit": "b6bdc7f4d03a55ae91d4c8379da5d0b430ce4fb3",
       "date": "2026-10-25",
       "layerfs": { "version": "v1.1.0", "commit": "ad78914e36b258b360daf13aec164b5655814689" },
       "notes": "First release: self-contained Linux x86_64 archive with Pi 1.4.0, the LayerFS 1.1.0 agent and backend packages, daemon and runtime image."
