@@ -1,0 +1,45 @@
+{
+  "authors": [
+    {
+      "github": "Mola-maker",
+      "name": "Mola-maker"
+    }
+  ],
+  "host": {
+    "name": "Magpie",
+    "url": "https://usemagpie.ai"
+  },
+  "id": "magpie-layerfs",
+  "license": "MIT",
+  "name": "LayerFS for Magpie",
+  "platforms": [
+    "linux"
+  ],
+  "repository": "https://github.com/Mola-maker/magpie-layerfs",
+  "schema": 1,
+  "status": "preview",
+  "summary": "LayerFS workspaces for Magpie agents: forks copy 0 bytes, checkpoints store only changes.",
+  "tags": [
+    "magpie",
+    "mcp",
+    "agents",
+    "workspaces",
+    "filesystem",
+    "version-control"
+  ],
+  "uses": [
+    "agent"
+  ],
+  "versions": [
+    {
+      "commit": "3a2677d0e5f909440a39c0af8d7b15cce25cca9d",
+      "date": "2026-10-24",
+      "layerfs": {
+        "commit": "9f97a7ec95b662e9cb288704afa165feff132cfa",
+        "version": "v1.1.0"
+      },
+      "notes": "Native backend on LayerFS 1.1.0 (@layerfs/agent); real-SDK suite 59/59.",
+      "version": "0.9.0"
+    }
+  ]
+}

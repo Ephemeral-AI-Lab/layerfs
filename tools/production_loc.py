@@ -222,9 +222,7 @@ def declared_modules(path: Path, text: str) -> list:
     file is itself test only, which is what makes the exclusion transitive.
     """
     declarations = []
-    pattern = re.compile(
-        r"(?P<attributes>(?:#\[[^\]]*\]\s*)*)mod\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;"
-    )
+    pattern = re.compile(r"(?P<attributes>(?:#\[[^\]]*\]\s*)*)mod\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;")
     directory = path.parent if path.stem in {"mod", "lib", "main"} else path.parent / path.stem
     for match in pattern.finditer(text):
         attributes = match.group("attributes")
@@ -232,19 +230,14 @@ def declared_modules(path: Path, text: str) -> list:
             implies_test(attribute[attribute.find("(") + 1 : -2])
             for attribute in re.findall(r"#\[cfg\([^\]]*\)\]", attributes)
         ) or any(
-            "test" in attribute and "cfg(" not in attribute
-            for attribute in re.findall(r"#\[[^\]]*\]", attributes)
+            "test" in attribute and "cfg(" not in attribute for attribute in re.findall(r"#\[[^\]]*\]", attributes)
         )
         explicit = re.search(r'#\[path\s*=\s*"([^"]+)"\]', attributes)
         if explicit:
             target = path.parent / explicit.group(1)
         else:
             candidate = directory / match.group("name")
-            target = (
-                candidate.with_suffix(".rs")
-                if (candidate.with_suffix(".rs")).exists()
-                else candidate / "mod.rs"
-            )
+            target = candidate.with_suffix(".rs") if (candidate.with_suffix(".rs")).exists() else candidate / "mod.rs"
         declarations.append((test_only, target))
     return declarations
 
@@ -460,12 +453,10 @@ def scope_files(root: Path, scope: str) -> list:
         if any(part in SKIP_DIRS for part in parts):
             continue
         source = (len(parts) > 2 and parts[1] == "src") or (
-            len(parts) > 3 and parts[0] == "layerfs-api"
-            and parts[1] in ("core", "sdk") and parts[2] == "src"
+            len(parts) > 3 and parts[0] == "layerfs-api" and parts[1] in ("core", "sdk") and parts[2] == "src"
         )
         sql = (len(parts) > 2 and parts[1] == "sql") or (
-            len(parts) > 3 and parts[0] == "layerfs-api"
-            and parts[1] in ("core", "sdk") and parts[2] == "sql"
+            len(parts) > 3 and parts[0] == "layerfs-api" and parts[1] in ("core", "sdk") and parts[2] == "sql"
         )
         if source and path.suffix in CODE_SUFFIXES:
             files.append(path)
@@ -534,10 +525,7 @@ def main() -> int:
         report = per_file(Path(args.root).resolve())
         print(f"{'path':<78} {'scope':<9} {'prod':>7} {'physical':>9}")
         for entry in report["files"]:
-            print(
-                f"{entry['path']:<78} {entry['scope']:<9} "
-                f"{entry['production_loc']:>7} {entry['physical_lines']:>9}"
-            )
+            print(f"{entry['path']:<78} {entry['scope']:<9} {entry['production_loc']:>7} {entry['physical_lines']:>9}")
         return 0
     result = scan(Path(args.root).resolve())
     if args.json:
