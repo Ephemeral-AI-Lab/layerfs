@@ -34,13 +34,13 @@
   "versions": [
     {
       "version": "0.1.0",
-      "commit": "e380d8f1c0f92ab19102cce427d7a3ae5745563b",
-      "date": "2026-10-24",
+      "commit": "e440813d6ca2cc973ddae517319addeb52b694b6",
+      "date": "2026-10-25",
       "layerfs": {
         "version": "v1.1.0",
         "commit": "ad78914e36b258b360daf13aec164b5655814689"
       },
-      "notes": "Lazy sandboxes; keep commit when unmount fails; default prefix hyp; sandbox image needs node/npm."
+      "notes": "Lazy sandboxes; keep commit when unmount fails; default prefix hyp; sandbox image needs node/npm; LayerFS pin ad78914e (#436 overlay fix)."
     }
   ]
 }
