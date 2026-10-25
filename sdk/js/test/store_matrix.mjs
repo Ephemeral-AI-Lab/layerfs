@@ -86,8 +86,25 @@ try {
   const published = await layerfs.branch.publish("work");
   assert.ok(published.kind, JSON.stringify(published).slice(0, 200));
   assert.equal((await layerfs.fs.read("main", "/docs/note.md")).text, "gamma\nbeta\n");
+  // A divergent merge: both sides advanced past their common base, so this
+  // is a real merge Commit (two parents), and both sides' files must be
+  // readable on the merged Branch and on main after its publish.
+  await layerfs.fs.write("work", "/later.md", "later\n", "work advanced");
+  await layerfs.branch.fork("feat2");
+  await layerfs.fs.write("feat2", "/feat2.md", "feat2 line\n", "feat2 advanced");
+  const combined = await layerfs.branch.merge("work", "feat2", "combined", "combine diverged");
+  assert.equal(combined.kind, "Merged");
+  assert.equal(combined.fastForward, false, "diverged sources cannot fast-forward");
+  assert.equal((await layerfs.fs.read("combined", "/later.md")).text, "later\n");
+  assert.equal((await layerfs.fs.read("combined", "/feat2.md")).text, "feat2 line\n");
+  const combinedHead = (await layerfs.branch.list_commits("combined", 1)).items[0];
+  assert.ok(combinedHead.secondParent, "a divergent merge Commit carries two parents");
+  await layerfs.branch.publish("combined");
+  assert.equal((await layerfs.fs.read("main", "/later.md")).text, "later\n");
+  assert.equal((await layerfs.fs.read("main", "/feat2.md")).text, "feat2 line\n");
+
   const after = await layerfs.project.list_branches();
-  assert.deepEqual(after.items.map((item) => item.name).sort(), ["main", "merged", "work"]);
+  assert.deepEqual(after.items.map((item) => item.name).sort(), ["combined", "feat2", "main", "merged", "work"]);
 
   // The daemon-only surface refuses Unsupported on the Windows route; on
   // Linux the workspace route is the daemon's and is not exercised here.
