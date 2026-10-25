@@ -31,7 +31,7 @@
 | Layer | Scope | Why it exists |
 | --- | --- | --- |
 | SQLite file lock (WAL) | the Store file | SQLite allows one write transaction per database; readers proceed alongside |
-| Directory lock (Linux) | all writer processes of one Store | Writers in different processes (each Sandbox's daemon, the SDK process) take turns instead of meeting `SQLITE_BUSY` |
+| Directory lock (Linux) / named kernel mutex (Windows) | all writer processes of one Store | Writers in different processes (each Sandbox's daemon, the SDK process) take turns instead of meeting `SQLITE_BUSY`; on Windows the mutex is named per Store directory and an abandoned mutex is taken by the next waiter |
 | Writer admission queue | threads of one process | Threads take turns on the process's one writer connection, first come first served, before touching SQLite |
 | Publication lane | one Commit's publish | Head check, merge and publish are one atomic step, so two Commits never both publish on the same old head |
 | Workspace lock | one Workspace's overlay database | Separate concern: guards that Workspace's own overlay connection (root AGENTS.md) |

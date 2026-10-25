@@ -23,6 +23,7 @@ simplification.
 | Cluster one | Implemented content, storage, history, persistence, project Init and telemetry libraries | [Cluster-one handbook](docs/general/cluster_one_handbook.md), [CAS/CDC/delta handbook](docs/general/cas_cdc_deltaencoding_handbook.md) |
 | Cluster two | Workspace, FUSE, daemon, execution and Commit/runtime integration design and implementation | [Current design index](core/docs/issues/303/README.md) and its seven primary contracts |
 | Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
+| Windows-native Store | Store engine and the SDK's in-process Store face on native Windows (owner, 2026-10-25); FUSE, daemon and Workspace stay Linux-only | [Direct Store contract](core/docs/issues/352/DIRECT_STORE.md) |
 
 **The LayerFS UI is the dsh LayerFS plugin** (owner, 2026-10-19): the LayerFS tab in
 DeepSeek Harness, served by `dsh/packages`; see [dsh/README.md](dsh/README.md).
@@ -151,6 +152,20 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   native handles and project discovery. This is independent of the macOS
   adapter and changes neither the product SDK nor the daemon. A lost reply
   is never replayed, and an uncertain Init retains its Linux home and volume.
+- **Windows-native Store route (owner direction 2026-10-25).** The Store
+  engine (SQLite, the cross-process writer lane, the kernel guard) and the
+  SDK's in-process Store face (fs, branch, project, operator) also run
+  natively on Windows: local NTFS volumes only, a named kernel mutex as the
+  cross-process writer lane, real volume-serial + file-index identity for
+  acquisition rows, and bundled SQLite, each in audited FFI modules
+  (core/AGENTS.md). No WSL2 and no daemon are involved. This supersedes the
+  Linux-only Store sentence above for this route only; Workspace, FUSE, Exec
+  and daemon calls still refuse `Unsupported` on Windows, and the dsh macOS
+  and WSL2 exceptions are unchanged. Recorded limitations: Windows Init has
+  no hard-link membership and no backing-inside-source alias check, carries
+  non-UTF-8 names lossily and synthesizes the mode from the read-only
+  attribute; overlay allocation is the logical length. See
+  [the Windows-native route](core/docs/issues/352/DIRECT_STORE.md).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

@@ -11,6 +11,8 @@
 > **One route, Linux only (owner, 2026-10-18):** Store calls run in-process
 > only; the daemon stops serving them, and an unsupported setup fails
 > `Unsupported`. There is no daemon route to choose or fall back to.
+> **Windows-native route (owner, 2026-10-25):** the Store engine and this
+> in-process Store face also run natively on Windows; see §6.
 
 ## 1. Architecture
 
@@ -88,3 +90,38 @@ Disposable/WAL/OFF only; page size 4 KiB; one attempt per operation; FUSE and
 Workspaces stay in the daemon; the daemon keeps opening the Store directly; no
 `layerfs-server`, no host/server adapter in the data path (the SDK is a direct
 opener, not a proxy).
+
+## 6. Windows-native route (owner direction 2026-10-25)
+
+The one-kernel safety condition is met natively on Windows: every opener of a
+Windows Store shares one Windows kernel and one local NTFS volume. No WSL2 and
+no daemon are involved. Implemented on branch `windows-native-store`:
+
+- The cross-process writer lane is a named kernel mutex
+  (`Local\layerfs-writer-lane-<hash>`); an abandoned mutex is taken by the
+  next waiter, so a dead writer does not hold the lane.
+- The kernel guard allows local NTFS volumes only, read with
+  `GetVolumeInformationW`; other filesystems and non-disk prefixes fail
+  `Unsupported` before the Store opens.
+- SQLite is bundled (rusqlite) on Windows targets; Disposable/WAL/OFF is the
+  only profile, unchanged.
+- Acquisition identity is the real volume serial and file index
+  (`GetFileInformationByHandle`), in audited FFI modules listed in
+  core/AGENTS.md.
+- The SDK addon serves fs, branch, project and operator calls in-process
+  exactly as on Linux. Workspace, exec and daemon calls refuse `Unsupported`
+  on Windows: FUSE, the daemon and Workspaces remain Linux-only, and the dsh
+  macOS and WSL2 exceptions are unchanged.
+
+Recorded limitations of this route: Windows Init carries non-UTF-8 names
+lossily, synthesizes the mode from the read-only attribute, has no hard-link
+membership and no backing-inside-source alias check; overlay allocation is the
+logical length; last-owner overlay-file deletion keeps its Linux identity
+check (not exercised here — the Store route holds no Workspace mounts).
+
+Proof receipts: the cross-process lane verifier
+(`layerfs-persistence` `tests/windows_store_native.rs`, two re-exec'd child
+processes, bounded waits); `cargo check --locked` of the five touched crates
+on Windows and in the `rust:1.85.1-bookworm` container; the lifecycle smoke
+(init → fork → one-Commit write → read back → list_commits → close) with no
+WSL2 and no daemon.

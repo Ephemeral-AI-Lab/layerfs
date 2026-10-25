@@ -577,3 +577,32 @@ No other Persistence module may contain unsafe Rust; the guard and its tests
 enforce the exact path. This does not authorize third-party patches, dependency
 changes, manual sidecar deletion or other FFI. See the
 [decision and diagnostic](docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md).
+
+### Audited Windows FFI modules
+
+Owner direction 2026-10-25 (route 2, Windows-native Store; root AGENTS.md)
+adds audited Windows FFI beside the macOS seal wrapper. The guard
+(`core/tools/check_product_boundary.py`) and its tests enforce the exact
+paths:
+
+- Persistence keeps `deny(unsafe_code)` with two allowed modules:
+  `src/backend/sqlite/file_control.rs` (the macOS seal wrapper, unchanged)
+  and `src/backend/sqlite/windows_lane.rs` (the named kernel mutex writer
+  lane and `GetVolumeInformationW` volume filesystem).
+- layerfs-project moves forbid→deny with one allowed module,
+  `src/import/windows_identity.rs` (`GetFileInformationByHandle`: volume
+  serial, file index, creation time).
+- layerfs-overlay moves forbid→deny with one allowed module,
+  `src/database/windows_identity.rs` (handle/path identity and
+  `GetDiskFreeSpaceExW`).
+- Storage's `src/encoding/codec.rs` authorization is unchanged.
+
+Acquisition rows are keyed by dev+inode. On Windows the identity MUST be
+the real volume serial and file index; a zeroed placeholder collides every
+entry onto one key and Init refuses with "the entry changed while Init
+read it".
+
+`#[cfg(unix)]` code is invisible to a Windows compile: a unix-only edit
+that does not parse can pass on Windows and still break Linux. Code touched
+for this route is cross-checked with `cargo check --locked` in the pinned
+Linux container (`rust:1.85.1-bookworm`) before any "it builds" claim.
