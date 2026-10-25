@@ -79,7 +79,7 @@ impl HostStat {
         {
             // The format stores no ownership; mode is synthesized from the
             // read-only attribute, and creation time stands in for ctime.
-            let base = if metadata.is_dir() { 0o555 } else { 0o644 };
+            let base = if metadata.is_dir() { 0o555 } else { 0o444 };
             let mode = if metadata.permissions().readonly() {
                 base
             } else {

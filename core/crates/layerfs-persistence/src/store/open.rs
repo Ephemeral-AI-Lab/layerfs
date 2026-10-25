@@ -92,14 +92,35 @@ impl Handles {
             config.sqlite_acquisition,
         )?);
         if writable {
-            session.add_binding_hints()?;
-            session.add_lineage(crate::history::backfill_lineage)?;
-            session.add_merge_scratch()?;
-            session.add_file_digests()?;
+            // The idempotent setup statements are write transactions, so two
+            // concurrent opens of one Store meet Busy exactly here under the
+            // no-retry rule. The coarse writer lane replaces Busy: one short
+            // hold covers the whole setup block, released before validation.
+            let writer =
+                crate::backend::sqlite::writer_admission::Writer::acquire(&config.path)?;
+            let setup =
+                (|| -> Result<(), crate::backend::records::BackendError> {
+                    session.add_binding_hints()?;
+                    session.add_lineage(crate::history::backfill_lineage)?;
+                    session.add_merge_scratch()?;
+                    session.add_file_digests()
+                })();
+            writer
+                .release()
+                .map_err(|_| crate::backend::records::BackendError::Integrity)?;
+            setup?;
         }
         let handles = Self::validated(session, directory, binding, cursor_key)?;
         if writable {
-            crate::storage::merge_records::sweep(&handles.storage.session)?;
+            // The sweep deletes stale merge records: a write, held behind the
+            // lane for the same reason as the setup block above.
+            let writer =
+                crate::backend::sqlite::writer_admission::Writer::acquire(&config.path)?;
+            let swept = crate::storage::merge_records::sweep(&handles.storage.session);
+            writer
+                .release()
+                .map_err(|_| crate::backend::records::BackendError::Integrity)?;
+            swept?;
         }
         Ok(handles)
     }

@@ -9,7 +9,10 @@ use std::{
 pub struct HeldWriter(Child);
 impl HeldWriter {
     pub fn acquire(database: &std::path::Path) -> Self {
-        let script = "import sqlite3,sys,select\nc=sqlite3.connect(sys.argv[1],timeout=0)\nc.execute('BEGIN IMMEDIATE')\nprint('held',flush=True)\nselect.select([sys.stdin],[],[],5)\nc.rollback()\nc.close()\n";
+        // The writer holds BEGIN IMMEDIATE, signals readiness and stands by
+        // for one line. select() is not portable to a Windows pipe stdin;
+        // a blocking readline is, and Drop's kill bounds a lost releaser.
+        let script = "import sqlite3,sys\nc=sqlite3.connect(sys.argv[1],timeout=0)\nc.execute('BEGIN IMMEDIATE')\nprint('held',flush=True)\nsys.stdin.readline()\nc.rollback()\nc.close()\n";
         let child = Command::new("python3")
             .arg("-c")
             .arg(script)
@@ -26,10 +29,10 @@ impl HeldWriter {
             let result = output.read_line(&mut line).map(|_| line);
             let _ = tx.send(result);
         });
-        assert_eq!(
-            rx.recv_timeout(Duration::from_secs(3)).unwrap().unwrap(),
-            "held\n"
-        );
+        // The external writer's readiness line, whatever end-of-line the
+        // host's python prints.
+        let line = rx.recv_timeout(Duration::from_secs(3)).unwrap().unwrap();
+        assert_eq!(line.trim_end(), "held");
         reader.join().unwrap();
         held
     }

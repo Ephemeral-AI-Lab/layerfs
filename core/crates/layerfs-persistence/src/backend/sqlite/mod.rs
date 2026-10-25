@@ -35,4 +35,4 @@ pub(crate) mod unit_io;
 pub(crate) mod unit_layout;
 mod units_publish;
 mod units_read;
-mod writer_admission;
+pub(crate) mod writer_admission;

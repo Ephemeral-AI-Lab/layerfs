@@ -14,6 +14,14 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+if (process.platform === "win32") {
+  // Every refusal this test drives is a unix mode-bit or filesystem-type
+  // contract (setgid, setuid, sticky, overlayfs, FIFO); Windows carries
+  // none of them. The Windows Store-face lifecycle is store_lifecycle.mjs.
+  console.log("init_refusals: unix-only contracts, not run on Windows");
+  process.exit(0);
+}
+
 const OVERLAYFS = 0x794c7630;
 const work = mkdtempSync(join(tmpdir(), "layerfs-init-refusals-"));
 const home = join(work, "home");

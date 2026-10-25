@@ -1,38 +1,15 @@
 //! Canonical namespace oracle over both explicit embedded Store profiles.
 //!
-//! The same Store opens on macOS/Linux. Unsupported platforms retain
-//! the explicit before-file-creation refusal.
+//! The same Store opens on macOS, Linux and Windows (owner direction
+//! 2026-10-25). Other platforms keep the product's compile-time refusal.
 mod support;
 use layerfs_history::HistoryCatalogConfig;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 use layerfs_persistence::SqliteAcquisitionSchema;
 use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use support::*;
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-#[test]
-fn an_unsupported_platform_refuses_the_store_before_any_file_exists() {
-    use layerfs_storage::port::PersistenceError;
-    for selected in DEVELOPMENT_PROFILES {
-        let fixture = Fixture::new(0);
-        let store = fixture.path.join("store.sqlite");
-        let refused = Handles::create(
-            PersistenceConfig::sqlite(&store).with_sqlite_profile(selected),
-            StoragePolicy::frozen_default(),
-            &HistoryCatalogConfig {
-                binding_key: b"init-sqlite".to_vec(),
-                cursor_key: [71; 32],
-                incarnation: 1,
-            },
-        );
-        assert!(
-            matches!(refused, Err(PersistenceError::BackendUnavailable)),
-            "{selected:?} must be refused on this platform"
-        );
-        assert!(!store.exists(), "a refused Store creates no file");
-    }
-}
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 #[test]
 fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
     for selected in DEVELOPMENT_PROFILES {
@@ -76,7 +53,7 @@ fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn attempt(
     fixture: &Fixture,
     handles: &Handles,
@@ -103,7 +80,7 @@ fn attempt(
     .0
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn create(store: &std::path::Path, acquisition: SqliteAcquisitionSchema) -> Handles {
     Handles::create(
         PersistenceConfig::sqlite(store).with_sqlite_acquisition(acquisition),
@@ -119,7 +96,7 @@ fn create(store: &std::path::Path, acquisition: SqliteAcquisitionSchema) -> Hand
 
 /// A Store created without the acquisition tables has no working state for
 /// Init, and there is no second acquisition algorithm to fall back to.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 #[test]
 fn a_store_without_acquisition_tables_refuses_init() {
     use layerfs_history::{HistoryCatalog, LayerStackId};
@@ -146,7 +123,7 @@ fn a_store_without_acquisition_tables_refuses_init() {
 
 /// The Store's own directory is acquisition backing: a Store inside the source
 /// would be read while it is written and acquired as part of the root.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 #[test]
 fn a_store_inside_the_source_is_refused_before_an_operation_begins() {
     use layerfs_project::ProjectError;

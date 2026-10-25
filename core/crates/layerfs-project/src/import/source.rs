@@ -30,17 +30,27 @@ pub(super) fn read_link(path: &Path, scanned: &Metadata) -> Result<Vec<u8>, Proj
 /// aliased spelling of a directory inside the source is recognised. Nothing
 /// is begun or changed: a backing inside the source would both alter the source
 /// while it is read and be acquired as part of it.
-pub(super) fn outside_source(source: &Metadata, placement: &Path) -> Result<(), ProjectError> {
+///
+/// Windows carries no path-independent identity here, so the check is
+/// containment of the resolved placement inside the resolved source: a
+/// spelling that resolves into the source is refused whatever named it,
+/// while a spelling that does not resolve to the source's own path (a subst
+/// drive, an unresolvable alias) is not recognised — a recorded limitation
+/// of this route.
+pub(super) fn outside_source(
+    source: &Path,
+    metadata: &Metadata,
+    placement: &Path,
+) -> Result<(), ProjectError> {
     #[cfg(unix)]
     let mut ancestor = fs::canonicalize(placement)?;
-    #[cfg(not(unix))]
-    let ancestor = fs::canonicalize(placement)?;
     #[cfg(unix)]
     {
+        let _ = source;
         use std::os::unix::fs::MetadataExt;
         loop {
-            let metadata = fs::symlink_metadata(&ancestor)?;
-            if metadata.dev() == source.dev() && metadata.ino() == source.ino() {
+            let entry = fs::symlink_metadata(&ancestor)?;
+            if entry.dev() == metadata.dev() && entry.ino() == metadata.ino() {
                 return Err(ProjectError::BackingInsideSource);
             }
             if !ancestor.pop() {
@@ -48,13 +58,16 @@ pub(super) fn outside_source(source: &Metadata, placement: &Path) -> Result<(), 
             }
         }
     }
-    #[cfg(windows)]
+    #[cfg(not(unix))]
     {
-        // Windows std carries no path-independent identity here, and the
-        // entry's own identity probe is per-path; an aliased spelling of
-        // the source is not recognised by this check (a recorded
-        // limitation).
-        let _ = (source, &ancestor);
+        // Both sides are canonicalized, so junctions and symlinks in the
+        // placement's spelling resolve before the comparison.
+        let source = fs::canonicalize(source)?;
+        let ancestor = fs::canonicalize(placement)?;
+        if ancestor == source || ancestor.starts_with(&source) {
+            return Err(ProjectError::BackingInsideSource);
+        }
+        let _ = metadata;
         Ok(())
     }
 }

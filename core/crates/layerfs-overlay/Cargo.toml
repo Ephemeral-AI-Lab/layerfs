@@ -16,6 +16,8 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Windows has no system SQLite, and the audited identity module needs the
-# Win32 file-information calls; windows-sys is already in the locked graph.
+# Win32 file-information calls; CreateFileW is additionally gated on
+# Win32_Security by its SECURITY_ATTRIBUTES parameter. windows-sys is
+# already in the locked graph.
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem"] }

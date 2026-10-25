@@ -53,12 +53,18 @@ fn dispatch_child() {
 }
 
 /// Bounded completion of one foreign child; a hung child fails the test.
+/// A failed child's own report (the harness prints it to its stdout) is
+/// carried into the failure instead of being discarded.
 fn finish(mut child: std::process::Child) {
     let until = Instant::now() + Duration::from_secs(60);
     loop {
         match child.try_wait().expect("child poll") {
             Some(status) => {
-                assert!(status.success(), "a child writer failed: {status}");
+                assert!(
+                    status.success(),
+                    "a child writer failed: {status}; child report: {:?}",
+                    String::from_utf8_lossy(&child.wait_with_output().expect("child drain").stdout)
+                );
                 return;
             }
             None => assert!(Instant::now() < until, "a child writer is hung"),
@@ -103,8 +109,8 @@ fn windows_native_store_serves_sessions_and_serializes_foreign_processes() {
             Command::new(&executable)
                 .env(CHILD_STORE, &lane_path)
                 .env(CHILD_BINDING, "windows-lane-processes")
-                .stdout(Stdio::null())
-                .stderr(Stdio::inherit())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
                 .spawn()
                 .unwrap(),
         );

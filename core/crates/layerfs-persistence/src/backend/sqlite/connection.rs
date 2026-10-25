@@ -175,7 +175,16 @@ impl Session {
         connection
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
-        profile::apply(&connection, create, selected, creation_acquisition, &work)?;
+        // The profile pragmas are this open's first database-touching
+        // statements, where a WAL Store's -shm is created and recovery
+        // runs; two concurrent opens of one Store can meet Busy exactly
+        // there under the no-retry rule. The coarse writer lane replaces
+        // Busy: hold it for this one short setup step and release before
+        // the reads that follow. macOS keeps exact SQLite Busy by design.
+        let writer = super::writer_admission::Writer::acquire(path)?;
+        let applied = profile::apply(&connection, create, selected, creation_acquisition, &work);
+        writer.release().map_err(|_| BackendError::Integrity)?;
+        applied?;
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
         } else {

@@ -13,8 +13,10 @@ layerfs-history = { path = "../layerfs-history", default-features = false }
 layerfs-telemetry = { path = "../layerfs-telemetry" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-# The audited host-identity probe; already in the locked graph.
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+# The audited host-identity probe; CreateFileW is additionally gated on
+# Win32_Security by its SECURITY_ATTRIBUTES parameter. windows-sys is
+# already in the locked graph.
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 layerfs-persistence = { path = "../layerfs-persistence" }

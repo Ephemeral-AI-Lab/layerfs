@@ -5,9 +5,11 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
+// import() needs a file:// URL; a bare Windows path is not one.
+const FAKE_URL = pathToFileURL(FAKE).href;
 Object.assign(process.env, {
   LAYERFS_NATIVE: FAKE, LAYERFS_HOME: "/private/trace-home", LAYERFS_DOCKER: "/fake.sock",
   LAYERFS_IMAGE: "fake-image", LAYERFS_VOLUME: "fake-volume", LAYERFS_DAEMON: "/fake/daemon",
@@ -80,7 +82,7 @@ const selected = process.argv[2];
 try {
   if (selected === "on") {
     const reference = await script(new LayerFS("website"));
-    const native = (await import(FAKE)).default;
+    const native = (await import(FAKE_URL)).default;
     const before = native.calls.length;
     assert.ok(native.observed.every((scope) => scope === null), "untraced calls carry no scope");
     process.env.LAYERFS_TRACE = file;
@@ -253,7 +255,7 @@ try {
   } else if (selected === "store") {
     // Store calls open the client's Store in this process once, and close()
     // releases it; no Sandbox is started for them (#352 F-020).
-    const native = (await import(FAKE)).default;
+    const native = (await import(FAKE_URL)).default;
     const client = new LayerFS("website");
     await client.project.list_branches();
     await client.fs.read("main", "/README.md");
@@ -286,7 +288,7 @@ try {
     // A client in a container dials its daemonHost on every call that
     // reaches a Sandbox, operator calls included: the binding reopens or
     // starts the Sandbox with the call's deploy.
-    const native = (await import(FAKE)).default;
+    const native = (await import(FAKE_URL)).default;
     await script(new LayerFS("website", { daemonHost: "host.docker.internal" }));
     const named = native.calls.filter((_, index) => "sandbox" in native.args[index]);
     for (const method of ["workspace.exec", "workspace.status", "workspace.commit", "workspace.unmount", "operator.workspace.overlay", "operator.workspace.changes", "operator.inspect.snapshot", "operator.process.start"]) {

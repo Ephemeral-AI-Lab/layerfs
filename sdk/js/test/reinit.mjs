@@ -28,14 +28,18 @@ try {
   };
   const layerfs = client();
 
-  // A set-group-ID source directory has a mode LayerFS cannot store.
-  chmodSync(source, 0o2755);
-  await assert.rejects(layerfs.project.init(source), {
-    code: "InvalidInput",
-    detail: { reason: "Mode", path: source, mode: "2755" },
-  });
-  assert.ok(!existsSync(join(work, "home", "website")), "a refused Init leaves no entry");
-  chmodSync(source, 0o755);
+  // A set-group-ID source directory has a mode LayerFS cannot store. The
+  // bit does not exist on Windows, whose chmod maps only the read-only
+  // attribute; the refusal contract is checked on unix platforms.
+  if (process.platform !== "win32") {
+    chmodSync(source, 0o2755);
+    await assert.rejects(layerfs.project.init(source), {
+      code: "InvalidInput",
+      detail: { reason: "Mode", path: source, mode: "2755" },
+    });
+    assert.ok(!existsSync(join(work, "home", "website")), "a refused Init leaves no entry");
+    chmodSync(source, 0o755);
+  }
 
   const first = await layerfs.project.init(source);
   assert.equal(first.kind, "Initialized");

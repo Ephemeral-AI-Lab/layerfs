@@ -36,6 +36,7 @@ fn fixture() -> Vec<Vec<u8>> {
         })
         .collect()
 }
+#[cfg(unix)]
 fn main() {
     assert_eq!(
         std::env::var("SCREEN_SCENARIO").as_deref(),
@@ -178,4 +179,9 @@ fn main() {
         metadata.blocks() * 512
     };
     writeln!(output,"{{\"sql_statements\":{},\"sql_vm_steps\":{},\"sqlite\":\"{}\",\"operation_ns\":{operation},\"complete_ns\":{},\"file_bytes\":{},\"allocated_bytes\":{allocated},\"sealed_bytes\":{},\"objects_input\":{COUNT},\"input_bytes\":{},\"cache\":\"created-in-sample Store; fixed warm in-memory fixture\",\"status\":\"RECORDED\"}}",work.statements,work.vm_steps,sql_version,total.elapsed().as_nanos(),metadata.len(),sealed.bytes,COUNT*BYTES).unwrap();
+}
+
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("this frozen recorder requires Unix (st_blocks); nothing recorded");
 }
