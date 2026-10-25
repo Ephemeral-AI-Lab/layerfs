@@ -61,6 +61,7 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
             failed(error)
         }
     })?;
+    #[cfg(unix)]
     std::fs::set_permissions(&directory, {
         use std::os::unix::fs::PermissionsExt;
         std::fs::Permissions::from_mode(0o700)

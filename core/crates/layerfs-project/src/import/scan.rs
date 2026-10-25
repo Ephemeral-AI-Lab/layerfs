@@ -17,12 +17,7 @@ use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::FilesystemObjects;
 use layerfs_content::{inode_leaf::InodeKind, PathName};
 use layerfs_storage::port::acquisition::{EntryKey, NewEntry, Placed};
-use std::{
-    ffi::{OsStr, OsString},
-    fs::{self, Metadata},
-    os::unix::ffi::{OsStrExt, OsStringExt},
-    path::{Path, PathBuf},
-};
+use std::{fs::{self, Metadata}, path::Path};
 
 /// What one completed scan placed in backing.
 pub(crate) struct Scanned {
@@ -84,11 +79,11 @@ impl Roots<'_, '_> {
     ) -> Result<NewEntry, Failure> {
         let path = || match parent {
             Some(_) => child_path(directory, &child.name),
-            None => directory.as_os_str().as_bytes().to_vec(),
+            None => super::host::os_to_bytes(directory.as_os_str()),
         };
-        let mode = child.portable_mode().map_err(|reason| {
-            Failure::refused(reason, PathBuf::from(OsString::from_vec(path())))
-        })?;
+        let mode = child
+            .portable_mode()
+            .map_err(|reason| Failure::refused(reason, super::host::bytes_to_path(&path())))?;
         let nanos = child.stamp.mtime_nsec as u32;
         let key = (child.kind.code(), mode, child.stamp.mtime, nanos);
         let metadata = PortableMetadata {
@@ -125,10 +120,11 @@ impl Roots<'_, '_> {
 }
 
 fn child_path(directory: &Path, name: &[u8]) -> Vec<u8> {
-    directory
-        .join(OsStr::from_bytes(name))
-        .into_os_string()
-        .into_vec()
+    super::host::os_to_bytes(
+        &directory
+            .join(super::host::bytes_to_os(name))
+            .into_os_string(),
+    )
 }
 
 /// Positions being assigned while directories are read.
@@ -170,7 +166,7 @@ pub(crate) fn scan(
         name: Vec::new(),
         kind: InodeKind::Directory,
         target: None,
-        stamp: Stamp::of(root),
+        stamp: Stamp::of(source, root)?,
     };
     let root = roots.entry(root, None, Some(0), source)?;
     placement
@@ -191,12 +187,15 @@ pub(crate) fn scan(
         placement.frontier -= 1;
         progress.tick()?;
         let parent = directory.position;
-        let path = PathBuf::from(OsString::from_vec(directory.host_path));
+        let path = super::host::bytes_to_path(&directory.host_path);
         let (mut count, mut wide) = (0usize, false);
         for child in fs::read_dir(&path)? {
             progress.tick()?;
             let child = child?;
-            buffer.push(observe(&child.path(), child.file_name().as_bytes())?);
+            buffer.push(observe(
+                &child.path(),
+                &super::host::os_to_bytes(&child.file_name()),
+            )?);
             count += 1;
             progress.counters.entry();
             if buffer.len() == WINDOW_ROWS {
@@ -305,6 +304,6 @@ fn observe(path: &Path, name: &[u8]) -> Result<Child, Failure> {
         name: name.to_vec(),
         kind,
         target,
-        stamp: Stamp::of(&metadata),
+        stamp: Stamp::of(path, &metadata)?,
     })
 }

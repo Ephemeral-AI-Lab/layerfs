@@ -94,11 +94,56 @@ impl Allocation {
             work: self.work.get(),
         })
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    pub(crate) fn new(file: File, path: &Path) -> OverlayResult<Self> {
+        let identity = super::windows_identity::windows_handle_identity(&file)?;
+        if identity.links != 1 {
+            return Err(OverlayError::Invalid("allocation file identity"));
+        }
+        let len = file.metadata()?.len();
+        Ok(Self {
+            file,
+            device: identity.device,
+            inode: identity.index,
+            path: path.to_owned(),
+            work: Cell::new(AllocationWork::default()),
+            high_water: Cell::new(len),
+        })
+    }
+    #[cfg(target_os = "windows")]
+    pub(crate) fn state(&self) -> OverlayResult<AllocationState> {
+        let mut work = self.work.get();
+        work.observations = work.observations.saturating_add(1);
+        self.work.set(work);
+        let meta = self.file.metadata()?;
+        let by_path = super::windows_identity::windows_path_identity(&self.path)?;
+        let by_handle = super::windows_identity::windows_handle_identity(&self.file)?;
+        if by_path.device != by_handle.device
+            || by_path.index != by_handle.index
+            || by_handle.device != self.device
+            || by_handle.index != self.inode
+            || by_handle.links != 1
+        {
+            return Err(OverlayError::Invalid("allocation file identity"));
+        }
+        // Windows exposes no allocated-blocks count; the logical length
+        // stands in for it (the disposable overlay never preallocates).
+        let allocated = meta.len();
+        self.high_water.set(self.high_water.get().max(allocated));
+        Ok(AllocationState {
+            logical_bytes: meta.len(),
+            allocated_bytes: allocated,
+            high_water_allocated_bytes: self.high_water.get(),
+            reserved_tail_bytes: 0,
+            cleanup_headroom_bytes: 0,
+            work: self.work.get(),
+        })
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     pub(crate) fn new(_file: File, _path: &Path) -> OverlayResult<Self> {
         Err(OverlayError::UnsupportedPlatform)
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     pub(crate) fn state(&self) -> OverlayResult<AllocationState> {
         Err(OverlayError::UnsupportedPlatform)
     }
@@ -119,7 +164,21 @@ impl Allocation {
         // those are not ordinary writable capacity. Retain the original cause.
         Ok(filesystem.blocks_available() == 0)
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    pub(crate) fn device_full(&self) -> OverlayResult<bool> {
+        self.state()?;
+        let mut work = self.work.get();
+        work.capacity_checks = work.capacity_checks.saturating_add(1);
+        self.work.set(work);
+        let directory = self
+            .path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
+        let free = super::windows_identity::windows_free_bytes(directory)
+            .map_err(|_| OverlayError::Invalid("capacity observation"))?;
+        Ok(free == 0)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     pub(crate) fn device_full(&self) -> OverlayResult<bool> {
         Err(OverlayError::UnsupportedPlatform)
     }

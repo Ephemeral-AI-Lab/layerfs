@@ -51,6 +51,8 @@ class ProductBoundaryTests(unittest.TestCase):
         ffi = "fn seal() { unsafe { file_control(); } }"
         self.assertFalse(unsafe_violations(base / "backend/sqlite/file_control.rs", ffi))
         self.assertFalse(unsafe_violations(base / "backend/sqlite/windows_lane.rs", ffi))
+        self.assertFalse(unsafe_violations(Path("core/crates/layerfs-project/src/import/windows_identity.rs"), ffi))
+        self.assertFalse(unsafe_violations(Path("core/crates/layerfs-overlay/src/database/windows_identity.rs"), ffi))
         for sibling in ["backend/sqlite/seal.rs", "store/seal.rs", "backend/sqlite/connection.rs"]:
             self.assertTrue(unsafe_violations(base / sibling, ffi))
         self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]"))

@@ -14,7 +14,11 @@ pub struct Backing {
     file: Option<std::fs::File>,
     namespace: i64,
     incarnation: [u8; 32],
+    // The deletion identity check reads these on unix only; Windows and the
+    // other platforms refuse deletion before reaching them.
+    #[cfg_attr(not(unix), allow(dead_code))]
     device: u64,
+    #[cfg_attr(not(unix), allow(dead_code))]
     inode: u64,
     pool: Weak<Workspaces>,
     terminal: AtomicBool,
@@ -42,7 +46,19 @@ impl Backing {
             }
             (metadata.dev(), metadata.ino(), metadata.nlink())
         };
-        #[cfg(not(unix))]
+        #[cfg(target_os = "windows")]
+        let (device, inode, links) = {
+            // The audited probe in the overlay engine reads the entry's real
+            // volume, file index and link count.
+            let identity = layerfs_overlay::windows_handle_identity(&file).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("overlay file identity: {error}"),
+                )
+            })?;
+            (identity.device, identity.index, identity.links)
+        };
+        #[cfg(not(any(unix, target_os = "windows")))]
         let (device, inode, links) = (0, 0, 0);
         if !metadata.is_file() || links != 1 {
             return Err(io::Error::new(
@@ -69,14 +85,14 @@ impl Backing {
         self.closed.store(true, Ordering::Release);
     }
     fn delete(&self) -> io::Result<()> {
-        let metadata = std::fs::symlink_metadata(&self.path)?;
-        let original = self
-            .file
-            .as_ref()
-            .expect("retained identity file")
-            .metadata()?;
         #[cfg(unix)]
         {
+            let metadata = std::fs::symlink_metadata(&self.path)?;
+            let original = self
+                .file
+                .as_ref()
+                .expect("retained identity file")
+                .metadata()?;
             use std::os::unix::fs::MetadataExt;
             if !metadata.is_file()
                 || metadata.nlink() != 1

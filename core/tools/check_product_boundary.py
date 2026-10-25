@@ -25,15 +25,17 @@ UNSAFE_AUDITED_MODULE = {
         "src/backend/sqlite/file_control.rs",
         "src/backend/sqlite/windows_lane.rs",
     ),
+    "layerfs-project": ("src/import/windows_identity.rs",),
+    "layerfs-overlay": ("src/database/windows_identity.rs",),
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-store-service", "layerfs-fuse", "layerfs-daemon", "layerfs-api", "layerfs-bridge", "layerfs-sandbox")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-workspace", "layerfs-store-service", "layerfs-fuse", "layerfs-daemon", "layerfs-api", "layerfs-bridge", "layerfs-sandbox")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
     "layerfs-telemetry": "#![forbid(unsafe_code)]",
     "layerfs-persistence": "#![deny(unsafe_code)]",
-    "layerfs-project": "#![forbid(unsafe_code)]",
-    "layerfs-overlay": "#![forbid(unsafe_code)]",
+    "layerfs-project": "#![deny(unsafe_code)]",
+    "layerfs-overlay": "#![deny(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",

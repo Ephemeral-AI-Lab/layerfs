@@ -173,6 +173,7 @@ pub(crate) fn call(method: &str, args: SdkValue, operator: bool) -> Outcome {
 }
 
 /// The Branch id of `name` in the project a call names, read in this process.
+#[cfg(unix)]
 pub(crate) fn branch_id(
     args: &SdkValue,
     name: &str,
@@ -183,6 +184,7 @@ pub(crate) fn branch_id(
 }
 
 /// The newest Commit of `branch`, read in this process; `None` when it has none.
+#[cfg(unix)]
 pub(crate) fn head(
     args: &SdkValue,
     branch: layerfs_history::BranchId,

@@ -633,6 +633,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "windows-sys",
 ]
 
 [[package]]
@@ -642,6 +643,7 @@ dependencies = [
  "blake3",
  "nix",
  "rusqlite",
+ "windows-sys",
 ]
 
 [[package]]
@@ -668,6 +670,7 @@ dependencies = [
  "layerfs-storage",
  "layerfs-telemetry",
  "sha2 0.11.0",
+ "windows-sys",
 ]
 
 [[package]]

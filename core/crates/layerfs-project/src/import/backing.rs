@@ -13,10 +13,7 @@ use layerfs_storage::port::acquisition::{
     WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 use layerfs_storage::port::PersistenceError;
-use std::{
-    cell::Cell, collections::VecDeque, ffi::OsString, fs::Metadata, os::unix::ffi::OsStringExt,
-    os::unix::fs::MetadataExt, path::PathBuf,
-};
+use std::{cell::Cell, collections::VecDeque, fs::Metadata};
 
 /// Rows the job queue or one resident child buffer may hold.
 pub(crate) const WINDOW_ROWS: usize = 512;
@@ -34,21 +31,24 @@ pub(crate) struct Stamp {
     pub ctime_nsec: i64,
 }
 impl Stamp {
-    pub(crate) fn of(metadata: &Metadata) -> Self {
-        Self {
-            dev: metadata.dev(),
-            ino: metadata.ino(),
-            len: metadata.len(),
-            mode: metadata.mode(),
-            mtime: metadata.mtime(),
-            mtime_nsec: metadata.mtime_nsec(),
-            ctime: metadata.ctime(),
-            ctime_nsec: metadata.ctime_nsec(),
-        }
+    pub(crate) fn of(path: &std::path::Path, metadata: &Metadata) -> std::io::Result<Self> {
+        let host = super::host::HostStat::of(path, metadata)?;
+        Ok(Self {
+            dev: host.dev,
+            ino: host.ino,
+            len: host.len,
+            mode: host.mode,
+            mtime: host.mtime,
+            mtime_nsec: host.mtime_nsec,
+            ctime: host.ctime,
+            ctime_nsec: host.ctime_nsec,
+        })
     }
     /// True while `metadata` is still the same unchanged regular file.
-    pub(crate) fn matches_file(&self, metadata: &Metadata) -> bool {
-        metadata.is_file() && !metadata.file_type().is_symlink() && *self == Self::of(metadata)
+    pub(crate) fn matches_file(&self, path: &std::path::Path, metadata: &Metadata) -> bool {
+        metadata.is_file()
+            && !metadata.file_type().is_symlink()
+            && Self::of(path, metadata).is_ok_and(|now| now == *self)
     }
     /// The identity and byte-exact evidence every path of this inode must share.
     pub(crate) fn identity(&self) -> HostIdentity {
@@ -377,7 +377,7 @@ pub(crate) fn window_full(rows: usize, held: usize, bytes: usize) -> bool {
 fn changed_source(error: AcquisitionError, path: impl Fn(u64) -> Option<Vec<u8>>) -> Failure {
     if let AcquisitionError::Changed { position } = error {
         if let Some(path) = path(position) {
-            let path = PathBuf::from(OsString::from_vec(path));
+            let path = super::host::bytes_to_path(&path);
             return Failure::refused(SourceRefusal::Changed, path);
         }
     }

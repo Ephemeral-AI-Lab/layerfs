@@ -3,7 +3,7 @@
 //! The engine owns SQL and profiling. Filesystem validation, scheduling, kernel
 //! replies and process lifetimes belong to its callers. Windows bound each job;
 //! they do not limit total files, changes, payload or Workspace lifetime.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod contract;
 mod database;
@@ -46,6 +46,8 @@ pub use contract::kernel_directory::{
 pub use database::accounting::{Resources, StoredCounts};
 pub use database::physical::{AllocationState, AllocationWork, ClosedFile};
 pub use database::startup::{Creation, CreationWork};
+#[cfg(target_os = "windows")]
+pub use database::windows_identity::windows_handle_identity;
 pub use db::Overlay;
 pub use diagnostics::payload::PayloadWork;
 pub use error::{CloseFailure, OverlayError, OverlayResult};

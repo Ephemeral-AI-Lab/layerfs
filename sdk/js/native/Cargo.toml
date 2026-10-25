@@ -26,3 +26,7 @@ napi-derive = "=2.16.13"
 
 [build-dependencies]
 napi-build = "=2.1.6"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# The Windows discovery guard's named kernel mutex; already in the locked graph.
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_System_Threading"] }
