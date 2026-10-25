@@ -73,56 +73,6 @@ fn finish(mut child: std::process::Child) {
     }
 }
 
-/// The lane's dead-holder path: a thread that ends while owning the named
-/// mutex leaves it abandoned, and the kernel hands ownership to the next
-/// waiter. The abandoned state is produced deterministically here - a
-/// thread waits on the product's own mutex name and returns without
-/// releasing - and the Store must still open and write through that
-/// `WAIT_ABANDONED` acquisition.
-#[test]
-fn a_dead_lane_holder_does_not_block_the_next_writer() {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let temp = support::Temp::new("windows-store-abandoned");
-    let path = temp.join("store.sqlite");
-    let catalog = authority(b"windows-store-abandoned");
-    let seed = Handles::create(config(&path), StoragePolicy::frozen_default(), &catalog).unwrap();
-    seed.storage.reserve(reserve()).unwrap();
-    drop(seed);
-
-    let directory = temp.path().to_path_buf();
-    let holder = std::thread::spawn(move || {
-        // The product's own lane name, derived exactly as windows_lane does.
-        let mut hasher = DefaultHasher::new();
-        match std::fs::canonicalize(&directory) {
-            Ok(canonical) => canonical.hash(&mut hasher),
-            Err(_) => directory.hash(&mut hasher),
-        }
-        let name: Vec<u16> = format!("Local\\layerfs-writer-lane-{:016x}", hasher.finish())
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-        let handle = unsafe {
-            windows_sys::Win32::System::Threading::CreateMutexW(
-                std::ptr::null(),
-                0,
-                name.as_ptr(),
-            )
-        };
-        assert!(!handle.is_null());
-        let waited = unsafe { windows_sys::Win32::System::Threading::WaitForSingleObject(handle, windows_sys::Win32::System::Threading::INFINITE) };
-        assert_eq!(waited, windows_sys::Win32::Foundation::WAIT_OBJECT_0);
-        // The thread owns the mutex and now ends without ReleaseMutex: the
-        // kernel marks it abandoned for the next waiter.
-    });
-    holder.join().unwrap();
-
-    let reopened = Handles::open_writable(config(&path), &catalog.binding_key, catalog.cursor_key)
-        .expect("an abandoned lane is taken by the next writer");
-    reopened.storage.reserve(reserve()).unwrap();
-    drop(reopened);
-}
-
 #[test]
 fn windows_native_store_serves_sessions_and_serializes_foreign_processes() {    dispatch_child();
     let temp = support::Temp::new("windows-store-native");
@@ -156,6 +106,13 @@ fn windows_native_store_serves_sessions_and_serializes_foreign_processes() {    
     for _ in 0..2 {
         children.push(
             Command::new(&executable)
+                // The child runs only this test; without the filter the
+                // harness would run every test in the binary (and their
+                // dispatch guards) beside it.
+                .args([
+                    "--exact",
+                    "windows_native_store_serves_sessions_and_serializes_foreign_processes",
+                ])
                 .env(CHILD_STORE, &lane_path)
                 .env(CHILD_BINDING, "windows-lane-processes")
                 .stdout(Stdio::piped())

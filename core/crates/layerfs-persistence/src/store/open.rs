@@ -92,12 +92,15 @@ impl Handles {
             config.sqlite_acquisition,
         )?);
         if writable {
-            // The idempotent setup statements are write transactions, so two
-            // concurrent opens of one Store meet Busy exactly here under the
-            // no-retry rule. The coarse writer lane replaces Busy: one short
-            // hold covers the whole setup block, released before validation.
-            let writer =
-                crate::backend::sqlite::writer_admission::Writer::acquire(&config.path)?;
+            // The setup statements are write transactions that two
+            // concurrent opens of one Store can interleave under the
+            // no-retry rule, so the whole block runs inside one held
+            // publication lane: its writer lock serializes the opens
+            // cross-process, and the block's own statements enter as
+            // nested turns, which do not take the lock a second time -
+            // a raw second hold here would self-deadlock on Linux, where
+            // flock is held per open file description.
+            let lane = session.hold_lane()?;
             let setup =
                 (|| -> Result<(), crate::backend::records::BackendError> {
                     session.add_binding_hints()?;
@@ -105,22 +108,15 @@ impl Handles {
                     session.add_merge_scratch()?;
                     session.add_file_digests()
                 })();
-            writer
-                .release()
-                .map_err(|_| crate::backend::records::BackendError::Integrity)?;
+            drop(lane);
             setup?;
         }
         let handles = Self::validated(session, directory, binding, cursor_key)?;
         if writable {
-            // The sweep deletes stale merge records: a write, held behind the
-            // lane for the same reason as the setup block above.
-            let writer =
-                crate::backend::sqlite::writer_admission::Writer::acquire(&config.path)?;
-            let swept = crate::storage::merge_records::sweep(&handles.storage.session);
-            writer
-                .release()
-                .map_err(|_| crate::backend::records::BackendError::Integrity)?;
-            swept?;
+            // The sweep runs as one write transaction whose admission takes
+            // the writer lane itself; the setup block's held lane above is
+            // released by then.
+            crate::storage::merge_records::sweep(&handles.storage.session)?;
         }
         Ok(handles)
     }

@@ -182,9 +182,11 @@ impl Session {
         // Busy: hold it for this one short setup step and release before
         // the reads that follow. macOS keeps exact SQLite Busy by design.
         let writer = super::writer_admission::Writer::acquire(path)?;
-        let applied = profile::apply(&connection, create, selected, creation_acquisition, &work);
-        writer.release().map_err(|_| BackendError::Integrity)?;
-        applied?;
+        let connected = (|| -> Result<
+            (ConnectionProfile, crate::SqlitePackLayout, crate::SqliteAcquisitionSchema),
+            BackendError,
+        > {
+        profile::apply(&connection, create, selected, creation_acquisition, &work)?;
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
         } else {
@@ -257,6 +259,10 @@ impl Session {
                 .map_err(rows::error)? as usize,
         };
         profile::check(&profile)?;
+        Ok((profile, layout, acquisition))
+        })();
+        writer.release().map_err(|_| BackendError::Integrity)?;
+        let (profile, layout, acquisition) = connected?;
         super::thread_work::add(&work.borrow());
         Ok(Self {
             admission: super::admission::Admission::default(),

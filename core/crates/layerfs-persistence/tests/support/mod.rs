@@ -20,9 +20,13 @@ impl Temp {
     pub fn new(name: &str) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
-            "layerfs-history-{}-{}-{}",
+            "layerfs-history-{}-{}-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|span| span.as_nanos())
+                .unwrap_or(0),
             name
         ));
         std::fs::create_dir_all(&path).expect("temporary directory");
