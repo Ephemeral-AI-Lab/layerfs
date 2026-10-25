@@ -2,11 +2,11 @@ Cursor coding agents work on LayerFS Branches and Workspaces instead of git work
 
 Plugin id: `cursor-agents`. Package: `layerfs-cursor-agents` `0.1.0`. This repository is for Cursor only. It does not install Claude Code skills, hooks, or configuration, and it does not ship a history dashboard.
 
-The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/layerfs.json): `ad78914e36b258b360daf13aec164b5655814689` (LayerFS v1.1.0).
+The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/layerfs.json): `ad78914e36b258b360daf13aec164b5655814689` (LayerFS v1.1.0).
 
 ## What it adds
 
-- A Cursor skill at [`.cursor/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/.cursor/skills/layerfs-agent/SKILL.md). The same skill is at [`.agents/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/.agents/skills/layerfs-agent/SKILL.md) for agents that look there.
+- A Cursor skill at [`.cursor/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/.cursor/skills/layerfs-agent/SKILL.md). The same skill is at [`.agents/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/.agents/skills/layerfs-agent/SKILL.md) for agents that look there.
 - `layerfs-cursor-setup`, which checks out that LayerFS commit, links the official `layerfs` command onto `PATH`, and writes `LAYERFS_*` settings.
 - On Linux, Store calls stay in the agent process. On macOS and Windows the setup starts the home worker with `@layerfs/runtime` and sets `LAYERFS_WORKER_ENDPOINT`.
 
@@ -18,7 +18,7 @@ The skill is the procedure. Short form:
 2. `branch.fork` one Branch for the task. Do not add a git worktree.
 3. Edit with `fs.write`, `fs.edit`, `fs.apply`, and the other `fs.*` calls.
 4. Run bash as `sandbox.create` (when you need a Sandbox), then `workspace.mount`, `workspace.exec`, `workspace.commit`, and `workspace.unmount`. Unmount in `finally`. On `Conflict`, stay in that Workspace until you resolve it or discard it.
-5. On `Conflict`, `Busy`, or `NoSuchSandbox`, follow [`refusals.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/.cursor/skills/layerfs-agent/references/refusals.md) once. Do not replay the refused call.
+5. On `Conflict`, `Busy`, or `NoSuchSandbox`, follow [`refusals.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/.cursor/skills/layerfs-agent/references/refusals.md) once. Do not replay the refused call.
 
 `examples/task-branch.mjs` forks a Branch (or keeps it if the name is taken) and writes one file. It imports the public SDK from `LAYERFS_REPO`.
 
@@ -61,4 +61,4 @@ When `LAYERFS_REPO` points at the pinned checkout, the same command also imports
 
 ## License
 
-MIT. See [LICENSE](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/LICENSE).
+MIT. See [LICENSE](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/LICENSE).
