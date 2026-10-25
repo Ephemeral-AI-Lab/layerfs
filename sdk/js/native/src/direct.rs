@@ -109,14 +109,12 @@ pub(crate) fn release(args: &SdkValue) -> Outcome {
     }
     let opened = stores.remove(&store).expect("present above");
     drop(stores);
-    // The service's sessions close under the Store's writer lane: their
-    // close-time checkpoints never run beside another opener's first attach.
-    let lane = layerfs_persistence::store_lane(&store);
+    // The service's close coordinates its sessions' teardown under the
+    // Store's writer lane itself.
     let closed = match Arc::try_unwrap(opened.service) {
         Ok(service) => service.close().map_err(failed),
         Err(_) => Ok(()),
     };
-    drop(lane);
     let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
     closed.and(removed)?;
     Ok(SdkValue::map([("clients", SdkValue::Int(0))]))

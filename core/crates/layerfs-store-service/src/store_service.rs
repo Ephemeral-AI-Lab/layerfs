@@ -55,11 +55,18 @@ pub struct StoreService {
     capacity: usize,
     bound: AtomicUsize,
     retained: Mutex<Vec<Retained>>,
+    /// The Store file whose writer lane guards this service's close.
+    store_file: std::path::PathBuf,
 }
 
 impl StoreService {
     /// Serves Store calls over `opened`, constructing through `owner`.
     pub fn new(opened: OpenedStore, owner: &Owner) -> Self {
+        Self::at(opened, owner, std::path::PathBuf::new())
+    }
+    /// [`new`](Self::new) with the Store file recorded, for a close that
+    /// coordinates its sessions' teardown under the writer lane.
+    pub fn at(opened: OpenedStore, owner: &Owner, store_file: std::path::PathBuf) -> Self {
         Self {
             store: opened.store.clone(),
             opened,
@@ -68,6 +75,7 @@ impl StoreService {
             capacity: owner.configuration().namespaces,
             bound: AtomicUsize::new(0),
             retained: Mutex::new(Vec::new()),
+            store_file,
         }
     }
 
@@ -109,7 +117,7 @@ impl StoreService {
             OwnerConfig { namespaces: CALLS },
         )
         .map_err(|error| OpenRefusal::Failed(format!("overlay template: {error}")))?;
-        let mut service = Self::new(opened, &owner);
+        let mut service = Self::at(opened, &owner, store.to_path_buf());
         service.owned = Some(owner);
         Ok(service)
     }
@@ -117,10 +125,20 @@ impl StoreService {
     /// Stops the overlay owner this service started. Private Workspaces kept
     /// with an uncertain Commit stay with it until then.
     pub fn close(mut self) -> Result<(), String> {
-        match self.owned.take() {
+        // The overlays stop first: their final Commits take the writer lane
+        // themselves, so no outer hold may surround this.
+        let stopped = match self.owned.take() {
             Some(owner) => owner.stop().map_err(|error| error.to_string()),
             None => Ok(()),
-        }
+        };
+        // The sessions then close under the Store's writer lane, so their
+        // close-time checkpoints never run beside another opener's first
+        // attach. A failed lane acquisition closes bare, as a drop does.
+        let lane = (!self.store_file.as_os_str().is_empty())
+            .then(|| layerfs_persistence::store_lane(&self.store_file));
+        drop(self);
+        drop(lane);
+        stopped
     }
 
     /// One private Workspace on `branch` for one file-changing call.
