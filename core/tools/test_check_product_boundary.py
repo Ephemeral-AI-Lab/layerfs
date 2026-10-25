@@ -50,6 +50,7 @@ class ProductBoundaryTests(unittest.TestCase):
         base = Path("core/crates/layerfs-persistence/src")
         ffi = "fn seal() { unsafe { file_control(); } }"
         self.assertFalse(unsafe_violations(base / "backend/sqlite/file_control.rs", ffi))
+        self.assertFalse(unsafe_violations(base / "backend/sqlite/windows_lane.rs", ffi))
         for sibling in ["backend/sqlite/seal.rs", "store/seal.rs", "backend/sqlite/connection.rs"]:
             self.assertTrue(unsafe_violations(base / sibling, ffi))
         self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]"))
@@ -279,7 +280,7 @@ class ProductBoundaryTests(unittest.TestCase):
                 path = core / "crates" / "store" / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("")
-            self.assertEqual([str(p.relative_to(core / "crates" / "store"))
+            self.assertEqual([p.relative_to(core / "crates" / "store").as_posix()
                               for p in production_files(core)],
                              ["sql/schema.sql", "src/lib.rs", "src/sql/query.sql"])
 
@@ -290,7 +291,7 @@ class ProductBoundaryTests(unittest.TestCase):
                 path = core / "crates/layerfs-api" / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("")
-            self.assertEqual([str(p.relative_to(core / "crates/layerfs-api"))
+            self.assertEqual([p.relative_to(core / "crates/layerfs-api").as_posix()
                               for p in production_files(core)],
                              ["src/fs/read.rs", "src/lib.rs"])
 

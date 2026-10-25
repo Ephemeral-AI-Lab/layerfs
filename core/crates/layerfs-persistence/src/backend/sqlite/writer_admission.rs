@@ -13,6 +13,8 @@ use {
 pub(crate) struct Writer {
     #[cfg(target_os = "linux")]
     lock: Flock<File>,
+    #[cfg(target_os = "windows")]
+    lane: super::windows_lane::LaneMutex,
 }
 
 impl Writer {
@@ -54,7 +56,28 @@ impl Writer {
             let _ = path;
             Ok(Self {})
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(target_os = "windows")]
+        {
+            // Windows has no flock on a directory handle. One named kernel
+            // mutex per Store directory is the equivalent coarse lane: it
+            // never opens another descriptor to SQLite's main/WAL/SHM files,
+            // and a holder process that exits releases it. Multiple Store
+            // files in one directory share this coarse lane, as on Linux.
+            let directory = path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            if !std::fs::metadata(directory)
+                .map(|metadata| metadata.is_dir())
+                .unwrap_or(false)
+            {
+                return Err(BackendError::Integrity);
+            }
+            let lane = super::windows_lane::LaneMutex::acquire(directory)
+                .map_err(|()| BackendError::Integrity)?;
+            Ok(Self { lane })
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = path;
             Err(BackendError::Integrity)
@@ -72,9 +95,13 @@ impl Writer {
                 Err((lock, _)) => Err(Self { lock }),
             }
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "macos")]
         {
             Ok(())
+        }
+        #[cfg(target_os = "windows")]
+        {
+            self.lane.release().map_err(|lane| Self { lane })
         }
     }
 }

@@ -24,3 +24,9 @@ nix = { version = "=0.31.3", default-features = false, features = ["fs", "pthrea
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Windows has no system SQLite; the Store bundles the same version. The
+# writer lane and volume probe FFI use windows-sys, already in the locked graph.
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_Storage_FileSystem"] }

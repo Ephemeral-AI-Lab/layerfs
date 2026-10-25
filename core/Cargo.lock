@@ -655,6 +655,7 @@ dependencies = [
  "layerfs-telemetry",
  "nix",
  "rusqlite",
+ "windows-sys",
 ]
 
 [[package]]

@@ -5,6 +5,11 @@ pub(crate) mod connection;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 mod file_control;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_lane;
+#[cfg(target_os = "windows")]
+pub use windows_lane::windows_volume_filesystem;
 pub(crate) mod lane;
 pub(crate) mod metadata_allocation;
 pub(crate) mod metadata_locations;

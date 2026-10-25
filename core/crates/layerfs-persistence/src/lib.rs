@@ -11,6 +11,9 @@ pub use backend::sqlite::connection::{ConnectionProfile, SqlWork};
 pub use backend::sqlite::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
 pub use backend::sqlite::thread_work::thread_work;
+#[cfg(target_os = "windows")]
+#[cfg(target_os = "windows")]
+pub use backend::sqlite::windows_volume_filesystem;
 pub use config::{
     BackendSelection, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout,
     SqlitePersistenceProfile,

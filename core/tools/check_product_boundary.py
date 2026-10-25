@@ -20,8 +20,11 @@ UNSAFE = re.compile(r"\bunsafe\b")
 # comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
-    "layerfs-storage": "src/encoding/codec.rs",
-    "layerfs-persistence": "src/backend/sqlite/file_control.rs",
+    "layerfs-storage": ("src/encoding/codec.rs",),
+    "layerfs-persistence": (
+        "src/backend/sqlite/file_control.rs",
+        "src/backend/sqlite/windows_lane.rs",
+    ),
 }
 UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-store-service", "layerfs-fuse", "layerfs-daemon", "layerfs-api", "layerfs-bridge", "layerfs-sandbox")
 UNSAFE_ROOT_ATTR = {
@@ -165,7 +168,7 @@ def unsafe_violations(path, source):
     relative = Path(*path.parts[path.parts.index("src"):])
     code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
     if UNSAFE.search(code):
-        if crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]:
+        if crate in UNSAFE_FREE_CRATES or relative.as_posix() not in UNSAFE_AUDITED_MODULE[crate]:
             found.append((1, "unsafe outside the audited module boundary; see core/AGENTS.md"))
     if relative == Path("src/lib.rs") and UNSAFE_ROOT_ATTR[crate] not in source:
         found.append((1, f"crate root must declare {UNSAFE_ROOT_ATTR[crate]}"))
