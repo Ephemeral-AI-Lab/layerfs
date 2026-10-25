@@ -37,6 +37,9 @@ fn child(path: PathBuf, binding: Vec<u8>) {
     let opened = Handles::open_writable(config(&path), &binding, [67; 32])
         .expect("the child opens the Store");
     opened.storage.reserve(reserve()).expect("the child writes");
+    // A clean close: the child's Store is not crashed, so the sibling's
+    // next open does not pay WAL recovery beside the lane under test.
+    opened.shutdown();
 }
 
 /// When this binary was re-executed as a lane child, run its one job and

@@ -73,6 +73,6 @@ fn a_dead_lane_holder_does_not_block_the_next_writer() {
     let reopened = Handles::open_writable(config(&path), &catalog.binding_key, catalog.cursor_key)
         .expect("an abandoned lane is taken by the next writer");
     reopened.storage.reserve(reserve()).unwrap();
-    drop(reopened);
+    reopened.shutdown();
 }
 

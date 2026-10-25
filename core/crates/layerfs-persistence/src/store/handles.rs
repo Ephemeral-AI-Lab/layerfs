@@ -35,6 +35,14 @@ impl Handles {
     pub fn close(&self) {
         self.storage.session.admission.close();
     }
+    /// Drops this session under the writer lane, so its connection's
+    /// close-time checkpoint never runs beside another opener's first
+    /// attach. A failed lane acquisition closes bare.
+    pub fn shutdown(self) {
+        let lane = crate::store_lane(&self.storage.session.path);
+        drop(self);
+        drop(lane);
+    }
     /// Read-back settings from the actual shared connection.
     pub fn profile(&self) -> &ConnectionProfile {
         &self.storage.session.profile
