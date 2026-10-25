@@ -10,20 +10,20 @@ A [Pi](https://github.com/earendil-works/pi) extension that runs Pi on persisten
 - `layerfs_project` and `pi-layerfs --manage-projects`: create, import, select and remove projects, each in its own Docker volume.
 - `/layerfs ui`: a dashboard on `127.0.0.1` with a random token. **Work** shows per-actor command and SDK-call records and live Sandbox/Workspace snapshots; **History** shows Branches, Commits, merge parents and published Layers with playback of recorded calls; **Files** shows saved state, blame, revisions and comparisons; **Storage** shows logical, stored and metadata metrics per Commit.
 
-![History dashboard](https://raw.githubusercontent.com/anyin233/pi-layerfs/f30a513711f8cbda886a7b264da4e66ad1ff66c4/docs/assets/dashboard-history.png)
+![History dashboard](https://raw.githubusercontent.com/anyin233/pi-layerfs/d4bde4fe0238bd3b0b872cfaa54254da857ea56f/docs/assets/dashboard-history.png)
 
 ## How it works
 
-The `pi-layerfs` launcher runs Pi 1.4.0 with the extension in a bundled Docker image. It mounts the host source read-only, generates a deterministic project and Branch outside it, and gives each canonical project directory its own Store volume, so reopening the same directory reuses its Store and history; nothing is written into the host source. The extension calls the LayerFS JavaScript SDK (1.0.0, from the pinned LayerFS commit, unmodified) and the bundled `layerfs-daemon`. Each SDK call is attempted once; refusals such as Busy, Dirty or Conflict are reported for explicit resolution. Model credentials and Pi settings live in a separate private volume; use Pi's `/login` as usual.
+The `pi-layerfs` launcher runs Pi 1.4.0 with the extension in a bundled Docker image. It mounts the host source read-only, generates a deterministic project and Branch outside it, and gives each canonical project directory its own Store volume, so reopening the same directory reuses its Store and history; nothing is written into the host source. The extension calls the LayerFS 1.1.0 `@layerfs/agent` and `@layerfs/backend` packages (from the pinned LayerFS commit, unmodified) and the bundled `layerfs-daemon`. Each SDK call is attempted once; refusals such as Busy, Dirty or Conflict are reported for explicit resolution. Model credentials and Pi settings live in a separate private volume; use Pi's `/login` as usual.
 
 ## You need
 
 - Linux x86_64 with `/dev/fuse`.
 - Docker Engine reachable through its Unix socket, and plain local Docker volumes on ext4, xfs or btrfs.
-- To build from source: Git, Node 22.19 or newer and the Rust 1.85.1 toolchain. The native build runs in the `rust:1.85.1-bookworm` image.
+- To build from source: Git and Node 22.19 or newer. The native build runs in the `rust:1.85.1-bookworm` image, so no host Rust toolchain is needed.
 - Credentials for a model provider.
 
-The built archive contains the plugin, the LayerFS SDK, native binding and daemon, Pi 1.4.0 and the runtime image; installing it downloads nothing. A prebuilt v0.1.0 archive is also attached to the plugin's GitHub release.
+The built archive contains the plugin, the LayerFS packages, native binding and daemon, Pi 1.4.0 and the runtime image; installing it downloads nothing.
 
 ## Limits
 

@@ -2,7 +2,7 @@ Install LayerFS for Pi {{version}} for me.
 
 1. Clone https://github.com/Ephemeral-AI-Lab/layerfs and check out commit {{layerfs.commit}} ({{layerfs.version}}). Use exactly this commit: it is the one this version was tested with.
 2. Clone {{repository}} beside it and check out commit {{commit}}.
-3. Check the machine before building: Linux x86_64, `/dev/fuse` present, `docker info` works through the local Unix socket, Node 22.19 or newer, and the Rust 1.85.1 toolchain (`rustup toolchain install 1.85.1`). If any is missing, stop and tell me which.
+3. Check the machine before building: Linux x86_64, `/dev/fuse` present, `docker info` works through the local Unix socket, and Node 22.19 or newer (Rust runs in its builder image; no host toolchain is needed). If any is missing, stop and tell me which.
 4. Build in the plugin checkout:
    - `npm ci`
    - `bash scripts/build-native.sh ../layerfs`: it refuses a LayerFS checkout that is not at {{layerfs.commit}} or has tracked changes, then builds the native binding and `layerfs-daemon` in the `rust:1.85.1-bookworm` image.
