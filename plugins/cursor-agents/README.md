@@ -2,7 +2,7 @@ Cursor coding agents work on LayerFS Branches and Workspaces instead of git work
 
 Plugin id: `cursor-agents`. Package: `layerfs-cursor-agents` `0.1.0`. This repository is for Cursor only. It does not install Claude Code skills, hooks, or configuration, and it does not ship a history dashboard.
 
-The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/layerfs.json): `9f97a7ec95b662e9cb288704afa165feff132cfa` (LayerFS v1.1.0).
+The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/34978fa665255e33acb673e2442c6bb9800f6621/layerfs.json): `ad78914e36b258b360daf13aec164b5655814689` (LayerFS v1.1.0).
 
 ## What it adds
 
