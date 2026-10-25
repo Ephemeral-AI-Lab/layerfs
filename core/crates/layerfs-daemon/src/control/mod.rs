@@ -6,6 +6,7 @@ mod cleanup;
 mod detach;
 mod dirty;
 mod export;
+mod export_helper;
 mod failure;
 mod force;
 mod inspect;

@@ -39,6 +39,7 @@ MOUNT_PACKAGE = "layerfs-daemon"
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
+    ("layerfs-nfs", "helper_deadline"): 60.1,
     ("layerfs-api", "scale_lineage_cap"): 24.3,
     ("layerfs-api", "sdk_merge_scale"): 23.8,
     ("layerfs-daemon", "complete_installed_roots"): 9.0,

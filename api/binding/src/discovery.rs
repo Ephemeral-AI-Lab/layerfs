@@ -142,7 +142,10 @@ pub(crate) fn project_dir(args: &SdkValue) -> Result<PathBuf> {
 /// Calls take turns on one directory: in this process before its OS lock,
 /// and between processes on the lock itself. The wait is readiness, bounded,
 /// and nothing has been attempted before it ends.
-const IN_PROCESS_WAIT: Duration = Duration::from_secs(60);
+// One NFS helper may use 60s plus 5s of post-KILL observation. Leave
+// return/cleanup headroom without releasing ownership around an in-flight
+// mutation. This is one shared deadline, not a new wait for each lock.
+const IN_PROCESS_WAIT: Duration = Duration::from_secs(70);
 /// Between two looks at another process's lock.
 const LOCK_PAUSE: Duration = Duration::from_millis(2);
 static HELD: Mutex<std::collections::BTreeSet<PathBuf>> =

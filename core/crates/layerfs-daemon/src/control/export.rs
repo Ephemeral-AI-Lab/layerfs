@@ -21,6 +21,7 @@
 //!   the export and its engine mount in the entry, as FUSE custody is kept.
 //! - ForceUnmount runs the forced helper once, then the same teardown.
 use super::{
+    export_helper::{Helpers, Ran},
     kernel::{bounded, Kernel},
     registry::{bound_mut, idle},
     Failure, Service, Success,
@@ -33,22 +34,18 @@ use layerfs_bridge::control::{
 };
 use layerfs_nfs::{ExportConfig, Released, Server};
 use layerfs_overlay::{CleanupState, KernelMount};
+#[cfg(target_os = "macos")]
+use std::process::{Command, Stdio};
 use std::{
     fmt,
-    io::Read,
     net::{IpAddr, Ipv4Addr, TcpListener},
     path::PathBuf,
-    process::{Command, Stdio},
     sync::Arc,
-    time::{Duration, Instant},
 };
 
 /// Largest write and read the export negotiates (FSINFO wtmax/rtmax).
 const WINDOW: u32 = 128 * 1024;
-/// How long one helper run may take before it is killed and reported.
-pub const HELPER_WAIT: Duration = Duration::from_secs(60);
-/// Bytes of a helper's output kept for a refusal.
-const OUTPUT: usize = 2048;
+pub use super::export_helper::{Helper, HELPER_WAIT};
 
 /// Stale inodes one install refreshes through the mount point at most.
 pub const REFRESHED: usize = 4096;
@@ -69,25 +66,6 @@ fn refresh(root: &std::path::Path, paths: &[PathBuf]) {
             let mode = std::fs::Permissions::from_mode(metadata.mode() & 0o7777);
             let _ = std::fs::set_permissions(&path, mode);
         }
-    }
-}
-/// One helper command; `{port}` and `{dir}` in its words are replaced.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Helper(pub Vec<String>);
-impl Helper {
-    /// Splits a configured command line on whitespace.
-    pub fn words(line: &str) -> Option<Self> {
-        let words: Vec<String> = line.split_whitespace().map(str::to_owned).collect();
-        (!words.is_empty()).then_some(Self(words))
-    }
-    fn command(&self, port: u16, directory: &str) -> Option<Command> {
-        let mut words = self.0.iter().map(|word| {
-            word.replace("{port}", &port.to_string())
-                .replace("{dir}", directory)
-        });
-        let mut command = Command::new(words.next()?);
-        command.args(words);
-        Some(command)
     }
 }
 /// How the host's NFS client mounts, flushes and unmounts an export.
@@ -178,10 +156,14 @@ impl ExportServingConfig {
 #[derive(Debug)]
 pub struct ExportServing {
     config: ExportServingConfig,
+    helpers: Helpers,
 }
 impl ExportServing {
     pub fn start(config: ExportServingConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            helpers: Helpers::default(),
+        }
     }
     pub fn config(&self) -> &ExportServingConfig {
         &self.config
@@ -202,9 +184,9 @@ impl ExportServing {
         (points.into_iter())
             .map(|point| {
                 let text = point.display().to_string();
-                match run(&self.config.mounter.force, 0, &text) {
+                match self.helpers.run(&self.config.mounter.force, 0, &text) {
                     Ran::Done => format!("forced off {text}"),
-                    Ran::Busy(detail) | Ran::Failed(detail) => {
+                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
                         format!("left {text}: {detail}")
                     }
                 }
@@ -339,64 +321,6 @@ pub(super) fn block(kernel: &Kernel) -> Option<MountStatus> {
         },
         _ => return None,
     })
-}
-/// What one helper run answered.
-enum Ran {
-    Done,
-    /// The client reported the mount busy; nothing changed.
-    Busy(String),
-    Failed(String),
-}
-fn run(helper: &Helper, port: u16, directory: &str) -> Ran {
-    let Some(mut command) = helper.command(port, directory) else {
-        return Ran::Failed("empty helper command".into());
-    };
-    let child = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn();
-    let mut child = match child {
-        Ok(child) => child,
-        Err(error) => return Ran::Failed(format!("{:?}: {error}", helper.0.first())),
-    };
-    let deadline = Instant::now() + HELPER_WAIT;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(5)),
-            Ok(None) => {
-                drop(child.kill());
-                drop(child.wait());
-                break Err(format!("helper did not finish in {HELPER_WAIT:?}; killed"));
-            }
-            Err(error) => break Err(format!("helper wait: {error}")),
-        }
-    };
-    let mut output = String::new();
-    for pipe in [
-        child.stderr.take().map(|p| Box::new(p) as Box<dyn Read>),
-        child.stdout.take().map(|p| Box::new(p) as Box<dyn Read>),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        let mut bytes = Vec::new();
-        drop(pipe.take(OUTPUT as u64).read_to_end(&mut bytes));
-        output.push_str(&String::from_utf8_lossy(&bytes));
-    }
-    match status {
-        Ok(status) if status.success() => Ran::Done,
-        Ok(status) => {
-            let detail = format!("{status}: {}", output.trim());
-            if output.to_ascii_lowercase().contains("busy") {
-                Ran::Busy(detail)
-            } else {
-                Ran::Failed(detail)
-            }
-        }
-        Err(detail) => Ran::Failed(format!("{detail}: {}", output.trim())),
-    }
 }
 fn receipt(token: WorkspaceToken, directory: String, mount: KernelMount, port: u16) -> ReadyMount {
     ReadyMount {
@@ -577,8 +501,25 @@ impl Service {
             }
         };
         let port = server.local_addr().port();
-        match run(&config.mounter.mount, port, &text) {
+        match serving.helpers.run(&config.mounter.mount, port, &text) {
             Ran::Done => {}
+            Ran::Interrupted(detail) => {
+                // The mount helper may have reached the kernel before its
+                // deadline. Keep the export alive and do not revoke/delete
+                // through a possibly mounted directory.
+                return Err(Stop::Retained(Box::new(ExportKept {
+                    ready: None,
+                    stage: TeardownStage::Detach,
+                    detail,
+                    work: Some(work(&server)),
+                    evidence: Box::new(Exported {
+                        server: Arc::new(server),
+                        mount,
+                        ready: receipt(token, text, mount, port),
+                    }),
+                    forced: None,
+                })));
+            }
             Ran::Busy(detail) | Ran::Failed(detail) => {
                 let released = server.stop();
                 drop(std::fs::remove_dir(&directory));
@@ -637,12 +578,17 @@ impl Service {
         };
         match &serving.config.mounter.flush {
             None => nix::unistd::sync(),
-            Some(helper) => match run(helper, server.local_addr().port(), &directory) {
-                Ran::Done => {}
-                Ran::Busy(detail) | Ran::Failed(detail) => {
-                    return Err(kernel_failure(ControlCode::Failed, "commit:flush", detail))
+            Some(helper) => {
+                match serving
+                    .helpers
+                    .run(helper, server.local_addr().port(), &directory)
+                {
+                    Ran::Done => {}
+                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
+                        return Err(kernel_failure(ControlCode::Failed, "commit:flush", detail))
+                    }
                 }
-            },
+            }
         }
         server.close_files();
         Ok(())
@@ -710,10 +656,15 @@ impl Service {
             .as_ref()
             .map(|serving| serving.config.mounter.unmount.clone());
         let port = exported.server.local_addr().port();
-        let ran = match &helper {
-            Some(helper) => run(helper, port, &exported.ready.directory),
-            None => Ran::Failed("export serving not assembled".into()),
-        };
+        let ran =
+            match &helper {
+                Some(helper) => self.export.as_ref().unwrap().helpers.run(
+                    helper,
+                    port,
+                    &exported.ready.directory,
+                ),
+                None => Ran::Failed("export serving not assembled".into()),
+            };
         match ran {
             Ran::Done => {}
             Ran::Busy(detail) => {
@@ -724,7 +675,7 @@ impl Service {
                     format!("client reported the mount busy; no terminal effect: {detail}"),
                 ));
             }
-            Ran::Failed(detail) => {
+            Ran::Failed(detail) | Ran::Interrupted(detail) => {
                 return Err(self.keep_export(
                     token,
                     TeardownStage::Detach,
@@ -885,13 +836,18 @@ impl Service {
             .as_ref()
             .map(|serving| serving.config.mounter.force.clone());
         let port = exported.server.local_addr().port();
-        let ran = match &helper {
-            Some(helper) => run(helper, port, &exported.ready.directory),
-            None => Ran::Failed("export serving not assembled".into()),
-        };
+        let ran =
+            match &helper {
+                Some(helper) => self.export.as_ref().unwrap().helpers.run(
+                    helper,
+                    port,
+                    &exported.ready.directory,
+                ),
+                None => Ran::Failed("export serving not assembled".into()),
+            };
         match ran {
             Ran::Done => facts.detach = DetachDisposition::Detached,
-            Ran::Busy(detail) | Ran::Failed(detail) => {
+            Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
                 facts.detach = DetachDisposition::Failed;
                 return Err(self.keep_export(
                     token,

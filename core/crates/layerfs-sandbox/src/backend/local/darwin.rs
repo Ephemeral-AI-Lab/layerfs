@@ -5,17 +5,24 @@
 //! (`umount -f`). Each tool is one run with a fixed path and the C locale,
 //! read once; nothing is retried.
 use super::process::Stat;
-use nix::libc;
+use nix::{
+    fcntl::{fcntl, FcntlArg, OFlag},
+    libc,
+};
 use std::{
-    io,
+    io::{self, Read},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::OnceLock,
+    process::{Child, Command, Stdio},
+    sync::{Mutex, OnceLock},
+    time::{Duration, Instant},
 };
 
 const SYSCTL: &str = "/usr/sbin/sysctl";
 const MOUNT: &str = "/sbin/mount";
 const UMOUNT: &str = "/sbin/umount";
+const UNMOUNT_WAIT: Duration = Duration::from_secs(60);
+const REAP_WAIT: Duration = Duration::from_secs(5);
+const OUTPUT: usize = 2048;
 
 /// One tool's standard output, or its failure with what it said.
 fn output(program: &str, args: &[&str]) -> io::Result<(bool, String)> {
@@ -176,19 +183,95 @@ fn mount_point(line: &str) -> Option<PathBuf> {
 
 /// Forces the mount at `point` off once; a point no longer mounted is done.
 pub(super) fn force_unmount(point: &Path) -> io::Result<()> {
-    let out = Command::new(UMOUNT)
+    static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
+    {
+        let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());
+        held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_))));
+    }
+    let mut child = Command::new(UMOUNT)
         .arg("-f")
         .arg(point)
         .env_clear()
         .env("LC_ALL", "C")
         .stdin(Stdio::null())
-        .output()?;
-    if out.status.success() || !mount_points()?.iter().any(|p| p == point) {
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stderr = child.stderr.take().and_then(|pipe| {
+        // If nonblocking setup fails, drop the pipe rather than risk an
+        // unbounded read while stopping a Sandbox.
+        fcntl(&pipe, FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
+            .ok()
+            .map(|_| pipe)
+    });
+    let mut output = Vec::new();
+    let deadline = Instant::now() + UNMOUNT_WAIT;
+    let status = loop {
+        unmount_output(&mut stderr, &mut output);
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Ok(None) => {
+                break Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "umount exceeded 60s",
+                ))
+            }
+            Err(error) => break Err(error),
+        }
+    };
+    let status = match status {
+        Ok(status) => status,
+        Err(error) => {
+            let pid = child.id();
+            let kill = child.kill();
+            let deadline = Instant::now() + REAP_WAIT;
+            let reaped = loop {
+                unmount_output(&mut stderr, &mut output);
+                match child.try_wait() {
+                    Ok(Some(_)) => break true,
+                    Ok(None) if Instant::now() < deadline => {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Ok(None) | Err(_) => break false,
+                }
+            };
+            let disposition = if reaped {
+                "exit reaped"
+            } else {
+                RETAINED
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .push(child);
+                "exit not observed after 5s; child custody retained (possible kernel wait)"
+            };
+            return Err(io::Error::new(
+                error.kind(),
+                format!(
+                    "umount -f {}: {error}; pid={pid}; KILL={kill:?}; {disposition}: {}",
+                    point.display(),
+                    String::from_utf8_lossy(&output).trim()
+                ),
+            ));
+        }
+    };
+    unmount_output(&mut stderr, &mut output);
+    if status.success() || !mount_points()?.iter().any(|p| p == point) {
         return Ok(());
     }
     Err(io::Error::other(format!(
-        "umount -f {}: {}",
+        "umount -f {}: {status}: {}",
         point.display(),
-        String::from_utf8_lossy(&out.stderr).trim()
+        String::from_utf8_lossy(&output).trim()
     )))
+}
+
+fn unmount_output(stderr: &mut Option<std::process::ChildStderr>, output: &mut Vec<u8>) {
+    let Some(pipe) = stderr else { return };
+    let mut bytes = [0; OUTPUT];
+    if let Ok(count) = pipe.read(&mut bytes) {
+        output.extend_from_slice(&bytes[..count.min(OUTPUT - output.len())]);
+    }
 }
