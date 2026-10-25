@@ -13,6 +13,13 @@
   "status": "preview",
   "versions": [
     {
+      "version": "0.3.0",
+      "commit": "2bbd70880fcee75d832ebe9a093d231782b93475",
+      "date": "2026-10-26",
+      "layerfs": { "version": "v1.1.0", "commit": "ad78914e36b258b360daf13aec164b5655814689" },
+      "notes": "Adds Branch merge (reports real conflicts, ignores each Branch's root .git link), keeps state until drop cleanup succeeds, and resolves the current Branch from cwd outside Herdr."
+    },
+    {
       "version": "0.2.1",
       "commit": "dba17fb30d46acb7daba5ba61e4e0048a01e3d43",
       "date": "2026-10-25",
