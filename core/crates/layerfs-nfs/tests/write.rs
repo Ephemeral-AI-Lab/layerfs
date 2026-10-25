@@ -225,7 +225,10 @@ fn every_changing_procedure_and_its_statuses() {
     assert_eq!(c.getattr(&dir.handle), Err(STALE));
 
     // Names the export refuses or the protocol forbids.
-    assert_eq!(c.touch(&root, b"._new.txt", 0o644).map(|_| ()), Err(ACCES));
+    // An AppleDouble file is created detached (see the test below); other
+    // kinds under such a name are refused.
+    c.touch(&root, b"._new.txt", 0o644).unwrap();
+    c.remove(&root, b"._new.txt").unwrap();
     assert_eq!(c.mkdir(&root, b"._d", 0o755).map(|_| ()), Err(ACCES));
     let refused = c.rename(&root, b"s", &root, b"._s").map(|_| ());
     assert_eq!(refused, Err(ACCES));
@@ -255,7 +258,16 @@ fn every_changing_procedure_and_its_statuses() {
 
     // Every serial handed out holds one reference: removed ones gave theirs back.
     let held = server.held();
-    assert_eq!((held.silly, held.retained, held.names_refused), (0, 0, 3));
+    assert_eq!(
+        (
+            held.silly,
+            held.retained,
+            held.names_refused,
+            held.companions,
+            held.names_detached
+        ),
+        (0, 0, 2, 0, 1)
+    );
     drop(c);
     let released = server.stop();
     let (_, outstanding) = rig.stop(released);
@@ -333,6 +345,91 @@ fn silly_renames_stay_out_of_the_workspace() {
     drop(c);
     let released = server.stop();
     assert_eq!((released.silly, released.silly_renamed), (1, 3));
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn apple_double_files_stay_out_of_the_workspace() {
+    let base = temp("appledouble");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    // What macOS copyfile does for a source carrying extended attributes:
+    // the data file, then its `._` companion with the attributes.
+    let data = c.touch(&root, b"copied.rs", 0o644).unwrap();
+    c.write(&data.handle, 0, b"fn main() {}").unwrap();
+    let made = c.touch(&root, b"._copied.rs", 0o644).unwrap();
+    c.write(&made.handle, 0, b"AppleDouble header").unwrap();
+    // It reads back under its name for the export's life ...
+    let (handle, attr) = c.lookup(&root, b"._copied.rs").unwrap();
+    assert_eq!(handle, made.handle);
+    assert_eq!(attr.size, 18);
+    assert_eq!(c.read_all(&handle, 4096), b"AppleDouble header");
+    // ... opening it again truncates it, GUARDED finds it taken ...
+    let truncate = Set {
+        size: Some(0),
+        ..Set::default()
+    };
+    let again = c
+        .create(&root, b"._copied.rs", How::Unchecked(truncate))
+        .unwrap();
+    assert_eq!(
+        (again.handle.clone(), again.attr.size),
+        (made.handle.clone(), 0)
+    );
+    let guarded = c.create(&root, b"._copied.rs", How::Guarded(Set::default()));
+    assert_eq!(guarded.map(|_| ()), Err(EXIST));
+    // ... READDIR does not list it, it moves only to another AppleDouble name,
+    // and a real file cannot take such a name.
+    let (entries, _) = c.list(&root, 64 * 1024, true);
+    assert!(entries.iter().all(|e| !e.name.starts_with(b"._")));
+    c.rename(&root, b"._copied.rs", &root, b"._moved.rs")
+        .unwrap();
+    assert_eq!(c.lookup(&root, b"._copied.rs").map(|_| ()), Err(NOENT));
+    let back = c
+        .rename(&root, b"._moved.rs", &root, b"plain.rs")
+        .map(|_| ());
+    assert_eq!(back, Err(ACCES));
+    let onto = c.rename(&root, b"copied.rs", &root, b"._x").map(|_| ());
+    assert_eq!(onto, Err(ACCES));
+    assert_eq!(server.held().companions, 1);
+    // REMOVE gives it back.
+    c.remove(&root, b"._moved.rs").unwrap();
+    assert_eq!(c.getattr(&handle), Err(STALE));
+    assert_eq!(server.held().companions, 0);
+    // One still held at Commit is not captured; the data file is.
+    let kept = c.touch(&root, b"._kept", 0o644).unwrap();
+    c.write(&kept.handle, 0, b"kept").unwrap();
+    let done = rig.commit();
+    assert!(done.history.is_some(), "{:?}", done.history);
+    let view = rig.view([77; 32]);
+    let viewer = rig.serve_view(TcpListener::bind("127.0.0.1:0").unwrap(), &view, UID, GID);
+    let mut v = Client::connect(viewer.local_addr(), UID, GID);
+    let view_root = v.mnt("/");
+    let (entries, _) = v.list(&view_root, 64 * 1024, false);
+    let names: Vec<Vec<u8>> = entries.into_iter().map(|e| e.name).collect();
+    assert!(names.contains(&b"copied.rs".to_vec()));
+    assert!(!names.iter().any(|n| n.starts_with(b"._")));
+    drop(v);
+    let view_released = viewer.stop();
+    assert_eq!(view_released.retained, 0);
+    rig.close_view(view);
+    drop(c);
+    let released = server.stop();
+    assert_eq!(
+        (
+            released.silly,
+            released.companions,
+            released.names_detached,
+            released.names_refused
+        ),
+        (0, 1, 2, 1)
+    );
     let (_, outstanding) = rig.stop(released);
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();

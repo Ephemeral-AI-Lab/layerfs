@@ -36,7 +36,9 @@ pub struct ExportConfig {
     pub gid: u32,
     /// Changing procedures answer `NFS3ERR_ROFS`.
     pub read_only: bool,
-    /// Refuse to create macOS AppleDouble `._*` names (see [`crate::names`]).
+    /// Keep macOS AppleDouble `._*` names out of the Workspace: a regular
+    /// file lives in the export's memory, any other kind is refused (see
+    /// [`crate::apple_double`]).
     pub refuse_apple_double: bool,
     /// Lookup references kept before the least recently used are collected
     /// (see [`crate::kernel`]); [`crate::kernel::LOOKUPS_HELD`] by default.

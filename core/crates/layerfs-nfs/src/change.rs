@@ -212,6 +212,9 @@ impl Kernel {
         how: How,
         tickets: &mut Tickets,
     ) -> Result<ViewStat, Status> {
+        if self.refuses_apple_double() && names::apple_double(name) && name.len() <= 255 {
+            return self.companion_create(parent, name, how, tickets);
+        }
         let checked = self.checked(name, true)?;
         let key = (parent, name.to_vec());
         if let How::Exclusive(verifier) = how {
@@ -353,6 +356,9 @@ impl Kernel {
     }
     /// REMOVE of a non-directory name.
     pub fn remove(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<(), Status> {
+        if self.companion_remove(parent, name) {
+            return Ok(());
+        }
         if self.silly_entry(parent, name).is_some() {
             self.drop_silly(parent, name);
             return Ok(());
@@ -387,6 +393,9 @@ impl Kernel {
         new_name: &[u8],
         tickets: &mut Tickets,
     ) -> Result<(), Status> {
+        if let Some(renamed) = self.companion_rename(from, name, to, new_name) {
+            return renamed;
+        }
         if let Some(serial) = self.silly_entry(from, name) {
             // Moving a silly name to another silly name keeps it ours;
             // giving it a real name again would need a link of an unlinked
@@ -443,6 +452,9 @@ impl Kernel {
         name: &[u8],
         tickets: &mut Tickets,
     ) -> Result<ViewStat, Status> {
+        if crate::apple_double::companion(serial) {
+            return Err(Status::Access);
+        }
         let checked = self.checked(name, true)?;
         let stat = self
             .mutate(parent, None, Expect::Stat(Some(serial)), tickets, |_| {
@@ -463,6 +475,9 @@ impl Kernel {
         guard: Option<(u32, u32)>,
         tickets: &mut Tickets,
     ) -> Result<ViewStat, Status> {
+        if crate::apple_double::companion(serial) {
+            return self.companion_setattr(serial, sattr, guard, tickets);
+        }
         if let Some(expected) = guard {
             let current = self.getattr(serial)?;
             if crate::attributes::ctime(&current) != expected {
@@ -500,6 +515,9 @@ impl Kernel {
         data: &[u8],
         tickets: &mut Tickets,
     ) -> Result<(u32, ViewStat), Status> {
+        if crate::apple_double::companion(serial) {
+            return self.companion_write(serial, offset, data);
+        }
         let open = self.open_file(serial, true)?;
         if data.is_empty() {
             return Ok((0, self.getattr(serial)?));

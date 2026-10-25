@@ -11,11 +11,12 @@
 //! configured read-only answers every changing procedure `NFS3ERR_ROFS`.
 //! A changing procedure's publication tickets are released only after its
 //! reply was sent (see [`change`]); names a client invents for itself are
-//! kept out of the Workspace (see [`names`]).
+//! kept out of the Workspace (see [`names`] and [`apple_double`]).
 //! There is no third-party dependency: XDR, RPC record marking and both
 //! programs are implemented here over `std::net`.
 #![forbid(unsafe_code)]
 
+pub mod apple_double;
 pub mod attributes;
 mod block;
 pub mod change;

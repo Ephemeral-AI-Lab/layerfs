@@ -10,10 +10,13 @@
 //!   export's table (LOOKUP, GETATTR, READ, WRITE, SETATTR and REMOVE of it
 //!   work; READDIR does not list it). The final REMOVE gives the inode back.
 //! - **AppleDouble.** On NFSv3 the macOS client stores extended attributes
-//!   and resource forks in `._<name>` companion files. Creating one is
-//!   refused with `NFS3ERR_ACCES` (when the export is configured to), so no
-//!   such file enters the Workspace; the client reports the extended
-//!   attribute as not settable.
+//!   and resource forks in `._<name>` companion files. When the export is
+//!   configured to keep them out, such a regular file is created in the
+//!   export's memory alone (see [`crate::apple_double`]): the client's
+//!   attribute write (`copyfile`, `cp`, `std::fs::copy`, `ditto`, `tar`)
+//!   succeeds and reads back for the export's life, and nothing reaches the
+//!   Workspace. Any other kind under such a name (directory, symlink, link,
+//!   rename target) is refused with `NFS3ERR_ACCES`.
 //!
 //! The patterns are exact so that a user's own `.nfsrc` or `._config` is an
 //! ordinary name (the AppleDouble refusal is the one deliberate exception

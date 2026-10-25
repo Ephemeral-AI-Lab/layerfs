@@ -140,8 +140,12 @@ pub struct Kernel {
     /// ticket): kept, never released or undone on a guess, as the FUSE
     /// connection retains them.
     retained: Mutex<Vec<MutationFailure>>,
-    /// Refuse to create macOS AppleDouble (`._*`) names.
+    /// Keep macOS AppleDouble (`._*`) names out of the Workspace: a regular
+    /// file lives in the export alone (see [`crate::apple_double`]), any
+    /// other kind is refused.
     refuse_apple_double: bool,
+    /// The AppleDouble companions held in memory.
+    pub(crate) companions: Mutex<crate::apple_double::Companions>,
     /// Lookup references kept before the least recently used are collected.
     lookups_held: usize,
     /// References collected, handles resolved again, and resolutions that
@@ -152,6 +156,8 @@ pub struct Kernel {
     /// Silly renames served as unlinks, and creations refused by name.
     pub(crate) silly_renamed: AtomicU64,
     pub(crate) names_refused: AtomicU64,
+    /// AppleDouble companions created in memory.
+    pub(crate) names_detached: AtomicU64,
 }
 impl Kernel {
     pub fn new(services: Arc<dyn MountServices>, mount: KernelMount, uid: u32, gid: u32) -> Self {
@@ -171,12 +177,14 @@ impl Kernel {
             requests: AtomicU64::new(1),
             retained: Mutex::default(),
             refuse_apple_double: false,
+            companions: Mutex::default(),
             lookups_held: LOOKUPS_HELD,
             collected: AtomicU64::new(0),
             resolved: AtomicU64::new(0),
             unresolved: AtomicU64::new(0),
             silly_renamed: AtomicU64::new(0),
             names_refused: AtomicU64::new(0),
+            names_detached: AtomicU64::new(0),
         }
     }
     /// Whether creating `._*` names is refused (see [`crate::names`]).
@@ -231,6 +239,10 @@ impl Kernel {
     pub(crate) fn held_reference(&self, serial: u64) -> Result<(), Status> {
         if serial == self.root() {
             return Ok(());
+        }
+        if crate::apple_double::companion(serial) {
+            // The export's own companion holds no engine reference.
+            return self.companion_stat(serial).map(|_| ());
         }
         {
             let mut table = self.table();
@@ -316,6 +328,9 @@ impl Kernel {
     /// is observed through its descriptor; any other inode no name reaches
     /// any more is stale.
     pub fn getattr(&self, serial: u64) -> Result<ViewStat, Status> {
+        if crate::apple_double::companion(serial) {
+            return self.companion_stat(serial);
+        }
         let handle = {
             let table = self.table();
             if table.pinned(serial) {
@@ -355,6 +370,9 @@ impl Kernel {
             }
             _ if name.len() > 255 => return Err(Status::NameTooLong),
             _ => {}
+        }
+        if let Some(stat) = self.companion_named(parent, name) {
+            return Ok(stat);
         }
         let silly = self.table().silly.get(&(parent, name.to_vec())).copied();
         if let Some(serial) = silly {
@@ -468,6 +486,9 @@ impl Kernel {
     }
     /// READLINK: the raw target bytes.
     pub fn readlink(&self, serial: u64) -> Result<Vec<u8>, Status> {
+        if crate::apple_double::companion(serial) {
+            return Err(Status::Inval);
+        }
         let (services, request) = self.request()?;
         let data = wait(KernelData::read(
             services,
@@ -559,6 +580,9 @@ impl Kernel {
     /// the size last seen for the file, or comes back short.
     pub fn read(&self, serial: u64, offset: u64, count: u32) -> Result<(Vec<u8>, bool), Status> {
         let length = count.min(READ_WINDOW as u32);
+        if crate::apple_double::companion(serial) {
+            return self.companion_read(serial, offset, length);
+        }
         let open = self.open_file(serial, false)?;
         if offset >= open.size {
             return Ok((Vec::new(), true));
@@ -581,6 +605,9 @@ impl Kernel {
     }
     /// A fresh implicit directory descriptor for an enumeration from cookie 0.
     pub fn open_directory(&self, serial: u64) -> Result<u64, Status> {
+        if crate::apple_double::companion(serial) {
+            return Err(Status::NotDir);
+        }
         let (_, _, directory) =
             self.observe(serial, None, KernelReadOperation::Opendir { serial })?;
         let handle = directory.ok_or(Status::ServerFault)?;
@@ -632,7 +659,9 @@ impl Kernel {
     /// Retained mutation failures keep their custody and are only counted.
     pub fn release(&self) -> Released {
         let table = std::mem::take(&mut *self.table());
+        let companions = self.companions_release();
         let released = Released {
+            companions,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -640,6 +669,7 @@ impl Kernel {
             retained: self.retained_count(),
             silly_renamed: self.silly_renamed.load(Ordering::Relaxed),
             names_refused: self.names_refused.load(Ordering::Relaxed),
+            names_detached: self.names_detached.load(Ordering::Relaxed),
             collected: self.collected.load(Ordering::Relaxed),
             resolved: self.resolved.load(Ordering::Relaxed),
             unresolved: self.unresolved.load(Ordering::Relaxed),
@@ -665,6 +695,7 @@ impl Kernel {
     pub fn held(&self) -> Released {
         let table = self.table();
         Released {
+            companions: self.companions_held(),
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -672,6 +703,7 @@ impl Kernel {
             retained: self.retained_count(),
             silly_renamed: self.silly_renamed.load(Ordering::Relaxed),
             names_refused: self.names_refused.load(Ordering::Relaxed),
+            names_detached: self.names_detached.load(Ordering::Relaxed),
             collected: self.collected.load(Ordering::Relaxed),
             resolved: self.resolved.load(Ordering::Relaxed),
             unresolved: self.unresolved.load(Ordering::Relaxed),
@@ -766,6 +798,10 @@ pub struct Released {
     pub silly_renamed: u64,
     /// Creations refused for their AppleDouble name, over the export's life.
     pub names_refused: u64,
+    /// AppleDouble companions held in memory (see [`crate::apple_double`]).
+    pub companions: usize,
+    /// AppleDouble companions created, over the export's life.
+    pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.
     pub collected: u64,
     /// Handles of collected serials resolved again by their name.
