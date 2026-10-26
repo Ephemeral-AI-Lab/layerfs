@@ -79,7 +79,7 @@ platform artifact. Keep Linux addons separate from the host addon.
 
 At runtime, the Docker Engine server selected by `LAYERFS_DOCKER` must accept
 Engine API v1.54 requests. The SDK always uses explicit `/v1.54/...` paths and
-does not negotiate from the server's maximum API version; see the [agent settings](how-to-use/agent.md#settings).
+does not negotiate from the server's maximum API version; see the [agent settings](docs/agent.md#settings).
 
 New Store schema versions are 16–18 (pack layouts) and 22–24 (with acquisition),
 with history identity format 3. Old Disposable Stores are rejected without
