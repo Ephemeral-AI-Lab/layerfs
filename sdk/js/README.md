@@ -41,9 +41,11 @@ Store calls (`fs`, `branch`, `project.list_branches`) run in this process: the
 first one opens the installed Store file at `storePath` (else
 `LAYERFS_STORE_PATH`) and `close()` releases it; no Sandbox is involved. That
 file is `global/store.sqlite` in the project's volume, so the process runs where
-that volume is mounted (`/layerfs-store` in a Sandbox). This is Linux only, with
-the Store on a local filesystem the daemons share (ext4, xfs, btrfs); anywhere
-else Store calls fail `Unsupported`, and without a `storePath` they fail
+that volume is mounted (`/layerfs-store` in a Sandbox). On Linux the Store sits
+on a local filesystem the daemons share (ext4, xfs, btrfs); on Windows the
+native Store route opens a local NTFS volume directly, no daemon involved
+(Workspace, exec and daemon calls refuse `Unsupported` there). Anywhere else
+Store calls fail `Unsupported`, and without a `storePath` they fail
 `InvalidInput`. Mount does not scan or materialize the complete tree.
 A project is its home entry, `LAYERFS_HOME/<name>/`; the binding keeps no other
 record of which names it initialized. Init refuses a name whose entry exists
@@ -72,7 +74,7 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |
 | `LAYERFS_NATIVE` | Optional addon path; defaults to `native/layerfs.node`. |
-| `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process; the client option `storePath` wins. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. Linux only, on a local filesystem the daemons share; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
+| `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open in this process; the client option `storePath` wins. It is `global/store.sqlite` in the project's volume, `/layerfs-store/global/store.sqlite` where that volume is mounted at `/layerfs-store`. On Linux, a local filesystem the daemons share (ext4, xfs, btrfs); on Windows, a local NTFS volume; elsewhere Store calls fail `Unsupported`. Unset, they fail `InvalidInput`. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional; the client option `daemonHost` wins. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [Call trace](#call-trace)); unset means no trace. |
@@ -382,7 +384,10 @@ names set.
 
 Run `npm --prefix sdk/js run build:native` on the macOS/Linux host that loads the
 addon. It uses Cargo +1.85.1, `--offline --locked --release`, and the repository
-ARM64 inputs. `-- --debug` selects dev. The artifact is atomically renamed into
+ARM64 inputs. `-- --debug` selects dev. On Windows the script refuses to run;
+build the addon directly with `cargo build --manifest-path core/Cargo.toml -p
+layerfs-node` (locked, `CARGO_TARGET_DIR` inside this worktree) and rename
+`target/<profile>/layerfs_node.dll` to `native/layerfs.node`. The artifact is atomically renamed into
 place, avoiding stale macOS executable-page signature state. `CARGO_TARGET_DIR`
 must stay inside this worktree; `LAYERFS_NATIVE_OUTPUT` can select a separate
 platform artifact. Keep Linux addons separate from the host addon.
