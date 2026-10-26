@@ -1,5 +1,3 @@
-> **Status:** Current general guide.
-
 ## What it adds
 
 Mainline lets coding agents read and record the engineering judgment behind code:

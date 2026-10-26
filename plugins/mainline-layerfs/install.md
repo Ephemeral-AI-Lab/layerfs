@@ -1,5 +1,3 @@
-> **Status:** Current general guide.
-
 Install Mainline for LayerFS {{version}} for me.
 
 1. Check for Node 20+, npm 10+, Git and Go 1.22+. Choose two fresh sibling folders:
