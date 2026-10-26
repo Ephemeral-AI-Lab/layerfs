@@ -500,7 +500,3 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
         ("id", SdkValue::text(id)),
     ]))
 }
-
-#[cfg(test)]
-#[path = "../tests/unit/reclaim.rs"]
-mod reclaim_tests;

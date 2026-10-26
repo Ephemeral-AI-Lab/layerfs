@@ -47,6 +47,28 @@ class SelectionAgainstTheTree(unittest.TestCase):
 
 
 class ExecutablesFromCargoJson(unittest.TestCase):
+    def test_binding_tests_stay_out_of_the_ci_lanes(self):
+        meta = {
+            "packages": [
+                {
+                    "name": "layerfs-node",
+                    "targets": [
+                        {
+                            "name": "native_discovery",
+                            "kind": ["test"],
+                            "src_path": "/w/api/binding/tests/native_discovery.rs",
+                        },
+                        {
+                            "name": "native_admission",
+                            "kind": ["test"],
+                            "src_path": "/w/api/binding/tests/native_admission.rs",
+                        },
+                    ],
+                }
+            ]
+        }
+        self.assertEqual(list(ci_tests.test_targets(meta)), [])
+
     def test_keeps_only_mount_test_binaries(self):
         meta = {"packages": [{"name": "layerfs-daemon", "manifest_path": "/w/core/crates/layerfs-daemon/Cargo.toml"}]}
 

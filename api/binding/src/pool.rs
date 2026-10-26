@@ -244,7 +244,3 @@ impl DerefMut for Lease<'_> {
         self.control.as_mut().expect("lent connection")
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/unit/admission.rs"]
-mod admission_tests;

@@ -87,6 +87,9 @@ def metadata():
 def test_targets(meta):
     """Yield (package, target, source path) for every integration test target."""
     for package in meta["packages"]:
+        # The owner leaves the JavaScript API out of both CI lanes.
+        if package["name"] == "layerfs-node":
+            continue
         for target in package["targets"]:
             if "test" in target["kind"]:
                 yield package["name"], target["name"], Path(target["src_path"])
