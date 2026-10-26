@@ -140,7 +140,8 @@ impl Sandbox {
         }
         Ok(SocketAddr::from((Ipv4Addr::LOCALHOST, self.port)))
     }
-    /// Stops the daemon once: TERM, up to `seconds` for it to end, then
+    /// Detaches its mounts while the daemon can still answer, then stops
+    /// the daemon once: TERM, up to `seconds` for it to end, then
     /// KILL (a daemon this process started has ended once reaped); then
     /// KILL to every process group of its commands and its daemon, as a
     /// container's end kills what ran in it. A daemon already gone is the
@@ -150,6 +151,12 @@ impl Sandbox {
             return Err(self.invalid("original local Stop admission"));
         }
         self.stop_attempted = true;
+        // A live NFS server can finish client writeback during detach. A
+        // failed detach does not prevent crash teardown; Delete retains its
+        // existing checked detach before removing anything through a mount.
+        if let Err(error) = mounts::detach(&self.directory) {
+            eprintln!("local Stop detach {}: {error}", self.directory.display());
+        }
         if let Some(process) = self.process {
             self.end(
                 process,
