@@ -2,14 +2,17 @@
 """Count first-party production source lines for the per-commit LOC rule.
 
 Production code is nonblank, non-comment first-party product implementation:
-the replacement product under core/crates/*/src and the reference product under
-crates/*/src, plus the runtime SQL that ships with either product under
+the product under core/crates/*/src, engine/crates/*/src and api/layerfs-api/src,
+and the reference product under crates/*/src, plus shipped runtime SQL under
 <crate>/sql/. Tests, examples, benches, fixtures, benchmark harnesses,
 development tools, docs, manifests and generated artifacts are excluded. Legacy
 inline #[cfg(test)] items are removed before counting, because the reference tree
 keeps tests inside src/.
 
-The JavaScript API is its own scope, `api` (#428): the Node binding's Rust
+Rust crates are assigned by name to core, engine or api in both the old and
+new layouts. Unknown historical crates remain counted in core.
+
+The JavaScript API shares the `api` scope (#428): the Node binding's Rust
 under api/binding/src (layerfs-node) and the src/ JavaScript of each package
 under api/ (api/agent/sdk is @layerfs/agent, api/agent/cli is @layerfs/cli,
 api/backend and api/runtime), one crate per package, named by its
@@ -30,7 +33,7 @@ dsh-layerfs repository on 2026-10-23 (#428); the scope stays so trees before
 the move still count it, and reads 0 after it. TypeScript comments are blanked
 by the same JavaScript scanner.
 
-Runtime SQL is counted for both scopes: a candidate package that ships schema or
+Runtime SQL is counted for every product scope: a candidate package that ships schema or
 query text under <crate>/sql/ contributes it exactly like the reference schema.
 Per-file reporting uses the same classification as the totals, and prints the
 physical line count separately so the two measures are never confused.
@@ -348,12 +351,39 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "reference", "api", "dsh")
+SCOPES = ("core", "engine", "reference", "api", "dsh")
+ENGINE_CRATES = {
+    "layerfs-bridge",
+    "layerfs-daemon",
+    "layerfs-fuse",
+    "layerfs-overlay",
+    "layerfs-persistence",
+    "layerfs-project",
+    "layerfs-sandbox",
+    "layerfs-store-service",
+    "layerfs-workspace",
+}
+
+
+def crate_layer(name: str) -> str:
+    if name == "layerfs-api":
+        return "api"
+    if name in ENGINE_CRATES:
+        return "engine"
+    # Historical and synthetic crates remain counted rather than disappearing.
+    return "core"
+
+
+def replacement_packages(root: Path) -> list:
+    return sorted(
+        [p for base in (root / "core/crates", root / "engine/crates") for p in base.glob("*") if p.is_dir()]
+        + ([root / "api/layerfs-api"] if (root / "api/layerfs-api").is_dir() else [])
+    )
 
 
 def scope_base(root: Path, scope: str) -> Path:
-    if scope == "core":
-        return root / "core" / "crates"
+    if scope in {"core", "engine"}:
+        return root
     if scope == "api":
         return root
     if scope == "dsh":
@@ -401,6 +431,8 @@ def api_files(root: Path) -> list:
 
 def api_crate(root: Path, path: Path) -> str:
     parts = path.relative_to(root).parts
+    if "layerfs-api" in parts:
+        return "layerfs-api"
     if parts[:2] == ("api", "binding") or parts[:3] == ("sdk", "js", "native"):
         return "layerfs-node"
     if parts[0] == "cli":
@@ -434,17 +466,11 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
     if scope == "dsh":
         return dsh_crate(base, path)
     parts = path.relative_to(root).parts
-    return parts[2] if scope == "core" else parts[1]
+    return parts[2] if scope in {"core", "engine"} else parts[1]
 
 
-def scope_files(root: Path, scope: str) -> list:
-    base = scope_base(root, scope)
-    if not base.is_dir():
-        return []
-    if scope == "api":
-        return api_files(root)
-    if scope == "dsh":
-        return dsh_files(base)
+def rust_files(base: Path) -> list:
+    """Product Rust/runtime SQL under a crate collection, including old API nesting."""
     files = []
     for path in sorted(base.rglob("*")):
         if not path.is_file():
@@ -465,6 +491,24 @@ def scope_files(root: Path, scope: str) -> list:
             files.append(path)
     excluded = test_only_files(files)
     return [path for path in files if path not in excluded]
+
+
+def scope_files(root: Path, scope: str) -> list:
+    if scope in {"core", "engine", "api"}:
+        files = []
+        packages = replacement_packages(root)
+        for base in sorted({package.parent for package in packages}):
+            names = {
+                package.name for package in packages if package.parent == base and crate_layer(package.name) == scope
+            }
+            files.extend(path for path in rust_files(base) if path.relative_to(base).parts[0] in names)
+        if scope == "api":
+            files.extend(api_files(root))
+        return sorted(set(files))
+    base = scope_base(root, scope)
+    if not base.is_dir():
+        return []
+    return dsh_files(base) if scope == "dsh" else rust_files(base)
 
 
 def physical_lines(path: Path) -> int:
@@ -523,6 +567,9 @@ def main() -> int:
     args = parser.parse_args()
     if args.files:
         report = per_file(Path(args.root).resolve())
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         print(f"{'path':<78} {'scope':<9} {'prod':>7} {'physical':>9}")
         for entry in report["files"]:
             print(f"{entry['path']:<78} {entry['scope']:<9} {entry['production_loc']:>7} {entry['physical_lines']:>9}")

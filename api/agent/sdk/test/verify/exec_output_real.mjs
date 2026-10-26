@@ -145,7 +145,7 @@ function outer([daemon, addon, image, phase = "check"]) {
   assert.ok(daemon && addon && image, "usage: outer <daemon> <addon> <image digest> [check|time]");
   const stamp = `f056-${Date.now().toString(36)}`;
   const volume = `layerfs-issue352-${stamp}`;
-  const home = join(REPO, "core/target/f056", `${stamp}-home`);
+  const home = join(REPO, "target/f056", `${stamp}-home`);
   mkdirSync(home, { recursive: true });
   chmodSync(home, 0o700); // LAYERFS_HOME must be private
   let r;

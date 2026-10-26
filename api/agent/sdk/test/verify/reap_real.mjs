@@ -50,7 +50,7 @@ function outer([daemon, addon, image]) {
   assert.ok(daemon && addon && image, "usage: outer <daemon> <addon> <image digest>");
   const stamp = `reap-${Date.now().toString(36)}`;
   const volume = `layerfs-issue352-${stamp}`;
-  const home = join(REPO, "core/target/f054", `${stamp}-home`);
+  const home = join(REPO, "target/f054", `${stamp}-home`);
   mkdirSync(home, { recursive: true });
   chmodSync(home, 0o700); // LAYERFS_HOME must be private
   let r;

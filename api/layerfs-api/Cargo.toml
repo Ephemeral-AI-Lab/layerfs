@@ -1,0 +1,29 @@
+[package]
+name = "layerfs-api"
+description = "The SDK's public surface behind the JavaScript SDK, one function per method: project Init and Branches, fs and branch Store methods over layerfs-store-service, and Sandbox control"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../../engine/crates/layerfs-bridge" }
+layerfs-content = { path = "../../core/crates/layerfs-content" }
+layerfs-history = { path = "../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../../engine/crates/layerfs-persistence" }
+layerfs-storage = { path = "../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../core/crates/layerfs-telemetry" }
+layerfs-project = { path = "../../engine/crates/layerfs-project" }
+layerfs-sandbox = { path = "../../engine/crates/layerfs-sandbox" }
+layerfs-store-service = { path = "../../engine/crates/layerfs-store-service" }
+
+[dev-dependencies]
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+layerfs-daemon = { path = "../../engine/crates/layerfs-daemon" }
+layerfs-fuse = { path = "../../engine/crates/layerfs-fuse" }
+# #364: the write-cost harness times BLAKE3 over the bytes it writes.
+blake3 = { version = "=1.8.5", default-features = false }
+# The Store method tests bind private Workspaces and count the Store's rows.
+layerfs-overlay = { path = "../../engine/crates/layerfs-overlay" }
+layerfs-workspace = { path = "../../engine/crates/layerfs-workspace" }
+rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }

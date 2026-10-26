@@ -22,15 +22,31 @@ class CounterTests(unittest.TestCase):
     def tearDown(self):
         self._temporary.cleanup()
 
+    def test_layer_classification_survives_relocation(self):
+        import shutil
+
+        for name in ("layerfs-content", "layerfs-project", "layerfs-api"):
+            write(self.root, f"core/crates/{name}/src/lib.rs", "pub fn value() {}\n")
+            write(self.root, f"core/crates/{name}/sql/schema.sql", "CREATE TABLE value(id INTEGER);\n")
+        before = production_loc.scan(self.root)
+        (self.root / "engine/crates").mkdir(parents=True)
+        (self.root / "api").mkdir()
+        shutil.move(self.root / "core/crates/layerfs-project", self.root / "engine/crates/layerfs-project")
+        shutil.move(self.root / "core/crates/layerfs-api", self.root / "api/layerfs-api")
+        after = production_loc.scan(self.root)
+        self.assertEqual(before, after)
+        for layer, name in (("core", "layerfs-content"), ("engine", "layerfs-project"), ("api", "layerfs-api")):
+            self.assertEqual(after["scopes"][layer]["crates"], {name: 2})
+
     def test_nested_api_members_count_only_product_source(self):
         for name in ("core/src/lib.rs", "sdk/src/client.rs", "sdk/tests/route.rs", "mcp/src/lib.rs", "cli/src/main.rs"):
             write(self.root, f"core/crates/layerfs-api/{name}", "pub fn value() {}\n")
-        files = production_loc.scope_files(self.root, "core")
+        files = production_loc.scope_files(self.root, "api")
         self.assertEqual(
             [str(path.relative_to(self.root / "core/crates/layerfs-api")) for path in files],
             ["core/src/lib.rs", "sdk/src/client.rs"],
         )
-        self.assertEqual(production_loc.scan(self.root)["scopes"]["core"]["lines"], 2)
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["api"]["lines"], 2)
 
     def test_api_counts_the_binding_and_each_package_by_its_name(self):
         write(self.root, "api/package.json", '{"name": "layerfs-js"}\n')

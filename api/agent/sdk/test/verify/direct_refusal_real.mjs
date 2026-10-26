@@ -4,7 +4,7 @@
 // (Docker Desktop's shared filesystem) and on tmpfs are each refused
 // `Unsupported` before any write: the file's bytes are unchanged and no
 // overlay directory is left. macOS is covered by
-// core/crates/layerfs-store-service/tests/kernel_guard.rs.
+// engine/crates/layerfs-store-service/tests/kernel_guard.rs.
 //
 //   node api/agent/sdk/test/verify/direct_refusal_real.mjs outer <daemon> <addon> <image digest>
 import assert from "node:assert/strict";
@@ -53,7 +53,7 @@ function outer([daemon, addon, image]) {
   assert.ok(daemon && addon && image, "usage: outer <daemon> <addon> <image digest>");
   const stamp = `f020-refusal-${Date.now().toString(36)}`;
   const volume = `layerfs-issue352-${stamp}`;
-  const bound = join(REPO, "core/target/f020", stamp);
+  const bound = join(REPO, "target/f020", stamp);
   mkdirSync(bound, { recursive: true });
   execFileSync("docker", ["volume", "create", volume], { stdio: "ignore" });
   let run;

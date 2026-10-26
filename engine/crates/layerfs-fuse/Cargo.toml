@@ -1,0 +1,17 @@
+[package]
+name = "layerfs-fuse"
+description = "Native Workspace connection and bounded request service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-overlay = { path = "../layerfs-overlay" }
+layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fuser = { version = "=0.18.0", default-features = false }
+libc = "=0.2.189"
+nix = { version = "=0.31.3", features = ["fs", "mount", "feature"] }

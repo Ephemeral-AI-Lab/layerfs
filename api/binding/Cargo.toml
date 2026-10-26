@@ -2,7 +2,7 @@
 name = "layerfs-node"
 description = "Node binding for the LayerFS JavaScript SDK: Store calls in-process (layerfs-store-service), Sandbox calls over layerfs-api"
 publish = false
-workspace = "../../core"
+workspace = "../.."
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
@@ -13,14 +13,14 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-layerfs-project = { path = "../../core/crates/layerfs-project" }
-layerfs-api = { path = "../../core/crates/layerfs-api" }
-layerfs-bridge = { path = "../../core/crates/layerfs-bridge" }
+layerfs-project = { path = "../../engine/crates/layerfs-project" }
+layerfs-api = { path = "../layerfs-api" }
+layerfs-bridge = { path = "../../engine/crates/layerfs-bridge" }
 layerfs-history = { path = "../../core/crates/layerfs-history" }
-layerfs-persistence = { path = "../../core/crates/layerfs-persistence" }
-layerfs-sandbox = { path = "../../core/crates/layerfs-sandbox" }
+layerfs-persistence = { path = "../../engine/crates/layerfs-persistence" }
+layerfs-sandbox = { path = "../../engine/crates/layerfs-sandbox" }
 layerfs-storage = { path = "../../core/crates/layerfs-storage" }
-layerfs-store-service = { path = "../../core/crates/layerfs-store-service" }
+layerfs-store-service = { path = "../../engine/crates/layerfs-store-service" }
 layerfs-telemetry = { path = "../../core/crates/layerfs-telemetry" }
 napi = "=2.16.17"
 napi-derive = "=2.16.13"
