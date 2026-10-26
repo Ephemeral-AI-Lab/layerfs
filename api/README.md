@@ -8,7 +8,7 @@
 
 This is the wiki for `api/`, LayerFS's JavaScript packages: what each one is
 for, which one you need, and how they are built and tested. How to use each
-one is in [`how-to-use/`](how-to-use/):
+one is in [`how-to-use/`](how-to-use):
 
 | Guide | Package | What it does | Who uses it |
 | --- | --- | --- | --- |

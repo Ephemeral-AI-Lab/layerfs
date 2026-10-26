@@ -8,10 +8,10 @@ add a test-only product API. Build `layerfs-node` first, then compile the test
 targets with `--no-run` before running them under an explicit wall timeout:
 
 ```sh
-cargo +1.85.1 build --manifest-path core/Cargo.toml --locked -p layerfs-node
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-node --tests --no-run
-timeout 30 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-node --test native_discovery
-timeout 90 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-node --test native_admission
+cargo +1.85.1 build --manifest-path Cargo.toml --locked -p layerfs-node
+cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --tests --no-run
+timeout 30 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_discovery
+timeout 90 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_admission
 ```
 
 Use the worktree's registered Cargo resources for these commands. Node 20 or

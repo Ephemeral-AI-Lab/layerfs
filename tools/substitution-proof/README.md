@@ -17,7 +17,7 @@ Four arms, one frozen consumer, four dependency selections:
 | `combined` | candidate | candidate |
 
 ```sh
-python3 core/tools/substitution-proof/run.py --baseline 66bce8378 --candidate HEAD
+python3 tools/substitution-proof/run.py --baseline 66bce8378 --candidate HEAD
 ```
 
 The run materializes one revision tree per arm under `--root` (default `/tmp/subst`),

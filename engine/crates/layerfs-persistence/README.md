@@ -51,7 +51,7 @@ boundary. Namespace entry-count collections are measured but are not yet a
 whole-importer memory-bound proof.
 
 The current plan and evidence live in
-[issue 302](../../docs/issues/302/SQLITE-DESIGN-AND-PLAN.md). Performance qualification
+[issue 302](../../../core/docs/issues/302/SQLITE-DESIGN-AND-PLAN.md). Performance qualification
 requires all seven revised Step 10 selections and the prospectively frozen 10%
 time margin; unit tests and compilation alone do not complete it.
 

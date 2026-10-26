@@ -290,15 +290,15 @@ through the Engine where the binding runs. See the
 ## Project Store composition (#463)
 
 Store Init, sealing and bounded authenticated installation live in
-[`layerfs-project::store`](../../crates/layerfs-project/src/store/mod.rs).
+[`layerfs-project::store`](../../../engine/crates/layerfs-project/src/store/mod.rs).
 The existing namespace constructor remains `layerfs_project::init_observed`;
-[`store/init.rs`](../../crates/layerfs-project/src/store/init.rs) composes it
+[`store/init.rs`](../../../engine/crates/layerfs-project/src/store/init.rs) composes it
 with Persistence creation, the first Branch, Init statistics and sole-owner
 seal. It requires Disposable explicitly and preserves original failure custody.
 Project depends on Bridge for the existing provisioning records and channel
 install protocol; it defines no second format or protocol.
 
-[`layerfs-api::project`](../../crates/layerfs-api/src/project/mod.rs) and its
+[`layerfs-api::project`](../../../api/layerfs-api/src/project/mod.rs) and its
 root retain the existing public names as re-exports. Its Control owner calls
 Project's `install_file` without changing correlation or quarantine. The
 [Node binding](../../../api/binding/src/project.rs) calls Project's Init once
