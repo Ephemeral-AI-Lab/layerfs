@@ -1,7 +1,9 @@
 //! Authentic daemon observations preserve ordinary effects and explicit identities.
 #![cfg(target_os = "linux")]
+#[path = "support/daemon_binary.rs"]
+mod daemon_binary;
 #[allow(dead_code)]
-#[path = "support/host_install.rs"]
+#[path = "../../layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 use layerfs_api::internal::Control;
 #[cfg(target_os = "linux")]
@@ -97,7 +99,7 @@ fn start_with(
 ) -> (Process, SocketAddr, Control, StoreManifest) {
     let config = configure(f, &deployment);
     let mut process = Process(
-        Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"))
+        Command::new(daemon_binary::path())
             .arg("--config")
             .arg(&config)
             .stdin(Stdio::null())
@@ -829,7 +831,7 @@ fn startup_refuses_a_serial_low_water_at_or_above_the_refill_window() {
         );
         let log = f.directory.join("refused.log");
         let mut process = Process(
-            Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"))
+            Command::new(daemon_binary::path())
                 .arg("--config")
                 .arg(&config)
                 .stdin(Stdio::null())

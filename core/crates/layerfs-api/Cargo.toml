@@ -18,6 +18,9 @@ layerfs-sandbox = { path = "../layerfs-sandbox" }
 layerfs-store-service = { path = "../layerfs-store-service" }
 
 [dev-dependencies]
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+layerfs-daemon = { path = "../layerfs-daemon" }
+layerfs-fuse = { path = "../layerfs-fuse" }
 # #364: the write-cost harness times BLAKE3 over the bytes it writes.
 blake3 = { version = "=1.8.5", default-features = false }
 # The Store method tests bind private Workspaces and count the Store's rows.

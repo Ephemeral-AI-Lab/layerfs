@@ -549,6 +549,8 @@ dependencies = [
  "blake3",
  "layerfs-bridge",
  "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-fuse",
  "layerfs-history",
  "layerfs-overlay",
  "layerfs-persistence",
@@ -558,6 +560,7 @@ dependencies = [
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
+ "nix",
  "rusqlite",
 ]
 
@@ -583,7 +586,6 @@ name = "layerfs-daemon"
 version = "1.1.0"
 dependencies = [
  "blake3",
- "layerfs-api",
  "layerfs-bridge",
  "layerfs-content",
  "layerfs-fuse",

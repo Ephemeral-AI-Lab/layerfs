@@ -2,10 +2,10 @@
 //! does not hold (#355 F-041). The merge lists at most 4,096 paths it changed
 //! in the Workspace; past that the reply says `truncated`, below it the list
 //! is complete and `truncated` is false.
-#[path = "../../layerfs-api/tests/support/installed_store.rs"]
+#[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
-#[path = "../../layerfs-api/tests/support/sdk.rs"]
+#[path = "support/sdk.rs"]
 #[allow(dead_code)]
 mod support;
 

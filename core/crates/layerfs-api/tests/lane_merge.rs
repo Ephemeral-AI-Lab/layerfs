@@ -7,10 +7,10 @@
 //! The Commit under test runs over a Store whose history wrapper holds its
 //! first `publish_lane` call until the test has landed the other Commit, at
 //! the public catalog boundary. Every wait is bounded.
-#[path = "../../layerfs-api/tests/support/installed_store.rs"]
+#[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
-#[path = "../../layerfs-api/tests/support/sdk.rs"]
+#[path = "support/sdk.rs"]
 #[allow(dead_code)]
 mod support;
 

@@ -429,13 +429,13 @@ class LayerBoundaryTests(unittest.TestCase):
                 if upward:
                     self.assertTrue(any("upward" in reason for _, reason in dependency_violations(source)))
 
-    def test_dev_edges_and_temporary_daemon_exception(self):
+    def test_dev_edges_reject_all_upward_dependencies(self):
         for table in ("dev-dependencies", "target.'cfg(unix)'.dev-dependencies"):
             for name, dependency, upward in (
                 ("layerfs-content", "layerfs-storage", False),
                 ("layerfs-content", "layerfs-project", True),
                 ("layerfs-project", "layerfs-workspace", False),
-                ("layerfs-daemon", "layerfs-api", False),
+                ("layerfs-daemon", "layerfs-api", True),
                 ("layerfs-workspace", "layerfs-api", True),
                 ("layerfs-node", "layerfs-api", False),
             ):
@@ -454,7 +454,7 @@ class LayerBoundaryTests(unittest.TestCase):
             dependency_violations('[package]\nname="layerfs-persistence"\n[dev-dependencies]\nrusqlite="1"')
         )
 
-    def test_path_escape_and_narrow_exception(self):
+    def test_path_escape_rejects_all_upward_includes(self):
         with TemporaryDirectory() as directory:
             core = Path(directory) / "core"
             packages = {
@@ -470,9 +470,9 @@ class LayerBoundaryTests(unittest.TestCase):
             cases = (
                 (content / "tests/read.rs", storage / "tests/helper.rs", False),
                 (content / "tests/read.rs", api / "tests/helper.rs", True),
-                (daemon / "tests/merge_report.rs", api / "tests/support/sdk.rs", False),
-                (daemon / "tests/concurrent_commits.rs", api / "tests/support/installed_store.rs", False),
-                (daemon / "tests/lane_merge.rs", api / "tests/support/sdk.rs", False),
+                (daemon / "tests/merge_report.rs", api / "tests/support/sdk.rs", True),
+                (daemon / "tests/concurrent_commits.rs", api / "tests/support/installed_store.rs", True),
+                (daemon / "tests/lane_merge.rs", api / "tests/support/sdk.rs", True),
                 (daemon / "tests/other.rs", api / "tests/support/sdk.rs", True),
                 (daemon / "tests/merge_report.rs", api / "tests/other.rs", True),
             )

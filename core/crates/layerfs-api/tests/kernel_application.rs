@@ -1,7 +1,9 @@
 //! Actual Linux daemon binary, protected config and direct Store installation.
 #![cfg(target_os = "linux")]
+#[path = "support/daemon_binary.rs"]
+mod daemon_binary;
 #[allow(dead_code)]
-#[path = "support/host_install.rs"]
+#[path = "../../layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 use layerfs_api::internal::Control;
 use layerfs_bridge::{
@@ -63,7 +65,7 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
     fs::write(&config, setup.encode().unwrap()).unwrap();
     fs::set_permissions(&config, fs::Permissions::from_mode(0o600)).unwrap();
     let mut child = Process(
-        Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"))
+        Command::new(daemon_binary::path())
             .arg("--config")
             .arg(&config)
             .stdin(Stdio::null())

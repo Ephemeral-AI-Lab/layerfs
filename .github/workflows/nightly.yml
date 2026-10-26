@@ -3,7 +3,7 @@
 #  - slow:  binaries that take 5 s or more to run, plus the "heavy" ones that
 #           take 5 s or more of build CPU (left out of the push job), on the
 #           runner
-#  - mount: Linux-only layerfs-daemon targets that mount FUSE. Each binary runs
+#  - mount: Linux-only daemon and SDK targets that mount FUSE. Each binary runs
 #           in its own fresh container with /dev/fuse and SYS_ADMIN, as the
 #           existing native proofs do: forced_unavailable needs fusectl absent,
 #           and fp2_negotiation_flags needs one test thread.
@@ -66,7 +66,7 @@ jobs:
         run: |
           targets="$(python3 -B core/tools/ci_tests.py mount-targets)"
           # shellcheck disable=SC2086 # one --test flag per word
-          cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-daemon \
+          cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-daemon -p layerfs-api \
             $targets --no-run --message-format json > "$RUNNER_TEMP/build.json"
           python3 -B core/tools/ci_tests.py executables < "$RUNNER_TEMP/build.json" > "$RUNNER_TEMP/mount.tsv"
           test -s "$RUNNER_TEMP/mount.tsv"

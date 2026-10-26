@@ -70,7 +70,7 @@ Production LOC: 102158 -> 102158 (delta 0), same subtotals as the prerequisite.
 
 ## Step 2a — Project Store composition
 
-The three implementation files move to
+Commit `0f442d5bb7`: the three implementation files move to
 [`layerfs-project::store`](../../../crates/layerfs-project/src/store/mod.rs).
 Their bodies remain unchanged. Project gains the approved Bridge and
 Persistence production edges; the Node binding calls this Project Init directly.
@@ -117,6 +117,39 @@ passed (the latter under a 90-second ceiling).
 
 Production LOC: 102158 -> 102162 (delta +4). Core 96794; API 5368,
 using the existing physical scopes before relocation.
+
+
+## Step 2b — daemon test ownership
+
+Eight test targets move from daemon to API: `mount_control`,
+`kernel_mount_routes`, `kernel_application`, `observed_application`,
+`r5_1_actual_daemon_commit`, `merge_report`, `concurrent_commits` and
+`lane_merge`. Their assertions survive unchanged. The first five keep cheap
+path includes into lower-layer daemon fixtures; the last three now include
+API's own helpers locally. Three targets locate the separately built ordinary
+daemon binary through a small API test helper, since Cargo's binary variable
+is package-local.
+
+Daemon's `host_install` and `host_handoff`, their three shared install/Init
+fixtures, and the `resource_prepare` example use Project Store composition
+instead of API. API gains daemon/FUSE and the already locked nix test edges;
+daemon drops its API dev-dependency. No dependency version changes. No tests
+are deleted. The boundary guard removes both temporary upward exceptions, and
+its self-tests require daemon → API to fail in every dependency/include case.
+CI's mount lane follows the four Linux-only moved targets into API, while
+`mount_control` remains in the heavy group at its new home.
+
+Checks passed: all fifteen packages' all-target no-run compilation and
+warning-denying Clippy, literal native addon build, full boundary/fuser guards,
+64 Python self-tests, Rust formatting, changed Python Ruff formatting and
+whitespace. All 121 focused Project/API/daemon executable selections passed;
+225 unaffected selections reuse their existing proofs. The unchanged FP-21
+selection retains its original FAIL under the explicit owner exception, without
+a rerun, and no selection remains unrun. The moved `observed_application`
+proof took 6.30 s; its SLOW timing is recorded while it stays in the mount lane.
+
+Production LOC: 102162 -> 102162 (delta 0). Core 96794; API 5368,
+using the physical scopes before relocation.
 
 
 ## Relocation coordination

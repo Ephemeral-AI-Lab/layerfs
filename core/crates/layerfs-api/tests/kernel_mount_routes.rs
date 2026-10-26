@@ -3,10 +3,10 @@
 //! frequent fresh mounts and sustained work on one mount.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
-#[path = "support/mounted.rs"]
+#[path = "../../layerfs-daemon/tests/support/mounted.rs"]
 mod mounted;
 #[allow(dead_code)]
-#[path = "support/host_install.rs"]
+#[path = "../../layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 use layerfs_api::{internal::Control, OperationCause};
 use layerfs_bridge::control::{

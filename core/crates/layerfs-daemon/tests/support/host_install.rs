@@ -1,9 +1,9 @@
 //! External authenticated endpoints and complete small-root installation oracle.
-use layerfs_api::{InitRequest, ProjectApi, SealedProject};
 use layerfs_bridge::duplex::{self, Connection};
 use layerfs_daemon::{install_types::InstalledStore, store::BindRequest, Owner, OwnerConfig};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_project::store::{InitRequest, ProjectApi, SealedProject};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::{

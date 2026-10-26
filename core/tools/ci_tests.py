@@ -9,7 +9,7 @@ the targets it runs: building, not running, is what its time goes to.
   slow     binaries that take 5 s or more to run (macOS host, 2026-10-23)
   heavy    binaries that take 5 s or more of build CPU (moved by the owner,
            2026-10-23)
-  mount    layerfs-daemon targets that are Linux-only (`#![cfg(target_os =
+  mount    daemon targets and the SDK mount targets that are Linux-only (`#![cfg(target_os =
            "linux")]`): they mount FUSE and need /dev/fuse, SYS_ADMIN and a
            fresh container each (forced_unavailable needs fusectl unmounted)
   nightly  slow and heavy, run together on the nightly runner
@@ -36,11 +36,14 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "core" / "Cargo.toml"
 LINUX_ONLY = '#![cfg(target_os = "linux")]'
 MOUNT_PACKAGE = "layerfs-daemon"
+API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_application", "r5_1_actual_daemon_commit"}
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
     # Linux native binding proof, owner-excluded from CI; run explicitly.
     ("layerfs-node", "native_admission"): 60.52,
+    # Linux SDK mount proof after the ownership move, 2026-10-27.
+    ("layerfs-api", "observed_application"): 6.30,
     ("layerfs-api", "scale_lineage_cap"): 24.3,
     ("layerfs-api", "sdk_merge_scale"): 23.8,
     ("layerfs-daemon", "complete_installed_roots"): 9.0,
@@ -54,7 +57,7 @@ SLOW = {
 # (package, test target): build CPU seconds in the cold mold build of CI run
 # 39924955411 (4-CPU runner, test profile without debuginfo).
 HEAVY = {
-    ("layerfs-daemon", "mount_control"): 20.6,
+    ("layerfs-api", "mount_control"): 20.6,
     ("layerfs-daemon", "store_commit"): 19.1,
     ("layerfs-workspace", "captured_namespace_cursor"): 9.3,
     ("layerfs-workspace", "captured_namespace_holds"): 9.0,
@@ -74,7 +77,11 @@ HEAVY = {
 }
 
 # SDK timings are recorded above without adding the owner-excluded API to CI.
-NIGHTLY = {target for target in set(SLOW) | set(HEAVY) if target[0] != "layerfs-node"}
+NIGHTLY = {
+    target
+    for target in set(SLOW) | set(HEAVY)
+    if target[0] != "layerfs-node" and not (target[0] == "layerfs-api" and target[1] in API_MOUNT_TARGETS)
+}
 
 
 def metadata():
@@ -101,6 +108,9 @@ def test_targets(meta):
 def mount_targets(meta):
     found = []
     for package, name, source in test_targets(meta):
+        if package == "layerfs-api" and name in API_MOUNT_TARGETS:
+            found.append((package, name))
+            continue
         if package != MOUNT_PACKAGE:
             continue
         if LINUX_ONLY in source.read_text().splitlines():

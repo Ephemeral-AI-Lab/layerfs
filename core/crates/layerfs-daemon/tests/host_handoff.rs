@@ -23,7 +23,7 @@ fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
         duplex::public_key(&support::SERVER_PRIVATE).unwrap(),
     )
     .unwrap();
-    let ack = layerfs_api::internal::install(&fixture.project, &mut connection).unwrap();
+    let ack = layerfs_project::store::install(&fixture.project, &mut connection).unwrap();
     assert_eq!(ack.manifest.host_sqlite, "3.51.0");
     assert_eq!(ack.manifest.daemon_sqlite.as_deref(), Some("3.53.2"));
     assert_eq!(ack.work.sent_bytes, fixture.project.store.bytes);

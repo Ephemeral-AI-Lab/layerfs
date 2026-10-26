@@ -18,20 +18,22 @@
 //! "chosen by the clock" (`rig::clock_masked`). Owner, `st_nlink`, `st_size`
 //! and `st_ino` sharing are checked against the kernel's own table.
 #![cfg(target_os = "linux")]
+#[path = "support/daemon_binary.rs"]
+mod daemon_binary;
 #[allow(dead_code)]
-#[path = "support/installed_store.rs"]
+#[path = "../../layerfs-daemon/tests/support/installed_store.rs"]
 mod installed;
 #[allow(dead_code)]
-#[path = "support/namespace_model.rs"]
+#[path = "../../layerfs-daemon/tests/support/namespace_model.rs"]
 mod model;
 #[allow(dead_code)]
-#[path = "support/mounted.rs"]
+#[path = "../../layerfs-daemon/tests/support/mounted.rs"]
 mod mounted;
 #[allow(dead_code)]
-#[path = "support/mounted_commit.rs"]
+#[path = "../../layerfs-daemon/tests/support/mounted_commit.rs"]
 mod rig;
 #[allow(dead_code)]
-#[path = "support/host_install.rs"]
+#[path = "../../layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 use layerfs_api::internal::Control;
 use layerfs_bridge::{
@@ -126,7 +128,7 @@ fn start(f: &support::Fixture, mounts: &Path) -> (Process, SocketAddr) {
     fs::write(&config, setup.encode().unwrap()).unwrap();
     fs::set_permissions(&config, fs::Permissions::from_mode(0o600)).unwrap();
     let mut process = Process(
-        Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"))
+        Command::new(daemon_binary::path())
             .arg("--config")
             .arg(&config)
             .stdin(Stdio::null())
@@ -301,7 +303,7 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
     let mount = Path::new(&ready.directory);
     println!(
         "{name} STARTED executable={} pid={} listen={address} phase={:?} store_sqlite={} mount={} command_identity={COMMAND}:{COMMAND}",
-        env!("CARGO_BIN_EXE_layerfs-daemon"),
+        daemon_binary::path().display(),
         process.0.id(),
         hello.phase,
         hello.store_sqlite.as_deref().unwrap(),

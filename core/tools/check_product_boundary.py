@@ -144,21 +144,12 @@ LAYER = {
     "layerfs-api": API,
     "layerfs-node": API,
 }
-# Temporary upward test link; migration #463 step 2b removes both exceptions.
-UPWARD_TEST_EDGE = ("layerfs-daemon", "layerfs-api")
-UPWARD_TEST_PATHS = {
-    (f"tests/{test}.rs", f"tests/support/{helper}.rs")
-    for test in ("merge_report", "concurrent_commits", "lane_merge")
-    for helper in ("installed_store", "sdk")
-}
 
 
 def layer_violations(name, dependency, kind):
     if dependency.startswith("layerfs-") and dependency not in LAYER:
         return [(1, f"crate missing from layer map: {dependency}")]
     if dependency in LAYER and LAYER_ORDER.index(LAYER[dependency]) > LAYER_ORDER.index(LAYER[name]):
-        if kind == "dev-dependencies" and (name, dependency) == UPWARD_TEST_EDGE:
-            return []
         return [(1, f"upward {kind} edge {name} ({LAYER[name]}) -> {dependency} ({LAYER[dependency]})")]
     return []
 
@@ -182,9 +173,6 @@ def test_path_violations(path, source, packages):
         if destination is None:
             continue
         name, dependency = packages[owner], packages[destination]
-        exception = (path.relative_to(owner).as_posix(), target.relative_to(destination).as_posix())
-        if (name, dependency) == UPWARD_TEST_EDGE and exception in UPWARD_TEST_PATHS:
-            continue
         for _, reason in layer_violations(name, dependency, "test #[path]"):
             found.append((source.count("\n", 0, match.start()) + 1, reason))
     return found

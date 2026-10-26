@@ -1,10 +1,10 @@
 //! Authenticated control over an actually installed Store and one real owner.
-#[path = "support/control_fixture.rs"]
+#[path = "../../layerfs-daemon/tests/support/control_fixture.rs"]
 mod fixture;
-#[path = "support/held_writer.rs"]
+#[path = "../../layerfs-daemon/tests/support/held_writer.rs"]
 mod held_writer;
 #[allow(dead_code)]
-#[path = "support/host_install.rs"]
+#[path = "../../layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 use layerfs_api::{internal::Control, OperationCause};
 use layerfs_bridge::control::{Activity, ControlCode, Reply, Request, WorkspaceToken};
