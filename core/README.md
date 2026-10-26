@@ -14,7 +14,10 @@ under root `crates/` was retired on 2026-10-10 (R9c) and can be read at local ta
 - **One global Store.** All committed state (content objects, metadata and
   history) lives in one SQLite Store file, opened with the Disposable profile
   (WAL, `synchronous=OFF`). Project Init builds and seals it; it is then
-  installed on a volume the daemons share.
+  installed on a volume the daemons share. Store Init, sealing and bounded
+  authenticated install live in `layerfs-project::store`; `layerfs-api`
+  re-exports their public names. See the
+  [composition boundary](docs/architecture/82-sdk-call-channel.md#project-store-composition-463).
 - **Store calls run in the SDK's process.** The JavaScript SDK
   ([`api`](../api/README.md)) calls `layerfs-api` through the Node
   binding. Its fs, branch, project and operator methods run on

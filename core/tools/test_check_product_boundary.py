@@ -260,7 +260,7 @@ class ProductBoundaryTests(unittest.TestCase):
                 self.assertIn("layerfs-persistence", findings[0][1])
 
     def test_domain_source_component_names(self):
-        for folder in ("layerfs-storage", "layerfs-history", "layerfs-project", "layerfs-content"):
+        for folder in ("layerfs-storage", "layerfs-history", "layerfs-content"):
             path = Path("core/crates") / folder / "src" / "implementation.rs"
             self.assertTrue(violations(path, "use layerfs_s3::S3Objects;"))
             self.assertTrue(violations(path, "// layerfs-metadata owns this"))
@@ -268,6 +268,18 @@ class ProductBoundaryTests(unittest.TestCase):
         path = Path("core/crates/layerfs-persistence/src/implementation.rs")
         self.assertFalse(violations(path, "use layerfs_storage::port::MetadataStore;"))
         self.assertTrue(violations(path, "use layerfs_s3::S3Objects;"))
+
+    def test_project_store_composition_uses_approved_engine_edges(self):
+        path = Path("core/crates/layerfs-project/src/store/init.rs")
+        for dependency in ("layerfs-persistence", "layerfs-bridge"):
+            self.assertFalse(violations(path, f"use {dependency.replace('-', '_')}::PublicType;"))
+            self.assertFalse(
+                dependency_violations(
+                    f'[package]\nname="layerfs-project"\n[dependencies]\n{dependency}={{path="../{dependency}"}}'
+                )
+            )
+        self.assertTrue(violations(path, "use layerfs_api::ProjectApi;"))
+        self.assertTrue(violations(path, "use layerfs_workspace::Workspace;"))
 
     def test_storage_encoding_engine_boundary(self):
         for folder in ("encoding", "pack"):

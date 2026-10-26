@@ -20,11 +20,11 @@ pub mod sandbox;
 pub use base::dispatch::call;
 pub use base::failure::{OperationCause, OperationFailure};
 pub use base::sdk::{SdkError, SdkResult};
-pub use layerfs_project::{InitCounters, InitCounts, InitStep, ProjectError, SourceRefusal};
-pub use project::{
+pub use layerfs_project::store::{
     InitError, InitFailure, InitRequest, InstallError, InstallFailure, InstallWork, Installed,
     ProjectApi, SealedProject,
 };
+pub use layerfs_project::{InitCounters, InitCounts, InitStep, ProjectError, SourceRefusal};
 #[cfg(unix)]
 pub use sandbox::{
     connect_address, ManagedSandbox, SandboxApi, SandboxCause, SandboxCreate, SandboxFailure,

@@ -1,4 +1,5 @@
 //! Host Init and original handoff/failure custody.
+use crate as layerfs_project;
 use layerfs_bridge::provision::{check_destination, ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,

@@ -14,14 +14,12 @@
 //! Layers.
 use crate::job::{failed, refused, Outcome};
 use crate::registry::{lock, random, text, Project, INITS};
-use layerfs_api::{
-    InitCounters, InitError, InitFailure, InitRequest, InitStep, ProjectApi, ProjectError,
-    SourceRefusal,
-};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_project::store::{InitError, InitFailure, InitRequest, ProjectApi};
+use layerfs_project::{InitCounters, InitStep, ProjectError, SourceRefusal};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::path::{Path, PathBuf};

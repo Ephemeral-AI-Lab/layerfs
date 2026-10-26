@@ -4,8 +4,6 @@ pub(crate) mod args;
 pub(crate) mod control;
 pub(crate) mod dispatch;
 pub(crate) mod failure;
-pub(crate) mod install;
-pub(crate) mod install_types;
 #[doc(hidden)]
 pub mod internal;
 mod recovery;

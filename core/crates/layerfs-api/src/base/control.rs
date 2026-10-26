@@ -236,7 +236,7 @@ impl Control {
                 fence_error: None,
             }));
         }
-        crate::base::install::install_file(store, manifest, &mut self.connection).inspect_err(
+        layerfs_project::store::install_file(store, manifest, &mut self.connection).inspect_err(
             |failure| {
                 if failure.request_attempted {
                     self.failed = true;

@@ -1,7 +1,8 @@
-//! Namespace Init over the content, storage and history contracts.
+//! Namespace construction and Store Init/seal/install composition.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 mod import;
+pub mod store;
 pub use error::{ProjectError, ProjectResult, RetainedAcquisition, SourceRefusal};
 #[cfg(unix)]
 pub(crate) use import::backing;

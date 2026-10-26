@@ -58,6 +58,7 @@ UNSAFE_ROOT_ATTR = {
 # checked separately. The combined SQLite adapter is the active provider.
 ALLOWED_DEPENDENCIES = {
     "layerfs-node": {
+        "layerfs-project",
         "layerfs-api",
         "layerfs-bridge",
         "layerfs-history",
@@ -72,7 +73,14 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-storage": {"layerfs-content", "layerfs-telemetry"},
     "layerfs-history": {"layerfs-content"},
     "layerfs-persistence": {"layerfs-storage", "layerfs-history", "layerfs-content", "layerfs-telemetry"},
-    "layerfs-project": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-telemetry"},
+    "layerfs-project": {
+        "layerfs-content",
+        "layerfs-storage",
+        "layerfs-history",
+        "layerfs-telemetry",
+        "layerfs-persistence",
+        "layerfs-bridge",
+    },
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
     "layerfs-fuse": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
@@ -116,7 +124,7 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     "layerfs-sandbox": set(),
 }
-DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
+DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history"}
 LAYER_ORDER = ("core", "engine", "api")
 CORE, ENGINE, API = LAYER_ORDER
 LAYER = {
@@ -235,7 +243,8 @@ def dependency_violations(source):
                 found.append((1, f"rusqlite dependency in core crate {name}"))
             if kind == "dev-dependencies":
                 continue
-            if name in DOMAIN_CRATES and dependency in {
+            # Project composes Store setup through Persistence, never a database driver.
+            if name in DOMAIN_CRATES | {"layerfs-project"} and dependency in {
                 "rusqlite",
                 "postgres",
                 "tokio-postgres",

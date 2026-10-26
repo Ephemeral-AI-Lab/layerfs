@@ -55,7 +55,9 @@ correlation, retries a failure or silently cleans up an uncertain resource.
 
 ## Project
 
-[Init](../../core/crates/layerfs-api/src/project/init.rs) imports the complete native
+[Init](../../core/crates/layerfs-project/src/store/init.rs) lives in
+`layerfs-project::store`, re-exported by `layerfs-api`. The Node binding calls
+that same Project implementation directly. Init imports the complete native
 tree, including Git metadata, ignored files, dependencies, symlinks, caches and
 output. It retains the original eleven-field InitRequest and caller timer: source,
 Store configuration, daemon locator, storage policy, catalog authority, stack and

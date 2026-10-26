@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
+layerfs-project = { path = "../../core/crates/layerfs-project" }
 layerfs-api = { path = "../../core/crates/layerfs-api" }
 layerfs-bridge = { path = "../../core/crates/layerfs-bridge" }
 layerfs-history = { path = "../../core/crates/layerfs-history" }

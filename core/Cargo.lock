@@ -626,6 +626,7 @@ dependencies = [
  "layerfs-bridge",
  "layerfs-history",
  "layerfs-persistence",
+ "layerfs-project",
  "layerfs-sandbox",
  "layerfs-storage",
  "layerfs-store-service",
@@ -661,6 +662,7 @@ dependencies = [
 name = "layerfs-project"
 version = "1.1.0"
 dependencies = [
+ "layerfs-bridge",
  "layerfs-content",
  "layerfs-history",
  "layerfs-persistence",

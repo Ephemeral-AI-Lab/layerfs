@@ -1,5 +1,5 @@
 //! Bounded one-attempt file streaming; the host never opens the installed Store.
-use crate::{InstallError, InstallFailure, InstallWork, Installed, SealedProject};
+use super::{InstallError, InstallFailure, InstallWork, Installed, SealedProject};
 use layerfs_bridge::{
     control::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
     duplex::{Connection, MAX_PLAINTEXT_BYTES},

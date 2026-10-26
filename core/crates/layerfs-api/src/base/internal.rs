@@ -1,12 +1,12 @@
 //! Hidden original-channel access for recovery, diagnostics and external proofs.
 pub use super::control::{Control, ControlCause, ControlFailure, ControlPhase};
-pub use super::install::install;
 use crate::{BoundWorkspace, OperationFailure, WorkspaceApi};
 use layerfs_bridge::{
     control::{CleanupObservation, ForcedOutcome, ReadyMount, WorkspaceStatus, WorkspaceToken},
     duplex::Connection,
 };
 use layerfs_history::{BranchId, WorkspaceId};
+pub use layerfs_project::store::install;
 use std::ops::{Deref, DerefMut};
 
 /// Diagnostic facade over the same operation owner, without channel policy changes.

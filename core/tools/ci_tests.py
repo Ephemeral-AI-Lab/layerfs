@@ -39,6 +39,8 @@ MOUNT_PACKAGE = "layerfs-daemon"
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
+    # Linux native binding proof, owner-excluded from CI; run explicitly.
+    ("layerfs-node", "native_admission"): 60.52,
     ("layerfs-api", "scale_lineage_cap"): 24.3,
     ("layerfs-api", "sdk_merge_scale"): 23.8,
     ("layerfs-daemon", "complete_installed_roots"): 9.0,
@@ -71,7 +73,8 @@ HEAVY = {
     ("layerfs-content", "filesystem_sorted_localized"): 5.0,
 }
 
-NIGHTLY = set(SLOW) | set(HEAVY)
+# SDK timings are recorded above without adding the owner-excluded API to CI.
+NIGHTLY = {target for target in set(SLOW) | set(HEAVY) if target[0] != "layerfs-node"}
 
 
 def metadata():

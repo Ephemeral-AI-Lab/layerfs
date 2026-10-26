@@ -286,3 +286,21 @@ mounting into a chosen Sandbox (agent), and
 `backend.daemon.sandbox.get_log`, which reads a Sandbox's daemon log once
 through the Engine where the binding runs. See the
 [backend guide](../../../api/how-to-use/backend.md#a-sandboxs-log).
+
+## Project Store composition (#463)
+
+Store Init, sealing and bounded authenticated installation live in
+[`layerfs-project::store`](../../crates/layerfs-project/src/store/mod.rs).
+The existing namespace constructor remains `layerfs_project::init_observed`;
+[`store/init.rs`](../../crates/layerfs-project/src/store/init.rs) composes it
+with Persistence creation, the first Branch, Init statistics and sole-owner
+seal. It requires Disposable explicitly and preserves original failure custody.
+Project depends on Bridge for the existing provisioning records and channel
+install protocol; it defines no second format or protocol.
+
+[`layerfs-api::project`](../../crates/layerfs-api/src/project/mod.rs) and its
+root retain the existing public names as re-exports. Its Control owner calls
+Project's `install_file` without changing correlation or quarantine. The
+[Node binding](../../../api/binding/src/project.rs) calls Project's Init once
+directly. This is ownership relocation only; no canonical identity, Store
+format, behavior or performance claim changes.
