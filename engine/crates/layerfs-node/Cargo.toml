@@ -1,0 +1,29 @@
+[package]
+name = "layerfs-node"
+description = "Node binding for the LayerFS JavaScript SDK: Store calls in-process (layerfs-store-service), Sandbox calls over layerfs-api"
+publish = false
+workspace = "../../.."
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+layerfs-project = { path = "../layerfs-project" }
+layerfs-api = { path = "../layerfs-api" }
+layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../layerfs-persistence" }
+layerfs-sandbox = { path = "../layerfs-sandbox" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-store-service = { path = "../layerfs-store-service" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+napi = "=2.16.17"
+napi-derive = "=2.16.13"
+
+[build-dependencies]
+napi-build = "=2.1.6"

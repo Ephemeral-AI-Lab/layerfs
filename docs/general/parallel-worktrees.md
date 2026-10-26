@@ -38,12 +38,12 @@ registered checkout without copying scripts into it or merging branches first.
 | Resource | Owner and placement |
 | --- | --- |
 | Source | Registered checkout; mounted at `/work` read-only during Linux builds |
-| macOS Cargo target | That checkout's `core/target` |
+| macOS Cargo target | That checkout's `target` |
 | macOS Cargo home | Private directory in its registration state |
-| Linux Cargo target | Labelled private Docker volume at `/work/core/target` |
+| Linux Cargo target | Labelled private Docker volume at `/work/target` |
 | Linux Cargo home | Separate labelled private Docker volume at `/cargo-home` |
 | Toolchain/images | Pinned toolchain and shared immutable installed images |
-| E2E artifacts | Unique sealed bundle containing daemon, addon, SDK runtime/operator/test files, the `layerfs` command (`api/agent/cli/src`, `api/agent/cli/test`), hashes and source identity |
+| E2E artifacts | Unique sealed bundle containing daemon, addon, SDK runtime/operator/test files, the `layerfs` command (`api/cli/src`, `api/cli/test`), hashes and source identity |
 | E2E writable state | Unique per-run Store volume and SDK home, container prefix, trace, and output receipt |
 
 ## Prepare dependencies and optional target seeds
@@ -95,7 +95,7 @@ The Linux target mount stays inside `/work`, which also satisfies the existing
 The standalone `build:native` script remains available; the isolated launcher
 publishes the daemon and addon together rather than overwriting a live addon.
 
-Builds start at the checkout root with `--manifest-path core/Cargo.toml`, preserving
+Builds start at the checkout root with `--manifest-path Cargo.toml`, preserving
 the root ARM64 Cargo profile. They reject inherited Rust flag/target/compiler
 overrides that would bypass it. Source files, the lockfile, root configuration,
 SDK runtime, operator and test files, and the `layerfs` command's source and
@@ -131,7 +131,7 @@ refuses workspace aggregates, target/config overrides and `fs-bench-pro`.
 ## Run pinned Linux E2E artifacts
 
 ```sh
-python3 tools/worktree.py run --resources /absolute/path/resources.json --bundle /absolute/path/to/sealed-linux-bundle --timeout 90 -- node api/agent/sdk/test/verify/direct_locking_real.mjs inner
+python3 tools/worktree.py run --resources /absolute/path/resources.json --bundle /absolute/path/to/sealed-linux-bundle --timeout 90 -- node api/agent/test/verify/direct_locking_real.mjs inner
 ```
 
 Select the owning test's Linux entrypoint. Tests that bootstrap their own outer
@@ -191,3 +191,18 @@ only with the explicit handoff release. The cleanup script independently recheck
 active processes and all container consumers before any deletion. Ordinary cleanup
 can omit the 300 GB target when no low-space episode is active. The launcher does
 not remove checkouts or frozen evidence, and never runs a global Docker prune.
+
+
+## Existing registrations after the layer split
+
+After rebasing across #463, close build/test owners in your selected worktree.
+For a registration made before the move, retain its original `resources.json`
+and update only that registration's `macos_target` from the selected checkout's
+`core/target` to its `target` directory. The Linux volume names and Cargo homes
+remain private and unchanged; the launcher now mounts the target at `/work/target`.
+Run `prepare` again for each platform you use. Registration verifies exact inputs
+and does not silently rewrite an older record; `prepare` reads the selected
+record, so its target path must be updated first. Never scan or migrate another
+worktree's records. Keep an active cache warm and release the old cache through
+the cleanup procedure at handoff; retain records, sealed bundles and failed-run
+evidence.

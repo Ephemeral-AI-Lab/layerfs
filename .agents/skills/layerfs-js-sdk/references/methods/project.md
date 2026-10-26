@@ -2,7 +2,7 @@
 
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Examples were
 > captured live in issue #334 Phase A at `b30e4fb8f`. Opaque IDs are shortened;
-> the full replies and trace are in `core/target/issue334/phase-a/`. The client
+> the full replies and trace are in `target/issue334/phase-a/`. The client
 > factories and `list_sandboxes` are #428's; result shapes are unchanged.
 
 Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).

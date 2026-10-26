@@ -1,5 +1,7 @@
 target/
-/core/target-linux/
+# The Node addon that api/scripts/build-native.mjs builds beside its crate.
+/engine/crates/layerfs-node/layerfs.node
+/target-linux/
 /eval/runs/
 /eval/datasets/
 .DS_Store

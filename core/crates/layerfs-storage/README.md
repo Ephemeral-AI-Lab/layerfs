@@ -1,13 +1,14 @@
-> **Status:** Historical native-provider detail below; current C2 owns only the
-> shared bounded save/read/encoding/pack flow. Persistence moved to
-> [layerfs-persistence](../layerfs-persistence/README.md), with an atomic
-> PackPersistence port and the new separately qualified WAL/FULL profile. Old
-> MEMORY/OFF and private-save descriptions/receipts retain their historical scope.
-
 # layerfs-storage (C2)
 
-> **Status:** Implemented slice; FULL and PREFIX payload records, pooled physical
-> metadata and an explicit multi-lane format matrix.
+> **Status:** Current general guide; historical native-provider details below
+> retain their original scope and receipts.
+
+Storage owns the shared bounded save/read, encoding and pack flow. Database
+ownership belongs to [Persistence](../../../engine/crates/layerfs-persistence/README.md).
+The original FULL/PREFIX slice and pooled physical metadata details below include
+historical provider descriptions. MEMORY/OFF, WAL/FULL and private-save receipts
+retain their original verdicts; current execution follows the root guide's
+[Disposable-only profile](../../../AGENTS.md#active-persistence-profile--owner-direction-2026-10-07).
 
 Content-addressed physical storage. C2 accepts already-finalized canonical
 objects, performs exact CAS reuse, writes supported FULL records into framed
@@ -140,7 +141,8 @@ destructor.
 ## Checks
 
 ```sh
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --tests
+cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-storage --tests --no-run
+timeout 120 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-storage --tests
 ```
 
 The aggregate `tools/preflight.sh` gate is permanently retired (ledger L32) and runs

@@ -100,9 +100,9 @@ proof remain required; all 10070 symlinks stay in scope.
 | xattrs/ownership | Unsupported | Explicit supported-format boundary, never hidden omission |
 | Contention | Reply permits can return EBUSY | No contention EBUSY; park waiters without holding workers |
 
-Current sources: [adapter](../../../crates/layerfs-fuse/src/adapter.rs),
-[mount](../../../crates/layerfs-fuse/src/mount.rs),
-[replies](../../../crates/layerfs-fuse/src/replies.rs). These crates are excluded
+Baseline sources at `f96d97651`: [adapter](https://github.com/Ephemeral-AI-Lab/layerfs/blob/f96d97651be5299f153ccde2bc8d921dd58807ad/core/crates/layerfs-fuse/src/adapter.rs),
+[mount](https://github.com/Ephemeral-AI-Lab/layerfs/blob/f96d97651be5299f153ccde2bc8d921dd58807ad/core/crates/layerfs-fuse/src/mount.rs),
+[replies](https://github.com/Ephemeral-AI-Lab/layerfs/blob/f96d97651be5299f153ccde2bc8d921dd58807ad/core/crates/layerfs-fuse/src/replies.rs). At that pin these crates were excluded
 from the active core workspace; their presence is not a built replacement.
 Portable metadata's ctime=mtime behavior is an explicit compatibility decision,
 not full POSIX metadata fidelity.
