@@ -102,13 +102,22 @@ impl<'a> Mutation<'a> {
             }
         }
     }
+    /// The entry at `path`. A name below an entry that is not a directory (a
+    /// file or a symlink, which is not followed) is `NotDirectory` at that
+    /// entry, as `mkdir` answers, not an engine failure.
     pub fn resolve(&self, path: &str) -> Result<ViewStat> {
         let mut stat = self
             .view
             .stat(self.op.overlay(), self.view.root_serial())
             .map_err(failure)?;
+        let mut at = String::new();
         for name in path.split('/').filter(|s| !s.is_empty()) {
             let name = checked(path, name)?;
+            if stat.kind != layerfs_content::object::inode_leaf::InodeKind::Directory {
+                return Err(args::refuse("NotDirectory", at, SdkValue::Null));
+            }
+            at.push('/');
+            at.push_str(name.as_str());
             stat = self
                 .view
                 .lookup(self.op.overlay(), stat.serial, &name)

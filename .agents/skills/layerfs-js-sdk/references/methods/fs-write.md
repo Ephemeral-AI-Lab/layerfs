@@ -30,6 +30,7 @@ Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-pr
 | `NoSuchBranch` | No such Branch | `branch.fork` it, or check the name |
 | `HeadMoved` | Another writer published on the Branch during the call; nothing was published | Read the files you changed again, then decide whether to apply your change |
 | `NoSuchPath` | A path or its parent folder is missing | `fs.list` the parent; `fs.mkdir` first |
+| `NotDirectory` | A file or a symlink is in the way of the path; `message` is that entry | `fs.stat` it; choose another path or remove it first |
 | `TooLarge` | The complete encoded request did not fit one control call; nothing was sent | Inspect the input, then choose a smaller call or a larger atomic Workspace step |
 | `InvalidInput` | A bad argument (message bytes, relative path, …) | Read `message`; fix the call |
 
