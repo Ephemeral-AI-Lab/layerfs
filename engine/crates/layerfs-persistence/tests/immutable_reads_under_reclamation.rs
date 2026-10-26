@@ -159,9 +159,19 @@ fn immutable_reads_are_unchanged_while_free_pages_are_reclaimed() {
     let done = AtomicBool::new(false);
     let (jobs, rounds, reclaimed) = std::thread::scope(|scope| {
         let reclaim = scope.spawn(|| {
-            let (mut jobs, mut reclaimed) = (0, 0);
+            let (mut jobs, mut reclaimed, mut busy) = (0, 0, 0);
             while jobs < JOBS {
-                let job = writer.reclaim_space(1).unwrap();
+                // The Store binds no busy handler, so a job that meets the
+                // concurrent reader's snapshot is refused `Busy` without
+                // effect; the documented caller response is a later job.
+                let job = match writer.reclaim_space(1) {
+                    Err(PersistenceError::Busy) if busy < JOBS => {
+                        busy += 1;
+                        std::thread::yield_now();
+                        continue;
+                    }
+                    other => other.unwrap(),
+                };
                 jobs += 1;
                 reclaimed += job.reclaimed_pages;
                 if job.remaining_free_pages == 0 {
