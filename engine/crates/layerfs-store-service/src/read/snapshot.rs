@@ -10,7 +10,7 @@ use crate::store::{Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{as_text, EntryFacts, TreeTable, MAXIMUM_TEXT_BYTES};
 use layerfs_content::filesystem::path::PathName;
-use layerfs_content::filesystem::FilesystemRootId;
+use layerfs_content::filesystem::{FilesystemRootId, SymlinkTarget};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};
 use layerfs_history::{LayerStackRecord, NodeId};
@@ -129,7 +129,9 @@ pub fn kind_name(kind: InodeKind) -> &'static str {
 }
 
 /// Logical size of a file or symlink's content; a directory is 0. A regular
-/// file's length is Store metadata: no payload or delta chain is read.
+/// file's length is Store metadata: no payload or delta chain is read. A
+/// symlink's is its target's length, as a mounted Workspace reports it, not
+/// the length of the object that stores the target.
 pub fn size(reader: &StorePorts, entry: &EntryFacts) -> Result<u64, SdkRefusal> {
     match entry.value.kind {
         InodeKind::Directory => Ok(0),
@@ -140,7 +142,8 @@ pub fn size(reader: &StorePorts, entry: &EntryFacts) -> Result<u64, SdkRefusal> 
             .ok_or_else(|| args::failed("missing file length")),
         InodeKind::Symlink => {
             layerfs_content::AuthenticatedObjects::read_canonical(reader, entry.value.content_root)
-                .map(|canonical| canonical.len() as u64)
+                .and_then(|canonical| SymlinkTarget::decode(&canonical))
+                .map(|target| target.as_bytes().len() as u64)
                 .map_err(args::content)
         }
     }
