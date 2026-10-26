@@ -25,7 +25,7 @@ if (result.status !== 0) process.exit(result.status ?? 1);
 const artifact = join(target, profile, `liblayerfs_node.${suffix}`);
 const output = process.env.LAYERFS_NATIVE_OUTPUT
   ? resolve(root, process.env.LAYERFS_NATIVE_OUTPUT)
-  : fileURLToPath(new URL("../binding/layerfs.node", import.meta.url));
+  : fileURLToPath(new URL("../../engine/crates/layerfs-node/layerfs.node", import.meta.url));
 mkdirSync(dirname(output), { recursive: true });
 const staged = `${output}.${process.pid}.new`;
 copyFileSync(artifact, staged);

@@ -2,23 +2,24 @@
 """Count first-party production source lines for the per-commit LOC rule.
 
 Production code is nonblank, non-comment first-party product implementation:
-the product under core/crates/*/src, engine/crates/*/src and api/layerfs-api/src,
-and the reference product under crates/*/src, plus shipped runtime SQL under
+the product under core/crates/*/src and engine/crates/*/src (layerfs-api and the
+layerfs-node binding were api/layerfs-api and api/binding before the api/
+regrouping, and are counted there too), and the reference product under crates/*/src, plus shipped runtime SQL under
 <crate>/sql/. Tests, examples, benches, fixtures, benchmark harnesses,
 development tools, docs, manifests and generated artifacts are excluded. Legacy
 inline #[cfg(test)] items are removed before counting, because the reference tree
 keeps tests inside src/.
 
-Rust crates are assigned by name to core, engine or api in both the old and
-new layouts. Unknown historical crates remain counted in core.
+Rust crates are assigned by name to core or engine in every layout: the
+layerfs-api method surface and the layerfs-node binding are engine crates
+wherever they sit. Unknown historical crates remain counted in core.
 
-The JavaScript API shares the `api` scope (#428): the Node binding's Rust
-under api/binding/src (layerfs-node) and the src/ JavaScript of each package
-under api/ (api/agent/sdk is @layerfs/agent, api/agent/cli is @layerfs/cli,
-api/backend and api/runtime), one crate per package, named by its
-package.json. Tests, node_modules and the binding's tests/examples are
-excluded. The layouts before the move to api/ are still counted, so trees on
-either side compare: sdk/js/native/src, sdk/js/packages/<name>/src, the
+The `api` scope is the published JavaScript (#428): the src/ JavaScript of
+each package under api/ (api/agent is @layerfs/agent, api/cli is @layerfs/cli,
+api/backend and api/runtime; api/agent/sdk and api/agent/cli before the
+regrouping), one crate per package, named by its package.json. Tests and
+node_modules are excluded. The layouts before the move to api/ are still
+counted, so trees on either side compare: sdk/js/native/src, sdk/js/packages/<name>/src, the
 older single package @layerfs/sdk under sdk/js/src and sdk/js/operator, and
 the layerfs command under cli/src. Those were the separate `sdk` and `cli`
 scopes. JavaScript comments are blanked by a scanner that knows line and
@@ -362,12 +363,14 @@ ENGINE_CRATES = {
     "layerfs-sandbox",
     "layerfs-store-service",
     "layerfs-workspace",
+    "layerfs-api",
+    "layerfs-node",
 }
+# Crate folders directly under api/ before the regrouping, by folder name.
+OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
 
 
 def crate_layer(name: str) -> str:
-    if name == "layerfs-api":
-        return "api"
     if name in ENGINE_CRATES:
         return "engine"
     # Historical and synthetic crates remain counted rather than disappearing.
@@ -377,8 +380,13 @@ def crate_layer(name: str) -> str:
 def replacement_packages(root: Path) -> list:
     return sorted(
         [p for base in (root / "core/crates", root / "engine/crates") for p in base.glob("*") if p.is_dir()]
-        + ([root / "api/layerfs-api"] if (root / "api/layerfs-api").is_dir() else [])
+        + [root / "api" / folder for folder in OLD_API_CRATES if (root / "api" / folder).is_dir()]
     )
+
+
+def package_crate(root: Path, package: Path) -> str:
+    """The crate name of a package folder; api/binding was layerfs-node."""
+    return OLD_API_CRATES[package.name] if package.parent == root / "api" else package.name
 
 
 def scope_base(root: Path, scope: str) -> Path:
@@ -409,8 +417,6 @@ def api_files(root: Path) -> list:
     """The binding's Rust and each package's src/ JavaScript, in either layout."""
     files = []
     api = root / "api"
-    if (api / "binding" / "src").is_dir():
-        files += kept(sorted((api / "binding" / "src").rglob("*.rs")), api / "binding")
     if api.is_dir():
         for package in api_packages(api):
             files += kept(sorted((package / "src").rglob("*.js")), package)
@@ -431,9 +437,7 @@ def api_files(root: Path) -> list:
 
 def api_crate(root: Path, path: Path) -> str:
     parts = path.relative_to(root).parts
-    if "layerfs-api" in parts:
-        return "layerfs-api"
-    if parts[:2] == ("api", "binding") or parts[:3] == ("sdk", "js", "native"):
+    if parts[:3] == ("sdk", "js", "native"):
         return "layerfs-node"
     if parts[0] == "cli":
         return "@layerfs/cli"
@@ -466,7 +470,9 @@ def crate_of(root: Path, scope: str, path: Path) -> str:
     if scope == "dsh":
         return dsh_crate(base, path)
     parts = path.relative_to(root).parts
-    return parts[2] if scope in {"core", "engine"} else parts[1]
+    if scope in {"core", "engine"}:
+        return OLD_API_CRATES[parts[1]] if parts[0] == "api" else parts[2]
+    return parts[1]
 
 
 def rust_files(base: Path) -> list:
@@ -499,7 +505,9 @@ def scope_files(root: Path, scope: str) -> list:
         packages = replacement_packages(root)
         for base in sorted({package.parent for package in packages}):
             names = {
-                package.name for package in packages if package.parent == base and crate_layer(package.name) == scope
+                package.name
+                for package in packages
+                if package.parent == base and crate_layer(package_crate(root, package)) == scope
             }
             files.extend(path for path in rust_files(base) if path.relative_to(base).parts[0] in names)
         if scope == "api":

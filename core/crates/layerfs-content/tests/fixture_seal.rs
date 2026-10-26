@@ -245,8 +245,7 @@ fn no_product_source_can_reseal_during_an_ordinary_test_run() {
         root.join("Cargo.toml").is_file() && root.join("core/crates").is_dir(),
         "the scan root is not the workspace"
     );
-    let roots = ["core", "engine", "api/layerfs-api", "api/binding", "tools"]
-        .map(|relative| root.join(relative));
+    let roots = ["core", "engine", "tools"].map(|relative| root.join(relative));
     let sources: Vec<_> = roots.iter().flat_map(|path| rust_sources(path)).collect();
     let guard = manifest.join("tests/fixture_seal.rs");
     assert!(

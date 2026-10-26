@@ -455,8 +455,9 @@ Historical explanation is retained outside default implementation routing.
 All product layers follow the detailed
 [production source rules](engine/AGENTS.md#production-file-size-and-responsibility)
 and [checks and completion rules](engine/AGENTS.md#checks-and-completion).
-The root manifest builds four core crates, nine engine crates, `layerfs-api`
-and the Node binding. The dependency direction is `core < engine < api`, including
-dev dependencies and test includes. Workstream names do not change this layering.
+The root manifest builds four core crates and eleven engine crates, including
+the SDK method surface `layerfs-api` and the Node binding `layerfs-node`; `api/`
+holds the published JavaScript packages. The dependency direction is
+`core < engine < api`, including dev dependencies and test includes. Workstream names do not change this layering.
 After rebasing across #463, update each selected worktree's own target registration and prepare again
 for the root `target/` path; never migrate another worktree's resource record.

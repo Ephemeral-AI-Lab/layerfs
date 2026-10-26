@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const FAKE = fileURLToPath(new URL("../../agent/sdk/test/fixture/fake-native.cjs", import.meta.url));
+const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
 process.env.LAYERFS_NATIVE = FAKE;
 for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "WORKER_ENDPOINT", "HOME", "STORE_PATH", "IMAGE", "DAEMON", "VOLUME"]) {
   delete process.env[`LAYERFS_${name}`];
@@ -273,7 +273,7 @@ try {
     // an agent client made before the runtime opens keeps its in-process
     // binding; the runtime's clients, and any made after it, use the worker
     const { LayerFS } = await import("@layerfs/agent");
-    const { fakeWorker } = await import("../../agent/sdk/test/fixture/fake-worker.mjs");
+    const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
     const worker = await fakeWorker((request) => ({ value: request.op === "backend.store.project.get_history" ? { kind: "ok", version: "h1", branches: [], commits: [], more: {}, layers: [] } : { items: [], hasMore: false } }));
     try {
       process.env.LAYERFS_STORE_PATH = "/fake/store.sqlite";
@@ -305,7 +305,7 @@ try {
     }
   } else if (selected === "macos-worker") {
     // the macOS worker's start with a stubbed docker CLI and a stand-in worker
-    const { fakeWorker } = await import("../../agent/sdk/test/fixture/fake-worker.mjs");
+    const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
     const macos = (await import("../src/platform/macos/index.js")).default;
     const worker = await fakeWorker(undefined, { anySecret: true });
     const bundle = join(work, "bundle");

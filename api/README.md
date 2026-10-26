@@ -8,51 +8,54 @@
 
 This is the wiki for `api/`, LayerFS's JavaScript packages: what each one is
 for, which one you need, and how they are built and tested. How to use each
-one is in [`how-to-use/`](how-to-use):
+one is in [`docs/`](docs):
 
 | Guide | Package | What it does | Who uses it |
 | --- | --- | --- | --- |
-| [agent.md](how-to-use/agent.md) | `@layerfs/agent` and the `layerfs` command | Works on a project: files, Branches, Sandboxes, Workspaces, Exec and Commit | Agents, through a Node script (the SDK) or Bash (the command) |
-| [backend.md](how-to-use/backend.md) | `@layerfs/backend` | Reads history, storage, Workspace state, background processes and daemon logs; the call trace | UIs and tools that show a project |
-| [runtime.md](how-to-use/runtime.md) | `@layerfs/runtime` | Runs LayerFS on a machine: Init, project removal, the macOS and Windows worker, Sandbox and volume cleanup | Hosts that run projects for their users |
+| [agent.md](docs/agent.md) | `@layerfs/agent` and the `layerfs` command | Works on a project: files, Branches, Sandboxes, Workspaces, Exec and Commit | Agents, through a Node script (the SDK) or Bash (the command) |
+| [backend.md](docs/backend.md) | `@layerfs/backend` | Reads history, storage, Workspace state, background processes and daemon logs; the call trace | UIs and tools that show a project |
+| [runtime.md](docs/runtime.md) | `@layerfs/runtime` | Runs LayerFS on a machine: Init, project removal, the macOS and Windows worker, Sandbox and volume cleanup | Hosts that run projects for their users |
 
 ## Which package do I need?
 
-Every integration starts with [`@layerfs/agent`](how-to-use/agent.md) and adds
+Every integration starts with [`@layerfs/agent`](docs/agent.md) and adds
 the others as it grows:
 
 - **A tool or skill for agents**, which works on a project's files and
   Branches: `@layerfs/agent`. Give agents that have only Bash
-  [the `layerfs` command](how-to-use/agent.md#the-layerfs-command).
+  [the `layerfs` command](docs/agent.md#the-layerfs-command).
 - **Something that shows a project**, such as a history view or a dashboard:
-  add [`@layerfs/backend`](how-to-use/backend.md), and read the
-  [call trace](how-to-use/backend.md#the-call-trace) to follow a run as it
+  add [`@layerfs/backend`](docs/backend.md), and read the
+  [call trace](docs/backend.md#the-call-trace) to follow a run as it
   happens.
 - **A host that runs projects for its users**, which initializes and removes
   them, and on macOS and Windows starts the worker: add
-  [`@layerfs/runtime`](how-to-use/runtime.md).
+  [`@layerfs/runtime`](docs/runtime.md).
 
 Store calls run in the calling process on Linux only. On macOS and Windows they
 go through the LayerFS home's worker, which `@layerfs/runtime` starts; see
-[where calls run](how-to-use/agent.md#where-calls-run) and
-[platforms and the worker](how-to-use/runtime.md#platforms-and-the-worker).
+[where calls run](docs/agent.md#where-calls-run) and
+[platforms and the worker](docs/runtime.md#platforms-and-the-worker).
 
 ## The folder
 
-`api/` holds the JavaScript packages and the native addon:
+`api/` holds the published JavaScript packages, one folder each, and no Rust:
 
-- `agent/sdk/`: `@layerfs/agent`, the agents' SDK (the client, its
+- `agent/`: `@layerfs/agent`, the agents' SDK (the client, its
   transports and the agent methods).
-- `agent/cli/`: the `layerfs` command, one `@layerfs/agent` call per command.
+- `cli/`: `@layerfs/cli`, the `layerfs` command, one `@layerfs/agent` call per command.
 - `backend/`: `@layerfs/backend`, per-project Store and daemon reads of an
   open client, for UIs and tools.
 - `runtime/`: `@layerfs/runtime`, installation management on a LayerFS home,
   for integrations.
-- `binding/`: the Rust Node addon crate `layerfs-node` over core; it builds
-  `binding/layerfs.node`.
-- `how-to-use/`: the three guides above.
+- `docs/`: the three guides above.
+- `scripts/`: `build-native.mjs` and `recover-records.mjs`.
 
-`npm install` in `api` links `agent/sdk`, `backend` and `runtime` to each
+The Rust behind them lives in the engine: the SDK method surface
+`engine/crates/layerfs-api` and the Node addon crate
+`engine/crates/layerfs-node`, which builds `engine/crates/layerfs-node/layerfs.node`.
+
+`npm install` in `api` links `agent`, `backend` and `runtime` to each
 other; it downloads nothing.
 
 `@layerfs/agent/internal` is not a public API. It exists only for
@@ -86,18 +89,18 @@ Zombie reaping and the existing replaced-inode FUSE policy remain owner-deferred
 
 The stand-in tests need no Docker, Store or daemon: they load the real
 JavaScript over one stand-in native binding,
-`agent/sdk/test/fixture/fake-native.cjs`, which the `layerfs` CLI tests
+`agent/test/fixture/fake-native.cjs`, which the `layerfs` CLI tests
 use too.
 
-- `node api/agent/sdk/test/calls.mjs` checks every agent call for
+- `node api/agent/test/calls.mjs` checks every agent call for
   correctness against the shared case table
-  `agent/sdk/test/fixture/cases.mjs`. For each call it checks the binding
+  `agent/test/fixture/cases.mjs`. For each call it checks the binding
   call made, the arguments sent, and the result returned or the
   `LayerFSError` thrown. There is a case for every call file under
-  `agent/sdk/src/`.
-- `node --test api/agent/cli/test/cli.test.mjs` runs the same cases through the SDK and
+  `agent/src/`.
+- `node --test api/cli/test/cli.test.mjs` runs the same cases through the SDK and
   through the `layerfs` command and requires them to agree (see
-  [the `layerfs` command](how-to-use/agent.md#the-layerfs-command)).
+  [the `layerfs` command](docs/agent.md#the-layerfs-command)).
 - `packaging.mjs`, `trace.mjs`, `exec_output.mjs` and the backend and runtime
   tests each check one case per command (`node <file> <case>`).
 
@@ -107,36 +110,36 @@ history) and `workspace` (a Sandbox, one Workspace, Exec, Commit and close).
 Run each part under the E2E launcher (`tools/worktree.py run`, see
 `docs/general/parallel-worktrees.md`):
 
-- `node api/agent/sdk/test/verify/calls_real.mjs inner <part>` runs the
+- `node api/agent/test/verify/calls_real.mjs inner <part>` runs the
   part through the SDK and checks each answer.
-- `node api/agent/cli/test/verify/cli_real.mjs inner <part>` runs it through the SDK and
+- `node api/cli/test/verify/cli_real.mjs inner <part>` runs it through the SDK and
   then as `layerfs` commands, and requires the same answers. Values that differ
   between any two runs are masked before the comparison.
 
 ### The `layerfs` command's tests
 
 ```bash
-npm --prefix api/agent/cli install
-node --test api/agent/cli/test/cli.test.mjs
+npm --prefix api/cli install
+node --test api/cli/test/cli.test.mjs
 ```
 
 The tests run the real `@layerfs/agent` JavaScript over the stand-in native
 binding that the SDK's own tests use
-(`api/agent/sdk/test/fixture/fake-native.cjs`). The binding records
+(`api/agent/test/fixture/fake-native.cjs`). The binding records
 every call, so the tests need no Docker, Store or daemon. The SDK's
 `calls.mjs` checks the SDK for correctness against the shared case table
-(`api/agent/sdk/test/fixture/cases.mjs`). These tests check that the
+(`api/agent/test/fixture/cases.mjs`). These tests check that the
 command is consistent with the SDK. Each case runs through the SDK in the
 test's own process and through `layerfs`. The command must make the same
 binding call with the same arguments, then either print the SDK's result as
 JSON (`workspace mount` adds `ws`) and exit 0, or exit 125 with the SDK's
 refusal. The tests also check parsing, bodies, `--text`, `--stream` and exit
-codes, that every call in the table has a case, and that `api/agent/cli/src` has a
+codes, that every call in the table has a case, and that `api/cli/src` has a
 command file for every SDK call file.
 
-`api/agent/cli/test/verify/cli_real.mjs inner <store|workspace>` checks the command
+`api/cli/test/verify/cli_real.mjs inner <store|workspace>` checks the command
 against a real Store, Docker and daemon, under the E2E launcher. It runs the
-SDK's real-Store scenario (`api/agent/sdk/test/verify/scenario.mjs`,
+SDK's real-Store scenario (`api/agent/test/verify/scenario.mjs`,
 every call once) through the SDK and then as `layerfs` commands, one process
 per call. Each command must give the SDK's answer. The comparison masks only
 what differs between any two runs: the project name, object ids, times, inode

@@ -1,9 +1,9 @@
 # Fast lane: runs after a push and reports. It is never a required check and
 # never blocks a push or merge; agents do not wait for it (AGENTS.md §4).
 # Slow and FUSE mount tests run in nightly.yml. Selection: tools/ci_tests.py.
-# The Node binding and JavaScript packages stay outside CI (owner, 2026-10-23):
-# no path trigger, excluded from Clippy/tests and skipped by the guard.
-# The Rust layerfs-api crate remains included at its relocated path.
+# The Node binding (engine/crates/layerfs-node) and the JavaScript packages in
+# api/ stay outside CI (owner, 2026-10-23): no path trigger, excluded from
+# Clippy/tests and skipped by the guard. The Rust layerfs-api crate is included.
 name: ci
 
 on:
@@ -12,7 +12,7 @@ on:
     paths:
       - "core/**"
       - "engine/**"
-      - "api/layerfs-api/**"
+      - "!engine/crates/layerfs-node/**"
       - "Cargo.*"
       - ".config/**"
       - "tools/**"
@@ -24,7 +24,7 @@ on:
     paths:
       - "core/**"
       - "engine/**"
-      - "api/layerfs-api/**"
+      - "!engine/crates/layerfs-node/**"
       - "Cargo.*"
       - ".config/**"
       - "tools/**"

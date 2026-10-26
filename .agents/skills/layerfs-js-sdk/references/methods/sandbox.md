@@ -2,7 +2,7 @@
 
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. The methods
 > are #428's; behaviour is from the source and its Docker checks
-> (`api/agent/sdk/test/verify/sandbox_real.mjs`).
+> (`api/agent/test/verify/sandbox_real.mjs`).
 
 Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).
 

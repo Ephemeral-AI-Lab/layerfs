@@ -2,22 +2,18 @@
 
 > **Status:** Current general guide.
 
-Read [repository instructions](../AGENTS.md) first. This layer contains
-`layerfs-api`, the Node binding (`layerfs-node` under `binding/`) and the
-JavaScript packages. The [root Cargo manifest](../Cargo.toml) and
-[SDK guide](../docs/general/sdk.md) establish the built Rust members and public
-surface. API may depend on engine and core; dependencies and test source includes
-from either lower layer back into API are forbidden.
+Read [repository instructions](../AGENTS.md) first. This layer holds the
+published JavaScript packages only, one folder each: `agent` (@layerfs/agent),
+`cli` (@layerfs/cli), `backend` (@layerfs/backend) and `runtime`
+(@layerfs/runtime), with their guides in `docs/` and the build scripts in
+`scripts/`. It holds no Rust: the SDK method surface `layerfs-api` and the Node
+binding `layerfs-node` are engine crates (see the
+[engine guide](../engine/AGENTS.md#scope-and-ownership)); `scripts/build-native.mjs`
+builds the addon beside its crate at `engine/crates/layerfs-node/layerfs.node`.
+The packages load the engine through that addon or the worker; nothing in core
+or engine may depend on them.
 
-Project Store Init and install belong to `layerfs-project::store`; the Rust API
-retains its public re-exports and the binding makes one direct Project Init call.
-SDK-facing daemon integration tests live in `layerfs-api/tests`, with cheap
-includes of lower-layer daemon fixtures. Build the ordinary daemon binary before
-running tests that launch it. `LAYERFS_TEST_DAEMON` may select an explicit binary;
-otherwise the tests locate the sibling Cargo output. The native binding's
-[external proof guide](binding/tests/README.md) describes its Linux addon tests.
-
-All API product code follows the
+All API product code, and the engine crates it loads, follow the
 [production size and responsibility rules](../engine/AGENTS.md#production-file-size-and-responsibility)
 and [checks and completion rules](../engine/AGENTS.md#checks-and-completion),
 including bounded test commands, build-before-run, locked dependencies, ARM64

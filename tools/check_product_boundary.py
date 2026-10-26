@@ -141,8 +141,10 @@ LAYER = {
     "layerfs-sandbox": ENGINE,
     "layerfs-store-service": ENGINE,
     "layerfs-workspace": ENGINE,
-    "layerfs-api": API,
-    "layerfs-node": API,
+    # The SDK method surface and the Node binding are engine crates; api/ holds
+    # only the published JavaScript packages, so no crate is in the api layer.
+    "layerfs-api": ENGINE,
+    "layerfs-node": ENGINE,
 }
 
 
@@ -312,12 +314,6 @@ def crate_name(path):
             if parts[index + 1] == "layerfs-api" and index + 2 < len(parts) and parts[index + 2] == "core":
                 return "layerfs-api-core"
             return parts[index + 1]
-    for index, part in enumerate(parts):
-        if part == "api" and index + 1 < len(parts):
-            if parts[index + 1] == "binding":
-                return "layerfs-node"
-            if parts[index + 1] == "layerfs-api":
-                return "layerfs-api"
     return None
 
 
@@ -401,7 +397,7 @@ def production_files(root, include_sdk=True):
     """Known product inputs; tests/examples/tools are deliberately outside this scope."""
     files = set()
     for package in crate_directories(root):
-        if not include_sdk and package == root / "api/binding":
+        if not include_sdk and package == root / "engine/crates/layerfs-node":
             continue
         if not package.is_dir():
             continue
@@ -411,8 +407,8 @@ def production_files(root, include_sdk=True):
         return sorted(files)
     api = root / "api"
     for directory in (
-        api / "agent" / "sdk" / "src",
-        api / "agent" / "cli" / "src",
+        api / "agent" / "src",
+        api / "cli" / "src",
         api / "backend" / "src",
         api / "runtime" / "src",
     ):
@@ -421,7 +417,7 @@ def production_files(root, include_sdk=True):
 
 
 def main():
-    # --skip-sdk leaves api/ (binding and JS packages) out of the scan; CI uses it (owner, 2026-10-23).
+    # --skip-sdk leaves the Node binding and api/'s JS packages out of the scan; CI uses it (owner, 2026-10-23).
     root = Path(__file__).resolve().parents[1]
     files = production_files(root, include_sdk="--skip-sdk" not in sys.argv[1:])
     failures = 0

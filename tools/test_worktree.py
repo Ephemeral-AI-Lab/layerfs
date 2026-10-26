@@ -30,19 +30,19 @@ class WorktreeTests(unittest.TestCase):
             "core/crates/example/src",
             "engine/vendor",
             "engine/crates/example/src",
-            "api/layerfs-api/src",
+            "engine/crates/layerfs-api/src",
             ".cargo",
-            "api/agent/sdk/src",
-            "api/agent/sdk/test",
+            "api/agent/src",
+            "api/agent/test",
             "api/backend/src",
             "api/runtime/src",
-            "api/binding/src",
+            "engine/crates/layerfs-node/src",
         ):
             (self.repo / folder).mkdir(parents=True)
         for name in ("Cargo.toml", "Cargo.lock", ".cargo/config.toml", "api/package.json"):
             (self.repo / name).write_text("{}\n")
-        (self.repo / "api/agent/sdk/src/index.js").write_text("export const value = 1;\n")
-        (self.repo / "api/agent/sdk/package.json").write_text(
+        (self.repo / "api/agent/src/index.js").write_text("export const value = 1;\n")
+        (self.repo / "api/agent/package.json").write_text(
             '{"name": "@layerfs/agent", "exports": {".": "./src/index.js", "./package.json": "./package.json"}}\n'
         )
         for name in ("backend", "runtime"):
@@ -50,9 +50,9 @@ class WorktreeTests(unittest.TestCase):
             (self.repo / f"api/{name}/package.json").write_text(
                 f'{{"name": "@layerfs/{name}", "exports": {{".": "./src/index.js"}}}}\n'
             )
-        (self.repo / "api/agent/cli/src").mkdir(parents=True)
-        (self.repo / "api/agent/cli/src/layerfs.js").write_text('import "@layerfs/agent";\n')
-        (self.repo / "api/agent/cli/package.json").write_text('{"name": "@layerfs/cli"}\n')
+        (self.repo / "api/cli/src").mkdir(parents=True)
+        (self.repo / "api/cli/src/layerfs.js").write_text('import "@layerfs/agent";\n')
+        (self.repo / "api/cli/package.json").write_text('{"name": "@layerfs/cli"}\n')
         git(self.repo, "init", "-q")
         git(self.repo, "config", "user.name", "Fixture")
         git(self.repo, "config", "user.email", "fixture@example.invalid")
@@ -77,7 +77,7 @@ class WorktreeTests(unittest.TestCase):
         for relative in (
             "core/crates/example/src/lib.rs",
             "engine/crates/example/src/lib.rs",
-            "api/layerfs-api/src/lib.rs",
+            "engine/crates/layerfs-api/src/lib.rs",
         ):
             path = self.repo / relative
             path.write_text("pub fn layer() {}\n")
@@ -169,7 +169,7 @@ class WorktreeTests(unittest.TestCase):
 
         def execute(*a, **kw):
             if mutate:
-                (self.repo / "api/agent/sdk/src/index.js").write_text("changed\n")
+                (self.repo / "api/agent/src/index.js").write_text("changed\n")
 
         with patch.object(builds, "execute", side_effect=execute), patch.object(builds, "environment", return_value={}):
             with contextlib.redirect_stdout(io.StringIO()):
@@ -182,16 +182,16 @@ class WorktreeTests(unittest.TestCase):
         # the bundle mirrors the repository layout under api/
         for name in (
             "api/package.json",
-            "api/agent/sdk/src/index.js",
+            "api/agent/src/index.js",
             "api/backend/src/index.js",
             "api/runtime/src/index.js",
         ):
             self.assertIn(name, manifest["files"])
-        self.assertFalse(any(name.startswith("api/binding/") for name in manifest["files"]))
+        self.assertFalse(any(name.startswith("engine/crates/layerfs-node/") for name in manifest["files"]))
         # each package resolves by name through a shim, not a symlink
         self.assertEqual(
             (bundle / "api/node_modules/@layerfs/agent/index.js").read_text(),
-            'export * from "../../../agent/sdk/src/index.js";\n',
+            'export * from "../../../agent/src/index.js";\n',
         )
         self.assertEqual(
             json.loads((bundle / "api/node_modules/@layerfs/agent/package.json").read_text())["exports"],
@@ -202,13 +202,13 @@ class WorktreeTests(unittest.TestCase):
             'export * from "../../../backend/src/index.js";\n',
         )
         # the layerfs command, which reaches the agent through its own shim
-        self.assertIn("api/agent/cli/src/layerfs.js", manifest["files"])
+        self.assertIn("api/cli/src/layerfs.js", manifest["files"])
         self.assertEqual(
-            (bundle / "api/agent/cli/node_modules/@layerfs/agent/index.js").read_text(),
-            'export * from "../../../../sdk/src/index.js";\n',
+            (bundle / "api/cli/node_modules/@layerfs/agent/index.js").read_text(),
+            'export * from "../../../../agent/src/index.js";\n',
         )
-        (self.repo / "api/agent/sdk/src/index.js").write_text("later edit\n")
-        self.assertEqual((bundle / "api/agent/sdk/src/index.js").read_text(), "export const value = 1;\n")
+        (self.repo / "api/agent/src/index.js").write_text("later edit\n")
+        self.assertEqual((bundle / "api/agent/src/index.js").read_text(), "export const value = 1;\n")
         file = bundle / "layerfs.node"
         file.chmod(0o600)
         file.write_bytes(b"corrupt")

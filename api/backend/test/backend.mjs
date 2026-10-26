@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 
-const FAKE = fileURLToPath(new URL("../../agent/sdk/test/fixture/fake-native.cjs", import.meta.url));
+const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
 Object.assign(process.env, { LAYERFS_NATIVE: FAKE, LAYERFS_HOME: "/private/home", LAYERFS_STORE_PATH: "/fake/store.sqlite" });
 for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "WORKER_ENDPOINT"]) delete process.env[`LAYERFS_${name}`];
 const { LayerFS, CODES } = await import("@layerfs/agent");

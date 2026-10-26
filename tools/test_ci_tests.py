@@ -58,12 +58,12 @@ class ExecutablesFromCargoJson(unittest.TestCase):
                         {
                             "name": "native_discovery",
                             "kind": ["test"],
-                            "src_path": "/w/api/binding/tests/native_discovery.rs",
+                            "src_path": "/w/engine/crates/layerfs-node/tests/native_discovery.rs",
                         },
                         {
                             "name": "native_admission",
                             "kind": ["test"],
-                            "src_path": "/w/api/binding/tests/native_admission.rs",
+                            "src_path": "/w/engine/crates/layerfs-node/tests/native_admission.rs",
                         },
                     ],
                 }
