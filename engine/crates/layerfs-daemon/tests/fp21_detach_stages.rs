@@ -14,8 +14,11 @@
 //! 2. **OPEN** and 3. **READDIR inside a provider read.** The Store is
 //!    composed from the public pieces `open_store` composes, with each read
 //!    session's pack persistence port behind `support/store_gate.rs` and no
-//!    object cache. An external python3 process of the command identity looks
-//!    the file up (or opens the directory) while the gate is open, and makes
+//!    shared canonical cache. Bounded reads of distinct stored inode values
+//!    displace the mounted reader's prepared values before the gate is armed;
+//!    pack and locator caches remain enabled. An external python3 process of
+//!    the command identity looks the file up (or opens the directory) while
+//!    the gate is open, and makes
 //!    its `open` (or its listing) after the test armed the gate: the request
 //!    is held inside its reader's provider call. Both are synchronous kernel
 //!    requests whose caller is blocked in its system call, so the product's
@@ -49,6 +52,8 @@ mod model;
 #[allow(dead_code)]
 #[path = "support/mounted.rs"]
 mod mounted;
+#[path = "support/fp21_read_pressure.rs"]
+mod read_pressure;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
@@ -64,6 +69,7 @@ use layerfs_daemon::{
     OwnerClient,
 };
 use layerfs_fuse::request::Opcode;
+use layerfs_history::HistoryCatalog;
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState, StoredCounts};
 use layerfs_persistence::Handles;
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
@@ -389,7 +395,7 @@ impl Held {
         }
     }
 }
-/// One mounted Workspace over a gated Store with no object cache, a helper
+/// One mounted Workspace over a gated Store with no shared canonical cache, a helper
 /// Workspace bound beside it for the engine's daemon-wide counts, and one
 /// caller about to be held inside the Store read of its request.
 struct Staged {
@@ -427,6 +433,15 @@ impl Staged {
         let config = || fixture.config.clone();
         let writer =
             Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap();
+        let scope = writer
+            .history
+            .branch_snapshot(fixture.branch)
+            .unwrap()
+            .unwrap()
+            .scope;
+        let producer = Storage::new(writer.storage.clone()).unwrap();
+        let pressure = read_pressure::prepare(&producer);
+        drop(producer);
         let gate = Gate::new();
         let reader_config = fixture.config.clone();
         let reader_gate = gate.clone();
@@ -471,6 +486,7 @@ impl Staged {
             &Path::new(&ready.directory).join(held.target()),
         );
         quiet(&harness, ready.token);
+        read_pressure::displace(&store, scope, ready.token.workspace, &pressure);
         let mount = engine_mount(&client, route).expect("attached engine mount");
         let idle = engine_rows(&harness, ready.token);
         assert_eq!(idle.0.namespaces, empty.namespaces);
@@ -573,10 +589,22 @@ fn unmount_beside(held: Held) {
     // The gate is armed, then the caller makes its one request.
     staged.gate.arm();
     staged.caller().send(held.mode());
-    within("the request is inside its Store read", || {
+    let deadline = Instant::now() + WAIT;
+    loop {
         let now = staged.work();
-        staged.gate.observe().holding == 1 && now.active == 1
-    });
+        if staged.gate.observe().holding == 1 && now.active == 1 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "NOT STAGED: {held:?}: mount={now:?} gate={:?} reads={:?} storage={:?} caller={:?}",
+            staged.gate.observe(),
+            staged.store.read_work(),
+            staged.store.reader_storage_diagnostics(2),
+            staged.caller().lines.try_recv()
+        );
+        thread::sleep(Duration::from_millis(2));
+    }
     let inside = staged.work();
     let rows = engine_rows(&staged.harness, staged.ready.token);
     let readers = staged
