@@ -36,6 +36,16 @@ pub fn failure(e: WorkspaceError) -> SdkRefusal {
     };
     args::refuse(code, e.to_string(), SdkValue::Null)
 }
+/// A refused view read. A read changes nothing in the overlay, so an engine
+/// error is a known `Failed`, never the uncertain `Unknown` that keeps the
+/// call's Workspace.
+pub fn read_failure(e: WorkspaceError) -> SdkRefusal {
+    let mut refusal = failure(e);
+    if refusal.code == "Unknown" {
+        refusal.code = "Failed".to_owned();
+    }
+    refusal
+}
 impl<'a> Mutation<'a> {
     pub fn new(workspace: &'a BoundWorkspace) -> Result<Self> {
         let op = workspace.operation().map_err(failure)?;
@@ -109,7 +119,7 @@ impl<'a> Mutation<'a> {
         let mut stat = self
             .view
             .stat(self.op.overlay(), self.view.root_serial())
-            .map_err(failure)?;
+            .map_err(read_failure)?;
         let mut at = String::new();
         for name in path.split('/').filter(|s| !s.is_empty()) {
             let name = checked(path, name)?;
@@ -121,7 +131,7 @@ impl<'a> Mutation<'a> {
             stat = self
                 .view
                 .lookup(self.op.overlay(), stat.serial, &name)
-                .map_err(failure)?;
+                .map_err(read_failure)?;
         }
         Ok(stat)
     }
@@ -146,7 +156,7 @@ impl<'a> Mutation<'a> {
         let mut bytes = Vec::new();
         self.view
             .read(self.op.overlay(), serial, offset, length, &mut bytes)
-            .map_err(failure)?;
+            .map_err(read_failure)?;
         Ok(bytes)
     }
     pub fn write_at(&mut self, serial: u64, offset: u64, bytes: &[u8]) -> Result<()> {

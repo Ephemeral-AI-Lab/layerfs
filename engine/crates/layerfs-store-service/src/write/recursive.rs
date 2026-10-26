@@ -1,5 +1,5 @@
 //! Recursive mutations use bounded directory pages and SQLite-backed hardlink maps.
-use super::mutation::{failure, Mutation, Result};
+use super::mutation::{failure, read_failure, Mutation, Result};
 use crate::history::lookup as args;
 use layerfs_content::{
     filesystem::{PathName, SymlinkTarget},
@@ -55,7 +55,7 @@ impl Mutation<'_> {
                     let page = self
                         .view
                         .list(self.op.overlay(), frame.serial, frame.after.as_deref())
-                        .map_err(failure)?;
+                        .map_err(read_failure)?;
                     frame.after = page.continuation;
                     frame.done = frame.after.is_none();
                     frame.rows = page.entries.into_iter();
@@ -64,7 +64,10 @@ impl Mutation<'_> {
             };
             if let Some((name, serial)) = next {
                 let child = join(&frame.path, &name)?;
-                let stat = self.view.stat(self.op.overlay(), serial).map_err(failure)?;
+                let stat = self
+                    .view
+                    .stat(self.op.overlay(), serial)
+                    .map_err(read_failure)?;
                 if stat.kind == InodeKind::Directory {
                     stack.push(Frame::new(child, serial));
                 } else {
@@ -148,7 +151,7 @@ impl Mutation<'_> {
                         let page = self
                             .view
                             .list(self.op.overlay(), frame.serial, frame.after.as_deref())
-                            .map_err(failure)?;
+                            .map_err(read_failure)?;
                         frame.after = page.continuation;
                         frame.done = frame.after.is_none();
                         frame.rows = page.entries.into_iter();
@@ -160,7 +163,10 @@ impl Mutation<'_> {
                 };
                 let source = join(&frame.path, &name)?;
                 let target = format!("{to}{}", &source[from.len()..]);
-                let stat = self.view.stat(self.op.overlay(), serial).map_err(failure)?;
+                let stat = self
+                    .view
+                    .stat(self.op.overlay(), serial)
+                    .map_err(read_failure)?;
                 self.copy_one(serial, &target, scope)?;
                 if stat.kind == InodeKind::Directory {
                     stack.push(Frame::new(source, serial));
@@ -187,7 +193,10 @@ impl Mutation<'_> {
         to: &str,
         scope: IndexedOperationRecordScope,
     ) -> Result<()> {
-        let source = self.view.stat(self.op.overlay(), serial).map_err(failure)?;
+        let source = self
+            .view
+            .stat(self.op.overlay(), serial)
+            .map_err(read_failure)?;
         let (parent, name) = self.parent(to)?;
         let mut raw = [0; 32];
         raw[..8].copy_from_slice(&serial.to_be_bytes());
@@ -229,7 +238,7 @@ impl Mutation<'_> {
                 target: SymlinkTarget::new(
                     self.view
                         .readlink(self.op.overlay(), serial)
-                        .map_err(failure)?
+                        .map_err(read_failure)?
                         .as_bytes()
                         .to_vec(),
                 )
