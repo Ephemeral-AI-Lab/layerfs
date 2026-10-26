@@ -339,7 +339,7 @@ class CleanupTests(unittest.TestCase):
 
     def test_caches_discovery_keeps_helpers_and_active_profile(self):
         tree = self.root / "linked"
-        target = tree / "core/target/linux"
+        target = tree / "target/linux"
         profile = target / "debug"
         (profile / "deps").mkdir(parents=True)
         (target / ".rustc_info.json").write_text("{}")
@@ -576,7 +576,7 @@ class CleanupTests(unittest.TestCase):
         other = self.root / "linked"
         self.git("worktree", "add", "--detach", str(other), "HEAD")
         for tree in (self.repo, other):
-            target = tree / "core/target"
+            target = tree / "target"
             (target / "debug/deps").mkdir(parents=True)
             (target / ".rustc_info.json").write_text("{}")
         registered = {str(p): {} for p in (self.repo, other)}
@@ -590,9 +590,9 @@ class CleanupTests(unittest.TestCase):
             caches_only=True,
             cache_worktrees=[str(self.repo)],
         )
-        self.assertEqual([a["path"] for a in scope["actions"]], [str(self.repo / "core/target/debug")])
+        self.assertEqual([a["path"] for a in scope["actions"]], [str(self.repo / "target/debug")])
         default, _ = discover(self.repo, {}, registered, [], [], "user authorized caches", caches_only=True)
-        self.assertEqual([a["path"] for a in default["actions"]], [str(other / "core/target/debug")])
+        self.assertEqual([a["path"] for a in default["actions"]], [str(other / "target/debug")])
 
     def test_archive_across_hash_batches_preserves_every_file(self):
         source = self.root / "many-files"

@@ -84,7 +84,7 @@ def main():
 
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(
-        ["git", "status", "--porcelain", "--", "core/crates", "crates"],
+        ["git", "status", "--porcelain", "--", "core/crates", "engine/crates", "api", "crates"],
         cwd=ROOT,
         text=True,
     ).strip()
@@ -105,7 +105,7 @@ def main():
             ),
             (
                 "candidate",
-                "core/Cargo.toml",
+                "Cargo.toml",
                 "layerfs-content",
                 "filesystem_primitives_candidate",
             ),

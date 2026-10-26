@@ -3,7 +3,7 @@
 # the pinned version:
 #   pipx run --spec ruff==0.17.2 ruff format
 #   pipx run --spec ruff==0.17.2 ruff check
-# Docs, evidence and core/vendor are outside `include` and stay as recorded.
-include = ["core/tools/**/*.py", "tools/**/*.py"]
+# Docs, evidence and engine/vendor are outside `include` and stay as recorded.
+include = ["tools/**/*.py"]
 target-version = "py311" # tomllib
 line-length = 120

@@ -109,7 +109,7 @@ been deleted; `layerfs-metadata` is also absent. The combined
 `layerfs-persistence` crate is the active provider. Historical plans describing those
 backends must not be used as instructions for the current implementation.
 
-Sources: [workspace](../../core/Cargo.toml),
+Sources: [workspace](../../Cargo.toml),
 [content public surface](../../core/crates/layerfs-content/src/lib.rs),
 [storage public surface](../../core/crates/layerfs-storage/src/lib.rs),
 [history contract](../../core/crates/layerfs-history/src/contract/catalog.rs),
@@ -190,9 +190,9 @@ let construction = storage.policy().construction();
 let capacities = construction.capacities();
 ```
 
-Source: [configuration](../../core/crates/layerfs-persistence/src/store/config.rs),
-[open/create](../../core/crates/layerfs-persistence/src/store/open.rs),
-[handles](../../core/crates/layerfs-persistence/src/store/handles.rs),
+Source: [configuration](../../engine/crates/layerfs-persistence/src/store/config.rs),
+[open/create](../../engine/crates/layerfs-persistence/src/store/open.rs),
+[handles](../../engine/crates/layerfs-persistence/src/store/handles.rs),
 [storage](../../core/crates/layerfs-storage/src/store/handle.rs).
 
 ### 3.2 Construction, read, and filesystem APIs
@@ -439,7 +439,7 @@ genesis LayerStack, not just file payload storage. The deadline is shared with
 workers; it is not a rollback boundary. Seal is a separate consuming handle lifecycle
 operation, not a substitute for either Save finish.
 
-Source: [Init API](../../core/crates/layerfs-project/src/import/init.rs).
+Source: [Init API](../../engine/crates/layerfs-project/src/import/init.rs).
 
 Directory construction uses bounded `Acquisition::bindings` windows containing
 name, position and canonical identity; inode and alias validation retain full
@@ -559,8 +559,8 @@ must still provide stable input: those checks are not a general snapshot service
 Ordering scratch for filesystem construction does not remove the retained scan
 collections. A fully file-count-bounded importer remains additional work.
 
-Sources: [worker scan](../../core/crates/layerfs-project/src/import/scan.rs),
-[batch/channel](../../core/crates/layerfs-project/src/import/batch.rs),
+Sources: [worker scan](../../engine/crates/layerfs-project/src/import/scan.rs),
+[batch/channel](../../engine/crates/layerfs-project/src/import/batch.rs),
 [storage bounds](../../core/crates/layerfs-storage/src/store/policy.rs),
 [construction](../../core/crates/layerfs-content/src/file/construction/bytes.rs).
 

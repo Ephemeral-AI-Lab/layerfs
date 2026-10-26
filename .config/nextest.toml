@@ -1,0 +1,13 @@
+# nextest profiles for the non-blocking GitHub CI. Selection lives in
+# tools/ci_tests.py; this file only sets how a selected test runs.
+
+[profile.ci]
+# Every test is its own process. Report all failures; never retry one.
+fail-fast = false
+retries = 0
+# The repository's 2-minute ceiling, per test: warn every 30 s, kill at 120 s.
+slow-timeout = { period = "30s", terminate-after = 4 }
+failure-output = "immediate-final"
+success-output = "never"
+status-level = "fail"
+final-status-level = "slow"

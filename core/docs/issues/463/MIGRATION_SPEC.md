@@ -80,8 +80,8 @@ migration hits most.
 
 ## 4. Step 1: layer guard (tooling only)
 
-Files: [core/tools/check_product_boundary.py](../../../tools/check_product_boundary.py)
-and [core/tools/test_check_product_boundary.py](../../../tools/test_check_product_boundary.py).
+Files: [core/tools/check_product_boundary.py](../../../../tools/check_product_boundary.py)
+and [core/tools/test_check_product_boundary.py](../../../../tools/test_check_product_boundary.py).
 
 Today the guard has:
 
@@ -206,7 +206,7 @@ For each file, in this order:
    a test at its new home.
 
 Then drop `layerfs-api` from the daemon's dev-dependencies and remove the guard
-exception from step 1. Update [core/tools/ci_tests.py](../../../tools/ci_tests.py)
+exception from step 1. Update [core/tools/ci_tests.py](../../../../tools/ci_tests.py)
 for any renamed or moved test target, including its `SLOW` list.
 
 Daemon and mount tests are Linux only: build and run them through the worktree's

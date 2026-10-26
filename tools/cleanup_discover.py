@@ -21,6 +21,7 @@ def repository_container(container, repo, registered):
 
 def cargo_profiles(worktree):
     """Find real Cargo targets, including the repository's nested Linux targets."""
+    # Keep discovering the retired target path for other worktrees awaiting rebase.
     for root in (worktree / "target", worktree / "core/target"):
         if not root.is_dir() or root.is_symlink():
             continue

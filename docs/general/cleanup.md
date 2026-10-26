@@ -370,8 +370,8 @@ or the user authorization recorded by discovery. Example selections:
   "actions": [
     {
       "kind": "cargo-cache",
-      "path": "/absolute/path/to/completed-worktree/core/target/debug",
-      "target_root": "/absolute/path/to/completed-worktree/core/target",
+      "path": "/absolute/path/to/completed-worktree/target/debug",
+      "target_root": "/absolute/path/to/completed-worktree/target",
       "owner": "completed assignment owner",
       "reason": "assignment handed off; cache released",
       "released": true

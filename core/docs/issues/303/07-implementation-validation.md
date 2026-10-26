@@ -53,9 +53,9 @@ historical baseline pins, receipts and verdicts retain their original scope.
 - `main` at `f96d97651be5299f153ccde2bc8d921dd58807ad`.
 - The cluster two crates (`layerfs-workspace`, `-fuse`, `-daemon`, `-bridge`,
   `-sandbox`, both `layerfs-api` packages) and `layerfs-server` are in `exclude`
-  in `core/Cargo.toml:19-28`. They are byte-identical to `7edddbdb8`, have no lock
+  in `Cargo.toml:19-28`. They are byte-identical to `7edddbdb8`, have no lock
   entries, and are not built or tested by the prescribed
-  `--manifest-path core/Cargo.toml` commands.
+  `--manifest-path Cargo.toml` commands.
 - `layerfs-server` and the SDK import `layerfs_storage::Store` and
   `layerfs_history::sqlite`, which cluster one no longer exports. This comes
   from reading imports and exports; nothing was compiled.
@@ -146,7 +146,7 @@ identities.
 | Sandbox integration | Running Linux ARM64 Docker backend; checked client/server version 29.5.2 | Actual daemon, SQLite overlay, Linux FUSE mounts and ordinary Bash execution |
 | Host provisioning/control | macOS Project Init/seal/install, then control-only | Explicit Disposable Store; no installed Store handle or object/Save/history data service |
 | Sandbox runtime | Linux sandbox with a daemon initialized before Workspace readiness | Direct shared Store and one local Overlay per daemon; multiple Workspaces; ordinary runtime owns processes/streams |
-| Build outputs | Worktree-owned `core/target/`; distinct owned Linux target such as `core/target/cluster2-linux/` | Reuse matching build seals; no target/cache borrowed from another worktree |
+| Build outputs | Worktree-owned `target/`; distinct owned Linux target such as `target/cluster2-linux/` | Reuse matching build seals; no target/cache borrowed from another worktree |
 
 Docker availability does not prove mounted FUSE readiness or the locked Linux
 toolchain. S0 still establishes the real image/build configuration, `/dev/fuse`
