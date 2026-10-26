@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "id": "codex-parallel-verify",
+  "name": "LayerFS for Codex parallel verify",
+  "summary": "One shared LayerFS Store, one Branch per Codex hypothesis, verify commands in parallel.",
+  "authors": [
+    {
+      "name": "Earson",
+      "github": "earsonlau"
+    }
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/earsonlau/layerfs-codex-parallel-verify",
+  "tags": [
+    "codex",
+    "verify",
+    "worktree",
+    "parallel"
+  ],
+  "platforms": [
+    "linux",
+    "macos",
+    "windows-wsl2"
+  ],
+  "uses": [
+    "agent",
+    "runtime"
+  ],
+  "host": {
+    "name": "Codex",
+    "url": "https://github.com/openai/codex"
+  },
+  "status": "preview",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "commit": "e440813d6ca2cc973ddae517319addeb52b694b6",
+      "date": "2026-10-25",
+      "layerfs": {
+        "version": "v1.1.0",
+        "commit": "ad78914e36b258b360daf13aec164b5655814689"
+      },
+      "notes": "Lazy sandboxes; keep commit when unmount fails; default prefix hyp; sandbox image needs node/npm; LayerFS pin ad78914e (#436 overlay fix)."
+    }
+  ]
+}
