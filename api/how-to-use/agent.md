@@ -149,6 +149,11 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
 | `LAYERFS_TRACE_START` | `1` adds a start line before each traced call; read at every call. |
 
+The Docker Engine server selected by `LAYERFS_DOCKER` must accept Engine API
+v1.54 requests. The SDK always uses explicit `/v1.54/...` paths and does not
+negotiate from the server's maximum API version. Check the server's API range
+with `docker version`.
+
 The SDK and the `layerfs` command read only these `LAYERFS_` names. An
 integration that can set only names with its own prefix maps them to these in
 its own wrapper.

@@ -75,7 +75,8 @@ impl WireFailure {
     }
 }
 
-/// Original bounded HTTP error diagnostic; bytes beyond this window are explicitly unobserved.
+/// Original bounded HTTP error diagnostic; Debug shows only the retained prefix as lossy UTF-8,
+/// with controls escaped, while bytes beyond this window remain explicitly unobserved.
 pub struct ErrorDiagnostic {
     pub prefix: Vec<u8>,
     pub observed_bytes: u64,
@@ -84,7 +85,9 @@ pub struct ErrorDiagnostic {
 }
 impl fmt::Debug for ErrorDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let prefix = String::from_utf8_lossy(&self.prefix);
         f.debug_struct("ErrorDiagnostic")
+            .field("prefix", &prefix)
             .field("prefix_bytes", &self.prefix.len())
             .field("observed_bytes", &self.observed_bytes)
             .field("complete", &self.complete)

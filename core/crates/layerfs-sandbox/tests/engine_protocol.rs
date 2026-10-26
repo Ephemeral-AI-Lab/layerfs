@@ -3,7 +3,7 @@
 #[path = "support/engine.rs"]
 mod peer;
 use layerfs_sandbox::{
-    backend::docker::{Docker, ExecRequest},
+    backend::docker::{CreatePhase, Docker, ExecRequest, SandboxRequest},
     CommandIdentity, ContainerId, ExecId, RuntimeError,
 };
 use std::io::{self, Write};
@@ -20,6 +20,14 @@ fn request() -> ExecRequest {
         environment: vec!["X=a\"b\\c\n".into()],
         directory: "/tmp".into(),
         stdin: false,
+    }
+}
+fn sandbox_request() -> SandboxRequest {
+    SandboxRequest {
+        image: format!("sha256:{}", "d".repeat(64)),
+        store_volume: "project-store".into(),
+        port: 30421,
+        labels: vec![("layerfs.role".into(), "sandbox".into())],
     }
 }
 fn created() -> Vec<u8> {
@@ -214,9 +222,76 @@ fn actual_mismatched_inspection_and_http_error_body_remain_distinct_from_selecto
     let failed = docker.inspect_exec(container(), exec()).unwrap_err();
     assert_eq!(failed.observed_exec, None);
     assert_eq!(failed.requested_exec, Some(exec()));
+    let rendered = format!("{failed:?}");
+    assert!(rendered.contains("original remote error"));
     let diagnostic = failed.error_body.unwrap();
     assert!(diagnostic.complete);
     assert_eq!(diagnostic.prefix, body);
+    server.finish();
+}
+#[test]
+fn sandbox_create_debug_shows_docker_api_version_refusal_without_negotiating() {
+    let message = "client version 1.54 is too new. Maximum supported API version is 1.52";
+    let body = format!("{{\"message\":\"{message}\"}}");
+    let volume = br#"{"Name":"project-store","Driver":"local","Scope":"local","Options":null}"#;
+    let (docker, server) = peer::Peer::new(
+        vec![peer::fixed(200, volume), peer::fixed(400, body.as_bytes())],
+        8192,
+    );
+    let failed = docker.create_sandbox(sandbox_request()).unwrap_err();
+    assert_eq!(failed.phase, CreatePhase::Create);
+    assert_eq!(failed.transfer.status, Some(400));
+    let rendered = format!("{failed:?}");
+    assert!(rendered.contains(message));
+    let requests = server.finish();
+    assert_eq!(requests.len(), 2);
+    assert!(String::from_utf8(requests[0].clone())
+        .unwrap()
+        .starts_with("GET /v1.54/volumes/project-store HTTP/1.1"));
+    assert!(String::from_utf8(requests[1].clone())
+        .unwrap()
+        .starts_with("POST /v1.54/containers/create HTTP/1.1"));
+}
+#[test]
+fn sandbox_volume_api_version_refusal_stops_before_create() {
+    let message = "client version 1.54 is too new. Maximum supported API version is 1.52";
+    let body = format!("{{\"message\":\"{message}\"}}");
+    let (docker, server) = peer::Peer::new(vec![peer::fixed(400, body.as_bytes())], 8192);
+    let failed = docker.create_sandbox(sandbox_request()).unwrap_err();
+    assert_eq!(failed.phase, CreatePhase::Volume);
+    assert_eq!(failed.transfer.status, Some(400));
+    assert!(format!("{failed:?}").contains(message));
+    let requests = server.finish();
+    assert_eq!(requests.len(), 1);
+    let request = String::from_utf8(requests[0].clone()).unwrap();
+    assert!(request.starts_with("GET /v1.54/volumes/project-store HTTP/1.1"));
+    assert!(!request.contains("POST /v1.54/containers/create"));
+}
+#[test]
+fn http_error_debug_shows_only_the_bounded_prefix() {
+    let mut body = vec![b'x'; 1024];
+    body.extend_from_slice(b"TAIL_SECRET_MARKER");
+    let (docker, server) = peer::Peer::new(vec![peer::fixed(500, &body)], 8192);
+    let failed = docker.inspect_exec(container(), exec()).unwrap_err();
+    let rendered = format!("{failed:?}");
+    let diagnostic = failed.error_body.unwrap();
+    assert_eq!(diagnostic.prefix, vec![b'x'; 1024]);
+    assert_eq!(diagnostic.observed_bytes, 1025);
+    assert!(!diagnostic.complete);
+    assert!(rendered.contains("prefix_bytes: 1024"));
+    assert!(rendered.contains("observed_bytes: 1025"));
+    assert!(rendered.contains("x".repeat(64).as_str()));
+    assert!(!rendered.contains("TAIL_SECRET_MARKER"));
+    server.finish();
+}
+#[test]
+fn http_error_debug_escapes_controls_and_replaces_invalid_utf8() {
+    let body = b"message:\nnext\t\0\xff";
+    let (docker, server) = peer::Peer::new(vec![peer::fixed(400, body)], 8192);
+    let failed = docker.inspect_exec(container(), exec()).unwrap_err();
+    let rendered = format!("{failed:?}");
+    assert!(rendered.contains("prefix: \"message:\\nnext\\t\\0\u{fffd}\""));
+    assert!(!rendered.contains("message:\nnext"));
     server.finish();
 }
 #[test]
