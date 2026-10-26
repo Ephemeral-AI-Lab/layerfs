@@ -1,10 +1,9 @@
 """Small source-text guard for core/AGENTS.md; semantic review is still required."""
 
-from pathlib import Path
 import re
 import sys
 import tomllib
-
+from pathlib import Path
 
 ATTR = re.compile(r"#\s*!?\s*\[([^\]]*)\]", re.DOTALL)
 TEST_ATTR = re.compile(r"^(?:\w+\s*::\s*)*(?:test|bench)\b")
@@ -58,6 +57,16 @@ UNSAFE_ROOT_ATTR = {
 # First-party production edges; third-party approvals and the locked graph are
 # checked separately. The combined SQLite adapter is the active provider.
 ALLOWED_DEPENDENCIES = {
+    "layerfs-node": {
+        "layerfs-api",
+        "layerfs-bridge",
+        "layerfs-history",
+        "layerfs-persistence",
+        "layerfs-sandbox",
+        "layerfs-storage",
+        "layerfs-store-service",
+        "layerfs-telemetry",
+    },
     "layerfs-telemetry": set(),
     "layerfs-content": {"layerfs-telemetry"},
     "layerfs-storage": {"layerfs-content", "layerfs-telemetry"},
@@ -108,6 +117,71 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-sandbox": set(),
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
+LAYER_ORDER = ("core", "engine", "api")
+CORE, ENGINE, API = LAYER_ORDER
+LAYER = {
+    "layerfs-content": CORE,
+    "layerfs-history": CORE,
+    "layerfs-storage": CORE,
+    "layerfs-telemetry": CORE,
+    "layerfs-bridge": ENGINE,
+    "layerfs-daemon": ENGINE,
+    "layerfs-fuse": ENGINE,
+    "layerfs-overlay": ENGINE,
+    "layerfs-persistence": ENGINE,
+    "layerfs-project": ENGINE,
+    "layerfs-sandbox": ENGINE,
+    "layerfs-store-service": ENGINE,
+    "layerfs-workspace": ENGINE,
+    "layerfs-api": API,
+    "layerfs-node": API,
+}
+# Temporary upward test link; migration #463 step 2b removes both exceptions.
+UPWARD_TEST_EDGE = ("layerfs-daemon", "layerfs-api")
+UPWARD_TEST_PATHS = {
+    (f"tests/{test}.rs", f"tests/support/{helper}.rs")
+    for test in ("merge_report", "concurrent_commits", "lane_merge")
+    for helper in ("installed_store", "sdk")
+}
+
+
+def layer_violations(name, dependency, kind):
+    if dependency.startswith("layerfs-") and dependency not in LAYER:
+        return [(1, f"crate missing from layer map: {dependency}")]
+    if dependency in LAYER and LAYER_ORDER.index(LAYER[dependency]) > LAYER_ORDER.index(LAYER[name]):
+        if kind == "dev-dependencies" and (name, dependency) == UPWARD_TEST_EDGE:
+            return []
+        return [(1, f"upward {kind} edge {name} ({LAYER[name]}) -> {dependency} ({LAYER[dependency]})")]
+    return []
+
+
+def crate_directories(core):
+    """All Rust crate roots; keep layout knowledge in one helper."""
+    return sorted(path for path in (core / "crates").glob("*") if path.is_dir()) + [core.parent / "api/binding"]
+
+
+def test_path_violations(path, source, packages):
+    """Resolve test includes before checking their owning crate's layer."""
+    packages = {root.resolve(): name for root, name in packages.items()}
+    path = path.resolve()
+    owner = next((root for root in packages if path.is_relative_to(root)), None)
+    if owner is None or packages[owner] not in LAYER:
+        return []
+    found = []
+    for match in re.finditer(r'#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]', source):
+        target = (path.parent / match[1]).resolve()
+        destination = next((root for root in packages if target.is_relative_to(root)), None)
+        if destination is None:
+            continue
+        name, dependency = packages[owner], packages[destination]
+        exception = (path.relative_to(owner).as_posix(), target.relative_to(destination).as_posix())
+        if (name, dependency) == UPWARD_TEST_EDGE and exception in UPWARD_TEST_PATHS:
+            continue
+        for _, reason in layer_violations(name, dependency, "test #[path]"):
+            found.append((source.count("\n", 0, match.start()) + 1, reason))
+    return found
+
+
 ENGINES_AND_CLUSTER2 = {
     "layerfs-s3",
     "layerfs-metadata",
@@ -141,20 +215,26 @@ RETIRED_PACKAGE = "retired package; its directory was removed and is not restore
 
 
 def dependency_violations(source):
-    """Check production/build edges, including target tables and aliases."""
+    """Check production/build and test edges, including target tables and aliases."""
     manifest = tomllib.loads(source)
     name = manifest.get("package", {}).get("name")
     if name in RETIRED_PACKAGES:
         return [(1, f"{RETIRED_PACKAGE}: {name}")]
-    if name not in ALLOWED_DEPENDENCIES:
-        return []
-    sections = [manifest.get(key, {}) for key in ("dependencies", "build-dependencies")]
+    if name not in LAYER:
+        return [(1, f"crate missing from layer map: {name}")]
+    kinds = ("dependencies", "build-dependencies", "dev-dependencies")
+    sections = [(key, manifest.get(key, {})) for key in kinds]
     for target in manifest.get("target", {}).values():
-        sections.extend(target.get(key, {}) for key in ("dependencies", "build-dependencies"))
+        sections.extend((key, target.get(key, {})) for key in kinds)
     found = []
-    for section in sections:
+    for kind, section in sections:
         for alias, specification in section.items():
             dependency = specification.get("package", alias) if isinstance(specification, dict) else alias
+            found.extend(layer_violations(name, dependency, kind))
+            if LAYER[name] == CORE and dependency == "rusqlite":
+                found.append((1, f"rusqlite dependency in core crate {name}"))
+            if kind == "dev-dependencies":
+                continue
             if name in DOMAIN_CRATES and dependency in {
                 "rusqlite",
                 "postgres",
@@ -238,9 +318,8 @@ def unsafe_violations(path, source):
         return found
     relative = Path(*path.parts[path.parts.index("src") :])
     code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
-    if UNSAFE.search(code):
-        if crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]:
-            found.append((1, "unsafe outside the audited module boundary; see core/AGENTS.md"))
+    if UNSAFE.search(code) and (crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]):
+        found.append((1, "unsafe outside the audited module boundary; see core/AGENTS.md"))
     if relative == Path("src/lib.rs") and UNSAFE_ROOT_ATTR[crate] not in source:
         found.append((1, f"crate root must declare {UNSAFE_ROOT_ATTR[crate]}"))
     return found
@@ -310,7 +389,9 @@ def overlay_terminology_violations(path, source):
 def production_files(core, include_sdk=True):
     """Known product inputs; tests/examples/tools are deliberately outside this scope."""
     files = set()
-    for package in (core / "crates").glob("*"):
+    for package in crate_directories(core):
+        if not include_sdk and package == core.parent / "api/binding":
+            continue
         if not package.is_dir():
             continue
         files.update(path for path in (package / "src").rglob("*") if path.is_file() and path.suffix in (".rs", ".sql"))
@@ -318,7 +399,6 @@ def production_files(core, include_sdk=True):
     if not include_sdk:
         return sorted(files)
     api = core.parent / "api"
-    files.update((api / "binding" / "src").rglob("*.rs"))
     for directory in (
         api / "agent" / "sdk" / "src",
         api / "agent" / "cli" / "src",
@@ -342,11 +422,17 @@ def main():
         if (core / "crates" / name).exists():
             print(f"crates/{name}: {RETIRED_PACKAGE}")
             failures += 1
-    manifests = set((core / "crates").glob("*/Cargo.toml"))
+    manifests = {root / "Cargo.toml" for root in crate_directories(core) if (root / "Cargo.toml").is_file()}
+    packages = {manifest.parent: tomllib.loads(manifest.read_text())["package"]["name"] for manifest in manifests}
     for manifest in sorted(manifests):
         for line, reason in dependency_violations(manifest.read_text()):
-            print(f"{manifest.relative_to(core)}:{line}: {reason}")
+            print(f"{manifest.relative_to(core.parent)}:{line}: {reason}")
             failures += 1
+    for package in packages:
+        for path in sorted((package / "tests").rglob("*.rs")):
+            for line, reason in test_path_violations(path, path.read_text(), packages):
+                print(f"{path.relative_to(core.parent)}:{line}: {reason}")
+                failures += 1
     if failures:
         print(f"FAIL: {failures} product-source boundary violations")
         return 1

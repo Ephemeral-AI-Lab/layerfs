@@ -1,11 +1,13 @@
+import os
+import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 
 from check_product_boundary import (
     RETIRED_PACKAGES,
     dependency_violations,
     production_files,
+    test_path_violations,
     unsafe_violations,
     violations,
 )
@@ -221,7 +223,11 @@ class ProductBoundaryTests(unittest.TestCase):
                     source = f'[package]\nname="{package}"\n[{table}]\nrenamed={{package="{dependency}",path="../{dependency}"}}\n'
                     self.assertTrue(dependency_violations(source))
                 source = f'[package]\nname="{package}"\n[dev-dependencies]\n"{dependency}"={{path="../{dependency}"}}\n'
-                self.assertFalse(dependency_violations(source))
+                # Dev edges now obey layers too; project -> workspace stays within engine.
+                self.assertEqual(
+                    bool(dependency_violations(source)),
+                    not (package == "layerfs-project" and dependency == "layerfs-workspace"),
+                )
         self.assertFalse(
             dependency_violations(
                 '[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-history={path="../layerfs-history"}\n'
@@ -398,8 +404,77 @@ class ProductBoundaryTests(unittest.TestCase):
             )
 
 
-if __name__ == "__main__":
-    unittest.main()
+class LayerBoundaryTests(unittest.TestCase):
+    def test_unknown_crate_requires_a_layer(self):
+        self.assertTrue(dependency_violations('[package]\nname="layerfs-new"'))
+        self.assertFalse(dependency_violations('[package]\nname="layerfs-content"'))
+
+    def test_production_and_build_edges_obey_layers(self):
+        for table in ("dependencies", "build-dependencies", "target.'cfg(unix)'.dependencies"):
+            for dependency, upward in (("layerfs-telemetry", False), ("layerfs-api", True)):
+                source = f'[package]\nname="layerfs-content"\n[{table}]\nrenamed={{package="{dependency}"}}'
+                self.assertEqual(bool(dependency_violations(source)), upward)
+                if upward:
+                    self.assertTrue(any("upward" in reason for _, reason in dependency_violations(source)))
+
+    def test_dev_edges_and_temporary_daemon_exception(self):
+        for table in ("dev-dependencies", "target.'cfg(unix)'.dev-dependencies"):
+            for name, dependency, upward in (
+                ("layerfs-content", "layerfs-storage", False),
+                ("layerfs-content", "layerfs-project", True),
+                ("layerfs-project", "layerfs-workspace", False),
+                ("layerfs-daemon", "layerfs-api", False),
+                ("layerfs-workspace", "layerfs-api", True),
+                ("layerfs-node", "layerfs-api", False),
+            ):
+                with self.subTest(table=table, name=name, dependency=dependency):
+                    source = f'[package]\nname="{name}"\n[{table}]\nrenamed={{package="{dependency}"}}'
+                    self.assertEqual(bool(dependency_violations(source)), upward)
+
+    def test_core_rejects_sqlite_in_every_dependency_kind(self):
+        for table in ("dependencies", "build-dependencies", "dev-dependencies", "target.'cfg(unix)'.dev-dependencies"):
+            for name in ("layerfs-content", "layerfs-history", "layerfs-storage", "layerfs-telemetry"):
+                source = f'[package]\nname="{name}"\n[{table}]\ndb={{package="rusqlite",version="1"}}'
+                self.assertTrue(
+                    any("rusqlite dependency in core" in reason for _, reason in dependency_violations(source))
+                )
+        self.assertFalse(
+            dependency_violations('[package]\nname="layerfs-persistence"\n[dev-dependencies]\nrusqlite="1"')
+        )
+
+    def test_path_escape_and_narrow_exception(self):
+        with TemporaryDirectory() as directory:
+            core = Path(directory) / "core"
+            packages = {
+                core / "crates" / name: name
+                for name in (
+                    "layerfs-content",
+                    "layerfs-storage",
+                    "layerfs-daemon",
+                    "layerfs-api",
+                )
+            }
+            content, storage, daemon, api = packages
+            cases = (
+                (content / "tests/read.rs", storage / "tests/helper.rs", False),
+                (content / "tests/read.rs", api / "tests/helper.rs", True),
+                (daemon / "tests/merge_report.rs", api / "tests/support/sdk.rs", False),
+                (daemon / "tests/concurrent_commits.rs", api / "tests/support/installed_store.rs", False),
+                (daemon / "tests/lane_merge.rs", api / "tests/support/sdk.rs", False),
+                (daemon / "tests/other.rs", api / "tests/support/sdk.rs", True),
+                (daemon / "tests/merge_report.rs", api / "tests/other.rs", True),
+            )
+            for path, target, upward in cases:
+                source = f'#[path = "{os.path.relpath(target, path.parent)}"]\nmod helper;'
+                with self.subTest(path=path, target=target):
+                    self.assertEqual(bool(test_path_violations(path, source, packages)), upward)
+            # Resolve dot segments and symlinks before finding the destination owner.
+            api.mkdir(parents=True)
+            alias = core / "alias"
+            alias.symlink_to(api, target_is_directory=True)
+            path = content / "tests/read.rs"
+            source = f'#[path = "{alias}/tests/helper.rs"] mod helper;'
+            self.assertTrue(test_path_violations(path, source, packages))
 
 
 class DurablePersistenceEdges(unittest.TestCase):
@@ -414,3 +489,7 @@ class DurablePersistenceEdges(unittest.TestCase):
                 '[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-storage={path="../layerfs-storage"}\nlayerfs-history={path="../layerfs-history"}\n'
             )
         )
+
+
+if __name__ == "__main__":
+    unittest.main()
