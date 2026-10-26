@@ -25,9 +25,9 @@ ordinary built addon through Node's exported methods instead.
 Removed test locations, with all eight behaviors covered at their new homes:
 
 - `discovery.rs::tests::a_dropped_guard_releases_the_lock_while_a_forked_child_holds_a_copy`
-  → [native_discovery.rs](../../../../api/binding/tests/native_discovery.rs).
+  → [native_discovery.rs](../../../../engine/crates/layerfs-node/tests/native_discovery.rs).
 - `tests/unit/admission.rs` (two tests: initial admission and deadline Busy)
-  → [native_admission.rs](../../../../api/binding/tests/native_admission.rs).
+  → [native_admission.rs](../../../../engine/crates/layerfs-node/tests/native_admission.rs).
 - `tests/unit/reclaim.rs` (five tests: gone-container cleanup, unrelated 404
   custody, replacement-number custody, stopped-container deletion, failed
   deletion custody) → `native_discovery.rs` above.
@@ -36,7 +36,7 @@ The lock regression uses a bounded test-only preload fixture to fork while the
 actual binding owns the lock. The child retains its open file description while
 a later exported binding call acquires the released lock. The admission deadline
 proof pays the full public 60-second wait; no private shorter wait or test-only
-product API is introduced. [The test guide](../../../../api/binding/tests/README.md)
+product API is introduced. [The test guide](../../../../engine/crates/layerfs-node/tests/README.md)
 describes the requirements. JavaScript API test targets remain outside CI under
 the owner's existing exclusion.
 
@@ -195,6 +195,26 @@ Production LOC: 102162 -> 102162 (delta 0), using the new counter on both exact
 parent and staged snapshots. Per-crate totals are identical. Layer subtotals:
 core 38241; engine 56640; API 7281. No upward guard exception remains. The
 runtime FP-21 exception remains explicitly separate from the passing checks.
+
+## Follow-up — the Rust leaves `api/`
+
+On 2026-10-27 the owner rejected the `api/` layout above and directed moving its
+Rust out. Commit `b98ac4c2f7` moves `api/layerfs-api` to
+`engine/crates/layerfs-api` and `api/binding` to `engine/crates/layerfs-node`
+(the addon now builds at `engine/crates/layerfs-node/layerfs.node`), and
+flattens the packages: `api/agent/sdk` → `api/agent`, `api/agent/cli` →
+`api/cli`, `api/how-to-use` → `api/docs`. `api/` now holds only the published
+JavaScript packages. The guard and the LOC counter classify `layerfs-api` and
+`layerfs-node` as engine by crate name in both layouts, so the earlier records
+above keep their original API subtotals.
+
+Production LOC: 102162 -> 102162 (delta 0); all 954 files keep their per-file
+counts. Under the name-based classification the subtotals are core 38241,
+engine 61288, API 2633. Checks: identical Cargo metadata, macOS all-target
+check and formatting, the boundary guard, 155 Python tool tests, Ruff, the
+JavaScript stand-in tests and a sealed Linux release bundle. dsh ran all ten
+scenarios on that bundle; the sandbox scenario's unmount race was a dsh-layerfs
+scenario timing issue, fixed there, not a LayerFS change.
 
 ## CI timing record
 
