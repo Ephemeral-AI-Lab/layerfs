@@ -67,8 +67,10 @@ export function resolveSettings(given = {}) {
       home: given.wsl?.home || `/var/lib/layerfs-windows/${hash}`,
     };
   }
-  for (const dir of [settings.stateDir, settings.traceDir]) mkdirSync(dir, { recursive: true });
+  // A new home is made private first, as Init requires; an existing one keeps
+  // its mode, and Init refuses it if it is not private.
   mkdirSync(settings.home, { recursive: true, mode: 0o700 });
+  for (const dir of [settings.stateDir, settings.traceDir]) mkdirSync(dir, { recursive: true });
   return settings;
 }
 

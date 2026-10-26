@@ -1,8 +1,8 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node api/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker
+//   node api/runtime/test/runtime.mjs surface|home-mode|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +60,19 @@ try {
     await runtime.close();
     await assert.rejects(runtime.project.list(), { code: "InvalidInput", message: /closed/ });
     assert.throws(() => runtime.events.subscribe(), { code: "InvalidInput" });
+  } else if (selected === "home-mode") {
+    const { resolveSettings } = await import("../src/settings.js");
+    const mode = (dir) => statSync(dir).mode & 0o777;
+    // a new home is made private before .runtime and traces inside it
+    const fresh = resolveSettings({ home, platform: "macos" });
+    assert.equal(mode(home).toString(8), "700");
+    assert.ok(existsSync(fresh.stateDir) && existsSync(fresh.traceDir));
+    // an existing home keeps its mode: Init refuses a non-private one
+    const shared = join(work, "shared");
+    mkdirSync(shared);
+    chmodSync(shared, 0o755);
+    resolveSettings({ home: shared, platform: "macos" });
+    assert.equal(mode(shared).toString(8), "755");
   } else if (selected === "projects") {
     project("alpha");
     project("beta");
@@ -476,7 +489,7 @@ try {
       worker.close();
     }
   } else {
-    throw new Error("select surface, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default or worker-docker");
+    throw new Error("select surface, home-mode, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default or worker-docker");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
