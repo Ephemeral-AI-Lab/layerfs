@@ -399,8 +399,16 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
     }
     let state = crate::registry::sandbox_live(args)?;
     let _guard = crate::discovery::guard(&state.directory)?;
-    crate::discovery::refresh(&state)?;
-    let mounted = lock(&state.mounts)?.keys().cloned().collect::<Vec<_>>();
+    let recoverable = crate::unmount::check_all(&state)?;
+    crate::discovery::refresh_except(&state, &recoverable)?;
+    // Explicit close can take over an orphaned/retained unmount, but must
+    // still refuse every unrelated live Workspace. Stop detaches before
+    // killing the daemon; Delete independently checks physical detach.
+    let mounted = lock(&state.mounts)?
+        .keys()
+        .filter(|path| !recoverable.contains(path))
+        .cloned()
+        .collect::<Vec<_>>();
     if !mounted.is_empty() {
         return Err(SdkRefusal {
             code: "MountsActive".to_owned(),

@@ -8,9 +8,7 @@
 //! by a mount and reclaimed by the next `sandbox.create` or
 //! `runtime.sandbox.reclaim`.
 use crate::job::{failed, Outcome};
-use crate::registry::{
-    lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount,
-};
+use crate::registry::{lock, naming, random, sandbox, sandbox_live, text, Mount};
 use crate::sandbox::{operation, WORKSPACES};
 use layerfs_api::internal::workspace;
 use layerfs_api::sandbox::values;
@@ -257,10 +255,19 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
 /// `workspace.unmount(ws, { discard? })`: `Busy` while a background
 /// process this binding started still runs there, then the daemon's answer.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
-    let state = sandbox_refreshed(args)?;
-    let _guard = crate::discovery::guard(&state.directory)?;
+    let state = sandbox(args)?;
     let path = text(args, "path")?;
+    if let Some(value) = crate::unmount::find(&state, path)? {
+        return crate::unmount::repeat(&value);
+    }
+    let guard = crate::discovery::guard(&state.directory)?;
+    // Another process may have registered while this call waited for the
+    // short admission section. Check again before sending anything.
+    if let Some(value) = crate::unmount::find(&state, path)? {
+        return crate::unmount::repeat(&value);
+    }
     let token = state.token(path)?;
+    crate::discovery::refresh(&state)?;
     // The runtime owner knows its own processes; the daemon's kernel probe
     // still answers Busy for any other holder.
     let running = crate::exec::running_in(&state, path)?;
@@ -278,11 +285,49 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
             )]),
         });
     }
-    let answer = workspace(&mut *crate::trace::control(&state.controls)?)
-        .unmount_checked(token, args.get_bool("discard"))
-        .map_err(operation)?;
-    let value = values::unmounted(&answer)?;
-    std::fs::remove_file(crate::discovery::workspace_file(&state, token)).map_err(failed)?;
-    lock(&state.mounts)?.remove(path);
-    Ok(value)
+    let attempt = crate::unmount::begin(&state, token, path)?;
+    drop(guard);
+    // Only this Workspace's lease remains held. Other Workspaces and
+    // processes can take Sandbox ownership while the daemon helper waits.
+    let mut sent = false;
+    let outcome = (|| {
+        let mut control = crate::trace::control(&state.controls)?;
+        sent = true;
+        match workspace(&mut control).unmount_checked(token, args.get_bool("discard")) {
+            Ok(answer) => values::unmounted(&answer),
+            Err(error) => Err(operation(error)),
+        }
+    })();
+    let outcome = match outcome {
+        Err(error) if error.code == "Missing" => {
+            Ok(SdkValue::map([("kind", SdkValue::text("Unmounted"))]))
+        }
+        other => other,
+    };
+    // Preserve the daemon's known outcome before any discovery-lock wait.
+    // A file/cleanup failure is separate from an already successful detach.
+    let publication = if !sent {
+        crate::unmount::cancel(&attempt)
+    } else {
+        crate::unmount::finish(&attempt, path, &outcome)
+    };
+    if let Err(error) = publication {
+        return crate::unmount::cleanup_failure(outcome, error);
+    }
+    if outcome.is_ok() {
+        let cleanup = (|| {
+            let _guard = crate::discovery::guard(&state.directory)?;
+            match std::fs::remove_file(crate::discovery::workspace_file(&state, token)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(failed(error)),
+            }
+            lock(&state.mounts)?.remove(path);
+            Ok(())
+        })();
+        if let Err(error) = cleanup {
+            return crate::unmount::cleanup_failure(outcome, error);
+        }
+    }
+    outcome
 }

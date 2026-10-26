@@ -78,7 +78,7 @@ pub(crate) fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRef
 /// tables as they stand: no daemon call (#352 F-029). A call that names a
 /// mount checks just that mount (`SandboxState::token`, `directory`); one
 /// that needs every mount or process another process may have changed takes
-/// [`sandbox_refreshed`].
+/// `discovery::refresh`.
 pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     let directory = crate::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
     let existing = lock(&SANDBOXES)?.get(&directory).cloned();
@@ -131,14 +131,6 @@ pub(crate) fn naming(args: &SdkValue, id: &str) -> SdkValue {
     SdkValue::Map(fields)
 }
 
-/// The Sandbox an operation names, its tables read again from the shared
-/// records and the daemon (one status call per mount).
-pub(crate) fn sandbox_refreshed(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let state = sandbox(args)?;
-    crate::discovery::refresh(&state)?;
-    Ok(state)
-}
-
 impl SandboxState {
     /// The token of the Workspace mounted at `path`.
     pub(crate) fn token(&self, path: &str) -> Result<WorkspaceToken, SdkRefusal> {
@@ -156,6 +148,7 @@ impl SandboxState {
     /// once, for whatever is mounted there now; the full refresh replaces
     /// the table, so a stale entry goes with it.
     fn mounted<T>(&self, path: &str, pick: impl Fn(&Mount) -> T) -> Result<T, SdkRefusal> {
+        crate::unmount::check(self, path)?;
         let known = lock(&self.mounts)?
             .get(path)
             .map(|mount| (mount.workspace.bound.token, pick(mount)));

@@ -14,6 +14,7 @@ mod registry;
 mod runtime;
 mod sandbox;
 mod trace;
+mod unmount;
 mod workspace;
 
 use job::Job;

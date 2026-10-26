@@ -49,7 +49,7 @@ pub(crate) fn home(args: &SdkValue) -> Result<PathBuf> {
     directory(&home)?;
     Ok(home)
 }
-fn private(path: &Path, dir: bool) -> Result<()> {
+pub(crate) fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
@@ -142,10 +142,9 @@ pub(crate) fn project_dir(args: &SdkValue) -> Result<PathBuf> {
 /// Calls take turns on one directory: in this process before its OS lock,
 /// and between processes on the lock itself. The wait is readiness, bounded,
 /// and nothing has been attempted before it ends.
-// One NFS helper may use 60s plus 5s of post-KILL observation. Leave
-// return/cleanup headroom without releasing ownership around an in-flight
-// mutation. This is one shared deadline, not a new wait for each lock.
-const IN_PROCESS_WAIT: Duration = Duration::from_secs(70);
+// Unmount exchanges run outside this guard; one shared readiness deadline
+// covers the in-process turn and the cross-process discovery lock.
+const IN_PROCESS_WAIT: Duration = Duration::from_secs(60);
 /// Between two looks at another process's lock.
 const LOCK_PAUSE: Duration = Duration::from_millis(2);
 static HELD: Mutex<std::collections::BTreeSet<PathBuf>> =
@@ -694,6 +693,12 @@ fn recorded_identity(value: &SdkValue) -> CommandIdentity {
 }
 /// Refresh shared executor/mount metadata without repeating an operation.
 pub(crate) fn refresh(state: &SandboxState) -> Result<()> {
+    refresh_except(state, &[])
+}
+/// Explicit Sandbox close may dispose retained unmounts without asking their
+/// daemon for a Ready receipt that no longer exists. Other records still
+/// undergo the ordinary refresh and MountsActive admission.
+pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
     let mut mounts = std::collections::BTreeMap::new();
     let mut processes = std::collections::BTreeMap::new();
     for item in fs::read_dir(&state.directory).map_err(failed)? {
@@ -704,6 +709,9 @@ pub(crate) fn refresh(state: &SandboxState) -> Result<()> {
                 continue;
             };
             let path = registry::text(&value, "path")?;
+            if retained.iter().any(|kept| kept == path) {
+                continue;
+            }
             let token = layerfs_bridge::control::WorkspaceToken {
                 workspace: layerfs_history::WorkspaceId::from_slice(&bytes::<32>(
                     &value,
