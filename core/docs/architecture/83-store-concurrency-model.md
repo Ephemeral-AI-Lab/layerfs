@@ -34,7 +34,15 @@
 | Directory lock (Linux) / named kernel mutex (Windows) | all writer processes of one Store | Writers in different processes (each Sandbox's daemon, the SDK process) take turns instead of meeting `SQLITE_BUSY`; on Windows the mutex is named per Store directory and an abandoned mutex is taken by the next waiter |
 | Writer admission queue | threads of one process | Threads take turns on the process's one writer connection, first come first served, before touching SQLite |
 | Publication lane | one Commit's publish | Head check, merge and publish are one atomic step, so two Commits never both publish on the same old head |
+| Open/teardown holds | one Store's connect, writable setup and close | The connect-time statement block (profile pragmas, format reads — where a cleaned WAL `-shm` is rebuilt under an exclusive recovery hold), the writable setup block (held publication lane, nested turns take no second lock) and a coordinated close (`StoreLane`/`Handles::shutdown`; the service's `close` stops overlays first, then drops the sessions under the lane) run under the same cross-process lane: SQLite's close-time checkpoint is writer work like any other and must never run beside another opener's first attach (no-retry rule) |
 | Workspace lock | one Workspace's overlay database | Separate concern: guards that Workspace's own overlay connection (root AGENTS.md) |
+
+The lane's Windows name is SHA-256 of the resolved directory's encoded
+bytes truncated to 64 bits — a version-stable digest, never
+`DefaultHasher`, whose algorithm may change between Rust releases and
+silently split one directory onto two lanes across builds (K3 review F1).
+The mutexes live in the `Local\` namespace: one login session's lanes are
+invisible to another (DIRECT_STORE.md §6).
 
 The queue and the directory lock replace failure, not add serialization: the
 repository forbids automatic retries and busy handlers (one attempt per
