@@ -134,7 +134,14 @@ uses the worker; a client made before keeps its in-process binding. One
 worker per process: a second runtime of another home is refused. Another
 process, such as an agent's command, uses the worker when its
 `LAYERFS_WORKER_ENDPOINT` names the endpoint file; the integration that runs
-it sets that. The endpoint is `<home>/worker/endpoint.json`, `{ home, port,
+it sets that. Such a process also needs the project's settings: make the
+project with `project.start_init`, which creates and records its volume, then
+set `LAYERFS_VOLUME` to the volume `project.list` gives,
+`LAYERFS_STORE_PATH` to `/var/lib/docker/volumes/<volume>/_data/global/store.sqlite`,
+and `LAYERFS_IMAGE` and `LAYERFS_DAEMON` for its Sandboxes (on macOS, the
+bundle's `layerfs-daemon`). A volume made outside the runtime works for Store
+calls, but `project.list` shows the project with `volume: null` and
+`volume.list` marks the volume `unknown`. The endpoint is `<home>/worker/endpoint.json`, `{ home, port,
 secret, build, daemonHost?, init? }`, readable by its user only. The worker
 checks every file of the bundle's `manifest.json` before it listens.
 
