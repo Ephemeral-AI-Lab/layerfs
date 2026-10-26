@@ -39,16 +39,12 @@ impl Drop for Lease {
     }
 }
 fn lease(path: &std::path::Path, operation: i32) -> Result<Option<Lease>, SdkRefusal> {
-    #[cfg(target_os = "macos")]
-    let no_follow = 0x100;
-    #[cfg(target_os = "linux")]
-    let no_follow = 0x20000;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .mode(0o600)
-        .custom_flags(no_follow)
+        .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .map_err(failed)?;
     discovery::private(path, false)?;

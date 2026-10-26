@@ -21,6 +21,7 @@ layerfs-sandbox = { path = "../../core/crates/layerfs-sandbox" }
 layerfs-storage = { path = "../../core/crates/layerfs-storage" }
 layerfs-store-service = { path = "../../core/crates/layerfs-store-service" }
 layerfs-telemetry = { path = "../../core/crates/layerfs-telemetry" }
+libc = "=0.2.189"
 napi = "=2.16.17"
 napi-derive = "=2.16.13"
 

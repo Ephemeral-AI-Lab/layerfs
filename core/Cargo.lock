@@ -648,6 +648,7 @@ dependencies = [
  "layerfs-storage",
  "layerfs-store-service",
  "layerfs-telemetry",
+ "libc",
  "napi",
  "napi-build",
  "napi-derive",
