@@ -12,6 +12,8 @@ layerfs-history = { path = "../layerfs-history", default-features = false }
 layerfs-content = { path = "../layerfs-content" }
 layerfs-telemetry = { path = "../layerfs-telemetry" }
 rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
+# The lane name digest; the same locked sha2 layerfs-storage already uses.
+sha2 = { version = "=0.11.0", default-features = false }
 
 [dev-dependencies]
 blake3 = { version = "=1.8.5", default-features = false }

@@ -34,8 +34,7 @@ fn authority(name: &[u8]) -> HistoryCatalogConfig {
 /// `WAIT_ABANDONED` acquisition.
 #[test]
 fn a_dead_lane_holder_does_not_block_the_next_writer() {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use sha2::{Digest, Sha256};
     let temp = support::Temp::new("windows-store-abandoned");
     let path = temp.join("store.sqlite");
     let catalog = authority(b"windows-store-abandoned");
@@ -45,13 +44,13 @@ fn a_dead_lane_holder_does_not_block_the_next_writer() {
 
     let directory = temp.path().to_path_buf();
     let holder = std::thread::spawn(move || {
-        // The product's own lane name, derived exactly as windows_lane does.
-        let mut hasher = DefaultHasher::new();
-        match std::fs::canonicalize(&directory) {
-            Ok(canonical) => canonical.hash(&mut hasher),
-            Err(_) => directory.hash(&mut hasher),
-        }
-        let name: Vec<u16> = format!("Local\\layerfs-writer-lane-{:016x}", hasher.finish())
+        // The product's own lane name: SHA-256 of the resolved directory's
+        // encoded bytes, truncated to 64 bits (windows_lane::lane_name).
+        let resolved = std::fs::canonicalize(&directory).unwrap_or_else(|_| directory.clone());
+        let digest = Sha256::digest(resolved.as_os_str().as_encoded_bytes());
+        let mut tag = [0u8; 8];
+        tag.copy_from_slice(&digest[..8]);
+        let name: Vec<u16> = format!("Local\\layerfs-writer-lane-{:016x}", u64::from_be_bytes(tag))
             .encode_utf16()
             .chain(std::iter::once(0))
             .collect();

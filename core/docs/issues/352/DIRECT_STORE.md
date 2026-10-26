@@ -113,7 +113,12 @@ no daemon are involved. Implemented on branch `windows-native-store`:
   on Windows: FUSE, the daemon and Workspaces remain Linux-only, and the dsh
   macOS and WSL2 exceptions are unchanged.
 
-Recorded limitations of this route: Windows Init carries non-UTF-8 names
+Recorded limitations of this route: the Windows lane and discovery
+mutexes live in the `Local\` namespace, so a session-0 service and a user
+session would each hold its own lane (Linux's directory flock crosses
+sessions); the product opens its Store within one login session today, and
+cross-session coordination would need the `Global\` namespace with a
+privilege evaluation (K3 review F2); Windows Init carries non-UTF-8 names
 lossily, synthesizes the mode from the read-only attribute, has no hard-link
 membership and no backing-inside-source alias check; overlay allocation is the
 logical length; last-owner overlay-file deletion keeps its Linux identity

@@ -11,8 +11,7 @@
 //! plain data. The volume probe reports the filesystem of the directory's
 //! local volume for the kernel guard's allowlist.
 #![allow(unsafe_code)]
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use sha2::{Digest, Sha256};
 use std::io;
 use std::path::Path;
 use windows_sys::Win32::Foundation::{CloseHandle, WAIT_ABANDONED, WAIT_OBJECT_0};
@@ -25,18 +24,25 @@ pub(crate) struct LaneMutex {
     handle: usize,
 }
 
+/// The lane's kernel object name: SHA-256 of the resolved directory's
+/// encoded bytes, truncated to 64 bits. A versioned-stable digest, not
+/// `DefaultHasher`, whose algorithm may change between Rust releases and
+/// silently split one directory onto two lanes across builds (K3 review F1).
+pub(crate) fn lane_name(directory: &Path) -> String {
+    let resolved = std::fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
+    let digest = Sha256::digest(resolved.as_os_str().as_encoded_bytes());
+    let mut tag = [0u8; 8];
+    tag.copy_from_slice(&digest[..8]);
+    format!("Local\\layerfs-writer-lane-{:016x}", u64::from_be_bytes(tag))
+}
+
 impl LaneMutex {
     /// One blocking kernel wait on the directory's named mutex, taken after
     /// the Session's FIFO turn, so at most one thread per Session waits here.
     /// Creation only opens the shared kernel object. Exits: the lane (a
     /// holder process that exits releases it); a failed wait.
     pub(crate) fn acquire(directory: &Path) -> Result<Self, ()> {
-        let mut hasher = DefaultHasher::new();
-        match std::fs::canonicalize(directory) {
-            Ok(canonical) => canonical.hash(&mut hasher),
-            Err(_) => directory.hash(&mut hasher),
-        }
-        let name: Vec<u16> = format!("Local\\layerfs-writer-lane-{:016x}", hasher.finish())
+        let name: Vec<u16> = lane_name(directory)
             .encode_utf16()
             .chain(std::iter::once(0))
             .collect();

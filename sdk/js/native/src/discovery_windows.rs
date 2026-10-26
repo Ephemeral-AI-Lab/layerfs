@@ -103,16 +103,16 @@ impl Drop for Guard {
 }
 
 /// One mutex name per directory; the canonical path identifies it between
-/// processes.
+/// processes. SHA-256 truncated, not `DefaultHasher`: the hasher's algorithm
+/// may change between Rust releases and silently split one directory onto
+/// two guards across builds (K3 review F1, with the persistence lane name).
 fn mutex_name(directory: &Path) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    match fs::canonicalize(directory) {
-        Ok(canonical) => canonical.hash(&mut hasher),
-        Err(_) => directory.hash(&mut hasher),
-    }
-    format!("Local\\layerfs-discovery-{:016x}", hasher.finish())
+    use sha2::{Digest, Sha256};
+    let resolved = fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
+    let digest = Sha256::digest(resolved.as_os_str().as_encoded_bytes());
+    let mut tag = [0u8; 8];
+    tag.copy_from_slice(&digest[..8]);
+    format!("Local\\layerfs-discovery-{:016x}", u64::from_be_bytes(tag))
 }
 
 pub(crate) fn guard(directory: &Path) -> Result<Guard> {

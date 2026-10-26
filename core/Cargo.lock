@@ -633,6 +633,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "sha2 0.11.0",
  "windows-sys",
 ]
 
@@ -657,6 +658,7 @@ dependencies = [
  "layerfs-telemetry",
  "nix",
  "rusqlite",
+ "sha2 0.11.0",
  "windows-sys",
 ]
 
