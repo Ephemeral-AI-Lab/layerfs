@@ -2,11 +2,25 @@
 // from the dsh Host's config.js (#428). A missing required setting does not
 // refuse open: status() lists it, so a runtime page can show what to fix.
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { isAbsolute, join, posix } from "node:path";
 import { LayerFSError } from "@layerfs/agent";
 
 const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
+const DEFAULT_DOCKER = "/var/run/docker.sock";
+
+/**
+ * The Docker socket when none is given: the engine's usual path, or on macOS
+ * Docker Desktop's own `~/.docker/run/docker.sock` when only that one exists
+ * (its "Allow the default Docker socket" setting off). Checked once, when the
+ * settings resolve.
+ */
+function defaultDocker(platform) {
+  if (platform !== "macos" || existsSync(DEFAULT_DOCKER)) return DEFAULT_DOCKER;
+  const desktop = join(homedir(), ".docker", "run", "docker.sock");
+  return existsSync(desktop) ? desktop : DEFAULT_DOCKER;
+}
 
 /**
  * @param {object} given
@@ -14,7 +28,8 @@ const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
  * @param {string} [given.image] runtime image digest Sandboxes run
  * @param {string} [given.daemon] Linux layerfs-daemon (default: the bundle's)
  * @param {string} [given.bundle] sealed Linux build folder; macOS and Windows need it
- * @param {string} [given.docker] Docker Engine Unix socket (default /var/run/docker.sock)
+ * @param {string} [given.docker] Docker Engine Unix socket (default /var/run/docker.sock; on
+ *   macOS Docker Desktop's ~/.docker/run/docker.sock when only that one exists)
  * @param {string} [given.volumes] Docker's volumes directory (Linux; default /var/lib/docker/volumes)
  * @param {string} [given.traceDir] per-agent trace files events.subscribe reads (default <home>/traces)
  * @param {string} [given.containerPrefix] this home's container names (default `layerfs-`)
@@ -35,7 +50,7 @@ export function resolveSettings(given = {}) {
     image: given.image || null,
     bundle,
     daemon: given.daemon || (bundle ? (platform === "windows" ? posix.join(bundle, "layerfs-daemon") : join(bundle, "layerfs-daemon")) : null),
-    docker: given.docker || "/var/run/docker.sock",
+    docker: given.docker || defaultDocker(platform),
     volumes: given.volumes || "/var/lib/docker/volumes",
     traceDir: given.traceDir || join(given.home, "traces"),
     containerPrefix: given.containerPrefix || "layerfs-",

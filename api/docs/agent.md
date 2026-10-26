@@ -136,7 +136,7 @@ Keep each agent's operations on a Workspace sequential.
 | Environment | Meaning |
 | --- | --- |
 | `LAYERFS_HOME` | Absolute private directory for discovery records (projects, Sandboxes) and Init's temporary sealed Store, deleted once its install is recorded. Created as 0700; existing directories must be owned by the current effective user with no group/other access. Records are 0600, not symlinks. |
-| `LAYERFS_DOCKER` | Local Engine Unix socket; `/var/run/docker.sock` is the default. |
+| `LAYERFS_DOCKER` | Local Engine Unix socket; `/var/run/docker.sock` is the default. On the macOS worker route the worker and Init's container use the engine's socket inside its VM instead (the endpoint's `docker`). |
 | `LAYERFS_IMAGE` | Exact immutable runtime `sha256:...` digest a new Sandbox runs. A running Sandbox keeps the image it started with. |
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |

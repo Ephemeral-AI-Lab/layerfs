@@ -29,9 +29,14 @@ const docker = (...args) => platform.docker(...args);
 const name = (settings) => `${settings.containerPrefix}worker`;
 
 const build = (settings) => JSON.parse(readFileSync(join(settings.bundle, "manifest.json"), "utf8")).build_id;
-// the socket path is the Docker VM's, as Docker Desktop and colima provide it
+/**
+ * The engine's socket inside its VM, as Docker Desktop and colima provide it:
+ * mounted into the worker and Init at the same path, and the socket their
+ * calls use. The Mac's own socket (settings.docker) is a path they cannot see.
+ */
+const VM_DOCKER = "/var/run/docker.sock";
 const mounts = ({ home, bundle }) => [
-  "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", `${VOLUMES}:${VOLUMES}`,
+  "-v", `${VM_DOCKER}:${VM_DOCKER}`, "-v", `${VOLUMES}:${VOLUMES}`,
   "-v", `${home}:${home}`, "-v", `${bundle}:${bundle}:ro`,
   "-e", `LAYERFS_NATIVE=${join(bundle, "layerfs.node")}`,
 ];
@@ -89,7 +94,7 @@ async function launch(settings) {
   const port = Number(/:(\d+)$/m.exec(await docker(settings, ["port", container, `${WORKER_PORT}/tcp`]))?.[1]);
   if (!port) throw refuse("Failed", `the worker ${container} publishes no port`);
   const info = {
-    home: settings.home, port, secret, build: expected, daemonHost: DAEMON_HOST,
+    home: settings.home, port, secret, build: expected, daemonHost: DAEMON_HOST, docker: VM_DOCKER,
     init: { argv: ["-H", `unix://${settings.docker}`, "run", "--rm", "-i", "--pull", "never", ...mounts(settings), "--entrypoint", "node"], image: settings.image, script: join(settings.bundle, INIT) },
   };
   // hashing the bundle comes first in the worker, so its readiness takes a while

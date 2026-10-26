@@ -7,9 +7,12 @@
 // Merged from the dsh Host's port/binding.js (macOS) and windows/binding.js.
 //
 // The endpoint file (LAYERFS_WORKER_ENDPOINT), written by runtime's platform
-// launcher, is JSON: { home, port, secret, build, daemonHost?, init? }.
+// launcher, is JSON: { home, port, secret, build, daemonHost?, docker?, init? }.
 // `daemonHost` is where the worker reaches a daemon's loopback-published
-// port (macOS: the Docker host); `init` (macOS) runs Init in a container of
+// port (macOS: the Docker host); `docker` (macOS) is the Docker socket the
+// worker and Init's container reach, inside the engine's VM, and replaces
+// every call's deploy.docker, a socket of this machine they cannot see;
+// `init` (macOS) runs Init in a container of
 // its own with the source folder mounted read-only: { argv, image, script }.
 // Elsewhere Init is one more call to the worker, which maps the folder.
 //
@@ -135,7 +138,12 @@ export function workerClient(file) {
   async function send(fn, op, args) {
     let info;
     try { info = endpointOf(file); } catch (error) { return refused("Failed", `the LayerFS worker is not running for this home: ${error.message}`); }
-    const sent = info.daemonHost ? { ...args, deploy: { ...args.deploy, daemonHost: args.deploy?.daemonHost ?? info.daemonHost } } : args;
+    const deploy = {
+      ...args.deploy,
+      ...(info.daemonHost ? { daemonHost: args.deploy?.daemonHost ?? info.daemonHost } : {}),
+      ...(info.docker ? { docker: info.docker } : {}),
+    };
+    const sent = info.daemonHost || info.docker ? { ...args, deploy } : args;
     const request = { fn, op, args: sent, open: opened.has(args.storePath) };
     if (fn === "call" && op === "project.init" && info.init) return initRun(info.init, request);
     return connection(info).call(request);

@@ -39,7 +39,9 @@ try {
 The runtime opens on a LayerFS home, not a project, so it works before the
 first project exists, after one is removed and while the worker is down.
 Agents don't import it. Settings (`settings.js`): `home` (required), `image`,
-`daemon` (default the bundle's), `bundle`, `docker`, `volumes` (Linux),
+`daemon` (default the bundle's), `bundle`, `docker` (default `/var/run/docker.sock`;
+on macOS Docker Desktop's `~/.docker/run/docker.sock` when only that one exists,
+checked once at `open`), `volumes` (Linux),
 `traceDir` (default `<home>/traces`), `containerPrefix`, `stateDir` (default
 `<home>/.runtime`, the runtime's project records), `sweep`
 (default true) and on Windows `wsl: { distribution, user, node, home }`. A
@@ -142,7 +144,10 @@ and `LAYERFS_IMAGE` and `LAYERFS_DAEMON` for its Sandboxes (on macOS, the
 bundle's `layerfs-daemon`). A volume made outside the runtime works for Store
 calls, but `project.list` shows the project with `volume: null` and
 `volume.list` marks the volume `unknown`. The endpoint is `<home>/worker/endpoint.json`, `{ home, port,
-secret, build, daemonHost?, init? }`, readable by its user only. The worker
+secret, build, daemonHost?, docker?, init? }`, readable by its user only. On macOS
+`docker` is the engine's socket inside its VM, `/var/run/docker.sock`, which the
+worker and Init's container mount; it replaces every call's `deploy.docker`, so the
+Mac's own socket (`LAYERFS_DOCKER`) never reaches Linux. The worker
 checks every file of the bundle's `manifest.json` before it listens.
 
 ## Docker

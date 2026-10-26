@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node api/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames
+//   node api/runtime/test/runtime.mjs surface|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -324,7 +324,9 @@ try {
       throw new Error(`unexpected docker ${args.join(" ")}`);
     };
     try {
-      const runtime = await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle });
+      // the Mac's own socket, as Docker Desktop has it with its default socket off
+      const mac = "/Users/someone/.docker/run/docker.sock";
+      const runtime = await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle, docker: mac });
       const state = await runtime.worker.start();
       assert.deepEqual([state.worker.state, state.worker.build, state.worker.answering], ["running", "build-1", true]);
       // the secret is in docker's environment and the endpoint file, never on its command line
@@ -337,6 +339,15 @@ try {
       const endpoint = JSON.parse(readFileSync(join(home, "worker", "endpoint.json"), "utf8"));
       assert.deepEqual([endpoint.port, endpoint.secret, endpoint.build, endpoint.daemonHost], [worker.port, secret, "build-1", "host.docker.internal"]);
       assert.ok(!endpoint.init.argv.some((arg) => arg.includes(secret)), "Init's container gets no secret");
+      // the Mac's docker CLI uses the Mac's socket; inside the VM, the worker and
+      // Init mount and use the VM's own, and no Mac socket path reaches them
+      const vm = "/var/run/docker.sock";
+      assert.equal(endpoint.docker, vm);
+      assert.deepEqual(endpoint.init.argv.slice(0, 2), ["-H", `unix://${mac}`]);
+      for (const argv of [run.args, endpoint.init.argv.slice(2)]) {
+        assert.ok(argv.includes(`${vm}:${vm}`), "the VM's socket is mounted");
+        assert.ok(!argv.some((arg) => arg.includes(mac)), "no Mac socket path inside the VM");
+      }
       assert.equal("oldStore" in (await runtime.status()), false, "no older Store container is looked for");
       // nothing but the worker is started or removed
       assert.deepEqual(calls.filter((c) => ["stop", "rm", "run"].includes(c.args[0])).map((c) => c.args[0]), ["run"]);
@@ -395,8 +406,77 @@ try {
     } finally {
       server.kill("SIGTERM");
     }
+  } else if (selected === "docker-default") {
+    // the socket when none is given: /var/run/docker.sock, except on macOS
+    // when only Docker Desktop's ~/.docker/run/docker.sock exists
+    const { resolveSettings } = await import("../src/settings.js");
+    const user = join(work, "user"), desktop = join(user, ".docker", "run", "docker.sock");
+    mkdirSync(join(user, ".docker", "run"), { recursive: true });
+    const saved = process.env.HOME;
+    process.env.HOME = user;
+    try {
+      const docker = (platform, given = {}) => resolveSettings({ home, platform, ...given }).docker;
+      assert.equal(docker("macos"), "/var/run/docker.sock", "no socket at either path: the usual one");
+      writeFileSync(desktop, "");
+      const fallback = existsSync("/var/run/docker.sock") ? "/var/run/docker.sock" : desktop;
+      assert.equal(docker("macos"), fallback);
+      assert.equal(docker("linux"), "/var/run/docker.sock", "Linux keeps the usual path");
+      assert.equal(docker("macos", { docker: "/given.sock" }), "/given.sock", "a given socket wins");
+      console.log(`docker-default: macOS default is ${fallback === desktop ? "Docker Desktop's socket (/var/run/docker.sock absent)" : "/var/run/docker.sock (present here)"}`);
+    } finally {
+      process.env.HOME = saved;
+    }
+  } else if (selected === "worker-docker") {
+    // the worker client replaces a call's deploy.docker with the endpoint's
+    // (the worker's socket inside the VM), for worker calls and for Init's
+    // own container; an endpoint without one (Windows) leaves it as given
+    const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
+    const { workerClient } = await import("../../agent/src/transport/worker_client.js");
+    const worker = await fakeWorker(() => ({ value: { ok: true } }));
+    const mac = "/Users/someone/.docker/run/docker.sock", vm = "/var/run/docker.sock";
+    const deploy = { docker: mac, image: IMAGE, volume: "vol", daemon: "/b/layerfs-daemon" };
+    // Init's container: a stand-in `docker` that records the request it gets on stdin
+    const bin = join(work, "bin"), got = join(work, "init-request");
+    mkdirSync(bin);
+    const frames = new URL("../../agent/src/transport/frames.js", import.meta.url).href;
+    const stub = [
+      `#!${process.execPath}`,
+      "(async () => {",
+      `  const { decode, encode } = await import(${JSON.stringify(frames)});`,
+      "  const chunks = [];",
+      "  for await (const chunk of process.stdin) chunks.push(chunk);",
+      `  require("node:fs").writeFileSync(${JSON.stringify(got)}, JSON.stringify({ argv: process.argv.slice(2), request: decode(Buffer.concat(chunks)) }));`,
+      '  process.stdout.write(encode({ value: { kind: "Initialized" } }));',
+      "})();",
+    ];
+    writeFileSync(join(bin, "docker"), `${stub.join("\n")}\n`, { mode: 0o755 });
+    const path = process.env.PATH;
+    process.env.PATH = `${bin}:${path}`;
+    try {
+      const file = join(work, "endpoint.json");
+      writeFileSync(file, JSON.stringify({ home, port: worker.port, secret: worker.secret, build: "fake", daemonHost: "host.docker.internal", docker: vm, init: { argv: ["-H", `unix://${mac}`, "run"], image: IMAGE, script: "/b/init.js" } }));
+      const client = workerClient(file);
+      await client.call("sandbox.create", { home, storePath: "/s", deploy });
+      await client.call("fs.read", { home, storePath: "/s", path: "/README.md" });
+      await client.backendCall("backend.daemon.workspace.status", { home, storePath: "/s", deploy: { ...deploy, daemonHost: "given.host" } });
+      assert.deepEqual(worker.calls.map((c) => c.args.deploy?.docker), [vm, vm, vm], "every worker call uses the VM's socket");
+      assert.equal(worker.calls[0].args.deploy.image, IMAGE, "the rest of deploy is kept");
+      assert.equal(worker.calls[2].args.deploy.daemonHost, "given.host", "a given daemonHost still wins");
+      assert.deepEqual(await client.call("project.init", { home, storePath: "/s", path: work, deploy }), { value: { kind: "Initialized" } });
+      const init = JSON.parse(readFileSync(got, "utf8"));
+      assert.deepEqual(init.argv.slice(0, 2), ["-H", `unix://${mac}`], "the Mac's docker CLI uses the Mac's socket");
+      assert.equal(init.request.args.deploy.docker, vm, "Init's container uses the VM's socket");
+      // Windows: the worker shares its distribution's engine, so the given socket stays
+      const windows = join(work, "windows.json");
+      writeFileSync(windows, JSON.stringify({ home, port: worker.port, secret: worker.secret, build: "fake" }));
+      await workerClient(windows).call("sandbox.create", { home, storePath: "/s", deploy: { ...deploy, docker: "/run/docker.sock" } });
+      assert.equal(worker.calls.at(-1).args.deploy.docker, "/run/docker.sock");
+    } finally {
+      process.env.PATH = path;
+      worker.close();
+    }
   } else {
-    throw new Error("select surface, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker or worker-frames");
+    throw new Error("select surface, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default or worker-docker");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
