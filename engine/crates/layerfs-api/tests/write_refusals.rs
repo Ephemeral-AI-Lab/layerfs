@@ -147,3 +147,109 @@ fn a_write_through_a_non_directory_is_not_directory() {
     );
     fixture.cleanup();
 }
+
+/// Changes the stored file contents of the closed Store at `path` out of
+/// band: every pack that holds only whole-file or chunk objects has one byte
+/// flipped. Metadata packs, which a Workspace bind reads, stay intact. The
+/// immutability triggers are dropped for this and created again from their
+/// recorded SQL.
+fn damage_file_contents(path: &std::path::Path) {
+    let db = rusqlite::Connection::open(path).unwrap();
+    let triggers: Vec<(String, String)> = db
+        .prepare(
+            "SELECT name, sql FROM sqlite_master \
+             WHERE type = 'trigger' AND tbl_name IN ('pack', 'pack_unit')",
+        )
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(!triggers.is_empty(), "the pack tables are immutable");
+    for (name, _) in &triggers {
+        db.execute_batch(&format!("DROP TRIGGER {name}")).unwrap();
+    }
+    // Object roles 1 and 2 are whole files and chunks.
+    let content = "SELECT pack_id FROM object_location GROUP BY pack_id \
+                   HAVING min(role IN (1, 2)) = 1";
+    let units: bool = db
+        .query_row(
+            "SELECT count(*) > 0 FROM sqlite_master WHERE name = 'pack_unit'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let (table, key) = if units {
+        ("pack_unit", "unit_id")
+    } else {
+        ("pack", "pack_id")
+    };
+    let rows: Vec<(i64, Vec<u8>)> = db
+        .prepare(&format!(
+            "SELECT {key}, body FROM {table} WHERE pack_id IN ({content})"
+        ))
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(!rows.is_empty(), "a pack holds the file contents");
+    for (id, mut body) in rows {
+        let middle = body.len() / 2;
+        body[middle] ^= 0xff;
+        db.execute(
+            &format!("UPDATE {table} SET body = ?1 WHERE {key} = ?2"),
+            rusqlite::params![body, id],
+        )
+        .unwrap();
+    }
+    for (_, sql) in &triggers {
+        db.execute_batch(sql).unwrap();
+    }
+}
+
+/// A write call that fails reading the Store, before it changes anything,
+/// is a known `Failed` and closes its Store call Workspace, not the
+/// uncertain `Unknown` that keeps one: more such calls than the Store has
+/// call Workspaces are each refused for the read, never for capacity.
+#[test]
+fn a_failed_read_keeps_no_store_call_workspace() {
+    let fixture = Fixture::new("write-failed-read", |source| {
+        fs::create_dir(source.join("dir")).unwrap();
+        fs::write(source.join("dir/inner.txt"), b"inner\n").unwrap();
+        2
+    });
+    fixture.fork("feat");
+    let host = fixture.close();
+    damage_file_contents(&host.config.path);
+    // The owner leaves its overlay template behind; the reopened owner makes its own.
+    fs::remove_file(host.directory.join("overlay.sqlite")).unwrap();
+    let fixture = Fixture::open(host);
+
+    // `fs.edit` resolves the file, then reads its damaged contents.
+    let edit = || {
+        fixture
+            .try_call(
+                "fs.edit",
+                vec![
+                    ("branch", SdkValue::text("feat")),
+                    ("path", SdkValue::text("/dir/inner.txt")),
+                    ("oldText", SdkValue::text("inner")),
+                    ("newText", SdkValue::text("x")),
+                ],
+            )
+            .expect_err("the file contents cannot be read")
+    };
+    let first = edit();
+    assert_eq!(first.code, "Failed", "{}", first.message);
+    let calls = layerfs_store_service::OwnerConfig::default().namespaces + 1;
+    for call in 1..calls {
+        let r = edit();
+        assert_eq!(
+            (r.code.as_str(), r.message.as_str()),
+            (first.code.as_str(), first.message.as_str()),
+            "call {call}"
+        );
+    }
+    fixture.cleanup();
+}

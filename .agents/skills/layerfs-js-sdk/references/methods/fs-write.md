@@ -33,6 +33,7 @@ Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-pr
 | `NotDirectory` | A file or a symlink is in the way of the path; `message` is that entry | `fs.stat` it; choose another path or remove it first |
 | `TooLarge` | The complete encoded request did not fit one control call; nothing was sent | Inspect the input, then choose a smaller call or a larger atomic Workspace step |
 | `InvalidInput` | A bad argument (message bytes, relative path, …) | Read `message`; fix the call |
+| `Failed` | The call failed before committing, for example it could not read the Store; nothing was committed | Stop and report `message` |
 
 One encoded control request fits at most 65,519 bytes, including paths, metadata
 and tracing fields as well as content. `TooLarge` from this before-send admission
