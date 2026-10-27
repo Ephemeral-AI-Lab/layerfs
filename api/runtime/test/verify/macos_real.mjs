@@ -53,8 +53,6 @@ const work = mkdtempSync(join(shared, "lfs-mac-"));
 const home = join(work, "home"), source = join(work, "shop"), id = Date.now().toString(36);
 const prefix = `lfs-mac-${id}-`;
 const docker = (...args) => execFileSync("docker", ["-H", `unix://${mac}`, ...args], { encoding: "utf8", timeout: 30_000 }).trim();
-// a private home, as Init requires; resolveSettings alone leaves a new one 0755
-mkdirSync(home, { mode: 0o700 });
 mkdirSync(source);
 writeFileSync(join(source, "README.md"), "# Shop\n");
 const started = Date.now();
