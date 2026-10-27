@@ -34,6 +34,15 @@ impl Fixture {
     /// `build` fills the kernel source and returns its entry count below the
     /// root; it may read the finished tree before the source is removed.
     pub fn built(label: &str, build: impl FnOnce(&std::path::Path) -> usize) -> Self {
+        Self::built_with(label, StoragePolicy::frozen_default(), build)
+    }
+    /// [`Self::built`] under the Store `policy` Init records, as
+    /// `LAYERFS_STORE_POLICY` selects it.
+    pub fn built_with(
+        label: &str,
+        policy: StoragePolicy,
+        build: impl FnOnce(&std::path::Path) -> usize,
+    ) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
         std::fs::create_dir(&directory).unwrap();
@@ -46,7 +55,7 @@ impl Fixture {
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
         let handles = Handles::create(
             config.clone(),
-            StoragePolicy::frozen_default(),
+            policy,
             &HistoryCatalogConfig {
                 binding_key: BINDING.to_vec(),
                 cursor_key: CURSOR,

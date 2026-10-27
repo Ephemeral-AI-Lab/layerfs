@@ -361,6 +361,8 @@ nothing. Only fresh files at or above the chunking cutoff ask for one.
                        |
                     eligible
                        |
+         base chain alone exceeds budget? --> independent result
+                       |
              acquire/authenticate base chain
                        |
            prospective chain exceeds budget? --> independent result
@@ -476,7 +478,14 @@ budgets. Payload selection conservatively tests:
 ```
 
 The second test adds target canonical length, not a predicted delta frame size.
-This bounds prospective dependency work before storing a dependent. Reader also
+This bounds prospective dependency work before storing a dependent. Both tests are
+applied once the base is acquired and authenticated. A base whose own chain already
+exceeds either budget is decided earlier, from the stored sizes of its records and
+before dependency reconstruction/authentication, because reading it as a dependency
+charges the same budgets and fails when the chain alone exceeds them: such a base is
+an independent result, not a failed Save, and is neither reconstructed nor
+authenticated. A base whose chain fits is authenticated first, so a corrupt one
+fails the Save even when the dependent then tips the chain over. Reader also
 enforces its own declared chain limits. These are dependency-work constraints,
 not a blanket 512 KiB maximum on every standalone FULL object; the larger canonical
 object limit is a separate bound. Caches can avoid some
