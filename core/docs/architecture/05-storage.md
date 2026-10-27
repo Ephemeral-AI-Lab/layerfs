@@ -625,10 +625,25 @@ deeper chain is still bounded by the bytes it may decode and encode."
 | `METADATA_CHAIN_ENCODED_LIMIT` | 17 × 8,193 |
 
 The per-save `DepthCache` holds at most `DEPTH_CACHE_ENTRIES = 4_096` live
-`ChainCost { depth, canonical }` entries. Its purpose is prospective: it records
-"exactly what a read of that object charges its chain budget: the object itself and
-every dependency, **so a producer can refuse to create a dependency a later read
-could not reconstruct**."
+`ChainCost { depth, canonical, encoded }` entries. Its purpose is prospective: it
+records "exactly what a read of that object charges its chain budgets: the object
+itself and every dependency, **so a producer can refuse to create a dependency a
+later read could not reconstruct**." `encoded` is the stored record width the read
+charges, taken from the same group directory the reader uses; a pooled metadata
+chain keeps its own account in its reader.
+
+The budget is judged in two steps. First, from that cost and **before dependency
+reconstruction/authentication**: reading a base as a dependency charges both bounds
+for its whole chain and fails when the base's own chain does not fit them, so a
+candidate that cannot fit alone, such as a stored whole file above 512 KiB canonical
+or 256 KiB encoded under a construction cutoff above the default, is a
+`work_exceeded` FULL like any chain that outgrows its budget and not a failed Save.
+Such a candidate is neither reconstructed nor authenticated. Second, a candidate
+whose chain fits is acquired and authenticated, and then the prospective chain, the
+base chain plus the dependent's canonical length, is tested against both bounds; a
+chain that fills a bound exactly is admitted. A corrupt base whose own chain fits
+therefore fails the Save (`Integrity("dependency identity")`) even when the
+dependent tips the chain over a bound.
 
 ### 6.9 Pooled metadata — the inode-value lane
 

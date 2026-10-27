@@ -4,8 +4,12 @@
 //! trial happens only when exactly one eligible candidate is acquired under the
 //! role's depth, work and memory policy, and the selection compares the complete
 //! framed record cost including the base identity. A candidate that is absent or
-//! ineligible selects FULL by policy; a codec, allocation or read failure is
-//! returned as a failure and never becomes an alternative representation.
+//! ineligible selects FULL by policy, and so does one whose chain exceeds the
+//! work budgets: alone, which is judged from the chain's stored sizes before
+//! dependency reconstruction/authentication, or with the new object on it, which
+//! is judged once the candidate is acquired and authenticated. A codec,
+//! allocation or read failure is returned as a failure and never becomes an
+//! alternative representation.
 
 use std::collections::BTreeMap;
 
@@ -15,7 +19,7 @@ use layerfs_content::{ObjectId, ObjectRole};
 
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::{signature, Candidates};
-use crate::encoding::delta::read::{ChainBases, ChainCounters, Resolver};
+use crate::encoding::delta::read::{ChainBases, ChainCounters, ChainEdge, Resolver};
 use crate::encoding::full::{encode_full, encode_prefix, raw_payload, EncodedRecord};
 use crate::error::{StorageError, StorageResult};
 use crate::location::ObjectLocation;
@@ -107,17 +111,20 @@ pub fn add_depths(total: &mut DepthHistogram, other: &DepthHistogram) {
     }
 }
 
-/// Depth and canonical cost of one object's dependency chain.
+/// Depth and work cost of one object's dependency chain.
 ///
-/// `canonical` is exactly what a read of that object charges its chain budget: the
-/// object itself and every dependency, so a producer can refuse to create a
-/// dependency a later read could not reconstruct.
+/// `canonical` and `encoded` are exactly what a read of that object charges its
+/// chain budgets: the object itself and every dependency, so a producer can refuse
+/// to create a dependency a later read could not reconstruct.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChainCost {
     /// Dependency edges below this object.
     pub depth: u8,
     /// Canonical bytes of this object and its dependencies.
     pub canonical: u64,
+    /// Stored record bytes of this object and its dependencies. A pooled metadata
+    /// chain reports none here: its reader keeps its own account.
+    pub encoded: u64,
 }
 
 /// Bounded per-save cache of dependency depths and chain costs.
@@ -155,14 +162,14 @@ impl DepthCache {
             &dyn Source,
             &mut DecompressionWorkspace,
             &ObjectLocation,
-        ) -> StorageResult<Option<ObjectId>>,
+        ) -> StorageResult<ChainEdge>,
     {
         Ok(self
             .cost_of(connection, workspace, id, base_of)?
             .map(|cost| cost.depth))
     }
 
-    /// Depth and canonical cost of `id`'s chain, or `None` when it is not stored.
+    /// Depth and work cost of `id`'s chain, or `None` when it is not stored.
     ///
     /// The walk is iterative and bounded by the profile maximum; a stored chain
     /// longer than that is corrupt and is reported rather than absorbed.
@@ -178,9 +185,10 @@ impl DepthCache {
             &dyn Source,
             &mut DecompressionWorkspace,
             &ObjectLocation,
-        ) -> StorageResult<Option<ObjectId>>,
+        ) -> StorageResult<ChainEdge>,
     {
-        let mut path: Vec<(ObjectId, u64)> = Vec::new();
+        // Each element's identity, canonical length and stored record width.
+        let mut path: Vec<(ObjectId, u64, u64)> = Vec::new();
         let mut current = id;
         // Whether the walk stopped on an **already cached** cost rather than on
         // the chain root. The cached entry is not pushed onto `path`, but the
@@ -188,7 +196,7 @@ impl DepthCache {
         // below has to count it.
         let mut cached_edge = 0_u8;
         let cost = loop {
-            if path.iter().any(|(id, _)| *id == current) {
+            if path.iter().any(|(id, _, _)| *id == current) {
                 return Err(StorageError::Integrity("dependency cycle"));
             }
             if let Some(cost) = self.costs.get(&current).copied() {
@@ -204,7 +212,7 @@ impl DepthCache {
             let Some(location) = location else {
                 return Ok(None);
             };
-            path.push((current, location.canonical_length as u64));
+            path.push((current, location.canonical_length as u64, 0));
             // A chain of depth `d` has `d + 1` records, and the deepest supported
             // chain is exactly `MAXIMUM_DELTA_MAX_DEPTH` deep: the walk bound has to
             // admit that record, or the deepest chain a policy accepts could not be
@@ -212,12 +220,17 @@ impl DepthCache {
             if path.len() > usize::from(MAXIMUM_DELTA_MAX_DEPTH) + 1 {
                 return Err(StorageError::Integrity("stored dependency chain depth"));
             }
-            match base_of(connection, workspace, &location)? {
+            let edge = base_of(connection, workspace, &location)?;
+            if let Some(last) = path.last_mut() {
+                last.2 = edge.width;
+            }
+            match edge.base {
                 Some(base) => current = base,
                 None => {
                     break ChainCost {
                         depth: 0,
                         canonical: 0,
+                        encoded: 0,
                     }
                 }
             }
@@ -238,7 +251,7 @@ impl DepthCache {
         // base deeper than 8. The bounds were consistent; the measurement was not.
         let mut level = cost;
         let mut result = cost;
-        for (position, (id, own)) in path.iter().rev().enumerate() {
+        for (position, (id, own, width)) in path.iter().rev().enumerate() {
             let depth = cost
                 .depth
                 .saturating_add(cached_edge)
@@ -246,6 +259,7 @@ impl DepthCache {
             level = ChainCost {
                 depth,
                 canonical: level.canonical.saturating_add(*own),
+                encoded: level.encoded.saturating_add(*width),
             };
             self.record(*id, level);
             result = level;
@@ -428,13 +442,33 @@ pub fn select(
         input.counters.note_depth(role, 0);
         return Ok(full);
     };
+    // Acquiring a base charges the work budgets for its whole chain, the base
+    // included, and fails the Save when they are exceeded. A base whose own chain
+    // cannot fit them is therefore refused from the stored sizes of its records,
+    // before dependency reconstruction/authentication, and stores FULL by policy.
+    let mut bases = ChainBases::new(input.packs);
+    let started = Instant::now();
+    let base_cost = input.depths.cost_of(
+        input.connection,
+        input.decode,
+        base_id,
+        |connection, workspace, location| bases.edge(connection, workspace, location),
+    );
+    SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
+    let base_cost = base_cost?.ok_or(StorageError::Integrity("selected base is not stored"))?;
+    if base_cost.canonical > input.capacities.chain_canonical_limit
+        || base_cost.encoded > input.capacities.chain_encoded_limit
+    {
+        return refused_by_budget(input, id, role, raw, prehashed, full);
+    }
     // Exactly one trial: the acquired base is read once, authenticated, and used
     // for one prefix frame. Nothing here retries with another candidate.
     let base = acquire(input, base_id)?;
     // A dependency that could not be reconstructed is never created: the chain
     // budget covers the base chain *and* the dependent. Refusing here stores FULL
     // by policy, so no stored object depends on bytes a later read could not
-    // reconstruct.
+    // reconstruct. A base whose own chain fits is judged only after it was
+    // authenticated.
     let chained = input
         .chain
         .canonical_bytes
@@ -446,14 +480,7 @@ pub fn select(
     if chained > input.capacities.chain_canonical_limit
         || encoded > input.capacities.chain_encoded_limit
     {
-        input.counters.work_exceeded = input.counters.work_exceeded.saturating_add(1);
-        if lane == PackLane::WholeFile {
-            let sig = prehashed.unwrap_or_else(|| signature(raw));
-            input.candidates.ensure_loaded(input.connection)?;
-            input.candidates.insert(id, sig);
-        }
-        input.counters.note_depth(role, 0);
-        return Ok(full);
+        return refused_by_budget(input, id, role, raw, prehashed, full);
     }
     let base_raw = raw_payload(&base, role)?;
     input.counters.trials = input.counters.trials.saturating_add(1);
@@ -470,25 +497,15 @@ pub fn select(
     SaveProfile::charge(&mut input.profile.delta_ns, started);
     let prefix = prefix?;
     if prefix.record.len() < full.record.len() {
-        // The walk reads each edge from its record through the selection's own
-        // pack cache, which the acquisition of this same base already filled: the
-        // bodies are fetched once, not once per walk and once per read.
-        let mut bases = ChainBases::new(input.packs);
-        let started = Instant::now();
-        let base_cost = input.depths.cost_of(
-            input.connection,
-            input.decode,
-            base_id,
-            |connection, workspace, location| bases.base_of(connection, workspace, location),
-        );
-        SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
-        let base_cost = base_cost?.ok_or(StorageError::Integrity("selected base is not stored"))?;
         let depth = base_cost.depth.saturating_add(1);
         input.depths.record(
             id,
             ChainCost {
                 depth,
                 canonical: base_cost.canonical.saturating_add(canonical.len() as u64),
+                encoded: base_cost
+                    .encoded
+                    .saturating_add(prefix.charged_width() as u64),
             },
         );
         input.counters.note_depth(role, depth);
@@ -503,6 +520,25 @@ pub fn select(
         input.counters.note_depth(role, 0);
         Ok(full)
     }
+}
+
+/// Counts a candidate refused for its chain budget and stores `full` by policy.
+fn refused_by_budget(
+    input: &mut SelectInput<'_>,
+    id: ObjectId,
+    role: ObjectRole,
+    raw: &[u8],
+    prehashed: Option<[u64; 8]>,
+    full: EncodedRecord,
+) -> StorageResult<EncodedRecord> {
+    input.counters.work_exceeded = input.counters.work_exceeded.saturating_add(1);
+    if full.lane == PackLane::WholeFile {
+        let sig = prehashed.unwrap_or_else(|| signature(raw));
+        input.candidates.ensure_loaded(input.connection)?;
+        input.candidates.insert(id, sig);
+    }
+    input.counters.note_depth(role, 0);
+    Ok(full)
 }
 
 /// Counts one record the encoder stored verbatim, read from its own tag.
@@ -568,7 +604,7 @@ fn eligible(
         input.connection,
         input.decode,
         id,
-        |connection, workspace, location| bases.base_of(connection, workspace, location),
+        |connection, workspace, location| bases.edge(connection, workspace, location),
     );
     SaveProfile::charge(&mut input.profile.resolve.eligible_ns, started);
     let depth = depth?;

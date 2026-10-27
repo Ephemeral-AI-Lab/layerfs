@@ -200,15 +200,19 @@ impl State<'_> {
                 &mut self.decode,
                 *id,
                 |source, workspace, location| {
-                    reader.stored_base_with_caches(
-                        source,
-                        workspace,
-                        location,
-                        Some(crate::encoding::pool::read::PooledCaches {
-                            encoded: &mut *packs,
-                            decoded: &mut *groups,
-                        }),
-                    )
+                    // The pool reader keeps the encoded account of a pooled chain
+                    // (`chain_encoded` below), so the walk measures no width.
+                    reader
+                        .stored_base_with_caches(
+                            source,
+                            workspace,
+                            location,
+                            Some(crate::encoding::pool::read::PooledCaches {
+                                encoded: &mut *packs,
+                                decoded: &mut *groups,
+                            }),
+                        )
+                        .map(|base| crate::encoding::delta::read::ChainEdge { base, width: 0 })
                 },
             )?
             else {
