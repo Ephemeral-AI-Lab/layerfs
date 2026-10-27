@@ -552,7 +552,8 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
         return Err(refused(
             "InvalidInput",
             format!(
-                "Sandbox {id} is a {} Sandbox, but this deployment is {wanted}                  (LAYERFS_SANDBOX): local and native Sandboxes are never mixed",
+                "Sandbox {id} is a {} Sandbox, but this deployment is {wanted} \
+                 (LAYERFS_SANDBOX): local and native Sandboxes are never mixed",
                 value.get_text("runtime").unwrap_or_default()
             ),
         ));

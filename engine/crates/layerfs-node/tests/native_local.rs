@@ -1,5 +1,5 @@
 //! External tests of the built Node binding's local Sandbox records
-//! (LAYERFS_SANDBOX=local). No private Rust source is included: every case
+//! (LAYERFS_SANDBOX=local or native). No private Rust source is included: every case
 //! writes a Sandbox record as a previous call would have, then calls the
 //! addon's public `runtime.sandbox.reclaim` and observes the reply and the
 //! files it left. Neither Docker, FUSE, nor a Store is needed.
@@ -248,4 +248,26 @@ fn a_docker_record_stays_docker_without_a_local_deployment() {
         "assert.equal(r.refused?.code, 'Failed', JSON.stringify(r));",
     );
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
+}
+
+#[test]
+fn local_and_native_sandboxes_are_never_mixed() {
+    let home = Home::new();
+    let root = root(&home);
+    let own = own(&root);
+    let mixed = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
+    assert.match(r.refused.message, /never mixed/);";
+    // a native record is not used by a local deployment
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    reclaim(&home, "local", Some(text(&root)), mixed);
+    // nor a local record by a native deployment
+    record(&home, "local", text(&own), "layerfs-proj-1", |_| {});
+    reclaim(&home, "native", Some(text(&root)), mixed);
+    assert!(own.join("daemon.log").exists());
+    assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
+    // a native deployment uses its own record: stopped, it is reclaimed
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    reclaim(&home, "native", Some(text(&root)), RECLAIMED);
+    assert!(!own.exists());
+    assert!(!home.0.join("proj/sandboxes/1").exists());
 }

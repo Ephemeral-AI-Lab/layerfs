@@ -1,18 +1,18 @@
 // Real native SDK regression. Explicit binaries + isolated root are required.
-// node api/binding/tests/unmount-concurrency.mjs /abs/root /abs/addon.node /abs/daemon
+// node api/agent/test/verify/native_unmount_real.mjs /abs/root /abs/addon.node /abs/daemon
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile, access, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const [base, addon, daemon, childMode, serialized] = process.argv.slice(2);
 assert.ok(base?.startsWith('/') && addon?.startsWith('/') && daemon?.startsWith('/'), 'explicit absolute fixture paths');
-const repo = fileURLToPath(new URL('../../..', import.meta.url));
+const repo = fileURLToPath(new URL('../../../..', import.meta.url));
 Object.assign(process.env, {
   LAYERFS_SANDBOX: 'native', LAYERFS_NATIVE: addon, LAYERFS_DAEMON: daemon,
   LAYERFS_HOME: base+'/home', LAYERFS_LOCAL_DIR: base+'/local', LAYERFS_STORE_PATH: base+'/store/store.sqlite',
   LAYERFS_NFS_UNMOUNT: `sh ${base}/helper.sh {dir}`,
 });
-const { LayerFS } = await import(repo+'/api/agent/sdk/src/index.js');
+const { LayerFS } = await import(repo+'/api/agent/src/index.js');
 const { LayerFSBackend } = await import(repo+'/api/backend/src/index.js');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function deadline(promise, ms) {
