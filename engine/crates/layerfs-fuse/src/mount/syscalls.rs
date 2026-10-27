@@ -1,5 +1,6 @@
 //! First-party device, direct mount, one plain detach and one abort write; no
-//! helper or lazy path.
+//! helper or lazy path. Also the one control-filesystem mount a daemon makes
+//! when its container has none.
 use nix::{
     errno::Errno,
     mount::{mount, umount2, MntFlags, MsFlags},
@@ -13,12 +14,14 @@ use std::{
         fd::{AsRawFd, OwnedFd},
         unix::{ffi::OsStrExt, fs::DirBuilderExt},
     },
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 const DEVICE: &str = "/dev/fuse";
 const MOUNT_TABLE: &str = "/proc/self/mountinfo";
-const CONTROL: &str = "/sys/fs/fuse/connections";
+/// The kernel's shared FUSE control tree, where a host mounts it.
+pub const CONTROL: &str = "/sys/fs/fuse/connections";
+const CONTROL_TYPE: &str = "fusectl";
 /// The type and source this product mounts with, and the only mount-table row
 /// whose connection it will ever bind an abort control for.
 const FILESYSTEM: &str = "fuse";
@@ -97,18 +100,40 @@ pub(crate) fn mount_entry(target: &Path) -> io::Result<MountEntry> {
 /// product's own row names one: an anonymous device (major 0, whose minor is
 /// the connection number) of type `fuse` with this product's source. Any
 /// other row binds nothing and opens nothing.
-pub(crate) fn abort_control(entry: &MountEntry) -> io::Result<Option<File>> {
+pub(crate) fn abort_control(entry: &MountEntry, control: &Path) -> io::Result<Option<File>> {
     if entry.device.0 != 0 || entry.filesystem != FILESYSTEM || entry.source != SOURCE {
         return Ok(None);
     }
-    let path = Path::new(CONTROL)
-        .join(entry.device.1.to_string())
-        .join("abort");
+    let path = control.join(entry.device.1.to_string()).join("abort");
     match OpenOptions::new().write(true).open(path) {
         Ok(file) => Ok(Some(file)),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error),
     }
+}
+/// The control tree this process binds its own abort controls from. The
+/// shared tree is used when the control filesystem is mounted there.
+/// Otherwise, as in a container, which mounts none, one mount of it is made
+/// at `private`, a new directory inside one only this process can reach:
+/// the tree lists every connection of the kernel, other containers'
+/// included. A `private` that already holds it is used as it is; an
+/// existing directory without it is never adopted. A refused mount (a user
+/// namespace refuses it, though not FUSE mounts) removes the directory this
+/// call made and returns the mount's own error.
+pub fn control_root(private: &Path) -> io::Result<PathBuf> {
+    for root in [Path::new(CONTROL), private] {
+        if mount_entry(root).is_ok_and(|entry| entry.filesystem == CONTROL_TYPE) {
+            return Ok(root.to_owned());
+        }
+    }
+    DirBuilder::new().mode(0o700).create(private)?;
+    let flags = MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOEXEC;
+    let source = Some(CONTROL_TYPE);
+    if let Err(errno) = mount(source, private, source, flags, None::<&str>) {
+        let _ = std::fs::remove_dir(private);
+        return Err(errno.into());
+    }
+    Ok(private.to_owned())
 }
 /// Exactly one `write(2)` of one byte on the bound control: no second call
 /// after a short count, an interruption or any other error.

@@ -2,14 +2,14 @@
 use super::{
     kernel::Kernel,
     registry::bound_mut,
-    serving::{stage, Attached, Kept, Leaving},
+    serving::{stage, Attached, Evidence, Kept, Leaving},
     Failure, Service, Success,
 };
 use crate::store::BoundWorkspace;
 use layerfs_bridge::control::{
     Activity, ControlCode, ForcedFacts, MountPhase, TeardownStage, WorkspaceToken,
 };
-use layerfs_fuse::session::{Detach, SessionObserver};
+use layerfs_fuse::session::{Detach, DrainStage, SessionObserver};
 use std::{fmt, sync::Arc};
 
 /// Terminal admission over a connection-owning entry. No daemon-side request
@@ -85,17 +85,18 @@ impl Service {
         let drained = match session.drain() {
             Ok(drained) => drained,
             Err(undrained) => {
-                return Err(self.retain(
-                    token,
-                    stage(undrained.stage),
-                    format!(
-                        "connection drain stopped at {:?}: loops {:?}, work {:?}",
-                        undrained.stage, undrained.loops, undrained.work
-                    ),
-                    Some(observer),
-                    undrained,
-                    None,
-                ))
+                let stopped = stage(undrained.stage);
+                let detail = format!(
+                    "connection drain stopped at {:?}: loops {:?}, work {:?}",
+                    undrained.stage, undrained.loops, undrained.work
+                );
+                // Detached yet unjoined: the connection outlived its mount,
+                // and one forced unmount may still end it.
+                let evidence = match undrained.stage {
+                    DrainStage::Join => Evidence::Stalled(undrained),
+                    _ => Evidence::Other(undrained),
+                };
+                return Err(self.keep(token, stopped, detail, Some(observer), evidence, None));
             }
         };
         // Drain barrier holds: one fixed logical mark, then indexed retirement.
@@ -154,6 +155,19 @@ impl Service {
         detail: String,
         observer: Option<SessionObserver>,
         evidence: Box<dyn fmt::Debug + Send>,
+        forced: Option<ForcedFacts>,
+    ) -> Failure {
+        let evidence = Evidence::Other(evidence);
+        self.keep(token, stage, detail, observer, evidence, forced)
+    }
+    /// The same, with the owner already sorted into its kind.
+    pub(super) fn keep(
+        &self,
+        token: WorkspaceToken,
+        stage: TeardownStage,
+        detail: String,
+        observer: Option<SessionObserver>,
+        evidence: Evidence,
         forced: Option<ForcedFacts>,
     ) -> Failure {
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());

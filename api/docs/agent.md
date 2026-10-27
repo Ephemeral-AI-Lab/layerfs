@@ -273,7 +273,7 @@ trace line covers the command's run.
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | branch (6) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
-| workspace (4) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
+| workspace (4) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
 
 A Workspace's status is not an agent call: it is `backend.daemon.workspace.status(ws)`
 in [`@layerfs/backend`](backend.md).
@@ -518,7 +518,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `workspace.mount` | `layerfs workspace mount <sandbox> <branch>` |
 | `workspace.exec` | `layerfs workspace exec <ws> <command> [-m <text>] [--stream]` |
 | `workspace.commit` | `layerfs workspace commit <ws> [-m <text>] [--force]` |
-| `workspace.unmount` | `layerfs workspace unmount <ws> [--discard]` |
+| `workspace.unmount` | `layerfs workspace unmount <ws> [--discard] [--force]` |
 | `sandbox.create` | `layerfs sandbox create [--image <text>]` |
 | `sandbox.list_workspaces` | `layerfs sandbox list_workspaces <sandbox> [--page-size <n>] [--page-pos <n>]` |
 | `sandbox.close` | `layerfs sandbox close <sandbox>` |
