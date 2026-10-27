@@ -74,8 +74,8 @@ async function launch(settings, held) {
   try {
     if (!answer.sdk || !Object.keys(answer.sdk).length) throw refuse("Failed", "the WSL worker supplied no SDK identity");
     for (const [path, expected] of Object.entries(answer.sdk)) {
-      if (!path.startsWith("api/agent/sdk/") || path.includes("..")) throw refuse("Failed", "invalid SDK identity path");
-      const source = readFileSync(join(agent, path.slice("api/agent/sdk/".length)), "utf8").replaceAll("\r\n", "\n");
+      if (!path.startsWith("api/agent/") || path.includes("..")) throw refuse("Failed", "invalid SDK identity path");
+      const source = readFileSync(join(agent, path.slice("api/agent/".length)), "utf8").replaceAll("\r\n", "\n");
       if (createHash("sha256").update(source).digest("hex") !== expected) throw refuse("Failed", `this @layerfs/agent differs from the sealed Linux build: ${path}`);
     }
   } catch (error) { child.stdin.end(); throw error; }

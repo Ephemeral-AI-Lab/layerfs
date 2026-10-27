@@ -14,11 +14,11 @@
 # Verify the tree you actually changed, per workspace:
 #
 #   core (the replacement product):
-#     cargo +1.85.1 test  --manifest-path core/Cargo.toml --locked
-#     cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings
-#     cargo +1.85.1 fmt   --manifest-path core/Cargo.toml --all --check
-#     python3 core/tools/check_product_boundary.py
-#     python3 -m unittest discover -s core/tools -p 'test_*.py'
+#     cargo +1.85.1 test  --manifest-path Cargo.toml --locked
+#     cargo +1.85.1 clippy --manifest-path Cargo.toml --locked --all-targets -- -D warnings
+#     cargo +1.85.1 fmt   --manifest-path Cargo.toml --all --check
+#     python3 tools/check_product_boundary.py
+#     python3 -m unittest discover -s tools -p 'test_*.py'
 #
 #   The root crates/ reference workspace was retired by R9c (2026-10-10) and
 #   has no commands at HEAD; it is at local tag reference-v0.1.6-final.

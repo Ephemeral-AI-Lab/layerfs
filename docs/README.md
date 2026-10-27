@@ -5,7 +5,7 @@
 ## LayerFS 1.1.0 (release candidate)
 
 - [Release record, compatibility and the owner waiver](release-notes/1.1.0/README.md)
-- [JavaScript packages wiki](../api/README.md) and its [how-to guides](../api/how-to-use/)
+- [JavaScript packages wiki](../api/README.md) and its [how-to guides](../api/docs/)
 
 ## Use LayerFS v0.1.7
 

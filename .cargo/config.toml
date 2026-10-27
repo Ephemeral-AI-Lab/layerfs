@@ -3,7 +3,7 @@
 # This file sits at the repository root, not under `core/`, because cargo
 # discovers `.cargo/config.toml` by walking up from the **current working
 # directory**. The repository's prescribed commands run from this root with
-# `--manifest-path core/Cargo.toml`, which never looks inside `core/.cargo/`, so
+# the root manifest; a manifest path never selects a nested `.cargo/`, so
 # the flags used to be silently absent from exactly the builds that matter.
 # It is scoped by target cfg, so x86_64 and every other target are untouched.
 #
@@ -18,7 +18,7 @@
 #
 # Measured consequence of losing them (same source, same machine, same protocol):
 # 214 MiB/s against 802 MiB/s on one stream, 425 against 1556 MiB/s on two.
-# `core/crates/layerfs-bridge` now refuses to compile for aarch64 without this
+# `engine/crates/layerfs-bridge` now refuses to compile for aarch64 without this
 # profile instead of silently negotiating the ChaCha20-Poly1305 fallback.
 #
 # These are the crates' own documented cfg knobs plus the ARMv8 target features,
@@ -26,7 +26,7 @@
 # a scripted or container build that sets RUSTFLAGS must repeat these flags.
 #
 # The reference workspace that lived under root `crates/` was retired by R9c
-# (2026-10-10); `core/` is the only Cargo workspace these flags apply to.
+# (2026-10-10); the root workspace now covers core, engine and api.
 [target.'cfg(target_arch = "aarch64")']
 rustflags = [
     "--cfg", "aes_armv8",

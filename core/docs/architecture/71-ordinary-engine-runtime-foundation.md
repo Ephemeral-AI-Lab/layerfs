@@ -32,7 +32,9 @@ remaining counters, never payload allocations. Unknown JSON strings/Arguments
 stream without collection. Selected-key duplicates, escapes/UTF-8/surrogates,
 integer types/width, malformed/truncated framing and conflicting headers refuse
 with original transfer and failed-fence knowledge. Error HTTP statuses retain a
-separate bounded prefix/count/completion/error diagnostic with redacted Debug.
+separate bounded prefix/count/completion/error diagnostic. Debug shows only the
+retained prefix (at most 1024 bytes) as lossy UTF-8 with controls escaped, alongside
+the byte count, completion state and read error.
 
 The selected metadata profile has an explicit32-level JSON support bound,128B
 selected-key/prefix capture,8KiB individual header lines and32KiB header/trailer

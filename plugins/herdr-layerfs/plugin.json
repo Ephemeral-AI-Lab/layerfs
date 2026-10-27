@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "id": "herdr-layerfs",
+  "name": "LayerFS for Herdr",
+  "summary": "Each Herdr workspace is a LayerFS Branch: a new one in ~0.2 s, restored after restart.",
+  "authors": [{ "name": "jiangkoumo", "github": "jiangkoumo" }],
+  "license": "MIT",
+  "repository": "https://github.com/jiangkoumo/herdr-plugin-layerfs",
+  "tags": ["herdr", "agents", "workspaces", "multi-agent", "terminal"],
+  "platforms": ["linux"],
+  "uses": ["agent"],
+  "host": { "name": "Herdr", "url": "https://herdr.dev" },
+  "status": "preview",
+  "versions": [
+    {
+      "version": "0.3.3",
+      "commit": "d2bf1a854bded0a696381d04721a0c79d5af8cb0",
+      "date": "2026-10-26",
+      "layerfs": { "version": "v1.1.0", "commit": "ad78914e36b258b360daf13aec164b5655814689" },
+      "notes": "A failed fork or reopen now stops the Sandbox daemon that attempt created, through SDK sandbox.close, once its mounts are cleaned up; reused or shared daemons keep running."
+    },
+    {
+      "version": "0.3.2",
+      "commit": "f2e7ba6b99fd14956de2a312ae7cef1ec4e908eb",
+      "date": "2026-10-26",
+      "layerfs": { "version": "v1.1.0", "commit": "ad78914e36b258b360daf13aec164b5655814689" },
+      "notes": "A failed fork is kept as a closed Branch with its error (reopen or drop to recover); reopen can adopt an existing Store Branch without a plugin record; fork from an agent pane outside the repo opens the Branch under the source repo."
+    },
+    {
+      "version": "0.3.1",
+      "commit": "34dd08cc29dc587ab041e087511d0ce6520efa0c",
+      "date": "2026-10-26",
+      "layerfs": { "version": "v1.1.0", "commit": "ad78914e36b258b360daf13aec164b5655814689" },
+      "notes": "drop [name] now cleans up closed Branches directly (no remount); optional --delete-git-branch deletes the Git branch only when merged. Store data is kept, so drop does not reclaim space."
+    },
+    {
+      "version": "0.3.0",
+      "commit": "2bbd70880fcee75d832ebe9a093d231782b93475",
+      "date": "2026-10-26",
+      "layerfs": { "version": "v1.1.0", "commit": "ad78914e36b258b360daf13aec164b5655814689" },
+      "notes": "Adds Branch merge (reports real conflicts, ignores each Branch's root .git link), keeps state until drop cleanup succeeds, and resolves the current Branch from cwd outside Herdr."
+    },
+    {
+      "version": "0.2.1",
+      "commit": "dba17fb30d46acb7daba5ba61e4e0048a01e3d43",
+      "date": "2026-10-25",
+      "layerfs": { "version": "v1.1.0", "commit": "ad78914e36b258b360daf13aec164b5655814689" },
+      "notes": "First listing: docker mode on LayerFS main verified end to end on Debian 13; agents fork from their own pane."
+    }
+  ]
+}

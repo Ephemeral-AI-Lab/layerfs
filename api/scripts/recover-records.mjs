@@ -5,7 +5,7 @@
 // is untouched in its Docker volume, and the record can be rebuilt from it:
 // the catalog binding, LayerStack, Init's `main` Branch and the first Layer's
 // root are rows of the Store; the cursor key only signs page cursors and is new.
-// api/binding/examples/restore_record.rs writes the record (#347).
+// engine/crates/layerfs-node/examples/restore_record.rs writes the record (#347).
 //
 //   node api/scripts/recover-records.mjs --home <home> --image <sha256:…>
 //        --restore <restore_record binary> [--apply] [project …]

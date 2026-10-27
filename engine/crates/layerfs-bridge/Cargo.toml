@@ -1,0 +1,23 @@
+[package]
+name = "layerfs-bridge"
+description = "Authenticated bounded duplex channels for cluster-two runtime integration"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = ["duplex"]
+duplex = ["dep:snow"]
+
+[dependencies]
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+snow = { version = "=0.9.6", optional = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(chacha20_force_neon)',
+    'cfg(aes_armv8)',
+    'cfg(polyval_armv8)',
+] }

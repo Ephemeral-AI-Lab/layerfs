@@ -1,11 +1,11 @@
 {
   "name": "layerfs-js",
   "version": "1.1.0",
-  "description": "The LayerFS JavaScript packages (#428): @layerfs/agent, @layerfs/backend and @layerfs/runtime, beside the native addon crate. `npm install` here links them; it downloads nothing.",
+  "description": "The LayerFS JavaScript packages (#428): @layerfs/agent, @layerfs/backend and @layerfs/runtime, which load the engine's native addon (engine/crates/layerfs-node). `npm install` here links them; it downloads nothing.",
   "private": true,
   "type": "module",
   "workspaces": [
-    "agent/sdk",
+    "agent",
     "backend",
     "runtime"
   ],

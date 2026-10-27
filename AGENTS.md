@@ -2,13 +2,13 @@
 
 > **Status:** Current general guide.
 
-Repository-wide instructions for LayerFS. Also read [core/AGENTS.md](core/AGENTS.md)
-for implementation under `core/`. Current owner instructions and documented
+Repository-wide instructions for LayerFS. Also read the applicable [core](core/AGENTS.md), [engine](engine/AGENTS.md)
+and [API](api/AGENTS.md) guides for implementation in those layers. Current owner instructions and documented
 supersessions govern; a closed handoff or historical receipt is not a new assignment.
 
 ## Product scope and current workstreams
 
-**Implement both cluster one and cluster two in `core/`.** The v0.1.6
+**Implement both workstreams through the core, engine and API layers.** The v0.1.6
 reference implementation that lived under root `crates/` was retired on
 2026-10-10 (R9c) and is absent at HEAD. It was never a dependency, source
 include or fallback for core, and must not return as a second product. Its last
@@ -20,8 +20,8 @@ simplification.
 
 | Workstream | Current scope | Entry point |
 | --- | --- | --- |
-| Cluster one | Implemented content, storage, history, persistence, project Init and telemetry libraries | [Cluster-one handbook](docs/general/cluster_one_handbook.md), [CAS/CDC/delta handbook](docs/general/cas_cdc_deltaencoding_handbook.md) |
-| Cluster two | Workspace, FUSE, daemon, execution and Commit/runtime integration design and implementation | [Current design index](core/docs/issues/303/README.md) and its seven primary contracts |
+| Cluster one | Core Content/Storage/History/Telemetry algorithms; Engine Persistence and Project Init | [Cluster-one handbook](docs/general/cluster_one_handbook.md), [CAS/CDC/delta handbook](docs/general/cas_cdc_deltaencoding_handbook.md) |
+| Cluster two | Engine Workspace/FUSE/daemon/Sandbox; API execution and Commit/runtime integration | [Current design index](core/docs/issues/303/README.md) and its seven primary contracts |
 | Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
 
 **The LayerFS UI is the dsh LayerFS plugin** (owner, 2026-10-19): the LayerFS tab in
@@ -34,7 +34,7 @@ bundle (the LayerFS mock model and its demo workspace) is disabled permanently**
 (owner, 2026-10-21): it loads nothing, is not released and no guide installs it.
 
 Cluster names are workstreams. C1/C2/C5 in older component documents mean
-content/storage/history. Check [core/Cargo.toml](core/Cargo.toml) for active
+content/storage/history. Check [Cargo.toml](Cargo.toml) for active
 members: a directory or old test does not establish a built replacement.
 Source and public contracts establish implemented behavior. Owner requirements
 and proposals establish target behavior; research establishes neither capability
@@ -75,7 +75,7 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   status and explicit cancellation. The filesystem daemon supervises no commands;
   optional `WorkspaceApi.exec` only delegates ordinary Sandbox execution.
   Keep this boundary explicit in implementation
-  and proofs; see [execution ownership](core/AGENTS.md#filesystem-access-and-execution-ownership).
+  and proofs; see [execution ownership](engine/AGENTS.md#filesystem-access-and-execution-ownership).
 - Initial full-root acquisition is explicit. Repeated mount binds the complete
   root without a whole-tree scan/copy/materialization or dependency restoration.
   The only file it creates is the Workspace's own overlay database, copied from
@@ -100,7 +100,7 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   canonical construction in Content, object encoding/packing in Storage and
   database writes in Persistence. Reuse these ports when completing daemon
   construction; do not add a second encoder or route it through host Init. See
-  [shared construction boundaries](core/AGENTS.md#shared-construction-and-completion-boundaries)
+  [shared construction boundaries](engine/AGENTS.md#shared-construction-and-completion-boundaries)
   for implemented entrypoints and the remaining S10 namespace integration.
 - `Save::finish()` completes saved objects while the Store remains open;
   History publication follows. `Handles::seal()` consumes the sole Store
@@ -207,7 +207,7 @@ For measurements, read the [agent measurement workflow](docs/general/agent-measu
 [report template](docs/general/benchmark_agent_report.md) and owning harness/family contract.
 Benchmark suites, harnesses and released data live in the
 [layerfs-benchmark](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark) repository, moved out of
-`benchmark/` on 2026-10-23. Core routing is its
+`benchmark/` on 2026-10-23. Benchmark routing is its
 [fs-bench-pro/AGENTS.md](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md).
 **fs-bench-pro is frozen and left broken (owner, 2026-10-18).** Do not edit,
 build, run or repair it, and leave it out of workspace builds and checks. Its
@@ -300,7 +300,7 @@ remain binding; moving them out of this file does not weaken them.
   fork, vendor, replace or edit third-party code/registry packages, except the
   owner's explicitly authorized fuser 0.18.0 timestamp, scoped receive-loop
   lifecycle and negotiated receive-buffer patches described in
-  [core provenance checks](core/AGENTS.md#fuser-provenance-and-authorized-patch-checks).
+  [core provenance checks](engine/AGENTS.md#fuser-provenance-and-authorized-patch-checks).
   Use locked builds and report an incompatible required dependency with evidence.
 - One attempted operation; no automatic retry/busy handler, refresh/reprepare
   or failed-operation replay. Readiness waits are not retries. Preserve exact
@@ -309,11 +309,11 @@ remain binding; moving them out of this file does not weaken them.
   fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
   guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
   FUSE mount tests); `format.yml` checks the Ruff formatting below.
-  [core/tools/ci_tests.py](core/tools/ci_tests.py) decides which tests go in
+  [tools/ci_tests.py](tools/ci_tests.py) decides which tests go in
   which lane. None is a required check, and nothing runs before a push. Do
   not wait for CI, and do not treat a green run as
   verification of your change: verify the changed scope yourself with
-  [core checks](core/AGENTS.md#checks-and-completion) and report checks/gaps.
+  [product checks](engine/AGENTS.md#checks-and-completion) and report checks/gaps.
   There is still no pre-push gate: `tools/preflight.sh` stays retired; do not
   restore it or an equivalent wrapper. An empty guard scan proves no
   implementation.
@@ -345,9 +345,9 @@ remain binding; moving them out of this file does not weaken them.
   no `fsync`/`fdatasync`/`sync_data`/`sync_all` on disposable Workspace backing,
   and no space is reserved ahead of use on it.
   Memory hints are hints, not evidence of resident bounds.
-- New core/application production files obey the 999-line ceiling and 200-line
+- New core/engine/API production files obey the 999-line ceiling and 200-line
   declaration/delegation ceiling for `lib.rs`/`mod.rs`. Product-only source,
-  external tests and guard coverage are detailed in the core guide.
+  external tests and guard coverage are detailed in the layer guides.
 - Format changed Python tools with Ruff; `ruff.toml` names the pinned version,
   scope and command. `format.yml` reports formatting drift after a push;
   nothing runs before one.
@@ -442,7 +442,7 @@ renderer highlights what changes:
   counted; name their directory in prose if it matters.
 
 A listing is a snapshot. It does not make a planned name a scaffolding
-requirement, and an existing source file or `core/Cargo.toml` still decides
+requirement, and an existing source file or `Cargo.toml` still decides
 what is built.
 
 ## 5. Why these rules exist (worked example)
@@ -450,3 +450,14 @@ what is built.
 The historical cache-credit failure and its immutable ledger remain linked in
 [the measurement workflow](docs/general/agent-measurement-policy.md#5-why-these-rules-exist-worked-example).
 Historical explanation is retained outside default implementation routing.
+
+
+All product layers follow the detailed
+[production source rules](engine/AGENTS.md#production-file-size-and-responsibility)
+and [checks and completion rules](engine/AGENTS.md#checks-and-completion).
+The root manifest builds four core crates and eleven engine crates, including
+the SDK method surface `layerfs-api` and the Node binding `layerfs-node`; `api/`
+holds the published JavaScript packages. The dependency direction is
+`core < engine < api`, including dev dependencies and test includes. Workstream names do not change this layering.
+After rebasing across #463, update each selected worktree's own target registration and prepare again
+for the root `target/` path; never migrate another worktree's resource record.

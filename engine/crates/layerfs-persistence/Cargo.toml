@@ -1,0 +1,26 @@
+[package]
+name = "layerfs-persistence"
+description = "Shared physical persistence and history over durable embedded SQLite."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-history = { path = "../../../core/crates/layerfs-history", default-features = false }
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
+
+[dev-dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+nix = { version = "=0.31.3", default-features = false, features = ["fs"] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "pthread", "signal"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+rusqlite = { version = "=0.40.2", features = ["bundled"] }

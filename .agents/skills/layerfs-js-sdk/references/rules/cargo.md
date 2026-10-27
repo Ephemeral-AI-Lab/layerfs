@@ -1,7 +1,7 @@
 # Rust and Cargo in a Workspace
 
 > **Status:** Current general guide. Live Cargo 1.85.1 checks in issue #337
-> Phase A used product `db5b1bac9`; raw receipts are in
+> Phase A used product `db5b1bac9`; at that pin the receipt path was
 > `core/target/issue337/phase-a/`. These are diagnostics, not benchmarks.
 
 ## Put all mutable Cargo state in the view

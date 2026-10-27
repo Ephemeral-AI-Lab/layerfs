@@ -273,7 +273,7 @@ the edit, and the sample only confirms it.
 
 ```bash
 RX_ONLY=costs,compound,transactions,native_visit_fence,native_visit_cost,job_cost \
-  python3 -B core/target/rx-suite.py host <summary-file> layerfs-overlay layerfs-workspace layerfs-daemon
+  python3 -B target/rx-suite.py host <summary-file> layerfs-overlay layerfs-workspace layerfs-daemon
 ```
 
 Restage a count test with the true new number in the same commit; never
@@ -567,16 +567,16 @@ concurrent clients, Commit, or a cell that did not run.
 
 ## Helpers
 
-`core/target/r7-summary.py <receipt.json>` prints the outcome, request, job,
-statement, Store and storage rows; `core/target/r7-statements.py
+`target/r7-summary.py <receipt.json>` prints the outcome, request, job,
+statement, Store and storage rows; `target/r7-statements.py
 <receipt.json>` prints per-family statements, executions, VM steps and time.
-`core/target/rx-suite.py host|linux <summary-file> <package>...` builds once
+`target/rx-suite.py host|linux <summary-file> <package>...` builds once
 and runs each test binary once under its own wall limit; `RX_ONLY=a,b,c`
 restricts both the build and the run to the named integration-test binaries.
-`core/target/r7-iterate-all.sh <first-receipt-number> [cells]` samples the
-named cells from one build. All are in the git-ignored `core/target`
+`target/r7-iterate-all.sh <first-receipt-number> [cells]` samples the
+named cells from one build. All are in the git-ignored `target`
 directory and are lost if it is cleaned. The array positions they decode are pinned to the product's
-diagnostics source (`core/crates/layerfs-overlay/src/diagnostics/metrics.rs`
-and the request accounting in `core/crates/layerfs-fuse`); a changed family or
+diagnostics source (`engine/crates/layerfs-overlay/src/diagnostics/metrics.rs`
+and the request accounting in `engine/crates/layerfs-fuse`); a changed family or
 opcode list must be updated in the helper, which warns when the lengths
 differ.
