@@ -90,7 +90,8 @@ there is no byte-read method. Grep streams literal matching. Blame follows
 immutable first parents without retaining the entire chain, skips unchanged
 content IDs and uses bounded LCS with exact common edges. In coarse comparisons,
 a line is inherited from the common suffix only when it starts at a
-corresponding line boundary in both versions. Oversized changed middles are
+corresponding line boundary in both versions, and from the common prefix only
+when it ends at one in both. Oversized changed middles are
 removed/added blocks with comparisonCoarse. Diff hunks may be omitted
 explicitly under comparison/reply bounds; equality uses immutable identity.
 

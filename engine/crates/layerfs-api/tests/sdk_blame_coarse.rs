@@ -184,6 +184,33 @@ fn an_added_final_newline_is_new_text() {
 }
 
 #[test]
+fn a_last_line_cut_short_without_a_final_newline_keeps_the_commit_that_cut_it() {
+    // The newer text is all prefix, but its last line ends where the older line goes on.
+    let head = lines(1, 2004);
+    let before = format!("{head}alpha beta\n");
+    let after = format!("{head}alpha");
+    check("cut-last", &before, &[(&after, &[2005])], true);
+    let before = format!("{head}alpha beta");
+    check("cut-last-bare", &before, &[(&after, &[2005])], true);
+}
+
+#[test]
+fn a_dropped_final_newline_is_new_text() {
+    let head = lines(1, 2004);
+    let before = format!("{head}alpha\n");
+    let after = format!("{head}alpha");
+    check("drop-newline", &before, &[(&after, &[2005])], true);
+}
+
+#[test]
+fn lines_before_dropped_last_lines_keep_their_origin() {
+    // The newer text is all prefix and ends with a newline, so every line is the older one.
+    let head = lines(1, 2005);
+    let before = format!("{head}alpha\nbeta");
+    check("drop-last", &before, &[(&head, &[])], true);
+}
+
+#[test]
 fn a_split_line_in_a_small_file_is_credited_to_the_commit_that_split_it() {
     let rest = lines(2, 10);
     let before = format!("alpha beta\n{rest}");

@@ -1,7 +1,8 @@
 //! Bounded blame along persisted first parents. Comparison uses exact byte
 //! prefix/suffix and bounded LCS for the changed middle. A larger middle is a
 //! removed/added block, matching Content's bounded diff policy; it is disclosed.
-//! A line is kept from the common suffix only where both texts start a line.
+//! A line is kept from the common suffix only where both texts start a line,
+//! and from the common prefix only where both texts end it.
 use super::{
     snapshot::{self, Snap},
     window,
@@ -73,7 +74,8 @@ fn starts_line(reader: &StorePorts, file: EntryFacts, at: u64) -> Result<bool> {
 /// The bytes the texts share at their start and at their end. A line of `newer` that starts at the
 /// first byte of the common suffix is the same line of `older` only if `older` starts a line there
 /// too. When it does not (a split or cut line), the suffix gives up that byte, so the line belongs to
-/// the changed middle.
+/// the changed middle. Likewise, an unterminated last line of `newer` that ends the common prefix is
+/// the same line only if `older` ends there too; otherwise the prefix gives up its last byte.
 fn equal_edges(reader: &StorePorts, newer: EntryFacts, older: EntryFacts) -> Result<(u64, u64)> {
     let (a, b) = (
         snapshot::size(reader, &newer)?,
@@ -113,6 +115,9 @@ fn equal_edges(reader: &StorePorts, newer: EntryFacts, older: EntryFacts) -> Res
     }
     if suffix > 0 && !starts_line(reader, older, b - suffix)? {
         suffix -= 1;
+    }
+    if prefix == a && a < b && !starts_line(reader, newer, a)? {
+        prefix -= 1;
     }
     Ok((prefix, suffix))
 }
