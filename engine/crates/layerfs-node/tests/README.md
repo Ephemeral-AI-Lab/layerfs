@@ -29,7 +29,8 @@ Node process; the fixture's fork is bounded and released on test unwinding.
 `runtime.sandbox.reclaim`: a record naming any directory other than where its
 deployment puts that Sandbox is refused and nothing is deleted, the configured
 `localDir` must be absolute and plain, a stopped local Sandbox is deleted and its
-number freed, and a damaged boot or port is refused.
+number freed, a damaged boot or port is refused, and local and native
+(`LAYERFS_SANDBOX=native`) records are never used by the other's deployment.
 
 `native_admission` covers initial connection admission and its `Busy` deadline.
 The deadline test pays the product's full 60-second readiness wait. The mock
