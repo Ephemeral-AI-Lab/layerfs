@@ -368,10 +368,30 @@ impl Ctx<'_, '_> {
     }
 
     /// `from` changed the names of the directory `f`, which `into` replaced
-    /// with `there` at its unchanged `path`: decided at the path, as the
-    /// other direction decides it at the name. A new directory there takes
-    /// `f`'s names; a kept `f` is resurrected with its subtree; a lost one
-    /// leaves the serials new below it unbound.
+    /// with `there` at its unchanged `path`: when `there` is a new directory,
+    /// it takes `f`'s names, as the other direction decides it at the name.
+    /// Called in the deciding pass instead of deciding `f`'s names against
+    /// no listing, so each name is decided once. True when absorbed.
+    pub(super) fn absorb_replaced(
+        &mut self,
+        path: &str,
+        b: EntryFacts,
+        f: EntryFacts,
+        there: EntryFacts,
+    ) -> ContentResult<bool> {
+        if !is_directory(Some(there.value))
+            || self.value(self.from, there.serial)?.is_some()
+            || self.spill.get(TARGET, single(there.serial))?.is_some()
+        {
+            return Ok(false);
+        }
+        self.absorb(Some(b), f, there, path.to_owned())?;
+        Ok(true)
+    }
+
+    /// The rest of [`Self::absorb_replaced`]'s case, once every moved
+    /// directory is known: decided at the path. A kept `f` is resurrected
+    /// with its subtree; a lost one leaves the serials new below it unbound.
     pub(super) fn replaced_directory(
         &mut self,
         path: &str,
@@ -379,12 +399,6 @@ impl Ctx<'_, '_> {
         f: EntryFacts,
         there: EntryFacts,
     ) -> ContentResult<()> {
-        if is_directory(Some(there.value))
-            && self.value(self.from, there.serial)?.is_none()
-            && self.spill.get(TARGET, single(there.serial))?.is_none()
-        {
-            return self.absorb(Some(b), f, there, path.to_owned());
-        }
         let result = self.decide(path, [Some(b), Some(f), Some(there)])?;
         let carrier = self.carrier(result, Some(there))?;
         if carrier == Some(f.serial) {

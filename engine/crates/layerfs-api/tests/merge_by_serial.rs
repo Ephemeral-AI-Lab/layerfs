@@ -841,6 +841,40 @@ fn a_directory_added_to_against_a_new_directory_merges_by_name() {
     );
 }
 
+/// As above, but `l` saves a new two-link file over `/t/d/old`, a name the
+/// base held, and `r`'s new directory holds a newer `old`. The merged
+/// directories decide `old` once in either order: `/.lww` keeps `r`'s, and
+/// `l`'s file stays at its other name, outside the directory or inside it.
+#[test]
+fn a_new_link_over_a_base_name_in_a_merged_directory_is_lost_once() {
+    let right = [
+        Change::Unlink("/t/d/old"),
+        Change::Rmdir("/t/d"),
+        Change::Mkdir("/t/d"),
+        Change::Create("/t/d/old", b"theirs\n"),
+        Change::Mtime("/t/d/old", NEWER),
+    ];
+    for other in ["/t/k", "/t/d/z"] {
+        each_order(
+            &format!("serial-absorbed-base-link{}", other.replace('/', "-")),
+            true,
+            true,
+            &[
+                Change::SaveOver("/t/d/old", b"ours\n"),
+                Change::Link("/t/d/old", other),
+            ],
+            &right,
+            |fixture, reply, merged_view, _| {
+                assert_eq!(read(fixture, "/t/d/old").as_deref(), Some("theirs\n"));
+                assert_eq!(read(fixture, other).as_deref(), Some("ours\n"));
+                single(merged_view, "/t/d/old");
+                single(merged_view, other);
+                assert_eq!(lww_paths(reply), ["/t/d/old"]);
+            },
+        );
+    }
+}
+
 #[test]
 fn a_one_sided_mode_change_is_kept() {
     let fixture = seeded("serial-chmod");

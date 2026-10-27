@@ -261,6 +261,17 @@ impl Ctx<'_, '_> {
         let one_sided = same(c.i, c.b);
         match (c.b, c.f, c.i) {
             (_, Some(f), _) if f.kind == InodeKind::Directory => {
+                if let (Some(b), None) = (c.b, c.i) {
+                    if let Some((path, there)) = self.replacement(c.serial, b, f)? {
+                        let facts = |value| EntryFacts {
+                            serial: c.serial,
+                            value,
+                        };
+                        if self.absorb_replaced(&path, facts(b), facts(f), there)? {
+                            return Ok(());
+                        }
+                    }
+                }
                 let mut listing = self.listing_of(c, PathSlot::Name(self.from, c.serial));
                 self.names(&mut listing, Mode::Decide)?;
                 if c.i.is_none() && c.b.is_some() {
@@ -442,11 +453,8 @@ impl Ctx<'_, '_> {
             return Ok(());
         }
         if f.value.kind == InodeKind::Directory {
-            if f.value.content_root != b.value.content_root {
-                let path = self.path(self.from, s)?;
-                if let Some(there) = self.rebound_at(s, &path)? {
-                    return self.replaced_directory(&path, b, f, there);
-                }
+            if let Some((path, there)) = self.replacement(s, b.value, f.value)? {
+                return self.replaced_directory(&path, b, f, there);
             }
             let c = Change {
                 serial: s,
@@ -487,6 +495,21 @@ impl Ctx<'_, '_> {
             return Ok(None);
         }
         self.resolver.entry(self.into, path)
+    }
+
+    /// A directory `from` changed the names of and `into` lacks: its path
+    /// and the inode `into` put there instead, if any.
+    fn replacement(
+        &mut self,
+        serial: u64,
+        b: InodeValue,
+        f: InodeValue,
+    ) -> ContentResult<Option<(String, EntryFacts)>> {
+        if f.content_root == b.content_root {
+            return Ok(None);
+        }
+        let path = self.path(self.from, serial)?;
+        Ok(self.rebound_at(serial, &path)?.map(|there| (path, there)))
     }
 
     /// A deferred file whose path `into` rebound to `there`.
