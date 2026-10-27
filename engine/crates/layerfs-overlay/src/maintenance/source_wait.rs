@@ -6,7 +6,20 @@ pub(crate) const GENERATION_WINDOW: &str =
     WHERE target=?1 AND kind IN(1,3,7) AND (kind,resource)>(?2,?3)
     ORDER BY kind,resource LIMIT 64";
 impl Overlay {
+    /// Whether an orphan that reads layer `gen` must still wait for it: a
+    /// capture has not settled it, or a captured reader holds it. Parking and
+    /// waking share this one rule.
+    pub(crate) fn orphan_source_awaited(&self, gen: i64) -> OverlayResult<bool> {
+        Ok(self.state()?.captured.is_some_and(|g| g.0 == gen) || self.generation_held(gen)?)
+    }
     pub(crate) fn wake_orphan_sources(&self, gen: i64) -> OverlayResult<()> {
+        // Orphans woken while the layer is awaited wait again at their next
+        // turn, and the rows they leave keep this wake pending: the drain after
+        // the job that settled the capture never ends. The release that ends
+        // the wait wakes them (`wake_generation`).
+        if self.orphan_source_awaited(gen)? {
+            return Ok(());
+        }
         if self
             .open
             .borrow()

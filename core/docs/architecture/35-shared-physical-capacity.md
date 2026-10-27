@@ -173,3 +173,30 @@ creation and SQL startup. The daemon must protect a closed, empty template and
 fence all live owners before terminal close. The external template tests prove
 independent routes 1/2, unchanged template bytes, existing-file refusal and no
 sidecars. Daemon lifetime integration is still pending at this seam.
+
+## Waking an orphan parked behind a captured layer (2026-10-27)
+
+An orphan whose lower source is a captured generation waits for it while a
+capture has not settled that generation or a captured reader holds it. The wait
+is a row of the generation waits and a held `ORPHAN` item.
+`orphan_source_awaited` is the one test of both conditions: `migrate_orphan`
+parks by it and `wake_orphan_sources` wakes by it. A capture settles by known
+install, definite failed-capture resolution or the release of a closed capture;
+each calls `wake_orphan_sources` for the generation, and the wake is queued only
+if nothing awaits the generation then. The wait ends with one of two events:
+
+- The reader's last release after the capture settled. The settlement found the
+  reader's hold and queued nothing; the release (`release_captured_reader`, then
+  `wake_generation`) finds nothing awaiting the generation and queues the wake.
+- The settlement after an early reader release. The release found the capture
+  still awaiting the generation and queued nothing; the settlement finds no
+  reader and queues the wake.
+
+A wake queued while the generation is awaited moves each orphan to its next
+turn, where it waits again and leaves rows for the wake item that is still
+pending. A Commit releases its captured reader only after the job that installs
+its root, or resolves its failure, has returned, and that job runs the ready
+maintenance after itself until none is ready: with such a wake that drain never
+ended and the Commit did not return. The external tests are
+`layerfs-overlay/tests/orphan_wake.rs` and, on a real mount,
+`layerfs-daemon/tests/mounted_orphan_commit.rs`.

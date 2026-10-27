@@ -233,10 +233,7 @@ impl Overlay {
                 .first()
                 .copied();
             if let Some(lower) = lower {
-                let state = self.state()?;
-                if state.captured.is_some_and(|g| g.0 == lower.gen)
-                    || self.generation_held(lower.gen)?
-                {
+                if self.orphan_source_awaited(lower.gen)? {
                     let mut state = self.open.borrow_mut();
                     state.waits.put((lower.gen, serial), ());
                     return Ok(step(0, 0, Next::Held));
