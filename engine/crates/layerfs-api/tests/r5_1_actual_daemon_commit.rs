@@ -299,6 +299,9 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
         .attach(bound.token)
         .unwrap();
     let guard = MountGuard(ready.directory.clone());
+    // From the shared control tree, or else the daemon's own beside its
+    // Overlay file, as in a Sandbox container.
+    assert!(ready.receipt.abort_bound, "{:?}", ready.receipt);
     assert!(mounted_at(&ready.directory));
     let mount = Path::new(&ready.directory);
     println!(
@@ -446,5 +449,19 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
     drop(process);
     fs::remove_dir_all(&replayed).unwrap();
     fs::remove_dir(&mounts).unwrap();
+    // The daemon's own control tree outlives it in this namespace.
+    let private = f.directory.join("fusectl");
+    let tree = if private.exists() {
+        let status = Command::new("umount")
+            .arg(&private)
+            .stdin(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "umount {}: {status:?}", private.display());
+        "private"
+    } else {
+        "shared"
+    };
+    println!("{name} control_tree={tree} abort_bound=true");
     f.cleanup();
 }

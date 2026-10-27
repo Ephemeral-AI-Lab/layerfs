@@ -132,7 +132,7 @@ impl KernelSession {
             Ok(entry) => entry,
             Err(cause) => return Err(session.abandon(AttachPhase::Receipt, cause)),
         };
-        match syscalls::abort_control(&entry) {
+        match syscalls::abort_control(&entry, &config.control) {
             Ok(abort) => session.abort = abort,
             Err(cause) => return Err(session.abandon(AttachPhase::Receipt, cause)),
         }

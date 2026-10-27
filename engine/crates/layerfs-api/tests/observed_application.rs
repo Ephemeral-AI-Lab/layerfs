@@ -234,6 +234,7 @@ fn task_ids(process: &Process) -> BTreeSet<u32> {
 }
 #[test]
 fn equal_calls_and_reused_slot_have_distinct_public_observation_identity() {
+    support::shared_control();
     let f = support::Fixture::new("observed-correlation", None);
     let log = f.directory.join("stderr.log");
     let (process, address, mut initial) = start(&f, File::create(&log).unwrap());
@@ -334,6 +335,7 @@ fn equal_calls_and_reused_slot_have_distinct_public_observation_identity() {
 }
 #[test]
 fn diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind() {
+    support::shared_control();
     let f = support::Fixture::new("observed-failed-sink", None);
     let (process, address, mut control) =
         start(&f, File::options().write(true).open("/dev/full").unwrap());
@@ -393,6 +395,7 @@ fn timing_names(telemetry: &layerfs_bridge::control::SdkValue) -> Vec<String> {
 }
 #[test]
 fn traced_diagnostic_failure_is_reported_and_keeps_the_connection() {
+    support::shared_control();
     let f = support::Fixture::new("observed-traced-sink", None);
     let (process, _address, mut control) =
         start(&f, File::options().write(true).open("/dev/full").unwrap());
@@ -441,6 +444,7 @@ fn traced_diagnostic_failure_is_reported_and_keeps_the_connection() {
 }
 #[test]
 fn traced_records_share_the_scope_and_untraced_replies_stay_plain() {
+    support::shared_control();
     let f = support::Fixture::new("observed-traced-records", None);
     let log = f.directory.join("stderr.log");
     let (process, _address, mut control) = start(&f, File::create(&log).unwrap());
@@ -503,6 +507,7 @@ fn width(telemetry: &layerfs_bridge::control::SdkValue, path: &[&str]) -> usize 
 /// carries its delta selection work.
 #[test]
 fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
+    support::shared_control();
     let f = support::Fixture::new("observed-traced-work", None);
     let log = f.directory.join("stderr.log");
     let (process, _address, mut control) = start(&f, File::create(&log).unwrap());
@@ -599,6 +604,7 @@ fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
 }
 #[test]
 fn resource_and_output_failure_preserve_original_status_reply() {
+    support::shared_control();
     let f = support::Fixture::new("observed-resource-and-sink", None);
     let (process, address, mut control) =
         start(&f, File::options().write(true).open("/dev/full").unwrap());
@@ -676,6 +682,7 @@ impl Drop for MountGuard {
 /// it makes none. Creates are ordinary processes of the command identity.
 #[test]
 fn configured_serial_low_water_reaches_a_mounted_create_on_both_startup_routes() {
+    support::shared_control();
     use std::os::unix::{fs::MetadataExt, process::CommandExt};
     const LOW: u64 = layerfs_workspace::SERIAL_REFILL - 1;
     let f = support::Fixture::new("observed-low-water", None);
@@ -812,6 +819,7 @@ fn configured_serial_low_water_reaches_a_mounted_create_on_both_startup_routes()
 /// one the test above starts with.
 #[test]
 fn startup_refuses_a_serial_low_water_at_or_above_the_refill_window() {
+    support::shared_control();
     let f = support::Fixture::new("observed-low-water-refused", None);
     let overlay = f.directory.join("overlay.sqlite");
     for refused in [
@@ -881,6 +889,7 @@ fn startup_refuses_a_serial_low_water_at_or_above_the_refill_window() {
 /// it stays; an open connection does not.
 #[test]
 fn an_idle_daemon_exits_and_a_workspace_keeps_it() {
+    support::shared_control();
     let f = support::Fixture::new("observed-idle-exit", None);
     let log = f.directory.join("stderr.log");
     let mounts = f.directory.join("mounts");

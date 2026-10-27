@@ -17,6 +17,8 @@ pub struct KernelConfig {
     pub ready_wait: Duration,
     /// Observation deadline for loop joins and request drain.
     pub drain_wait: Duration,
+    /// Control tree each connection's abort control is bound from.
+    pub control: PathBuf,
 }
 /// Kernel serving is a Linux capability; elsewhere it cannot be constructed.
 #[cfg(not(target_os = "linux"))]

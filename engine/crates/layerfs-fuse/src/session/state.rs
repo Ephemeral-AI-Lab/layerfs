@@ -39,6 +39,9 @@ pub struct SessionConfig {
     pub ready_wait: Duration,
     /// Observation deadline for loop joins and request drain.
     pub drain_wait: Duration,
+    /// Control tree the connection's abort control is bound from; see
+    /// [`crate::mount::control_root`].
+    pub control: PathBuf,
 }
 
 /// One mounted connection. Dropping it performs no detach, abort, join or

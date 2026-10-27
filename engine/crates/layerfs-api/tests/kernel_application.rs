@@ -39,6 +39,7 @@ fn connect(address: SocketAddr) -> duplex::Connection {
 }
 #[test]
 fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
+    support::shared_control();
     let f = support::Fixture::new("application", None);
     fs::set_permissions(&f.directory, fs::Permissions::from_mode(0o700)).unwrap();
     let setup = DaemonSetup {
