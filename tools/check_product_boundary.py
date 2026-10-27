@@ -141,6 +141,7 @@ LAYER = {
     "layerfs-bridge": ENGINE,
     "layerfs-daemon": ENGINE,
     "layerfs-fuse": ENGINE,
+    "layerfs-nfs": ENGINE,
     "layerfs-overlay": ENGINE,
     "layerfs-persistence": ENGINE,
     "layerfs-project": ENGINE,
