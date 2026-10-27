@@ -127,6 +127,20 @@ the same audited identity on Windows as on Linux (volume serial + file
 index, sole link, checked on both the path's entry and the retained
 handle).
 
+When the owner merges this branch, the observation period runs by a
+fixed checklist (each step reads a mechanism that already exists, none
+needs a new decision):
+
+1. **Merge lands** — the observation job records `merged` with the merge
+   commit; the tech-tree gate `pr_merged_and_stable` flips on that fact.
+2. **Stability window** — the owner bounds it (the ruling names no
+   length); its evidence is the absence of new findings on this PR plus
+   the standing suites staying green on `main`.
+3. **WinFsp independent period starts contract-first** (SSO pattern):
+   the mount face's contracts are written and reviewed before any
+   implementation, under the `winfsp-independent-period` tree node whose
+   precondition is exactly step 1 plus step 2.
+
 Proof receipts: the cross-process lane verifier
 (`layerfs-persistence` `tests/windows_store_native.rs`, two re-exec'd child
 processes, bounded waits); `cargo check --locked` of the five touched crates
