@@ -350,8 +350,10 @@ lines; CRLF text is preserved, and a final LF creates no phantom line. Read repo
 a UTF-8 prefix, with no within-line continuation; the remainder is explicitly
 omitted and the next window starts at the following line. NUL/invalid UTF-8 in the
 scanned text is Binary. Grep scans chunks and matches across chunk boundaries.
-Blame uses bounded LCS and exact common edges; an oversized changed middle is a
-removed/added block and `comparisonCoarse` discloses that Content diff policy.
+Blame uses bounded LCS and exact common edges. In coarse comparisons, a line
+is inherited from the common suffix only when it starts at a corresponding
+line boundary in both versions. An oversized changed middle is a removed/added
+block and `comparisonCoarse` discloses that Content diff policy.
 Diff hunks can be omitted explicitly when their bounded comparison/reply cannot
 represent them; equal content is decided by immutable content identity.
 

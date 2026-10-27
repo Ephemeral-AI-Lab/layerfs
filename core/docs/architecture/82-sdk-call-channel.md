@@ -88,8 +88,10 @@ Immutable reads use 1-based inclusive lines, at most 2,000 lines/48 KiB reply
 payload. Huge-line UTF-8 prefixes, omitted remainder and nextLine are explicit;
 there is no byte-read method. Grep streams literal matching. Blame follows
 immutable first parents without retaining the entire chain, skips unchanged
-content IDs and uses bounded LCS with exact common edges. Oversized changed
-middles are removed/added blocks with comparisonCoarse. Diff hunks may be omitted
+content IDs and uses bounded LCS with exact common edges. In coarse comparisons,
+a line is inherited from the common suffix only when it starts at a
+corresponding line boundary in both versions. Oversized changed middles are
+removed/added blocks with comparisonCoarse. Diff hunks may be omitted
 explicitly under comparison/reply bounds; equality uses immutable identity.
 
 Commit-v3 includes the message and operation/origin/displacement metadata in
