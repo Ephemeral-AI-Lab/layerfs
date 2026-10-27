@@ -31,7 +31,7 @@ needs no Workspace, branch, commit, mount or daemon.
 | Group body | `<= 64 KiB` (v1/v2/v4), `<= 16 KiB` (v6) |
 | Records per group | `<= 8191`; `1` in the compact and singleton lanes |
 | Groups per pack | `<= 256`; `1` in the singleton lane |
-| Chain budgets | `512 KiB` canonical and `256 KiB` encoded per chain, independent of the accepted depths |
+| Chain budgets | `4 × cutoff` canonical and `2 × cutoff` encoded per chain (`512 KiB` / `256 KiB` at the default cutoff), so the largest whole file fits a chain alone; independent of the accepted depths (#472) |
 | Metadata pooling | implemented: supplied canonical inode leaves are stored pooled; each 73-byte inode value is one stored row under its ordinal (issue 320 design B, 2026-10-13), 100 rows per leaf page; a row keeps the ordinal its value has in a named base leaf, a new value takes the next ordinal of the Save's reserved block |
 | Pooled record grammar | `0 | physical body` (FULL) or `1 | base id | output length | instruction count | program` (COPY/INSERT), the ordinary lane's tags read under the `InodeLeaf` role; an `InodeBranch` uses the same program against its canonical predecessor page (#360 item 3) |
 | Pooled chain budgets | depth `0..=50` (own persisted field); 64 KiB canonical and 139 KiB encoded per chain; 8 KiB per pooled record; match budget 128 KiB per trial |

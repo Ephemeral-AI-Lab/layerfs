@@ -1,8 +1,11 @@
 //! A Store created with a larger construction cutoff (`LAYERFS_STORE_POLICY`
-//! `smallFileThreshold`, 128 KiB to 1 MiB) holds whole files above the default
-//! size, and a second version of such a file is saved even when the first is
-//! larger than the delta chain budgets (512 KiB canonical, 256 KiB encoded): the
-//! new version is stored independently.
+//! `smallFileThreshold`, up to 1 MiB) keeps whole files above the default size,
+//! and its payload chain budgets scale with that cutoff (#472). The second
+//! version of such a file is saved, as a delta against the first, through
+//! `fs.apply`, `fs.write` and a Workspace Commit; Project Init of two similar
+//! large files succeeds. Under the fixed 512 KiB / 256 KiB budgets these Saves
+//! failed with a dependency-work `Integrity` error, and after #473 stored every
+//! second version whole.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
@@ -19,11 +22,35 @@ fn mebibyte_cutoff() -> StoragePolicy {
     StoragePolicy::new(1, 1_048_576, 16, 8).validated().unwrap()
 }
 
-fn text(value: &str) -> SdkValue {
-    SdkValue::text(value)
+/// CSV text of `len` bytes, one record per line: it compresses to about half,
+/// like a data export or log.
+fn rows(len: usize) -> Vec<u8> {
+    let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+    let mut out = Vec::with_capacity(len + 64);
+    let mut row = 0_u64;
+    while out.len() < len {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        row += 1;
+        out.extend_from_slice(
+            format!(
+                "{row},2024-{:02}-{:02},{},{:016x}\n",
+                state % 12 + 1,
+                state % 28 + 1,
+                state % 1_000_000,
+                state
+            )
+            .as_bytes(),
+        );
+    }
+    out.truncate(len);
+    out
 }
 
-/// Word-salad text of `len` bytes: it compresses like source code or logs.
+/// Word-salad text of `len` bytes from eight words. Init's similarity index
+/// pairs two such files; the codec finds the nearby repeats first, so a delta
+/// need not beat FULL, but the Save must not fail.
 fn words(len: usize) -> Vec<u8> {
     const WORDS: [&str; 8] = [
         "alpha", "beta", "gamma", "delta", "layer", "branch", "commit", "store",
@@ -74,33 +101,25 @@ fn with_first_version(label: &str, policy: StoragePolicy, first: &[u8]) -> Fixtu
     fixture
 }
 
-/// The line of `bytes` holding `offset`: its 1-based number and its text.
-fn line_at(bytes: &[u8], offset: usize) -> (i64, String) {
-    let number = bytes[..offset].iter().filter(|b| **b == b'\n').count();
-    let line = bytes.split(|b| *b == b'\n').nth(number).unwrap();
-    (number as i64 + 1, String::from_utf8(line.to_vec()).unwrap())
-}
-
-/// Branch `w` holds `expected` at the line that holds `offset`.
-fn assert_line_at(fixture: &Fixture, expected: &[u8], offset: usize) {
-    let (number, line) = line_at(expected, offset);
-    let reply = fixture.call(
-        "fs.read",
-        vec![
-            ("branch", text("w")),
-            ("path", text("/big")),
-            ("startLine", SdkValue::Int(number)),
-            ("endLine", SdkValue::Int(number)),
-        ],
-    );
-    assert_eq!(
-        reply.get_text("text").map(str::trim_end),
-        Some(line.as_str())
-    );
+/// Whole-file objects this Store's Saves stored at a positive depth so far.
+fn whole_file_deltas(fixture: &Fixture) -> u64 {
+    let depths = fixture
+        .service
+        .store
+        .save_counters()
+        .delta
+        .whole_file_depths;
+    depths[1..].iter().sum()
 }
 
 fn assert_size(fixture: &Fixture, path: &str, size: usize) {
-    let stat = fixture.call("fs.stat", vec![("branch", text("w")), ("path", text(path))]);
+    let stat = fixture.call(
+        "fs.stat",
+        vec![
+            ("branch", SdkValue::text("w")),
+            ("path", SdkValue::text(path)),
+        ],
+    );
     assert_eq!(
         stat.get("size"),
         Some(&SdkValue::Int(size as i64)),
@@ -108,55 +127,93 @@ fn assert_size(fixture: &Fixture, path: &str, size: usize) {
     );
 }
 
+/// Branch `w` holds `expected`'s size at `path`, and its line that holds `offset`.
+fn assert_text_at(fixture: &Fixture, path: &str, expected: &[u8], offset: usize) {
+    assert_size(fixture, path, expected.len());
+    let number = expected[..offset].iter().filter(|b| **b == b'\n').count();
+    let line = expected.split(|b| *b == b'\n').nth(number).unwrap();
+    let reply = fixture.call(
+        "fs.read",
+        vec![
+            ("branch", SdkValue::text("w")),
+            ("path", SdkValue::text(path)),
+            ("startLine", SdkValue::Int(number as i64 + 1)),
+            ("endLine", SdkValue::Int(number as i64 + 1)),
+        ],
+    );
+    assert_eq!(
+        reply.get_text("text").map(str::trim_end),
+        Some(std::str::from_utf8(line).unwrap()),
+        "{path}"
+    );
+}
+
 #[test]
-fn fs_apply_saves_a_second_version_of_a_large_text_file() {
-    // 600,000 compressible bytes: a canonical object above the 512 KiB budget.
-    let first = words(600_000);
+fn fs_apply_stores_a_second_large_text_version_as_a_delta() {
+    // 600,000 bytes of text: a canonical object above the fixed 512 KiB.
+    let first = rows(600_000);
     let second = edited(&first);
     let fixture = with_first_version("budget-apply", mebibyte_cutoff(), &first);
+    let before = whole_file_deltas(&fixture);
     fixture.apply("w", vec![write("/big", second.as_slice())]);
-    assert_size(&fixture, "/big", second.len());
-    assert_line_at(&fixture, &second, second.len() / 2);
+    assert_eq!(
+        whole_file_deltas(&fixture) - before,
+        1,
+        "{:?}",
+        fixture.service.store.save_counters().delta
+    );
+    assert_text_at(&fixture, "/big", &second, second.len() / 2);
     fixture.cleanup();
 }
 
 #[test]
-fn fs_write_saves_a_second_version_of_a_large_incompressible_file() {
-    // 300,000 incompressible bytes: a record above the 256 KiB encoded budget.
+fn fs_write_stores_a_second_large_incompressible_version_as_a_delta() {
+    // 300,000 incompressible bytes: a record above the fixed 256 KiB encoded.
     let first = noise(300_000);
     let second = edited(&first);
     let fixture = with_first_version("budget-write", mebibyte_cutoff(), &first);
+    let before = whole_file_deltas(&fixture);
     let reply = fixture.call(
         "fs.write",
         vec![
-            ("branch", text("w")),
-            ("path", text("/big")),
+            ("branch", SdkValue::text("w")),
+            ("path", SdkValue::text("/big")),
             ("bytes", SdkValue::Bytes(second.clone())),
         ],
     );
     assert_eq!(reply.get_text("kind"), Some("Committed"), "{reply:?}");
+    assert_eq!(
+        whole_file_deltas(&fixture) - before,
+        1,
+        "{:?}",
+        fixture.service.store.save_counters().delta
+    );
     assert_size(&fixture, "/big", second.len());
     fixture.cleanup();
 }
 
 #[test]
-fn a_workspace_commit_saves_a_second_version_of_a_large_text_file() {
-    // A Workspace overwrites the first ten bytes and its captured producer builds
-    // the new version through the same Content and Storage code as `fs.apply`;
-    // no FUSE mount is involved.
-    let first = words(600_000);
+fn a_workspace_commit_stores_a_second_large_text_version_as_a_delta() {
+    // A private Workspace overwrites the first ten bytes and its captured
+    // producer builds the new version; no FUSE mount is involved.
+    let first = rows(600_000);
     let mut second = first.clone();
     second[..10].fill(b'#');
     let fixture = with_first_version("budget-commit", mebibyte_cutoff(), &first);
+    let before = whole_file_deltas(&fixture);
     fixture.workspace_commit("w", &[Change::Write("/big", &second[..10])], 1, || {});
-    assert_size(&fixture, "/big", second.len());
-    assert_line_at(&fixture, &second, 0);
+    assert_eq!(
+        whole_file_deltas(&fixture) - before,
+        1,
+        "{:?}",
+        fixture.service.store.save_counters().delta
+    );
+    assert_text_at(&fixture, "/big", &second, 0);
     fixture.cleanup();
 }
 
 #[test]
-fn init_of_a_directory_with_two_similar_large_text_files_stores_both() {
-    // Project Init of a directory that contains two similar files.
+fn init_of_two_similar_large_text_files_stores_both() {
     let first = words(600_000);
     let second = edited(&first);
     let host = installed::Fixture::built_with("budget-init", mebibyte_cutoff(), |source| {
@@ -166,13 +223,14 @@ fn init_of_a_directory_with_two_similar_large_text_files_stores_both() {
     });
     let fixture = Fixture::open(host);
     fixture.fork("w");
-    assert_size(&fixture, "/data-2024.csv", first.len());
-    assert_size(&fixture, "/data-2025.csv", second.len());
+    assert_text_at(&fixture, "/data-2024.csv", &first, first.len() / 2);
+    assert_text_at(&fixture, "/data-2025.csv", &second, second.len() / 2);
     fixture.cleanup();
 }
 
 #[test]
 fn control_the_default_cutoff_saves_the_same_two_versions() {
+    // At the default cutoff the 600,000-byte file is chunked.
     let first = words(600_000);
     let second = edited(&first);
     let fixture = with_first_version("budget-default", StoragePolicy::frozen_default(), &first);

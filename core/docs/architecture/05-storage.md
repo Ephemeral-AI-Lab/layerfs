@@ -627,10 +627,21 @@ was chosen rather than only that it was.
 **Chain bounds are separate from depths**, and the source says so explicitly: "a
 deeper chain is still bounded by the bytes it may decode and encode."
 
+The payload chain bounds scale with the Store's construction cutoff `T` (#472):
+`StorageCapacities::from_policy` multiplies `T` by `CHAIN_CANONICAL_CUTOFFS = 4`
+and `CHAIN_ENCODED_CUTOFFS = 2`. At the default 128 KiB cutoff they are 512 KiB
+and 256 KiB. The largest whole file a cutoff admits (`T + 22` canonical bytes, a
+frame under about `1.01 × T + 1 KiB`) therefore always fits a chain alone, so a
+Save never meets a declared base whose own chain a read could not charge, and a
+larger cutoff keeps whole-file deltas for the larger whole files it creates. The
+cost is read work: one read may reconstruct up to `4 × T` canonical bytes, 4 MiB
+at the 1 MiB cutoff. A depth never raises the bounds. Chunk chains are bounded by
+their depth first (32 KiB chunks).
+
 | Bound | Value |
 | --- | ---: |
-| `CHAIN_CANONICAL_LIMIT` | 512 KiB |
-| `CHAIN_ENCODED_LIMIT` | 256 KiB |
+| `chain_canonical_limit` | `4 × T` (512 KiB at the default cutoff) |
+| `chain_encoded_limit` | `2 × T` (256 KiB at the default cutoff) |
 | `DEPENDENCY_PACK_CACHE_BYTES` | 4 MiB |
 | `METADATA_DECODED_WORK_LIMIT` | 32 MiB |
 | `METADATA_CHAIN_CANONICAL_LIMIT` | 8 × 8,192 |
@@ -647,10 +658,12 @@ chain keeps its own account in its reader.
 The budget is judged in two steps. First, from that cost and **before dependency
 reconstruction/authentication**: reading a base as a dependency charges both bounds
 for its whole chain and fails when the base's own chain does not fit them, so a
-candidate that cannot fit alone, such as a stored whole file above 512 KiB canonical
-or 256 KiB encoded under a construction cutoff above the default, is a
-`work_exceeded` FULL like any chain that outgrows its budget and not a failed Save.
-Such a candidate is neither reconstructed nor authenticated. Second, a candidate
+candidate that cannot fit alone is a `work_exceeded` FULL like any chain that
+outgrows its budget and not a failed Save. Such a candidate is neither
+reconstructed nor authenticated. Since the bounds scale with the cutoff, a Store's
+own producer never stores such a chain; under the earlier fixed bounds a whole file
+above 512 KiB canonical or 256 KiB encoded, possible only above the default cutoff,
+was one (#472, #473). Second, a candidate
 whose chain fits is acquired and authenticated, and then the prospective chain, the
 base chain plus the dependent's canonical length, is tested against both bounds; a
 chain that fills a bound exactly is admitted. A corrupt base whose own chain fits

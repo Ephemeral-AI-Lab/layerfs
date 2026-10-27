@@ -1,13 +1,14 @@
-//! A declared base the chain budgets cannot hold is refused, not fatal.
+//! The chain-work budgets decide whether a declared base is used.
 //!
-//! Reading a stored object as a dependency charges the chain budgets (512 KiB
-//! canonical, 256 KiB encoded) and fails the read when that object's own chain
-//! exceeds them. A Save whose declared base is such an object must not fail: the
-//! prospective chain exceeds its budget, so the new object is stored
-//! independently and counted as `work_exceeded`, exactly as for a chain that
-//! outgrows the budget. A base whose own chain fits is still acquired and
-//! authenticated before the dependent is judged against the budget, so a corrupt
-//! one fails the Save even when the dependent then tips the chain over.
+//! Reading a stored object as a dependency charges the chain budgets (4 and 2
+//! cutoffs: 512 KiB canonical and 256 KiB encoded at the default cutoff) and
+//! fails the read when that object's own chain exceeds them. Under its own
+//! policy a Store never holds such a chain, since the largest whole file fits
+//! alone (#472); a base whose chain exceeds them anyway is refused, not fatal: the
+//! new object is stored independently and counted as `work_exceeded`, exactly as
+//! for a chain that outgrows the budget. A base whose own chain fits is acquired
+//! and authenticated before the dependent is judged against the budget, so a
+//! corrupt one fails the Save even when the dependent then tips the chain over.
 #[path = "support/memory_metadata.rs"]
 mod metadata;
 mod support;
@@ -19,6 +20,7 @@ use metadata::MemoryMetadata;
 use std::sync::Arc;
 
 const ONE_MIB: u64 = 1_048_576;
+const DEFAULT_CUTOFF: u64 = 131_072;
 
 /// A canonical whole-file object has 23 bytes of envelope around its payload.
 const ENVELOPE: usize = 23;
@@ -56,6 +58,12 @@ fn mebibyte_cutoff() -> StoragePolicy {
     StoragePolicy::new(1, ONE_MIB, 16, 8).validated().unwrap()
 }
 
+fn default_cutoff() -> StoragePolicy {
+    StoragePolicy::new(1, DEFAULT_CUTOFF, 16, 8)
+        .validated()
+        .unwrap()
+}
+
 fn store(policy: StoragePolicy) -> Arc<MemoryMetadata> {
     let metadata = Arc::new(MemoryMetadata::default());
     metadata.state.lock().unwrap().policy = policy;
@@ -86,13 +94,13 @@ fn chain(policy: StoragePolicy, versions: &[(usize, bool)]) -> Chain {
     }
 }
 
-/// The same chain of incompressible versions, all in one Save.
-fn chain_in_one_save(policy: StoragePolicy, lengths: &[usize]) -> WriteOutcome {
+/// The same chain of versions, all in one Save.
+fn chain_in_one_save(policy: StoragePolicy, versions: &[(usize, bool)]) -> WriteOutcome {
     let storage = Storage::new(store(policy)).unwrap();
     let save = storage.begin_save().unwrap();
     let mut base = None;
-    for (index, len) in lengths.iter().enumerate() {
-        let object = version(*len, false, index, base);
+    for (index, (len, compressible)) in versions.iter().enumerate() {
+        let object = version(*len, *compressible, index, base);
         base = Some(object.id());
         save.accept(object).unwrap();
     }
@@ -141,105 +149,98 @@ impl Chain {
 }
 
 #[test]
-fn a_base_above_the_encoded_budget_is_refused_not_fatal() {
-    // 300,000 incompressible bytes are stored verbatim: a record above the 256 KiB
-    // encoded budget, while the canonical object is far below the 512 KiB one.
-    let saved = chain(mebibyte_cutoff(), &[(300_000, false); 2]);
-    saved.assert_refused_by_budget(1, "300,000 incompressible bytes");
-    saved.assert_reads_back();
-}
-
-#[test]
-fn a_base_above_the_canonical_budget_is_refused_not_fatal() {
-    // 600,000 compressible bytes: a record far below 256 KiB, a canonical object
-    // above the 512 KiB budget on its own.
-    let saved = chain(mebibyte_cutoff(), &[(600_000, true); 2]);
-    saved.assert_refused_by_budget(1, "600,000 compressible bytes");
-    saved.assert_reads_back();
-}
-
-#[test]
-fn a_small_dependent_does_not_make_an_over_budget_base_fit() {
-    let saved = chain(mebibyte_cutoff(), &[(300_000, false), (10_000, false)]);
-    saved.assert_refused_by_budget(1, "10,000 bytes after 300,000 incompressible bytes");
-    saved.assert_reads_back();
-}
-
-#[test]
-fn the_refusal_covers_the_canonical_boundary() {
-    // A 524,265-byte payload is 524,288 canonical bytes: the budget itself, so its
-    // chain fits alone and only the dependent tips it over. One byte more does not
-    // fit alone. Both are the same refusal.
-    for len in [524_265, 524_266] {
-        let saved = chain(mebibyte_cutoff(), &[(len, true); 2]);
-        saved.assert_refused_by_budget(1, &format!("{len}-byte payload"));
-    }
-}
-
-#[test]
-fn the_refusal_covers_the_encoded_boundary() {
-    // At this size a verbatim record is its payload plus 9 bytes: 262,135 payload
-    // bytes are exactly the 256 KiB encoded budget, so the chain fits alone and
-    // only the dependent tips it over. One byte more does not fit alone.
-    for len in [262_135, 262_136] {
-        let saved = chain(mebibyte_cutoff(), &[(len, false); 2]);
-        saved.assert_refused_by_budget(1, &format!("{len}-byte payload"));
+fn a_stored_chain_above_the_budgets_is_refused_not_fatal() {
+    // A Store's policy never changes, and under its own budgets the producer
+    // never stores a chain a read could not charge. To reach the refusal, the
+    // base is stored under a 1 MiB cutoff and the dependent is saved after the
+    // fixture's policy drops to the default cutoff, whose budgets the base alone
+    // exceeds: 300,000 incompressible bytes above 256 KiB encoded, 600,000
+    // compressible bytes above 512 KiB canonical.
+    for (len, compressible) in [(300_000, false), (600_000, true)] {
+        let metadata = store(mebibyte_cutoff());
+        let base = version(len, compressible, 0, None);
+        save_one(&metadata, base.clone()).unwrap();
+        metadata.state.lock().unwrap().policy = default_cutoff();
+        let dependent = version(10_000, compressible, 1, Some(base.id()));
+        let outcome = save_one(&metadata, dependent.clone()).unwrap();
+        assert_eq!(outcome.delta.work_exceeded, 1, "{len}: {outcome:?}");
+        assert_eq!(outcome.delta.trials, 0, "{len}: {outcome:?}");
+        assert_eq!(
+            (outcome.full_records, outcome.prefix_records),
+            (1, 0),
+            "{len}: {outcome:?}"
+        );
+        let storage = Storage::new(metadata.clone()).unwrap();
+        assert_eq!(
+            storage
+                .reader()
+                .unwrap()
+                .read_objects(&[dependent.id()])
+                .unwrap(),
+            vec![dependent.canonical().to_vec()]
+        );
     }
 }
 
 #[test]
 fn a_dependent_that_fills_the_canonical_budget_exactly_is_admitted() {
-    // Base 400,000 canonical bytes + dependent 124,288 = 524,288, the budget.
-    // One dependent byte more is refused.
-    let base = 400_000 - ENVELOPE;
-    let fits = chain(
-        mebibyte_cutoff(),
-        &[(base, true), (124_288 - ENVELOPE, true)],
-    );
-    fits.assert_admitted(1, "canonical budget filled exactly");
+    // At the default cutoff: three 131,072-byte canonical objects (131,049
+    // payload bytes) chained, and a fourth of the same size, fill the 524,288-byte
+    // budget exactly. One dependent byte more is refused.
+    let len = 131_072 - ENVELOPE;
+    let fits = chain(default_cutoff(), &[(len, true); 4]);
+    let depth = fits.save(2, "third version").delta.whole_file_depths;
+    assert_eq!(depth.iter().position(|n| *n == 1), Some(2), "{depth:?}");
+    fits.assert_admitted(3, "canonical budget filled exactly");
     fits.assert_reads_back();
 
     let over = chain(
-        mebibyte_cutoff(),
-        &[(base, true), (124_289 - ENVELOPE, true)],
+        default_cutoff(),
+        &[(len, true), (len, true), (len, true), (len + 1, true)],
     );
-    over.assert_refused_by_budget(1, "one canonical byte past the budget");
+    over.assert_refused_by_budget(3, "one canonical byte past the budget");
 }
 
 #[test]
 fn a_dependent_that_fills_the_encoded_budget_exactly_is_admitted() {
     // A verbatim record in the compact whole-file lane is its payload plus a
     // 1-byte tag. Base 131,056 + 1, dependent 131,064 + 23 canonical = 262,144,
-    // the budget. One dependent byte more is refused.
-    let fits = chain(mebibyte_cutoff(), &[(131_056, false), (131_064, false)]);
+    // the default cutoff's budget. One dependent byte more is refused.
+    let fits = chain(default_cutoff(), &[(131_056, false), (131_064, false)]);
     fits.assert_admitted(1, "encoded budget filled exactly");
     fits.assert_reads_back();
 
-    let over = chain(mebibyte_cutoff(), &[(131_056, false), (131_065, false)]);
+    let over = chain(default_cutoff(), &[(131_056, false), (131_065, false)]);
     over.assert_refused_by_budget(1, "one encoded byte past the budget");
 }
 
 #[test]
 fn a_chain_built_inside_one_save_is_judged_like_one_built_over_several() {
-    // Two 100,000-byte versions, then a third. While the Save still holds the
-    // second, its chain cost is the one the Save recorded when it chose its record;
-    // once it is stored, the cost is read back from the stored record. Both must
-    // put the third version's refusal at the same size.
+    // Four 130,000-byte versions, then a fifth, at the default cutoff. While the
+    // Save still holds the fourth, its chain cost is the one the Save recorded
+    // when it chose its record; once it is stored, the cost is read back from the
+    // stored record. Both must put the fifth version's refusal at the same size.
     let refused = |len: usize, together: bool| {
+        let versions = [
+            (130_000, true),
+            (130_000, true),
+            (130_000, true),
+            (130_000, true),
+            (len, true),
+        ];
         let work_exceeded = if together {
-            chain_in_one_save(mebibyte_cutoff(), &[100_000, 100_000, len])
+            chain_in_one_save(default_cutoff(), &versions)
                 .delta
                 .work_exceeded
         } else {
-            let versions = [(100_000, false), (100_000, false), (len, false)];
-            chain(mebibyte_cutoff(), &versions)
-                .save(2, "third version")
+            chain(default_cutoff(), &versions)
+                .save(4, "fifth version")
                 .delta
                 .work_exceeded
         };
         work_exceeded == 1
     };
-    let (mut fits, mut over) = (150_000, 175_000);
+    let (mut fits, mut over) = (1_000, 10_000);
     assert!(!refused(fits, false) && refused(over, false));
     while over - fits > 1 {
         let middle = (fits + over) / 2;
@@ -248,6 +249,8 @@ fn a_chain_built_inside_one_save_is_judged_like_one_built_over_several() {
             false => fits = middle,
         }
     }
+    // 4 x 130,023 + (fits + 23) canonical bytes fill the 524,288-byte budget.
+    assert_eq!(fits, 524_288 - 4 * 130_023 - ENVELOPE);
     assert!(!refused(fits, true), "{fits} bytes fit when stored");
     assert!(refused(over, true), "{over} bytes do not fit when stored");
 }
@@ -331,15 +334,15 @@ fn control_a_corrupt_base_inside_both_budgets_still_fails_the_save() {
 
 #[test]
 fn a_corrupt_base_that_fits_is_authenticated_even_when_the_dependent_tips_the_chain_over() {
-    // The base fits both budgets alone: 131,057 encoded and 131,079 canonical
+    // At the default cutoff the base fits both budgets alone: 131,057 encoded and 131,079 canonical
     // bytes. The dependent is 131,088 canonical bytes, so its prospective encoded
     // charge is 131,057 + 131,088 = 262,145, one byte over the budget: with an
     // intact base the Save is the budget refusal. The base is acquired and
     // authenticated before that is decided, so a corrupt one fails the Save.
-    let intact = chain(mebibyte_cutoff(), &[(131_056, false), (131_065, false)]);
+    let intact = chain(default_cutoff(), &[(131_056, false), (131_065, false)]);
     intact.assert_refused_by_budget(1, "intact base, one encoded byte past the budget");
 
-    let metadata = store(mebibyte_cutoff());
+    let metadata = store(default_cutoff());
     let first = version(131_056, false, 0, None);
     save_one(&metadata, first.clone()).unwrap();
     let raw = support::noise(131_056);
