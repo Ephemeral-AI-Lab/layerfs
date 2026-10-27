@@ -1,4 +1,4 @@
-//! Local Docker Engine API1.54, with exact IDs and no command replay.
+//! Local Docker Engine API1.48 to 1.54, negotiated once, with exact IDs and no command replay.
 mod archive;
 mod body;
 mod container;
@@ -15,6 +15,7 @@ mod socket;
 mod streams;
 mod strings;
 mod topology;
+mod version;
 pub use archive::{UploadFailure, UploadWork};
 pub use container_types::{
     CreatePhase, Sandbox, SandboxCreateFailure, SandboxDisposition, SandboxRequest,

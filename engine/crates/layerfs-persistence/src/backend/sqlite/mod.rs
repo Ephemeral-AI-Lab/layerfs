@@ -5,6 +5,8 @@ pub(crate) mod connection;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 mod file_control;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub(crate) mod headroom;
 pub(crate) mod lane;
 pub(crate) mod metadata_allocation;
 pub(crate) mod metadata_locations;

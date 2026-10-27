@@ -100,6 +100,12 @@ impl PackPersistence for StorageProvider {
         if self.session.layout.uses_units() {
             crate::backend::sqlite::unit_layout::validate_batch(batch)?;
         }
+        // Only pack bytes are guarded; metadata-only batches may use the margin.
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        if !batch.packs.is_empty() {
+            let bytes = batch.packs.iter().map(|pack| pack.body.len() as u64).sum();
+            crate::backend::sqlite::headroom::admit(&self.session.path, bytes)?;
+        }
         self.session.run(true, |tx| publication::publish(tx, batch))
     }
 }

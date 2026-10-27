@@ -145,6 +145,18 @@ PUT acknowledgements precede registration; a failed or uncertain operation is
 terminal and causes neither resend nor guessed cleanup. A later failed save can
 leave previously acknowledged independent batches and unreferenced payloads.
 
+**Free-space guard (#379).** Nothing deletes those batches, so on a disk that
+fills during a save the Store used to reach 0 free bytes and refuse every later
+write. The SQLite provider now checks the Store's filesystem (`statvfs`) before
+each publication that carries packs. It refuses `Capacity`, before any effect,
+when the batch would leave less than `STORE_HEADROOM_BYTES` (64 MiB) available.
+Pack bytes count twice, because the WAL holds them until a checkpoint copies
+them into the file. Metadata-only publications and history writes are not
+checked, so they may use the margin. The check is best effort: other writers
+share the disk, and a miss ends in SQLite's own `DiskFull`, also `Capacity`.
+The guard does not reclaim the packs a refused save left; that cleanup is a
+separate proposal on #379.
+
 A first-wins physical base must be acknowledged before a dependent's PREFIX
 selection: its winning chain may differ in depth from this producer's private
 copy. Candidate-triggered seals therefore register their closed prerequisites

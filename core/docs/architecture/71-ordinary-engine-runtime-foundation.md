@@ -7,7 +7,7 @@
 > and command-client provenance are deferred by owner direction. Native FUSE
 > remains R2; ordinary execution adds no filesystem registration.
 
-The active replacement Sandbox provides a concrete Docker Engine API1.54 Unix
+The active replacement Sandbox provides a concrete Docker Engine API1.48 to 1.54 Unix
 adapter for ordinary command creation, non-TTY launch, independent stdin/output
 owners and coherent runtime inspection. It uses exact full acknowledged container
 and Exec IDs, not names, prefixes, host/VM PID guesses or filesystem registration.

@@ -148,7 +148,7 @@ fn relink(
             name: PathName::new(name).unwrap(),
         })
         .unwrap();
-        m.write(file, &bytes).unwrap();
+        m.write(file, &bytes, None).unwrap();
         let created = m.resolve(file).unwrap().serial;
         assert_ne!(created, *serial, "a new inode");
         m.apply(Operation::SetAttributes {
