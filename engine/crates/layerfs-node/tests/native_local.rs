@@ -147,7 +147,11 @@ fn a_local_record_naming_another_directory_is_neither_used_nor_deleted() {
             "the record of {directory} was removed"
         );
     }
-    assert!(data.join("keep").exists(), "a delete reached {}", data.display());
+    assert!(
+        data.join("keep").exists(),
+        "a delete reached {}",
+        data.display()
+    );
     assert!(old.exists(), "a delete reached {}", old.display());
 }
 
@@ -224,7 +228,10 @@ fn a_damaged_boot_or_port_is_refused_and_removes_nothing() {
             &format!("assert.equal(r.refused?.code, {code:?}, JSON.stringify(r));"),
         );
         assert!(own.join("daemon.log").exists(), "{key}");
-        assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists(), "{key}");
+        assert!(
+            home.0.join("proj/sandboxes/1/sandbox.record").exists(),
+            "{key}"
+        );
     }
 }
 
