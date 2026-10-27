@@ -31,7 +31,7 @@ pub fn windows_handle_identity(file: &File) -> io::Result<WindowsIdentity> {
 
 /// The identity of `path`'s entry, read as attributes only: no data access,
 /// no link traversal; directories need the backup-semantics flag.
-pub(crate) fn windows_path_identity(path: &Path) -> io::Result<WindowsIdentity> {
+pub fn windows_path_identity(path: &Path) -> io::Result<WindowsIdentity> {
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileW, GetFileInformationByHandle, FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE,

@@ -47,7 +47,7 @@ pub use database::accounting::{Resources, StoredCounts};
 pub use database::physical::{AllocationState, AllocationWork, ClosedFile};
 pub use database::startup::{Creation, CreationWork};
 #[cfg(target_os = "windows")]
-pub use database::windows_identity::windows_handle_identity;
+pub use database::windows_identity::{windows_handle_identity, windows_path_identity};
 pub use db::Overlay;
 pub use diagnostics::payload::PayloadWork;
 pub use error::{CloseFailure, OverlayError, OverlayResult};

@@ -14,11 +14,11 @@ pub struct Backing {
     file: Option<std::fs::File>,
     namespace: i64,
     incarnation: [u8; 32],
-    // The deletion identity check reads these on unix only; Windows and the
-    // other platforms refuse deletion before reaching them.
-    #[cfg_attr(not(unix), allow(dead_code))]
+    // The deletion identity check reads these on unix and Windows; the
+    // remaining platforms refuse deletion before reaching them.
+    #[cfg_attr(not(any(unix, target_os = "windows")), allow(dead_code))]
     device: u64,
-    #[cfg_attr(not(unix), allow(dead_code))]
+    #[cfg_attr(not(any(unix, target_os = "windows")), allow(dead_code))]
     inode: u64,
     pool: Weak<Workspaces>,
     terminal: AtomicBool,
@@ -105,14 +105,54 @@ impl Backing {
                     "overlay deletion identity",
                 ));
             }
+            std::fs::remove_file(&self.path)
         }
-        #[cfg(not(unix))]
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "overlay deletion platform",
-        ));
-        #[cfg(unix)]
-        std::fs::remove_file(&self.path)
+        #[cfg(target_os = "windows")]
+        {
+            // The same discipline through the audited Windows identity: the
+            // entry at the path and the retained open handle must both still
+            // be the acquisition's file (volume serial + file index, sole
+            // link) before the removal. The retained handle was opened with
+            // FILE_SHARE_DELETE (std's share mode), so the removal takes
+            // effect when Drop closes that last handle, immediately after.
+            let path_identity = layerfs_overlay::windows_path_identity(&self.path)
+                .map_err(|error| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("overlay deletion identity: {error}"),
+                    )
+                })?;
+            let retained = layerfs_overlay::windows_handle_identity(
+                self.file.as_ref().expect("retained identity file"),
+            )
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("overlay deletion identity: {error}"),
+                )
+            })?;
+            if path_identity.device != self.device
+                || path_identity.index != self.inode
+                || retained.device != self.device
+                || retained.index != self.inode
+                || path_identity.links != 1
+                || retained.links != 1
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "overlay deletion identity",
+                ));
+            }
+            std::fs::remove_file(&self.path)
+        }
+        #[cfg(not(any(unix, target_os = "windows")))]
+        {
+            let _ = &self.path;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "overlay deletion platform",
+            ))
+        }
     }
 }
 impl Drop for Backing {
