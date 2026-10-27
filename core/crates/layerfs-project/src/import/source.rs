@@ -60,14 +60,24 @@ pub(super) fn outside_source(
     }
     #[cfg(not(unix))]
     {
-        // Both sides are canonicalized, so junctions and symlinks in the
-        // placement's spelling resolve before the comparison.
-        let source = fs::canonicalize(source)?;
-        let ancestor = fs::canonicalize(placement)?;
-        if ancestor == source || ancestor.starts_with(&source) {
-            return Err(ProjectError::BackingInsideSource);
+        // Linux's algorithm on the audited Windows identity: canonicalize
+        // the placement once (junctions and symlinks in the spelling
+        // resolve), then compare every ancestor's volume-serial + file
+        // index with the source's. The identity walk sees through drive
+        // aliases a DOS-path comparison misses — a subst drive keeps its
+        // letter under GetFinalPathNameByHandle's DOS volume name, but its
+        // directories carry the real volume's device and index.
+        let source_resolved = fs::canonicalize(source)?;
+        let source_identity = super::host::HostStat::of(&source_resolved, metadata)?;
+        let mut ancestor = fs::canonicalize(placement)?;
+        loop {
+            let entry = super::host::HostStat::of(&ancestor, &fs::symlink_metadata(&ancestor)?)?;
+            if entry.dev == source_identity.dev && entry.ino == source_identity.ino {
+                return Err(ProjectError::BackingInsideSource);
+            }
+            if !ancestor.pop() {
+                return Ok(());
+            }
         }
-        let _ = metadata;
-        Ok(())
     }
 }

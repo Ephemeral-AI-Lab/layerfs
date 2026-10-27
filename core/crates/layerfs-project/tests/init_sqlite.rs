@@ -154,6 +154,59 @@ fn a_store_inside_the_source_is_refused_before_an_operation_begins() {
     assert_eq!((owner.operation, owner.epoch), (1, 1));
 }
 
+/// An aliased spelling of the source refuses the backing: a directory
+/// junction names the source's own directories, and the identity walk sees
+/// the same volume serial + file index whatever the spelling.
+#[cfg(target_os = "windows")]
+#[test]
+fn a_junction_spelling_of_the_source_is_refused_as_inside_it() {
+    use layerfs_history::{HistoryName, LayerStackId};
+    use layerfs_project::{InitRequest, ProjectError};
+    use support::memory_acquisition::MemoryAcquisition;
+    let fixture = Fixture::new(5);
+    let handles = create(
+        &fixture.path.join("store.sqlite"),
+        SqliteAcquisitionSchema::Tables,
+    );
+    let junction = fixture.path.join("alias");
+    std::process::Command::new("cmd")
+        .args([
+            "/c",
+            "mklink",
+            "/J",
+        ])
+        .arg(&junction)
+        .arg(&fixture.source)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(junction.join("d0").is_dir(), "the junction names the source");
+    let storage = storage(handles.storage.clone());
+    let error = layerfs_telemetry::timer::Timing::disabled("project.init", |scope| {
+        layerfs_project::init(
+            &storage,
+            &handles.history,
+            InitRequest {
+                source: &fixture.source,
+                acquisition: &MemoryAcquisition::placed_in(junction),
+                stack: LayerStackId::from_authority([19; 16]),
+                name: HistoryName::new("main").unwrap(),
+                scope_seed: [29; 32],
+                deadline: std::time::Instant::now() + std::time::Duration::from_secs(60),
+            },
+            scope,
+        )
+    })
+    .0
+    .unwrap_err();
+    assert!(
+        matches!(error, ProjectError::BackingInsideSource),
+        "{error:?}"
+    );
+    std::fs::remove_dir(&fixture.path.join("alias")).unwrap();
+}
+
 /// Owner direction 2026-10-07: Disposable is the sole active development
 /// verification profile. Durable execution of these bodies is NOT_RUN —
 /// deferred by owner for Disposable-only development. Durable support and its
