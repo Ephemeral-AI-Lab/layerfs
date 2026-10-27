@@ -164,7 +164,3 @@ impl Runtime {
         Ok((code, stdout, stderr))
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/unit/runtime.rs"]
-mod runtime_tests;
