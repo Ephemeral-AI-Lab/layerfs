@@ -4,9 +4,11 @@
 //! in the merge's records; the merged root is one backed update of the
 //! `into` side over them, so it is built by the same canonical producer, on
 //! the same route, as a Workspace Commit. A file value written at a name
-//! keeps its source serial when the serial is new to that side, already
-//! holds that value there, or is changed in place at its only binding;
-//! otherwise it gets a fresh serial, so one serial never carries two values.
+//! keeps its source serial when the serial is new to that side and `from`
+//! binds it at no other name, already holds that value there, or is changed
+//! in place at its only binding; otherwise it gets a fresh serial, so one
+//! serial never carries two values and a new file `from` also binds at other
+//! names keeps its own value there.
 
 use layerfs_telemetry::timer::{Active, TimingScope};
 
@@ -168,16 +170,17 @@ impl Plan<'_, '_> {
         }
     }
 
-    /// The serial that carries `value` for the source serial `source`.
+    /// The serial that carries `value` for the entry `like`.
     pub(super) fn assign(
         &mut self,
         resolver: &Resolver<'_>,
         into: usize,
         writer: &mut Writer<'_>,
-        source: u64,
+        like: EntryFacts,
         value: InodeValue,
         here: Option<EntryFacts>,
     ) -> ContentResult<u64> {
+        let source = like.serial;
         let stored = if self.assigned.may_hold(source) {
             self.spill.get(ASSIGNED, single(source))?
         } else {
@@ -194,6 +197,9 @@ impl Plan<'_, '_> {
         let first = given.is_empty();
         let serial = match resolver.value(into, source)? {
             _ if !first => None,
+            // `from` binds the file at other names too, which keep its own
+            // value: the value written here is another file.
+            None if like.value.namespace_ref_count > 1 => None,
             None => {
                 self.fresh(source)?;
                 Some(source)
@@ -231,11 +237,6 @@ impl Plan<'_, '_> {
     /// True when the plan holds a final value for `serial`.
     pub(super) fn valued(&self, serial: u64) -> ContentResult<bool> {
         Ok(self.spill.get(VALUE, single(serial))?.is_some())
-    }
-
-    /// True when a decision gave `source`'s entry a value.
-    pub(super) fn assigned(&self, source: u64) -> ContentResult<bool> {
-        Ok(self.assigned.may_hold(source) && self.spill.get(ASSIGNED, single(source))?.is_some())
     }
 
     /// Adds one assignment to a source serial's record.
