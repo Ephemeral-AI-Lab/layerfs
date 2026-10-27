@@ -146,3 +146,15 @@ export function checkedMessage(message) {
   }
   return message;
 }
+
+/** A write's last argument as call fields: a Commit message string, or
+ * `{ message?, mode? }` where `mode` is the permission bits (e.g. `0o755`).
+ * The engine checks `mode`; other option names are ignored. */
+export function writeOptions(options) {
+  if (options === undefined || typeof options === "string") return { message: checkedMessage(options) };
+  if (options === null || typeof options !== "object" || Array.isArray(options)) {
+    throw new LayerFSError("InvalidInput", "options must be a message string or { message, mode }", null);
+  }
+  const { message, mode } = options;
+  return { message: checkedMessage(message), ...(mode === undefined ? {} : { mode }) };
+}
