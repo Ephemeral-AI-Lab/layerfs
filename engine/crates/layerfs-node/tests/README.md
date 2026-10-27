@@ -12,6 +12,7 @@ cargo +1.85.1 build --manifest-path Cargo.toml --locked -p layerfs-node
 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --tests --no-run
 timeout 30 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_discovery
 timeout 90 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_admission
+timeout 60 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_local
 ```
 
 Use the worktree's registered Cargo resources for these commands. Node 20 or
@@ -23,6 +24,12 @@ copy it to a private temporary directory with the `.node` suffix Node requires.
 number replacement during inspection, and discovery-lock release while a forked
 child retains the descriptor. Its C fixture interposes `flock` only in the child
 Node process; the fixture's fork is bounded and released on test unwinding.
+
+`native_local` covers local Sandbox records (`LAYERFS_SANDBOX=local`) through
+`runtime.sandbox.reclaim`: a record naming any directory other than where its
+deployment puts that Sandbox is refused and nothing is deleted, the configured
+`localDir` must be absolute and plain, a stopped local Sandbox is deleted and its
+number freed, and a damaged boot or port is refused.
 
 `native_admission` covers initial connection admission and its `Busy` deadline.
 The deadline test pays the product's full 60-second readiness wait. The mock
