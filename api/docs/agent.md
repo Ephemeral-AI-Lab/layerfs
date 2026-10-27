@@ -352,7 +352,8 @@ omitted and the next window starts at the following line. NUL/invalid UTF-8 in t
 scanned text is Binary. Grep scans chunks and matches across chunk boundaries.
 Blame uses bounded LCS and exact common edges. In coarse comparisons, a line
 is inherited from the common suffix only when it starts at a corresponding
-line boundary in both versions. An oversized changed middle is a removed/added
+line boundary in both versions, and from the common prefix only when it ends at
+one in both. An oversized changed middle is a removed/added
 block and `comparisonCoarse` discloses that Content diff policy.
 Diff hunks can be omitted explicitly when their bounded comparison/reply cannot
 represent them; equal content is decided by immutable content identity.
