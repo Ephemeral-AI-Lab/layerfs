@@ -97,12 +97,11 @@ impl ExecCreated {
             }));
         }
         self.start_attempted = true;
-        let result = self.docker.exchange(
-            "POST",
-            &format!("/v1.54/exec/{}/start", self.exec),
-            true,
-            |w| w.write_all(b"{\"Detach\":false,\"Tty\":false}"),
-        );
+        let result =
+            self.docker
+                .exchange("POST", &format!("/exec/{}/start", self.exec), true, |w| {
+                    w.write_all(b"{\"Detach\":false,\"Tty\":false}")
+                });
         match result {
             Ok(response) if response.status == 101 => Ok(Attached {
                 created: self,

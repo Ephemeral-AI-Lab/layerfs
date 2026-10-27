@@ -71,7 +71,7 @@ impl Sandbox {
             }
             self.upload_attempted = true;
             let path = format!(
-                "/v1.54/containers/{}/archive?path=/&noOverwriteDirNonDir=true&copyUIDGID=true",
+                "/containers/{}/archive?path=/&noOverwriteDirNonDir=true&copyUIDGID=true",
                 self.id
             );
             let mut response = self

@@ -77,9 +77,11 @@ place, avoiding stale macOS executable-page signature state. `CARGO_TARGET_DIR`
 must stay inside this worktree; `LAYERFS_NATIVE_OUTPUT` can select a separate
 platform artifact. Keep Linux addons separate from the host addon.
 
-At runtime, the Docker Engine server selected by `LAYERFS_DOCKER` must accept
-Engine API v1.54 requests. The SDK always uses explicit `/v1.54/...` paths and
-does not negotiate from the server's maximum API version; see the [agent settings](docs/agent.md#settings).
+At runtime, the Docker Engine server selected by `LAYERFS_DOCKER` must speak
+Engine API v1.48 (Docker 28.0) or newer. Before its first request the SDK reads
+the server's version once (`GET /version`) and uses `/v1.<minor>/...` paths at
+that version, up to v1.54; an older server is refused up front, naming both
+versions. See the [agent settings](docs/agent.md#settings).
 
 New Store schema versions are 16–18 (pack layouts) and 22–24 (with acquisition),
 with history identity format 3. Old Disposable Stores are rejected without

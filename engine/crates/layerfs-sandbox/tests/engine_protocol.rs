@@ -230,7 +230,7 @@ fn actual_mismatched_inspection_and_http_error_body_remain_distinct_from_selecto
     server.finish();
 }
 #[test]
-fn sandbox_create_debug_shows_docker_api_version_refusal_without_negotiating() {
+fn sandbox_create_debug_shows_docker_api_version_refusal_without_retrying() {
     let message = "client version 1.54 is too new. Maximum supported API version is 1.52";
     let body = format!("{{\"message\":\"{message}\"}}");
     let volume = br#"{"Name":"project-store","Driver":"local","Scope":"local","Options":null}"#;
@@ -266,6 +266,68 @@ fn sandbox_volume_api_version_refusal_stops_before_create() {
     let request = String::from_utf8(requests[0].clone()).unwrap();
     assert!(request.starts_with("GET /v1.54/volumes/project-store HTTP/1.1"));
     assert!(!request.contains("POST /v1.54/containers/create"));
+}
+fn volume() -> Vec<u8> {
+    peer::fixed(
+        200,
+        br#"{"Name":"project-store","Driver":"local","Scope":"local","Options":null}"#,
+    )
+}
+fn create_requests(version: Vec<u8>) -> Vec<String> {
+    let (docker, server) = peer::Peer::scripted(vec![version, volume(), created()], 8192);
+    docker.create_sandbox(sandbox_request()).unwrap();
+    let requests = server.finish();
+    requests
+        .iter()
+        .map(|request| {
+            String::from_utf8_lossy(request)
+                .lines()
+                .next()
+                .unwrap()
+                .to_owned()
+        })
+        .collect()
+}
+#[test]
+fn an_older_engine_gets_its_own_api_version() {
+    let heads = create_requests(peer::fixed(200, br#"{"ApiVersion":"1.52"}"#));
+    assert_eq!(
+        heads,
+        [
+            "GET /version HTTP/1.1",
+            "GET /v1.52/volumes/project-store HTTP/1.1",
+            "POST /v1.52/containers/create HTTP/1.1"
+        ]
+    );
+}
+#[test]
+fn a_newer_engine_gets_api_1_54() {
+    let heads = create_requests(peer::fixed(200, br#"{"ApiVersion":"1.56"}"#));
+    assert_eq!(heads[1], "GET /v1.54/volumes/project-store HTTP/1.1");
+    assert_eq!(heads[2], "POST /v1.54/containers/create HTTP/1.1");
+}
+#[test]
+fn an_engine_below_api_1_48_is_refused_before_any_versioned_request() {
+    let (docker, server) =
+        peer::Peer::scripted(vec![peer::fixed(200, br#"{"ApiVersion":"1.47"}"#)], 8192);
+    let failed = docker.create_sandbox(sandbox_request()).unwrap_err();
+    assert_eq!(failed.phase, CreatePhase::Volume);
+    assert!(!failed.transfer.attempted);
+    assert!(matches!(
+        failed.transfer.cause,
+        RuntimeError::Unsupported(_)
+    ));
+    let rendered = format!("{failed:?}");
+    assert!(rendered.contains("Engine API 1.47 is older than the 1.48 to 1.54 this client speaks"));
+    let requests = server.finish();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].starts_with(b"GET /version HTTP/1.1"));
+}
+#[test]
+fn an_engine_that_does_not_report_its_version_gets_api_1_54() {
+    let heads = create_requests(peer::fixed(404, br#"{"message":"page not found"}"#));
+    assert_eq!(heads[1], "GET /v1.54/volumes/project-store HTTP/1.1");
+    assert_eq!(heads[2], "POST /v1.54/containers/create HTTP/1.1");
 }
 #[test]
 fn http_error_debug_shows_only_the_bounded_prefix() {

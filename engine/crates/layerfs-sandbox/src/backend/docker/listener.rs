@@ -47,7 +47,7 @@ impl Sandbox {
             let mut r = pending.exchange(
                     "GET",
                     &format!(
-                        "/v1.54/containers/{}/logs?stdout=true&stderr=true&follow=true&tail=all&timestamps=false",
+                        "/containers/{}/logs?stdout=true&stderr=true&follow=true&tail=all&timestamps=false",
                         self.id
                     ),
                     false,
@@ -145,7 +145,7 @@ impl Sandbox {
             .exchange(
                 "GET",
                 &format!(
-                    "/v1.54/containers/{}/logs?stdout=true&stderr=true&follow=false&tail={lines}&timestamps=false",
+                    "/containers/{}/logs?stdout=true&stderr=true&follow=false&tail={lines}&timestamps=false",
                     self.id
                 ),
                 false,

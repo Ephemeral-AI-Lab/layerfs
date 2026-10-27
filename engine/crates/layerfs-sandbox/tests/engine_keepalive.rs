@@ -70,7 +70,13 @@ struct Engine {
     worker: Option<JoinHandle<Vec<Vec<String>>>>,
 }
 impl Engine {
-    fn new(script: Vec<Connection>) -> (Docker, Self) {
+    /// The client's first connection asks the version, so the script follows
+    /// an Engine that answers it; `finish` leaves that connection out.
+    fn new(mut script: Vec<Connection>) -> (Docker, Self) {
+        script.insert(
+            0,
+            (vec![response(200, r#"{"ApiVersion":"1.54"}"#, true)], None),
+        );
         let directory = std::env::temp_dir().join(format!(
             "layerfs-keepalive-{}-{}",
             std::process::id(),
@@ -118,7 +124,9 @@ impl Engine {
     }
     /// The request heads each connection received.
     fn finish(mut self) -> Vec<Vec<String>> {
-        self.worker.take().unwrap().join().unwrap()
+        let mut connections = self.worker.take().unwrap().join().unwrap();
+        connections.remove(0);
+        connections
     }
 }
 impl Drop for Engine {
