@@ -110,6 +110,15 @@ pub fn commit(
                     crate::store::CommitError::History(layerfs_history::HistoryError::Busy) => {
                         "Busy"
                     }
+                    crate::store::CommitError::History(
+                        layerfs_history::HistoryError::Capacity(_),
+                    ) => "Capacity",
+                    crate::store::CommitError::Storage(error)
+                    | crate::store::CommitError::Construction { storage: error, .. }
+                        if error.is_capacity_refusal() =>
+                    {
+                        "Capacity"
+                    }
                     _ => "Failed",
                 };
                 let refusal = args::refuse(code, failure.to_string(), SdkValue::Null);
