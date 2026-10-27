@@ -142,6 +142,7 @@ text) go through `construct_bytes` into the same consumer first.
    | `from` bound a serial `into` deleted | resurrected with `from`'s subtree; a file `from` edited there is decided as a deletion against an edit (`modify/delete`), as in the case above |
    | `from` changed a serial `into` deleted | decided as a deletion against a change; a kept file is placed at `from`'s path, its missing parents revived |
    | a serial new on `from` that loses a collision | left unbound, with the new subtree below it; a file `from` hard-linked at other names only once every link is lost, else it stays at the names the merge keeps |
+   | a file new on `from`, hard-linked at other names, whose name is decided with written bytes (merged text or markers) | the bytes are a new file at that name; the other names keep the file and its own bytes, in a Branch merge and in the root a conflicted Commit installs |
 
 5. **Paths.** Only a serial that needs a path is named: a decision (for its
    conflict report and `/.lww` matching), a deletion against a change below
@@ -151,9 +152,13 @@ text) go through `construct_bytes` into the same consumer first.
    rewritten; link counts are derived from the changed bindings, and a serial
    left with none is released. A directory new to `into` is built from its
    bindings. A file value keeps its serial in three cases: the serial is new to
-   `into`, `into` already holds that value, or the value changes in place at
-   the serial's only binding. Otherwise the caller's `fresh` allocator supplies
-   a new serial, so one serial never carries two values.
+   `into` and `from` binds it at no other name, `into` already holds that
+   value, or the value changes in place at the serial's only binding.
+   Otherwise the caller's `fresh` allocator supplies a new serial, so one
+   serial never carries two values: a new file `from` also binds at other
+   names stays at those names with its own value, and the written value is a
+   fresh file at the decided name. Link counts follow the bindings the merge
+   keeps, for the file and for the fresh serial alike.
 
 **Working state (#355 (d), M1).** Memory does not grow with the merge. The
 serials deferred until moves are known are one run of 60 KiB chunks read once;

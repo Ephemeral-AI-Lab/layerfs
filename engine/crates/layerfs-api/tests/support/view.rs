@@ -5,16 +5,18 @@
 
 use layerfs_content::compare::tree::{inode_changes, join, list_directory, TreeTable};
 use layerfs_content::compare::DifferenceWork;
+use layerfs_content::file::read_all_bounded;
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
-use layerfs_content::filesystem::FilesystemRootId;
+use layerfs_content::filesystem::{FilesystemRead, FilesystemRootId, LogicalPath, Resolved};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::object::{AuthenticatedObjects, ObjectId};
 use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::Storage;
+use layerfs_telemetry::timer::Timing;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-fn hex(bytes: &[u8]) -> String {
+pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().fold(String::new(), |mut text, byte| {
         text.push_str(&format!("{byte:02x}"));
         text
@@ -48,6 +50,44 @@ impl Viewer {
     pub fn view(&self, root: &str, mtime: bool) -> Vec<String> {
         let reader = self.storage.reader().unwrap();
         view(&reader, root, mtime)
+    }
+
+    /// The inode bound at `path` in the root named by `root` (hex).
+    fn resolve(&self, root: &str, path: &str) -> Resolved {
+        let reader = self.storage.reader().unwrap();
+        let root = FilesystemRootId(ObjectId::from_bytes(&unhex(root)).unwrap());
+        let path = LogicalPath::new(path.trim_start_matches('/')).unwrap();
+        FilesystemRead::new(&reader, root)
+            .unwrap()
+            .resolve(&path)
+            .unwrap()
+    }
+
+    /// The link count stored for the inode bound at `path` in the root
+    /// named by `root` (hex).
+    pub fn links(&self, root: &str, path: &str) -> u64 {
+        self.resolve(root, path).value.namespace_ref_count
+    }
+
+    /// The bytes of the regular file bound at `path` in the root named by
+    /// `root` (hex), as text.
+    pub fn text(&self, root: &str, path: &str) -> String {
+        let reader = self.storage.reader().unwrap();
+        let file = self.resolve(root, path).value;
+        assert_eq!(file.kind, InodeKind::RegularFile, "{path}");
+        let mut bytes = Vec::new();
+        Timing::disabled("view.text", |timing| {
+            read_all_bounded(
+                &reader,
+                file.content_root,
+                u64::MAX,
+                &mut bytes,
+                timing.child("read"),
+            )
+        })
+        .0
+        .unwrap();
+        String::from_utf8(bytes).unwrap()
     }
 
     /// Serials whose value differs between two roots (hex): what a merge by

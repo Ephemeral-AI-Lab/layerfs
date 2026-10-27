@@ -396,8 +396,9 @@ impl Ctx<'_, '_> {
                 let mut listing = self.listing_of(c, PathSlot::Name(self.from, s));
                 self.names(&mut listing, Mode::Emit)?;
             }
-            // A new file decided at a name already carries its result.
-            (None, Some(f), None) if !self.plan.assigned(s)? => {
+            // A new file keeps `from`'s value, unless a decision at a name
+            // gave this serial its result.
+            (None, Some(f), None) if !self.plan.valued(s)? => {
                 self.plan.fresh(s)?;
                 self.plan.value(s, f)?;
             }
@@ -515,7 +516,7 @@ impl Ctx<'_, '_> {
                 &self.resolver,
                 self.into,
                 &mut self.writer,
-                like.serial,
+                like,
                 value,
                 here,
             )?),

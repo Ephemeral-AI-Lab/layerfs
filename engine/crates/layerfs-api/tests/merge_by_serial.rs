@@ -67,18 +67,25 @@ fn merge(
     (left_root.to_owned(), merged)
 }
 
-fn view(fixture: &Fixture, root: &str) -> Vec<String> {
+fn viewer(fixture: &Fixture) -> view::Viewer {
     view::Viewer::open(
         &fixture.host.config.path,
         installed::BINDING,
         installed::CURSOR,
     )
-    .view(root, false)
+}
+
+fn view(fixture: &Fixture, root: &str) -> Vec<String> {
+    viewer(fixture).view(root, false)
+}
+
+fn merged_root(merged: Result<SdkValue, SdkRefusal>) -> String {
+    let reply = merged.unwrap_or_else(|refusal| panic!("merge refused: {refusal:?}"));
+    reply.get_text("root").unwrap().to_owned()
 }
 
 fn merged_view(fixture: &Fixture, merged: Result<SdkValue, SdkRefusal>) -> Vec<String> {
-    let reply = merged.unwrap_or_else(|refusal| panic!("merge refused: {refusal:?}"));
-    view(fixture, reply.get_text("root").unwrap())
+    view(fixture, &merged_root(merged))
 }
 
 /// The view's line for `path`, if the path exists.
@@ -89,8 +96,16 @@ fn line<'v>(view: &'v [String], path: &str) -> Option<&'v str> {
 }
 
 fn read(fixture: &Fixture, path: &str) -> Option<String> {
+    read_at(fixture, "m", path)
+}
+
+/// The text at `path` on `branch`, if the path exists.
+fn read_at(fixture: &Fixture, branch: &str, path: &str) -> Option<String> {
     fixture
-        .try_call("fs.read", vec![("branch", text("m")), ("path", text(path))])
+        .try_call(
+            "fs.read",
+            vec![("branch", text(branch)), ("path", text(path))],
+        )
         .ok()
         .map(|reply| reply.get_text("text").unwrap().to_owned())
 }
@@ -426,6 +441,201 @@ fn a_new_file_is_dropped_once_every_link_is_lost() {
         }
         fixture.cleanup();
     }
+}
+
+/// `l` replaces `/shared.txt` with a new file that it also links at
+/// `/uncontested.txt`; `r` edits `/shared.txt` and never touches the other
+/// name. Merging `branch` with `with` gives `/shared.txt` the merged text, a
+/// file of its own, and leaves `/uncontested.txt` the bytes `l` wrote, as one
+/// link.
+fn merge_beside_a_new_link(branch: &str, with: &str) {
+    let fixture = Fixture::new(&format!("serial-link-beside-{branch}"), |source| {
+        fs::write(source.join("shared.txt"), b"line1\nline2\nline3\n").unwrap();
+        1
+    });
+    fixture.fork("l");
+    fixture.fork("r");
+    fixture.apply("l", vec![rm("/shared.txt")]);
+    fixture.workspace_commit(
+        "l",
+        &[
+            Change::Create("/uncontested.txt", b"OUR_LINE1\nline2\nline3\n"),
+            Change::Link("/uncontested.txt", "/shared.txt"),
+        ],
+        1,
+        || {},
+    );
+    fixture.apply(
+        "r",
+        vec![write("/shared.txt", "line1\nline2\nTHEIR_LINE3\n")],
+    );
+    let merged = fixture.try_call(
+        "branch.merge",
+        vec![
+            ("branch", text(branch)),
+            ("with", text(with)),
+            ("name", text("m")),
+        ],
+    );
+    let root = merged_root(merged);
+    let merged_view = view(&fixture, &root);
+    assert_eq!(
+        read(&fixture, "/shared.txt").as_deref(),
+        Some("OUR_LINE1\nline2\nTHEIR_LINE3\n")
+    );
+    assert_eq!(
+        read(&fixture, "/uncontested.txt").as_deref(),
+        Some("OUR_LINE1\nline2\nline3\n")
+    );
+    for path in ["/shared.txt", "/uncontested.txt"] {
+        let found = line(&merged_view, path).expect("both names stay");
+        assert!(!found.contains(" link="), "{found}");
+        assert_eq!(viewer(&fixture).links(&root, path), 1, "{path}");
+    }
+    fixture.cleanup();
+}
+
+/// `l` is merged with `r`: the merge reads the changes of the branch that
+/// made the new file.
+#[test]
+fn text_merged_at_one_link_of_a_new_file_leaves_its_other_link_alone() {
+    merge_beside_a_new_link("l", "r");
+}
+
+/// `r` is merged with `l`: the merge reads the changes of the branch that
+/// only edited.
+#[test]
+fn text_merged_at_one_link_of_a_new_file_leaves_its_other_link_alone_in_the_other_order() {
+    merge_beside_a_new_link("r", "l");
+}
+
+/// The new file linked at `/a.txt` and `/b.txt`, both edited by `r`: each
+/// name holds its own merged text and the file keeps none of its own bytes.
+/// Two merged texts that differ are two files; two that are equal stay one
+/// file with two links.
+#[test]
+fn a_new_file_with_every_name_merged_keeps_none_of_its_own_bytes() {
+    for (label, edits, merged_texts, links) in [
+        (
+            "serial-links-merged-apart",
+            ["1\n2\nA3\n", "1\n2\nB3\n"],
+            ["O1\n2\nA3\n", "O1\n2\nB3\n"],
+            1,
+        ),
+        (
+            "serial-links-merged-alike",
+            ["1\n2\nT3\n", "1\n2\nT3\n"],
+            ["O1\n2\nT3\n", "O1\n2\nT3\n"],
+            2,
+        ),
+    ] {
+        let fixture = Fixture::new(label, |source| {
+            fs::write(source.join("a.txt"), b"1\n2\n3\n").unwrap();
+            fs::write(source.join("b.txt"), b"1\n2\n3\n").unwrap();
+            2
+        });
+        fixture.fork("l");
+        fixture.fork("r");
+        fixture.apply("l", vec![rm("/a.txt"), rm("/b.txt")]);
+        fixture.workspace_commit(
+            "l",
+            &[
+                Change::Create("/a.txt", b"O1\n2\n3\n"),
+                Change::Link("/a.txt", "/b.txt"),
+            ],
+            1,
+            || {},
+        );
+        fixture.apply(
+            "r",
+            vec![write("/a.txt", edits[0]), write("/b.txt", edits[1])],
+        );
+        let merged = fixture.try_call(
+            "branch.merge",
+            vec![
+                ("branch", text("l")),
+                ("with", text("r")),
+                ("name", text("m")),
+            ],
+        );
+        let root = merged_root(merged);
+        let merged_view = view(&fixture, &root);
+        for (path, merged_text) in ["/a.txt", "/b.txt"].into_iter().zip(merged_texts) {
+            let case = format!("{label} {path}");
+            assert_eq!(read(&fixture, path).as_deref(), Some(merged_text), "{case}");
+            let found = line(&merged_view, path).expect("both names stay");
+            assert_eq!(found.contains(" link="), links == 2, "{case}: {found}");
+            assert_eq!(viewer(&fixture).links(&root, path), links, "{case}");
+        }
+        fixture.cleanup();
+    }
+}
+
+/// A Workspace creates `/conflict.txt` and links it at `/clean_alias.txt`
+/// while another writer adds a different `/conflict.txt` to the Branch. The
+/// Commit conflicts at `/conflict.txt` alone and publishes nothing. The root
+/// it installs in the Workspace holds the markers at `/conflict.txt` and
+/// leaves `/clean_alias.txt` the bytes the Workspace wrote, as one link.
+#[test]
+fn a_conflict_at_one_link_of_a_new_file_leaves_its_other_link_alone() {
+    let fixture = Fixture::new("serial-link-conflict", |source| {
+        fs::write(source.join("readme.txt"), b"base\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    let committed = fixture.workspace_commit(
+        "work",
+        &[
+            Change::Create("/conflict.txt", b"our new file\n"),
+            Change::Link("/conflict.txt", "/clean_alias.txt"),
+        ],
+        1,
+        || {
+            fixture.apply("work", vec![write("/conflict.txt", "their new file\n")]);
+        },
+    );
+    let report = committed
+        .merge
+        .as_ref()
+        .expect("the head moved: a merge ran");
+    let conflicts: Vec<_> = report.conflicts.iter().map(|c| c.path.as_str()).collect();
+    assert_eq!(conflicts, ["/conflict.txt"]);
+    // Nothing is published: the Branch keeps only the other writer's file.
+    assert!(committed.history.is_none(), "{:?}", committed.history);
+    assert_eq!(
+        read_at(&fixture, "work", "/conflict.txt").as_deref(),
+        Some("their new file\n")
+    );
+    assert_eq!(read_at(&fixture, "work", "/clean_alias.txt"), None);
+    // The Workspace's own root binds one file at both names; the root the
+    // merge installed in its place binds a file of its own at each.
+    let written = report.written.clone();
+    let (shown, local) = committed
+        .replaced
+        .expect("a conflicted merge installs a root");
+    let (shown, local) = (view::hex(shown.as_bytes()), view::hex(local.as_bytes()));
+    let store = viewer(&fixture);
+    let shown_view = store.view(&shown, false);
+    for path in ["/conflict.txt", "/clean_alias.txt"] {
+        let found = line(&shown_view, path).expect("both names bound");
+        assert!(found.ends_with(" link=/clean_alias.txt"), "{found}");
+    }
+    let local_view = store.view(&local, false);
+    assert_eq!(store.text(&local, "/clean_alias.txt"), "our new file\n");
+    let marked = store.text(&local, "/conflict.txt");
+    assert!(
+        marked
+            .starts_with("<<<<<<< workspace\nour new file\n=======\ntheir new file\n>>>>>>> work@"),
+        "{marked}"
+    );
+    for path in ["/conflict.txt", "/clean_alias.txt"] {
+        let found = line(&local_view, path).expect("both names stay");
+        assert!(!found.contains(" link="), "{found}");
+        assert_eq!(store.links(&local, path), 1, "{path}");
+    }
+    // Only the conflicted name is reported as written into the Workspace.
+    assert_eq!(written, ["/conflict.txt"]);
+    fixture.cleanup();
 }
 
 #[test]
