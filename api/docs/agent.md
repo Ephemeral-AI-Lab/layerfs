@@ -149,9 +149,15 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
 | `LAYERFS_TRACE_START` | `1` adds a start line before each traced call; read at every call. |
 
-The Docker Engine server selected by `LAYERFS_DOCKER` must accept Engine API
-v1.54 requests. The SDK always uses explicit `/v1.54/...` paths and does not
-negotiate from the server's maximum API version. Check the server's API range
+The Docker Engine server selected by `LAYERFS_DOCKER` must speak Engine API
+v1.48 (Docker 28.0) or newer. Before its first request the SDK reads the
+server's API version once with an unversioned `GET /version` and uses
+`/v1.<minor>/...` paths at that version, up to v1.54 (a newer server is
+addressed as v1.54). A server older than v1.48 is refused before any other
+request, with an error naming the server's version and the supported range:
+earlier Engines fail to upload the daemon. If `GET /version` cannot be read,
+the SDK uses v1.54, and the server's own refusal of it, if any, is the error. A
+failed request is never resent at another version. Check the server's API range
 with `docker version`.
 
 The SDK and the `layerfs` command read only these `LAYERFS_` names. An

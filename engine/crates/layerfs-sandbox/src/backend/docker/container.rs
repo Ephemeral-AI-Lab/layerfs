@@ -43,8 +43,7 @@ impl SandboxRequest {
 impl Docker {
     /// One read of an existing exact plain local volume; it has no create effect.
     fn plain_volume(&self, name: &str) -> Result<(), Box<WireFailure>> {
-        let mut response =
-            self.exchange("GET", &format!("/v1.54/volumes/{name}"), false, |_| Ok(()))?;
+        let mut response = self.exchange("GET", &format!("/volumes/{name}"), false, |_| Ok(()))?;
         if response.status != 200 {
             return Err(response.fail(RuntimeError::Http(response.status), None));
         }
@@ -103,8 +102,8 @@ impl Docker {
             phase = CreatePhase::Create;
             // `naming` admitted only characters that need no URL escape.
             let path = match &self.container_name {
-                Some(name) => format!("/v1.54/containers/create?name={name}"),
-                None => "/v1.54/containers/create".to_owned(),
+                Some(name) => format!("/containers/create?name={name}"),
+                None => "/containers/create".to_owned(),
             };
             let mut response = self.exchange("POST", &path, false, |w| request.encode(w))?;
             if response.status != 201 {
@@ -181,7 +180,7 @@ impl Sandbox {
             return Err(self.invalid("original container Start admission"));
         }
         self.start_attempted = true;
-        self.empty("POST", &format!("/v1.54/containers/{}/start", self.id), 204)?;
+        self.empty("POST", &format!("/containers/{}/start", self.id), 204)?;
         self.started = true;
         Ok(())
     }
@@ -193,7 +192,7 @@ impl Sandbox {
             return Err(self.invalid("original container Stop admission"));
         }
         self.stop_attempted = true;
-        let path = format!("/v1.54/containers/{}/stop?t={seconds}", self.id);
+        let path = format!("/containers/{}/stop?t={seconds}", self.id);
         self.empty("POST", &path, 204)
             .or_else(|failure| match failure.cause {
                 RuntimeError::Http(304) => Ok(()),
@@ -210,7 +209,7 @@ impl Sandbox {
         self.delete_attempted = true;
         self.empty(
             "DELETE",
-            &format!("/v1.54/containers/{}?force=false&v=false", self.id),
+            &format!("/containers/{}?force=false&v=false", self.id),
             204,
         )?;
         self.deleted = true;

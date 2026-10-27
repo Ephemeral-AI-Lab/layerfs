@@ -13,9 +13,25 @@ static NEXT: AtomicUsize = AtomicUsize::new(0);
 pub struct Peer {
     directory: PathBuf,
     worker: Option<JoinHandle<Vec<Vec<u8>>>>,
+    /// Leading requests `finish` leaves out: the client's version probe.
+    probes: usize,
 }
 impl Peer {
+    /// A peer whose Engine reports API 1.54 first, as an unprobed client asks;
+    /// `finish` returns only the requests after that probe. No responses
+    /// means no request at all, so no probe either.
     pub fn new(responses: Vec<Vec<u8>>, split: usize) -> (Docker, Self) {
+        if responses.is_empty() {
+            return Self::scripted(responses, split);
+        }
+        let mut served = vec![fixed(200, br#"{"ApiVersion":"1.54"}"#)];
+        served.extend(responses);
+        let (docker, mut peer) = Self::scripted(served, split);
+        peer.probes = 1;
+        (docker, peer)
+    }
+    /// A peer that serves exactly `responses`, probe included.
+    pub fn scripted(responses: Vec<Vec<u8>>, split: usize) -> (Docker, Self) {
         let directory = std::env::temp_dir().join(format!(
             "layerfs-engine-{}-{}",
             std::process::id(),
@@ -105,12 +121,14 @@ impl Peer {
             Self {
                 directory,
                 worker: Some(worker),
+                probes: 0,
             },
         )
     }
     pub fn finish(mut self) -> Vec<Vec<u8>> {
-        let result = self.worker.take().unwrap().join().unwrap();
+        let mut result = self.worker.take().unwrap().join().unwrap();
         fs::remove_dir_all(&self.directory).unwrap();
+        result.drain(..self.probes);
         result
     }
 }

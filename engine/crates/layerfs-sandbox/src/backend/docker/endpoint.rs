@@ -65,7 +65,7 @@ impl Sandbox {
             .docker
             .exchange(
                 "GET",
-                &format!("/v1.54/containers/{}/json", self.id),
+                &format!("/containers/{}/json", self.id),
                 false,
                 |_| Ok(()),
             )
