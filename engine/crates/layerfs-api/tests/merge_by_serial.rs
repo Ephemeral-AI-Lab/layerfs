@@ -480,6 +480,25 @@ fn both_orders(
     right: &[Change],
     check: impl Fn(&Fixture, &[String], [&'static str; 2]),
 ) {
+    each_order(
+        label,
+        rules,
+        old,
+        left,
+        right,
+        |fixture, _, merged_view, order| check(fixture, merged_view, order),
+    );
+}
+
+/// Runs one case in both orders: `check` gets the merge's reply and view.
+fn each_order(
+    label: &str,
+    rules: bool,
+    old: bool,
+    left: &[Change],
+    right: &[Change],
+    check: impl Fn(&Fixture, &SdkValue, &[String], [&'static str; 2]),
+) {
     let mut failed = Vec::new();
     for order in ORDERS {
         let fixture = link_tree(&format!("{label}-{}", order[0]), rules, old);
@@ -487,7 +506,7 @@ fn both_orders(
         let checked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let merged = merged.unwrap_or_else(|refusal| panic!("merge refused: {refusal:?}"));
             let merged_view = view(&fixture, merged.get_text("root").unwrap());
-            check(&fixture, &merged_view, order);
+            check(&fixture, &merged, &merged_view, order);
         }));
         if checked.is_err() {
             failed.push(order);
@@ -739,6 +758,121 @@ fn a_new_link_below_a_replaced_directory() {
             }
         },
     );
+}
+
+/// The paths of a merge reply's `/.lww` decisions.
+fn lww_paths(reply: &SdkValue) -> Vec<&str> {
+    match reply.get("lww") {
+        Some(SdkValue::List(lww)) => lww
+            .iter()
+            .map(|decision| decision.get_text("path").unwrap())
+            .collect(),
+        other => panic!("lww: {other:?}"),
+    }
+}
+
+/// `r` replaces the directory `/t/d` with a file.
+const REPLACED_BY_FILE: [Change<'static>; 4] = [
+    Change::Unlink("/t/d/old"),
+    Change::Rmdir("/t/d"),
+    Change::Create("/t/d", b"theirs d\n"),
+    Change::Mtime("/t/d", NEWER),
+];
+
+/// `l` added to `/t/d`, which `r` replaced with a file. Two directories are
+/// the same entry, so `l` did not change the entry at `/t/d`: `r`'s file
+/// wins in either order, with no `/.lww` decision and no conflict, and
+/// `l`'s new file goes with the directory. That holds with `l`'s directory
+/// newer and without a `/.lww` rule.
+#[test]
+fn a_directory_added_to_loses_to_the_file_that_replaced_it() {
+    let added = [Change::Create("/t/d/y", b"ours\n")];
+    let newer = [
+        Change::Create("/t/d/y", b"ours\n"),
+        Change::Mtime("/t/d", NEWER + 1),
+    ];
+    for (label, rules, left) in [
+        ("serial-dir-file", true, &added[..]),
+        ("serial-dir-file-newer-dir", true, &newer[..]),
+        ("serial-dir-file-no-rule", false, &added[..]),
+    ] {
+        each_order(
+            label,
+            rules,
+            true,
+            left,
+            &REPLACED_BY_FILE,
+            |fixture, reply, merged_view, _| {
+                assert_eq!(below_t(merged_view), ["/t/d"]);
+                assert_eq!(read(fixture, "/t/d").as_deref(), Some("theirs d\n"));
+                assert!(lww_paths(reply).is_empty(), "{reply:?}");
+            },
+        );
+    }
+}
+
+/// `r` replaces `/t/d` with a new directory holding a newer `x`; `l` adds
+/// an older `x` and a `y` to the old one. In either order the two
+/// directories are merged by name: `/.lww` keeps `r`'s `x`, `l`'s `y`
+/// stays and `r`'s removal of `old` holds.
+#[test]
+fn a_directory_added_to_against_a_new_directory_merges_by_name() {
+    each_order(
+        "serial-dir-dir-lww",
+        true,
+        true,
+        &[
+            Change::Create("/t/d/x", b"ours\n"),
+            Change::Create("/t/d/y", b"ours y\n"),
+        ],
+        &[
+            Change::Unlink("/t/d/old"),
+            Change::Rmdir("/t/d"),
+            Change::Mkdir("/t/d"),
+            Change::Create("/t/d/x", b"theirs\n"),
+            Change::Mtime("/t/d/x", NEWER),
+        ],
+        |fixture, reply, merged_view, _| {
+            assert_eq!(below_t(merged_view), ["/t/d", "/t/d/x", "/t/d/y"]);
+            assert_eq!(read(fixture, "/t/d/x").as_deref(), Some("theirs\n"));
+            assert_eq!(read(fixture, "/t/d/y").as_deref(), Some("ours y\n"));
+            assert_eq!(lww_paths(reply), ["/t/d/x"]);
+        },
+    );
+}
+
+/// As above, but `l` saves a new two-link file over `/t/d/old`, a name the
+/// base held, and `r`'s new directory holds a newer `old`. The merged
+/// directories decide `old` once in either order: `/.lww` keeps `r`'s, and
+/// `l`'s file stays at its other name, outside the directory or inside it.
+#[test]
+fn a_new_link_over_a_base_name_in_a_merged_directory_is_lost_once() {
+    let right = [
+        Change::Unlink("/t/d/old"),
+        Change::Rmdir("/t/d"),
+        Change::Mkdir("/t/d"),
+        Change::Create("/t/d/old", b"theirs\n"),
+        Change::Mtime("/t/d/old", NEWER),
+    ];
+    for other in ["/t/k", "/t/d/z"] {
+        each_order(
+            &format!("serial-absorbed-base-link{}", other.replace('/', "-")),
+            true,
+            true,
+            &[
+                Change::SaveOver("/t/d/old", b"ours\n"),
+                Change::Link("/t/d/old", other),
+            ],
+            &right,
+            |fixture, reply, merged_view, _| {
+                assert_eq!(read(fixture, "/t/d/old").as_deref(), Some("theirs\n"));
+                assert_eq!(read(fixture, other).as_deref(), Some("ours\n"));
+                single(merged_view, "/t/d/old");
+                single(merged_view, other);
+                assert_eq!(lww_paths(reply), ["/t/d/old"]);
+            },
+        );
+    }
 }
 
 #[test]

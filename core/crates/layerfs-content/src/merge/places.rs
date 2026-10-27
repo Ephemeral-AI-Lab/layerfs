@@ -225,9 +225,16 @@ impl Ctx<'_, '_> {
             return Ok(());
         }
         spill.insert(DROP, single(serial), Vec::new())?;
-        let Some(root) = listing(value) else {
-            return Ok(());
-        };
+        match listing(value) {
+            Some(root) => self.drop_below(root),
+            None => Ok(()),
+        }
+    }
+
+    /// Leaves every serial new on `from` below the listing `root` unbound,
+    /// as [`Self::drop_new`] does.
+    pub(super) fn drop_below(&mut self, root: ObjectId) -> ContentResult<()> {
+        let spill = self.spill;
         let mut stack = SpillStack::new(spill);
         stack.push(spill, root.as_bytes().to_vec())?;
         while let Some(bytes) = stack.pop(spill)? {
