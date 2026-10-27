@@ -1,0 +1,29 @@
+# LayerFS workspace: core algorithms, engine composition and public API.
+
+[workspace]
+resolver = "2"
+members = [
+    "core/crates/*",
+    "engine/crates/*",
+]
+exclude = [
+    "engine/vendor/fuser-0.18.0",
+]
+
+[workspace.package]
+edition = "2021"
+version = "1.1.0"
+rust-version = "1.85"
+license = "MIT"
+
+# Keep the large boundary fixtures cheap without removing cases or assertions.
+# Product dev/release profiles and test debug assertions stay unchanged.
+[profile.test]
+opt-level = 1
+
+[profile.test.package.zstd-sys]
+opt-level = 3
+
+# Owner-authorized signed-timestamp correction to the crates.io 0.18.0 archive.
+[patch.crates-io]
+fuser = { version = "=0.18.0", path = "engine/vendor/fuser-0.18.0" }

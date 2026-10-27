@@ -62,8 +62,8 @@ def register(args):
     source = Path(args.worktree).resolve()
     if Path(git(source, "rev-parse", "--show-toplevel").decode().strip()).resolve() != source:
         raise Refused("Select a Git checkout root")
-    if not (source / "core/Cargo.toml").is_file():
-        raise Refused("Worktree has no active core manifest")
+    if not (source / "Cargo.toml").is_file():
+        raise Refused("Worktree has no active workspace manifest")
     state = Path(args.root).expanduser().resolve() / identity(source)
     if overlaps(state, source):
         raise Refused("Resource state must be outside the worktree")
@@ -75,7 +75,7 @@ def register(args):
         "worktree": str(source),
         "state": str(state),
         "toolchain": TOOLCHAIN,
-        "macos_target": str(source / "core/target"),
+        "macos_target": str(source / "target"),
         "macos_cargo_home": str(state / "cargo-home-macos"),
         "linux_target_volume": "lfs-dev-" + identity(source) + "-target",
         "linux_cargo_volume": "lfs-dev-" + identity(source) + "-cargo",
@@ -151,7 +151,7 @@ def environment(record, platform):
         if os.uname().sysname != "Darwin":
             raise Refused("macos builds require a macOS host")
         return {**os.environ, "CARGO_HOME": record["macos_cargo_home"], "CARGO_TARGET_DIR": record["macos_target"]}
-    return {"CARGO_HOME": "/cargo-home", "CARGO_TARGET_DIR": "/work/core/target"}
+    return {"CARGO_HOME": "/cargo-home", "CARGO_TARGET_DIR": "/work/target"}
 
 
 def docker_build(record, command, extra=(), network="none"):
@@ -172,7 +172,7 @@ def docker_build(record, command, extra=(), network="none"):
         "--mount",
         f"type=bind,src={record['worktree']},dst=/work,readonly",
         "--mount",
-        f"type=volume,src={record['linux_target_volume']},dst=/work/core/target,volume-nocopy",
+        f"type=volume,src={record['linux_target_volume']},dst=/work/target,volume-nocopy",
         "--mount",
         f"type=volume,src={record['linux_cargo_volume']},dst=/cargo-home,volume-nocopy",
         *[v for k, value in env.items() for v in ("-e", k + "=" + value)],
@@ -224,18 +224,18 @@ def inputs(record):
     root = Path(record["worktree"])
     selected = [
         ".cargo",
-        "core/Cargo.toml",
-        "core/Cargo.lock",
+        "Cargo.toml",
+        "Cargo.lock",
         "core/crates",
-        "core/vendor",
-        "api/agent/sdk",
+        "engine/vendor",
+        "engine/crates",
+        "api/agent",
         "api/backend",
         "api/runtime",
-        "api/binding",
         "api/package.json",
-        "api/agent/cli/src",
-        "api/agent/cli/test",
-        "api/agent/cli/package.json",
+        "api/cli/src",
+        "api/cli/test",
+        "api/cli/package.json",
     ]
     result = {}
     for relative in selected:

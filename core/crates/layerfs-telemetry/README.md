@@ -162,9 +162,9 @@ error. Flush is not crash durability.
 ## Examples
 
 ```sh
-cargo run --manifest-path core/Cargo.toml --example timer_nested
-cargo run --manifest-path core/Cargo.toml --example timer_composition
-cargo run --manifest-path core/Cargo.toml --example timer_composition -- /tmp/run-1/timing.json
+cargo run --manifest-path Cargo.toml --example timer_nested
+cargo run --manifest-path Cargo.toml --example timer_composition
+cargo run --manifest-path Cargo.toml --example timer_composition -- /tmp/run-1/timing.json
 ```
 
 `timer_nested` shows injected parent/child scopes, an error that stops one branch
@@ -195,10 +195,11 @@ it.
 ## Checks
 
 ```sh
-python3 core/tools/check_product_boundary.py
-cargo fmt --manifest-path core/Cargo.toml --all --check
-cargo test --manifest-path core/Cargo.toml --workspace --locked
-cargo clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+python3 tools/check_product_boundary.py
+cargo fmt --manifest-path Cargo.toml --all --check
+cargo +1.85.1 test --manifest-path Cargo.toml --workspace --locked --no-run
+timeout 120 cargo +1.85.1 test --manifest-path Cargo.toml --workspace --locked
+cargo clippy --manifest-path Cargo.toml --workspace --locked --all-targets -- -D warnings
 ```
 
 `tests/timer_json.rs` validates emitted JSON with Python's standard library

@@ -6,7 +6,7 @@
 > gate. Owner direction of 2026-10-12 governs the implementation and measurements.
 >
 > Relocation 2026-10-15 ([#327](https://github.com/Ephemeral-AI-Lab/layerfs/issues/327)):
-> the crate is renamed `layerfs-sdk` -> `layerfs-api` at `core/crates/layerfs-api`
+> the crate is renamed `layerfs-sdk` -> `layerfs-api` at `engine/crates/layerfs-api`
 > and regrouped as `project/`, `branch/` and `sandbox/`; links below follow the move.
 > The layout table stays pinned to `ce4e214d9`. See `core/docs/issues/327/SPEC.md`.
 >
@@ -55,7 +55,9 @@ correlation, retries a failure or silently cleans up an uncertain resource.
 
 ## Project
 
-[Init](../../core/crates/layerfs-api/src/project/init.rs) imports the complete native
+[Init](../../engine/crates/layerfs-project/src/store/init.rs) lives in
+`layerfs-project::store`, re-exported by `layerfs-api`. The Node binding calls
+that same Project implementation directly. Init imports the complete native
 tree, including Git metadata, ignored files, dependencies, symlinks, caches and
 output. It retains the original eleven-field InitRequest and caller timer: source,
 Store configuration, daemon locator, storage policy, catalog authority, stack and
@@ -65,12 +67,12 @@ Every permitted new Store explicitly selects Disposable/WAL/synchronous=OFF.
 Init publishes its original initial Layer and Branch, seals the sole Store, and
 returns a closed file and the actual original acknowledgements.
 
-[Fork](../../core/crates/layerfs-api/src/branch/fork.rs) preserves the original
+[Fork](../../engine/crates/layerfs-api/src/branch/fork.rs) preserves the original
 explicit ForkRequest and its Layer or Commit source. It does not invent a latest
 head lookup or a hidden refresh. The history trunk is a LayerStack, not a Branch;
 the first working Branch is named main today.
 
-[Branches](../../core/crates/layerfs-api/src/project/list_branches.rs) reads one page of a
+[Branches](../../engine/crates/layerfs-api/src/project/list_branches.rs) reads one page of a
 selected stack in name order, with id, name, base Layer and head Commit. It uses
 one authorized additive Bridge request (tag 14), one reply (tag 17) and one daemon
 dispatch arm to the existing HistoryCatalog::branches port. The existing control
@@ -78,14 +80,14 @@ window is 32 records. The existing authenticated History cursor covers further
 pages; the caller advances it explicitly. The SDK checks stack identity, result
 size, ordered names and continuation shape without a second request.
 
-[Commits](../../core/crates/layerfs-api/src/branch/list_commits.rs) renames the public
+[Commits](../../engine/crates/layerfs-api/src/branch/list_commits.rs) renames the public
 history method. It sends the unchanged History request and returns one anchored,
 bounded ancestry page, newest first. Cursor authentication, captured-head scope,
 publication semantics and original control bytes are unchanged.
 
 ## Sandbox
 
-[Create](../../core/crates/layerfs-api/src/sandbox/create.rs) uses the original
+[Create](../../engine/crates/layerfs-api/src/sandbox/create.rs) uses the original
 explicit deployment/image/volume, private configuration, executable, authentication
 keys and startup wait. For a fresh Store it creates, uploads, starts, authenticates,
 sends the original initial Hello, installs the sealed Project once, then waits on
@@ -96,7 +98,7 @@ startup and sends no second install. Its manifest must match the supplied Projec
 only the populated daemon SQLite version may differ from the host Init manifest.
 A mismatched selection fails at Validate before deployment or control effects.
 
-[Close](../../core/crates/layerfs-api/src/sandbox/close.rs) consumes the owner. It
+[Close](../../engine/crates/layerfs-api/src/sandbox/close.rs) consumes the owner. It
 attempts the original one-second stop once, then deletes once after acknowledged
 stop, with force=false and v=false. Stop failure does not attempt delete. Either
 failure retains exact runtime, control, original inputs, handshake, observation
@@ -108,14 +110,14 @@ or command/descriptor drain. The caller explicitly unmounts Workspaces first.
 
 ## Workspace
 
-[Mount](../../core/crates/layerfs-api/src/sandbox/mount.rs) takes no Project argument;
+[Mount](../../engine/crates/layerfs-api/src/sandbox/mount.rs) takes no Project argument;
 the Sandbox has already selected its Store. It sends the original bind and attach
 requests once each. The first acknowledgement carries the selected Branch/root;
 the second carries the mounted directory and native negotiation receipt. A failed
 attach retains the bound token in MountFailure. No bind, attach, unmount or rollback
 is guessed from a lost reply or attempted again automatically.
 
-[Exec](../../core/crates/layerfs-api/src/sandbox/exec.rs) delegates ordinary existing
+[Exec](../../engine/crates/layerfs-api/src/sandbox/exec.rs) delegates ordinary existing
 Sandbox execution with the mount as working directory and the deployment's admitted
 identity. It returns the original runtime owner for Start, streams, exit status and
 explicit cancellation. It sends no daemon control request, registers no filesystem
@@ -123,12 +125,12 @@ Exec, applies no ordinary command deadline, and performs no Commit or unmount.
 Any other permitted process can use the same mount through ordinary filesystem
 calls; the filesystem daemon supervises no commands.
 
-[Commit](../../core/crates/layerfs-api/src/sandbox/commit.rs) captures the shared
+[Commit](../../engine/crates/layerfs-api/src/sandbox/commit.rs) captures the shared
 published frontier and returns Committed or UpToDate. It does not filter mutations
-by launch route or command completion. [Status](../../core/crates/layerfs-api/src/sandbox/status.rs)
+by launch route or command completion. [Status](../../engine/crates/layerfs-api/src/sandbox/status.rs)
 retains the existing maintained-state scope and never resolves an unknown operation.
 
-[Unmount](../../core/crates/layerfs-api/src/sandbox/unmount.rs) folds normal and
+[Unmount](../../engine/crates/layerfs-api/src/sandbox/unmount.rs) folds normal and
 forced terminal operations into `unmount(token, force)`. Normal success returns
 None; forced success returns Some(ForcedOutcome) with the original dispositions.
 Normal Busy keeps the mount usable. Public force does not relinquish unknown
@@ -193,7 +195,7 @@ src/                                             [1444]
     unmount.rs                                      33
 ```
 
-SDK tests live under core/crates/layerfs-api/tests; affected daemon tests and
+SDK tests live under engine/crates/layerfs-api/tests; affected daemon tests and
 benchmark runtime tests remain in their owning external test directories.
 
 ## Decisions and deferred work

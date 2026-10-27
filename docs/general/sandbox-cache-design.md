@@ -84,31 +84,31 @@ one daemon (complete process/bootstrap integration still in progress)
 
 The relevant production boundaries are:
 
-- [`workspace.rs`](../../core/crates/layerfs-workspace/src/workspace/state.rs):
+- [`workspace.rs`](../../engine/crates/layerfs-workspace/src/workspace/state.rs):
   `Workspace::open` accepts `Arc<CanonicalClient>`, a filesystem root, allocation
   scope and incarnation, then binds a separate overlay route.
-- [`base.rs`](../../core/crates/layerfs-workspace/src/base/view.rs): `BaseView` retains
+- [`base.rs`](../../engine/crates/layerfs-workspace/src/base/view.rs): `BaseView` retains
   that root and shared client; lookup, listing and file reads use public
   cluster-one content APIs. Root binding reads the root without enumerating the
   whole namespace or materializing all file payloads.
-- [`client.rs`](../../core/crates/layerfs-workspace/src/base/client.rs):
+- [`client.rs`](../../engine/crates/layerfs-workspace/src/base/client.rs):
   `CanonicalClient` checks demand cardinality, object identities and processing
   windows, and releases the cache lock before upstream acquisition.
-- [`cache.rs`](../../core/crates/layerfs-workspace/src/base/cache.rs): bounded standard
+- [`cache.rs`](../../engine/crates/layerfs-workspace/src/base/cache.rs): bounded standard
   maps store immutable bytes and recency. Large entries can bypass retention.
-- [`owner.rs`](../../core/crates/layerfs-daemon/src/overlay/owner.rs) and
-  [`credits.rs`](../../core/crates/layerfs-daemon/src/overlay/credits.rs): short SQL service
+- [`owner.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/c6df039e63187da1f407843540c37477c9e25beb/core/crates/layerfs-daemon/src/owner.rs) and
+  [`credits.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/c6df039e63187da1f407843540c37477c9e25beb/core/crates/layerfs-daemon/src/credits.rs): short SQL service
   and aggregate admission credits, including caller-retained result ownership.
-- [`db.rs`](../../core/crates/layerfs-overlay/src/database/connection.rs),
-  [`profile.rs`](../../core/crates/layerfs-overlay/src/database/profile.rs) and
-  [`schema.sql`](../../core/crates/layerfs-overlay/sql/schema.sql): one initialized
+- [`db.rs`](../../engine/crates/layerfs-overlay/src/database/connection.rs),
+  [`profile.rs`](../../engine/crates/layerfs-overlay/src/database/profile.rs) and
+  [`schema.sql`](../../engine/crates/layerfs-overlay/sql/schema.sql): one initialized
   disposable connection, read-back settings and Workspace-prefixed relations.
 
 The [base access guide](../../core/docs/architecture/20-workspace-base.md),
 [daemon owner guide](../../core/docs/architecture/21-daemon-owner.md) and
 [Store length-fact guide](../../core/docs/architecture/24-file-lengths.md)
 describe the implemented seams. Source directory presence alone does not establish
-an active mounted product; [the core manifest](../../core/Cargo.toml) identifies
+an active mounted product; [the core manifest](../../Cargo.toml) identifies
 active members.
 
 ## 3. Different branches safely reuse identical objects

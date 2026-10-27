@@ -195,7 +195,7 @@ server.listen(config.port, config.host, () => {
   console.error(`layerfs worker: listening on ${config.host}:${port}, build ${manifest.build_id}`);
   if (!stdin) return;
   // the caller checks its own @layerfs/agent against the sealed one
-  const sdk = Object.fromEntries(Object.entries(manifest.files).filter(([path]) => path.startsWith("api/agent/sdk/src/")));
+  const sdk = Object.fromEntries(Object.entries(manifest.files).filter(([path]) => path.startsWith("api/agent/src/")));
   process.stdout.write(frame({ port, build: manifest.build_id, sdk }));
   process.stdin.on("end", () => shutdown().catch((error) => console.error(error)));
   process.stdin.resume();

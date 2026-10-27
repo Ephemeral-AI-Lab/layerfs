@@ -9,7 +9,7 @@ schema lines to its stderr, so to `docker logs`:
 
 This tool reads such a stream (other lines are skipped), groups the records of
 one call by daemon, scope and call, names every section and value from the
-source order in core/crates/layerfs-daemon/src/application/diagnostics/
+source order in engine/crates/layerfs-daemon/src/application/diagnostics/
 (diagnostics.rs, schema.rs, kernel.rs, resources.rs), and prints one JSON object
 per call. With --trace it adds the SDK trace line id whose `scope` matches, so
 each traced SDK call links to its daemon records.

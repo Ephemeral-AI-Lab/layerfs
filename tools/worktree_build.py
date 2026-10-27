@@ -34,7 +34,7 @@ def prepare(args):
                 home.mkdir(mode=0o700, exist_ok=True)
                 if args.dependency_seed:
                     copy_dependencies(args.dependency_seed, home)
-                command = ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path", "core/Cargo.toml", "--locked"]
+                command = ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path", "Cargo.toml", "--locked"]
                 execute(command, record["worktree"], environment(record, "macos"), log=receipt / "output.log")
             else:
                 for key in ("linux_cargo_volume", "linux_target_volume"):
@@ -55,7 +55,7 @@ def prepare(args):
                     execute(command, record["worktree"], log=receipt / "seed.log")
                 command = docker_build(
                     record,
-                    ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path", "core/Cargo.toml", "--locked"],
+                    ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path", "Cargo.toml", "--locked"],
                     network="default",
                 )
                 execute(command, record["worktree"], log=receipt / "output.log")
@@ -87,7 +87,7 @@ def cargo_arguments(arguments):
         "+" + TOOLCHAIN,
         arguments[0],
         "--manifest-path",
-        "core/Cargo.toml",
+        "Cargo.toml",
         "--locked",
         "--offline",
         *arguments[1:],
@@ -135,27 +135,27 @@ def cargo(args):
 
 def copy_sdk(root, bundle):
     """The JavaScript packages and the `layerfs` command, in the repository's
-    own layout (#428): api/package.json, api/agent/sdk (@layerfs/agent),
-    api/backend, api/runtime and api/agent/cli. A bundle holds no symlink, so
+    own layout: api/package.json, api/agent (@layerfs/agent),
+    api/backend, api/runtime and api/cli. A bundle holds no symlink, so
     each package resolves by name through a re-export shim under
     api/node_modules/@layerfs/<name> that imports its one real copy."""
     destination = bundle / "api"
     destination.mkdir(parents=True)
     ignore = shutil.ignore_patterns("node_modules", "__pycache__", "target")
-    packages = [destination / folder for folder in ("agent/sdk", "backend", "runtime")]
+    packages = [destination / folder for folder in ("agent", "backend", "runtime")]
     for package in packages:
         shutil.copytree(root / "api" / package.relative_to(destination), package, ignore=ignore)
     shutil.copy2(root / "api/package.json", destination / "package.json")
     for package in sorted(packages):
         shim(destination / "node_modules", package)
-    if (root / "api/agent/cli/package.json").is_file():
-        cli = destination / "agent/cli"
+    if (root / "api/cli/package.json").is_file():
+        cli = destination / "cli"
         cli.mkdir()
         for folder in ("src", "test"):
-            if (root / "api/agent/cli" / folder).is_dir():
-                shutil.copytree(root / "api/agent/cli" / folder, cli / folder, ignore=ignore)
-        shutil.copy2(root / "api/agent/cli/package.json", cli / "package.json")
-        shim(cli / "node_modules", destination / "agent/sdk")
+            if (root / "api/cli" / folder).is_dir():
+                shutil.copytree(root / "api/cli" / folder, cli / folder, ignore=ignore)
+        shutil.copy2(root / "api/cli/package.json", cli / "package.json")
+        shim(cli / "node_modules", destination / "agent")
 
 
 def shim(node_modules, package):
@@ -212,7 +212,7 @@ def build(args):
             "+" + TOOLCHAIN,
             "build",
             "--manifest-path",
-            "core/Cargo.toml",
+            "Cargo.toml",
             "--locked",
             "--offline",
             "-p",
@@ -229,8 +229,8 @@ def build(args):
                 closed_volumes([record["linux_cargo_volume"], record["linux_target_volume"]])
                 execute(docker_build(record, command), record["worktree"], log=receipt / "output.log")
                 script = (
-                    'set -eu; cp "/work/core/target/$1/layerfs-daemon" /export/layerfs-daemon; '
-                    'cp "/work/core/target/$1/liblayerfs_node.so" /export/layerfs.node; '
+                    'set -eu; cp "/work/target/$1/layerfs-daemon" /export/layerfs-daemon; '
+                    'cp "/work/target/$1/liblayerfs_node.so" /export/layerfs.node; '
                     'chown "$2:$3" /export/layerfs-daemon /export/layerfs.node'
                 )
                 export = docker_build(
@@ -280,7 +280,7 @@ def seed(args):
         raise Refused("Seed source and destination must be different worktrees")
     if record["images"] != source["images"]:
         raise Refused("Seed images differ")
-    for relative in ("core/Cargo.lock", ".cargo/config.toml"):
+    for relative in ("Cargo.lock", ".cargo/config.toml"):
         if digest(Path(record["worktree"]) / relative) != digest(Path(source["worktree"]) / relative):
             raise Refused("Seed lockfile or build configuration differs")
     with lease(record, args.platform), lease(source, args.platform):
@@ -290,8 +290,8 @@ def seed(args):
                 volume(owner, "linux_target_volume")
             closed_volumes([record["linux_target_volume"], source["linux_target_volume"]])
             script = (
-                'set -eu; test ! -e "/work/core/target/$1"; cp -a "/seed/$1" "/work/core/target/$1"; '
-                'for f in .rustc_info.json CACHEDIR.TAG; do if [ -f "/seed/$f" ]; then cp -a "/seed/$f" /work/core/target/; fi; done'
+                'set -eu; test ! -e "/work/target/$1"; cp -a "/seed/$1" "/work/target/$1"; '
+                'for f in .rustc_info.json CACHEDIR.TAG; do if [ -f "/seed/$f" ]; then cp -a "/seed/$f" /work/target/; fi; done'
             )
             command = docker_build(
                 record,
