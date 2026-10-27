@@ -31,6 +31,27 @@ pub fn windows_handle_identity(file: &File) -> io::Result<WindowsIdentity> {
 
 /// The identity of `path`'s entry, read as attributes only: no data access,
 /// no link traversal; directories need the backup-semantics flag.
+/// The entry's on-disk allocation in bytes (compression/sparse aware),
+/// read through FileStandardInfo on the open handle.
+pub fn windows_allocation_size(file: &File) -> io::Result<u64> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandleEx, FILE_STANDARD_INFO, FileStandardInfo,
+    };
+    let mut info = FILE_STANDARD_INFO::default();
+    let ok = unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FileStandardInfo,
+            &mut info as *mut FILE_STANDARD_INFO as *mut core::ffi::c_void,
+            std::mem::size_of::<FILE_STANDARD_INFO>() as u32,
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(info.AllocationSize.max(0) as u64)
+}
+
 pub fn windows_path_identity(path: &Path) -> io::Result<WindowsIdentity> {
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::Storage::FileSystem::{

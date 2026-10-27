@@ -100,14 +100,14 @@ impl Allocation {
         if identity.links != 1 {
             return Err(OverlayError::Invalid("allocation file identity"));
         }
-        let len = file.metadata()?.len();
+        let allocated = super::windows_identity::windows_allocation_size(&file)?;
         Ok(Self {
             file,
             device: identity.device,
             inode: identity.index,
             path: path.to_owned(),
             work: Cell::new(AllocationWork::default()),
-            high_water: Cell::new(len),
+            high_water: Cell::new(allocated),
         })
     }
     #[cfg(target_os = "windows")]
@@ -126,9 +126,10 @@ impl Allocation {
         {
             return Err(OverlayError::Invalid("allocation file identity"));
         }
-        // Windows exposes no allocated-blocks count; the logical length
-        // stands in for it (the disposable overlay never preallocates).
-        let allocated = meta.len();
+        // The allocated footprint comes from FileStandardInfo on the same
+        // retained handle (compression/sparse aware); the disposable overlay
+        // never preallocates, so this tracks the tail's actual clusters.
+        let allocated = super::windows_identity::windows_allocation_size(&self.file)?;
         self.high_water.set(self.high_water.get().max(allocated));
         Ok(AllocationState {
             logical_bytes: meta.len(),
