@@ -120,9 +120,12 @@ sessions); the product opens its Store within one login session today, and
 cross-session coordination would need the `Global\` namespace with a
 privilege evaluation (K3 review F2); Windows Init carries non-UTF-8 names
 lossily, synthesizes the mode from the read-only attribute, has no hard-link
-membership and no backing-inside-source alias check; overlay allocation is the
-logical length; last-owner overlay-file deletion keeps its Linux identity
-check (not exercised here — the Store route holds no Workspace mounts).
+membership, and its backing-inside-source check resolves the placement's
+spelling (a subst drive or unresolvable alias is not recognised); overlay
+allocation is the logical length. Last-owner overlay-file deletion applies
+the same audited identity on Windows as on Linux (volume serial + file
+index, sole link, checked on both the path's entry and the retained
+handle).
 
 Proof receipts: the cross-process lane verifier
 (`layerfs-persistence` `tests/windows_store_native.rs`, two re-exec'd child
