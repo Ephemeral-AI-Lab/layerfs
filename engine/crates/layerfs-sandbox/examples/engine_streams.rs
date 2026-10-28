@@ -34,7 +34,7 @@ fn main() {
     let container = ContainerId::parse(&args.next().expect("full owned container ID")).unwrap();
     assert!(args.next().is_none());
     let docker = Docker::new(socket, Duration::from_secs(3)).unwrap();
-    let security=docker.create_exec(container,ExecRequest{identity:CommandIdentity{uid:501,gid:20},arguments:vec!["/bin/bash".into(),"-c".into(),"id -u; id -g; awk '/^(Groups|CapEff|CapAmb|NoNewPrivs):/{print}' /proc/self/status".into()],environment:vec![],directory:"/tmp".into(),stdin:false}).unwrap();
+    let security=docker.create_exec(container,ExecRequest{identity:CommandIdentity{uid:501,gid:20},arguments:vec!["/bin/bash".into(),"-c".into(),"id -u; id -g; awk '/^(Groups|CapEff|CapAmb|NoNewPrivs):/{print}' /proc/self/status".into()],environment:vec![],directory:"/tmp".into(),stdin:false,root_launcher:false}).unwrap();
     let (_, output, handle) = security.start().unwrap().into_parts().unwrap();
     let mut identity = Vec::new();
     output.copy_to(&mut identity, &mut io::sink()).unwrap();
@@ -56,6 +56,7 @@ fn main() {
         environment: vec![],
         directory: "/tmp".into(),
         stdin: true,
+        root_launcher: false,
     };
     let created = docker.create_exec(container, request).unwrap();
     let (cid, eid) = created.identity();

@@ -47,6 +47,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             idle_exit_s: 0,
         },
         existing_store: None,
+        private_mount_ns: false,
     }
 }
 
@@ -61,7 +62,18 @@ impl Fixture {
     fn new(tail: Vec<Vec<u8>>) -> Self {
         Self::new_for(None, tail)
     }
+    /// A Sandbox whose daemon serves from a private mount namespace.
+    fn new_private(tail: Vec<Vec<u8>>) -> Self {
+        Self::build(None, tail, true)
+    }
     fn new_for(project: Option<&layerfs_api::SealedProject>, tail: Vec<Vec<u8>>) -> Self {
+        Self::build(project, tail, false)
+    }
+    fn build(
+        project: Option<&layerfs_api::SealedProject>,
+        tail: Vec<Vec<u8>>,
+        private_mount_ns: bool,
+    ) -> Self {
         let existing = project.is_some();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -132,6 +144,7 @@ impl Fixture {
         ));
         fs::write(&binary, b"original executable input").unwrap();
         let mut deployment_setup = setup([32; 32], duplex::public_key(&[31; 32]).unwrap());
+        deployment_setup.private_mount_ns = private_mount_ns;
         if let Some(project) = project {
             let mut manifest = project.manifest.clone();
             manifest.daemon_sqlite = Some("3.51.0".into());
@@ -332,6 +345,48 @@ fn workspace_exec_returns_original_runtime_owner_at_the_mount_with_no_daemon_reg
     assert!(!calls
         .iter()
         .any(|call| call.windows(12).any(|bytes| bytes == b"/exec/start ")));
+}
+#[test]
+fn workspace_exec_wraps_the_command_for_a_private_mount_namespace_sandbox() {
+    const EID: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    let mut fixture = Fixture::new_private(vec![
+        fixed(201, format!("{{\"Id\":\"{EID}\"}}").as_bytes()),
+        fixed(204, b""),
+        fixed(204, b""),
+    ]);
+    let created = WorkspaceApi::exec(
+        fixture.owner.as_ref().unwrap(),
+        &mounted(),
+        vec!["/bin/pwd".into()],
+        vec![],
+        false,
+    )
+    .unwrap();
+    assert_eq!(created.request().directory, "/workspaces/selected-mount");
+    assert_eq!(
+        created.request().arguments,
+        [
+            "/usr/local/bin/layerfs-daemon",
+            "ns-exec",
+            "--socket",
+            "/layerfs-local/ns-exec.sock",
+            "--directory",
+            "/workspaces/selected-mount",
+            "--uid",
+            "501",
+            "--gid",
+            "20",
+            "--",
+            "/bin/pwd",
+        ]
+    );
+    // Only root holds the capability the helper's setns needs.
+    assert!(created.request().root_launcher);
+    fixture.api.close(fixture.owner.take().unwrap()).unwrap();
+    let calls = fixture.calls();
+    let request = std::str::from_utf8(&calls[6]).unwrap();
+    assert!(request.starts_with(&format!("POST /v1.54/containers/{CID}/exec ")));
+    assert!(request.contains(r#""User":"0:0""#), "request: {request}");
 }
 #[test]
 fn workspace_exec_failure_keeps_exact_original_request_and_container() {

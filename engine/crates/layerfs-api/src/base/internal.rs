@@ -141,6 +141,11 @@ pub fn parts(
 
 /// The same ordinary launcher for external host commands and disjoint concurrent proof borrows.
 #[cfg(unix)]
+pub use crate::sandbox::exec::{exec_arguments, MountNamespace};
+
+/// `namespace` names a daemon that serves from a private mount namespace: the
+/// command then runs through that daemon's `ns-exec` helper. `None` keeps the
+/// command as it is.
 pub fn exec(
     sandbox: &layerfs_sandbox::backend::docker::Sandbox,
     identity: layerfs_sandbox::CommandIdentity,
@@ -148,9 +153,18 @@ pub fn exec(
     environment: Vec<String>,
     directory: String,
     stdin: bool,
+    namespace: Option<MountNamespace<'_>>,
 ) -> Result<
     layerfs_sandbox::backend::docker::ExecCreated,
     Box<layerfs_sandbox::backend::docker::ExecCreateFailure>,
 > {
-    crate::sandbox::exec::launch(sandbox, identity, arguments, environment, directory, stdin)
+    crate::sandbox::exec::launch(
+        sandbox,
+        identity,
+        arguments,
+        environment,
+        directory,
+        stdin,
+        namespace,
+    )
 }

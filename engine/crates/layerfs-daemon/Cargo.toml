@@ -19,7 +19,7 @@ layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 # Concrete Store opening stays in application bootstrap, outside store/.
 layerfs-persistence = { path = "../layerfs-persistence" }
 
-nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+nix = { version = "=0.31.3", features = ["fs", "user", "process", "sched", "socket"] }
 
 [dev-dependencies]
 blake3 = { version = "=1.8.5", default-features = false }

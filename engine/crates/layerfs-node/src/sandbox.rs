@@ -54,7 +54,7 @@ pub(crate) const WORKSPACES: u32 = 16;
 /// for this process and the rest for others (#352 F-017).
 pub(crate) const DAEMON_CONNECTIONS: u16 = 8;
 
-fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
+fn setup(private: [u8; 32], peer: [u8; 32], private_mount_ns: bool) -> DaemonSetup {
     DaemonSetup {
         listen: format!("0.0.0.0:{PORT}"),
         private_key: private,
@@ -80,11 +80,22 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             idle_exit_s: IDLE_EXIT_S,
         },
         existing_store: None,
+        private_mount_ns,
     }
 }
 
 /// A container name prefix when the deployment sets none.
 const PREFIX: &str = "layerfs-";
+
+/// Opt-in for the prototype private mount namespace (#3/#499): a truthy
+/// `deploy.privateMountNs`, else `LAYERFS_PRIVATE_MOUNT_NS=1`. Off by default,
+/// so an ordinary Sandbox keeps its mounts in the namespace exec enters.
+fn private_mount_ns(args: &SdkValue) -> bool {
+    args.get("deploy")
+        .is_some_and(|deploy| deploy.get_bool("privateMountNs"))
+        || std::env::var_os("LAYERFS_PRIVATE_MOUNT_NS")
+            .is_some_and(|value| value.to_str() == Some("1"))
+}
 
 /// The container labels of Sandbox `id` of `project`: what it is, whose,
 /// and which. Saved in its record, so a reopen expects the same.
@@ -187,7 +198,13 @@ fn start_claimed(
     let name = text(args, "project")?;
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
-    let mut daemon_setup = setup(daemon.private, controller.public);
+    let mut daemon_setup = setup(daemon.private, controller.public, private_mount_ns(args));
+    let ns_socket = daemon_setup
+        .mount_ns_socket()
+        .map(|path| path.to_string_lossy().into_owned());
+    let ns_pid_file = daemon_setup
+        .mount_ns_pid_file()
+        .map(|path| path.to_string_lossy().into_owned());
     let mut existing = project.manifest.clone();
     existing.daemon_sqlite = installed.daemon_sqlite;
     daemon_setup.existing_store = Some(existing);
@@ -245,6 +262,9 @@ fn start_claimed(
         directory: saved_directory.to_owned(),
         runtime,
         identity,
+        ns_socket,
+        ns_pid_file,
+        ns_upgrade_required: false,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),

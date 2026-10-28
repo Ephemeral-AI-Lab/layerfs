@@ -5,7 +5,8 @@ use crate::{
     wire::{Reader, Writer},
 };
 use std::fmt;
-const MAGIC: &[u8] = b"LFSD\x05";
+use std::path::{Path, PathBuf};
+const MAGIC: &[u8] = b"LFSD\x06";
 /// Explicit daemon startup resources; these are windows/admission, not file caps.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DaemonLimits {
@@ -51,6 +52,12 @@ pub struct DaemonSetup {
     /// None selects the original one-time installer. Some selects explicit existing
     /// Store open using retained authority; never selected after an install error.
     pub existing_store: Option<StoreManifest>,
+    /// Start in a mount namespace of this process's own (prototype for #3/#499),
+    /// serve its descriptor on [`DaemonSetup::mount_ns_socket`] and write the
+    /// diagnostic pid file [`DaemonSetup::mount_ns_pid_file`] names, so a
+    /// command reaches the Workspace mounts only through the daemon's
+    /// `ns-exec` helper. Off by default; the flag is opt-in.
+    pub private_mount_ns: bool,
 }
 impl DaemonSetup {
     /// Encodes one bounded private config. No operation/flow byte limit is implied.
@@ -77,6 +84,7 @@ impl DaemonSetup {
         if let Some(value) = &self.existing_store {
             out.blob(&value.encode()?)?;
         }
+        out.byte(u8::from(self.private_mount_ns))?;
         Ok(out.0)
     }
     /// Decodes exactly one config without fallback or profile selection.
@@ -104,6 +112,11 @@ impl DaemonSetup {
             1 => Some(StoreManifest::decode(input.blob(crate::wire::LIMIT)?)?),
             _ => return Err(ControlError("daemon config boolean")),
         };
+        let private_mount_ns = match input.byte()? {
+            0 => false,
+            1 => true,
+            _ => return Err(ControlError("daemon config boolean")),
+        };
         input.finish()?;
         let value = Self {
             listen,
@@ -116,6 +129,7 @@ impl DaemonSetup {
             command_gid,
             limits,
             existing_store,
+            private_mount_ns,
         };
         value.check()?;
         Ok(value)
@@ -154,7 +168,30 @@ impl DaemonSetup {
                 return Err(ControlError("explicit existing Disposable Store"));
             }
         }
+        if self.private_mount_ns && self.mount_ns_socket().is_none() {
+            return Err(ControlError("private mount namespace socket path"));
+        }
         Ok(())
+    }
+    /// The diagnostic pid file this daemon writes when
+    /// [`Self::private_mount_ns`] is on: `daemon.pid` in the local directory
+    /// above the Overlay's own directory (in a Sandbox that is
+    /// `/layerfs-local`). It is evidence, not an exec route. `None` when the
+    /// flag is off or the Overlay path has no such local directory.
+    pub fn mount_ns_pid_file(&self) -> Option<PathBuf> {
+        self.local_path("daemon.pid")
+    }
+    /// The socket this daemon serves its mount-namespace descriptor on when
+    /// [`Self::private_mount_ns`] is on, beside the pid file.
+    pub fn mount_ns_socket(&self) -> Option<PathBuf> {
+        self.local_path("ns-exec.sock")
+    }
+    fn local_path(&self, name: &str) -> Option<PathBuf> {
+        if !self.private_mount_ns {
+            return None;
+        }
+        let home = Path::new(&self.overlay).parent()?.parent()?;
+        Some(home.join(name))
     }
 }
 impl fmt::Debug for DaemonSetup {
@@ -170,6 +207,7 @@ impl fmt::Debug for DaemonSetup {
             .field("command_gid", &self.command_gid)
             .field("limits", &self.limits)
             .field("existing_store", &self.existing_store)
+            .field("private_mount_ns", &self.private_mount_ns)
             .finish()
     }
 }

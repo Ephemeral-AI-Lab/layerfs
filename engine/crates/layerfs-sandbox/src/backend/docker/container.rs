@@ -28,7 +28,9 @@ impl SandboxRequest {
             w.write_all(b":")?;
             quoted(w, value)?;
         }
-        w.write_all(b"},\"User\":\"0:0\",\"Entrypoint\":[\"/usr/local/bin/layerfs-daemon\"],\"Cmd\":[\"--config\",\"/layerfs-local/config/daemon.setup\"],\"Tty\":false,\"ExposedPorts\":{")?;
+        w.write_all(b"},\"User\":\"0:0\",\"Entrypoint\":[")?;
+        quoted(w, crate::DAEMON_ENTRY)?;
+        w.write_all(b"],\"Cmd\":[\"--config\",\"/layerfs-local/config/daemon.setup\"],\"Tty\":false,\"ExposedPorts\":{")?;
         quoted(w, &format!("{}/tcp", self.port))?;
         w.write_all(b":{}},\"HostConfig\":{\"Init\":true,\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\",\"Config\":{\"max-size\":\"10m\",\"max-file\":\"2\"}},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\",")?;
         quoted(w, SECCOMP)?;
