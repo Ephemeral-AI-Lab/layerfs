@@ -140,6 +140,27 @@ A later normal or forced unmount returns the retained stage, detail and abort
 facts unchanged. An unavailable control cannot be forced, and a consumed
 control is never written again. Successful completion still replies `Unmounted`.
 
+A traced normal unmount reports the path it took as the `unmount` telemetry
+section of its reply, whether it completed or stopped: `stage` (`Join`,
+`Abort`, `Revoke` or `Close`), `abort` (`Written`, `Short` or `Failed`), the
+short write's `bytes` or the failed write's `errno`, `detached`,
+`loops_exited`, `loops_joined`, `active`, `retained`, and `waited_ms` from the
+stalled drain to the end of the abort path. The same fields form one
+`LAYERFS_DAEMON_UNMOUNT_ABORT` stderr line, written when that path ends (traced
+or not); a `Revoke` or `Close` stop that follows it is reported by the retained
+entry's section, not by a second line. Both are observations of a normal
+unmount only: a forced teardown already reports its `ForcedFacts` in the reply,
+and neither envelope changes. The keys are described in
+[the normal unmount](76-native-mount-session.md#observing-the-abort-path).
+Aggregating them in a Host view is a
+[dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs) follow-up,
+outside this repository.
+
+A retained `Revoke` or `Close` stop reports the same section through the
+traced reply that reports its custody. Both forms are staged in-process
+through the entry's own owner and are covered beside the completed path in
+`layerfs-api/tests/unmount_observability.rs`.
+
 `ForceUnmount` remains for a stalled custody that is still forceable (one
 whose abort was not attempted) and for a live connection. It takes the session back and makes the
 same sequence with two differences. Step 1 is `NativeSession::abort_detached`,

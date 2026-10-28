@@ -189,6 +189,7 @@ impl Service {
             commit: None,
             observation_failure: None,
             kernel: None,
+            abort: None,
         };
         let installed = self.entries.lock().map(|mut entries| {
             entries.insert(

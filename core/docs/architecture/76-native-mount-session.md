@@ -211,6 +211,44 @@ terminal service fence before the second drain. A failed or short abort reports
 `Abort` with its original errno or byte count; later drain, Revoke and Close
 failures retain the recorded abort effects in `TeardownCustody.forced`.
 
+### Observing the abort path
+
+A traced Unmount that takes that path reports it beside the ordinary reply, in
+the daemon's `unmount` telemetry section of the existing `Observed` envelope
+(issue #2). The reply itself is unchanged: success still answers `Unmounted`,
+and a stop keeps its `TeardownCustody`. The section's stable keys are:
+
+| Field | Meaning |
+| --- | --- |
+| `stage` | The boundary the unmount was at: `Join` when the stalled drain was ended by the abort, `Abort` when the one write was short or failed, and `Revoke` or `Close` when a later step stopped with the abort recorded |
+| `abort` | The connection's single abort write: `Written`, `Short` or `Failed` |
+| `bytes` | The count of a `Short` write only |
+| `errno` | The original `Failed` write errno only |
+| `detached` | Kernel detach was already known when the abort was made |
+| `loops_exited`, `loops_joined` | Receive loops exited and joined, as observed at that stop or completion |
+| `active`, `retained` | Request owner counts at the same observation |
+| `waited_ms` | Milliseconds from the start of the connection drain to the end of the abort path |
+
+An unmount that never stalled carries no such section, and no normal or forced
+teardown carries one otherwise. The same fields are written once to stderr as
+a `LAYERFS_DAEMON_UNMOUNT_ABORT <field>=<value>…` line when the abort path
+ends, traced or not; it is one diagnostic line per abort, never per-request
+logging. That line's `stage` is therefore the abort path's own (`Join`, or
+`Abort` for a short or failed write), while a later `Revoke` or `Close` stop
+appears in the retained entry's section for the reply that reports it.
+Aggregating these facts in a Host view belongs to the
+[dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs) follow-up, outside
+this repository.
+
+A retained Revoke or Close stop keeps that observation in its entry, so the
+traced reply that later reports the stop's custody carries the same section at
+the later boundary. `layerfs-api/tests/unmount_observability.rs` covers both
+forms: the completed abort path through the actual daemon executable, and the
+retained stop through the in-process service, where the entry's own owner can
+be poisoned or closed. That target mounts a Workspace, so `tools/ci_tests.py`
+lists it with the SDK mount targets: the fast lane leaves it out and the
+nightly mount lane runs it in its own container with `/dev/fuse`.
+
 ## Forced unmount
 
 [`ForceUnmount`](80-forced-teardown.md) takes the session out of the entry the
