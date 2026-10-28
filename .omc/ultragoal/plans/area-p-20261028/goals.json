@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "planId": "area-p-20261028",
+  "createdAt": "2026-10-28T14:01:09.199Z",
+  "updatedAt": "2026-10-28T14:35:19.243Z",
+  "briefPath": ".omc/ultragoal/plans/area-p-20261028/brief.md",
+  "goalsPath": ".omc/ultragoal/plans/area-p-20261028/goals.json",
+  "ledgerPath": ".omc/ultragoal/plans/area-p-20261028/ledger.jsonl",
+  "claudeGoalMode": "aggregate",
+  "goals": [
+    {
+      "id": "G001-recon-and-design",
+      "title": "Recon and design",
+      "objective": "Understand core and Area P, choose Linux-first environment and resolve or surface D10/D11 and R7 gates; obtain design approval",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:34:59.680Z",
+      "startedAt": "2026-10-28T14:01:23.578Z",
+      "completedAt": "2026-10-28T14:34:59.680Z",
+      "evidence": "Core/source recon complete; all Area P issues verified; builder-check findings resolved in docs/superpowers/specs/2026-10-28-area-p-design.md; foundation plan saved; private repository created; local branch and verified rollback bundle ready. R7 remains external blocker."
+    },
+    {
+      "id": "G002-build-test-rollback-environment",
+      "title": "Build test rollback environment",
+      "objective": "Establish and verify isolated Linux build/test resources, project-local build helpers, and clean Git rollback checkpoints before product code",
+      "status": "in_progress",
+      "attempt": 1,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:35:19.243Z",
+      "startedAt": "2026-10-28T14:35:19.243Z"
+    },
+    {
+      "id": "G003-p1-node-history",
+      "title": "P1 Node history",
+      "objective": "Implement and verify layerfs-connect#53 Node SDK history calls",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G004-p2-constructor-configuration",
+      "title": "P2 Constructor configuration",
+      "objective": "Implement and verify layerfs#484 explicit JS client configuration with environment fallback",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G005-p6-shared-contract-tests",
+      "title": "P6 Shared contract tests",
+      "objective": "Create reusable cross-client behavioral contracts and fixtures for Node Python CLI and MCP",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G006-p7-commit-metadata",
+      "title": "P7 Commit metadata",
+      "objective": "Implement and verify commit author agent and labels through history",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G007-p8-historical-file-reads",
+      "title": "P8 Historical file reads",
+      "objective": "Implement and verify list stat read at Commit or Layer including binary handling",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G008-p9-event-stream",
+      "title": "P9 Event stream",
+      "objective": "Implement and verify typed event stream for required project and runtime changes",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G009-p10-per-call-results",
+      "title": "P10 Per-call results",
+      "objective": "Implement and verify method duration error and write outcome results API",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G010-p11-store-statistics",
+      "title": "P11 Store statistics",
+      "objective": "Implement and verify detailed Store statistics building on get_storage",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G011-p12-store-summary",
+      "title": "P12 Store summary",
+      "objective": "Implement and verify project-list Store summary",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G012-p13-folder-scoped-client",
+      "title": "P13 Folder-scoped client",
+      "objective": "Implement and verify folder and Branch namespace scoping",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G013-p14-pagination-fixes",
+      "title": "P14 Pagination fixes",
+      "objective": "Reproduce and fix list_branches short pages and list_workspaces Branch names past 64",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G014-p3-cli-history-push-pull",
+      "title": "P3 CLI history push pull",
+      "objective": "Implement and verify CLI calls after P1 and R7 are available; record blocker otherwise",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G015-p4-python-sdk",
+      "title": "P4 Python SDK",
+      "objective": "After D10 decision implement and verify Python SDK and required wheel worker paths",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G016-p5-mcp-server",
+      "title": "P5 MCP server",
+      "objective": "After D11 decision implement and verify MCP file Bash history push pull calls",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G017-p15-package-publishing",
+      "title": "P15 Package publishing",
+      "objective": "Prepare and verify npm packages; publish only with separate explicit approval",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    },
+    {
+      "id": "G018-final-cross-client-verification",
+      "title": "Final cross-client verification",
+      "objective": "Run independent review ai-slop-cleaner and changed-scope verification; produce Node Python CLI MCP evidence matrix and resolve all review blockers",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-10-28T14:01:09.199Z",
+      "updatedAt": "2026-10-28T14:01:09.199Z"
+    }
+  ],
+  "claudeObjective": "Complete all ultragoal stories in .omc/ultragoal/plans/area-p-20261028/goals.json: G001-recon-and-design Recon and design; G002-build-test-rollback-environment Build test rollback environment; G003-p1-node-history P1 Node history; G004-p2-constructor-configuration P2 Constructor configuration; G005-p6-shared-contract-tests P6 Shared contract tests; G006-p7-commit-metadata P7 Commit metadata; G007-p8-historical-file-reads P8 Historical file reads; G008-p9-event-stream P9 Event stream; G009-p10-per-call-results P10 Per-call results; G010-p11-store-statistics P11 Store statistics; G011-p12-store-summary P12 Store summary; G012-p13-folder-scoped-client P13 Folder-scoped client; G013-p14-pagination-fixes P14 Pagination fixes; G014-p3-cli-history-push-pull P3 CLI history push pull; G015-p4-python-sdk P4 Python SDK; G016-p5-mcp-server P5 MCP server; G017-p15-package-publishing P15 Package publishing; G018-final-cross-client-verification Final cross-client verification",
+  "activeGoalId": "G002-build-test-rollback-environment"
+}

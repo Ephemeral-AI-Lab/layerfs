@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1793199244010,
+  "projectRoot": "E:\\layerfs-connect\\layerfs",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Rust",
+        "version": "1.85",
+        "confidence": "high",
+        "markers": [
+          "Cargo.toml"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "cargo",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "cargo build",
+    "testCommand": "cargo test",
+    "lintCommand": "cargo clippy",
+    "devCommand": "cargo run",
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "api": {
+      "path": "api",
+      "purpose": "API routes",
+      "fileCount": 5,
+      "lastAccessed": 1793199243987,
+      "keyFiles": [
+        "AGENTS.md",
+        "package.json",
+        "README.md"
+      ]
+    },
+    "core": {
+      "path": "core",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1793199243987,
+      "keyFiles": [
+        "AGENTS.md",
+        "README.md"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1793199243988,
+      "keyFiles": [
+        "README.md"
+      ]
+    },
+    "engine": {
+      "path": "engine",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793199243988,
+      "keyFiles": [
+        "AGENTS.md"
+      ]
+    },
+    "plugins": {
+      "path": "plugins",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1793199243988,
+      "keyFiles": []
+    },
+    "tools": {
+      "path": "tools",
+      "purpose": null,
+      "fileCount": 32,
+      "lastAccessed": 1793199243988,
+      "keyFiles": [
+        "check_fuser_integrity.py",
+        "check_product_boundary.py",
+        "ci_tests.py",
+        "cleanup-scope.example.json",
+        "cleanup.py"
+      ]
+    },
+    "api\\docs": {
+      "path": "api\\docs",
+      "purpose": "Documentation",
+      "fileCount": 3,
+      "lastAccessed": 1793199243989,
+      "keyFiles": [
+        "agent.md",
+        "backend.md",
+        "runtime.md"
+      ]
+    },
+    "core\\docs": {
+      "path": "core\\docs",
+      "purpose": "Documentation",
+      "fileCount": 0,
+      "lastAccessed": 1793199243989,
+      "keyFiles": []
+    },
+    "docs\\assets": {
+      "path": "docs\\assets",
+      "purpose": "Static assets",
+      "fileCount": 0,
+      "lastAccessed": 1793199243989,
+      "keyFiles": []
+    },
+    "engine\\vendor": {
+      "path": "engine\\vendor",
+      "purpose": "Third-party code",
+      "fileCount": 0,
+      "lastAccessed": 1793199243989,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "tools/worktree.py",
+      "accessCount": 2,
+      "lastAccessed": 1793199282040,
+      "type": "directory"
+    },
+    {
+      "path": "",
+      "accessCount": 2,
+      "lastAccessed": 1793200733326,
+      "type": "directory"
+    },
+    {
+      "path": "tools/worktree_run.py",
+      "accessCount": 1,
+      "lastAccessed": 1793199269103,
+      "type": "file"
+    },
+    {
+      "path": "tools/production_loc.py",
+      "accessCount": 1,
+      "lastAccessed": 1793199269157,
+      "type": "file"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-10-28-area-p-design.md",
+      "accessCount": 1,
+      "lastAccessed": 1793199296007,
+      "type": "directory"
+    },
+    {
+      "path": ".superpowers/sdd/2026-10-28-area-p-foundation/progress.md",
+      "accessCount": 1,
+      "lastAccessed": 1793200843472,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

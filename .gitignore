@@ -13,3 +13,7 @@ benchmark-results/*
 !benchmark-results/fs-bench-pro/
 benchmark-results/fs-bench-pro/*
 !benchmark-results/fs-bench-pro/optimization-history.md
+
+# Area P build MCP dependencies and transient local agent state.
+tools/build-mcp/node_modules/
+.omc/state/
