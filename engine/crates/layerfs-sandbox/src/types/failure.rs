@@ -53,6 +53,24 @@ pub struct WireFailure {
 /// The cause [`WireFailure::container_stopped`] reports.
 pub(crate) const STOPPED: &str = "exact stopped container observation";
 impl WireFailure {
+    /// A non-HTTP cause before an attempt, with no invented transport facts.
+    pub fn local(cause: RuntimeError) -> Box<Self> {
+        Box::new(Self {
+            attempted: false,
+            sent_bytes: 0,
+            request_header_bytes: 0,
+            sent_body_bytes: 0,
+            pending_request: Default::default(),
+            status: None,
+            cause,
+            fence_error: None,
+            observed_exec: None,
+            observed_container: None,
+            requested_container: None,
+            requested_exec: None,
+            error_body: None,
+        })
+    }
     /// The Engine still has the exact requested container, intact, but it is
     /// not running: its daemon exited, so nothing it held survives.
     pub fn container_stopped(&self) -> bool {
