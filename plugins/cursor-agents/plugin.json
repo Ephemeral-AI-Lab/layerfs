@@ -33,6 +33,16 @@
   "status": "preview",
   "versions": [
     {
+      "version": "0.1.1",
+      "commit": "66aafb319a6bf05a4745763c325b87cb6016587f",
+      "date": "2026-10-28",
+      "layerfs": {
+        "version": "v1.1.0",
+        "commit": "4b5276216a2e9f780194a554ef9f0c33f9b6ba6d"
+      },
+      "notes": "Update setup, package links, CLI and addon paths for the upstream directory split; real Linux API 1.52 Workspace round-trip passed."
+    },
+    {
       "version": "0.1.0",
       "commit": "1802b525cca2ff9730678c01f8aefcc107223940",
       "date": "2026-10-25",

@@ -63,3 +63,9 @@ Forked candidates stay in the baseline after `discard`, because a worktree workf
 - Exit 125 from the CLI means LayerFS refused the call. `Exists` on a second `init` of the same name is not a prompt to retry.
 - `discard` and `keep` do not delete commits. Discarded losers stay as deduplicated history. Unmounting with discard drops an uncommitted overlay and copies nothing.
 - A Cursor plugin, the DeepSeek Harness UI, and changes to LayerFS itself are out of scope.
+
+## 0.1.1 verification
+
+The implementation passed 43 tests and a real Linux run on Docker 29.1.3 (Engine API 1.52): initialize with an install, fork two Branches, edit the same file differently, and run `verify-all --jobs 2`. One candidate passed and one failed as expected. Both completed one mount, exec, commit and unmount without cleanup errors; unchanged verification state returned `UpToDate`.
+
+The 0.1.1 metadata update passed the affected tests. These checks do not qualify macOS or the Windows-host worker route, and are not performance measurements. The listing remains `preview`.
