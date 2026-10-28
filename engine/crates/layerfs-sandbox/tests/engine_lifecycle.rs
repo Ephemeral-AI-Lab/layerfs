@@ -420,6 +420,7 @@ fn only_the_exact_intact_container_not_running_is_a_stopped_container() {
 #[test]
 fn provider_inspects_and_reopens_exact_running_and_stopped_deployments() {
     use layerfs_sandbox::backend::docker::DockerProvider;
+    use layerfs_sandbox::provider::{SandboxProvider, SandboxRecord};
     let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
     let running = inspect().replace(
         r#""Running":true"#,
@@ -438,8 +439,9 @@ fn provider_inspects_and_reopens_exact_running_and_stopped_deployments() {
         ],
         64,
     );
-    let provider = DockerProvider::new(docker, request());
-    let mut owner = provider.reopen_docker(id, request()).unwrap();
+    let provider = DockerProvider::new(docker);
+    let record = SandboxRecord::from(request());
+    let mut owner = provider.reopen(id, &record).unwrap();
     let facts = owner.inspect().unwrap();
     assert!(facts.running);
     assert_eq!(facts.process_id, Some(42));
@@ -451,7 +453,7 @@ fn provider_inspects_and_reopens_exact_running_and_stopped_deployments() {
     assert_eq!(facts.exit_code, Some(7));
     // A read-only observation does not authorize Delete on the running owner.
     assert!(!owner.delete().unwrap_err().attempted);
-    let mut stopped = provider.reopen_stopped_docker(id, request()).unwrap();
+    let mut stopped = provider.reopen_stopped(id, &record).unwrap();
     stopped.delete().unwrap();
     assert_eq!(peer.finish().len(), 4);
 }

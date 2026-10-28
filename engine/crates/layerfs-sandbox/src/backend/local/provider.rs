@@ -3,7 +3,7 @@ use super::{Local, LocalPhase, LocalProcess, Sandbox};
 use crate::provider::{
     ExecExit, IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
     ProviderCapabilities, ProviderLaunchOptions, SandboxInspection, SandboxInstance,
-    SandboxProvider, SearchPathPolicy,
+    SandboxProvider, SandboxRecord, SearchPathPolicy,
 };
 use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use std::{io::Write, net::SocketAddr, path::Path};
@@ -84,7 +84,12 @@ impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
         let ProviderLaunchOptions::Local {
             command_identity,
             mut environment,
-        } = request.options;
+        } = request.options
+        else {
+            return Err(fail(RuntimeError::Unsupported(
+                "native provider requires local launch options",
+            )));
+        };
         command_identity.check().map_err(fail)?;
         if (!LINUX
             && (command_identity.uid != nix::unistd::Uid::effective().as_raw()
@@ -138,8 +143,13 @@ impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
     fn reopen(
         &self,
         id: ContainerId,
-        record: &LocalRecord,
+        record: &SandboxRecord,
     ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
+        let Some(record) = record.local() else {
+            return Err(WireFailure::local(RuntimeError::Unsupported(
+                "native provider requires a local record",
+            )));
+        };
         let paths = self.paths(&record.name).map_err(WireFailure::local)?;
         Sandbox::reopen(
             paths.directory,
@@ -153,8 +163,13 @@ impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
     fn reopen_stopped(
         &self,
         id: ContainerId,
-        record: &LocalRecord,
+        record: &SandboxRecord,
     ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
+        let Some(record) = record.local() else {
+            return Err(WireFailure::local(RuntimeError::Unsupported(
+                "native provider requires a local record",
+            )));
+        };
         let paths = self.paths(&record.name).map_err(WireFailure::local)?;
         Ok(Box::new(Sandbox::stopped(
             paths.directory,
@@ -228,5 +243,8 @@ impl SandboxInstance for Sandbox {
             port: self.port(),
             labels: self.labels().to_vec(),
         })
+    }
+    fn record(&self) -> Option<SandboxRecord> {
+        self.local_record().map(SandboxRecord::Local)
     }
 }

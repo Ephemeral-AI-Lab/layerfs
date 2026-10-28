@@ -1,6 +1,7 @@
 //! One-attempt runtime lifecycle with acknowledged partial ownership on launch failure.
 use super::{
     ExecExit, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxId, SandboxInspection,
+    SandboxRecord,
 };
 use crate::{ExecRequest, RuntimeError, WireFailure};
 use std::{fmt, io::Write, net::SocketAddr};
@@ -43,6 +44,10 @@ pub trait SandboxInstance: Send + Sync {
     fn scratch_directory(&self) -> String;
     /// Physical facts for the binding's existing record format, when this is local.
     fn local_record(&self) -> Option<LocalRecord>;
+    /// Persisted deployment facts for reopening this runtime instance.
+    fn record(&self) -> Option<SandboxRecord> {
+        self.local_record().map(SandboxRecord::Local)
+    }
 }
 pub trait SandboxProvider: Send + Sync {
     fn capabilities(&self) -> ProviderCapabilities;
@@ -53,16 +58,16 @@ pub trait SandboxProvider: Send + Sync {
         &self,
         request: LaunchRequest,
     ) -> Result<Box<dyn SandboxInstance>, Box<LaunchFailure>>;
-    /// Reopen starts nothing and checks the recorded process identity.
+    /// Reopen starts nothing and checks the recorded deployment or process identity.
     fn reopen(
         &self,
         id: SandboxId,
-        record: &LocalRecord,
+        record: &SandboxRecord,
     ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>>;
     /// A known stopped record admits only the existing runtime's single Delete.
     fn reopen_stopped(
         &self,
         id: SandboxId,
-        record: &LocalRecord,
+        record: &SandboxRecord,
     ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>>;
 }

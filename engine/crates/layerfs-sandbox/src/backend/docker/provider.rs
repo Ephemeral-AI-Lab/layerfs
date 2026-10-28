@@ -3,7 +3,7 @@ use super::{Docker, Sandbox, SandboxRequest};
 use crate::provider::{
     ExecExit, IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
     ProviderCapabilities, ProviderLaunchOptions, SandboxInspection, SandboxInstance,
-    SandboxProvider, SearchPathPolicy,
+    SandboxProvider, SandboxRecord, SearchPathPolicy,
 };
 use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use std::{fs::File, io::Write, net::SocketAddr};
@@ -12,32 +12,13 @@ use std::{fs::File, io::Write, net::SocketAddr};
 #[derive(Clone, Debug)]
 pub struct DockerProvider {
     docker: Docker,
-    deployment: SandboxRequest,
 }
 /// The original container owner, including its exact attempted/acknowledged lifecycle state.
 pub type DockerInstance = Sandbox;
 impl DockerProvider {
-    /// Deployment labels must match the launch labels; the record format is unchanged.
-    pub fn new(docker: Docker, deployment: SandboxRequest) -> Self {
-        Self { docker, deployment }
-    }
-    /// Reads the existing exact deployment; starts, installs and replays nothing.
-    pub fn reopen_docker(
-        &self,
-        id: ContainerId,
-        request: SandboxRequest,
-    ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
-        Sandbox::reopen(self.docker.clone(), id, request)
-            .map(|s| Box::new(s) as Box<dyn SandboxInstance>)
-    }
-    /// Caller must already hold an exact stopped observation. Delete remains non-forcing.
-    pub fn reopen_stopped_docker(
-        &self,
-        id: ContainerId,
-        request: SandboxRequest,
-    ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
-        request.check().map_err(WireFailure::local)?;
-        Ok(Box::new(Sandbox::stopped(self.docker.clone(), id, request)))
+    /// Negotiation and all transfers use the supplied client's original policy and version cache.
+    pub fn new(docker: Docker) -> Self {
+        Self { docker }
     }
 }
 impl SandboxProvider for DockerProvider {
@@ -62,15 +43,28 @@ impl SandboxProvider for DockerProvider {
         let mut phase = LaunchPhase::Validate;
         let mut instance = None;
         let result = (|| {
-            let ProviderLaunchOptions::Local {
-                command_identity,
-                environment,
-            } = request.options;
-            command_identity.check()?;
-            if !environment.is_empty() || request.labels != self.deployment.labels {
-                return Err(RuntimeError::Protocol("Docker launch labels/environment"));
+            let ProviderLaunchOptions::Docker {
+                image,
+                store_volume,
+                port,
+                connect_host,
+            } = request.options
+            else {
+                return Err(RuntimeError::Unsupported(
+                    "Docker requires Docker launch options",
+                ));
+            };
+            if let Some(host) = &connect_host {
+                if host.is_empty() || host.contains(['\0', ' ', '\t', '\r', '\n']) {
+                    return Err(RuntimeError::Protocol("Docker connect_host format"));
+                }
             }
-            let deployment = self.deployment.clone();
+            let deployment = SandboxRequest {
+                image,
+                store_volume,
+                port,
+                labels: request.labels,
+            };
             deployment.check()?;
             if request.startup_timeout.is_zero()
                 || request.daemon_config.is_empty()
@@ -111,21 +105,30 @@ impl SandboxProvider for DockerProvider {
     }
     fn reopen(
         &self,
-        _: ContainerId,
-        _: &LocalRecord,
+        id: ContainerId,
+        record: &SandboxRecord,
     ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
-        Err(WireFailure::local(RuntimeError::Unsupported(
-            "Docker requires a Docker deployment record",
-        )))
+        let Some(record) = record.docker() else {
+            return Err(WireFailure::local(RuntimeError::Unsupported(
+                "Docker requires a Docker deployment record",
+            )));
+        };
+        Sandbox::reopen(self.docker.clone(), id, record.clone().into())
+            .map(|s| Box::new(s) as Box<dyn SandboxInstance>)
     }
     fn reopen_stopped(
         &self,
-        _: ContainerId,
-        _: &LocalRecord,
+        id: ContainerId,
+        record: &SandboxRecord,
     ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
-        Err(WireFailure::local(RuntimeError::Unsupported(
-            "Docker requires a Docker deployment record",
-        )))
+        let Some(record) = record.docker() else {
+            return Err(WireFailure::local(RuntimeError::Unsupported(
+                "Docker requires a Docker deployment record",
+            )));
+        };
+        let request: SandboxRequest = record.clone().into();
+        request.check().map_err(WireFailure::local)?;
+        Ok(Box::new(Sandbox::stopped(self.docker.clone(), id, request)))
     }
 }
 impl SandboxInstance for Sandbox {
@@ -164,5 +167,8 @@ impl SandboxInstance for Sandbox {
     }
     fn local_record(&self) -> Option<LocalRecord> {
         None
+    }
+    fn record(&self) -> Option<SandboxRecord> {
+        Some(SandboxRecord::Docker(self.request.clone().into()))
     }
 }

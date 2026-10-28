@@ -120,16 +120,23 @@ impl SandboxApi {
             }
             let mut launch = request.launch.clone();
             launch.daemon_config = request.setup.encode().map_err(SandboxCause::Setup)?;
-            let ProviderLaunchOptions::Local {
+            if let ProviderLaunchOptions::Local {
                 command_identity, ..
-            } = &launch.options;
-            if (command_identity.uid, command_identity.gid)
-                != (request.setup.command_uid, request.setup.command_gid)
-                || request
-                    .setup
-                    .existing_store
-                    .as_ref()
-                    .is_some_and(|m| m.locator != request.setup.store)
+            } = &launch.options
+            {
+                if (command_identity.uid, command_identity.gid)
+                    != (request.setup.command_uid, request.setup.command_gid)
+                {
+                    return Err(SandboxCause::Setup(ControlError(
+                        "provider topology/identity",
+                    )));
+                }
+            }
+            if request
+                .setup
+                .existing_store
+                .as_ref()
+                .is_some_and(|m| m.locator != request.setup.store)
                 || launch.startup_timeout.is_zero()
                 || public_key(&request.controller_private).map_err(SandboxCause::Channel)?
                     != request.setup.control_peer
@@ -168,9 +175,13 @@ impl SandboxApi {
                 .expect("launched")
                 .endpoint()
                 .map_err(SandboxCause::Runtime)?;
+            let connect_host = match &request.launch.options {
+                ProviderLaunchOptions::Docker { connect_host, .. } => connect_host.as_deref(),
+                _ => None,
+            };
             let mut status = progress.connect(
                 endpoint,
-                None,
+                connect_host,
                 request.launch.startup_timeout,
                 &request.controller_private,
                 request.daemon_peer,

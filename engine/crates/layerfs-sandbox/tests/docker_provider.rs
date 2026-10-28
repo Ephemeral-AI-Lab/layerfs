@@ -6,7 +6,8 @@ mod peer;
 use layerfs_sandbox::{
     backend::docker::{DockerProvider, ProviderFailure, Sandbox, SandboxRequest},
     provider::{
-        LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxInstance, SandboxProvider,
+        DockerRecord, LaunchPhase, LaunchRequest, LocalRecord, ProviderLaunchOptions,
+        SandboxInstance, SandboxProvider, SandboxRecord,
     },
     CommandIdentity, ContainerId, ExecRequest, RuntimeError,
 };
@@ -47,9 +48,11 @@ impl Binary {
             daemon_config: b"private config".to_vec(),
             labels: vec![],
             startup_timeout: Duration::from_secs(2),
-            options: ProviderLaunchOptions::Local {
-                command_identity: CommandIdentity { uid: 501, gid: 20 },
-                environment: vec![],
+            options: ProviderLaunchOptions::Docker {
+                image: IMAGE.into(),
+                store_volume: "provider-store".into(),
+                port: 30421,
+                connect_host: None,
             },
         }
     }
@@ -108,13 +111,22 @@ fn launch_stream_log_stop_delete_and_negotiated_versions_use_the_original_runtim
             fixed(204, b""),
         ]);
         let (docker, peer) = Peer::scripted(responses, 8192);
-        let provider = DockerProvider::new(docker, deployment());
+        let provider = DockerProvider::new(docker);
         assert_eq!(provider.capabilities().name, "docker");
         assert!(provider.local_directory("anything").unwrap().is_none());
         let mut instance = provider.launch(binary.launch()).unwrap();
         assert_eq!(instance.identity().to_string(), CID);
         assert_eq!(instance.scratch_directory(), "/tmp");
         assert!(instance.local_record().is_none());
+        assert_eq!(
+            instance.record(),
+            Some(SandboxRecord::Docker(DockerRecord {
+                image: IMAGE.into(),
+                store_volume: "provider-store".into(),
+                port: 30421,
+                labels: vec![],
+            }))
+        );
         instance.track(42, 1).unwrap();
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
         let exit = instance
@@ -150,7 +162,7 @@ fn uncertain_create_retains_partial_id_and_never_adopts_or_cleans_it() {
     responses.truncate(2);
     responses[1] = fixed(201, format!(r#"{{"Id":"{CID}","Id":"{CID}"}}"#).as_bytes());
     let (docker, peer) = Peer::new(responses, 1);
-    let failure = DockerProvider::new(docker, deployment())
+    let failure = DockerProvider::new(docker)
         .launch(binary.launch())
         .err()
         .unwrap();
@@ -178,7 +190,7 @@ fn upload_start_and_listener_failures_keep_acknowledged_instance_and_original_re
         responses.truncate(stage + 1);
         responses[stage] = fixed(409, b"refused");
         let (docker, peer) = Peer::new(responses, 8192);
-        let mut failure = DockerProvider::new(docker, deployment())
+        let mut failure = DockerProvider::new(docker)
             .launch(binary.launch())
             .err()
             .unwrap();
@@ -203,12 +215,49 @@ fn upload_start_and_listener_failures_keep_acknowledged_instance_and_original_re
 fn validation_and_stdin_refuse_without_an_engine_attempt() {
     let binary = Binary::new();
     let (docker, peer) = Peer::new(vec![], 1);
-    let provider = DockerProvider::new(docker.clone(), deployment());
+    let provider = DockerProvider::new(docker.clone());
     let mut request = binary.launch();
     request.name = "../escape".into();
     assert_eq!(
         provider.launch(request).err().unwrap().phase,
         LaunchPhase::Validate
+    );
+    let mut bad_host = binary.launch();
+    bad_host.options = ProviderLaunchOptions::Docker {
+        image: IMAGE.into(),
+        store_volume: "provider-store".into(),
+        port: 30421,
+        connect_host: Some("bad host\0".into()),
+    };
+    assert_eq!(
+        provider.launch(bad_host).err().unwrap().phase,
+        LaunchPhase::Validate
+    );
+    let mut wrong_options = binary.launch();
+    wrong_options.options = ProviderLaunchOptions::Local {
+        command_identity: CommandIdentity { uid: 501, gid: 20 },
+        environment: vec![],
+    };
+    assert_eq!(
+        provider.launch(wrong_options).err().unwrap().phase,
+        LaunchPhase::Validate
+    );
+    let foreign = SandboxRecord::Local(LocalRecord {
+        name: "test".into(),
+        pid: 1,
+        start_time: 1,
+        boot: None,
+        port: 30421,
+        labels: vec![],
+    });
+    let id = ContainerId::parse(CID).unwrap();
+    assert!(!provider.reopen(id, &foreign).err().unwrap().attempted);
+    assert!(
+        !provider
+            .reopen_stopped(id, &foreign)
+            .err()
+            .unwrap()
+            .attempted
     );
     let stopped = Sandbox::stopped(docker, ContainerId::parse(CID).unwrap(), deployment());
     let mut request = exec_request();
@@ -230,9 +279,7 @@ fn eof_with_unknown_exit_preserves_the_handle_without_polling_or_replay() {
         exec_inspection(true, "null"),
     ]);
     let (docker, peer) = Peer::new(responses, 8192);
-    let instance = DockerProvider::new(docker, deployment())
-        .launch(binary.launch())
-        .unwrap();
+    let instance = DockerProvider::new(docker).launch(binary.launch()).unwrap();
     let failure = instance
         .run(&exec_request(), &mut Vec::new(), &mut Vec::new())
         .unwrap_err();
@@ -269,9 +316,7 @@ fn exec_stage_failures_keep_deciding_wire_facts_and_delivered_progress() {
         exec[stage] = fixed(409, b"original refusal");
         responses.extend(exec);
         let (docker, peer) = Peer::new(responses, 8192);
-        let owner = DockerProvider::new(docker, deployment())
-            .launch(binary.launch())
-            .unwrap();
+        let owner = DockerProvider::new(docker).launch(binary.launch()).unwrap();
         let failure = owner
             .run(&exec_request(), &mut Vec::new(), &mut Vec::new())
             .unwrap_err();
@@ -325,9 +370,7 @@ fn failed_sink_retains_pending_output_and_exec_identity_without_inspection_or_cl
         upgrade(&frame(1, b"undelivered")),
     ]);
     let (docker, peer) = Peer::new(responses, 8192);
-    let instance = DockerProvider::new(docker, deployment())
-        .launch(binary.launch())
-        .unwrap();
+    let instance = DockerProvider::new(docker).launch(binary.launch()).unwrap();
     let failure = instance
         .run(&exec_request(), &mut BrokenSink, &mut Vec::new())
         .unwrap_err();

@@ -2,7 +2,7 @@
 
 Status: Current general guide.
 
-`backend::docker::DockerProvider::new(docker, deployment)` adapts the existing
+`backend::docker::DockerProvider::new(docker)` adapts the existing
 Engine client and `SandboxRequest`. `DockerInstance` aliases the original
 `docker::Sandbox`: the provider shares its lifecycle admission, API 1.48–1.54
 negotiation cache, streamed private archive, logs, exact deployment inspection,
@@ -10,12 +10,9 @@ and explicit stop/delete. It introduces no automatic cleanup or retries.
 
 Import `provider::{SandboxProvider, SandboxInstance}` to use the ports. Call
 `provider.launch(LaunchRequest { .. })` with the executable, private configuration,
-name, matching deployment labels and explicit startup wait. The current shared
-launch options contain only `ProviderLaunchOptions::Local`: Docker checks its
-command identity and requires an empty environment. Image, volume and daemon port
-come from the constructor's `SandboxRequest`. This temporary naming preserves
-existing API consumers without changing the trait or option enum in this slice.
-The API integration follow-up can introduce appropriate common launch options.
+name, explicit startup wait, and `ProviderLaunchOptions::Docker { image, store_volume, port, connect_host }`.
+Docker validates the immutable image digest, existing volume name, port, optional
+connect_host format, and labels from `LaunchRequest.labels`.
 The runtime does not decode daemon configuration or perform authentication.
 
 The instance supports `endpoint`, `inspect`, `run`, `log_tail`, `stop` and
@@ -42,11 +39,13 @@ diagnostics, fence errors and Exec owners remain in the nested `ProviderFailure`
 Retaining a handle permits an explicit later observation; it never permits replay
 of creation or Start. Ordinary commands have no automatic runtime timeout.
 
-Records remain a caller responsibility. `reopen_docker(id, SandboxRequest)`
+Records remain a caller responsibility. `SandboxProvider::reopen(id, &SandboxRecord)`
 validates the exact existing deployment and endpoint without starting it.
-`reopen_stopped_docker` requires the caller's prior exact stopped observation and
-admits only non-forcing Delete. The existing trait reopen methods accept only
-`LocalRecord`; Docker refuses those before effects. No disk format changes occur.
+`SandboxProvider::reopen_stopped` requires the caller's prior exact stopped observation and
+admits only non-forcing Delete. Both methods accept `SandboxRecord`, which represents either
+`LocalRecord` or `DockerRecord`. Docker refuses local records before effects; native providers
+refuse Docker records before effects. `SandboxInstance::record()` exposes the instance's
+persisted deployment facts. No disk format changes occur.
 
 This slice does not route `SandboxApi` or the Node binding through the provider.
 Their existing Docker paths remain for the follow-up, which must validate daemon

@@ -27,9 +27,15 @@ pub enum ProviderLaunchOptions {
         command_identity: CommandIdentity,
         environment: Vec<(String, String)>,
     },
+    Docker {
+        image: String,
+        store_volume: String,
+        port: u16,
+        connect_host: Option<String>,
+    },
 }
 /// Persisted physical facts supplied by the record owner; no filesystem discovery here.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalRecord {
     pub name: String,
     pub pid: u32,
@@ -37,6 +43,94 @@ pub struct LocalRecord {
     pub boot: Option<u128>,
     pub port: u16,
     pub labels: Vec<(String, String)>,
+}
+/// Persisted deployment facts for a Docker container; no filesystem discovery here.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DockerRecord {
+    pub image: String,
+    pub store_volume: String,
+    pub port: u16,
+    pub labels: Vec<(String, String)>,
+}
+/// Recorded runtime identity and deployment facts for reopen.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SandboxRecord {
+    Local(LocalRecord),
+    Docker(DockerRecord),
+}
+impl SandboxRecord {
+    pub fn local(&self) -> Option<&LocalRecord> {
+        match self {
+            Self::Local(record) => Some(record),
+            _ => None,
+        }
+    }
+    pub fn docker(&self) -> Option<&DockerRecord> {
+        match self {
+            Self::Docker(record) => Some(record),
+            _ => None,
+        }
+    }
+}
+impl From<LocalRecord> for SandboxRecord {
+    fn from(record: LocalRecord) -> Self {
+        Self::Local(record)
+    }
+}
+impl From<&LocalRecord> for SandboxRecord {
+    fn from(record: &LocalRecord) -> Self {
+        Self::Local(record.clone())
+    }
+}
+impl From<DockerRecord> for SandboxRecord {
+    fn from(record: DockerRecord) -> Self {
+        Self::Docker(record)
+    }
+}
+impl From<&DockerRecord> for SandboxRecord {
+    fn from(record: &DockerRecord) -> Self {
+        Self::Docker(record.clone())
+    }
+}
+impl From<crate::backend::docker::SandboxRequest> for DockerRecord {
+    fn from(request: crate::backend::docker::SandboxRequest) -> Self {
+        Self {
+            image: request.image,
+            store_volume: request.store_volume,
+            port: request.port,
+            labels: request.labels,
+        }
+    }
+}
+impl From<&crate::backend::docker::SandboxRequest> for DockerRecord {
+    fn from(request: &crate::backend::docker::SandboxRequest) -> Self {
+        Self {
+            image: request.image.clone(),
+            store_volume: request.store_volume.clone(),
+            port: request.port,
+            labels: request.labels.clone(),
+        }
+    }
+}
+impl From<DockerRecord> for crate::backend::docker::SandboxRequest {
+    fn from(record: DockerRecord) -> Self {
+        Self {
+            image: record.image,
+            store_volume: record.store_volume,
+            port: record.port,
+            labels: record.labels,
+        }
+    }
+}
+impl From<crate::backend::docker::SandboxRequest> for SandboxRecord {
+    fn from(request: crate::backend::docker::SandboxRequest) -> Self {
+        Self::Docker(request.into())
+    }
+}
+impl From<&crate::backend::docker::SandboxRequest> for SandboxRecord {
+    fn from(request: &crate::backend::docker::SandboxRequest) -> Self {
+        Self::Docker(request.into())
+    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExecExit {
