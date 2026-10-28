@@ -1,12 +1,12 @@
 Cursor coding agents work on LayerFS Branches and Workspaces instead of git worktrees. One task gets one Branch. File edits go through `fs.*`. Bash runs as `workspace.mount`, then `exec`, `commit`, and `unmount`. Each LayerFS call is attempted once.
 
-Plugin id: `cursor-agents`. Package: `layerfs-cursor-agents` `0.1.0`. This repository is for Cursor only. It does not install Claude Code skills, hooks, or configuration, and it does not ship a history dashboard.
+Plugin id: `cursor-agents`. Package: `layerfs-cursor-agents` `0.1.1`. This repository is for Cursor only. It does not install Claude Code skills, hooks, or configuration, and it does not ship a history dashboard.
 
-The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/layerfs.json): `ad78914e36b258b360daf13aec164b5655814689` (LayerFS v1.1.0).
+The LayerFS commit this version was built against is `commit` in [`layerfs.json`](https://github.com/earsonlau/layerfs-cursor-agents/blob/66aafb319a6bf05a4745763c325b87cb6016587f/layerfs.json): `4b5276216a2e9f780194a554ef9f0c33f9b6ba6d` (LayerFS v1.1.0).
 
 ## What it adds
 
-- A Cursor skill at [`.cursor/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/.cursor/skills/layerfs-agent/SKILL.md). The same skill is at [`.agents/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/.agents/skills/layerfs-agent/SKILL.md) for agents that look there.
+- A Cursor skill at [`.cursor/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/66aafb319a6bf05a4745763c325b87cb6016587f/.cursor/skills/layerfs-agent/SKILL.md). The same skill is at [`.agents/skills/layerfs-agent/SKILL.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/66aafb319a6bf05a4745763c325b87cb6016587f/.agents/skills/layerfs-agent/SKILL.md) for agents that look there.
 - `layerfs-cursor-setup`, which checks out that LayerFS commit, links the official `layerfs` command onto `PATH`, and writes `LAYERFS_*` settings.
 - On Linux, Store calls stay in the agent process. On macOS and Windows the setup starts the home worker with `@layerfs/runtime` and sets `LAYERFS_WORKER_ENDPOINT`.
 
@@ -18,7 +18,7 @@ The skill is the procedure. Short form:
 2. `branch.fork` one Branch for the task. Do not add a git worktree.
 3. Edit with `fs.write`, `fs.edit`, `fs.apply`, and the other `fs.*` calls.
 4. Run bash as `sandbox.create` (when you need a Sandbox), then `workspace.mount`, `workspace.exec`, `workspace.commit`, and `workspace.unmount`. Unmount in `finally`. On `Conflict`, stay in that Workspace until you resolve it or discard it.
-5. On `Conflict`, `Busy`, or `NoSuchSandbox`, follow [`refusals.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/.cursor/skills/layerfs-agent/references/refusals.md) once. Do not replay the refused call.
+5. On `Conflict`, `Busy`, or `NoSuchSandbox`, follow [`refusals.md`](https://github.com/earsonlau/layerfs-cursor-agents/blob/66aafb319a6bf05a4745763c325b87cb6016587f/.cursor/skills/layerfs-agent/references/refusals.md) once. Do not replay the refused call.
 
 `examples/task-branch.mjs` forks a Branch (or keeps it if the name is taken) and writes one file. It imports the public SDK from `LAYERFS_REPO`.
 
@@ -61,4 +61,10 @@ When `LAYERFS_REPO` points at the pinned checkout, the same command also imports
 
 ## License
 
-MIT. See [LICENSE](https://github.com/earsonlau/layerfs-cursor-agents/blob/1802b525cca2ff9730678c01f8aefcc107223940/LICENSE).
+MIT. See [LICENSE](https://github.com/earsonlau/layerfs-cursor-agents/blob/66aafb319a6bf05a4745763c325b87cb6016587f/LICENSE).
+
+## 0.1.1 verification
+
+The implementation passed 27 tests, with the optional Docker test skipped in that run, then passed the real Docker Workspace round-trip separately on Linux with Docker 29.1.3 (Engine API 1.52). The installer regression suite also passed after checking the relocated CLI install target.
+
+The 0.1.1 metadata update passed the affected tests. These checks do not qualify macOS or the Windows-host worker route, and are not performance measurements. The listing remains `preview`.
