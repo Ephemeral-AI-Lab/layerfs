@@ -55,7 +55,7 @@ fn root() -> bool {
     std::fs::metadata("/proc/self").is_ok_and(|m| m.uid() == 0)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn import_installs_the_store_in_process() {
     use std::os::unix::fs::PermissionsExt;
@@ -64,6 +64,7 @@ fn import_installs_the_store_in_process() {
     let destination = directory.join("volume/global/store.sqlite");
     let sealed_bytes = std::fs::read(&project.store.path).unwrap();
     let outcome = install_local(&project.store.path, &project.manifest, &destination);
+    #[cfg(target_os = "linux")]
     if !root() {
         let failure = outcome.unwrap_err();
         assert!(failure.cause.contains("must run as user 0"), "{failure}");
@@ -117,9 +118,9 @@ fn an_installed_manifest_is_refused_before_anything_is_written() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 #[test]
-fn local_install_is_unsupported_off_linux() {
+fn local_install_is_unsupported_on_other_platforms() {
     let directory = scratch("host");
     let project = sealed(&directory);
     let destination = directory.join("volume/global/store.sqlite");

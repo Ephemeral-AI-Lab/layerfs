@@ -263,7 +263,7 @@ fn start_claimed(
         project: name.to_owned(),
         name: container_name,
         directory: saved_directory.to_owned(),
-        runtime: crate::runtime::Runtime::Docker(runtime),
+        runtime: crate::runtime::Runtime::Docker(Box::new(runtime)),
         identity,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),

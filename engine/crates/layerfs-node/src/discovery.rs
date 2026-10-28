@@ -380,10 +380,10 @@ pub(crate) fn save_sandbox(
         ]),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Runtime::Local(runtime) => {
-            let process = runtime
-                .process()
+            let record = runtime
+                .local_record()
                 .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
-            let boot = process
+            let boot = record
                 .boot
                 .ok_or_else(|| refused("Failed", "local Sandbox daemon has no boot id"))?;
             fields.extend([
@@ -392,14 +392,18 @@ pub(crate) fn save_sandbox(
                 ("gid", SdkValue::Int(i64::from(state.identity.gid))),
                 (
                     "directory",
-                    SdkValue::text(runtime.directory().display().to_string()),
+                    SdkValue::text(
+                        crate::local::directory(args, &state.id)?
+                            .display()
+                            .to_string(),
+                    ),
                 ),
-                ("pid", SdkValue::Int(i64::from(process.pid))),
-                ("start", SdkValue::text(process.start.to_string())),
+                ("pid", SdkValue::Int(i64::from(record.pid))),
+                ("start", SdkValue::text(record.start_time.to_string())),
                 ("boot", SdkValue::text(format!("{boot:032x}"))),
-                ("port", SdkValue::Int(i64::from(runtime.port()))),
+                ("port", SdkValue::Int(i64::from(record.port))),
                 ("image", SdkValue::text(crate::runtime::LOCAL)),
-                ("labels", labels(runtime.labels())),
+                ("labels", labels(&record.labels)),
             ]);
         }
     }
@@ -588,7 +592,7 @@ impl Recorded {
     pub(crate) fn reopen(self) -> std::result::Result<Runtime, Box<WireFailure>> {
         match self {
             Self::Docker(docker, id, request) => {
-                Sandbox::reopen(docker, id, request).map(Runtime::Docker)
+                Sandbox::reopen(docker, id, request).map(|s| Runtime::Docker(Box::new(s)))
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {
@@ -597,14 +601,15 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => local::Sandbox::reopen(directory, id, process, port, labels).map(Runtime::Local),
+            } => local::Sandbox::reopen(directory, id, process, port, labels)
+                .map(|s| Runtime::Local(Box::new(s))),
         }
     }
     /// The runtime found stopped: only its one Delete is admitted.
     pub(crate) fn stopped(self) -> Runtime {
         match self {
             Self::Docker(docker, id, request) => {
-                Runtime::Docker(Sandbox::stopped(docker, id, request))
+                Runtime::Docker(Box::new(Sandbox::stopped(docker, id, request)))
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {
@@ -613,9 +618,9 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => Runtime::Local(local::Sandbox::stopped(
+            } => Runtime::Local(Box::new(local::Sandbox::stopped(
                 directory, id, process, port, labels,
-            )),
+            ))),
         }
     }
 }

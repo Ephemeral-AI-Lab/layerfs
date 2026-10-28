@@ -46,6 +46,9 @@ pub trait SandboxInstance: Send + Sync {
 }
 pub trait SandboxProvider: Send + Sync {
     fn capabilities(&self) -> ProviderCapabilities;
+    /// Local resource ownership, checked by API before encoding daemon topology.
+    /// Nonlocal providers return None. No resource is created by this observation.
+    fn local_directory(&self, name: &str) -> Result<Option<std::path::PathBuf>, RuntimeError>;
     fn launch(
         &self,
         request: LaunchRequest,

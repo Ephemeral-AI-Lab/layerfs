@@ -1,6 +1,12 @@
 //! Actual ordinary Sandbox lifecycle and its Workspaces, with exact logical and kernel readiness.
 #[cfg(unix)]
 mod close;
+#[cfg(unix)]
+mod connection;
+#[cfg(unix)]
+mod provider;
+#[cfg(unix)]
+pub use provider::{ProviderCreate, ProviderFailure, ProviderSandbox};
 mod commit;
 #[cfg(unix)]
 pub(crate) mod create;

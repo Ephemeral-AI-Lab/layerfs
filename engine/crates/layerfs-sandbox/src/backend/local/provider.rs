@@ -40,6 +40,9 @@ impl SandboxProvider for NativeMacosProvider {
             direct_store_access: true,
         }
     }
+    fn local_directory(&self, name: &str) -> Result<Option<std::path::PathBuf>, RuntimeError> {
+        self.paths(name).map(|paths| Some(paths.directory))
+    }
     fn launch(
         &self,
         request: LaunchRequest,

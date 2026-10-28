@@ -1,14 +1,16 @@
 //! Ordinary Sandbox startup, original deployment inputs and failure custody.
+use super::connection::Startup;
 use crate::{internal::Control, OperationFailure};
 use layerfs_bridge::{
-    control::{ControlError, DaemonPhase, DaemonStatus, HelloRequest, Reply, Request},
+    control::{ControlError, DaemonStatus, HelloRequest, Reply, Request},
     daemon_setup::DaemonSetup,
-    duplex::{initiate_observed, public_key, ChannelError, ChannelWork},
+    duplex::{public_key, ChannelError, ChannelWork},
 };
 use layerfs_sandbox::backend::docker::{
     Docker, ListenerFailure, Sandbox, SandboxCreateFailure, SandboxRequest, UploadFailure,
 };
-use std::{fmt, fs::File, io, net::TcpStream, path::PathBuf, time::Duration};
+use layerfs_sandbox::provider::SandboxProvider;
+use std::{fmt, fs::File, io, path::PathBuf, sync::Arc, time::Duration};
 /// One actual stopped-container deployment, private archive and authenticated startup.
 #[derive(Clone)]
 pub struct SandboxCreate {
@@ -109,6 +111,8 @@ pub enum SandboxCause {
     Listener(Box<ListenerFailure>),
     /// Original Engine transfer, no replay.
     Runtime(Box<layerfs_sandbox::WireFailure>),
+    /// Original provider launch cause; partial runtime ownership is retained separately.
+    Provider(Box<layerfs_sandbox::provider::LaunchFailure>),
     /// Original authentication failure; handshake work remains in the receipt.
     Channel(ChannelError),
     /// Original correlated daemon control exchange/refusal.
@@ -155,9 +159,10 @@ impl fmt::Display for SandboxFailure {
 }
 impl std::error::Error for SandboxFailure {}
 /// Actual local Engine and authenticated daemon lifecycle organization.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SandboxApi {
-    pub(crate) docker: Docker,
+    pub(crate) docker: Option<Docker>,
+    pub(crate) provider: Option<Arc<dyn SandboxProvider>>,
 }
 /// Exact acknowledged container and authenticated control owner.
 pub struct ManagedSandbox {
@@ -177,7 +182,10 @@ pub struct ManagedSandbox {
 impl SandboxApi {
     /// Uses one explicit local Engine endpoint and metadata wait policy.
     pub fn new(docker: Docker) -> Self {
-        Self { docker }
+        Self {
+            docker: Some(docker),
+            provider: None,
+        }
     }
     /// Creates, privately configures, starts and authenticates once, preserving partial ownership on failure.
     pub fn create(
@@ -211,68 +219,33 @@ impl SandboxApi {
                 }));
             }
         }
-        let mut owner = create(&self.docker, request)?;
+        let mut owner = create(self, request)?;
         if existing {
             // The original startup already selected and waited for this Store.
             // Installing again would change the existing one-attempt lifecycle.
             return Ok(owner);
         }
-        let installed = owner
-            .control
-            .install_file(store, manifest)
-            .map_err(|cause| {
-                Box::new(SandboxFailure {
-                    request: owner.request.clone(),
-                    phase: SandboxPhase::Install,
-                    sandbox: None,
-                    control: None,
-                    handshake: owner.handshake,
-                    observed: Some(owner.startup.clone()),
-                    installed: None,
-                    cause: SandboxCause::Install(cause),
-                })
-            });
-        let installed = match installed {
-            Ok(installed) => installed,
-            Err(mut failure) => {
-                failure.sandbox = Some(owner.runtime);
-                failure.control = Some(owner.control);
-                return Err(failure);
-            }
-        };
-        owner.installed = Some(installed);
-        match hello(
+        let mut phase = SandboxPhase::Install;
+        if let Err(cause) = super::connection::install(
             &mut owner.control,
-            HelloRequest {
-                expected_instance: Some(owner.startup.instance),
-                wait_for_store: true,
-            },
+            &mut owner.startup,
+            &mut owner.installed,
+            &mut phase,
+            store,
+            manifest,
         ) {
-            Ok(status) if status.phase == DaemonPhase::ControlReady => {
-                owner.startup = status;
-                Ok(owner)
-            }
-            Ok(status) => Err(Box::new(SandboxFailure {
+            return Err(Box::new(SandboxFailure {
                 request: owner.request,
-                phase: SandboxPhase::Hello,
-                sandbox: Some(owner.runtime),
-                control: Some(owner.control),
-                handshake: owner.handshake,
-                observed: Some(status),
-                installed: owner.installed,
-                cause: SandboxCause::Setup(ControlError("original installed startup phase")),
-            })),
-            Err(cause) => Err(Box::new(SandboxFailure {
-                request: owner.request,
-                phase: SandboxPhase::Hello,
+                phase,
                 sandbox: Some(owner.runtime),
                 control: Some(owner.control),
                 handshake: owner.handshake,
                 observed: Some(owner.startup),
                 installed: owner.installed,
-                cause: SandboxCause::Control(cause),
-            })),
+                cause,
+            }));
         }
+        Ok(owner)
     }
 }
 impl ManagedSandbox {
@@ -302,15 +275,16 @@ pub(super) fn hello(
     }
 }
 pub(crate) fn create(
-    docker: &Docker,
+    api: &SandboxApi,
     request: SandboxCreate,
 ) -> Result<ManagedSandbox, Box<SandboxFailure>> {
     let mut phase = SandboxPhase::Validate;
     let mut sandbox = None;
-    let mut control = None;
-    let mut handshake = ChannelWork::default();
-    let mut observed = None;
+    let mut startup = Startup::new();
     let result = (|| {
+        let docker = api.docker.as_ref().ok_or(SandboxCause::Setup(ControlError(
+            "Docker API requires Docker selection",
+        )))?;
         let config = request.setup.encode().map_err(SandboxCause::Setup)?;
         if request.setup.listen != format!("0.0.0.0:{}", request.deployment.port)
             || request.setup.store != "/layerfs-store/global/store.sqlite"
@@ -347,58 +321,25 @@ pub(crate) fn create(
             .map_err(SandboxCause::Listener)?;
         phase = SandboxPhase::Endpoint;
         let endpoint = owner.endpoint().map_err(SandboxCause::Runtime)?;
-        phase = SandboxPhase::Connect;
-        let address =
-            connect_address(endpoint, request.connect_host.as_deref()).map_err(SandboxCause::Io)?;
-        let stream =
-            TcpStream::connect_timeout(&address, request.startup_wait).map_err(SandboxCause::Io)?;
-        stream
-            .set_read_timeout(Some(request.startup_wait))
-            .map_err(SandboxCause::Io)?;
-        stream
-            .set_write_timeout(Some(request.startup_wait))
-            .map_err(SandboxCause::Io)?;
-        phase = SandboxPhase::Authenticate;
-        let start = initiate_observed(stream, &request.controller_private, request.daemon_peer);
-        handshake = start.work;
-        let connection = start.result.map_err(SandboxCause::Channel)?;
-        // The startup handshake waits are cleared before control/product operations.
-        // Bridge owns cloned duplex directions; clear policy through that actual owner.
-        control = Some(Control::new(connection));
-        phase = SandboxPhase::Policy;
-        control
-            .as_ref()
-            .expect("authenticated")
-            .clear_io_waits()
-            .map_err(SandboxCause::Channel)?;
-        phase = SandboxPhase::Hello;
-        let status = hello(
-            control.as_mut().expect("authenticated"),
-            HelloRequest {
-                expected_instance: None,
-                wait_for_store: request.setup.existing_store.is_some(),
-            },
-        )
-        .map_err(SandboxCause::Control)?;
-        let expected = if request.setup.existing_store.is_some() {
-            DaemonPhase::ControlReady
-        } else {
-            DaemonPhase::InstallPending
-        };
-        observed = Some(status.clone());
-        if status.phase != expected {
-            return Err(SandboxCause::Setup(ControlError("original startup phase")));
-        }
-        Ok(status)
+        let connected = startup.connect(
+            endpoint,
+            request.connect_host.as_deref(),
+            request.startup_wait,
+            &request.controller_private,
+            request.daemon_peer,
+            request.setup.existing_store.is_some(),
+        );
+        phase = startup.phase;
+        connected
     })();
     match result {
-        Ok(startup) => Ok(ManagedSandbox {
+        Ok(status) => Ok(ManagedSandbox {
             request: request.clone(),
             installed: None,
             runtime: sandbox.take().expect("owned"),
-            control: control.take().expect("authenticated"),
-            startup,
-            handshake,
+            control: startup.control.take().expect("authenticated"),
+            handshake: startup.handshake,
+            startup: status,
             command_identity: layerfs_sandbox::CommandIdentity {
                 uid: request.setup.command_uid,
                 gid: request.setup.command_gid,
@@ -408,9 +349,9 @@ pub(crate) fn create(
             request,
             phase,
             sandbox,
-            control,
-            handshake,
-            observed,
+            control: startup.control,
+            handshake: startup.handshake,
+            observed: startup.observed,
             installed: None,
             cause,
         })),

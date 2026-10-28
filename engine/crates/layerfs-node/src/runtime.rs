@@ -10,7 +10,7 @@ use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_sandbox::backend::docker;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_sandbox::backend::local;
+use layerfs_sandbox::provider::SandboxInstance;
 use layerfs_sandbox::{CommandIdentity, ContainerId, WireFailure};
 use std::net::SocketAddr;
 
@@ -24,9 +24,9 @@ pub(crate) const NATIVE: &str = "native";
 
 /// One Sandbox's runtime owner.
 pub(crate) enum Runtime {
-    Docker(docker::Sandbox),
+    Docker(Box<docker::Sandbox>),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Local(local::Sandbox),
+    Local(Box<dyn SandboxInstance>),
 }
 
 /// Whether the deployment selects a local daemon: `deploy.sandbox` unset or
@@ -84,7 +84,7 @@ impl Runtime {
         match self {
             Self::Docker(_) => "/tmp".to_owned(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Local(sandbox) => sandbox.tmp().display().to_string(),
+            Self::Local(sandbox) => sandbox.scratch_directory(),
         }
     }
     /// Stops it, giving its daemon `seconds` to exit before it is killed
@@ -163,7 +163,7 @@ impl Runtime {
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local(sandbox) => {
-                let request = docker::ExecRequest {
+                let request = layerfs_sandbox::ExecRequest {
                     identity,
                     arguments,
                     environment,

@@ -114,13 +114,34 @@ pub fn split(
 ) {
     (sandbox.runtime, sandbox.control, sandbox.command_identity)
 }
+/// Transfers provider runtime, original channel and admitted command identity.
+#[cfg(unix)]
+pub fn split_provider(
+    sandbox: crate::sandbox::ProviderSandbox,
+) -> (
+    Box<dyn layerfs_sandbox::provider::SandboxInstance>,
+    Control,
+    layerfs_sandbox::CommandIdentity,
+) {
+    (sandbox.runtime, sandbox.control, sandbox.command_identity)
+}
+/// Borrows the same provider instance and original channel for concurrent execution.
+#[cfg(unix)]
+pub fn provider_parts(
+    sandbox: &mut crate::sandbox::ProviderSandbox,
+) -> (
+    &dyn layerfs_sandbox::provider::SandboxInstance,
+    &mut Control,
+) {
+    (sandbox.runtime.as_ref(), &mut sandbox.control)
+}
 /// Original one-attempt startup used by existing-Store deployments and lifecycle proofs.
 #[cfg(unix)]
 pub fn start(
     api: &crate::SandboxApi,
     request: crate::SandboxCreate,
 ) -> Result<crate::ManagedSandbox, Box<crate::SandboxFailure>> {
-    crate::sandbox::create::create(&api.docker, request)
+    crate::sandbox::create::create(api, request)
 }
 /// Existing bounded startup observation for control-channel qualification.
 #[cfg(unix)]

@@ -16,13 +16,12 @@
 use crate::job::{failed, refused};
 use crate::registry::{lock, text, SandboxState, SANDBOXES};
 use crate::runtime::Runtime;
-use layerfs_api::internal::Control;
-use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
-use layerfs_bridge::duplex::initiate_observed;
+use layerfs_api::{sandbox::ProviderCreate, SandboxApi};
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
-use layerfs_sandbox::backend::local::{Local, LocalCreateFailure, Sandbox};
+use layerfs_sandbox::backend::local::NativeMacosProvider;
+use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions, SandboxInstance};
 use layerfs_sandbox::CommandIdentity;
-use std::net::{SocketAddr, TcpStream};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -52,8 +51,7 @@ pub(crate) fn start(
             "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a native Sandbox needs it",
         )
     })?;
-    let local = Local::native(root)
-        .map(|local| local.environment(native_environment()))
+    let local = NativeMacosProvider::new(root)
         .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let store = match args.get_text("storePath") {
@@ -92,14 +90,11 @@ fn start_claimed(
     saved_directory: &Path,
     id: &str,
     (project, installed): (&crate::registry::Project, StoreManifest),
-    (local, executable, store): (Local, PathBuf, String),
+    (local, executable, store): (NativeMacosProvider, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let sandbox_name = sandbox_name(args, id)?;
-    let local = local
-        .naming(&sandbox_name)
-        .map_err(|_| refused("InvalidInput", format!("local Sandbox name {sandbox_name}")))?;
-    let paths = local.paths().map_err(failed)?;
+    let paths = local.paths(&sandbox_name).map_err(failed)?;
     let path_text = |path: &Path| {
         path.to_str()
             .map(str::to_owned)
@@ -123,40 +118,61 @@ fn start_claimed(
         uid: setup.command_uid,
         gid: setup.command_gid,
     };
-    let config = setup.encode().map_err(failed)?;
+    setup.encode().map_err(failed)?;
     // Read only if this process ends before the intent is resolved.
     crate::discovery::save(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
     let labels = crate::sandbox::labels(name, id);
-    let sandbox = local
-        .create(&executable, &config, crate::sandbox::STARTUP, labels)
-        .map_err(|failure| {
-            let LocalCreateFailure {
-                phase,
-                sandbox,
-                cause,
-            } = *failure;
+    let api = SandboxApi::with_provider(Arc::new(local));
+    let mut manifest = project.manifest.clone();
+    manifest.locator = setup.store.clone();
+    let created = api
+        .create_provider_file(
+            ProviderCreate {
+                launch: LaunchRequest {
+                    name: sandbox_name.clone(),
+                    daemon_executable: executable,
+                    daemon_config: Vec::new(),
+                    labels,
+                    startup_timeout: crate::sandbox::STARTUP,
+                    options: ProviderLaunchOptions::Local {
+                        command_identity: identity,
+                        environment: native_environment(),
+                    },
+                },
+                setup,
+                controller_private: controller.private,
+                daemon_peer: daemon.public,
+            },
+            &project.store,
+            &manifest,
+        )
+        .map_err(|mut failure| {
+            drop(failure.control.take());
             abandon(
                 directory,
                 id,
-                format!("local sandbox create stopped at {phase:?}: {cause:?}"),
-                sandbox,
+                format!(
+                    "native sandbox stopped at {:?}: {:?}",
+                    failure.phase, failure.cause
+                ),
+                failure.runtime.take(),
             )
         })?;
-    let first = sandbox.endpoint().map_err(failed).and_then(|endpoint| {
-        first(endpoint, controller.private, daemon.public).map(|c| (endpoint, c))
-    });
-    let (endpoint, (control, instance)) = match first {
-        Ok(opened) => opened,
-        Err(refusal) => {
+    let instance = created.startup.instance;
+    let (sandbox, control, identity) = layerfs_api::internal::split_provider(created);
+    let endpoint = match sandbox.endpoint() {
+        Ok(endpoint) => endpoint,
+        Err(error) => {
+            drop(control);
             return Err(abandon(
                 directory,
                 id,
-                format!("local sandbox first connection: {}", refusal.message),
+                format!("native endpoint after startup: {error:?}"),
                 Some(sandbox),
-            ))
+            ));
         }
     };
     let dial = crate::pool::Dial {
@@ -280,46 +296,17 @@ pub(crate) fn directory(args: &SdkValue, id: &str) -> Result<PathBuf, SdkRefusal
     Ok(root.join(name))
 }
 
-/// The first control connection to a new daemon: one connect, one
-/// authentication, one Hello that waits for the Store and must find the
-/// daemon ControlReady; its instance identifies the daemon from then on.
-fn first(
-    endpoint: SocketAddr,
-    secret: [u8; 32],
-    peer: [u8; 32],
-) -> Result<(Control, [u8; 32]), SdkRefusal> {
-    let wait = crate::sandbox::STARTUP;
-    let stream = TcpStream::connect_timeout(&endpoint, wait).map_err(failed)?;
-    stream.set_read_timeout(Some(wait)).map_err(failed)?;
-    stream.set_write_timeout(Some(wait)).map_err(failed)?;
-    let connection = initiate_observed(stream, &secret, peer)
-        .result
-        .map_err(failed)?;
-    connection.clear_io_waits().map_err(failed)?;
-    let mut control = Control::new(connection);
-    match control
-        .call(Request::Hello(HelloRequest {
-            expected_instance: None,
-            wait_for_store: true,
-        }))
-        .map_err(failed)?
-    {
-        Reply::Hello(status) if status.phase == DaemonPhase::ControlReady => {
-            Ok((control, status.instance))
-        }
-        reply => Err(refused(
-            "Failed",
-            format!("the new daemon is not ControlReady: {reply:?}"),
-        )),
-    }
-}
-
 /// The refusal for a failed start. Everything a local start makes is its
 /// own (a directory and a child process), so each effect is known: the
 /// daemon's last log lines are read once, then it is stopped and its
 /// directory deleted, each once, and the intent removed. If that cleanup
 /// fails, the intent stays and says what is left.
-fn abandon(directory: &Path, id: &str, mut cause: String, sandbox: Option<Sandbox>) -> SdkRefusal {
+fn abandon(
+    directory: &Path,
+    id: &str,
+    mut cause: String,
+    sandbox: Option<Box<dyn SandboxInstance>>,
+) -> SdkRefusal {
     let container = sandbox.as_ref().map(|s| s.identity().to_string());
     let mut log = None;
     let mut left = None;
@@ -332,14 +319,11 @@ fn abandon(directory: &Path, id: &str, mut cause: String, sandbox: Option<Sandbo
             }
             Err(error) => cause = format!("{cause}; its daemon log was unreadable: {error:?}"),
         }
-        let removed = match sandbox.process() {
-            Some(_) => sandbox.stop(1).and_then(|()| sandbox.delete()),
-            None => sandbox.delete(),
-        };
+        let removed = sandbox.stop(1).and_then(|()| sandbox.delete());
         left = removed.err().map(|error| {
             format!(
                 "its local Sandbox {} could not be removed: {error:?}",
-                sandbox.directory().display()
+                sandbox.identity()
             )
         });
     }
