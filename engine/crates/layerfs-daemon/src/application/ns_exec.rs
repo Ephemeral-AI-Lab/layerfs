@@ -40,7 +40,12 @@ pub(super) fn main(args: &[OsString]) -> std::process::ExitCode {
 }
 
 fn run(args: &[OsString]) -> Result<(), String> {
-    let (socket, directory, identity, command) = parse(args)?;
+    let Parsed {
+        socket,
+        directory,
+        identity,
+        command,
+    } = parse(args)?;
     // The daemon is not dumpable, so a Sandbox root (CAP_SYS_ADMIN without
     // CAP_SYS_PTRACE) cannot open its `/proc/<pid>/ns/mnt`; the daemon sends
     // the descriptor over this socket instead.
@@ -63,11 +68,18 @@ fn run(args: &[OsString]) -> Result<(), String> {
     Err(format!("exec {}: {error}", program.to_string_lossy()))
 }
 
+/// One parsed helper invocation: the daemon socket, the optional directory to
+/// enter after joining, the ordinary identity to drop to and the command.
+struct Parsed {
+    socket: String,
+    directory: Option<String>,
+    identity: Option<(u32, u32)>,
+    command: Vec<OsString>,
+}
+
 /// `--socket <path> [--directory <path>] [--uid <uid> --gid <gid>] --
 /// <command> [args...]`.
-fn parse(
-    args: &[OsString],
-) -> Result<(String, Option<String>, Option<(u32, u32)>, Vec<OsString>), String> {
+fn parse(args: &[OsString]) -> Result<Parsed, String> {
     let mut rest = args.iter();
     let mut socket = None;
     let mut directory = None;
@@ -98,14 +110,20 @@ fn parse(
     if command.is_empty() {
         return Err(USAGE.to_owned());
     }
-    match (uid, gid) {
+    let identity = match (uid, gid) {
         (Some(0), _) | (_, Some(0)) => {
-            Err("--uid and --gid must name the non-root command identity".to_owned())
+            return Err("--uid and --gid must name the non-root command identity".to_owned())
         }
-        (Some(uid), Some(gid)) => Ok((socket, directory, Some((uid, gid)), command)),
-        (None, None) => Ok((socket, directory, None, command)),
-        _ => Err("--uid and --gid must be given together".to_owned()),
-    }
+        (Some(uid), Some(gid)) => Some((uid, gid)),
+        (None, None) => None,
+        _ => return Err("--uid and --gid must be given together".to_owned()),
+    };
+    Ok(Parsed {
+        socket,
+        directory,
+        identity,
+        command,
+    })
 }
 
 fn path(value: Option<&OsString>) -> Result<String, String> {
@@ -130,70 +148,4 @@ fn drop_to(uid: u32, gid: u32) -> Result<(), String> {
     setgroups(&[]).map_err(|error| format!("drop supplementary groups: {error}"))?;
     setgid(Gid::from_raw(gid)).map_err(|error| format!("drop to gid {gid}: {error}"))?;
     setuid(Uid::from_raw(uid)).map_err(|error| format!("drop to uid {uid}: {error}"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn socket_command() -> Vec<OsString> {
-        ["--socket", "/s", "--", "true"]
-            .into_iter()
-            .map(OsString::from)
-            .collect()
-    }
-
-    #[test]
-    fn the_command_identity_cannot_be_root() {
-        let args: Vec<OsString> = ["--socket", "/s", "--uid", "0", "--gid", "0", "--", "true"]
-            .into_iter()
-            .map(OsString::from)
-            .collect();
-        assert!(parse(&args).is_err());
-    }
-
-    #[test]
-    fn a_command_needs_a_separator_and_a_program() {
-        assert!(parse(&[OsString::from("--socket"), "/s".into()]).is_err());
-        assert!(parse(&[OsString::from("--socket"), "/s".into(), "--".into()]).is_err());
-    }
-
-    #[test]
-    fn a_socket_names_the_namespace() {
-        let (socket, directory, identity, command) = parse(&socket_command()).unwrap();
-        assert_eq!(socket, "/s");
-        assert_eq!(directory, None);
-        assert_eq!(identity, None);
-        assert_eq!(command, ["true"]);
-        // No socket, no namespace: the helper refuses.
-        let none: Vec<OsString> = ["--", "true"].into_iter().map(OsString::from).collect();
-        assert!(parse(&none).is_err());
-    }
-
-    #[test]
-    fn the_identity_is_all_or_nothing() {
-        let args = [
-            "--socket".into(),
-            "/s".into(),
-            "--uid".into(),
-            "501".into(),
-            "--".into(),
-            "true".into(),
-        ];
-        assert!(parse(&args).is_err());
-    }
-
-    #[test]
-    fn a_parsed_command_keeps_its_arguments() {
-        let args: Vec<OsString> = ["--socket", "/s", "--uid", "501", "--gid", "20", "--"]
-            .into_iter()
-            .map(OsString::from)
-            .chain(["bash".into(), "-c".into(), "printf hello".into()])
-            .collect();
-        let (socket, directory, identity, command) = parse(&args).unwrap();
-        assert_eq!(socket, "/s");
-        assert_eq!(directory, None);
-        assert_eq!(identity, Some((501, 20)));
-        assert_eq!(command, ["bash", "-c", "printf hello"]);
-    }
 }

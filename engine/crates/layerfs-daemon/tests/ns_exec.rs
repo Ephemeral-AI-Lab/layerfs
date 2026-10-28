@@ -369,6 +369,38 @@ fn a_helper_without_a_namespace_source_refuses_and_runs_nothing() {
 }
 
 #[test]
+fn malformed_helper_argv_refuses_with_a_reason_and_runs_nothing() {
+    let cases: [(&str, &[&str]); 5] = [
+        ("usage: layerfs-daemon ns-exec", &["--socket", "/s"]),
+        ("usage: layerfs-daemon ns-exec", &["--socket", "/s", "--"]),
+        (
+            "--uid and --gid must be given together",
+            &["--socket", "/s", "--uid", "501", "--", "true"],
+        ),
+        (
+            "--uid and --gid must name the non-root command identity",
+            &["--socket", "/s", "--uid", "0", "--gid", "0", "--", "true"],
+        ),
+        (
+            "--uid is not a number",
+            &[
+                "--socket", "/s", "--uid", "ordinary", "--gid", "20", "--", "true",
+            ],
+        ),
+    ];
+    for (reason, argv) in cases {
+        let output = Command::new(BINARY)
+            .arg("ns-exec")
+            .args(argv)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(125), "argv: {argv:?}");
+        let err = String::from_utf8_lossy(&output.stderr);
+        assert!(err.contains(reason), "argv: {argv:?}, stderr: {err}");
+    }
+}
+
+#[test]
 fn a_helper_in_another_pid_namespace_is_refused_by_the_daemons_socket() {
     let directory = unique_directory("foreign-pid-ns");
     let socket = directory.join("ns-exec.sock");

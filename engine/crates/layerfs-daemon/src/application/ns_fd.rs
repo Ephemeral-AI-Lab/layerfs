@@ -157,23 +157,3 @@ pub fn receive(path: &Path) -> io::Result<File> {
     }
     Ok(namespace)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_root_is_admitted() {
-        assert!(admit_uid(0));
-        assert!(!admit_uid(501));
-        assert!(!admit_uid(65534));
-    }
-
-    #[test]
-    fn a_peer_must_be_in_this_pid_namespace() {
-        assert!(same_pid_namespace(std::process::id() as i32));
-        assert!(!same_pid_namespace(0));
-        assert!(!same_pid_namespace(-1));
-        assert!(!same_pid_namespace(i32::MAX));
-    }
-}
