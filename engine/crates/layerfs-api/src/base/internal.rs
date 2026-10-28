@@ -98,12 +98,15 @@ pub fn into_connection(control: Control) -> Connection {
 
 /// Original authenticated control owner, without a reconnect or reset.
 #[cfg(unix)]
-pub fn control(sandbox: &mut crate::ManagedSandbox) -> &mut Control {
+pub fn control(sandbox: &mut crate::sandbox::ProviderSandbox) -> &mut Control {
     &mut sandbox.control
 }
-/// The runtime, control owner and command identity of one Sandbox, taken
-/// apart for an owner that serves several Workspaces at once: commands run on
-/// the runtime while the control owner answers one request at a time.
+/// Deprecated: use control(&mut ProviderSandbox) instead; retained for layerfs-node until H27.
+#[cfg(unix)]
+pub fn control_managed(sandbox: &mut crate::ManagedSandbox) -> &mut Control {
+    &mut sandbox.control
+}
+/// Deprecated: use split_provider instead; retained for layerfs-node until H27.
 #[cfg(unix)]
 pub fn split(
     sandbox: crate::ManagedSandbox,
@@ -139,28 +142,21 @@ pub fn provider_parts(
 #[cfg(unix)]
 pub fn start(
     api: &crate::SandboxApi,
-    request: crate::SandboxCreate,
-) -> Result<crate::ManagedSandbox, Box<crate::SandboxFailure>> {
-    crate::sandbox::create::create(api, request)
+    request: crate::sandbox::ProviderCreate,
+) -> Result<crate::sandbox::ProviderSandbox, Box<crate::sandbox::ProviderFailure>> {
+    api.start(request)
 }
 /// Existing bounded startup observation for control-channel qualification.
 #[cfg(unix)]
 pub fn sandbox_status(
-    sandbox: &mut crate::ManagedSandbox,
+    sandbox: &mut crate::sandbox::ProviderSandbox,
     wait_for_store: bool,
 ) -> Result<layerfs_bridge::control::DaemonStatus, Box<OperationFailure>> {
     sandbox.status(wait_for_store)
 }
 
-/// Disjoint original runtime/control borrows for concurrent Workspace orchestration.
-#[cfg(unix)]
-pub fn parts(
-    sandbox: &mut crate::ManagedSandbox,
-) -> (&layerfs_sandbox::backend::docker::Sandbox, &mut Control) {
-    (&sandbox.runtime, &mut sandbox.control)
-}
-
 /// The same ordinary launcher for external host commands and disjoint concurrent proof borrows.
+/// Deprecated: retained for legacy layerfs-node until its migration in H27.
 #[cfg(unix)]
 pub fn exec(
     sandbox: &layerfs_sandbox::backend::docker::Sandbox,
@@ -173,5 +169,11 @@ pub fn exec(
     layerfs_sandbox::backend::docker::ExecCreated,
     Box<layerfs_sandbox::backend::docker::ExecCreateFailure>,
 > {
-    crate::sandbox::exec::launch(sandbox, identity, arguments, environment, directory, stdin)
+    sandbox.create_exec(layerfs_sandbox::ExecRequest {
+        identity,
+        arguments,
+        environment,
+        directory,
+        stdin,
+    })
 }

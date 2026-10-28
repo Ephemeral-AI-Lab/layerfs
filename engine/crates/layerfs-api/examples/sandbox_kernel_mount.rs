@@ -4,8 +4,8 @@
 //! registered with the daemon, read the complete root and mutate it through
 //! plain syscalls.
 use layerfs_api::{
-    InitRequest, ManagedSandbox, MountedWorkspace, OperationCause, ProjectApi, SandboxApi,
-    SandboxCreate, WorkspaceApi,
+    InitRequest, MountedWorkspace, OperationCause, ProjectApi, ProviderCreate, ProviderSandbox,
+    SandboxApi, WorkspaceApi,
 };
 use layerfs_bridge::{
     control::{ControlCode, DaemonPhase, MountPhase, Reply, Request},
@@ -14,7 +14,8 @@ use layerfs_bridge::{
 };
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
-use layerfs_sandbox::backend::docker::{Docker, SandboxRequest};
+use layerfs_sandbox::backend::docker::{Docker, DockerProvider};
+use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::{
@@ -22,6 +23,7 @@ use std::{
     fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -100,59 +102,46 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
         existing_store: None,
     }
 }
-type Running = (
-    layerfs_sandbox::backend::docker::RuntimeOutput,
-    layerfs_sandbox::backend::docker::ExecHandle,
-);
 enum Directory<'a> {
     Mounted(&'a MountedWorkspace),
     Kernel(&'a str),
 }
-/// Mounted commands use SDK exec; outside-mount commands retain ordinary Sandbox execution.
-fn start(
-    owner: &ManagedSandbox,
+fn run_dir(
+    runtime: &dyn layerfs_sandbox::provider::SandboxInstance,
+    identity: layerfs_sandbox::CommandIdentity,
     script: &str,
-    directory: Directory<'_>,
-) -> Result<Running, Box<dyn Error>> {
-    let arguments = vec!["bash".into(), "-c".into(), script.into()];
-    let created = match directory {
-        Directory::Mounted(mounted) => WorkspaceApi::exec(owner, mounted, arguments, vec![], false),
-        Directory::Kernel(directory) => layerfs_api::internal::exec(
-            &owner.runtime,
-            layerfs_sandbox::CommandIdentity { uid: 501, gid: 20 },
-            arguments,
-            vec![],
-            directory.into(),
-            false,
-        ),
-    }
-    .map_err(|f| format!("create {f:?}"))?;
-    let attached = created.start().map_err(|f| format!("start {f:?}"))?;
-    let (_input, output, handle) = attached.into_parts().map_err(|f| format!("split {f:?}"))?;
-    Ok((output, handle))
-}
-fn finish((output, handle): Running) -> Result<Vec<u8>, Box<dyn Error>> {
-    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    output
-        .copy_to(&mut stdout, &mut stderr)
-        .map_err(|f| format!("output {f:?}"))?;
-    let inspected = handle.inspect().map_err(|f| format!("inspect {f:?}"))?;
-    if inspected.known_root_exit() != Some(0) {
+    directory: &str,
+) -> Result<Vec<u8>, String> {
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let exit = runtime
+        .run(
+            &layerfs_sandbox::ExecRequest {
+                identity,
+                arguments: vec!["bash".into(), "-c".into(), script.into()],
+                environment: vec![],
+                directory: directory.into(),
+                stdin: false,
+            },
+            &mut stdout,
+            &mut stderr,
+        )
+        .map_err(|f| format!("exec {f:?}"))?;
+    if exit.code != 0 {
         return Err(format!(
-            "command {inspected:?}: {} {}",
+            "command exit {exit:?}: {} {}",
             String::from_utf8_lossy(&stdout),
             String::from_utf8_lossy(&stderr)
-        )
-        .into());
+        ));
     }
     Ok(stdout)
 }
-fn run(
-    owner: &ManagedSandbox,
-    script: &str,
-    directory: Directory<'_>,
-) -> Result<Vec<u8>, Box<dyn Error>> {
-    finish(start(owner, script, directory)?)
+fn run(owner: &ProviderSandbox, script: &str, directory: Directory<'_>) -> Result<Vec<u8>, String> {
+    let dir = match directory {
+        Directory::Mounted(mounted) => &mounted.ready.directory,
+        Directory::Kernel(dir) => dir,
+    };
+    run_dir(owner.runtime.as_ref(), owner.command_identity, script, dir)
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let began = Instant::now();
@@ -191,22 +180,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     fs::remove_dir_all(directory.join("source"))?;
     let keys = transport::generate_keypair()?;
     let daemon = transport::generate_keypair()?;
-    let api = SandboxApi::new(Docker::new(&args[1], Duration::from_secs(3))?);
+    let docker = Docker::new(&args[1], Duration::from_secs(3))?;
+    let provider = Arc::new(DockerProvider::new(docker));
+    let api = SandboxApi::with_provider(provider);
     let mut owner = api
         .create(
-            SandboxCreate {
-                deployment: SandboxRequest {
-                    image: args[2].clone(),
-                    store_volume: args[3].clone(),
-                    port: 30421,
+            ProviderCreate {
+                launch: LaunchRequest {
+                    name: "kernel-mount-test".into(),
+                    daemon_executable: PathBuf::from(&args[4]),
+                    daemon_config: vec![],
                     labels: vec![],
+                    startup_timeout: Duration::from_secs(3),
+                    options: ProviderLaunchOptions::Docker {
+                        image: args[2].clone(),
+                        store_volume: args[3].clone(),
+                        port: 30421,
+                        connect_host: None,
+                    },
                 },
                 setup: setup(daemon.private, keys.public),
-                executable: PathBuf::from(&args[4]),
                 controller_private: keys.private,
                 daemon_peer: daemon.public,
-                startup_wait: Duration::from_secs(3),
-                connect_host: None,
             },
             &project,
         )
@@ -323,45 +318,54 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Reversible normal unmount: a running command's working directory keeps
     // the kernel busy. The filesystem neither kills nor waits for the command.
-    let holder = start(
-        &owner,
-        "sleep 1.2",
-        Directory::Kernel(&format!("{root}/node_modules")),
-    )?;
-    run(
-        &owner,
-        &format!(
-            "until ls -l /proc/[0-9]*/cwd 2>/dev/null | grep -q '{root}/node_modules'; do sleep 0.02; done"
-        ),
-        Directory::Kernel("/"),
-    )?;
-    let busy = WorkspaceApi::new(&mut owner)
-        .unmount(mounted.bound.token, false)
-        .unwrap_err();
-    match &busy.cause {
-        OperationCause::Remote(refusal) => {
-            assert_eq!(
-                (refusal.code, refusal.phase.as_str()),
-                (ControlCode::Busy, "unmount:kernel")
-            );
+    let node_modules_dir = format!("{root}/node_modules");
+    let identity = owner.command_identity;
+    let (runtime, control) = layerfs_api::internal::provider_parts(&mut owner);
+    std::thread::scope(|s| {
+        let holder = s.spawn(|| run_dir(runtime, identity, "sleep 1.2", &node_modules_dir));
+        run_dir(
+            runtime,
+            identity,
+            &format!("until ls -l /proc/[0-9]*/cwd 2>/dev/null | grep -q '{node_modules_dir}'; do sleep 0.02; done"),
+            "/",
+        )
+        .unwrap();
+        let busy = WorkspaceApi::from_control(control)
+            .unmount(mounted.bound.token, false)
+            .unwrap_err();
+        match &busy.cause {
+            OperationCause::Remote(refusal) => {
+                assert_eq!(
+                    (refusal.code, refusal.phase.as_str()),
+                    (ControlCode::Busy, "unmount:kernel")
+                );
+            }
+            other => panic!("{other:?}"),
         }
-        other => panic!("{other:?}"),
-    }
-    let status = WorkspaceApi::new(&mut owner).status(mounted.bound.token)?;
-    let kernel = status.kernel.expect("kernel status block");
-    assert_eq!(kernel.phase, MountPhase::Ready);
-    assert_eq!(
-        kernel.ready.as_ref(),
-        Some(&mounted.ready),
-        "same connection"
-    );
-    assert_eq!(
-        run(&owner, "cat .git/index", Directory::Mounted(&mounted))?,
-        FILES[1].1
-    );
-    finish(holder)?;
-    println!("UNMOUNT_BUSY phase=unmount:kernel workspace_ready=true command_untouched=true");
-    mark("busy");
+        let status = WorkspaceApi::from_control(control)
+            .status(mounted.bound.token)
+            .unwrap();
+        let kernel = status.kernel.expect("kernel status block");
+        assert_eq!(kernel.phase, MountPhase::Ready);
+        assert_eq!(
+            kernel.ready.as_ref(),
+            Some(&mounted.ready),
+            "same connection"
+        );
+        assert_eq!(
+            run_dir(
+                runtime,
+                identity,
+                "cat .git/index",
+                &mounted.ready.directory
+            )
+            .unwrap(),
+            FILES[1].1
+        );
+        holder.join().unwrap().unwrap();
+        println!("UNMOUNT_BUSY phase=unmount:kernel workspace_ready=true command_untouched=true");
+        mark("busy");
+    });
 
     // Terminal unmount: detach, loop joins, drain, revocation and Close.
     WorkspaceApi::new(&mut owner)

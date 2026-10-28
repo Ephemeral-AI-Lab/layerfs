@@ -62,8 +62,16 @@ impl fmt::Debug for ProviderFailure {
             .finish_non_exhaustive()
     }
 }
+impl fmt::Display for ProviderFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Sandbox {:?}: {:?}", self.phase, self.cause)
+    }
+}
+impl std::error::Error for ProviderFailure {}
 /// Provider runtime and its original authenticated daemon channel.
 pub struct ProviderSandbox {
+    /// Original private launch and daemon configuration inputs.
+    pub request: ProviderCreate,
     /// Explicit runtime lifecycle owner.
     pub runtime: Box<dyn SandboxInstance>,
     /// Original correlated startup observation.
@@ -73,7 +81,23 @@ pub struct ProviderSandbox {
     /// Store installation acknowledgement, if installed by this create.
     pub installed: Option<crate::Installed>,
     pub(crate) control: Control,
-    pub(crate) command_identity: CommandIdentity,
+    /// Command identity admitted for this Sandbox deployment.
+    pub command_identity: CommandIdentity,
+}
+impl ProviderSandbox {
+    /// Explicit startup observation/wait on the same incarnation and Control owner.
+    pub(crate) fn status(
+        &mut self,
+        wait_for_store: bool,
+    ) -> Result<DaemonStatus, Box<crate::OperationFailure>> {
+        super::create::hello(
+            &mut self.control,
+            layerfs_bridge::control::HelloRequest {
+                expected_instance: Some(self.startup.instance),
+                wait_for_store,
+            },
+        )
+    }
 }
 impl SandboxApi {
     /// Uses a dynamically selected runtime provider.
@@ -81,6 +105,127 @@ impl SandboxApi {
         Self {
             docker: None,
             provider: Some(provider),
+        }
+    }
+    /// Creates, privately configures, starts and authenticates once, preserving partial ownership on failure.
+    pub fn create(
+        &self,
+        request: ProviderCreate,
+        project: &crate::SealedProject,
+    ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
+        self.create_provider_file(request, &project.store, &project.manifest)
+    }
+    /// Launches once and authenticates to Hello without Store installation (internal proof only).
+    pub(crate) fn start(
+        &self,
+        request: ProviderCreate,
+    ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
+        let mut progress = Startup::new();
+        let mut runtime = None;
+        let result = (|| {
+            let provider = self
+                .provider
+                .as_ref()
+                .ok_or(SandboxCause::Setup(ControlError(
+                    "provider API requires provider selection",
+                )))?;
+            if let Some(directory) =
+                provider
+                    .local_directory(&request.launch.name)
+                    .map_err(|cause| {
+                        SandboxCause::Runtime(layerfs_sandbox::WireFailure::local(cause))
+                    })?
+            {
+                if std::path::Path::new(&request.setup.overlay)
+                    != directory.join("overlay/overlay.sqlite")
+                    || std::path::Path::new(&request.setup.mounts) != directory.join("workspaces")
+                    || std::path::Path::new(&request.setup.store).starts_with(&directory)
+                    || request.setup.listen != "127.0.0.1:0"
+                {
+                    return Err(SandboxCause::Setup(ControlError(
+                        "provider local resource ownership",
+                    )));
+                }
+            }
+            let mut launch = request.launch.clone();
+            launch.daemon_config = request.setup.encode().map_err(SandboxCause::Setup)?;
+            if let ProviderLaunchOptions::Local {
+                command_identity, ..
+            } = &launch.options
+            {
+                if (command_identity.uid, command_identity.gid)
+                    != (request.setup.command_uid, request.setup.command_gid)
+                {
+                    return Err(SandboxCause::Setup(ControlError(
+                        "provider topology/identity",
+                    )));
+                }
+            }
+            if launch.startup_timeout.is_zero()
+                || public_key(&request.controller_private).map_err(SandboxCause::Channel)?
+                    != request.setup.control_peer
+                || public_key(&request.setup.private_key).map_err(SandboxCause::Channel)?
+                    != request.daemon_peer
+            {
+                return Err(SandboxCause::Setup(ControlError(
+                    "provider topology/identity",
+                )));
+            }
+            runtime = Some(match provider.launch(launch) {
+                Ok(owner) => owner,
+                Err(mut failure) => {
+                    progress.phase = match failure.phase {
+                        layerfs_sandbox::provider::LaunchPhase::Validate => SandboxPhase::Validate,
+                        layerfs_sandbox::provider::LaunchPhase::Create => SandboxPhase::Create,
+                        layerfs_sandbox::provider::LaunchPhase::Start => SandboxPhase::Start,
+                        layerfs_sandbox::provider::LaunchPhase::Listener => SandboxPhase::Listener,
+                    };
+                    runtime = failure.instance.take();
+                    return Err(SandboxCause::Provider(failure));
+                }
+            });
+            progress.phase = SandboxPhase::Endpoint;
+            let endpoint = runtime
+                .as_ref()
+                .expect("launched")
+                .endpoint()
+                .map_err(SandboxCause::Runtime)?;
+            let connect_host = match &request.launch.options {
+                ProviderLaunchOptions::Docker { connect_host, .. } => connect_host.as_deref(),
+                _ => None,
+            };
+            progress.connect(
+                endpoint,
+                connect_host,
+                request.launch.startup_timeout,
+                &request.controller_private,
+                request.daemon_peer,
+                request.setup.existing_store.is_some(),
+            )
+        })();
+        match result {
+            Ok(startup) => Ok(ProviderSandbox {
+                request: request.clone(),
+                runtime: runtime.expect("launched"),
+                startup,
+                installed: None,
+                handshake: progress.handshake,
+                control: progress.control.expect("authenticated"),
+                command_identity: CommandIdentity {
+                    uid: request.setup.command_uid,
+                    gid: request.setup.command_gid,
+                },
+            }),
+            Err(cause) => Err(Box::new(ProviderFailure {
+                request,
+                phase: progress.phase,
+                runtime,
+                control: progress.control,
+                handshake: progress.handshake,
+                observed: progress.observed,
+                installed: None,
+                cause,
+            })),
         }
     }
     /// Launches once, authenticates, selects or installs the Store, then observes Ready.
@@ -205,6 +350,7 @@ impl SandboxApi {
         })();
         match result {
             Ok(startup) => Ok(ProviderSandbox {
+                request: request.clone(),
                 runtime: runtime.expect("launched"),
                 startup,
                 installed,

@@ -11,7 +11,7 @@ use layerfs_sandbox::backend::docker::{
 };
 use layerfs_sandbox::provider::SandboxProvider;
 use std::{fmt, fs::File, io, path::PathBuf, sync::Arc, time::Duration};
-/// One actual stopped-container deployment, private archive and authenticated startup.
+/// Deprecated: use ProviderCreate instead; retained for layerfs-node until its migration in H27.
 #[derive(Clone)]
 pub struct SandboxCreate {
     /// Exact immutable image and borrowed shared named volume.
@@ -120,7 +120,7 @@ pub enum SandboxCause {
     /// Original streaming installation failure and exact publication knowledge.
     Install(Box<crate::InstallFailure>),
 }
-/// Caller retains exact acknowledged owner, connection and original deployment inputs.
+/// Deprecated: use ProviderFailure instead; retained for layerfs-node until its migration in H27.
 pub struct SandboxFailure {
     /// Original inputs with secrets retained privately.
     pub request: SandboxCreate,
@@ -164,7 +164,7 @@ pub struct SandboxApi {
     pub(crate) docker: Option<Docker>,
     pub(crate) provider: Option<Arc<dyn SandboxProvider>>,
 }
-/// Exact acknowledged container and authenticated control owner.
+/// Deprecated: use ProviderSandbox instead; retained for layerfs-node until its migration in H27.
 pub struct ManagedSandbox {
     /// Owned runtime container; explicit stop/delete only.
     pub runtime: Sandbox,
@@ -180,22 +180,16 @@ pub struct ManagedSandbox {
     pub(crate) command_identity: layerfs_sandbox::CommandIdentity,
 }
 impl SandboxApi {
-    /// Uses one explicit local Engine endpoint and metadata wait policy.
+    /// Deprecated: use SandboxApi::with_provider(Arc::new(DockerProvider::new(docker))) instead; retained for layerfs-node until H27.
     pub fn new(docker: Docker) -> Self {
         Self {
-            docker: Some(docker),
-            provider: None,
+            docker: Some(docker.clone()),
+            provider: Some(Arc::new(
+                layerfs_sandbox::backend::docker::DockerProvider::new(docker),
+            )),
         }
     }
-    /// Creates, privately configures, starts and authenticates once, preserving partial ownership on failure.
-    pub fn create(
-        &self,
-        request: SandboxCreate,
-        project: &crate::SealedProject,
-    ) -> Result<ManagedSandbox, Box<SandboxFailure>> {
-        self.create_file(request, &project.store, &project.manifest)
-    }
-    /// Creates a new daemon using exact persisted sealed-file and manifest facts.
+    /// Deprecated: use create_provider_file(ProviderCreate, ...) instead; retained for layerfs-node until H27.
     pub fn create_file(
         &self,
         request: SandboxCreate,
@@ -246,22 +240,6 @@ impl SandboxApi {
             }));
         }
         Ok(owner)
-    }
-}
-impl ManagedSandbox {
-    /// Explicit startup observation/wait on the same incarnation and Control owner.
-    /// A later observation never resolves an earlier unknown operation.
-    pub(crate) fn status(
-        &mut self,
-        wait_for_store: bool,
-    ) -> Result<DaemonStatus, Box<OperationFailure>> {
-        hello(
-            &mut self.control,
-            HelloRequest {
-                expected_instance: Some(self.startup.instance),
-                wait_for_store,
-            },
-        )
     }
 }
 pub(super) fn hello(
