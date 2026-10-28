@@ -240,6 +240,15 @@ Aggregating these facts in a Host view belongs to the
 [dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs) follow-up, outside
 this repository.
 
+A retained Revoke or Close stop keeps that observation in its entry, so the
+traced reply that later reports the stop's custody carries the same section at
+the later boundary. `layerfs-api/tests/unmount_observability.rs` covers both
+forms: the completed abort path through the actual daemon executable, and the
+retained stop through the in-process service, where the entry's own owner can
+be poisoned or closed. That target mounts a Workspace, so `tools/ci_tests.py`
+lists it with the SDK mount targets: the fast lane leaves it out and the
+nightly mount lane runs it in its own container with `/dev/fuse`.
+
 ## Forced unmount
 
 [`ForceUnmount`](80-forced-teardown.md) takes the session out of the entry the

@@ -156,6 +156,11 @@ Aggregating them in a Host view is a
 [dsh-layerfs](https://github.com/Ephemeral-AI-Lab/dsh-layerfs) follow-up,
 outside this repository.
 
+A retained `Revoke` or `Close` stop reports the same section through the
+traced reply that reports its custody. Both forms are staged in-process
+through the entry's own owner and are covered beside the completed path in
+`layerfs-api/tests/unmount_observability.rs`.
+
 `ForceUnmount` remains for a stalled custody that is still forceable (one
 whose abort was not attempted) and for a live connection. It takes the session back and makes the
 same sequence with two differences. Step 1 is `NativeSession::abort_detached`,
