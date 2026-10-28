@@ -1,10 +1,6 @@
-//! A Sandbox's runtime: a Docker container (the default), or on macOS with
-//! `deploy.sandbox` `native` (LAYERFS_SANDBOX=native) a local daemon process
-//! of this user that serves its Workspaces over loopback NFS to this host's
-//! own client, its commands run as this user, with no root. Both run the
-//! same daemon and answer the same calls; only how it is started, how
-//! commands are launched and how it is observed differ. Off macOS selecting
-//! `native` is refused as Unsupported before anything is made.
+//! A Sandbox's runtime: Docker (default), or `LAYERFS_SANDBOX=native` on
+//! Linux (root FUSE daemon, nonroot commands) and macOS (loopback NFS,
+//! caller identity). Both use the same authenticated daemon control pipeline.
 use crate::job::{failed, refused};
 use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -19,7 +15,7 @@ use std::net::SocketAddr;
 /// record has no `runtime`).
 pub(crate) const LOCAL: &str = "local";
 /// A native Sandbox record's `runtime` (LAYERFS_SANDBOX=native): a local
-/// daemon serving its Workspaces over loopback NFS, commands as this user.
+/// daemon serving FUSE on Linux or loopback NFS on macOS.
 pub(crate) const NATIVE: &str = "native";
 
 /// One Sandbox's runtime owner.
@@ -38,14 +34,13 @@ pub(crate) fn local(deploy: &SdkValue) -> Result<bool, SdkRefusal> {
         Some(NATIVE) => Ok(true),
         Some(other) => Err(refused(
             "InvalidInput",
-            format!("deploy.sandbox (LAYERFS_SANDBOX) is docker or native (macOS), not {other}"),
+            format!("deploy.sandbox (LAYERFS_SANDBOX) is docker or native (Linux or macOS), not {other}"),
         )),
     }
 }
 
-/// Whether the deployment selects the native route: a local daemon whose
-/// Workspaces this host's own NFS client mounts (`LAYERFS_KERNEL=nfs`), and
-/// whose commands run as this user, unconfined. No root, no Docker, no FUSE.
+/// Whether the deployment selects the native route: FUSE on Linux,
+/// loopback NFS on macOS, with no Docker.
 pub(crate) fn native(deploy: &SdkValue) -> bool {
     deploy.get_text("sandbox") == Some(NATIVE)
 }

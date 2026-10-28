@@ -584,7 +584,9 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
 fn local_record(_: &SdkValue, id: &str, _: &SdkValue) -> Result<Recorded> {
     Err(refused(
         "Unsupported",
-        format!("Sandbox {id} is a native Sandbox (LAYERFS_SANDBOX=native), which needs macOS"),
+        format!(
+            "Sandbox {id} is a native Sandbox (LAYERFS_SANDBOX=native), which needs Linux or macOS"
+        ),
     ))
 }
 impl Recorded {

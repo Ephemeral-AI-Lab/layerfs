@@ -61,9 +61,9 @@ export function sandboxArg(sandbox) {
 /** Deployment settings from the client options, else the environment
  * (LAYERFS_<NAME>). A Workspace's Sandbox needs
  * every one but the container prefix and daemon host. With `sandbox`
- * (LAYERFS_SANDBOX) `native` (macOS), a Sandbox is a daemon process of this
- * user whose Workspaces this host's own NFS client mounts, with commands run
- * as this user (no root, no Docker image): it needs the daemon and
+ * (LAYERFS_SANDBOX) `native` (Linux or macOS), a Sandbox is a host daemon:
+ * Linux uses FUSE with a root daemon and nonroot commands (501:20);
+ * macOS uses loopback NFS and this user. It needs the daemon and
  * `localDir` (LAYERFS_LOCAL_DIR) and no Docker setting. Unset or `docker` is
  * Docker; any other value is refused. */
 export function deployment(options = {}) {
@@ -71,7 +71,7 @@ export function deployment(options = {}) {
   const sandbox = options.sandbox ?? env("SANDBOX");
   if (sandbox === "native") return nativeDeployment(options, env, sandbox);
   if (sandbox !== undefined && sandbox !== "docker") {
-    throw new LayerFSError("InvalidInput", `deploy.sandbox (LAYERFS_SANDBOX) is docker or native (macOS), not ${sandbox}`, null);
+    throw new LayerFSError("InvalidInput", `deploy.sandbox (LAYERFS_SANDBOX) is docker or native (Linux or macOS), not ${sandbox}`, null);
   }
   const deploy = {
     docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",

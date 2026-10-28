@@ -32,7 +32,7 @@ deployment puts that Sandbox is refused and nothing is deleted, the configured
 number freed, a damaged boot or port is refused, a native record is used only by
 a native deployment, and a record of the former `local` runtime is never used or
 deleted. Record handling is the same code on Linux and macOS, so it runs here;
-starting a native Sandbox is macOS only.
+starting a native Sandbox is supported on macOS (caller identity, loopback NFS) and Linux (root daemon, nonroot 501:20 commands, FUSE). Linux lifecycle qualification also runs `layerfs-sandbox --test native_provider` as root and the SDK smoke with `LAYERFS_SANDBOX=native`.
 
 `native_admission` covers initial connection admission and its `Busy` deadline.
 The deadline test pays the product's full 60-second readiness wait. The mock

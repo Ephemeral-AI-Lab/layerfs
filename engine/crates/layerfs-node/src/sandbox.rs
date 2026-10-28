@@ -121,8 +121,7 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         return Err(refused(
             "Unsupported",
-            "LAYERFS_SANDBOX=native runs its daemon as a process of this user and mounts its \
-             Workspaces with this host's own NFS client, which needs macOS; use Docker",
+            "LAYERFS_SANDBOX=native requires Linux (FUSE) or macOS (loopback NFS); use Docker",
         ));
     }
     let docker = text(deploy, "docker")?;

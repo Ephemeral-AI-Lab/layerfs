@@ -1,4 +1,4 @@
-//! Native Sandboxes (`deploy.sandbox` `native`, LAYERFS_SANDBOX=native, macOS):
+//! Native Sandboxes (`deploy.sandbox` `native`, LAYERFS_SANDBOX=native):
 //! the project's daemon runs as a process of this user instead of in a
 //! container. It isolates nothing beyond the caller's own sandbox.
 //!
@@ -8,9 +8,8 @@
 //! Workspace mounts (`/workspaces`). The daemon opens the installed Store
 //! where this process opens it (`storePath`), so the daemon setup and the
 //! Store's locator name that path instead of `/layerfs-store`. The daemon
-//! listens on 127.0.0.1 only. A native Sandbox needs no root: its daemon
-//! serves Workspaces over loopback NFS (`LAYERFS_KERNEL=nfs`) to this host's
-//! own client, and its commands run as this user. Start,
+//! listens on 127.0.0.1 only. macOS serves loopback NFS as this user; Linux
+//! keeps the root FUSE daemon and nonroot commands (501:20) from #402. Start,
 //! failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
 //! daemon stopped and its directory deleted, each once.
 use crate::job::{failed, refused};
@@ -19,14 +18,17 @@ use crate::runtime::Runtime;
 use layerfs_api::{sandbox::ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
-use layerfs_sandbox::backend::local::NativeMacosProvider;
+#[cfg(target_os = "linux")]
+use layerfs_sandbox::backend::local::NativeLinuxProvider as NativeProvider;
+#[cfg(target_os = "macos")]
+use layerfs_sandbox::backend::local::NativeMacosProvider as NativeProvider;
 use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions, SandboxInstance};
 use layerfs_sandbox::CommandIdentity;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-/// Starts the project's next Sandbox as a native daemon (macOS only;
-/// elsewhere refused before any effect). Called by
+/// Starts the project's next Sandbox as a native daemon. Linux requires
+/// root before any effect. Called by
 /// [`crate::sandbox::start`] under the project's guard, with the project
 /// and its installed manifest already read.
 pub(crate) fn start(
@@ -38,11 +40,10 @@ pub(crate) fn start(
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
-    if !cfg!(target_os = "macos") {
+    if cfg!(target_os = "linux") && crate::discovery::user().0 != 0 {
         return Err(refused(
             "Unsupported",
-            "LAYERFS_SANDBOX=native mounts its Workspaces with this host's own NFS client and \
-             runs commands as this user, which is supported on macOS only; use Docker here",
+            "LAYERFS_SANDBOX=native on Linux needs root for FUSE and commands as uid 501, gid 20; run inside the VM or CI box that isolates it",
         ));
     }
     let root = deploy.get_text("localDir").ok_or_else(|| {
@@ -51,7 +52,7 @@ pub(crate) fn start(
             "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a native Sandbox needs it",
         )
     })?;
-    let local = NativeMacosProvider::new(root)
+    let local = NativeProvider::new(root)
         .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let store = match args.get_text("storePath") {
@@ -90,7 +91,7 @@ fn start_claimed(
     saved_directory: &Path,
     id: &str,
     (project, installed): (&crate::registry::Project, StoreManifest),
-    (local, executable, store): (NativeMacosProvider, PathBuf, String),
+    (local, executable, store): (NativeProvider, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let sandbox_name = sandbox_name(args, id)?;
@@ -103,8 +104,11 @@ fn start_claimed(
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let mut setup = crate::sandbox::setup(daemon.private, controller.public);
-    // the native route's commands run as this user, unconfined
-    (setup.command_uid, setup.command_gid) = crate::discovery::user();
+    // macOS uses the caller; Linux keeps #402's separate nonroot identity.
+    #[cfg(target_os = "macos")]
+    {
+        (setup.command_uid, setup.command_gid) = crate::discovery::user();
+    }
     setup.listen = "127.0.0.1:0".into();
     setup.store = store.clone();
     setup.overlay = path_text(&paths.overlay)?;
@@ -234,6 +238,7 @@ fn start_claimed(
 /// What a native Sandbox's daemon starts with besides `PATH`: the NFS
 /// route, and the mount helper and reference overrides this process was
 /// given (`LAYERFS_NFS_*`), so a test host can name its own client.
+#[cfg(target_os = "macos")]
 fn native_environment() -> Vec<(String, String)> {
     let mut environment = vec![("LAYERFS_KERNEL".to_owned(), "nfs".to_owned())];
     for name in [
@@ -248,6 +253,11 @@ fn native_environment() -> Vec<(String, String)> {
         }
     }
     environment
+}
+
+#[cfg(target_os = "linux")]
+fn native_environment() -> Vec<(String, String)> {
+    vec![("LAYERFS_KERNEL".to_owned(), "fuse".to_owned())]
 }
 
 /// A local Sandbox's directory name: `<prefix><project>-<id>`, the name its
