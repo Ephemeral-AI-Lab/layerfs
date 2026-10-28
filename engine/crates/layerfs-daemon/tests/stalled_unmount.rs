@@ -5,12 +5,12 @@
 //! engine or VM agent outside a Sandbox can. The daemon's plain detach then
 //! succeeds in its own namespace while the superblock lives on in the copy, so
 //! the kernel never ends the connection: the receive loops stay blocked and
-//! the drain stops at Join. A second normal unmount returns the same custody.
-//! One forced unmount ends it with one abort write, then drains, revokes and
-//! closes. Removing the mount directory then detaches the copy's mount too
-//! (Linux detaches the mounts on a removed mount point in every namespace),
-//! so the connection's control entry goes while the copy still runs, and the
-//! copy finds no mount there.
+//! the drain stops at Join. The normal unmount then makes the same single
+//! abort write a forced unmount would, drains again, revokes and closes, so it
+//! ends the connection itself. Removing the mount directory then detaches the
+//! copy's mount too (Linux detaches the mounts on a removed mount point in
+//! every namespace), so the connection's control entry goes while the copy
+//! still runs, and the copy finds no mount there.
 //!
 //! The safety rule of `support/fusectl.rs` binds this file: nothing here
 //! writes under `/sys/fs/fuse/connections` or reads another connection.
@@ -30,10 +30,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    AbortDisposition, CommitKnowledge, DetachDisposition, MountPhase, Reply, TeardownStage,
-};
-use layerfs_daemon::control::Failure;
+use layerfs_bridge::control::Reply;
 use mounted::{mount_entry, until};
 use rig::{root, Rig};
 use std::{
@@ -125,7 +122,7 @@ impl Drop for Copy {
 }
 
 #[test]
-fn a_normal_unmount_stalled_at_join_is_ended_by_one_forced_unmount() {
+fn a_normal_unmount_stalled_at_join_ends_itself_with_one_abort_write() {
     fusectl::mount();
     let rig = Rig::new("stalled-join");
     let ready = rig.mount(1);
@@ -134,67 +131,25 @@ fn a_normal_unmount_stalled_at_join_is_ended_by_one_forced_unmount() {
     let connection = fusectl::own(&ready);
     let mut copy = Copy::spawn(root(&ready));
 
-    // The plain detach succeeds here; the connection outlives it.
-    let custody = match rig.harness.try_unmount(token) {
-        Err(Failure::Retained(custody)) => *custody,
-        other => panic!(
-            "normal unmount with a copied mount: {:?}",
-            other.map(|done| done.reply)
-        ),
+    // The plain detach succeeds here; the connection outlives it, so the drain
+    // stops at Join and the normal unmount ends it with one abort write.
+    let done = match rig.harness.try_unmount(token) {
+        Ok(done) => done,
+        Err(failure) => panic!("normal unmount of a copied mount: {failure:?}"),
     };
-    println!("STALLED custody={custody:?}");
-    assert_eq!(custody.stage, TeardownStage::Join, "{custody:?}");
-    assert!(custody.detached && custody.forced.is_none(), "{custody:?}");
-    let work = custody.work.expect("custody work");
-    assert_eq!(
-        (work.loops_exited, work.active, work.retained),
-        (0, 0, 0),
-        "{work:?}"
-    );
+    println!("STALLED plain unmount={:?}", done.reply);
+    assert_eq!(done.reply, Reply::Unmounted(token));
     assert!(
         mount_entry(&ready.directory).is_none(),
         "the daemon's mount row remains"
-    );
-    assert!(connection.exists(), "the connection ended with its mount");
-    assert_eq!(rig.harness.phase(token), MountPhase::Retained);
-
-    // Plain unmount is unchanged: a second one returns the same custody.
-    match rig.harness.try_unmount(token) {
-        Err(Failure::Retained(again)) => assert_eq!(
-            (again.stage, again.detail.as_str()),
-            (custody.stage, custody.detail.as_str())
-        ),
-        other => panic!("second normal unmount: {:?}", other.map(|done| done.reply)),
-    }
-
-    // One forced unmount ends the stalled custody.
-    let outcome = match rig.harness.try_force(token, false) {
-        Ok(done) => match done.reply {
-            Reply::ForceUnmounted(closed) => {
-                assert_eq!(closed.token, token);
-                closed.outcome
-            }
-            other => panic!("forced unmount replied {other:?}"),
-        },
-        Err(failure) => panic!("forced unmount of a stalled Join: {failure:?}"),
-    };
-    println!("FORCED outcome={outcome:?}");
-    assert_eq!(outcome.facts.abort, AbortDisposition::Written);
-    assert_eq!(outcome.facts.detach, DetachDisposition::Detached);
-    assert_eq!(outcome.facts.commit, CommitKnowledge::Absent);
-    assert!(
-        outcome.work.loops_configured != 0
-            && outcome.work.loops_joined == outcome.work.loops_configured,
-        "{:?}",
-        outcome.work
     );
     assert!(
         !Path::new(&ready.directory).exists(),
         "mount directory left behind"
     );
 
-    // The removed directory took the copy's mount with it: the connection
-    // ends while the copy still runs, and the copy finds nothing there.
+    // The removed directory took the copy's mount with it: the connection ends
+    // while the copy still runs, and the copy finds nothing there.
     until("own connection entry removed", || !connection.exists());
     let answer = copy.ask("probe");
     assert!(

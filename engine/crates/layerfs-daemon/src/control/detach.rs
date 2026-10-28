@@ -1,4 +1,7 @@
 //! Linux half of normal unmount: plain detach once, then the drain barrier.
+//! A drain that stops at `Join` makes the one abort write a forced unmount
+//! would and drains again, so a connection that outlived its mount is ended
+//! rather than kept (#426, #460).
 use super::{
     kernel::Kernel,
     registry::bound_mut,
@@ -84,20 +87,26 @@ impl Service {
         self.leaving(token, MountPhase::Draining);
         let drained = match session.drain() {
             Ok(drained) => drained,
-            Err(undrained) => {
-                let stopped = stage(undrained.stage);
-                let detail = format!(
-                    "connection drain stopped at {:?}: loops {:?}, work {:?}",
-                    undrained.stage, undrained.loops, undrained.work
-                );
-                // Detached yet unjoined: the connection outlived its mount,
-                // and one forced unmount may still end it.
-                let evidence = match undrained.stage {
-                    DrainStage::Join => Evidence::Stalled(undrained),
-                    _ => Evidence::Other(undrained),
-                };
-                return Err(self.keep(token, stopped, detail, Some(observer), evidence, None));
-            }
+            // Detached yet unjoined: the connection outlived its mount because
+            // another mount namespace holds a copy of it (an engine or VM agent
+            // outside the Sandbox). Make the same one abort write a forced
+            // unmount makes, then drain again; a connection whose control is
+            // unusable, or one that still stops, keeps its custody (#426, #460).
+            Err(undrained) => match undrained.end_stalled() {
+                Ok(drained) => drained,
+                Err(undrained) => {
+                    let stopped = stage(undrained.stage);
+                    let detail = format!(
+                        "connection drain stopped at {:?}: loops {:?}, work {:?}",
+                        undrained.stage, undrained.loops, undrained.work
+                    );
+                    let evidence = match undrained.stage {
+                        DrainStage::Join => Evidence::Stalled(undrained),
+                        _ => Evidence::Other(undrained),
+                    };
+                    return Err(self.keep(token, stopped, detail, Some(observer), evidence, None));
+                }
+            },
         };
         // Drain barrier holds: one fixed logical mark, then indexed retirement.
         match self.job(

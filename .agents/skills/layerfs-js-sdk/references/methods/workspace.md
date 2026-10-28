@@ -282,7 +282,7 @@ Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes
 | --- | --- |
 | `ws` | The Workspace from `mount` |
 | `discard` | `true` to drop uncommitted changes instead of refusing |
-| `force` | `true` to abort the Workspace's kernel connection instead; drops uncommitted changes. Use it only for an unmount that stalled (below) |
+| `force` | `true` to abort the Workspace's kernel connection instead; drops uncommitted changes. A normal unmount that stalls at `Join` ends itself with one abort write, so this is for an entry that kept its custody because no abort control was usable |
 
 **Returns:** `{ kind: "Unmounted" }`, or with `force`
 `{ kind: "ForceUnmounted", abort, detach, cleanup }`.
@@ -294,7 +294,7 @@ Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes
 | `Dirty` | Uncommitted changes; `detail.changed` lists paths | Commit them, so the step is recorded; discard only a Workspace you're abandoning |
 | `Busy` | A background process still runs there | Stop it (`backend.daemon.process.cancel`, in the observe skill), or wait for it |
 | `NotMounted` | Already unmounted, or the wrong Workspace | Use the Workspace from `mount` |
-| `Failed` with `TeardownCustody { stage: Join` in the message | The mount is gone but its connection did not end, so the unmount stalled; every later plain unmount answers the same | `workspace.unmount(ws, true, true)` once |
+| `Failed` with `TeardownCustody { stage: Join` in the message | The mount is gone, its connection did not end, and no abort write could be made, so every later plain unmount answers the same; `force` is refused too | Stop: the Sandbox holds a connection the engine cannot abort; replace the Sandbox |
 
 ```js
 // ws: from workspace.mount. Every mount creates a new Workspace; never hard-code one.

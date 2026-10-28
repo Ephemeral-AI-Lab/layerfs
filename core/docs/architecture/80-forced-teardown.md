@@ -14,8 +14,10 @@ The daemon half is [`control/force.rs`](../../crates/layerfs-daemon/src/control/
 The connection half (the abort write, the terminal fence and the forced drain)
 belongs to Fuse and is described in
 [native request service](75-native-request-service.md#terminal-fence-and-gated-ports).
-The normal path is unchanged; see
-[native mount session](76-native-mount-session.md#normal-unmount).
+A normal unmount that stalls at `Join` makes the same single abort write
+itself ([stalled normal unmount](#stalled-normal-unmount)); `ForceUnmount`
+remains for the one stalled custody that could not be aborted, and for
+aborting a live connection without waiting for its processes.
 
 ## Request and replies
 
@@ -122,11 +124,19 @@ A normal unmount can detach successfully and still stop at `Join`: when
 another mount of the same superblock outlives the detach, for example a copy
 in a mount namespace made by a process outside the Sandbox, the kernel never
 ends the connection, so its receive loops stay blocked in their reads
-(issues #426 and #460). The entry keeps that undrained session as `Retained`
-at `Join` with no forced facts, and every later normal `Unmount` returns that
-custody unchanged.
+(issues #426 and #460). The unmount now makes one abort write itself
+(`NativeSession::abort_detached`) and drains again, so the connection ends and
+the unmount completes with `Unmounted`.
 
-`ForceUnmount` is the one way out. It takes the session back and makes the
+Only when that write cannot be made — no abort control is bound, or the write
+is short or refused — does the entry keep the undrained session as `Retained`
+at `Join`, and every later normal `Unmount` returns that custody unchanged.
+Such a custody is not forceable either: the guard admits only a stalled entry
+whose control is bound and unused, which the normal path has then already
+used.
+
+`ForceUnmount` remains for a stalled custody that is still forceable (one
+whose abort was not attempted) and for a live connection. It takes the session back and makes the
 same sequence with two differences. Step 1 is `NativeSession::abort_detached`,
 which refuses unless the connection is detached and not yet aborted. Step 2
 makes no detach, because the normal unmount's plain detach is the
