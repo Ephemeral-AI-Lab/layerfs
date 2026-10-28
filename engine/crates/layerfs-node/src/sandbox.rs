@@ -199,6 +199,9 @@ fn start_claimed(
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let mut daemon_setup = setup(daemon.private, controller.public, private_mount_ns(args));
+    let ns_socket = daemon_setup
+        .mount_ns_socket()
+        .map(|path| path.to_string_lossy().into_owned());
     let ns_pid_file = daemon_setup
         .mount_ns_pid_file()
         .map(|path| path.to_string_lossy().into_owned());
@@ -259,7 +262,9 @@ fn start_claimed(
         directory: saved_directory.to_owned(),
         runtime,
         identity,
+        ns_socket,
         ns_pid_file,
+        ns_upgrade_required: false,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),

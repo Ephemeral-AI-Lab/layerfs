@@ -4,26 +4,29 @@
 //! `workspace.exec` is an Engine exec in the container's initial mount
 //! namespace. When the daemon serves from a private namespace, the Workspace
 //! mounts are in that namespace only, so the Engine's entry command is this
-//! helper: it reads the daemon's pid from the pid file the daemon wrote, joins
-//! `/proc/<pid>/ns/mnt`, drops the root identity the Engine starts it with back
-//! to the ordinary command identity, and execs the command it was given. The
-//! Engine still sees one process and the same streams and exit code. Nothing
-//! is run when any step fails: a helper that cannot join must not silently run
-//! the command in the wrong namespace.
+//! helper: it receives the daemon's mount-namespace descriptor over the
+//! daemon's socket, joins it, drops the root identity the Engine starts it with
+//! back to the ordinary command identity, and execs the command it was given.
+//! The Engine still sees one process and the same streams and exit code.
+//! Nothing is run when any step fails: a helper that cannot join must not
+//! silently run the command in the wrong namespace. Every refusal exits 125
+//! with a `layerfs-daemon ns-exec:` reason on stderr, which the host sees as
+//! the command's exit code and stderr (a mixed old/new pair therefore refuses
+//! deliberately instead of running unwrapped).
 use nix::{
     sched::{setns, CloneFlags},
     unistd::{setgid, setgroups, setuid, Gid, Uid},
 };
 use std::{
     ffi::{OsStr, OsString},
-    fs,
     os::unix::process::CommandExt,
+    path::Path,
     process::Command,
 };
 
 /// Exit code of a helper that refused before running the command.
 const REFUSED: u8 = 125;
-const USAGE: &str = "usage: layerfs-daemon ns-exec --pid-file <path> [--directory <path>] [--uid <uid> --gid <gid>] -- <command> [args...]";
+const USAGE: &str = "usage: layerfs-daemon ns-exec --socket <path> [--directory <path>] [--uid <uid> --gid <gid>] -- <command> [args...]";
 
 pub(super) fn main(args: &[OsString]) -> std::process::ExitCode {
     match run(args) {
@@ -37,9 +40,14 @@ pub(super) fn main(args: &[OsString]) -> std::process::ExitCode {
 }
 
 fn run(args: &[OsString]) -> Result<(), String> {
-    let (pid_file, directory, identity, command) = parse(args)?;
-    let pid = read_pid(&pid_file)?;
-    join_mount_namespace(pid)?;
+    let (socket, directory, identity, command) = parse(args)?;
+    // The daemon is not dumpable, so a Sandbox root (CAP_SYS_ADMIN without
+    // CAP_SYS_PTRACE) cannot open its `/proc/<pid>/ns/mnt`; the daemon sends
+    // the descriptor over this socket instead.
+    let namespace = super::ns_fd::receive(Path::new(&socket))
+        .map_err(|error| format!("receive mount namespace from {socket}: {error}"))?;
+    setns(&namespace, CloneFlags::CLONE_NEWNS)
+        .map_err(|error| format!("join mount namespace from {socket}: {error}"))?;
     // The Engine starts this process in the container's initial namespace,
     // where the mount directory is only the empty directory the daemon
     // mounted over. Enter the joined namespace's view of it before running.
@@ -55,20 +63,21 @@ fn run(args: &[OsString]) -> Result<(), String> {
     Err(format!("exec {}: {error}", program.to_string_lossy()))
 }
 
-/// `--pid-file <path> [--directory <path>] [--uid <uid> --gid <gid>] -- <command> [args...]`.
+/// `--socket <path> [--directory <path>] [--uid <uid> --gid <gid>] --
+/// <command> [args...]`.
 fn parse(
     args: &[OsString],
 ) -> Result<(String, Option<String>, Option<(u32, u32)>, Vec<OsString>), String> {
     let mut rest = args.iter();
-    let pid_file = match rest.next() {
-        Some(flag) if flag == OsStr::new("--pid-file") => path(rest.next())?,
-        _ => return Err(USAGE.to_owned()),
-    };
+    let mut socket = None;
     let mut directory = None;
     let mut uid = None;
     let mut gid = None;
     loop {
         match rest.next() {
+            Some(flag) if flag == OsStr::new("--socket") && socket.is_none() => {
+                socket = Some(path(rest.next())?)
+            }
             Some(flag) if flag == OsStr::new("--directory") && directory.is_none() => {
                 directory = Some(path(rest.next())?)
             }
@@ -83,6 +92,9 @@ fn parse(
         }
     }
     let command: Vec<OsString> = rest.cloned().collect();
+    let Some(socket) = socket else {
+        return Err(USAGE.to_owned());
+    };
     if command.is_empty() {
         return Err(USAGE.to_owned());
     }
@@ -90,8 +102,8 @@ fn parse(
         (Some(0), _) | (_, Some(0)) => {
             Err("--uid and --gid must name the non-root command identity".to_owned())
         }
-        (Some(uid), Some(gid)) => Ok((pid_file, directory, Some((uid, gid)), command)),
-        (None, None) => Ok((pid_file, directory, None, command)),
+        (Some(uid), Some(gid)) => Ok((socket, directory, Some((uid, gid)), command)),
+        (None, None) => Ok((socket, directory, None, command)),
         _ => Err("--uid and --gid must be given together".to_owned()),
     }
 }
@@ -111,24 +123,6 @@ fn number(value: Option<&OsString>, name: &str) -> Result<u32, String> {
         .ok_or_else(|| format!("--{name} is not a number"))
 }
 
-/// The daemon's pid from its pid file, or a clear refusal.
-fn read_pid(pid_file: &str) -> Result<u32, String> {
-    let pid = fs::read_to_string(pid_file)
-        .map_err(|error| format!("read daemon pid file {pid_file}: {error}"))?;
-    match pid.trim().parse::<u32>() {
-        Ok(pid) if pid != 0 => Ok(pid),
-        _ => Err(format!("daemon pid file {pid_file} does not name a pid")),
-    }
-}
-
-fn join_mount_namespace(pid: u32) -> Result<(), String> {
-    let namespace = format!("/proc/{pid}/ns/mnt");
-    let file = fs::File::open(&namespace)
-        .map_err(|error| format!("open mount namespace {namespace}: {error}"))?;
-    setns(&file, CloneFlags::CLONE_NEWNS)
-        .map_err(|error| format!("join mount namespace {namespace}: {error}"))
-}
-
 /// The Engine starts this helper as root, because only root holds the
 /// capability the `setns` needs; the command must still run as the Sandbox's
 /// ordinary command identity, with no supplementary groups and no capability.
@@ -142,9 +136,16 @@ fn drop_to(uid: u32, gid: u32) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    fn socket_command() -> Vec<OsString> {
+        ["--socket", "/s", "--", "true"]
+            .into_iter()
+            .map(OsString::from)
+            .collect()
+    }
+
     #[test]
     fn the_command_identity_cannot_be_root() {
-        let args: Vec<OsString> = ["--pid-file", "/p", "--uid", "0", "--gid", "0", "--", "true"]
+        let args: Vec<OsString> = ["--socket", "/s", "--uid", "0", "--gid", "0", "--", "true"]
             .into_iter()
             .map(OsString::from)
             .collect();
@@ -153,15 +154,27 @@ mod tests {
 
     #[test]
     fn a_command_needs_a_separator_and_a_program() {
-        assert!(parse(&[OsString::from("--pid-file"), "/p".into()]).is_err());
-        assert!(parse(&[OsString::from("--pid-file"), "/p".into(), "--".into()]).is_err());
+        assert!(parse(&[OsString::from("--socket"), "/s".into()]).is_err());
+        assert!(parse(&[OsString::from("--socket"), "/s".into(), "--".into()]).is_err());
+    }
+
+    #[test]
+    fn a_socket_names_the_namespace() {
+        let (socket, directory, identity, command) = parse(&socket_command()).unwrap();
+        assert_eq!(socket, "/s");
+        assert_eq!(directory, None);
+        assert_eq!(identity, None);
+        assert_eq!(command, ["true"]);
+        // No socket, no namespace: the helper refuses.
+        let none: Vec<OsString> = ["--", "true"].into_iter().map(OsString::from).collect();
+        assert!(parse(&none).is_err());
     }
 
     #[test]
     fn the_identity_is_all_or_nothing() {
         let args = [
-            "--pid-file".into(),
-            "/p".into(),
+            "--socket".into(),
+            "/s".into(),
             "--uid".into(),
             "501".into(),
             "--".into(),
@@ -172,37 +185,15 @@ mod tests {
 
     #[test]
     fn a_parsed_command_keeps_its_arguments() {
-        let args: Vec<OsString> = ["--pid-file", "/p", "--uid", "501", "--gid", "20", "--"]
+        let args: Vec<OsString> = ["--socket", "/s", "--uid", "501", "--gid", "20", "--"]
             .into_iter()
             .map(OsString::from)
             .chain(["bash".into(), "-c".into(), "printf hello".into()])
             .collect();
-        let (pid_file, directory, identity, command) = parse(&args).unwrap();
-        assert_eq!(pid_file, "/p");
+        let (socket, directory, identity, command) = parse(&args).unwrap();
+        assert_eq!(socket, "/s");
         assert_eq!(directory, None);
         assert_eq!(identity, Some((501, 20)));
         assert_eq!(command, ["bash", "-c", "printf hello"]);
-    }
-
-    #[test]
-    fn a_missing_or_unreadable_pid_file_is_a_refusal() {
-        let directory =
-            std::env::temp_dir().join(format!("layerfs-ns-exec-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&directory);
-        fs::create_dir(&directory).unwrap();
-        let missing = directory.join("missing.pid");
-        assert!(read_pid(missing.to_str().unwrap()).is_err());
-        fs::write(&missing, b"not a pid\n").unwrap();
-        assert!(read_pid(missing.to_str().unwrap()).is_err());
-        fs::write(&missing, b"0\n").unwrap();
-        assert!(read_pid(missing.to_str().unwrap()).is_err());
-        fs::write(&missing, b"4321\n").unwrap();
-        assert_eq!(read_pid(missing.to_str().unwrap()).unwrap(), 4321);
-        fs::remove_dir_all(&directory).unwrap();
-    }
-
-    #[test]
-    fn a_missing_namespace_is_a_refusal() {
-        assert!(join_mount_namespace(u32::MAX - 1).is_err());
     }
 }

@@ -52,8 +52,9 @@ pub struct DaemonSetup {
     /// None selects the original one-time installer. Some selects explicit existing
     /// Store open using retained authority; never selected after an install error.
     pub existing_store: Option<StoreManifest>,
-    /// Start in a mount namespace of this process's own (prototype for #3/#499)
-    /// and write the pid file [`DaemonSetup::mount_ns_pid_file`] names, so a
+    /// Start in a mount namespace of this process's own (prototype for #3/#499),
+    /// serve its descriptor on [`DaemonSetup::mount_ns_socket`] and write the
+    /// diagnostic pid file [`DaemonSetup::mount_ns_pid_file`] names, so a
     /// command reaches the Workspace mounts only through the daemon's
     /// `ns-exec` helper. Off by default; the flag is opt-in.
     pub private_mount_ns: bool,
@@ -167,21 +168,30 @@ impl DaemonSetup {
                 return Err(ControlError("explicit existing Disposable Store"));
             }
         }
-        if self.private_mount_ns && self.mount_ns_pid_file().is_none() {
-            return Err(ControlError("private mount namespace pid file path"));
+        if self.private_mount_ns && self.mount_ns_socket().is_none() {
+            return Err(ControlError("private mount namespace socket path"));
         }
         Ok(())
     }
-    /// The pid file this daemon writes when [`Self::private_mount_ns`] is on:
-    /// `daemon.pid` in the local directory above the Overlay's own directory
-    /// (in a Sandbox that is `/layerfs-local`). `None` when the flag is off or
-    /// the Overlay path has no such local directory.
+    /// The diagnostic pid file this daemon writes when
+    /// [`Self::private_mount_ns`] is on: `daemon.pid` in the local directory
+    /// above the Overlay's own directory (in a Sandbox that is
+    /// `/layerfs-local`). It is evidence, not an exec route. `None` when the
+    /// flag is off or the Overlay path has no such local directory.
     pub fn mount_ns_pid_file(&self) -> Option<PathBuf> {
+        self.local_path("daemon.pid")
+    }
+    /// The socket this daemon serves its mount-namespace descriptor on when
+    /// [`Self::private_mount_ns`] is on, beside the pid file.
+    pub fn mount_ns_socket(&self) -> Option<PathBuf> {
+        self.local_path("ns-exec.sock")
+    }
+    fn local_path(&self, name: &str) -> Option<PathBuf> {
         if !self.private_mount_ns {
             return None;
         }
         let home = Path::new(&self.overlay).parent()?.parent()?;
-        Some(home.join("daemon.pid"))
+        Some(home.join(name))
     }
 }
 impl fmt::Debug for DaemonSetup {
@@ -235,6 +245,9 @@ mod tests {
         assert!(setup("/local/overlay/overlay.sqlite", false)
             .mount_ns_pid_file()
             .is_none());
+        assert!(setup("/local/overlay/overlay.sqlite", false)
+            .mount_ns_socket()
+            .is_none());
         let encoded = setup("/local/overlay/overlay.sqlite", true)
             .encode()
             .unwrap();
@@ -244,6 +257,10 @@ mod tests {
             decoded.mount_ns_pid_file(),
             Some(PathBuf::from("/local/daemon.pid"))
         );
+        assert_eq!(
+            decoded.mount_ns_socket(),
+            Some(PathBuf::from("/local/ns-exec.sock"))
+        );
     }
 
     #[test]
@@ -251,6 +268,10 @@ mod tests {
         assert_eq!(
             setup("/layerfs-local/overlay/overlay.sqlite", true).mount_ns_pid_file(),
             Some(PathBuf::from("/layerfs-local/daemon.pid"))
+        );
+        assert_eq!(
+            setup("/layerfs-local/overlay/overlay.sqlite", true).mount_ns_socket(),
+            Some(PathBuf::from("/layerfs-local/ns-exec.sock"))
         );
         // An Overlay path with no local directory cannot name a pid file.
         assert!(setup("/overlay.sqlite", true).encode().is_err());

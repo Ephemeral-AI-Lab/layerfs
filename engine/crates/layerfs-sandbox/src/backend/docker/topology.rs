@@ -4,6 +4,7 @@ use super::{
     SandboxRequest,
 };
 use crate::RuntimeError;
+use crate::DAEMON_ENTRY;
 use std::io::Read;
 /// The container's whole system-call filter. It denies creation of a user
 /// namespace (`CLONE_NEWUSER` to `unshare` or `clone`; `clone3` answers
@@ -52,7 +53,7 @@ pub(super) fn config<R: Read>(
             valid &= !j.boolean()?;
         } else if key.equals("Entrypoint") {
             once(&mut bits, 4)?;
-            valid &= strings(j, &["/usr/local/bin/layerfs-daemon"])?;
+            valid &= strings(j, &[DAEMON_ENTRY])?;
         } else if key.equals("Cmd") {
             once(&mut bits, 8)?;
             valid &= strings(j, &["--config", "/layerfs-local/config/daemon.setup"])?;

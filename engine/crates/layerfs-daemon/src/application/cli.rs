@@ -67,16 +67,21 @@ fn run(args: &[OsString]) -> Result<(), ApplicationError> {
     // an Engine exec or a `docker exec` enters (prototype for #3/#499). A
     // failure refuses startup rather than serving with the old topology.
     #[cfg(target_os = "linux")]
-    if setup.private_mount_ns {
+    let _ns_fd = if setup.private_mount_ns {
         layerfs_fuse::mount::private_namespace().map_err(ApplicationError::Io)?;
-        let pid_file = setup.mount_ns_pid_file().ok_or_else(|| {
+        if let Some(pid_file) = setup.mount_ns_pid_file() {
+            write_pid_file(&pid_file).map_err(ApplicationError::Io)?;
+        }
+        let socket = setup.mount_ns_socket().ok_or_else(|| {
             ApplicationError::Io(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "private mount namespace without a pid file path",
+                "private mount namespace without a socket path",
             ))
         })?;
-        write_pid_file(&pid_file).map_err(ApplicationError::Io)?;
-    }
+        Some(super::ns_fd::NsFd::start(&socket).map_err(ApplicationError::Io)?)
+    } else {
+        None
+    };
     let listener = TcpListener::bind(&setup.listen).map_err(ApplicationError::Io)?;
     let application = Application::start(setup)?;
     println!(

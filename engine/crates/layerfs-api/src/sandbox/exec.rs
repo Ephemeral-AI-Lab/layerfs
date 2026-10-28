@@ -2,11 +2,19 @@
 use crate::{ManagedSandbox, MountedWorkspace, WorkspaceApi};
 use layerfs_sandbox::{
     backend::docker::{ExecCreateFailure, ExecCreated, ExecRequest, Sandbox},
-    CommandIdentity,
+    CommandIdentity, DAEMON_ENTRY,
 };
 
-/// The daemon's entry inside its Sandbox container, as the deployment installs it.
-const DAEMON_ENTRY: &str = "/usr/local/bin/layerfs-daemon";
+/// The daemon socket a command gets its private mount namespace from. Only a
+/// daemon that serves from a private namespace names one, so `Some` always
+/// wraps the command and `None` never does: there is no empty middle state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MountNamespace<'a> {
+    /// The daemon's socket. It sends the descriptor of its own mount
+    /// namespace; the daemon is not dumpable, so the helper cannot open
+    /// `/proc/<pid>/ns/mnt` itself.
+    pub socket: &'a str,
+}
 
 impl WorkspaceApi<'_> {
     /// Creates one ordinary command at this mount using the deployment's admitted identity.
@@ -19,6 +27,15 @@ impl WorkspaceApi<'_> {
         environment: Vec<String>,
         stdin: bool,
     ) -> Result<ExecCreated, Box<ExecCreateFailure>> {
+        // The owner's own daemon setup says whether this Sandbox serves from a
+        // private namespace. When it does, the command must enter it through
+        // `ns-exec`; running it in the initial namespace would find only the
+        // empty directory under the mount.
+        let socket = sandbox
+            .request
+            .setup
+            .mount_ns_socket()
+            .map(|path| path.to_string_lossy().into_owned());
         launch(
             &sandbox.runtime,
             sandbox.command_identity,
@@ -26,15 +43,14 @@ impl WorkspaceApi<'_> {
             environment,
             workspace.ready.directory.clone(),
             stdin,
-            None,
+            socket.as_deref().map(|socket| MountNamespace { socket }),
         )
     }
 }
-/// Creates the Engine Exec for one command. `ns_pid_file` is the pid file of a
-/// daemon that serves from a private mount namespace: the command then runs
-/// through that daemon's `ns-exec` helper, because the Workspace mounts are
-/// absent from the namespace the Engine enters. `None` keeps the command as
-/// it is.
+/// Creates the Engine Exec for one command. `namespace` names a daemon that
+/// serves from a private mount namespace: the command then runs through that
+/// daemon's `ns-exec` helper, because the Workspace mounts are absent from the
+/// namespace the Engine enters. `None` keeps the command as it is.
 pub(crate) fn launch(
     sandbox: &Sandbox,
     identity: CommandIdentity,
@@ -42,37 +58,37 @@ pub(crate) fn launch(
     environment: Vec<String>,
     directory: String,
     stdin: bool,
-    ns_pid_file: Option<&str>,
+    namespace: Option<MountNamespace<'_>>,
 ) -> Result<ExecCreated, Box<ExecCreateFailure>> {
     sandbox.create_exec(ExecRequest {
         identity,
-        arguments: launch_arguments(ns_pid_file, identity, &directory, arguments),
+        arguments: exec_arguments(namespace, identity, &directory, arguments),
         environment,
         directory,
         stdin,
-        root_launcher: ns_pid_file.is_some(),
+        root_launcher: namespace.is_some(),
     })
 }
-/// The Engine argv for one command. Without a private-namespace pid file it is
-/// exactly the caller's argv. With one it names the daemon's helper, the pid
-/// file, the mount directory the Engine starts in (only the directory under the
-/// mount exists in its namespace) and the ordinary identity the helper drops
-/// to, then the same argv after `--`: the helper execs it, so the Engine still
-/// has one process tree, the same streams and the same exit code.
-fn launch_arguments(
-    ns_pid_file: Option<&str>,
+/// The Engine argv for one command. Without a mount-namespace socket it is
+/// exactly the caller's argv. With one it names the daemon's helper, the
+/// socket, the mount directory the Engine starts in (only the directory under
+/// the mount exists in its namespace) and the ordinary identity the helper
+/// drops to, then the same argv after `--`: the helper execs it, so the Engine
+/// still has one process tree, the same streams and the same exit code.
+pub fn exec_arguments(
+    namespace: Option<MountNamespace<'_>>,
     identity: CommandIdentity,
     directory: &str,
     arguments: Vec<String>,
 ) -> Vec<String> {
-    let Some(pid_file) = ns_pid_file else {
+    let Some(namespace) = namespace else {
         return arguments;
     };
     let mut wrapped = vec![
         DAEMON_ENTRY.to_owned(),
         "ns-exec".to_owned(),
-        "--pid-file".to_owned(),
-        pid_file.to_owned(),
+        "--socket".to_owned(),
+        namespace.socket.to_owned(),
         "--directory".to_owned(),
         directory.to_owned(),
         "--uid".to_owned(),
@@ -89,32 +105,38 @@ fn launch_arguments(
 mod tests {
     use super::*;
 
+    fn identity() -> CommandIdentity {
+        CommandIdentity { uid: 501, gid: 20 }
+    }
+
+    fn command() -> Vec<String> {
+        vec!["bash".into(), "-c".into(), "printf ordinary".into()]
+    }
+
     #[test]
     fn a_sandbox_without_a_private_namespace_keeps_the_command_as_it_is() {
-        let identity = CommandIdentity { uid: 501, gid: 20 };
-        let arguments = vec!["bash".into(), "-c".into(), "printf ordinary".into()];
         assert_eq!(
-            launch_arguments(None, identity, "/workspaces/1", arguments.clone()),
-            arguments
+            exec_arguments(None, identity(), "/workspaces/1", command()),
+            command()
         );
     }
 
     #[test]
-    fn a_private_namespace_sandbox_runs_the_daemon_helper() {
-        let identity = CommandIdentity { uid: 501, gid: 20 };
-        let arguments = vec!["bash".into(), "-c".into(), "printf ordinary".into()];
+    fn a_private_namespace_sandbox_runs_the_daemon_helper_over_its_socket() {
         assert_eq!(
-            launch_arguments(
-                Some("/layerfs-local/daemon.pid"),
-                identity,
+            exec_arguments(
+                Some(MountNamespace {
+                    socket: "/layerfs-local/ns-exec.sock",
+                }),
+                identity(),
                 "/workspaces/1",
-                arguments,
+                command(),
             ),
             [
                 "/usr/local/bin/layerfs-daemon",
                 "ns-exec",
-                "--pid-file",
-                "/layerfs-local/daemon.pid",
+                "--socket",
+                "/layerfs-local/ns-exec.sock",
                 "--directory",
                 "/workspaces/1",
                 "--uid",
