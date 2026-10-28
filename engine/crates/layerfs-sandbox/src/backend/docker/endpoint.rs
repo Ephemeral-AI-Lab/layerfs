@@ -61,6 +61,20 @@ impl Sandbox {
         if !self.started || self.stop_attempted || self.delete_attempted {
             return Err(self.invalid("running endpoint admission"));
         }
+        let (_, endpoint) = self.observe(true)?;
+        endpoint.ok_or_else(|| self.invalid("missing daemon endpoint"))
+    }
+    /// One exact deployment/state observation; absent optional facts remain absent.
+    pub fn inspect(&self) -> Result<crate::provider::SandboxInspection, Box<WireFailure>> {
+        self.observe(false).map(|(inspection, _)| inspection)
+    }
+    fn observe(
+        &self,
+        require_running: bool,
+    ) -> Result<(crate::provider::SandboxInspection, Option<SocketAddr>), Box<WireFailure>> {
+        if self.deleted {
+            return Err(self.invalid("deleted container observation"));
+        }
         let mut r = self
             .docker
             .exchange(
@@ -80,6 +94,8 @@ impl Sandbox {
             let mut topology = true;
             let mut running = None;
             let mut endpoint = None;
+            let mut exit_code = None;
+            let mut process_id = None;
             let mut j = Json::new(&mut r.body);
             j.object(|j, key| {
                 if key.equals("Id") {
@@ -108,6 +124,20 @@ impl Sandbox {
                         if key.equals("Running") {
                             once(&mut bits, 1)?;
                             running = Some(j.boolean()?);
+                        } else if key.equals("ExitCode") {
+                            once(&mut bits, 16)?;
+                            if !j.null()? {
+                                exit_code =
+                                    Some(i32::try_from(j.integer()?).map_err(|_| {
+                                        RuntimeError::Protocol("container exit width")
+                                    })?);
+                            }
+                        } else if key.equals("Pid") {
+                            once(&mut bits, 32)?;
+                            process_id = Some(
+                                u32::try_from(j.integer()?)
+                                    .map_err(|_| RuntimeError::Protocol("container PID width"))?,
+                            );
                         } else if key.equals("Paused")
                             || key.equals("Restarting")
                             || key.equals("Dead")
@@ -126,7 +156,7 @@ impl Sandbox {
                         }
                         Ok(())
                     })?;
-                    topology &= bits == 15;
+                    topology &= bits & 15 == 15;
                 } else if key.equals("NetworkSettings") {
                     once(&mut fields, 4)?;
                     let mut bits = 0;
@@ -137,6 +167,9 @@ impl Sandbox {
                             j.object(|j, key| {
                                 if key.equals(&format!("{}/tcp", self.request.port)) {
                                     once(&mut selected, 1)?;
+                                    if j.null()? {
+                                        return Ok(());
+                                    }
                                     let mut count = 0;
                                     j.array(|j| {
                                         count += 1;
@@ -213,27 +246,36 @@ impl Sandbox {
                 Ok(())
             })?;
             j.finish()?;
-            // the exact recorded container, intact but not running: its daemon
-            // and every mount in it are gone (Docker restarted, for instance)
-            if observed == Some(self.id)
-                && fields == 127
-                && image
-                && topology
-                && running == Some(false)
-            {
-                return Err(RuntimeError::Protocol(crate::types::STOPPED));
-            }
             if observed != Some(self.id)
                 || fields != 127
                 || !image
                 || !topology
-                || running != Some(true)
+                || running.is_none()
             {
                 return Err(RuntimeError::Protocol(
                     "exact running container observation",
                 ));
             }
-            endpoint.ok_or(RuntimeError::Protocol("missing daemon endpoint"))
+            if require_running && running == Some(false) {
+                return Err(RuntimeError::Protocol(crate::types::STOPPED));
+            }
+            if running == Some(true) && endpoint.is_none() {
+                return Err(RuntimeError::Protocol("missing daemon endpoint"));
+            }
+            Ok((
+                crate::provider::SandboxInspection {
+                    identity: self.id,
+                    running: running.expect("required"),
+                    exit_code: if running == Some(false) {
+                        exit_code
+                    } else {
+                        None
+                    },
+                    process_id: process_id.filter(|pid| *pid != 0),
+                    scratch_bytes: None,
+                },
+                endpoint,
+            ))
         })();
         result.map_err(|e| {
             let mut f = self.selected(r.fail(e, None));
